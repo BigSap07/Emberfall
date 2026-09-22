@@ -59,7 +59,7 @@ namespace Emberfall.UI.Screens
         private RectTransform _rosterList;
         private Text _powerLabel;
 
-        private readonly UIButton[] _slotButtons = new UIButton[SlotCount];
+        private readonly ForgeCard[] _slotButtons = new ForgeCard[SlotCount];
         private readonly RectTransform[] _slotBodies = new RectTransform[SlotCount];
 
         /// <summary>
@@ -74,7 +74,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            ScreenChrome.Header(Root, "YOUR BANNER", Router, out _headerSubtitle);
+            EmberforgeUI.Ground(Root);
+            ScreenChrome.ForgedHeader(Root, "YOUR BANNER", Router, out _headerSubtitle);
 
             BuildBanner();
             BuildPrompt();
@@ -94,39 +95,34 @@ namespace Emberfall.UI.Screens
             for (int i = 0; i < SlotCount; i++)
             {
                 int slot = i;
-                UIButton card = UIBuilder.MakeButton("Slot" + i, _bannerRow, "", UITheme.FontSmall,
-                                                     UITheme.PanelSunken, UITheme.Border, UITheme.TextPrimary);
+                // A SELECTABLE CARD, not a button. A banner slot is a CONTAINER that happens to
+                // be pressable - the same shape as a hero card in the collection - and the kit's
+                // two button voices are ember for the thing to press and teal for the way back
+                // out, neither of which a slot is. Five slot cards and thirty roster rows built
+                // as buttons came out as a page of solid teal. See EmberforgeUI.SelectableCard.
+                ForgeCard card = EmberforgeUI.SelectableCard("Slot" + i, _bannerRow,
+                                                             delegate { OnSlotTapped(slot); });
                 UIBuilder.Flexible(card.Root, 1f, 1f);
 
-                // MakeButton's own label fills the face and would sit on top of the portrait; it is
-                // pushed to the bottom of the card and used for the occupant's name.
-                UIBuilder.Box(card.Label.rectTransform, 0f, 40f, 300f, 30f, new Vector2(0.5f, 0f));
-
-                // Everything below the title is parented to a body node so a repaint can clear it
-                // without touching the button, its frame, or its label.
-                RectTransform body = UIBuilder.Node("Body", card.Root);
-                UIBuilder.FillParent(body, 0f);
-                body.gameObject.AddComponent<CanvasGroup>().blocksRaycasts = false;
-
                 _slotButtons[i] = card;
-                _slotBodies[i] = body;
-                card.OnClick(delegate { OnSlotTapped(slot); });
+                _slotBodies[i] = card.Body;
             }
         }
 
         private void BuildPrompt()
         {
-            _powerLabel = UIBuilder.Label("Power", Root, "", UITheme.FontHeading, UITheme.Gold, TextAnchor.MiddleCenter);
+            _powerLabel = EmberforgeUI.Title("Power", Root, "", UITheme.FontHeading,
+                                             Emberforge.TextGold, TextAnchor.MiddleCenter);
             UIBuilder.Box(_powerLabel.rectTransform, 0f, -(UITheme.TopBarHeight + PowerTop), 1824f, PowerHeight, new Vector2(0.5f, 1f));
 
-            _prompt = UIBuilder.Label("Prompt", Root, "", UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleCenter);
+            _prompt = EmberforgeUI.Label("Prompt", Root, "", UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
             UIBuilder.Box(_prompt.rectTransform, 0f, -(UITheme.TopBarHeight + PromptTop), 1824f, PromptHeight, new Vector2(0.5f, 1f));
         }
 
         private void BuildRoster()
         {
-            Text heading = UIBuilder.Label("RosterHeading", Root, "YOUR ROSTER", UITheme.FontTiny,
-                                           UITheme.TextDim, TextAnchor.MiddleLeft);
+            Text heading = EmberforgeUI.Title("RosterHeading", Root, "YOUR ROSTER", UITheme.FontSmall,
+                                              Emberforge.TextGold, TextAnchor.MiddleLeft);
             UIBuilder.Box(heading.rectTransform, UITheme.ScreenPadding, -(UITheme.TopBarHeight + RosterLabelTop),
                           600f, 30f, new Vector2(0f, 1f));
 
@@ -134,7 +130,8 @@ namespace Emberfall.UI.Screens
             // note in HeroesScreen for what it is FOR - it answers "what am I missing", which is a
             // different question from "who is fighting", and folding it in would have made this
             // screen do both jobs badly.
-            UIButton viewAll = UIBuilder.SecondaryButton("ViewAll", Root, "VIEW ALL HEROES", UITheme.FontTiny);
+            UIButton viewAll = EmberforgeUI.Button("ViewAll", Root, "VIEW ALL HEROES", UITheme.FontTiny,
+                                                   ForgeButtonKind.Secondary);
             UIBuilder.Box(viewAll.Root, -UITheme.ScreenPadding, -(UITheme.TopBarHeight + RosterLabelTop - 12f),
                           320f, 54f, new Vector2(1f, 1f));
             viewAll.OnClick(OpenCollection);
@@ -183,48 +180,51 @@ namespace Emberfall.UI.Screens
                 HeroInstance occupant = profile.FindHeroByUid(profile.Team[i]);
                 bool isSelected = placing && occupant != null && occupant.Uid == _selectedUid;
 
-                UIButton card = _slotButtons[i];
+                ForgeCard card = _slotButtons[i];
                 RectTransform body = _slotBodies[i];
                 for (int c = body.childCount - 1; c >= 0; c--) Destroy(body.GetChild(c).gameObject);
 
                 // While a hero is waiting to be placed every slot is a live target, so every slot
-                // says so. Highlighting only the plausible ones would be guessing at intent.
-                Color fill = isSelected ? UITheme.Ember
-                           : placing ? UITheme.PanelRaised
-                           : UITheme.PanelSunken;
-                Color edge = isSelected ? UITheme.EmberDeep
-                           : placing ? UITheme.Gold
-                           : (occupant != null ? UITheme.Border : UITheme.WithAlpha(UITheme.BorderSoft, 0.6f));
-                card.Background.color = fill;
-                card.Frame.color = edge;
+                // lights. Highlighting only the plausible ones would be guessing at intent.
+                EmberforgeUI.SetCardSelected(card, isSelected || placing);
 
-                Text position = UIBuilder.Label("Pos", body, SlotTitle(i), UITheme.FontTiny,
-                                                i == 0 ? UITheme.Ember : UITheme.TextDim, TextAnchor.UpperCenter);
+                Text position = EmberforgeUI.Label("Pos", body, SlotTitle(i), UITheme.FontTiny,
+                                                   i == 0 ? Emberforge.TextGold : Emberforge.TextQuiet,
+                                                   TextAnchor.UpperCenter);
                 UIBuilder.Box(position.rectTransform, 0f, -12f, 280f, 24f, new Vector2(0.5f, 1f));
+                UIBuilder.Outlined(position, Emberforge.Outline, Emberforge.StrokeThin);
 
                 if (occupant != null && occupant.Def != null)
                 {
-                    RectTransform portrait = Widgets.Portrait("Portrait", body, occupant.Def, occupant.Def.Stars, 118f, true);
+                    RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", body, occupant.Def,
+                                                                        occupant.Def.Stars, 118f);
                     UIBuilder.Box(portrait, 0f, -38f, 118f, 118f, new Vector2(0.5f, 1f));
 
                     RectTransform stars = Widgets.StarRow("Stars", body, occupant.Def.Stars, 13f);
                     UIBuilder.Box(stars, 0f, -160f, 110f, 15f, new Vector2(0.5f, 1f));
 
-                    Text power = UIBuilder.Label("Power", body, occupant.Power.ToString(), UITheme.FontSmall,
-                                                 UITheme.Gold, TextAnchor.LowerCenter);
+                    Text power = EmberforgeUI.Label("Power", body, occupant.Power.ToString(),
+                                                    UITheme.FontSmall, Emberforge.TextGold,
+                                                    TextAnchor.LowerCenter);
                     UIBuilder.Box(power.rectTransform, 0f, 8f, 280f, 28f, new Vector2(0.5f, 0f));
+                    UIBuilder.Outlined(power, Emberforge.Outline, Emberforge.StrokeThin);
 
-                    card.SetText(occupant.Def.Name.ToUpperInvariant());
-                    card.Label.color = isSelected ? UITheme.TextOnAccent : UITheme.TextPrimary;
+                    Text who = EmberforgeUI.Label("Name", body, occupant.Def.Name.ToUpperInvariant(),
+                                                  UITheme.FontSmall, Emberforge.TextBody,
+                                                  TextAnchor.LowerCenter);
+                    UIBuilder.Box(who.rectTransform, 0f, 40f, 300f, 30f, new Vector2(0.5f, 0f));
+                    UIBuilder.Outlined(who, Emberforge.Outline, Emberforge.StrokeThin);
                 }
                 else
                 {
                     Image ghost = UIBuilder.Img("Ghost", body, TextureLab.Ring(160, 3),
-                                                UITheme.WithAlpha(UITheme.BorderSoft, 0.7f));
+                                                UITheme.WithAlpha(Emberforge.Outline, 0.7f));
                     UIBuilder.Box(ghost.rectTransform, 0f, -38f, 118f, 118f, new Vector2(0.5f, 1f));
 
-                    card.SetText("EMPTY");
-                    card.Label.color = UITheme.TextDim;
+                    Text who = EmberforgeUI.Label("Name", body, "EMPTY", UITheme.FontSmall,
+                                                  Emberforge.TextQuiet, TextAnchor.LowerCenter);
+                    UIBuilder.Box(who.rectTransform, 0f, 40f, 300f, 30f, new Vector2(0.5f, 0f));
+                    UIBuilder.Outlined(who, Emberforge.Outline, Emberforge.StrokeThin);
                 }
             }
         }
@@ -293,47 +293,46 @@ namespace Emberfall.UI.Screens
             int slot = profile.TeamSlotOf(hero.Uid);
             bool selected = _selectedUid == hero.Uid;
 
-            UIButton row = UIBuilder.MakeButton("Hero_" + hero.Uid, _rosterList, "", UITheme.FontSmall,
-                                                selected ? UITheme.Ember
-                                                : slot >= 0 ? UITheme.WithAlpha(UITheme.Success, 0.16f)
-                                                : UITheme.PanelRaised,
-                                                selected ? UITheme.EmberDeep : UITheme.Border,
-                                                UITheme.TextPrimary);
+            // A SELECTABLE CARD for the same reason the banner slots are. Framed while this is
+            // the hero being placed, plain otherwise; where a hero already stands is said by the
+            // STATE word on the right, which is where a player reads it.
+            ForgeCard row = EmberforgeUI.SelectableCard("Hero_" + hero.Uid, _rosterList,
+                                                        delegate { OnHeroTapped(hero); });
             UIBuilder.Sized(row.Root, 0f, RowHeight);
-            row.Label.gameObject.SetActive(false);   // this row lays its own text out
+            EmberforgeUI.SetCardSelected(row, selected);
 
-            RectTransform content = UIBuilder.Node("Body", row.Root);
-            UIBuilder.FillParent(content, 0f);
-            content.gameObject.AddComponent<CanvasGroup>().blocksRaycasts = false;
+            RectTransform content = row.Body;
 
-            RectTransform portrait = Widgets.Portrait("Portrait", content, hero.Def, hero.Def.Stars, 76f, true);
+            RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", content, hero.Def,
+                                                                hero.Def.Stars, 76f);
             UIBuilder.Box(portrait, 26f, 0f, 76f, 76f, new Vector2(0f, 0.5f));
 
             // Name above the centre line, detail below it. The first draft anchored both near the
             // middle and they printed on top of each other.
-            Text name = UIBuilder.Label("Name", content, hero.Def.Name, UITheme.FontSmall,
-                                        UITheme.StarColor(hero.Def.Stars), TextAnchor.MiddleLeft);
+            Text name = EmberforgeUI.Label("Name", content, hero.Def.Name, UITheme.FontSmall,
+                                           UITheme.StarColor(hero.Def.Stars), TextAnchor.MiddleLeft);
             UIBuilder.Box(name.rectTransform, 124f, 19f, 620f, 34f, new Vector2(0f, 0.5f));
+            UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
 
-            Text sub = UIBuilder.Label("Sub", content,
+            Text sub = EmberforgeUI.Label("Sub", content,
                                        "LV " + hero.Level + "   -   " + UITheme.RoleName(hero.Def.Role)
                                        + "   -   " + AspectChart.DisplayName(hero.Def.Aspect),
-                                       UITheme.FontTiny, UITheme.TextMuted, TextAnchor.MiddleLeft);
+                                       UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleLeft);
             UIBuilder.Box(sub.rectTransform, 124f, -18f, 620f, 28f, new Vector2(0f, 0.5f));
+            UIBuilder.Outlined(sub, Emberforge.Outline, Emberforge.StrokeThin);
 
-            Text power = UIBuilder.Label("Power", content, hero.Power.ToString(), UITheme.FontSmall,
-                                         UITheme.Gold, TextAnchor.MiddleRight);
+            Text power = EmberforgeUI.Label("Power", content, hero.Power.ToString(), UITheme.FontSmall,
+                                            Emberforge.TextGold, TextAnchor.MiddleRight);
             UIBuilder.Box(power.rectTransform, -230f, 0f, 190f, 34f, new Vector2(1f, 0.5f));
+            UIBuilder.Outlined(power, Emberforge.Outline, Emberforge.StrokeThin);
 
             string status = selected ? "PLACING" : slot >= 0 ? "SLOT " + (slot + 1) : "BENCH";
-            Text state = UIBuilder.Label("State", content, status, UITheme.FontTiny,
-                                         selected ? UITheme.TextOnAccent
-                                         : slot >= 0 ? UITheme.Success : UITheme.TextDim,
-                                         TextAnchor.MiddleRight);
+            Text state = EmberforgeUI.Label("State", content, status, UITheme.FontTiny,
+                                           selected ? Emberforge.TextGold
+                                           : slot >= 0 ? UITheme.Success : Emberforge.TextQuiet,
+                                           TextAnchor.MiddleRight);
             UIBuilder.Box(state.rectTransform, -24f, 0f, 150f, 30f, new Vector2(1f, 0.5f));
-
-            HeroInstance captured = hero;
-            row.OnClick(delegate { OnHeroTapped(captured); });
+            UIBuilder.Outlined(state, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         /// <summary>
@@ -344,32 +343,35 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void AddLockedRow(HeroDef def)
         {
-            UIButton row = UIBuilder.MakeButton("Locked_" + def.Id, _rosterList, "", UITheme.FontSmall,
-                                                UITheme.PanelSunken, UITheme.WithAlpha(UITheme.BorderSoft, 0.5f),
-                                                UITheme.TextDim);
+            ForgeCard row = EmberforgeUI.SelectableCard("Locked_" + def.Id, _rosterList, null);
             UIBuilder.Sized(row.Root, 0f, RowHeight);
-            row.Label.gameObject.SetActive(false);
-            row.Interactable = false;
+            row.Button.Interactable = false;
 
-            RectTransform content = UIBuilder.Node("Body", row.Root);
-            UIBuilder.FillParent(content, 0f);
-            content.gameObject.AddComponent<CanvasGroup>().blocksRaycasts = false;
+            // A locked row is the same plate at reduced strength rather than a different plate:
+            // the list stays one list, and "you do not have this one" is a fade rather than a
+            // second design.
+            row.Root.gameObject.AddComponent<CanvasGroup>().alpha = 0.7f;
+
+            RectTransform content = row.Body;
 
             // allowArt false, the same rule the collection screen follows: a locked hero is a
             // silhouette so an owned one is never out-presented by a hero you cannot field.
-            RectTransform portrait = Widgets.Portrait("Portrait", content, def, def.Stars, 76f, true, true, false);
+            // allowArt false is still the rule here, so this goes through Widgets directly
+            // rather than through the kit's PortraitFrame: a locked hero is a silhouette so an
+            // owned one can never be out-presented by a hero you cannot field.
+            RectTransform portrait = Widgets.Portrait("Portrait", content, def, def.Stars, 76f, false, true, false);
             UIBuilder.Box(portrait, 26f, 0f, 76f, 76f, new Vector2(0f, 0.5f));
 
-            Text name = UIBuilder.Label("Name", content, def.Name, UITheme.FontSmall,
-                                        UITheme.TextMuted, TextAnchor.MiddleLeft);
+            Text name = EmberforgeUI.Label("Name", content, def.Name, UITheme.FontSmall,
+                                        Emberforge.TextQuiet, TextAnchor.MiddleLeft);
             UIBuilder.Box(name.rectTransform, 124f, 19f, 620f, 34f, new Vector2(0f, 0.5f));
 
-            Text sub = UIBuilder.Label("Sub", content, "NOT YET SUMMONED", UITheme.FontTiny,
-                                       UITheme.TextDim, TextAnchor.MiddleLeft);
+            Text sub = EmberforgeUI.Label("Sub", content, "NOT YET SUMMONED", UITheme.FontTiny,
+                                       Emberforge.TextQuiet, TextAnchor.MiddleLeft);
             UIBuilder.Box(sub.rectTransform, 124f, -18f, 620f, 28f, new Vector2(0f, 0.5f));
 
-            Text state = UIBuilder.Label("State", content, "LOCKED", UITheme.FontTiny,
-                                         UITheme.TextDim, TextAnchor.MiddleRight);
+            Text state = EmberforgeUI.Label("State", content, "LOCKED", UITheme.FontTiny,
+                                         Emberforge.TextQuiet, TextAnchor.MiddleRight);
             UIBuilder.Box(state.rectTransform, -24f, 0f, 150f, 30f, new Vector2(1f, 0.5f));
         }
 
@@ -390,7 +392,7 @@ namespace Emberfall.UI.Screens
             }
 
             _prompt.text = "TAP A HERO BELOW TO DEPLOY THEM, OR A SLOT TO MOVE WHO IS IN IT";
-            _prompt.color = UITheme.TextMuted;
+            _prompt.color = Emberforge.TextQuiet;
         }
 
         // ------------------------------------------------------------------ actions

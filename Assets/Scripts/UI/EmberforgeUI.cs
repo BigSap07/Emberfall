@@ -26,6 +26,17 @@ namespace Emberfall.UI
         public Text Caption;
     }
 
+    /// <summary>A built selectable card: a pressable plate that gains the kit's gold frame while
+    /// it is the chosen one. Body is where a caller hangs everything it draws, so a repaint can
+    /// clear the contents without touching the plate or its button.</summary>
+    public sealed class ForgeCard
+    {
+        public RectTransform Root;
+        public RectTransform Body;
+        public Image Plate;
+        public UIButton Button;
+    }
+
     /// <summary>A built currency pill: the value is what a caller writes to, the plus is what it
     /// wires up, and the jewel is what tells the three of them apart.</summary>
     public sealed class ForgePill
@@ -176,6 +187,52 @@ namespace Emberfall.UI
             RectTransform sheet = UIBuilder.Node(name, parent);
             PanelOn(sheet, true);
             return sheet;
+        }
+
+        /// <summary>
+        /// A SELECTABLE CARD: a plate you can press, which gains the kit's gold frame while it is
+        /// the one being acted on.
+        ///
+        /// This is the third pressable thing in the kit and it exists because the other two say
+        /// the wrong sentence about a container. A BUTTON has two voices, ember for the thing to
+        /// press and teal for the way back out, and a banner slot or a roster row is neither - a
+        /// page of them built as buttons comes out as a wall of solid teal, which is the
+        /// second-loudest colour in the kit spent on the calmest thing on the screen. A TAB is
+        /// closer but its unselected plate is the darkest surface here, right for a tab strip over
+        /// a sheet and far too heavy for a card the size of a hero.
+        ///
+        /// So: the same warm plate a hero card in the collection already uses, and the SELECTED
+        /// state is that plate gaining a gold frame. Structure is what gold means everywhere else
+        /// in this kit, and "this is the one" is a structural fact.
+        /// </summary>
+        public static ForgeCard SelectableCard(string name, Transform parent, Action action)
+        {
+            ForgeCard card = new ForgeCard();
+            card.Root = UIBuilder.Node(name, parent);
+            card.Plate = PlainPanelOn(card.Root);
+
+            card.Button = new UIButton();
+            card.Button.Root = card.Root;
+            card.Button.Background = card.Plate;
+            card.Button.Button = card.Root.gameObject.AddComponent<Button>();
+            card.Button.Button.targetGraphic = card.Plate;
+            card.Button.Button.transition = Selectable.Transition.None;
+            card.Root.gameObject.AddComponent<ButtonPress>();
+            if (action != null) card.Button.Button.onClick.AddListener(delegate { action(); });
+
+            // Everything a caller draws goes in here, so a repaint can clear the contents without
+            // destroying the plate, the button or the press feedback attached to the root.
+            card.Body = UIBuilder.Node("Body", card.Root);
+            UIBuilder.FillParent(card.Body, 0f);
+            card.Body.gameObject.AddComponent<CanvasGroup>().blocksRaycasts = false;
+            return card;
+        }
+
+        public static void SetCardSelected(ForgeCard card, bool selected)
+        {
+            if (card == null || card.Plate == null) return;
+            card.Plate.sprite = EmberforgeSkin.Get(selected ? EmberforgeArt.Slot.Panel
+                                                            : EmberforgeArt.Slot.PanelPlain);
         }
 
         /// <summary>
@@ -1017,6 +1074,23 @@ namespace Emberfall.UI
         {
             _interactable = value;
             if (!value) _down = false;
+            Apply();
+        }
+
+        /// <summary>
+        /// Changes which VOICE this button speaks in, after it was built.
+        ///
+        /// For the one shape of control the kit's two voices are genuinely a state rather than a
+        /// property: a formation slot is ember while it is where a held hero would land and teal
+        /// the rest of the time, and a picker's chosen row is ember while it is the chosen one.
+        /// Repainting through the skin rather than by setting a sprite at the call site is what
+        /// keeps the pressed and disabled art in step with it - the screen asks for a voice and
+        /// the component still owns every state that voice has.
+        /// </summary>
+        public void SetKind(ForgeButtonKind kind)
+        {
+            if (_kind == kind) return;
+            _kind = kind;
             Apply();
         }
 

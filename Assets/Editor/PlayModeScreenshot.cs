@@ -757,7 +757,11 @@ namespace Emberfall.EditorTools
                 }
             }
 
-            for (int i = 0; i < session.Content.Relics.Count; i++)
+            // HALF the relics, not all of them. Granting every relic makes the shop photograph as
+            // ten OWNED cards, which shows one of that screen's two states and hides the other -
+            // and the one it hides is the card with a price and a BUY on it, which is what the
+            // shop is for.
+            for (int i = 0; i < session.Content.Relics.Count; i += 2)
                 session.GrantRelic(session.Content.Relics[i].Id);
 
             app.RefreshHud();

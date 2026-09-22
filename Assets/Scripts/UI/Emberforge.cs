@@ -115,11 +115,23 @@ namespace Emberfall.UI
         public static readonly Color SecondaryLip = UITheme.Hex("0B4550");
         public static readonly Color SecondaryEdge = UITheme.Hex("062A31");
 
-        public static readonly Color DisabledTop = UITheme.Hex("9EA0A8");
-        public static readonly Color DisabledMid = UITheme.Hex("6C6E77");
-        public static readonly Color DisabledLow = UITheme.Hex("4E505A");
-        public static readonly Color DisabledLip = UITheme.Hex("2C2D34");
-        public static readonly Color DisabledEdge = UITheme.Hex("17181D");
+        /// <summary>
+        /// A DISABLED BUTTON HAS TO RECEDE, and the first ramp here did the opposite.
+        ///
+        /// It was a cool light grey - 9EA0A8 down to 4E505A - which is BRIGHTER than the warm
+        /// brown panel it sits on. On the forge, whose three anvil actions are all unavailable
+        /// until the player has Slag, that made the one row a player cannot use the loudest thing
+        /// on the page. The capture is what caught it; nothing about the token read wrong on its
+        /// own, only against the surface it lands on.
+        ///
+        /// Warm, and darker than PanelTop at every stop, so an unavailable control reads as the
+        /// same object with the light off rather than as a different, paler one.
+        /// </summary>
+        public static readonly Color DisabledTop = UITheme.Hex("4A433E");
+        public static readonly Color DisabledMid = UITheme.Hex("332D2A");
+        public static readonly Color DisabledLow = UITheme.Hex("241F1D");
+        public static readonly Color DisabledLip = UITheme.Hex("171312");
+        public static readonly Color DisabledEdge = UITheme.Hex("0C0A09");
 
         public const int ButtonLip = 6;
         public const int ButtonLipPressed = 2;

@@ -56,10 +56,10 @@ at 20:9 and nowhere else. One aspect is half a check.
 | Settings | converted | RESET PROGRESS is teal on purpose: the kit's ember voice is the thing to press, and the one destructive control in the game is not it. |
 | Profile | converted | The avatar picker scrolls horizontally and its faces are tabs. A layout group in a fixed rect does not overflow, it divides - thirty-two owned heroes were fifty pixels each with their names printed through one another. |
 | Account | converted | Five cards, five text fields, and the kit's disabled button art doing the work the offline state needs. |
-| Forge | pending | |
-| Formation | pending | |
-| Relic shop | pending | |
-| Friends | pending | |
+| Forge | converted | The slot rail is a tab bar and the three anvil actions are one voice, not three: the caller's tint used to colour each button's own border, which is three button voices on a row whose job is to offer three equal choices. |
+| Formation | converted | The banner slots and the roster rows are `SelectableCard`, a third pressable thing the kit needed: built as buttons they came out as a page of solid teal, and a tab's unlit plate is far too heavy at card size. |
+| Relic shop | converted | A relic on the shelf is a framed panel and one already owned is a plain one, so depth carries "you have this". The grade's colour left the card's border: every frame in this kit is gold. |
+| Friends | converted | Photographed in its OFFLINE state, which is what every build with no `supabase.json` shows. The signed-in list needs a live account and a second live account that has sent a request; that is `AccountsVerification`'s job and no synthetic seeding could stand in for it. |
 | Friend's team | pending | |
 | Guild | pending | |
 | Guild requests | pending | |
@@ -81,3 +81,5 @@ at 20:9 and nowhere else. One aspect is half a check.
 | `EmberforgeUI.TextField` | (Sunken) | Five text boxes across the account and guild screens. |
 | `EmberforgeUI.Heading` | - | A section heading inside a panel. Deliberately NOT a ribbon: a ribbon is laid across a panel and overhangs it, which is right for the one thing a panel is called and wrong for the third heading down a scrolling card. |
 | `EmberforgeUI.Sunken` | (Sunken) | The recess as a child, for a node that already has a Graphic on it. |
+| `EmberforgeUI.SelectableCard` | (Panel, PanelPlain) | A plate you can press, which gains the kit's gold frame while it is the one being acted on. The kit's third pressable thing, and it exists because the other two say the wrong sentence about a container: a button has two voices and neither of them is "a slot", and a tab's unlit plate is the darkest surface in the kit - right over a sheet, far too heavy at the size of a hero card. |
+| `UIBuilder.ScrollStrip` | - | The horizontal counterpart of `ScrollList`. A layout group in a fixed rect does not overflow, it divides. |
