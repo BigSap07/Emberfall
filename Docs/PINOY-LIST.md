@@ -16,12 +16,16 @@ It is one file so it can be sent as one message, and it is maintained here rathe
    judgement.
 4. **A note for the next painting** - one constraint on future hub art.
 
-Checked against the tree on 2026-09-22, after the 2-star and 1-star tiers were authored and the
-roster reached 94 of 94. Section 2b was rebuilt against the shipped kits when the 3-star tier
-landed rather than carried forward - the engine gaps pass had retired nine of its rows and this
-file had not been told - and the low-star batch appends to it rather than rebuilding it again.
-**Sections 2b and 2c are now closed lists**: every hero has a shipped kit, so no further batch can
-add a row to either.
+Checked against the tree on 2026-09-22, after the 2-star and 1-star tiers were authored, the
+roster reached 94 of 94, and the five-star review moved four numbers on three of them. Section 2b
+was rebuilt against the shipped kits when the 3-star tier landed rather than carried forward - the
+engine gaps pass had retired nine of its rows and this file had not been told - and the low-star
+batch appends to it rather than rebuilding it again.
+
+**Sections 2b and 2c are closed lists**: every hero has a shipped kit, so no further batch can add
+a row to either, and 2c's four-clause Energy question is now answered here rather than waiting.
+**Section 2d is new and is not closed**, because it holds departures a MEASUREMENT produced rather
+than an authoring batch, and the instruments keep running.
 
 ---
 
@@ -100,6 +104,14 @@ here rather than transcribed, so it is the one that most needs saying yes or no 
   names rather than on a resource the rest of her kit spends before the kill arrives, and it is
   still worth more to a Kiva who held links than to one who did not. It reads 1118 Shield in its own
   arena against 0.
+- **And the "up to 36%" has never been paid, which the text now says out loud.** Measured over the
+  four dark arenas that can raise a Forsaken kill, three seeds each, and over the hero sweep's five:
+  **every payout is exactly 1118**, which is 12% of her 9320 Max HP at level 40, and there is never
+  a second ShieldGain event beside it. The two link-gated clauses are authored, correct and
+  reachable in principle; they are inert at the rates the rest of her kit runs at, which is the same
+  rate this entry already describes. The talent's own description carries the measurement now rather
+  than advertising a number nothing has produced. **Nothing about the kit changed for this** - it is
+  the sentence catching up with the arithmetic.
 
 The wording was changed in `import/Heroes.json` as well as on the shipped talent, so both say the
 same thing. **If the answer is no, both come back together.**
@@ -187,25 +199,34 @@ shipped kit differently because of what the star contract gives each tier, not b
 engine can express, so the answer to any of these could be "change the contract for that hero"
 rather than "change the engine".
 
-**Four of the seven are one question, and it is the one worth answering first.** A 1-star is a
+**Four of the seven were one question and it is now CLOSED, so they need no answer.** A 1-star is a
 basic and nothing else and a 2-star is a basic and one passive, so **neither tier has an active
 skill** - and Energy is spent on nothing else. Four of the low-star designs pay the hero Energy:
 Piri 15 on a kill, Yara 10 for a new bearing, Wynn 5 when a buffed ally is hit, and Orenna 5 on
 every swing. Written as they stand, all four are clauses a player reads on the card and that can
 never do anything. Each shipped kit keeps the amount and moves where it lands - to the ally with
 the emptiest bar, or to the ally who was hit - except Yara's, which is paid in Attack because two
-heroes handing Energy to an ally was already one more than the tier needed. **The choice is
-Pinoy's: either the low tiers get an active skill, or these four clauses mean what the shipped kits
-make them mean.**
+heroes handing Energy to an ally was already one more than the tier needed.
 
-| hero | clause as written | what ships instead | what the faithful shape would cost |
+**The decision: the star contract does not move, and the redirect stands.** One star stays a basic
+and nothing else, two stars stays a basic and one passive, and the Energy those four clauses pay
+goes to an ally who can spend it. The reason is that the alternative was never about these four
+heroes: giving the low tiers an active skill changes the contract `validate_heroes.py` enforces at
+import time for all twenty of them, moves both tiers' star-band rungs - a hero with an active does
+not spend every turn on one ability, which is half of why the low-star basics run to about 350% of
+Attack against Pinoy's 105% to 110% - and re-opens the two ceilings the band read off the tiers
+above. Four clauses on four heroes is not a reason to re-derive a rung. The four rows below are the
+record of what the kits do, not a question.
+
+| hero | clause as written | what ships instead | what the faithful shape would have cost |
 |---|---|---|---|
 | **Piri** | "When Piri defeats an enemy, **she gains 15 Energy**" | the ally with the emptiest bar gains the 15 | an active skill at two stars, for the whole tier |
 | **Wynn** | "When an ally with Wynn's Defense buff is hit, **Wynn gains 5 Energy**" | the ally who was hit gains the 5 | the same |
 | **Orenna** | "Deals 110% Attack damage and **gains 5 Energy**" | the ally with the emptiest bar gains the 5 | an active skill at one star, for the whole tier |
 | **Yara** | "she gains **10 Energy**" | 10% Attack for 1 round instead | the same, plus group 33 for the gate it hangs on |
 
-**The other three are the older question, one tier up.** A 3-star is authored as a basic, an active
+**The other three are the older question, one tier up, and they are still open.** A 3-star is
+authored as a basic, an active
 and one passive and nothing else, where a 4-star may carry an extra passive in the overflow list
 for a described clause that answers a trigger of its own.
 
@@ -214,6 +235,33 @@ for a described clause that answers a trigger of its own.
 | **Avera** | "Disrupted targets lose 8 Energy **after an active skill**" | the engine's own `Disrupted`, which takes the 8 off the first Energy gain each round instead | a second passive on `OnEnemyActive`, which is exactly what Finn's Ringing Slug carries |
 | **Cal** | "The **next ally attack** on the target also deals 25% damage to an adjacent enemy" | Cal's own shot carries 25% into the bodies beside the target | a link plus a second passive on `OnLinkedUnitHit`, which is what Mika's Loose Parts carries |
 | **Petra** | "When a Withheld enemy **targets** an ally, Petra gains 8% Damage Reduction" | it answers the blow landing, so a strike that misses or is blocked does not reach it | nothing in the engine; `OnTargeted` fires on the body being aimed at, not on a watcher |
+
+### 2d. Four numbers on three 5-stars that the measurements moved
+
+Sections 2b and 2c are about clauses the engine could not say or the star contract had no room
+for. **These four are different: every one of them is a sentence the engine says perfectly well,
+and every one of them was measured doing nothing, or doing something nobody could have meant.**
+They are the first departures on 5-star heroes; every number moved below five stars so far has been
+the star band's and is recorded in 2b's preamble rather than row by row.
+
+| hero | clause as written | what ships instead | what the measurement said |
+|---|---|---|---|
+| **Altheon** | Immaculate Record marks the Subject "**for 2 rounds**" and records "up to **120% of Altheon's Attack**" | the Subject lives 3 rounds and the ceiling is 50% of his Attack; the record also takes only Altheon's own blows, which is the sentence's "from Altheon" honoured for the first time | the ceiling needed a single blow of four times his Attack, and his largest effect is 185% and resolves before the record it creates exists. The Subject is also faster than he is, so its clock ticks before his turn and a 2-round Subject contained ONE of his turns. The record closed in none of the five sweep seeds; it closes in four now |
+| **Seraphine** | Volume Closed: "the target becomes Unable to Gain Buffs for 1 round. **When that restriction ends**, Footnote is removed and Seraphine gains 15 Energy" | all of it lands in the same firing, on the turn the record reaches its cap | the second beat needed a mark to survive one of her turns, and Contrary Evidence - her own Dispel - strips it, on the same trigger that fills the record. It ran zero times in every arena |
+| **Seraphine** | nothing: Volume Closed says nothing about damage | closing the book also releases the record as damage to the target | a record that reached its cap was thrown away unread, which is what made Cross Reference work against this clause rather than with it |
+| **Hale** | Field Sign deals "**120% of Attack**" and Closing Radius "**220% of Attack**" | 250% and 570% | he read x0.36 of his role's 5-star median, below every 4-star and both 3-star Marksmen. Both of his numbers are single blows at single targets where his three 5-star peers carry a second damage clause on each ability or hit the whole line; every 4-star and 3-star Marksman had a bigger single-target active than his 220%. He reads x0.79 now |
+
+**The answer that is useful here is different from 2b's.** These are not "the approximation is fine"
+questions. Each is *the shipped number is the one I want*, or *the original number is the one I
+want and the kit should change around it*, and for Hale in particular the second answer means
+giving him a second damage clause rather than restoring 120% and 220%.
+
+One more thing sits underneath the Altheon row and is not a question for Pinoy, only a note:
+Immaculate Record's own ceiling arithmetic assumed a blow lands for as much as it is priced at.
+Defence takes a share of every blow before the record sees it, so a clause that records a fraction
+of damage and ceilings against raw Attack is reading two different currencies. Nothing else in the
+roster is shaped that way today.
+
 ---
 
 ## 3. Strike frames

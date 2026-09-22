@@ -6,9 +6,10 @@ unedited. The archive is the reasoning: why a mechanic is shaped the way it is, 
 measured, what it refused to build and why. This file is the state: what exists, where it lives,
 what is moving, and what is owed.
 
-Checked against the repository on 2026-09-22, after the 2-star and 1-star kits landed and the
-roster reached 94 of 94, against a live `Tools/build-check.ps1` run, a live `validate_heroes.py`
-run and the files themselves, not against this document's own prior claims.
+Checked against the repository on 2026-09-22, after the 2-star and 1-star kits landed, the roster
+reached 94 of 94 and the five-star review closed three of the open decisions, against a live
+`Tools/build-check.ps1` run, a live `validate_heroes.py` run and the files themselves, not against
+this document's own prior claims.
 Where this file and the archive disagree, this file is right about status and the archive is right
 about reasoning.
 
@@ -29,7 +30,10 @@ Two runs decide whether the tree is healthy, and they measure different things.
   Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. The one red
   is the talent coverage note under **Known bugs**, and it is a standing instrument reporting a
   real reading rather than a break. The campaign power-band guard was the second and is green: the
-  curve was re-solved under the eighteen 3-star kits and the low-star batch moved nothing it reads.
+  curve was re-solved under the eighteen 3-star kits, and neither the low-star batch nor the
+  five-star review moved anything it reads - the balance line is Kael, Kiva, Isara, Adric and
+  Orelle, and the review changed none of their behaviour, so all 72 stage fingerprints held and the
+  solver was not re-run.
   **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
@@ -59,10 +63,13 @@ of them needs a stated reason in the commit that moves it.
   carried in prose; the campaign-curve pass pinned it to a file, with one line per stage
   attributing that pass's move.
 - **`hero-sweep-baseline.txt`: 470 lines.** Five seeds for each of the 94 authored heroes, which is
-  the whole roster. Nothing is excluded from it any more.
+  the whole roster. Nothing is excluded from it any more. The five-star review moved 11 of them:
+  all five of Altheon's, all five of Hale's, and one of Seraphine's, which is the single seed in
+  which her Footnote reaches its ceiling at all.
 - **`talent-sweep-baseline.txt`: 450 lines.** All 90 talents at five seeds each, every one compared
   against the same hero at the same seed with nothing picked. Talents are a 5-star's alone, so the
-  lower tiers add none and this file stays at 450.
+  lower tiers add none and this file stays at 450. The five-star review moved 33 of them, all three
+  talents of the same three heroes, for the same reasons their hero-sweep lines moved.
 
 ## Systems
 
@@ -177,8 +184,11 @@ of a role sits and one or two readings have no middle. That is Warden (1), Stalk
 and Tinkerer (2), and it will not change now that the roster is complete. The ceiling keeps running
 for them, and so does the ordering reading.
 
-**Every graded hero on every rung is inside its band**: 16 four-stars, 13 three-stars, 8 two-stars
-and 6 one-stars. The ungraded ones are printed and four of them sit under where the floor would be
+**A 5-star is not graded by the band, and the two that were furthest from their role's middle have
+now been read.** Hale was at x0.36 of the Marksman median and is at x0.79; Altheon was and remains
+the highest reading in the Breaker role. Neither move touched a median, so no hero below five stars
+changed ratio. **Every graded hero on every rung is inside its band**: 16 four-stars, 13
+three-stars, 8 two-stars and 6 one-stars. The ungraded ones are printed and four of them sit under where the floor would be
 if their role had one - Corin at x0.20, Demos at x0.28 and Iolan at x0.37 against a single-hero
 Binder median, and Fenn and Till at x0.09 against a two-hero Tinkerer one. Each wants re-grading
 the day a second and third 5-star is authored in that role, and none of them is a statement about
@@ -421,7 +431,10 @@ same Development condition, and shared with the Android path so both targets ans
 `Tools/build-check.ps1` is the gate. `Tools/doc-lint.ps1` enforces the citation half of CLAUDE.md
 across every tracked markdown file, with its known debt recorded in `Tools/doc-lint-baseline.txt`.
 `Tools/DevHarness` holds every engine check, the stage fingerprints, the hero sweep and the talent
-sweep. CI runs `build-check.ps1` on every push and pull request.
+sweep. **`CheckEveryAuthoredActiveIsCast` is new**: it walks all 74 authored actives over the
+sweep's own arena and seeds, asserts that the set never cast is exactly Roan's - a second hero going
+quiet is a failure now - and then proves his in a dark arena that lets him live to round 4, which
+the sweep does not. CI runs `build-check.ps1` on every push and pull request.
 
 ### Build targets
 
@@ -432,11 +445,14 @@ differs between them.
 
 ## In progress
 
-**`content/low-star-kits`** carries the twelve 2-star and eight 1-star kits, the star band's last
-two rungs and the sweep filler fix. Everything else that was in flight has landed on `main` and is
-observable in the files: the 4-star and 3-star tiers, the rarity stat pass, the star band's floor,
+**`balance/five-star-review`** carries the four open decisions the five-star review closed - Hale's
+band position, Altheon's unreachable Ledger ceiling, Seraphine's Cross Reference conflict and the
+low-tier Energy question - plus two text repairs on Demos and Kiva III, a harness check that sees
+Roan spend his Energy bar, and `Docs/DESIGN-DAMAGE-DISPLAY.md`. Everything else that was in flight
+has landed on `main` and is observable in the files: the 4-star and 3-star tiers, the rarity stat pass, the star band's floor,
 the economy retune, the campaign curve re-derivation, the Hub's four layers, the Emberforge design
-system, Arden's caps and `Docs/ENGINE-GAPS.md`.
+system, Arden's caps, `Docs/ENGINE-GAPS.md`, and the twelve 2-star and eight 1-star kits with the
+star band's last two rungs and the sweep filler fix.
 
 ## Next
 
@@ -484,8 +500,9 @@ In order.
 
 ## Open decisions
 
-Seven. None of them is a number to nudge, and neither the economy question nor the power-band one
-that used to head this list is still here.
+Four. None of them is a number to nudge, and neither the economy question nor the power-band one
+that used to head this list is still here. The five-star review closed four more: the three
+5-star kit questions and the low-tier Energy one, all recorded below.
 
 **The economy decision is resolved.** It read "a simulated player arrives at every stage between
 1.55 and 3.2 times its `recommendedPower`, and either progression is too fast or the targets are
@@ -502,16 +519,49 @@ stars, and `PlayerProfile.NormaliseTeam` only ever fills an empty slot and never
 already deployed, so a newly authored 1-star cannot walk into it. `Tools/solve-recommended-power.ps1`
 was therefore not re-run for this batch.
 
-1. **Four of the twelve low-star Energy clauses mean something other than what Pinoy wrote**, and
-   the choice is his. A 1-star is a basic and a 2-star is a basic and one passive, so **neither
-   tier has an active skill**, and Energy is spent on nothing else. Piri, Yara, Wynn and Orenna are
-   each written to gain Energy, which on those two tiers is a line a player reads on the card that
-   can never do anything. Each shipped kit keeps the amount and moves where it lands, to an ally
-   who can spend it - except Yara's, which is paid in Attack because two heroes handing Energy to
-   an ally was already one more than the tier needed. The alternative is to give the low tiers an
-   active skill, which is a change to the star contract rather than to four heroes.
-   `Docs/PINOY-LIST.md` section 2c carries all four.
-2. **All four walls resolve in zero extra sittings, in simulation.** A stage is
+**And so is the low-tier Energy one.** It read "four of the twelve low-star Energy clauses mean
+something other than what Pinoy wrote, and the choice is his", the choice being whether to give the
+1-star and 2-star tiers an active skill. **The decision is that the star contract does not move and
+the redirect stands**: one star is a basic and nothing else, two stars is a basic and one passive,
+and the Energy Piri, Wynn and Orenna are written to gain goes to an ally who can spend it, while
+Yara's is paid in Attack. The reason is that the alternative was never about four heroes. An active
+skill at those tiers changes the contract `validate_heroes.py` enforces for all twenty of them,
+moves both tiers' star-band rungs - a hero with an active does not spend every turn on one ability,
+which is half of why the low-star basics run to about 350% of Attack against Pinoy's 105% to 110% -
+and re-opens the two ceilings the band read off the tiers above. `Docs/PINOY-LIST.md` section 2c
+carries the four rows as a record of what the kits do rather than as a question.
+
+**The three 5-star kit questions are resolved, and all three were arithmetic rather than taste.**
+
+- **Hale read x0.36 of the Marksman median.** It was both halves of the question the decision
+  asked. Half was the arena: his second passive answers a Quarry target gaining a Shield, and the
+  word Shield does not appear anywhere in `enemies.json`, so it is dark against every enemy in the
+  game; his active's missing-HP rider needs an ally to have struck the Quarry and fired zero times;
+  and he takes 19 turns over the five seeds against Talren's 27, Edrin's 24 and Nysera's 34,
+  because he has no survival clause. Per turn he read 1,583 against a role per-turn median of about
+  2,875. The other half was the kit: his basic is one blow and his active is one blow at one body,
+  where his three 5-star peers each carry a second damage clause or hit the whole line, and every
+  4-star and 3-star Marksman had a bigger single-target active than his 220%. His two numbers are
+  250% and 570% now and he reads x0.79. The Marksman median did not move, because it is the mean of
+  Talren's 77,618 and Nysera's 88,333 and he sits under both.
+- **Altheon III was unreachable, and no roster could have reached it.** The ceiling was 120% of his
+  Attack and Immaculate Record banks 30% of one blow a round, so closing it needed a single blow of
+  four times his own Attack; his largest authored effect is 185% and it resolves before the same
+  cast applies the record it would feed. The Subject is also faster than he is, so its clock ticks
+  before his turn and a 2-round Subject contained exactly one of his turns, and the one blow it
+  recorded was whichever hit landed first rather than his. The Subject lives 3 rounds now, records
+  only Altheon's own blows, and the ceiling is 50% of his Attack. It closes in 4 of the 5 sweep
+  seeds where it closed in none, which lights Altheon III and his second passive with it.
+- **Seraphine's Cross Reference worked against her own Volume Closed**, and the reason was that a
+  record reaching its ceiling was thrown away unread: only Contradiction Filed paid it out, and
+  Volume Closed removed the same Mark and Ledger without releasing them. Underneath that, the
+  closing half could never run at all - it was gated on a MarkAlt that Contrary Evidence, her own
+  Dispel, strips on the same trigger that fills the record. The book closes in one firing now and
+  files what it read: suppression, turn shift, Footnote off, the record released as damage, and the
+  15 Energy. Cross Reference makes the payout arrive sooner and start 30% of her Attack higher, and
+  Volume Closed keeps everything it did. The Dispel half of the finding is open decision 3 below.
+
+1. **All four walls resolve in zero extra sittings, in simulation.** A stage is
    `waveCount` times 12 wins even for a player who never loses, so every stage costs a floor of
    `ceil(ladder / 40)` sittings whatever its difficulty, and the wall is what it costs on top of
    that. The table reads 0 extra sittings and 0 extra hours on `1-9`, `1-12`, `2-6` and `2-12`. A
@@ -521,7 +571,7 @@ was therefore not re-run for this batch.
    with more simulation.** The simulated player never loses to anything the model does not price,
    and "a wall that costs nothing" is either a correct reading of a generous economy or a model
    that cannot see what a wall is; another harness pass cannot tell those apart.
-3. **The CEIL band is blind on `1-1` to `1-8`.** The geared curve is what content is tuned against
+2. **The CEIL band is blind on `1-1` to `1-8`.** The geared curve is what content is tuned against
    and its band assertion covers non-pinned stages only. The instrument's own geared level-1 line
    is worth about 7,000 to 7,400 power and chapter 1 now asks for 2,977 to 8,748, so eight of its
    twelve stages report FLOOR-PINNED: the pin cannot level down to the target, so those rows measure
@@ -530,28 +580,20 @@ was therefore not re-run for this batch.
    is therefore tuned against nothing for two thirds of its length. Closing it would need chapter 1
    income to roughly quadruple, which is a different game, so the alternative is a second cheaper
    yardstick for the opening stages.
-4. **Seraphine's Cross Reference works against her own Volume Closed.** Cross Reference, her talent
-   II, appends a `LedgerIncrement` worth 30% of her Attack to the active. Volume Closed fires on
-   `LedgerAtCap` and, when it does, strips the Mark and the Ledger it was reading. So the talent
-   that fills the record faster also empties it sooner, and talent I says the same thing out loud:
-   the harness proves it records 35% instead of 25% "so Volume Closed shuts the book a round
-   earlier". Whether that is the intended tension of the kit or two clauses fighting is a design
-   call, not a number.
-5. **Altheon III is unreachable in the shipped roster.** Immaculate Record's Ledger banks 30% of one
-   hit a round against 1.2x his Attack on an entry that lives two rounds, and Altheon at Speed 109
-   applies it late, so capping it takes a **single blow of about 5,700 on the Ledger holder**. The
-   biggest single damage effect on any 5-star is about 3,600 and the biggest aimed at
-   `HighestAttackEnemy` about 3,230. Arden's percent-of-Max-HP terms used to cap it outright, and
-   that reading was the defect rather than the talent. Swapping Vaelis in was tried and measured
-   and the Ledger still capped zero times, so this is not a squad that needs picking better. The
-   talent needs either a lower cap or a roster that can land the blow.
-6. **Hale reads x0.36 of the Marksman median.** He is a 5-star at 30,071 against a role median of
-   82,975, which puts him below every authored 4-star Marksman - Leon at 51,231, Maera at 51,678
-   and Tavia at 41,993 - and now below both authored 3-star Marksmen as well, Cal at 29,004 being
-   the closest. The star band only grades heroes below five stars, so nothing fails on this. Either
-   his kit is under-tuned or the sweep arena cannot raise what he is built for, and the roster is
-   finished now, so the comparison is as bad as it is going to get and the two want telling apart.
-7. **The Hub's right rail sits on painted architecture.** The delivered `hub.png` puts the Proving's
+3. **A Mark counts as a buff to `Dispel`, and repairing that is an engine pass rather than a
+   balance edit.** `Dispel` skips harmful statuses and takes everything else, walking newest first.
+   `StatusInfo.IsInert` already names the bookkeeping set - Mark, MarkAlt, Ledger, both Resolve
+   counters and Linked - and its own comment says any rule treating "not harmful" as "beneficial"
+   gets them wrong unless it asks first. `ApplyStatus`'s BuffSuppression gate asks and so does the
+   beneficial count on `CombatUnit`; `Dispel` is the last rule in the engine that does not. Eight
+   authored Dispels say "removes one buff" and none of them wants a Mark, and Seraphine's Contrary
+   Evidence was eating the bookmark her own Volume Closed writes. **The one-line repair was written
+   and measured and backed out**, because of what it costs: 22 of 72 stage fingerprints move, the
+   geared CEIL band goes red on `2-4` at 94.5% against a 92% ceiling, Kael II goes dark in the
+   sweep because his active stops stripping the Mark his talent answers, and the dark-talent check
+   for Seraphine I loses its separation. That is a re-solve of `recommendedPower` and a rewrite of
+   two dark-talent arenas. The decision is whether to spend that pass; the reading is not in doubt.
+4. **The Hub's right rail sits on painted architecture.** The delivered `hub.png` puts the Proving's
    gatehouse hard against the right edge, roughly x 0.82 to 0.97 of the painting, and the rail's
    discs land on its right tower at every supported aspect. No marker and no label is covered -
    `HubMarkerClamp` reserves the rail's column and slides the Proving's plate left while its tail
@@ -570,11 +612,19 @@ The one harness red first, then the rest.
 1. **20 of 90 talents execute but are never observed doing anything** in the sweep arena. Each waits
    on something that arena does not raise: a kill, a mark, a host passive resolving first, a
    particular matchup, an `OnLedgerCapped`. Every one is named in the report with what it waits on,
-   and 23 of them are proved separately in the dark-talent arenas, each built to raise its own gate.
-   The check is red because the sweep refuses to call "nothing happened" a pass. It read 29 when the
-   roster was authored, 27 after the dark-talent pass, and 20 after the kit-defect pass. **It is
-   still 20**: talents belong to a 5-star alone, so the 3-star, 2-star and 1-star tiers added none
-   and could not move this number.
+   and most of them are proved separately in the dark-talent arenas, each built to raise its own
+   gate. The check is red because the sweep refuses to call "nothing happened" a pass. It read 29
+   when the roster was authored, 27 after the dark-talent pass, and 20 after the kit-defect pass.
+   **It is still 20 after the five-star review, and the membership changed underneath the number.**
+   Altheon III has left it: it waits on `OnLedgerCapped`, which no arena had ever raised for him,
+   and his repaired Ledger now closes in four of the five seeds. Seraphine III has joined it, and
+   that is a consequence of a repair rather than a defect in the talent - it deepens a turn shift on
+   the body whose record just capped, and Volume Closed used to re-fire on that body every single
+   turn once capped, because its bookmark was being dispelled and its own gate read the bookmark's
+   absence. Closing the book once per record is the correct behaviour and it costs the talent its
+   repeats; in the sweep the only body that caps is the straggler, which dies of its own bleed
+   before the delay it was handed can land. **Roan could never have moved this number**: the roster
+   authors talents on 5-stars alone and he is a 3-star.
 
 Beyond the harness:
 
@@ -596,10 +646,23 @@ the Celen and Nereia deliveries, every kit clause the engine could not say as wr
 frames, and the note about the right edge of a future hub painting. It is one file so it can be
 sent as one message.
 
+**Section 2d is new and is the first set of departures on 5-star heroes.** Every number moved below
+five stars so far was the star band's and is recorded as a class rather than row by row; these four
+are a sentence the engine says perfectly well that a measurement caught doing nothing, or doing
+something nobody could have meant. Altheon's Subject and its ceiling, both halves of Seraphine's
+Volume Closed, and Hale's two percentages.
+
 ## Later
 
 Not scheduled and not blocked on anything in **Next**, listed so it is not rediscovered.
 
+- **The ability line on a hero's card**, proposed in
+  [`Docs/DESIGN-DAMAGE-DISPLAY.md`](Docs/DESIGN-DAMAGE-DISPLAY.md) and not built. A 1-star's basic
+  reads 437% of Attack where a 5-star's reads 105%, which a player will read as a bug and which is
+  the star contract and the stat ladder working exactly as decided. The doc measures why, weighs
+  three presentations and recommends flat damage at the hero's current stats with the percentage
+  kept beside it. `AbilityDef.Description` and `PassiveDef.Description` are parsed from the JSON
+  and rendered nowhere today, so there is no ability line to change yet.
 - **Guilds phase two.** A guild shop, currency, raids, rewards, guild levels and leaderboards all
   price against the economy, and the economy's shape only settled with the curve re-derivation.
 - **A marketplace.** Nothing built, nothing designed.

@@ -218,7 +218,7 @@
         "talentIII": {
           "id": "kiva_talent_iii",
           "name": "Unclaimed Victory",
-          "description": "When Kiva defeats a Forsaken target, she gains a Shield equal to 12% of her Max HP for 2 rounds, and 12% more for each Broken Link she is holding, up to 36%. All Broken Links are consumed."
+          "description": "When Kiva defeats a Forsaken target, she gains a Shield equal to 12% of her Max HP for 2 rounds, and 12% more for each Broken Link she is holding, up to 36%. All Broken Links are consumed. Measured: every payout in every harness arena is 12%, because Abandoned Support banks at most one Broken Link a round and Severance Paid spends it on the next basic against a Forsaken body, so a kill finds none held. The two link-gated clauses are authored and inert at those rates."
         }
       }
     },

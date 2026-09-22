@@ -44,7 +44,7 @@
           {
             "kind": "Damage",
             "target": "LowestHpEnemy",
-            "power": 1.2
+            "power": 2.5
           },
           {
             "kind": "ApplyStatus",
@@ -60,7 +60,8 @@
             "duration": 2,
             "bypassResist": true
           }
-        ]
+        ],
+        "description": "Deals 250% Attack damage to the enemy with the lowest HP and applies Quarry for 2 rounds. Quarry makes Hale's attacks against that enemy hit 10% harder. Pinoy writes the damage as 120% and Quarry as ignoring 10% Defense; the percentage is the star band's and the engine has no per-attacker armour ignore, so Quarry is a source-keyed Vulnerable of the same size. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
       },
       "active": {
         "id": "hale_closing_radius",
@@ -70,21 +71,22 @@
           {
             "kind": "Damage",
             "target": "EnemyWithMyMark",
-            "power": 2.2
+            "power": 5.7
           },
           {
             "kind": "Damage",
             "target": "EnemyWithMyMark",
-            "power": 1.0,
+            "power": 0.0,
             "targetMissingHpRatio": 0.12,
-            "missingHpCap": 0.15,
+            "attackCap": 1.2,
             "condition": "SubjectDamagedByOtherSinceMyTurn",
             "conditionOn": "Target",
             "condition3": "HpBelow",
             "conditionValue3": -1,
             "conditionOn3": "Caster"
           }
-        ]
+        ],
+        "description": "Deals 570% Attack damage to the enemy with Quarry. If any ally attacked it since Hale's last turn, deals additional damage equal to 12% of its missing HP, up to 120% of Attack. Pinoy writes the first number as 220%; the percentage is the star band's. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
       },
       "passive": {
         "id": "hale_tracking_habit_stats",
@@ -123,12 +125,15 @@
           {
             "kind": "ApplyStatus",
             "target": "HighestDamageDealtEnemy",
+            "condition": "HasMyMark",
+            "conditionOn": "Target",
             "status": "Vulnerable",
             "magnitude": 0.1,
             "duration": 2,
             "bypassResist": true
           }
-        ]
+        ],
+        "description": "At the start of each of Hale's turns, Quarry moves to the enemy that has dealt the most damage, and that enemy takes 10% more damage from Hale for 2 rounds. Both halves answer the same body: when Quarry was defeated there is no Mark to move and the rider does not land either. Pinoy writes the move as happening at the end of a round in which Quarry was not defeated; the engine's nearest hook is the start of his own turn."
       },
       "passive2": {
         "id": "hale_no_safe_distance",
@@ -767,7 +772,7 @@
           "name": "Unclaimed Victory",
           "trigger": "OnKill",
           "oncePerBattle": false,
-          "description": "When Kiva defeats a Forsaken target, she gains a Shield equal to 12% of her Max HP for 2 rounds, and 12% more for each Broken Link she is holding, up to 36%. All Broken Links are consumed.",
+          "description": "When Kiva defeats a Forsaken target, she gains a Shield equal to 12% of her Max HP for 2 rounds, and 12% more for each Broken Link she is holding, up to 36%. All Broken Links are consumed. Measured: every payout in every harness arena is 12%, because Abandoned Support banks at most one Broken Link a round and Severance Paid spends it on the next basic against a Forsaken body, so a kill finds none held. The two link-gated clauses are authored and inert at those rates.",
           "effects": [
             {
               "kind": "Shield",
@@ -1271,84 +1276,59 @@
           {
             "kind": "ApplyStatus",
             "target": "AllEnemies",
-            "status": "BuffSuppression",
-            "duration": 1,
-            "bypassResist": true,
             "condition": "LedgerAtCap",
             "conditionOn": "Target",
-            "condition2": "LacksMyMark",
-            "conditionStatus2": "MarkAlt",
-            "conditionOn2": "Target"
+            "bypassResist": true,
+            "duration": 1,
+            "status": "BuffSuppression"
           },
           {
             "kind": "TurnShift",
             "target": "AllEnemies",
             "magnitude": 0.0,
             "condition": "LedgerAtCap",
-            "conditionOn": "Target",
-            "condition2": "LacksMyMark",
-            "conditionStatus2": "MarkAlt",
-            "conditionOn2": "Target"
-          },
-          {
-            "kind": "ApplyStatus",
-            "target": "AllEnemies",
-            "status": "MarkAlt",
-            "duration": 2,
-            "condition": "LedgerAtCap",
-            "conditionOn": "Target",
-            "condition2": "LacksMyMark",
-            "conditionStatus2": "MarkAlt",
-            "conditionOn2": "Target"
+            "conditionOn": "Target"
           },
           {
             "kind": "RemoveStatus",
             "target": "AllEnemies",
+            "hits": 1,
             "status": "Mark",
-            "hits": 1,
-            "condition": "HasMyMark",
-            "conditionStatus": "MarkAlt",
-            "conditionOn": "Target",
-            "condition2": "LacksStatus",
-            "conditionStatus2": "BuffSuppression",
-            "conditionOn2": "Target"
+            "condition": "LedgerAtCap",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "LedgerRelease",
+            "target": "AllEnemies",
+            "power": 1.0,
+            "condition": "LedgerAtCap",
+            "conditionOn": "Target"
           },
           {
             "kind": "RemoveStatus",
             "target": "AllEnemies",
-            "status": "Ledger",
             "hits": 1,
-            "condition": "HasMyMark",
-            "conditionStatus": "MarkAlt",
+            "status": "Ledger",
+            "condition": "HasStatus",
+            "conditionStatus": "BuffSuppression",
             "conditionOn": "Target",
-            "condition2": "LacksStatus",
-            "conditionStatus2": "BuffSuppression",
+            "condition2": "LacksMyMark",
+            "conditionStatus2": "Mark",
             "conditionOn2": "Target"
           },
           {
             "kind": "EnergyGain",
             "target": "Self",
             "flat": 15,
-            "condition": "HasMyMark",
-            "conditionStatus": "MarkAlt",
+            "condition": "HasStatus",
+            "conditionStatus": "BuffSuppression",
             "conditionOn": "LastTarget",
-            "condition2": "LacksStatus",
-            "conditionStatus2": "BuffSuppression",
+            "condition2": "LacksMyMark",
+            "conditionStatus2": "Mark",
             "conditionOn2": "LastTarget"
-          },
-          {
-            "kind": "RemoveStatus",
-            "target": "AllEnemies",
-            "status": "MarkAlt",
-            "hits": 1,
-            "condition": "HasMyMark",
-            "conditionStatus": "MarkAlt",
-            "conditionOn": "Target",
-            "condition2": "LacksStatus",
-            "conditionStatus2": "BuffSuppression",
-            "conditionOn2": "Target"
           }
-        ]
+        ],
+        "description": "When a Footnote record reaches its cap, the target cannot gain buffs for 1 round, loses turn progress, has Footnote removed and takes damage equal to the whole record, and Seraphine gains 15 Energy. Pinoy writes it in two beats, with the removal and the Energy arriving when the restriction ends, and says nothing about the record being paid out. Both departures are the same repair: the second beat was gated on a Mark that Contrary Evidence - Seraphine's own Dispel - strips on the same trigger that fills the record, so it could never run, and a record that reached its cap was thrown away unread. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
       },
       "talents": {
         "talentI": {
@@ -1567,7 +1547,7 @@
       "basic": {
         "id": "demos_notice_of_loss",
         "name": "Notice of Loss",
-        "description": "Deals 180% Attack damage and applies Arrears for 2 rounds. At turn end, Arrears loses 4% current HP.",
+        "description": "Deals 180% Attack damage and applies Arrears for 2 rounds. At turn end, Arrears loses 4% of its current HP, bounded at 105% of Demos's Attack. The bound is not in Pinoy's sentence and is the only thing holding the clause inside the star band; it is enforced on the Notice of Loss tick passive - see Docs/ENGINE-GAPS.md group 12.",
         "effects": [
           {
             "kind": "Damage",
@@ -12813,23 +12793,25 @@
             "kind": "ApplyStatus",
             "target": "HighestAttackEnemy",
             "status": "Mark",
-            "duration": 2
+            "duration": 3
           },
           {
             "kind": "ApplyStatus",
             "target": "HighestAttackEnemy",
             "status": "Ledger",
             "magnitude": 0.3,
-            "duration": 2,
-            "storedCap": 1.2,
+            "duration": 3,
+            "storedCap": 0.5,
             "ledgerAutoRelease": true,
-            "ledgerBankLimit": 1
+            "ledgerBankLimit": 1,
+            "ledgerBankFromCaster": true
           },
           {
             "kind": "SnapshotHp",
             "target": "HighestAttackEnemy"
           }
-        ]
+        ],
+        "description": "Deals 185% Attack damage to all enemies and marks the enemy with the highest Attack as the Subject for 3 rounds. The first time the Subject takes damage from Altheon each round, record 30% of that damage, up to 50% of Altheon's Attack. When the Subject expires it takes damage equal to the whole record. Pinoy writes the Subject as 2 rounds and the ceiling as 120% of Attack; at those numbers the ceiling needs a single blow of four times Altheon's Attack and the Subject outruns him, so the record got one blow a round and never closed. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
       },
       "passive": {
         "id": "altheon_preserved_moment_stats",
