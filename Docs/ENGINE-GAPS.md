@@ -307,9 +307,10 @@ its own side. There is no placement, no ordering and nothing that forbids either
 
 ## Where the counts stand
 
-Twenty-two capabilities, thirty-nine clauses, across twenty heroes and four authoring batches, which
-is the whole of the 4-star tier plus the four 5-stars whose text met the same walls. Eleven groups
-have more than one occupant:
+Twenty-two capabilities, thirty-nine clauses, across twenty heroes and four authoring batches.
+**All twenty are 4-stars**, which is twenty of the twenty-six in the tier; the other six authored
+cleanly. No 5-star is in this file, and an earlier version of this line that said four of them were
+was wrong - checked hero by hero against `heroes.json`. Eleven groups have more than one occupant:
 
 | group | capability | clauses |
 |---|---|---|
