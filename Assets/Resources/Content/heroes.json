@@ -9247,7 +9247,7 @@
       "basic": {
         "id": "tamsin_snag",
         "name": "Snag",
-        "description": "Deals 135% Attack damage and removes 6% turn progress, or 18% from a buffed target.",
+        "description": "Deals 135% Attack damage and removes 6% turn progress for each target buff, up to 18%.",
         "effects": [
           {
             "kind": "Damage",
@@ -9257,14 +9257,12 @@
           {
             "kind": "TurnShift",
             "target": "LastTarget",
-            "magnitude": -0.06
-          },
-          {
-            "kind": "TurnShift",
-            "target": "LastTarget",
-            "condition": "HasAnyBeneficialStatus",
-            "conditionOn": "Target",
-            "magnitude": -0.12
+            "magnitude": -0.06,
+            "perStack": 1.0,
+            "perStackOn": "Target",
+            "perStackClass": "AnyBeneficial",
+            "perStackMaxCount": 3,
+            "perStackFromZero": true
           }
         ]
       },
@@ -12938,19 +12936,16 @@
         "id": "leon_close_the_case",
         "name": "Close the Case",
         "energyCost": 100,
-        "description": "Deals 490% Attack damage to an enemy with Case Number, and 190% more if it is carrying a buff.",
+        "description": "Deals 490% Attack damage to an enemy with Case Number. Damage increases 10% per displayed buff, up to 40%.",
         "effects": [
           {
             "kind": "Damage",
             "target": "EnemyWithMyMark",
-            "power": 4.9
-          },
-          {
-            "kind": "Damage",
-            "target": "EnemyWithMyMark",
-            "condition": "HasAnyBeneficialStatus",
-            "conditionOn": "Target",
-            "power": 1.9
+            "power": 4.9,
+            "perStack": 0.1,
+            "perStackOn": "Target",
+            "perStackClass": "AnyBeneficial",
+            "perStackMaxCount": 4
           }
         ]
       },

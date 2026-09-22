@@ -257,11 +257,11 @@ talren_the_wayfinder|2|e7342cf892ddd4b8
 talren_the_wayfinder|3|160ecebbad93e173
 talren_the_wayfinder|4|c6c42eb40b7bf1de
 talren_the_wayfinder|5|38d3efda2dc426dd
-tamsin_the_loose_thread|1|81a3d767b01fbe9c
-tamsin_the_loose_thread|2|72fdbcc48a32f658
-tamsin_the_loose_thread|3|72f77bb0385c4a5d
-tamsin_the_loose_thread|4|281da6a4da1f0b2c
-tamsin_the_loose_thread|5|b39b063b760876dd
+tamsin_the_loose_thread|1|2d82444427d4c0f0
+tamsin_the_loose_thread|2|aaaeb50a6c09f9c0
+tamsin_the_loose_thread|3|9ac708b4a3670f3a
+tamsin_the_loose_thread|4|f2f0918123e5d540
+tamsin_the_loose_thread|5|ef853816c976b85f
 tavia_the_signal_huntress|1|e35170d7118720fe
 tavia_the_signal_huntress|2|909fa219757710b0
 tavia_the_signal_huntress|3|c2158d56435c68f0

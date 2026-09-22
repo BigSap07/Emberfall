@@ -188,19 +188,6 @@ enemy at a named third body.
 
 ---
 
-## 17. Counting how many statuses of a class a body carries
-
-`StatusStacksAtLeast` and `MyStatusStacksAtLeast` count entries of ONE named kind.
-`HasAnyBeneficialStatus` answers whether a body has one at all and not how many, so "N per buff" has
-nothing to multiply.
-
-| hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
-|---|---|---|---|---|
-| Tamsin | "removes 6% turn progress **for each target buff**, up to 18%" | a count of beneficial statuses usable as a scalar | 6% flat, and 18% against a body carrying any buff at all | medium |
-| Leon | "Damage increases **10% per displayed buff**, up to 40%" | the same count | the whole 40% lands against a body carrying any buff at all | medium |
-
----
-
 ## 18. Telling WHICH KIND of status a removal took
 
 Both triggers in this group now publish the body the event happened to, so Tamsin's row is gone
@@ -278,7 +265,6 @@ have more than one occupant:
 | 2 | per-round budgets on a standing status | 2 |
 | 3 | telling an area hit from a single-target one | 2 |
 | 8 | remembering who hit MY SIDE rather than who hit ME | 2 |
-| 17 | counting how many statuses of a class a body carries | 2 |
 | 22 | position, and anything that would hold a unit in one | 2 |
 
 **Group 9 is closed.** Two of its five rows were the same exclusion in `OnEnemyDamagedAlly`, met
