@@ -1271,84 +1271,59 @@
           {
             "kind": "ApplyStatus",
             "target": "AllEnemies",
-            "status": "BuffSuppression",
-            "duration": 1,
-            "bypassResist": true,
             "condition": "LedgerAtCap",
             "conditionOn": "Target",
-            "condition2": "LacksMyMark",
-            "conditionStatus2": "MarkAlt",
-            "conditionOn2": "Target"
+            "bypassResist": true,
+            "duration": 1,
+            "status": "BuffSuppression"
           },
           {
             "kind": "TurnShift",
             "target": "AllEnemies",
             "magnitude": 0.0,
             "condition": "LedgerAtCap",
-            "conditionOn": "Target",
-            "condition2": "LacksMyMark",
-            "conditionStatus2": "MarkAlt",
-            "conditionOn2": "Target"
-          },
-          {
-            "kind": "ApplyStatus",
-            "target": "AllEnemies",
-            "status": "MarkAlt",
-            "duration": 2,
-            "condition": "LedgerAtCap",
-            "conditionOn": "Target",
-            "condition2": "LacksMyMark",
-            "conditionStatus2": "MarkAlt",
-            "conditionOn2": "Target"
+            "conditionOn": "Target"
           },
           {
             "kind": "RemoveStatus",
             "target": "AllEnemies",
+            "hits": 1,
             "status": "Mark",
-            "hits": 1,
-            "condition": "HasMyMark",
-            "conditionStatus": "MarkAlt",
-            "conditionOn": "Target",
-            "condition2": "LacksStatus",
-            "conditionStatus2": "BuffSuppression",
-            "conditionOn2": "Target"
+            "condition": "LedgerAtCap",
+            "conditionOn": "Target"
+          },
+          {
+            "kind": "LedgerRelease",
+            "target": "AllEnemies",
+            "power": 1.0,
+            "condition": "LedgerAtCap",
+            "conditionOn": "Target"
           },
           {
             "kind": "RemoveStatus",
             "target": "AllEnemies",
-            "status": "Ledger",
             "hits": 1,
-            "condition": "HasMyMark",
-            "conditionStatus": "MarkAlt",
+            "status": "Ledger",
+            "condition": "HasStatus",
+            "conditionStatus": "BuffSuppression",
             "conditionOn": "Target",
-            "condition2": "LacksStatus",
-            "conditionStatus2": "BuffSuppression",
+            "condition2": "LacksMyMark",
+            "conditionStatus2": "Mark",
             "conditionOn2": "Target"
           },
           {
             "kind": "EnergyGain",
             "target": "Self",
             "flat": 15,
-            "condition": "HasMyMark",
-            "conditionStatus": "MarkAlt",
+            "condition": "HasStatus",
+            "conditionStatus": "BuffSuppression",
             "conditionOn": "LastTarget",
-            "condition2": "LacksStatus",
-            "conditionStatus2": "BuffSuppression",
+            "condition2": "LacksMyMark",
+            "conditionStatus2": "Mark",
             "conditionOn2": "LastTarget"
-          },
-          {
-            "kind": "RemoveStatus",
-            "target": "AllEnemies",
-            "status": "MarkAlt",
-            "hits": 1,
-            "condition": "HasMyMark",
-            "conditionStatus": "MarkAlt",
-            "conditionOn": "Target",
-            "condition2": "LacksStatus",
-            "conditionStatus2": "BuffSuppression",
-            "conditionOn2": "Target"
           }
-        ]
+        ],
+        "description": "When a Footnote record reaches its cap, the target cannot gain buffs for 1 round, loses turn progress, has Footnote removed and takes damage equal to the whole record, and Seraphine gains 15 Energy. Pinoy writes it in two beats, with the removal and the Energy arriving when the restriction ends, and says nothing about the record being paid out. Both departures are the same repair: the second beat was gated on a Mark that Contrary Evidence - Seraphine's own Dispel - strips on the same trigger that fills the record, so it could never run, and a record that reached its cap was thrown away unread. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
       },
       "talents": {
         "talentI": {
