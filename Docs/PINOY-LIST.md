@@ -16,8 +16,9 @@ It is one file so it can be sent as one message, and it is maintained here rathe
    judgement.
 4. **A note for the next painting** - one constraint on future hub art.
 
-Checked against the tree on 2026-09-22, after the 2-star and 1-star tiers were authored, the
-roster reached 94 of 94, and the five-star review moved four numbers on three of them. Section 2b
+Checked against the tree on 2026-09-23, after the 2-star and 1-star tiers were authored, the
+roster reached 94 of 94, the five-star review moved four numbers on three of them, and pass 3 of the
+engine gaps work rewrote the eleven sentences in 2g and moved three numbers on Aminah. Section 2b
 was rebuilt against the shipped kits when the 3-star tier landed rather than carried forward - the
 engine gaps pass had retired nine of its rows and this file had not been told - and the low-star
 batch appends to it rather than rebuilding it again.
@@ -26,8 +27,9 @@ batch appends to it rather than rebuilding it again.
 a row to either, and 2c's four-clause Energy question is now answered here rather than waiting.
 **Sections 2d and 2e are not closed**, because they hold what a MEASUREMENT produced rather than
 an authoring batch, and the instruments keep running. 2e holds two talents that cost the hero who
-picks them. **2f is the newest**: the ability text that still carries a drafting note, one yes or
-no question per note, and it shrinks as answers arrive.
+picks them. **2f** is the ability text that still carries a drafting note, one yes or no question
+per note, and it shrinks as answers arrive. **2g is the newest**: eleven sentences the engine gaps
+pass 3 rewrote when it made the kits do what they say, each one to confirm.
 
 ---
 
@@ -240,11 +242,13 @@ for a described clause that answers a trigger of its own.
 | **Cal** | "The **next ally attack** on the target also deals 25% damage to an adjacent enemy" | Cal's own shot carries 25% into the bodies beside the target | a link plus a second passive on `OnLinkedUnitHit`, which is what Mika's Loose Parts carries |
 | **Petra** | "When a Withheld enemy **targets** an ally, Petra gains 8% Damage Reduction" | it answers the blow landing, so a strike that misses or is blocked does not reach it | nothing in the engine; `OnTargeted` fires on the body being aimed at, not on a watcher |
 
-### 2d. Five numbers on three 5-stars that the measurements moved
+### 2d. Eight numbers on four 5-stars that the measurements moved
 
 Sections 2b and 2c are about clauses the engine could not say or the star contract had no room
-for. **These five are different: every one of them is a sentence the engine says perfectly well,
-and every one of them was measured doing nothing, or doing something nobody could have meant.**
+for. **The Altheon, Seraphine and Hale rows are different: every one of them is a sentence the
+engine says perfectly well, and every one of them was measured doing nothing, or doing something
+nobody could have meant.** The Aminah row is the fourth hero and a different kind again: her kit
+does what it says, and it was simply too small for a 5-star, which the harness now checks.
 They are the first departures on 5-star heroes; every number moved below five stars so far has been
 the star band's and is recorded in 2b's preamble rather than row by row.
 
@@ -254,6 +258,7 @@ the star band's and is recorded in 2b's preamble rather than row by row.
 | **Seraphine** | Volume Closed: "the target becomes Unable to Gain Buffs for 1 round. **When that restriction ends**, Footnote is removed and Seraphine gains 15 Energy" | all of it lands in the same firing, on the turn the record reaches its cap | the second beat needed a mark to survive one of her turns, and Contrary Evidence - her own Dispel - was stripping it, on the same trigger that fills the record. It ran zero times in every arena. The Dispel has since been repaired to skip the bookkeeping statuses, so the mark now survives; the departure stands on its own merits rather than on that defect, and the question of whether the two beats should separate again is open |
 | **Seraphine** | nothing: Volume Closed says nothing about damage | closing the book also releases the record as damage to the target | a record that reached its cap was thrown away unread, which is what made Cross Reference work against this clause rather than with it |
 | **Altheon** | Witness Script deals 120% "and damage increases by **35%** if Altheon has already damaged that enemy this round" | the rider is 35% again, and it resolves BEFORE the 120% blow instead of after it | it shipped as 42%, and the order was what mattered: the condition reads the round's damage list, the 120% blow above it is an entry in that list, so the rider asked a question its own firing had already answered and paid on every basic he ever threw. That flat second blow made his basic x1.55 of the role's per-basic median while his active sat exactly on it, and it is most of why he read x1.51 of the Breaker 5-star median. He reads x1.23 now. Ordered this way the rider fires when the Subject's delayed damage or Fixed in Place reached that body earlier in the round, which is the sentence as written - but a hero with one action a turn reaches it rarely, and it fires zero times in the sweep arena |
+| **Aminah** | Marked Diagnosis deals "**105% of Attack**" and heals for "**55% of Attack**"; Restore the Balance deals "**155% of Attack**" | 170%, 115% and 230% | she read x0.50 of the Mender 5-star median, under two of the three Mender 4-stars, on the same stat line as Marrow. Her kit simply does less in the one arena the project measures in: fewer casts over a shorter life, and a Priority that holds healing back. A 5-star below the 4-stars of its own role is what the new 5-star check exists to catch. She reads x0.86 now |
 | **Hale** | Field Sign deals "**120% of Attack**" and Closing Radius "**220% of Attack**" | 250% and 570% | he read x0.36 of his role's 5-star median, below every 4-star and both 3-star Marksmen. Both of his numbers are single blows at single targets where his three 5-star peers carry a second damage clause on each ability or hit the whole line; every 4-star and 3-star Marksman had a bigger single-target active than his 220%. He reads x0.79 now |
 
 **The answer that is useful here is different from 2b's.** These are not "the approximation is fine"
@@ -281,19 +286,20 @@ roster is shaped that way today.
 ### 2e. Two talents that cost their own hero, and cannot be mended from content
 
 Every authored talent was measured against the same hero with nothing picked, over 40 seeds, in
-the sweep arena and in the arena built to raise it. Eight cost their hero output. Six buy something
+the sweep arena and in the arena built to raise it. Six cost their hero output. Four buy something
 the output total cannot see, or pay a price their own sentence names, and are fine as written:
-Kiva's Unclaimed Victory keeps her alive, Nysera's Deeper Absence strips a buff (a taunting tank's
-Provoke, in the sweep), Rheia's Endless Revision trades casts for bigger ones, Rheia's Perfect
-Reversal pays Energy for every strike it keeps Revision for, Mireth's No Record Remains takes her
-own Focus off the body it strikes, and Marrow's Shared Oath spreads a smaller Promise over a third
-ally. **These two buy nothing, and each is a conflict between the talent and the kit it hangs on**,
+Nysera's Deeper Absence strips a buff (a taunting tank's Provoke, in the sweep), Rheia's Endless
+Revision trades casts for bigger ones, Rheia's Perfect Reversal pays Energy for every strike it
+keeps Revision for, and Marrow's Shared Oath spreads a smaller Promise over a third ally. Kiva's
+Unclaimed Victory and Mireth's No Record Remains were on that list and have left it: once
+Kiva's and Mireth's buff listeners heard real buffs only, the first reads inside the noise and the
+second gains in its own room. **These two buy nothing, and each is a conflict between the talent and the kit it hangs on**,
 so the smallest repair is a change to the kit rather than to a number.
 
 | hero | talent as written | what it costs | why nothing comes back |
 |---|---|---|---|
 | **Kael** | Lasting Materials: "Rubble no longer expires after 3 rounds. Kael can hold up to 5 Rubble, but Take Down the Wall deals 10% less base damage." | 1,726 of his 23,781 output a battle, t -36.6: the 10% cut, exactly | What Breaks Forward consumes all Rubble on his very next Basic Attack, so Rubble never lives long enough to expire and never stacks past what one cast gave. The retention and the cap of 5 have nothing to act on. It loses in every arena it was tried in, including one where his Dispel has four long buffs to take. Unusable Cover now spends Rubble only when it moves a Ward, as its own sentence says, which keeps a Rubble in hand a little longer and changes nothing here: it is still gone at the next basic. The question: should What Breaks Forward stop consuming all of it, or should the talent buy something What Breaks Forward cannot spend first? |
-| **Mireth** | Deeper Erasure: "Remove From Record can trigger twice per Focused enemy during its duration, but the second trigger deals 30% less bonus damage." | 1,909 of her 19,751 a battle, t -4.9 | The Missing Page now lands in every round a Focused enemy gains a buff: its once-a-round limit is spent by a landing rather than by the first buff anywhere, which is what "the first time each round" says. Over Focus's two rounds that is already two landings at full strength. The talent lifts the round limit and caps the clause at two landings per enemy, and the engine's count of those cannot start again when Focus is laid again, so over a fight it is fewer landings, the second one softer. The question: now that the base clause lands every round, should Deeper Erasure take the 30% cut off, or buy a third landing? |
+| **Mireth** | Deeper Erasure: "Remove From Record can trigger twice per Focused enemy during its duration, but the second trigger deals 30% less bonus damage." | against one enemy that buffs every turn, 31,145 of her 96,401 a battle, t -92; the sweep no longer raises The Missing Page, so it is read in that room now | The Missing Page now lands in every round a Focused enemy gains a buff: its once-a-round limit is spent by a landing rather than by the first buff anywhere, which is what "the first time each round" says. Over Focus's two rounds that is already two landings at full strength. The talent lifts the round limit and caps the clause at two landings per enemy, and the engine's count of those cannot start again when Focus is laid again, so over a fight it is fewer landings, the second one softer. The question: now that the base clause lands every round, should Deeper Erasure take the 30% cut off, or buy a third landing? |
 
 **Velis's Final Denial was the second row, and it no longer costs measurably.** Once No Second
 Breath paid its Energy only for enemies below half HP, as its sentence says, the reading fell to
@@ -352,6 +358,35 @@ Energy half, taken off the attacker, does what the sentence describes. Describin
 would print a defect on the card, so it is pinned in `AbilityTextPinnedUnwritten` until the kit
 is repaired. Pinoy's sentence adds the damage to the redirected blow, which is the obvious
 repair.
+
+### 2g. Eleven sentences pass 3 of the engine gaps work rewrote
+
+The engine gaps pass 3 made nine clauses do what Pinoy's sentences say, where before they did
+something close to it. Every sentence below is the player text that ships now, in the house style of
+`Docs/ABILITY-TEXT-STYLE.md`, and each changed because the kit under it changed. **Nine are the
+sentence Pinoy wrote, said at last, and the question is only whether the wording reads right.**
+Two are not: Cyrra's store also pays when it runs out, and Isolde's rider counts debuffs. Those two
+are real questions and say why.
+
+| hero | ability | the text now | against Pinoy's sentence | the question |
+|---|---|---|---|---|
+| **Marrow** | The Cost Is Named | When an ally holding Promise starts their next turn, Promise is spent: it heals them for a share of their Max HP and removes a debuff. | Now what Vow Kept says: the heal lands as that ally's next turn opens. It used to land as their previous turn ended. | Reads right? Recommend yes. |
+| **Nereia** | Deeper Reservoir | Relief Circuit's Reserve can hold more, and when Reserve pays out healing, Nereia gains Energy. | Now what the talent says: the Energy comes when Reserve is spent on healing, and a Reserve that ends empty pays nothing. | Reads right? Recommend yes. |
+| **Nereia** | Shared Reserve | When Reserve pays out, the lowest-HP ally also gains a Ward worth a share of what it held. | Now what the talent says: a Ward worth half of what Reserve released. It used to be a share of Nereia's own Max HP whatever Reserve held. | Reads right? Recommend yes. |
+| **Cyrra** | Hidden Reserve | Bury the Burden also stores a share of the healing it gives beyond each warded ally's Max HP, and any overflow after it. When that Ward breaks, or the store runs out, the ally is healed with what was stored. | The store now starts with Bury the Burden's Ward and pays when that Ward breaks, as written. It also keeps gathering overflow while it lasts, and pays out when it runs out if the Ward never broke, because it shares a store with the one her full Veiled Weight already opens. | Should an unbroken Ward's store be lost instead of paid? Recommend no: the store is shared, and losing it would take the full-Weight payout with it. |
+| **Aeron** | Unpaid Action | The first enemy each round to repay a heavy Turn Debt is Silenced once its turn ends. | Now what the talent says: only a large repayment counts, and the Silence covers the enemy's next turn rather than the one it was already taking. | Reads right? Recommend yes. |
+| **Velis** | Hollow the Wound | Strikes the enemy with the lowest HP. If it is badly hurt, it becomes Hollowed: the next heal it receives is partly turned into damage against it instead. Hollowed does this once. | Now what the active says: Hollowed converts one heal and is spent. It used to convert every heal the enemy took. | Reads right? Recommend yes. |
+| **Velis** | No Second Breath | Whenever an enemy below half HP is healed, Velis gains Energy, more if it is Hollowed. | The Remnant has moved to What Was Taken, where the sentence puts it. | Reads right? Recommend yes. |
+| **Velis** | What Was Taken | Whenever Hollowed turns healing into damage, Velis stores a Remnant, up to a limit. | A new line of text for the half of What Was Taken that stores Remnants, which used to ride on any heal of a Hollowed enemy. | Reads right? Recommend yes. |
+| **Velis** | Starve the Light | When Hollowed turns healing into damage, that enemy loses Energy. If that empties its bar, Velis gains Energy. | Now what the talent says, including the bonus for emptying the bar, which the kit did not have. | Reads right? Recommend yes. |
+| **Isolde** | Unfinished Sentence | The first time each round Isolde's damage over time hurts a Revealed enemy, she strikes it. If that enemy is carrying several debuffs, she strikes harder and gains Energy. | The sentence asks for several damage-over-time effects. Cinder is the only one the game has, and every Cinder on an enemy merges into one whoever lays it, so no team could ever reach the harder strike. It counts debuffs of any kind now, and keeps the idea: a team that piles effects onto one enemy is rewarded. | Is counting debuffs right, or should Isolde's own Cinder stack instead? Recommend debuffs: stacking would break Exposed Vein, which refreshes her Cinder rather than adding another. |
+| **Mireth** | The Missing Page | The first time each round an enemy Mireth has marked gains a buff, she strips it, strikes the enemy and stores a Page, up to a limit. With the Pages full, she spends them all to strike it harder and apply Attack Down. | Now what Remove From Record says: the buff that arrived is removed at once. That also gives Absence Has Weight something to count, which it had not had. | Reads right? Recommend yes. |
+
+**Two changes on this pass changed no sentence**, and are recorded here so nobody looks for them.
+Rheia's Rewrite the Outcome now grants one Revision for each enemy it reached, as her sentence
+counts, rather than a flat amount that overpaid once fewer enemies stood. Arden's Deeper Measure
+now raises the limit on Find the Measure's Max HP damage, as its sentence always said; the game had
+been dropping that part.
 
 ---
 

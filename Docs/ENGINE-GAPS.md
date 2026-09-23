@@ -19,7 +19,9 @@ than written, on the wrong body, against a limit nothing reaches - and measured 
 findings that need a new capability joined the groups below; the rest are either repaired in the
 engine or written up as content instructions in that section. **The content pass that followed
 it** carried those instructions out, built G4 and G5, and closed groups 34, 36 and 37; what it
-landed, what it rejected and what it found is the last part of that section.
+landed, what it rejected and what it found is the last part of that section. **Pass 3**, the
+last section of this file, said the nine clauses that content pass confirmed and left, turned
+`buffsOnly` on (C13), and corrected two of pass 2's readings that the record had wrong.
 
 **Rows are grouped by the capability that is missing**, not by hero, because that is the only
 arrangement in which a repeat is visible. That arrangement did its job: eleven of the original
@@ -164,8 +166,9 @@ Nothing says what a removal REMOVED. `OnStatusRemoved` names the remover and now
 taken from, and `_lastRemovedValue` carries the pending DoT damage that left with it, but no field
 and no condition carries the KIND - so a rider that is supposed to answer only a control debuff
 answers every debuff. The nearest shapes are `TriggerStatus`, which filters the EXPIRY triggers
-against `_expiredKinds`, and `SubjectLostStatusThisFiring`, which answers whether anything was
-taken at all.
+against `_expiredKinds`, and `SubjectLostStatusThisFiring`, which since pass 3 can name ONE kind
+the firing took (Mireth's No Record Remains asks for her Mark that way). "A control debuff" is a
+class of kinds rather than one, and a gate names one, so neither row closes on it.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
@@ -540,7 +543,7 @@ three seeds a stage, with the balance line's five at a level that climbs with th
 
 | # | clause | mismatch | as it ships -> as it reads | output | resolution |
 |---|---|---|---|---|---|
-| 1 | **bookkeeping heard as a buff** - `OnEnemyBuffGained` and `MoveBuffs` treat a Mark, Ledger or Link as an enemy buff | trigger fires more; subject wrong | 7 of 10 listeners answer their own side's marks: Seraphine's Contrary Evidence 46 of 61 firings, Hale 14 of 29, Nadine 13 of 23, Sylven 5 of 20, Kiva 4 of 15, Mireth 4 of 14, Tavia 3 of 13. The shipped moves carry 10 marks off: Tavia's Cut the Wire 5, Vanno's misdirection 5, onto his own ally | listeners read as buffs-only: Tavia -34.0%, Seraphine -15.3%, Mireth +8.7%; Vanno's move buffs-only +66.1%. Made the rule for the whole roster (a run, not committed): finale 1-12 CEIL 63% -> 22%, 2-12 61.5% -> 50.5%, Tavia x0.33 below the 4-star band | engine capability built, opt-in: `buffsOnly` on a passive and on a MoveBuffs effect; turning it on is content plus a campaign retune. **Still off**: the content pass was told not to turn it on |
+| 1 | **bookkeeping heard as a buff** - `OnEnemyBuffGained` and `MoveBuffs` treat a Mark, Ledger or Link as an enemy buff | trigger fires more; subject wrong | 7 of 10 listeners answer their own side's marks: Seraphine's Contrary Evidence 46 of 61 firings, Hale 14 of 29, Nadine 13 of 23, Sylven 5 of 20, Kiva 4 of 15, Mireth 4 of 14, Tavia 3 of 13. The shipped moves carry 10 marks off: Tavia's Cut the Wire 5, Vanno's misdirection 5, onto his own ally | listeners read as buffs-only: Tavia -34.0%, Seraphine -15.3%, Mireth +8.7%; Vanno's move buffs-only +66.1%. Made the rule for the whole roster (a run, not committed): finale 1-12 CEIL 63% -> 22%, 2-12 61.5% -> 50.5%, Tavia x0.33 below the 4-star band | engine capability built, opt-in: `buffsOnly` on a passive and on a MoveBuffs effect; turning it on is content plus a campaign retune. **On since pass 3 (C13)**, on the eight listeners and four moves, with the campaign re-solved |
 | 2 | **limits spent by the trigger** - group 34's shape on 24 shipped passives | trigger lands less | 7 raised by the sweep arena, all land more: Isara III saves 0 -> 5, Maren saves 0 -> 5, Mireth's Missing Page blows 5 -> 18, Branik's Damage Reduction 3 -> 15, Tavia's Dead Channel 6 -> 13, Vanno's misdirection 5 -> 11, Dahlia's Broken Rhythm shields 16 -> 23. The other 17 wait on cases the arena never raises | Isara III +29.8%, Mireth +14.7%, Maren +14.0%. Made the rule: 72 of 72 stage fingerprints move and Mireth lifts the Breaker 5-star median from 81541 to 90536, dropping Aster to x0.29 | engine capability built, opt-in: `chargeOnLanding`. **Set on all 24 by the content pass (C11)**, with Aster raised 3.3% (Attack 182 to 188), which puts her at x0.302 of the new Breaker median |
 | 3 | Kael, Unusable Cover | trigger fires more | 5 Rubble spent on firings that moved no Shield -> 0 | +13.9%; in the live campaign (probe) +6.8% of Kael's damage and shielding, wins unchanged at 50 of 72 | content C1, **landed**, with the Ward pass gated on the ally's Ward too |
 | 4 | Nereia, Change of Course | subject wrong | 25 lethal saves -> 8; 17 were allies Relief Circuit never covered | -6.8% (the shipped clause is the stronger one) | content C2, **landed**, gated on HER Covered; it moved the geared CEIL and forced the solver |
@@ -657,7 +660,8 @@ written, because the kit said otherwise when it was opened; each says why.
   statuses across 10 firings and 0 of them the one that arrived, and all 10 firings answered
   Mireth's own Mark. With the gate and without the Dispel, Absence is honest and has nothing in her
   kit to count; the smallest thing that would let the sentence be said is a Dispel that takes the
-  triggering buff rather than skipping it.
+  triggering buff rather than skipping it. **Written in pass 3**, with exactly that:
+  `EffectDef.DispelTakesTrigger`.
 - **C10** `caldus_defined_duty`: append a `GainResolve` of 1, `maxStacks` 3, gated on `HasMyMark` on
   `LastAttacker`. **Landed on `LastTarget`.** A Self-aimed line is never refused by the per-target
   budget, so gated on the attacker it banked Resolve on every counter the once-a-round budget turned
@@ -684,7 +688,8 @@ written, because the kit said otherwise when it was opened; each says why.
   instruction: `buffsOnly` stays opt-in and off.** Two things about it moved. Hale's buff listener
   is `hale_no_safe_distance_unseen` now, because his Shield half answers `OnEnemyShielded` and has
   no buff to filter. And the 63%-to-22% reading was taken before the content pass re-solved the
-  campaign, so it has to be taken again when this is done.
+  campaign, so it has to be taken again when this is done. **Done in pass 3**, re-read against the
+  re-solved campaign: chapter 1's finale CEIL fell from 68% to 27%, and the solver brought it back to 66.5%.
 
 ### Suspected, not measured
 
@@ -714,7 +719,7 @@ as suspected.
   four is one per enemy capped at her limit, written as a flat four because the per-target count
   (`perTarget`) is a dormant primitive this pass did not light; below four enemies it over-pays. 0
   Revision in the sweep before, 20 after, output unchanged at 81541 - the Speed it buys does not
-  reorder that arena.
+  reorder that arena. **Pass 3 made the four one per enemy**, with `perTarget`.
 - **Nereia, Deeper Reservoir and Shared Reserve (I, II)**: both answer the Ledger's expiry whatever
   it held. Deeper Reservoir pays its 10 Energy at every expiry, where the text pays when Reserve is
   consumed for healing; Shared Reserve pays a Shield of a fixed 10% of her Max HP, where the text pays
@@ -723,27 +728,39 @@ as suspected.
   0 released. Neither is a content line: nothing can ask whether an expiry paid out, and the
   auto-release leaves `_lastLedgerRelease` at the LAST release when a Reserve expires empty, so a
   Shield on `scaleByLastRelease` would pay a stale figure. Both want the auto-release to record an
-  empty release as zero, and Deeper Reservoir wants a condition on it.
+  empty release as zero, and Deeper Reservoir wants a condition on it. **Pass 3 built both, and
+  found this entry's count wrong.** The count read a Reserve as empty unless a heal was the very
+  event before its expiry, and the passives the release heal wakes write events in between: in the
+  sweep every one of the Reserves released, and Shared Reserve's Wards had been paying a tenth of
+  her Max HP where the sentence pays half of what was released. The empty case is real elsewhere:
+  beside a lone bruiser no Covered ally is hit, and every Reserve expires holding nothing.
 - **Cyrra, Hidden Reserve (II)**: `OnShieldBreak` fires on Cyrra's own Shield breaking, where the
   text is about the ally's Bury the Burden Shield. **Confirmed, and left.** 13 firings, each on one of
   her own 13 broken Wards, while 13 Wards broke on other allies unanswered. Moving it to
   `OnAllyShieldBreak` would fix the body and not the shape: the sentence stores from the Ward's
   creation and pays when that Ward breaks, and a store keyed to one Ward is not something a Ledger
-  can be - two of her Ledgers on one ally fold into one entry.
+  can be - two of her Ledgers on one ally fold into one entry. **Pass 3 said it from the other
+  end**: Bury the Burden opens the store as it gives the Ward, before its own heal, and the talent
+  listens on `OnAllyShieldBreak` with `includeSelf` and releases that store. The folding stays, and
+  is harmless: the store's flags match the full-Weight store the base kit already opens.
 - **Velis, Starve the Light (II)**: answers every heal on a Hollowed enemy, including after Hollowed's
   one conversion is spent. **Not as suspected, and something else is.** Hollowed never spends: the
   HealIntercept convert path skips a spent `ledgerBankLimit` but never charges it, so one Hollowed
   with Velis's limit of 1 converted 5 heals in a row, and a listener on `OnEnemyHealed` and one on
   `OnFunnelConvertFired` both answered all 5. There is no spent conversion for the talent to answer
   after. The defect is Hollowed's, "it can trigger once before it expires" in the sentence, and
-  repairing it moves Velis's whole kit, so it is recorded here rather than made.
+  repairing it moves Velis's whole kit, so it is recorded here rather than made. **Made in pass
+  3**: a converting Ledger's limit is spent per application, and the Remnant and Starve the Light
+  answer `OnFunnelConvertFired`.
 - **Isolde, Unfinished Sentence**: the "three or more damage-over-time effects" rider needs three
   Burn entries on one body, and Isolde refreshes her own; it never landed in the sweep, and outside a
   team with two other Burn appliers it is a cap nothing reaches. **Confirmed, and worse than
   suspected.** `AddOrRefresh` folds every application of a kind into one entry whoever applied it,
   and no shipped Burn sets `stackOnReapply`, so three heroes Burning one enemy leave one entry: the
   rider is unreachable in any team. Burn is the only damage-over-time kind, so "three effects" has no
-  engine meaning at all; which number it should read is Pinoy's call.
+  engine meaning at all; which number it should read is Pinoy's call. **Pass 3 counted debuffs
+  instead** (`HarmfulStatusesAtLeast`), and found the whole passive dark in the sweep, not only
+  the rider: Revelation lands on a straggler that dies while her Cinder ticks elsewhere.
 - **Mireth, Absence Has Weight** (code confirmed): `OnStatusRemoved` fires on the remover for any
   removal, so Mireth spending her own Pages counts as a Focused enemy losing a status once the Missing
   Page lands often enough to fill them. C9 carries the gate. **Fixed**: 4 Absence banked ungated,
@@ -756,13 +773,15 @@ as suspected.
   Promises he laid on himself were never spent; 20 of 25 are now. **It is a large move**: his sweep
   output goes from 117914 to 170309 (+44.4%), because he is the lowest-HP ally his own basic Promises
   most often. The ally half stays - 17 Promise heals, all at the ally's turn end - because no trigger
-  opens at an ally's turn start.
+  opens at an ally's turn start. **Pass 3 opened one**, `OnAllyTurnStart`. The +44.4% was toward
+  his role's median rather than away from it: he is a Mender, and that median is Isara's 187832
+  before and after, so he read x0.63 and then x0.91.
 - **Aeron, Unpaid Action (III)**: "repay at least 20% Turn Debt" is not gated; any repayment pays.
   **Confirmed, and left.** 31 Silences, at least 22 of them after a debt one Press Forward banked on
   its own, which is 12% at most. Nothing can ask the size of a repayment: the entries are gone and
   the Energy moved before `OnTurnDebtRepaid` is raised. A second mismatch sits beside it: the Silence
   lands AT the repayment, at the start of the debtor's own turn, where the sentence has it after that
-  turn ends.
+  turn ends. **Both halves said in pass 3**: `SubjectRepaidDebtAtLeast`, asked at `OnEnemyTurnEnd`.
 
 ### The content pass
 
@@ -838,15 +857,157 @@ record; and Mireth II left, because Pages fill now.
 **Found, and left for the next pass.** Each is recorded above where it belongs, and none is built:
 
 - Hollowed's convert path never charges `ledgerBankLimit`, so "once before it expires" converts every
-  heal (Starve the Light, above).
+  heal (Starve the Light, above). **Repaired in pass 3.**
 - A Dispel that takes the buff that raised its window is what C9 needs, and what Absence needs to
-  have anything to count.
+  have anything to count. **Built in pass 3.**
 - An auto-released Ledger that expires empty leaves the last release's figure behind (Nereia I and
-  II, above).
-- "Three or more damage-over-time effects" has no engine meaning (Isolde, above).
+  II, above). **Repaired in pass 3.**
+- "Three or more damage-over-time effects" has no engine meaning (Isolde, above). **Read as debuffs
+  in pass 3.**
 - Rheia's four Revision on Rewrite the Outcome is one per enemy only while four stand; `perTarget`
-  would say it exactly.
+  would say it exactly. **Said in pass 3.**
 - **Suspected, not measured**: a counter the per-target budget refuses still pays a
   `consumesResolve` its effect carries, because the condition that passed is what `ResolveAbility`
   reads, and the budget turns the body away after. Caldus's Defined Duty is the shipped effect with
   that shape, and it spends a Resolve that way whenever he holds one.
+
+---
+
+## Pass 3 - the nine pass 2 left, and buffsOnly
+
+The content pass above confirmed nine clauses doing something other than their sentence and left
+them, each for a stated reason. Pass 3 said all nine, turned `buffsOnly` on as C13 specified, and
+then re-solved the campaign once, at the end. The order was the point: changes like these are not
+independent, so tuning between them would have measured a build that does not ship.
+
+Every clause is proved in the harness section **ENGINE GAPS PASS 3** (`CheckEngineGapsPassThree` in
+`Tools/DevHarness/Program.cs`) the pass 2 way: an engine rule in a synthetic arena with zero
+variance, a shipped clause as a pair fought with the pass 2 reading forced back in memory beside
+the kit as it ships. Where a clause is dark in the sweep, the pair is fought in the dark room that
+raises it, and the line says so.
+
+### The nine, and what each measured
+
+| # | clause | what it does now | measured |
+|---|---|---|---|
+| 1 | Marrow, The Cost Is Named (allies) | an ally's Promise is spent as that ally's next turn opens, on the new trigger `OnAllyTurnStart` | pass 2 reading: 16 Promise heals on allies, every one after the ally had acted. Now 16 as the turn opens and none after. Sweep output 170309 -> 174195 (+2.3%) with the Taunt repair below |
+| 2 | Nereia, Deeper Reservoir (I) and Shared Reserve (II) | an empty auto-release records zero; I pays its Energy only when `LastReleaseAtLeast` says the store paid out; II's Ward is half of what was released, on `scaleByLastRelease` | beside a lone bruiser every Reserve expires empty: I paid on 7 of 8 and II on 5 of 5 of them, now 0 of 5 each. In the sweep every Reserve released, so I is unchanged there, and II's Wards fell from 20864 at a tenth of her Max HP to 10532 at half the release. Talent value: II +8498 -> +6254 a battle |
+| 3 | Cyrra, Hidden Reserve (II) | Bury the Burden opens a store on each ally it wards, before its own heal; the talent listens on `OnAllyShieldBreak` with `includeSelf` and releases it | pass 2 answered 13 of her own broken Wards and none of her allies'. Now 13 allies' and 16 of her own. The store holds overflow, the two lowest-HP allies are seldom full, and none of the breaks in the sweep found anything stored, so most of it pays when the store runs out. Talent value: 0 -> +3175 a battle (t 4.0) |
+| 4 | Aeron, Unpaid Action (III) | `SubjectRepaidDebtAtLeast` reads the fraction of a turn repaid, kept on the debtor as `CombatUnit.DebtRepaidThisTurn`; the talent answers `OnEnemyTurnEnd` and lays a Silence that holds through the next turn | synthetic: debt capped at 12% of a turn, 0 Silences; at 25%, 6, all after the debtor acted. Sweep: pass 2 laid 31, every one before the debtor acted; now 15, none before |
+| 5 | Velis, Hollowed and Starve the Light (II) | a converting Ledger's `ledgerBankLimit` is spent per application (`StatusInstance.ConvertUses`); the Remnant and Starve the Light answer `OnFunnelConvertFired` | one Hollowed converted 5 heals and now converts 1. Alone against a mender, pass 2's kit converted 5 heals off 3 Hollowed and paid 5 Remnants; now 3 off 3, one Remnant each. Sweep output unchanged at 37312: the sweep's healer seldom heals a Hollowed body |
+| 6 | Isolde, Unfinished Sentence | the rider counts debuffs rather than Burn entries: `HarmfulStatusesAtLeast` 3 | Burn folds to one entry per body whoever applies it, so "three damage-over-time effects" was unreachable in any team. Beside Hale and Elyra in her dark room, the rider read as Cinders lands on 0 of 3 firings, read as debuffs on 3 of 3, and on 0 of 63 with nobody laying one. The whole passive is dark in the sweep, not only the rider. **A rewrite, not a restoration: section 2g of `Docs/PINOY-LIST.md` asks** |
+| 7 | Rheia, Rewrite the Outcome's Revision | `perTarget` on the Revision gain: one per enemy the cast reached | with two enemies standing, the flat four paid 20 Revision over 10 casts; now 10. The sweep fields five, and her cap is four, so it moves nothing there |
+| 8 | Mireth, The Missing Page (C9) and Absence Has Weight | the Missing Page's first effect is a Dispel with `dispelTakesTrigger`: it strips the buff that raised the firing and nothing else | against an enemy that buffs every turn, 42 firings stripped 42 buffs, every one the buff that raised it; without the Dispel, none. Absence banks 9 from those strips and none from her own Page spend. Talent sweep: every Mireth line moved |
+| 9 | Arden, Deeper Measure | `attackCap` is a field `TalentMath.TryApplyDelta` changes | "up to a higher limit" is said: the cap on Find the Measure's Max HP blow is 2.1x Attack with the talent, 2.0x without, where the delta was dropped. Talent value +2107 -> +2344 a battle |
+
+### What was built in the engine
+
+Appended enum members only, so no ordinal moved:
+
+- `PassiveTrigger.OnAllyTurnStart`, raised in `TakeTurn` straight after the turn-taker's own
+  `TurnStart` passives and before the Stun check, with the turn-taker as subject and source.
+- `EffectCondition.LastReleaseAtLeast` (Sim state), `SubjectRepaidDebtAtLeast` (pure) and
+  `HarmfulStatusesAtLeast` (pure).
+- `EffectDef.DispelTakesTrigger`, and `SubjectLostStatusThisFiring` answering for one named kind
+  when its gate names a status. Mireth needed the second: her Dispel now runs first in the firing,
+  and No Record Remains strikes "on that same firing" only if the Mark was what left.
+- An empty auto-release records zero in `_lastLedgerRelease`; a converting Ledger's limit is spent
+  per application; `attackCap` joins `TalentMath.TryApplyDelta`.
+
+**One repair nobody asked for, found by item 1.** `TargetMode.BroadcastSubject` resolved in the
+single-enemy branch of `ResolveTargetsInner`, after the other side's Taunt anchor, the caster's
+Provoke and concealment, all of which are rules about which ENEMY a pick may reach. So a heal aimed
+at the ally a broadcast was about landed on the enemy Taunt holder instead: once Marrow's Promise
+moved to the ally's turn start, the sweep's Warden took 5 of his 17 Promise heals. A subject on the
+caster's own side now returns before those rules. It moved Hod, Wynn and Clara in the hero sweep as
+well as Marrow, and no stage fingerprint.
+
+### C13, turned on
+
+`buffsOnly` is set on the eight listeners whose text names a buff (Kiva, Tavia, Mireth,
+Seraphine, Hale's `hale_no_safe_distance_unseen`, Vanno, Sylven, Nadine) and the five `MoveBuffs`
+effects of Cut the Wire, Passed Position, Change Sides and Vanno's misdirection. Read against the
+re-solved campaign, before any retune:
+
+- 8 of 10 listeners had been answering their own side's bookkeeping: Seraphine 46 of 61 firings,
+  Hale 14 of 29, Nadine 13 of 23, Sylven 5 of 20, Kiva, Mireth and Vanno 4 each, Tavia 3.
+- 69 of 72 stage fingerprints moved, and chapter 1's finale CEIL fell from 68% to 27% (chapter 2's held at 66%). Four
+  walls left the power band: 1-9 and 1-12 at x1.07, 2-6 at x1.05, 2-12 at x1.04.
+- In the sweep: Seraphine -15.3%, Tavia -31.6%, Vanno +43.1%, Mireth -4.8%. **Tavia and Vanno are
+  4-stars**, so only Seraphine moved a median: the Breaker median fell from her 90536 to Rheia's
+  81541, which raised every Breaker below five - Siofra x0.59 -> x0.66, Tamsin x0.51 -> x0.57,
+  Aster x0.30 -> x0.34, Avera x0.31 -> x0.34 - and left all of them in band.
+- Tavia fell to x0.33, below the 4-star floor, because Dead Channel had been striking her own
+  Exposed Frequency. Her basic went from 175% to 275% of Attack and Cut the Wire from 370% to 460%,
+  which puts her at x0.49, where she read before.
+- Vanno reads x0.86 of the Stalker median. The Stalker band is not enforced (two 5-stars) and he
+  sits under the median, so nothing fails; he is the nearest ungraded hero to where a ceiling would be.
+
+### The 5-star yardstick, and what it caught
+
+`CheckStarBandByRole` now grades every 5-star against its own role's 5-star median, x0.78 to
+x1.64, wherever the role has two or more. The derivation is beside `FiveStarFloor`: one tier step
+is the measured x0.61, the floor is half a step down and the ceiling a whole step up. It failed one
+hero on its first run: **Aminah at x0.50, under two of the three Mender 4-stars.** Pinoy's numbers
+are what shipped and she has Marrow's stat line; her kit does less, at 0.63 of the Mender per-turn
+median over fewer turns. Her basic went from 105% to 170% of Attack, its heal from 55% to 115%, and
+Restore the Balance from 155% to 230%, which reads x0.86. Nearest the edges now: Kiva and Hale at
+x0.79, Edrin x1.53 and Darian x1.48.
+
+### The retune, once
+
+`Tools/solve-recommended-power.ps1` converged in 17 iterations and moved 22 of 24 stages, 18 in the
+authored roster; every `recommendedPower` rose, by 0% to 9%. Two stages were then moved by hand with
+the solver's own kind of move. At 1-11 its 600-sample reading and the gate's 200-sample one disagreed
+at the band's edge, and the Hollow Husk went down one level (CEIL 77.5% -> 81.5%). 1-10 is
+floor-pinned, which the solver does not measure and the band excludes, but the instrument's line
+sits one percent over what it asks, and the re-solve had taken its CEIL from 96% to 55% - the relief
+stage after the 1-9 wall reading as the hardest finish in chapter 1. The three units under its
+Stone Warden went two levels down, and it reads 83%. **Its ceiling was the first thing tried, and
+it is the wrong lever**: one level lower read 85.5% at 1-10 and pushed 2-12 over its band, because
+the simulated player's losses at 1-10 change every armor drop after it. Across the moves tried,
+2-12 read anywhere from x0.98 to x1.04, so a late wall's band is only as steady as everything the
+simulated player fights before it.
+
+Bands against the documented ones: ordinary stages x1.14 to x1.21 (x1.10 to x1.30); chapter 1 walls
+x1.02 (x1.00 to x1.05); later walls x1.00 and x0.98 (x0.95 to x1.02); geared CEIL on the stages it
+measures 78.5% to 89.5% (78% to 92%), finales 66.5% and 69.5% (55% to 72%).
+
+### The baselines, and what moved each line
+
+Measured by regenerating each baseline at four cumulative states and diffing them, so every line
+has the change that first moved it:
+
+- **Stage fingerprints, 72 of 72.** `buffsOnly` moved 69 (Kiva's Broken Links are in every opening
+  battle); the re-solve and the two hand moves after it moved the other 3 and moved 51 of the 69
+  again. The nine clauses and the Taunt repair moved none.
+- **Hero sweep, 55 of 470.** The nine and the two renumbers, 17: Aminah 5, Marrow 5, Tavia 5, Velis 2.
+  The Taunt repair, 8: Hod 5, Wynn 2, Clara 1, and Marrow's 5 again. `buffsOnly`, 30: Hale, Kiva,
+  Mireth, Seraphine, Sylven and Vanno, 5 each, and Tavia's 5 again. The re-solve, none.
+- **Talent sweep, 134 of 450.** The nine and the renumbers, 59: Aeron III, all three of Aminah and
+  Marrow, Arden I, Cyrra II, Nereia II, and Velis I, II and III. `buffsOnly`, 75: all three talents
+  of Hale, Kiva, Mireth, Seraphine and Sylven. The Taunt repair moved Marrow's 15 again.
+
+### What the talent checks read now
+
+37 gain, 47 sit in the noise, 6 lose, where it was 36, 46 and 8. Kiva III left the costly list
+(-1528 -> -410, t -1.7) and so did Mireth III, which gains in its room now. Mireth I stays a trap and
+is read in `s_buffer`, because the sweep no longer raises The Missing Page: -31145 of 96401, t -92.
+Velis III has a new room, alone against a small self-mending enemy, because a Remnant now needs
+three separate Hollowed each landed low and each healed. `TalentAudit.Costly` was brought to the
+same six, and the harness checks the two equal.
+
+The coverage note went from 21 to 23: Mireth II and Seraphine III joined, both hanging off a buff
+listener the sweep's enemies never raise with a real buff. Both are proved in their dark rooms.
+None left.
+
+### Not done, and why
+
+- **G1, G2 and G3** are still proposals: this pass was the nine clauses and C13.
+- **A counter refused by the per-target budget still spends the Resolve its effect carries** (the
+  suspected Caldus entry): unmeasured, unchanged.
+- **Cyrra, Darian and Edrin read x1.37, x1.48 and x1.53 of their medians.** Inside the ceiling the
+  new check sets; named here and in `DESIGN-BUILD-ORDER.md` as the nearest to it.
+- **Vanno's x0.86** of an ungraded role, above.
+- **Velis III's design question** in `Docs/PINOY-LIST.md` section 2e stands: Final Denial's Heal
+  Suppression also stops the heal Hollowed would convert.

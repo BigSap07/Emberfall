@@ -347,6 +347,15 @@ namespace Emberfall.Core.Data
         /// caster's Id. False (default) removes any beneficial status, the existing behaviour.</summary>
         public bool DispelOwnOnly;
 
+        /// <summary>
+        /// A Dispel inside an OnEnemyBuffGained window takes THE STATUS THAT RAISED THE WINDOW and
+        /// nothing else. Without it the same Dispel does the opposite and skips that kind, so a
+        /// clause answering a buff can read it before anything strips it. Outside such a window
+        /// there is no triggering status and this removes nothing. ENGINE-GAPS pass 3, for
+        /// Mireth's "that status is removed immediately" (C9), which the skip made unsayable.
+        /// </summary>
+        public bool DispelTakesTrigger;
+
         /// <summary>When true, ShieldTransfer and HpTransfer read the TARGET's pool instead of the
         /// caster's. False (default) keeps the existing caster-as-donor behaviour.</summary>
         public bool TransferFromTarget;
@@ -860,6 +869,7 @@ namespace Emberfall.Core.Data
             e.LedgerBankLimit = Math.Max(0, j.GetInt("ledgerBankLimit", 0));
             e.PerTarget = j.GetBool("perTarget", false);
             e.DispelOwnOnly = j.GetBool("dispelOwnOnly", false);
+            e.DispelTakesTrigger = j.GetBool("dispelTakesTrigger", false);
             e.TransferFromTarget = j.GetBool("transferFromTarget", false);
             e.LedgerBankHeals = j.GetBool("ledgerBankHeals", false);
             e.StoredCapBasis = j.GetString("storedCapBasis", "attack");
@@ -975,6 +985,7 @@ namespace Emberfall.Core.Data
             c.LedgerBankLimit = LedgerBankLimit;
             c.PerTarget = PerTarget;
             c.DispelOwnOnly = DispelOwnOnly;
+            c.DispelTakesTrigger = DispelTakesTrigger;
             c.TransferFromTarget = TransferFromTarget;
             c.LedgerBankHeals = LedgerBankHeals;
             c.StoredCapBasis = StoredCapBasis;

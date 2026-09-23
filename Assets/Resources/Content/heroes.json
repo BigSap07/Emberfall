@@ -211,6 +211,7 @@
               "conditionOn2": "BroadcastSubject"
             }
           ],
+          "buffsOnly": true,
           "description": "When an enemy marked as Quarry becomes Untargetable, Hale strikes it and Quarry comes off. Once per enemy."
         }
       },
@@ -748,6 +749,7 @@
             "maxStacks": 2
           }
         ],
+        "buffsOnly": true,
         "description": "The first time each round a Forsaken enemy gains a buff, Kiva gains a Broken Link, holding up to a limit.",
         "chargeOnLanding": true
       },
@@ -1003,7 +1005,7 @@
       "passive1": {
         "id": "marrow_promise_heal",
         "name": "The Cost Is Named",
-        "trigger": "OnAllyTurnEnd",
+        "trigger": "OnAllyTurnStart",
         "oncePerBattle": false,
         "effects": [
           {
@@ -1038,7 +1040,7 @@
             "conditionOn": "BroadcastSubject"
           }
         ],
-        "description": "When an ally holding Promise ends their turn, Promise is spent: it heals them for a share of their Max HP and removes a debuff."
+        "description": "When an ally holding Promise starts their next turn, Promise is spent: it heals them for a share of their Max HP and removes a debuff."
       },
       "passive2": {
         "id": "marrow_promise_survives",
@@ -1389,6 +1391,7 @@
             "conditionOn": "Target"
           }
         ],
+        "buffsOnly": true,
         "description": "When an enemy with Footnote gains a buff, Seraphine strips a buff from it and adds to its record."
       },
       "passive2": {
@@ -2042,7 +2045,7 @@
           {
             "kind": "Damage",
             "target": "HighestAttackEnemy",
-            "power": 1.75
+            "power": 2.75
           },
           {
             "kind": "ApplyStatus",
@@ -2070,20 +2073,22 @@
           {
             "kind": "Damage",
             "target": "EnemyWithMyMark",
-            "power": 3.7
+            "power": 4.6
           },
           {
             "kind": "MoveBuffs",
             "target": "EnemyWithMyMark",
             "hits": 3,
             "moveDuration": 1,
-            "secondaryTarget": "LowestHpEnemy"
+            "secondaryTarget": "LowestHpEnemy",
+            "buffsOnly": true
           }
         ]
       },
       "passive1": {
         "id": "tavia_dead_channel",
         "name": "Dead Channel",
+        "buffsOnly": true,
         "description": "When an enemy with Exposed Frequency gains a buff, Tavia strikes it, once per round.",
         "trigger": "OnEnemyBuffGained",
         "oncePerBattle": false,
@@ -3065,7 +3070,10 @@
             {
               "kind": "EnergyGain",
               "target": "Self",
-              "flat": 10
+              "flat": 10,
+              "condition": "LastReleaseAtLeast",
+              "conditionValue": 1,
+              "conditionOn": "Caster"
             }
           ],
           "overrides": [
@@ -3076,7 +3084,7 @@
               "delta": 0.05
             }
           ],
-          "description": "Relief Circuit's Reserve can hold more, and when Reserve ends Nereia gains Energy."
+          "description": "Relief Circuit's Reserve can hold more, and when Reserve pays out healing, Nereia gains Energy."
         },
         "talentII": {
           "id": "nereia_shared_reserve",
@@ -3088,11 +3096,12 @@
             {
               "kind": "Shield",
               "target": "LowestHpAlly",
-              "selfHpRatio": 0.1,
+              "power": 0.5,
+              "scaleByLastRelease": true,
               "duration": 2
             }
           ],
-          "description": "When Reserve ends, the lowest-HP ally also gains a Ward worth a share of Nereia's Max HP."
+          "description": "When Reserve pays out, the lowest-HP ally also gains a Ward worth a share of what it held."
         },
         "talentIII": {
           "id": "nereia_reversed_flow",
@@ -3258,7 +3267,8 @@
             "target": "Self",
             "maxStacks": 4,
             "duration": 99,
-            "hits": 4
+            "hits": 1,
+            "perTarget": true
           }
         ],
         "description": "Strikes every enemy and applies Guard Down. Any enemy with Attack Down has it rewritten: it gains Attack Up, takes an extra hit and loses the Attack Down."
@@ -4231,7 +4241,8 @@
             "conditionStatus": "Linked",
             "hits": 10,
             "moveDuration": 1,
-            "secondaryTarget": "LowestHpEnemy"
+            "secondaryTarget": "LowestHpEnemy",
+            "buffsOnly": true
           },
           {
             "kind": "MoveBuffs",
@@ -4240,7 +4251,8 @@
             "conditionStatus": "Linked",
             "hits": 10,
             "moveDuration": 1,
-            "secondaryTarget": "HighestAttackEnemy"
+            "secondaryTarget": "HighestAttackEnemy",
+            "buffsOnly": true
           }
         ],
         "description": "Strikes the enemy with the highest Attack and the enemy with the lowest HP. If either carries Departure, its buffs move to the other."
@@ -4791,7 +4803,8 @@
             "target": "Self",
             "hits": 3,
             "moveDuration": 2,
-            "secondaryTarget": "LastTarget"
+            "secondaryTarget": "LastTarget",
+            "buffsOnly": true
           },
           {
             "kind": "MoveDebuffs",
@@ -5027,6 +5040,7 @@
         {
           "id": "vanno_wrong_turn_misdirect",
           "name": "Wrong Turn",
+          "buffsOnly": true,
           "description": "The misdirection itself: a buff landing on a Misdirected enemy is taken off it and given to a random ally of Vanno’s, once per round.",
           "trigger": "OnEnemyBuffGained",
           "oncePerBattle": false,
@@ -5039,7 +5053,8 @@
               "conditionOn": "BroadcastSubject",
               "hits": 1,
               "moveDuration": 2,
-              "secondaryTarget": "RandomAlly"
+              "secondaryTarget": "RandomAlly",
+              "buffsOnly": true
             }
           ],
           "chargeOnLanding": true
@@ -7107,6 +7122,7 @@
             "status": "Ledger"
           }
         ],
+        "buffsOnly": true,
         "description": "When an enemy with a Scar Record gains the buff it remembers, Sylven strips that buff, removes the Scar Record and strikes it. Any other buff it gains becomes the one the Record remembers."
       },
       "talents": {
@@ -8620,18 +8636,22 @@
         "talentIII": {
           "id": "aeron_unpaid_action",
           "name": "Unpaid Action",
-          "trigger": "OnTurnDebtRepaid",
+          "trigger": "OnEnemyTurnEnd",
           "oncePerBattle": false,
           "limit": "OncePerRound",
+          "chargeOnLanding": true,
           "effects": [
             {
               "kind": "ApplyStatus",
               "target": "BroadcastSubject",
               "status": "Silence",
-              "duration": 1
+              "duration": 2,
+              "condition": "SubjectRepaidDebtAtLeast",
+              "conditionValue": 0.2,
+              "conditionOn": "BroadcastSubject"
             }
           ],
-          "description": "The first enemy each round to repay Turn Debt is Silenced."
+          "description": "The first enemy each round to repay a heavy Turn Debt is Silenced once its turn ends."
         }
       }
     },
@@ -11435,21 +11455,34 @@
         "talentII": {
           "id": "cyrra_hidden_reserve",
           "name": "Hidden Reserve",
-          "trigger": "OnShieldBreak",
+          "trigger": "OnAllyShieldBreak",
           "oncePerBattle": false,
+          "includeSelf": true,
           "effects": [
             {
-              "kind": "ApplyStatus",
+              "kind": "LedgerRelease",
               "target": "BroadcastSubject",
-              "status": "Ledger",
-              "magnitude": 0.5,
-              "duration": 2,
-              "ledgerBankHeals": true,
-              "ledgerAutoRelease": true,
-              "ledgerAutoReleaseAsHeal": true
+              "power": 1.0,
+              "releaseAsHeal": true
             }
           ],
-          "description": "When Cyrra's own Ward breaks, she begins storing a share of the overflow healing she receives and is healed with it when the store ends."
+          "appends": [
+            {
+              "ability": "active",
+              "atIndex": 5,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "TwoLowestHpAllies",
+                "status": "Ledger",
+                "magnitude": 0.5,
+                "duration": 2,
+                "ledgerBankHeals": true,
+                "ledgerAutoRelease": true,
+                "ledgerAutoReleaseAsHeal": true
+              }
+            }
+          ],
+          "description": "Bury the Burden also stores a share of the healing it gives beyond each warded ally's Max HP, and any overflow after it. When that Ward breaks, or the store runs out, the ally is healed with what was stored."
         },
         "talentIII": {
           "id": "cyrra_final_weight",
@@ -11944,6 +11977,14 @@
         "limit": "OncePerRound",
         "effects": [
           {
+            "kind": "Dispel",
+            "target": "BroadcastSubject",
+            "hits": 1,
+            "dispelTakesTrigger": true,
+            "condition": "HasMyMark",
+            "conditionOn": "BroadcastSubject"
+          },
+          {
             "kind": "Damage",
             "target": "BroadcastSubject",
             "power": 0.7,
@@ -11994,7 +12035,8 @@
             "conditionOn": "Caster"
           }
         ],
-        "description": "The first time each round an enemy Mireth has marked gains a buff, she strikes it and stores a Page, up to a limit. With the Pages full, she spends them all to strike it harder and apply Attack Down.",
+        "buffsOnly": true,
+        "description": "The first time each round an enemy Mireth has marked gains a buff, she strips it, strikes the enemy and stores a Page, up to a limit. With the Pages full, she spends them all to strike it harder and apply Attack Down.",
         "chargeOnLanding": true
       },
       "talents": {
@@ -12016,7 +12058,7 @@
             },
             {
               "ability": "passive2",
-              "effectIndex": 0,
+              "effectIndex": 1,
               "field": "power",
               "delta": -0.21
             }
@@ -12046,7 +12088,7 @@
           "appends": [
             {
               "ability": "passive2",
-              "atIndex": 4,
+              "atIndex": 5,
               "effect": {
                 "kind": "EnergyGain",
                 "target": "Self",
@@ -12059,7 +12101,7 @@
             },
             {
               "ability": "passive2",
-              "atIndex": 4,
+              "atIndex": 5,
               "effect": {
                 "kind": "EnergyGain",
                 "target": "BroadcastSubject",
@@ -12092,7 +12134,7 @@
           "appends": [
             {
               "ability": "passive2",
-              "atIndex": 4,
+              "atIndex": 5,
               "effect": {
                 "kind": "RemoveStatus",
                 "target": "BroadcastSubject",
@@ -12109,12 +12151,13 @@
             },
             {
               "ability": "passive2",
-              "atIndex": 5,
+              "atIndex": 6,
               "effect": {
                 "kind": "Damage",
                 "target": "BroadcastSubject",
                 "power": 0.8,
                 "condition": "SubjectLostStatusThisFiring",
+                "conditionStatus": "Mark",
                 "conditionOn": "BroadcastSubject",
                 "condition2": "StatusStacksAtLeast",
                 "conditionCounterIndex2": 2,
@@ -12495,7 +12538,7 @@
             "conditionOn": "Target"
           }
         ],
-        "description": "Strikes the enemy with the lowest HP. If it is badly hurt, it becomes Hollowed: once each round, a share of the healing it receives is turned into damage against it instead."
+        "description": "Strikes the enemy with the lowest HP. If it is badly hurt, it becomes Hollowed: the next heal it receives is partly turned into damage against it instead. Hollowed does this once."
       },
       "passive": {
         "id": "velis_no_second_breath_stats",
@@ -12550,18 +12593,9 @@
             "condition2": "HpBelow",
             "conditionValue2": 0.5,
             "conditionOn2": "BroadcastSubject"
-          },
-          {
-            "kind": "GainResolve",
-            "target": "Self",
-            "maxStacks": 3,
-            "duration": 99,
-            "condition": "HasStatus",
-            "conditionStatus": "Ledger",
-            "conditionOn": "BroadcastSubject"
           }
         ],
-        "description": "Whenever an enemy below half HP is healed, Velis gains Energy, more if it is Hollowed. Any heal on a Hollowed enemy also gives her a Remnant."
+        "description": "Whenever an enemy below half HP is healed, Velis gains Energy, more if it is Hollowed."
       },
       "passive2": {
         "id": "velis_what_was_taken",
@@ -12587,6 +12621,23 @@
         ],
         "description": "When Velis holds enough Remnants, she spends them to strike the enemy with the lowest HP, and strikes it again if it is at low HP."
       },
+      "passives": [
+        {
+          "id": "velis_what_was_taken_remnant",
+          "name": "What Was Taken",
+          "trigger": "OnFunnelConvertFired",
+          "oncePerBattle": false,
+          "effects": [
+            {
+              "kind": "GainResolve",
+              "target": "Self",
+              "maxStacks": 3,
+              "duration": 99
+            }
+          ],
+          "description": "Whenever Hollowed turns healing into damage, Velis stores a Remnant, up to a limit."
+        }
+      ],
       "talents": {
         "talentI": {
           "id": "velis_deeper_wound",
@@ -12612,27 +12663,24 @@
         "talentII": {
           "id": "velis_starve_the_light",
           "name": "Starve the Light",
-          "trigger": "OnEnemyHealed",
+          "trigger": "OnFunnelConvertFired",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "EnergyGain",
               "target": "BroadcastSubject",
-              "flat": -10,
-              "condition": "HasStatus",
-              "conditionStatus": "Ledger",
-              "conditionOn": "BroadcastSubject"
+              "flat": -10
             },
             {
               "kind": "EnergyGain",
               "target": "Self",
               "flat": 10,
-              "condition": "HasStatus",
-              "conditionStatus": "Ledger",
+              "condition": "EnergyBelow",
+              "conditionValue": 0,
               "conditionOn": "BroadcastSubject"
             }
           ],
-          "description": "When a Hollowed enemy is healed, it loses Energy and Velis gains Energy."
+          "description": "When Hollowed turns healing into damage, that enemy loses Energy. If that empties its bar, Velis gains Energy."
         },
         "talentIII": {
           "id": "velis_final_denial",
@@ -13398,7 +13446,7 @@
           {
             "kind": "Damage",
             "target": "HighestAttackEnemy",
-            "power": 1.05
+            "power": 1.7
           },
           {
             "kind": "ApplyStatus",
@@ -13417,7 +13465,7 @@
           {
             "kind": "Heal",
             "target": "LowestHpAlly",
-            "power": 0.55
+            "power": 1.15
           }
         ],
         "description": "Strikes the enemy with the highest Attack, marks it and heals the lowest-HP ally. If the marked enemy is at low HP, that ally is healed a second time."
@@ -13430,7 +13478,7 @@
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.55
+            "power": 2.3
           },
           {
             "kind": "ApplyStatus",
@@ -14321,8 +14369,7 @@
             "power": 0.35,
             "condition": "HasMyMark",
             "conditionOn": "BroadcastSubject",
-            "condition2": "StatusStacksAtLeast",
-            "conditionStatus2": "Burn",
+            "condition2": "HarmfulStatusesAtLeast",
             "conditionValue2": 3,
             "conditionOn2": "BroadcastSubject"
           },
@@ -14332,13 +14379,12 @@
             "flat": 8,
             "condition": "HasMyMark",
             "conditionOn": "BroadcastSubject",
-            "condition2": "StatusStacksAtLeast",
-            "conditionStatus2": "Burn",
+            "condition2": "HarmfulStatusesAtLeast",
             "conditionValue2": 3,
             "conditionOn2": "BroadcastSubject"
           }
         ],
-        "description": "The first time each round Isolde's damage over time hurts a Revealed enemy, she strikes it. If that enemy is carrying several stacks of Cinder, she strikes harder and gains Energy.",
+        "description": "The first time each round Isolde's damage over time hurts a Revealed enemy, she strikes it. If that enemy is carrying several debuffs, she strikes harder and gains Energy.",
         "chargeOnLanding": true
       },
       "talents": {
@@ -14732,6 +14778,7 @@
       "passive1": {
         "id": "nadine_proper_place",
         "name": "Proper Place",
+        "buffsOnly": true,
         "description": "The first time each round a Registered enemy hides itself, Nadine strikes it and strips the concealment.",
         "trigger": "OnEnemyBuffGained",
         "oncePerBattle": false,

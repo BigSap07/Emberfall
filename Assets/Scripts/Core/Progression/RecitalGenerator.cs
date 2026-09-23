@@ -95,9 +95,11 @@ namespace Emberfall.Core.Progression
             int level = LevelForFloor(cfg, f);
             bool guardian = IsGuardian(cfg, f);
 
+            HashSet<string> scripted = ScriptedLossEnemies(content);
             List<EnemyDef> pool = new List<EnemyDef>();
             for (int i = 0; i < content.Enemies.Count; i++)
-                if (content.Enemies[i].Aspect == aspect) pool.Add(content.Enemies[i]);
+                if (content.Enemies[i].Aspect == aspect && !scripted.Contains(content.Enemies[i].Id))
+                    pool.Add(content.Enemies[i]);
 
             StageDef stage = new StageDef();
             stage.Id = "recital_floor_" + f;
@@ -122,6 +124,31 @@ namespace Emberfall.Core.Progression
                 stage.Enemies.Add(spawn);
             }
             return stage;
+        }
+
+        /// <summary>
+        /// Templates the Recital must never draw: whatever the prologue's scripted loss fields that
+        /// no campaign stage fields. Today that is The Unmade alone, a boss built to end a level-42
+        /// squad at level 60, and before this every Umbra floor drew it - twice on floors 5 and 11,
+        /// and on every sixth floor after - so the Recital handed players a fight authored to be lost.
+        ///
+        /// Read off the prologue rather than off a list of ids, the way GuildDungeonGenerator reads
+        /// its pool off the campaign, so a second scripted loss is excluded without anyone editing
+        /// this file. NOT the Guild's rule itself: that draws only what some campaign stage fields,
+        /// and Fractured Chorister, the only Lumen template, is fielded by no stage because it was
+        /// authored for this mode. The Recital draws everything except the scripted loss.
+        /// </summary>
+        public static HashSet<string> ScriptedLossEnemies(ContentDatabase content)
+        {
+            HashSet<string> campaign = new HashSet<string>();
+            for (int s = 0; s < content.AllStages.Count; s++)
+                for (int e = 0; e < content.AllStages[s].Enemies.Count; e++)
+                    campaign.Add(content.AllStages[s].Enemies[e].EnemyId);
+            HashSet<string> scripted = new HashSet<string>();
+            StageDef loss = PrologueScript.BuildStage(PrologueScript.Step.Boss);
+            for (int e = 0; e < loss.Enemies.Count; e++)
+                if (!campaign.Contains(loss.Enemies[e].EnemyId)) scripted.Add(loss.Enemies[e].EnemyId);
+            return scripted;
         }
 
         /// <summary>Best-fit existing environment id per Aspect - none of the six painted

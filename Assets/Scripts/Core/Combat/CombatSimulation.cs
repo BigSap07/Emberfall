@@ -392,7 +392,23 @@ namespace Emberfall.Core.Combat
                 case EffectCondition.SubjectIsCasting:
                 case EffectCondition.ShieldBrokenByCaster:
                 case EffectCondition.SubjectHadStatusWhenStruck:
+                case EffectCondition.LastReleaseAtLeast:
                     return false;
+
+                // Pure: the repayment is kept on the debtor. Strictly positive as well as at
+                // least the value, so a threshold of zero still means "repaid something".
+                case EffectCondition.SubjectRepaidDebtAtLeast:
+                    return subject.DebtRepaidThisTurn > 0f && subject.DebtRepaidThisTurn >= effect.ConditionValue;
+
+                // Entries, not kinds: two debuffs of one kind fold into one entry anyway, so the
+                // two readings only differ where a status stacks by application.
+                case EffectCondition.HarmfulStatusesAtLeast:
+                {
+                    int harmful = 0;
+                    for (int i = 0; i < subject.Statuses.Count; i++)
+                        if (StatusInfo.IsHarmful(subject.Statuses[i].Kind)) harmful++;
+                    return harmful >= effect.ConditionValue;
+                }
 
                 case EffectCondition.LedgerAtCap:
                 {
@@ -715,6 +731,18 @@ namespace Emberfall.Core.Combat
             /// question about one firing, and nothing in the condition vocabulary could ask it.
             /// </summary>
             private readonly List<int> _removedFromThisFiring = new List<int>();
+
+            /// <summary>
+            /// The same record with the KIND each removal took, as (unit id, kind) pairs. Read only
+            /// when SubjectLostStatusThisFiring names a status, which no clause did before pass 3;
+            /// every unnamed read still asks _removedFromThisFiring and answers as it always did.
+            ///
+            /// Mireth is why. Her Missing Page strips the buff that raised it, as its first effect,
+            /// and No Record Remains strips her Focus later in the same firing and then strikes
+            /// "on that same firing" - a gate that asked "lost anything" would have read the buff
+            /// strip and struck on the first firing of every battle.
+            /// </summary>
+            private readonly List<long> _removedKindsThisFiring = new List<long>();
 
             /// <summary>
             /// The body the chosen ability's first Damage struck, and the status kinds it carried
@@ -1640,6 +1668,9 @@ namespace Emberfall.Core.Combat
                 // inside this turn should see the turn it is part of as having happened.
                 unit.ActedThisRound = true;
                 unit.LastTurnRound = _round;
+                // Written by RepayTurnDebt a few lines down, so "repaid at least this much" is
+                // always a question about the turn now opening and never about an older one.
+                unit.DebtRepaidThisTurn = 0f;
 
                 TickDamageOverTime(unit);
                 if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
@@ -1648,6 +1679,22 @@ namespace Emberfall.Core.Combat
                 if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
 
                 TriggerPassive(unit, PassiveTrigger.TurnStart, 0);
+                if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
+
+                // THE MIRROR OF OnAllyTurnEnd, and the moment "at the start of their next turn"
+                // names. Raised before the Stun check below on purpose: a stunned ally's turn
+                // still opens, it is only its action that is skipped, and a clause that pays out
+                // as a turn opens pays out on that one too. Same window shape as the turn-end
+                // broadcast: the turn-taker is subject and source, and is excluded.
+                {
+                    CombatUnit prevStartSubject = _broadcastSubject;
+                    int prevStartSrc = _broadcastSourceId;
+                    _broadcastSubject = unit;
+                    _broadcastSourceId = unit.Id;
+                    BroadcastPassive(unit.IsPlayer, PassiveTrigger.OnAllyTurnStart, 0, unit);
+                    _broadcastSourceId = prevStartSrc;
+                    _broadcastSubject = prevStartSubject;
+                }
                 if (!unit.Alive || IsBattleOver()) { ExpireStatuses(unit); return; }
 
                 // Stun: the whole turn is skipped - no Basic Attack, no Active, no energy gain.
@@ -2032,6 +2079,15 @@ namespace Emberfall.Core.Combat
                         _lastBandHp[s.SourceId] = unit.Hp;
                     }
 
+                    // AN EMPTY RELEASE IS A RELEASE OF ZERO. An auto-releasing Ledger that expires
+                    // holding nothing used to leave the per-caster record at whatever its previous
+                    // release paid, so a clause answering the expiry with ScaleByLastRelease paid a
+                    // stale figure and a clause asking "did it pay out" had nothing to ask. Measured
+                    // in ENGINE-GAPS pass 2: all 15 of Nereia's Reserves in the sweep expired empty,
+                    // and both of her Reserve talents paid in full on every one.
+                    if (s.Kind == StatusKind.Ledger && s.AutoRelease && s.Stored <= 0f)
+                        _lastLedgerRelease[s.SourceId] = 0f;
+
                     if (s.Kind == StatusKind.Ledger && s.AutoRelease && s.Stored > 0f)
                     {
                         int payout = (int)Math.Round(s.Stored, MidpointRounding.AwayFromZero);
@@ -2231,7 +2287,7 @@ namespace Emberfall.Core.Combat
                     // state for the same reason the three above are: the list belongs to the
                     // ability in flight, and nothing a caller could pass in knows about it.
                     case EffectCondition.SubjectLostStatusThisFiring:
-                        first = _removedFromThisFiring.Contains(subject.Id);
+                        first = LostThisFiring(subject, effect.ConditionStatus);
                         break;
 
                     // G4. Whether this body is the one the chosen ability first struck, and
@@ -2239,6 +2295,13 @@ namespace Emberfall.Core.Combat
                     // as the line above: the snapshot belongs to the ability in flight.
                     case EffectCondition.SubjectHadStatusWhenStruck:
                         first = StruckFirstHad(subject, effect.ConditionStatus);
+                        break;
+
+                    // Pass 3. Whether the CASTER's last Ledger release paid at least the value -
+                    // a question about the caster whatever the gate's subject is, the same way
+                    // ScaleByLastRelease reads the caster's record whatever the effect targets.
+                    case EffectCondition.LastReleaseAtLeast:
+                        first = LastReleasePaid(caster, effect.ConditionValue);
                         break;
 
                     // Whether this body has a cast declared and not yet resolved. Sim state, so it
@@ -2331,6 +2394,16 @@ namespace Emberfall.Core.Combat
                 return Condition3MetHere(effect, caster, target);
             }
 
+            /// <summary>Whether `caster`'s most recent Ledger release paid at least `min`, and
+            /// something rather than nothing. An empty auto-release records zero, so a store that
+            /// expired empty answers no.</summary>
+            private bool LastReleasePaid(CombatUnit caster, float min)
+            {
+                if (caster == null) return false;
+                float paid = GetLastLedgerRelease(caster.Id);
+                return paid > 0f && paid >= min;
+            }
+
             /// <summary>G4: the subject is the body the chosen ability first struck, and it carried
             /// `kind` as that blow began. False before anything was struck and for every other
             /// body.</summary>
@@ -2385,9 +2458,11 @@ namespace Emberfall.Core.Combat
                     case EffectCondition.LastMovedAboveHpFraction:
                         return LastMovedAboveFraction(caster, subject2, gate2.ConditionValue);
                     case EffectCondition.SubjectLostStatusThisFiring:
-                        return _removedFromThisFiring.Contains(subject2.Id);
+                        return LostThisFiring(subject2, gate2.ConditionStatus);
                     case EffectCondition.SubjectHadStatusWhenStruck:
                         return StruckFirstHad(subject2, gate2.ConditionStatus);
+                    case EffectCondition.LastReleaseAtLeast:
+                        return LastReleasePaid(caster, gate2.ConditionValue);
                 }
 
                 if (gate2.ConditionOn == ConditionSubject.Defeated
@@ -2445,9 +2520,11 @@ namespace Emberfall.Core.Combat
                     case EffectCondition.LastMovedAboveHpFraction:
                         return LastMovedAboveFraction(caster, subject3, gate3.ConditionValue);
                     case EffectCondition.SubjectLostStatusThisFiring:
-                        return _removedFromThisFiring.Contains(subject3.Id);
+                        return LostThisFiring(subject3, gate3.ConditionStatus);
                     case EffectCondition.SubjectHadStatusWhenStruck:
                         return StruckFirstHad(subject3, gate3.ConditionStatus);
+                    case EffectCondition.LastReleaseAtLeast:
+                        return LastReleasePaid(caster, gate3.ConditionValue);
                 }
 
                 if (gate3.ConditionOn == ConditionSubject.Defeated
@@ -2545,6 +2622,11 @@ namespace Emberfall.Core.Combat
                 }
                 if (owed <= 0f || rate <= 0f) return;
 
+                // The size of the repayment, kept on the debtor for the rest of its turn. The
+                // entries are gone and the Energy is about to move, so this is the only place
+                // left that knows it - EffectCondition.SubjectRepaidDebtAtLeast reads it.
+                unit.DebtRepaidThisTurn = owed;
+
                 int cost = (int)Math.Round(owed * rate, MidpointRounding.AwayFromZero);
                 if (cost > 0) AddEnergy(unit, -cost, -1);
 
@@ -2585,7 +2667,7 @@ namespace Emberfall.Core.Combat
                 // Cleared on the same boundary and inherited the same way: "this firing removed a
                 // status from that body" is a question about the ability a unit chose, and a
                 // passive it woke is part of that firing rather than a firing of its own.
-                if (depth == 0) _removedFromThisFiring.Clear();
+                if (depth == 0) { _removedFromThisFiring.Clear(); _removedKindsThisFiring.Clear(); }
                 // G4's snapshot, on the same boundary for the same reason.
                 if (depth == 0) { _struckFirstId = -1; _struckFirstKinds.Clear(); }
                 // Cleared and restored on exactly the same boundary _lastTarget uses, and for the
@@ -3203,6 +3285,9 @@ namespace Emberfall.Core.Combat
                                 led.AutoRelease = effect.LedgerAutoRelease;
                                 led.Mitigates = effect.LedgerMitigates;
                                 led.BankLimit = effect.LedgerBankLimit;
+                                // A fresh application is a fresh allowance for a converting
+                                // entry, whose limit is per application rather than per round.
+                                led.ConvertUses = 0;
                                 led.BankHeals = effect.LedgerBankHeals;
                                 led.BankOnlyFrom = effect.LedgerBankOnlyFrom;
                                 led.BankFromCaster = effect.LedgerBankFromCaster;
@@ -3321,6 +3406,7 @@ namespace Emberfall.Core.Combat
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
                             cleansedValue += RemainingDotDamage(target.Statuses[i], target);
+                            NoteRemovedKind(target, target.Statuses[i].Kind);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
@@ -3351,7 +3437,18 @@ namespace Emberfall.Core.Combat
                             // Exclude the buff that triggered OnEnemyBuffGained, so "when an enemy
                             // gains a buff, dispel it" does not strip the very buff that raised the
                             // trigger before anything else can read it.
-                            if (_broadcastBuff != StatusKind.None && target.Statuses[i].Kind == _broadcastBuff) continue;
+                            //
+                            // OR TAKE EXACTLY THAT ONE, when the effect says so. "The first time that
+                            // enemy receives a positive status, THAT STATUS is removed" is the
+                            // opposite reading, and a Dispel that skipped the kind stripped some
+                            // older buff or nothing, never the one the sentence names. Walked newest
+                            // first like every Dispel, so of two entries of the kind it is the one
+                            // that just arrived that goes.
+                            if (effect.DispelTakesTrigger)
+                            {
+                                if (_broadcastBuff == StatusKind.None || target.Statuses[i].Kind != _broadcastBuff) continue;
+                            }
+                            else if (_broadcastBuff != StatusKind.None && target.Statuses[i].Kind == _broadcastBuff) continue;
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
                             // Same rule as the expiry path: a dispelled ward stops absorbing. A
@@ -3359,6 +3456,7 @@ namespace Emberfall.Core.Combat
                             // disagreement, reached by a different door.
                             if (target.Statuses[i].Kind == StatusKind.Shield) target.Shield = 0f;
                             dispelledValue += RemainingDotDamage(target.Statuses[i], target);
+                            NoteRemovedKind(target, target.Statuses[i].Kind);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
@@ -3454,6 +3552,7 @@ namespace Emberfall.Core.Combat
                             BattleEvent e = Emit(BattleEventType.StatusExpired, source.Id, target.Id);
                             e.Status = target.Statuses[i].Kind;
                             strippedValue += RemainingDotDamage(target.Statuses[i], target);
+                            NoteRemovedKind(target, target.Statuses[i].Kind);
                             target.Statuses.RemoveAt(i);
                             removed++;
                         }
@@ -4594,6 +4693,22 @@ namespace Emberfall.Core.Combat
             /// whether this firing stripped that enemy, and an ability that took two buffs off one
             /// body did not strip it twice as far as any authored clause is concerned.
             /// </summary>
+            private void NoteRemovedKind(CombatUnit target, StatusKind kind)
+            {
+                if (target == null) return;
+                long key = target.Id * 65536L + (int)kind;
+                if (!_removedKindsThisFiring.Contains(key)) _removedKindsThisFiring.Add(key);
+            }
+
+            /// <summary>SubjectLostStatusThisFiring: any removal from this body in the firing, or,
+            /// where the gate names a status, a removal of that kind.</summary>
+            private bool LostThisFiring(CombatUnit subject, StatusKind kind)
+            {
+                if (subject == null) return false;
+                if (kind == StatusKind.None) return _removedFromThisFiring.Contains(subject.Id);
+                return _removedKindsThisFiring.Contains(subject.Id * 65536L + (int)kind);
+            }
+
             private void NoteRemovedFrom(CombatUnit target)
             {
                 if (target == null) return;
@@ -5817,6 +5932,13 @@ namespace Emberfall.Core.Combat
                     if (led.FunnelSource != FunnelSource.HealIntercept) continue;
                     if (led.Magnitude <= 0f || amount <= 0) continue;
                     if (led.BankLimit > 0 && led.BankUsesThisRound >= led.BankLimit) continue;
+                    // A CONVERSION IS SPENT FOR THE LIFE OF THE ENTRY, not for the round. "It can
+                    // trigger once before it expires" is the sentence, and the convert path used
+                    // to skip a spent limit without ever charging it, so one Hollowed with a limit
+                    // of 1 converted every heal it was handed - 5 in a row in the pass 2 arena. The
+                    // bank path below keeps the per-round reading it always had: a deposit is not
+                    // a spend, and the Ledgers that bank per round are written against that.
+                    if (led.FunnelConvert && led.BankLimit > 0 && led.ConvertUses >= led.BankLimit) continue;
 
                     int intercepted = (int)Math.Round(amount * led.Magnitude, MidpointRounding.AwayFromZero);
                     if (intercepted <= 0) continue;
@@ -5825,6 +5947,7 @@ namespace Emberfall.Core.Combat
 
                     if (led.FunnelConvert)
                     {
+                        led.ConvertUses++;
                         // Convert path: deal the intercepted amount as damage immediately.
                         DealRawDamage(led.SourceId, target, intercepted, false, "impact",
                                       StatusKind.None, 1f, "");
@@ -7339,6 +7462,21 @@ namespace Emberfall.Core.Combat
 
                 }
 
+                // A BROADCAST ABOUT ONE OF THE CASTER'S OWN SIDE IS NOT A PICK OF AN ENEMY.
+                // BroadcastSubject resolves in the single-enemy switch below, which is right when
+                // the news is about an enemy and wrong when it is about an ally: everything between
+                // here and that switch - a Provoke on the caster, the other side's Taunt anchor,
+                // concealment - is a rule about which ENEMY a single-target pick may reach. Asked
+                // of a heal aimed at the ally whose turn was opening, the enemy's Taunt holder
+                // answered instead, and Marrow's Promise healed the sweep's Warden 5 times in 17.
+                // ENGINE-GAPS pass 3 found it the moment that heal moved to the ally's turn start.
+                if (mode == TargetMode.BroadcastSubject && caster != null && _broadcastSubject != null
+                    && _broadcastSubject.IsPlayer == caster.IsPlayer)
+                {
+                    if (_broadcastSubject.Alive && _broadcastSubject != excluded) result.Add(_broadcastSubject);
+                    return result;
+                }
+
                 // THE HAND-DRIVEN PICK, and the only line in this method that is not about the
                 // game. `_forcedPrimary` is null in every battle the game resolves - the guard is a
                 // null test, draws nothing from the RNG and cannot move a fingerprint - and is set
@@ -8077,6 +8215,7 @@ namespace Emberfall.Core.Combat
                     landed.Mitigates = status.Mitigates;
                     landed.BankLimit = status.BankLimit;
                     landed.BankUsesThisRound = status.BankUsesThisRound;
+                    landed.ConvertUses = status.ConvertUses;
                     landed.BankHeals = status.BankHeals;
                     landed.BankOnlyFrom = status.BankOnlyFrom;
                     landed.BankFromCaster = status.BankFromCaster;
