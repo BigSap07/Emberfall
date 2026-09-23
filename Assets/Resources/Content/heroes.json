@@ -13686,7 +13686,7 @@
         "id": "aminah_emergency_release",
         "name": "No Wasted Recovery",
         "trigger": "OnAllyHpBelowThreshold",
-        "threshold": 0.5,
+        "threshold": 0.3,
         "oncePerBattle": true,
         "effects": [
           {

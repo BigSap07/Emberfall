@@ -24250,7 +24250,7 @@ namespace Emberfall.DevHarness
             "clara_known_condition",
             "demos_notice_of_loss", "demos_arrears_tick",
             "hale_field_sign", "hale_closing_radius",
-            "kiva_unclaimed_victory", "seraphine_volume_closed", "altheon_witness_script",
+            "seraphine_volume_closed", "altheon_witness_script",
             "altheon_immaculate_record"
         };
 
@@ -26831,23 +26831,25 @@ namespace Emberfall.DevHarness
                       "Mireth III adds damage when The Missing Page lands on a wounded Focused "
                       + "enemy (" + b.SubjectDamage + " against " + a.SubjectDamage + ")");
 
-            // ---- Rheia I: three Energy per Revision instead of five, and a bigger blow for it.
+            // ---- Rheia I: the rewrite's own blow, far heavier.
+            //
+            // WHAT THIS USED TO ASSERT WAS THE PRICE, AND THE PRICE WAS THE FAULT. Endless
+            // Revision took two Energy off EVERY Applied Revision - her whole cast rate - and
+            // bought twenty percent of Attack on one conditional clause of one cast. It read
+            // -7961, t -22.9, and its KnownCostlyTalents entry called that "fewer casts that
+            // each hit harder", which is true and is not a purchase. The Energy is gone and the
+            // rider is the whole talent, so what is asserted is the rider.
             if (!DarkPair("rheia_the_revision_scribe", 1, "s_selfdown", DarkStrikers, 1, false,
                           out a, out b))
                 Check(false, "rheia I arena built");
             else
-                Check(a.SubjectPlus(5) > 0 && b.SubjectPlus(5) == 0 && b.SubjectPlus(3) > 0,
-                      "Rheia I pays 3 Energy per Revision where she paid 5 (" + b.SubjectPlus(3)
-                      + " payment(s) of 3 and " + b.SubjectPlus(5) + " of 5, against "
-                      + a.SubjectPlus(3) + " and " + a.SubjectPlus(5)
-                      + ") - she needs a body that buffs AND debuffs itself to have a status to "
-                      + "flip at all");
-                Check(b.SubjectCasts > 0 && a.SubjectCasts > 0
+                Check(b.SubjectCasts > 0 && a.SubjectCasts > 0 && b.SubjectDamage > a.SubjectDamage
                       && b.SubjectDamage / b.SubjectCasts > a.SubjectDamage / a.SubjectCasts,
-                      "and buys 20% of Attack per affected enemy with it: " + (b.SubjectDamage / b.SubjectCasts)
-                      + " damage per cast against " + (a.SubjectDamage / a.SubjectCasts)
-                      + ", while her TOTAL falls from " + a.SubjectDamage + " to " + b.SubjectDamage
-                      + " because the Energy she gives up costs her casts");
+                      "Rheia I makes Rewrite the Outcome's blow on a rewritten enemy far heavier ("
+                      + (b.SubjectDamage / b.SubjectCasts) + " damage per cast against "
+                      + (a.SubjectDamage / a.SubjectCasts) + ", " + b.SubjectDamage + " in total"
+                      + " against " + a.SubjectDamage + ") - she needs a body that buffs AND"
+                      + " debuffs itself for the rewrite to have an Attack Down to rewrite at all");
 
             // ---- Rheia II: the rider Second Draft carries at four Revision.
             if (!DarkPair("rheia_the_revision_scribe", 2, "s_selfdown", DarkStrikers, 1, false,
