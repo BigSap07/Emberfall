@@ -13,8 +13,17 @@ namespace Emberfall.Core.Model
         public string Uid = "";        // stable per-collection id
         public string DefId = "";
         public int Level = 1;
-        public int Copies = 1;         // duplicates pulled from summoning
+        public int Copies = 1;         // bodies of this hero owned, itself included: duplicates add, conversions and ascensions spend
         public long AcquiredUnix;
+
+        /// <summary>
+        /// Ascension tier, 0 until the hero first ascends. Only a 5-star ever has anything else
+        /// (F2). It sets the hero's level cap (F7), and it sets how far along the one level
+        /// ladder each of its levels moves the hero: see StatMath.LevelAt for why Level stays the
+        /// single number every stat line is built from, and GameSession.TierLevelOf for the level
+        /// inside the tier that an ascension resets to 1 (F6).
+        /// </summary>
+        public int Ascension;
 
         /// <summary>
         /// A REFERENCE into PlayerProfile.OwnedRelics, or empty for an empty slot. Resolved
@@ -496,6 +505,18 @@ namespace Emberfall.Core.Model
         public bool Owns(string defId)
         {
             return FindHeroByDefId(defId) != null;
+        }
+
+        /// <summary>
+        /// Takes a hero out of the collection entirely: its last body went into a conversion. Its
+        /// armor and relic are references held on the instance, so they return to the owned pools
+        /// unworn with it. Refuses a deployed hero; the caller is expected to have checked, and a
+        /// team slot naming nobody is a state NormaliseTeam repairs rather than one to create.
+        /// </summary>
+        public bool RemoveHero(HeroInstance hero)
+        {
+            if (hero == null || IsDeployed(hero.Uid)) return false;
+            return Heroes.Remove(hero);
         }
 
         public bool IsDeployed(string uid)

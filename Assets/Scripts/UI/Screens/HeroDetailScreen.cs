@@ -952,15 +952,15 @@ namespace Emberfall.UI.Screens
             ArmorConfig armorConfig = session.Content.Armor;
 
             UnitStats now = StatMath.ForHero(def, _hero.Level, relic, armor, armorConfig);
-            int cap = session.HeroLevelCap;
+            int cap = session.HeroLevelCapOf(_hero);
             bool atCap = _hero.Level >= cap;
-            UnitStats next = atCap ? now : StatMath.ForHero(def, _hero.Level + 1, relic, armor, armorConfig);
+            UnitStats next = atCap ? now : StatMath.ForHero(def, session.NextLevelOf(_hero), relic, armor, armorConfig);
 
             RefreshArmorBlock(session);
 
-            // The "/ cap" half is a progress readout against the player's Wayfarer rank, which
-            // means nothing for a prologue hero and reads as broken next to one: a brand-new
-            // account caps at 12, so Kael at 42 rendered as "LEVEL 42 / 12".
+            // The "/ cap" half is a progress readout against this hero's own cap - its star tier
+            // and ascension tier set it, not Wayfarer rank - which means nothing for a prologue
+            // hero and reads as broken next to one: Kael at 42 would render as "LEVEL 42 / 10".
             _levelLabel.text = _prologueView
                 ? "LEVEL " + _hero.Level
                 : "LEVEL " + _hero.Level + "<color=#6C6382> / " + cap + "</color>";
@@ -991,7 +991,9 @@ namespace Emberfall.UI.Screens
             _capNote.text = _prologueView
                 ? "A thousand years of levels. None of them yours to spend."
                 : atCap
-                ? "Raise your Wayfarer rank in the campaign to lift the level cap."
+                ? (def.Stars >= 5
+                    ? "Ascend with copies of this hero to lift the level cap."
+                    : "Below five stars, this is as far as a hero levels.")
                 : "Next level costs " + cost + " gold  -  you hold " + session.Profile.Gold;
 
             int deployedSlot = session.Profile.TeamSlotOf(_hero.Uid);

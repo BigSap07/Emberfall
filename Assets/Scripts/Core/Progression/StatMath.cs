@@ -361,18 +361,146 @@ namespace Emberfall.Core.Progression
 
         public static int LevelUpCost(BalanceConfig cfg, int currentLevel)
         {
+            return LevelUpCost(cfg, currentLevel, 0);
+        }
+
+        /// <summary>
+        /// The level above currentLevel, at an ascension tier, where currentLevel is the TIER level
+        /// (GameSession.TierLevelOf). The tier's curve multiplier scales the cost as it scales the
+        /// stride (LevelAt), so a coin buys the same stride of the ladder at every tier: ascension
+        /// moves where gold goes, never what it buys. Without it a tier-2 level would sell six
+        /// Levels at a tier-0 level's price, and the gold that already buys 70% of the simulated
+        /// player's power would buy more of it the further they ascended.
+        /// </summary>
+        public static int LevelUpCost(BalanceConfig cfg, int currentLevel, int ascensionTier)
+        {
             if (currentLevel < 1) currentLevel = 1;
             double cost = cfg.LevelCostA
                         + cfg.LevelCostB * currentLevel
                         + cfg.LevelCostC * currentLevel * currentLevel;
+            cost *= CurveMultiplier(cfg, ascensionTier);
             return (int)Math.Round(cost, MidpointRounding.AwayFromZero);
         }
 
-        public static int HeroLevelCap(BalanceConfig cfg, int playerLevel)
+        // ---------- level caps and ascension (F1, F2, F5, F6, F7) ----------
+
+        /// <summary>
+        /// A hero's level cap IN TIER LEVELS: a function of its star tier and its ascension tier and
+        /// of nothing else (F7). Account rank used to set it, and nothing does now. A tier past the
+        /// last one balance.json authors reads as the last one, so a save from a build with more
+        /// tiers still loads to a real cap. CapLevel is the same cap as a Level.
+        /// </summary>
+        public static int HeroLevelCap(BalanceConfig cfg, int stars, int ascensionTier)
         {
-            int cap = cfg.HeroLevelCapBase + cfg.HeroLevelCapPerPlayerLevel * Math.Max(0, playerLevel - 1);
-            if (cap > cfg.HeroLevelHardCap) cap = cfg.HeroLevelHardCap;
-            return cap;
+            if (stars < 5)
+            {
+                int[] low = cfg.LevelCapsBelowFiveStars;
+                if (low == null || low.Length == 0) return 1;
+                int i = Math.Max(1, stars) - 1;
+                return Math.Max(1, low[Math.Min(i, low.Length - 1)]);
+            }
+            int[] caps = cfg.FiveStarLevelCaps;
+            if (caps == null || caps.Length == 0) return 1;
+            return Math.Max(1, caps[ClampTier(cfg, ascensionTier)]);
+        }
+
+        /// <summary>The highest ascension tier balance.json authors. Zero means ascension is off.</summary>
+        public static int MaxAscensionTier(BalanceConfig cfg)
+        {
+            int n = cfg.FiveStarLevelCaps != null ? cfg.FiveStarLevelCaps.Length : 1;
+            if (cfg.AscensionCurveMultipliers != null) n = Math.Min(n, cfg.AscensionCurveMultipliers.Length);
+            int byCopies = cfg.AscensionCopies != null ? cfg.AscensionCopies.Length + 1 : 1;
+            n = Math.Min(n, byCopies);
+            return Math.Max(0, n - 1);
+        }
+
+        private static int ClampTier(BalanceConfig cfg, int tier)
+        {
+            if (tier < 0) return 0;
+            int max = cfg.FiveStarLevelCaps != null ? cfg.FiveStarLevelCaps.Length - 1 : 0;
+            return tier > max ? Math.Max(0, max) : tier;
+        }
+
+        /// <summary>A tier's curve multiplier: the levels of the one ladder each of its tier levels
+        /// is worth, and the multiple its level cost carries. 1 at tier 0.</summary>
+        public static float CurveMultiplier(BalanceConfig cfg, int ascensionTier)
+        {
+            float[] m = cfg.AscensionCurveMultipliers;
+            if (ascensionTier <= 0 || m == null || m.Length == 0) return 1f;
+            return m[Math.Min(ascensionTier, m.Length - 1)];
+        }
+
+        /// <summary>
+        /// ONE LADDER, WALKED AT A TIER'S STRIDE. The Level a 5-star at this tier stands at on the
+        /// given tier level.
+        ///
+        /// Ascension does not give a hero a second stat curve. It changes how far along the one it
+        /// already has each of its levels moves it: tier t's first level stands one Level past tier
+        /// t - 1's cap (F6: it out-powers that cap, by exactly one Level), and every tier level
+        /// after it moves the hero CurveMultiplier(t) Levels, rounded. Since StatMath.Build is
+        /// 1 + growth * (Level - 1), a tier whose first level stands at 1 + (M - 1) / growth and
+        /// which steps M at a time has HP, Attack and Defense of M * (1 + growth * (tierLevel - 1)):
+        /// M times tier 0's curve, the higher curve F6 asks for, exactly as a multiplier on the
+        /// stats would give.
+        ///
+        /// WHY IT IS DONE ON LEVEL AND NOT AS A MULTIPLIER ON THE STATS, because it was first done as
+        /// a multiplier and the harness measured what that cost. Combat reads a hero's level for
+        /// more than its stats: Defense mitigation is defense / (defense + constant + perLevel *
+        /// attacker's Level). A tier-1 hero whose stats were doubled by a multiplier stood at a
+        /// lower Level than a tier-0 hero of the same power, so its blows were mitigated harder,
+        /// and an even pinned line of them cleared 2-12's ceiling 39% of the time where the tier-0
+        /// line at the same power cleared it 63% of the time. Power stopped predicting the fight,
+        /// which every instrument and every recommendedPower in the campaign rests on. Walking the
+        /// one ladder keeps Level the single number a stat line and a mitigation roll are both built
+        /// from, so equal power is an equal fight at every tier, and no battle code had to change.
+        ///
+        /// Heroes below five stars never ascend (F1) and walk the ladder one Level at a time.
+        /// </summary>
+        public static int LevelAt(BalanceConfig cfg, int ascensionTier, int tierLevel)
+        {
+            if (tierLevel < 1) tierLevel = 1;
+            return TierBaseLevel(cfg, ascensionTier) + Stride(cfg, ascensionTier, tierLevel);
+        }
+
+        /// <summary>The Level of a tier's first tier level: 1 at tier 0, and one Level past the
+        /// previous tier's cap above it (F6).</summary>
+        public static int TierBaseLevel(BalanceConfig cfg, int ascensionTier)
+        {
+            int level = 1;
+            int tiers = Math.Min(Math.Max(0, ascensionTier), MaxAscensionTier(cfg));
+            for (int t = 0; t < tiers; t++) level += Stride(cfg, t, HeroLevelCap(cfg, 5, t)) + 1;
+            return level;
+        }
+
+        private static int Stride(BalanceConfig cfg, int ascensionTier, int tierLevel)
+        {
+            return (int)Math.Round(CurveMultiplier(cfg, ascensionTier) * (tierLevel - 1), MidpointRounding.AwayFromZero);
+        }
+
+        /// <summary>The tier level a Level stands at: the highest tier level whose Level is not
+        /// above it, and at least 1. The inverse of LevelAt on every Level LevelAt produces.</summary>
+        public static int TierLevelOf(BalanceConfig cfg, int ascensionTier, int level)
+        {
+            int tierLevel = 1;
+            int cap = HeroLevelCap(cfg, 5, ascensionTier);
+            while (tierLevel < cap && LevelAt(cfg, ascensionTier, tierLevel + 1) <= level) tierLevel++;
+            return tierLevel;
+        }
+
+        /// <summary>The Level a hero stops at: its star tier's cap below five stars, and a 5-star's
+        /// tier cap walked along its tier's stride.</summary>
+        public static int CapLevel(BalanceConfig cfg, int stars, int ascensionTier)
+        {
+            if (stars < 5) return HeroLevelCap(cfg, stars, 0);
+            return LevelAt(cfg, ascensionTier, HeroLevelCap(cfg, 5, ascensionTier));
+        }
+
+        /// <summary>Copies of the same hero the step from this tier to the next consumes, or -1
+        /// where there is no next tier.</summary>
+        public static int AscensionCopiesFor(BalanceConfig cfg, int ascensionTier)
+        {
+            if (ascensionTier < 0 || ascensionTier >= MaxAscensionTier(cfg)) return -1;
+            return cfg.AscensionCopies[ascensionTier];
         }
 
         // ---------- account levelling ----------

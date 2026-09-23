@@ -109,7 +109,7 @@ namespace Emberfall.EditorTools
                 Profile.PlayerLevel = Math.Max(1, _accountLevel);
                 Profile.PlayerXp = 0;
                 Flush("Account level -> " + Profile.PlayerLevel
-                      + " (hero level cap now " + Session.HeroLevelCap + ")");
+                      + " (hero level caps follow star and ascension tier, not rank)");
             }
 
             EditorGUILayout.Space();
@@ -136,7 +136,7 @@ namespace Emberfall.EditorTools
             // ---- status readout ----
             EditorGUILayout.LabelField("Profile Status", EditorStyles.boldLabel);
             EditorGUILayout.LabelField("Account Lv", Profile.PlayerLevel.ToString());
-            EditorGUILayout.LabelField("Hero Level Cap", Session.HeroLevelCap.ToString());
+            EditorGUILayout.LabelField("5-star Level Cap", StatMath.CapLevel(Session.Balance, 5, 0) + " at tier 0");
             EditorGUILayout.LabelField("Heroes", Profile.Heroes.Count.ToString());
             EditorGUILayout.LabelField("Gold", Profile.Gold.ToString("N0"));
             EditorGUILayout.LabelField("Shards", Profile.Shards.ToString("N0"));

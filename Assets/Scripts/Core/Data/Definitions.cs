@@ -2592,9 +2592,45 @@ namespace Emberfall.Core.Data
         public float LevelCostA = 55f;
         public float LevelCostB = 26f;
         public float LevelCostC = 3.2f;
-        public int HeroLevelCapBase = 12;
-        public int HeroLevelCapPerPlayerLevel = 4;
-        public int HeroLevelHardCap = 80;
+
+        /// <summary>
+        /// LEVEL CAPS ARE A FUNCTION OF STAR TIER AND ASCENSION TIER, NOT OF ACCOUNT RANK (F7). The
+        /// cap used to be 12 + 4 per account rank up to 80, the same for every hero, which made gold
+        /// the whole of power: a 3-star could be levelled as far as a 5-star, so nothing ever gave
+        /// the simulated player a reason to change its line. Every number below is derived by
+        /// CheckFusionEconomyDerivation in the harness and asserted equal to what balance.json
+        /// says; the reasoning sits next to each key there.
+        ///
+        /// LevelCapsBelowFiveStars[s - 1] is the cap of an s-star hero, s = 1..4. Those tiers never
+        /// ascend (F1), so each has one cap.
+        /// </summary>
+        public int[] LevelCapsBelowFiveStars = { 5, 6, 7, 8 };
+
+        /// <summary>FiveStarLevelCaps[t] is a 5-star's cap at ascension tier t, counted in levels
+        /// of that tier (GameSession.TierLevelOf). Its length is the number of tiers: the highest
+        /// tier is FiveStarLevelCaps.Length - 1.</summary>
+        public int[] FiveStarLevelCaps = { 9, 18, 39 };
+
+        /// <summary>AscensionCurveMultipliers[t] is tier t's curve multiplier: how many levels of
+        /// the one ladder each of its tier levels is worth, which makes its HP, Attack and Defense
+        /// that multiple of tier 0's along the tier (StatMath.LevelAt), and the multiple its level
+        /// cost carries. Tier 0 is 1. Same length as FiveStarLevelCaps.</summary>
+        public float[] AscensionCurveMultipliers = { 1f, 2.035f, 6.175f };
+
+        /// <summary>AscensionCopies[t] is how many copies of the SAME hero (F5) the step from tier t
+        /// to t + 1 consumes, beyond the hero itself. One shorter than FiveStarLevelCaps.</summary>
+        public int[] AscensionCopies = { 1, 4 };
+
+        /// <summary>
+        /// A CONVERSION (F3): heroes below five stars in, one RANDOM 5-star of the chosen aspect out.
+        /// ConversionFodderPoints[s - 1] is what one s-star body is worth, s = 1..4, and a
+        /// conversion needs ConversionPointsRequired. An aspect in ConversionSeedAspects takes one
+        /// mandatory seed of that aspect plus fodder of any aspect (F9); every other aspect takes
+        /// fodder of its own aspect only (F4).
+        /// </summary>
+        public int[] ConversionFodderPoints = { 15, 10, 10, 18 };
+        public int ConversionPointsRequired = 100;
+        public string[] ConversionSeedAspects = { "Umbra", "Lumen" };
 
         // account levelling
         public float PlayerXpBase = 120f;
@@ -2853,9 +2889,18 @@ namespace Emberfall.Core.Data
             b.LevelCostA = j.GetFloat("levelCostA", b.LevelCostA);
             b.LevelCostB = j.GetFloat("levelCostB", b.LevelCostB);
             b.LevelCostC = j.GetFloat("levelCostC", b.LevelCostC);
-            b.HeroLevelCapBase = j.GetInt("heroLevelCapBase", b.HeroLevelCapBase);
-            b.HeroLevelCapPerPlayerLevel = j.GetInt("heroLevelCapPerPlayerLevel", b.HeroLevelCapPerPlayerLevel);
-            b.HeroLevelHardCap = j.GetInt("heroLevelHardCap", b.HeroLevelHardCap);
+            b.LevelCapsBelowFiveStars = IntArray(j, "levelCapsBelowFiveStars", b.LevelCapsBelowFiveStars);
+            b.FiveStarLevelCaps = IntArray(j, "fiveStarLevelCaps", b.FiveStarLevelCaps);
+            b.AscensionCurveMultipliers = FloatArray(j, "ascensionCurveMultipliers", b.AscensionCurveMultipliers);
+            b.AscensionCopies = IntArray(j, "ascensionCopies", b.AscensionCopies);
+            b.ConversionFodderPoints = IntArray(j, "conversionFodderPoints", b.ConversionFodderPoints);
+            b.ConversionPointsRequired = j.GetInt("conversionPointsRequired", b.ConversionPointsRequired);
+            if (j.Has("conversionSeedAspects"))
+            {
+                List<JsonValue> seeds = j.GetList("conversionSeedAspects");
+                b.ConversionSeedAspects = new string[seeds.Count];
+                for (int i = 0; i < seeds.Count; i++) b.ConversionSeedAspects[i] = seeds[i].AsString("");
+            }
             b.PlayerXpBase = j.GetFloat("playerXpBase", b.PlayerXpBase);
             b.PlayerXpExponent = j.GetFloat("playerXpExponent", b.PlayerXpExponent);
             b.IdleGoldPerHourFloor = j.GetFloat("idleGoldPerHourFloor", b.IdleGoldPerHourFloor);
@@ -2913,6 +2958,24 @@ namespace Emberfall.Core.Data
             b.GuildDungeonChampionLevelBonus = j.GetInt("guildDungeonChampionLevelBonus", b.GuildDungeonChampionLevelBonus);
             b.GuildDungeonHeroLevel = j.GetInt("guildDungeonHeroLevel", b.GuildDungeonHeroLevel);
             return b;
+        }
+
+        private static int[] IntArray(JsonValue j, string key, int[] fallback)
+        {
+            if (!j.Has(key)) return fallback;
+            List<JsonValue> list = j.GetList(key);
+            int[] result = new int[list.Count];
+            for (int i = 0; i < list.Count; i++) result[i] = list[i].AsInt(0);
+            return result;
+        }
+
+        private static float[] FloatArray(JsonValue j, string key, float[] fallback)
+        {
+            if (!j.Has(key)) return fallback;
+            List<JsonValue> list = j.GetList(key);
+            float[] result = new float[list.Count];
+            for (int i = 0; i < list.Count; i++) result[i] = list[i].AsFloat(0f);
+            return result;
         }
     }
 }

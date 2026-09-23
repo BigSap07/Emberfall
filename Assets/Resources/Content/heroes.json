@@ -13465,7 +13465,7 @@
           {
             "kind": "Damage",
             "target": "HighestAttackEnemy",
-            "power": 1.7
+            "power": 1.9
           },
           {
             "kind": "ApplyStatus",
@@ -13476,7 +13476,7 @@
           {
             "kind": "Heal",
             "target": "LowestHpAlly",
-            "power": 0.22,
+            "power": 0.25,
             "condition": "HpBelow",
             "conditionValue": 0.5,
             "conditionOn": "LastTarget"
@@ -13484,7 +13484,7 @@
           {
             "kind": "Heal",
             "target": "LowestHpAlly",
-            "power": 1.15
+            "power": 1.29
           }
         ],
         "description": "Strikes the enemy with the highest Attack, marks it and heals the lowest-HP ally. If the marked enemy is at low HP, that ally is healed a second time."
@@ -13497,7 +13497,7 @@
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 2.3
+            "power": 2.58
           },
           {
             "kind": "ApplyStatus",
@@ -13564,7 +13564,7 @@
           {
             "kind": "Damage",
             "target": "HighestAttackEnemy",
-            "power": 0.5,
+            "power": 0.56,
             "scaleByLastRelease": true
           }
         ],
@@ -14065,7 +14065,7 @@
           {
             "kind": "Damage",
             "target": "FrontEnemy",
-            "power": 1.15
+            "power": 1.21
           },
           {
             "kind": "EnergyGain",
@@ -14085,7 +14085,7 @@
           {
             "kind": "Damage",
             "target": "AllEnemies",
-            "power": 1.8
+            "power": 1.89
           },
           {
             "kind": "ApplyStatus",
@@ -14129,7 +14129,7 @@
           {
             "kind": "Damage",
             "target": "LastAttacker",
-            "power": 0.75,
+            "power": 0.79,
             "condition": "HasMyMark",
             "conditionOn": "Target",
             "perStackStatus": "Resolve",
@@ -14158,7 +14158,7 @@
           {
             "kind": "Damage",
             "target": "LastAttacker",
-            "power": 0.45,
+            "power": 0.47,
             "condition": "HasMyMark",
             "conditionOn": "LastAttacker"
           },
