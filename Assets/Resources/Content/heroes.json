@@ -7137,16 +7137,24 @@
               "ability": "active",
               "effectIndex": 1,
               "field": "duration",
-              "delta": 1
-            },
-            {
-              "ability": "active",
-              "effectIndex": 1,
-              "field": "storedCap",
-              "delta": 1.2
+              "delta": 2
             }
           ],
-          "description": "Scar Record lasts longer and can store more before it reaches its limit."
+          "description": "The Scar Record lasts longer, and the body that carries it stays open to Sylven's blade while it does.",
+          "appends": [
+            {
+              "ability": "active",
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "HighestPendingDoTEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.22,
+                "duration": 5,
+                "bypassResist": true
+              }
+            }
+          ]
         },
         "talentII": {
           "id": "sylven_inherited_injury",
@@ -7161,15 +7169,27 @@
                 "target": "HighestHpEnemy",
                 "flat": -10
               }
+            },
+            {
+              "ability": "passive1",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "AllEnemies",
+                "status": "Vulnerable",
+                "magnitude": 0.16,
+                "duration": 99,
+                "bypassResist": true
+              }
             }
           ],
-          "description": "Whenever an enemy is defeated, the highest-HP enemy also loses Energy."
+          "description": "When an enemy is defeated the highest-HP enemy loses Energy, and every enemy still standing carries the wound: Sylven's blows land harder on all of them."
         },
         "talentIII": {
           "id": "sylven_nothing_heals_cleanly",
           "name": "Nothing Heals Cleanly",
           "trigger": "None",
           "effects": [],
+          "description": "When Wounds Remember answers the buff it was waiting for, the enemy's mending is shut down and the wound reopens: Sylven cuts it deeper from then on.",
           "appends": [
             {
               "ability": "passive2",
@@ -7177,18 +7197,33 @@
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "BroadcastSubject",
-                "bypassResist": true,
+                "status": "HealingReduction",
+                "magnitude": 0.2,
+                "duration": 2,
                 "chance": 1,
+                "bypassResist": true,
                 "condition": "StoredStatusMatches",
                 "conditionOn": "BroadcastSubject",
-                "conditionStatus": "Ledger",
-                "duration": 2,
-                "magnitude": 0.2,
-                "status": "HealingReduction"
+                "conditionStatus": "Ledger"
+              }
+            },
+            {
+              "ability": "passive2",
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "status": "Vulnerable",
+                "magnitude": 0.3,
+                "duration": 3,
+                "chance": 1,
+                "bypassResist": true,
+                "condition": "StoredStatusMatches",
+                "conditionOn": "BroadcastSubject",
+                "conditionStatus": "Ledger"
               }
             }
-          ],
-          "description": "When Wounds Remember strikes, it first applies Healing Reduction to that enemy."
+          ]
         }
       }
     },
@@ -9243,71 +9278,76 @@
                 "conditionOn": "BroadcastSubject",
                 "magnitude": -0.08
               }
+            },
+            {
+              "ability": "passive1",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "status": "Vulnerable",
+                "magnitude": 0.3,
+                "duration": 3,
+                "bypassResist": true,
+                "condition": "HasMyMark",
+                "conditionOn": "BroadcastSubject"
+              }
             }
           ],
-          "description": "When Anticipated delays an enemy, Merek gains Energy and that enemy is delayed further."
+          "description": "When Anticipated delays an enemy, Merek gains Energy, that enemy is delayed further, and his blows land harder on it."
         },
         "talentII": {
           "id": "merek_reordered_agenda",
-          "name": "Reordered Agenda",
+          "name": "Overturned Agenda",
           "trigger": "None",
           "effects": [],
           "appends": [
             {
               "ability": "active",
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "AllEnemies",
+                "status": "DefenseDown",
+                "magnitude": 0.2,
+                "duration": 2,
+                "bypassResist": true
+              }
+            },
+            {
+              "ability": "active",
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "SwapAdvancedUnit",
-                "bypassResist": true,
-                "chance": 1,
-                "duration": 2,
+                "status": "DefenseDown",
                 "magnitude": 0.1,
-                "status": "DefenseDown"
+                "duration": 2,
+                "bypassResist": true
               }
             }
           ],
-          "description": "Stolen Interval also gives the enemy moved forward Guard Down."
+          "description": "Stolen Interval breaks every enemy's guard before it strikes, and the enemy moved forward keeps it broken longer."
         },
         "talentIII": {
           "id": "merek_no_first_move",
           "name": "No First Move",
-          "trigger": "OnEnemyDefeated",
+          "trigger": "RoundStart",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "EnergyGain",
               "target": "AllEnemies",
-              "condition": "HasMyMark",
-              "condition2": "SubjectHasNotActedThisRound",
-              "conditionOn": "Defeated",
-              "conditionOn2": "Defeated",
-              "conditionStatus": "MarkAlt",
               "flat": -12
-            },
-            {
-              "kind": "Damage",
-              "target": "HighestEnergyEnemy",
-              "condition": "HasMyMark",
-              "condition2": "SubjectHasNotActedThisRound",
-              "conditionOn": "Defeated",
-              "conditionOn2": "Defeated",
-              "conditionStatus": "MarkAlt",
-              "power": 1.15
             },
             {
               "kind": "ApplyStatus",
               "target": "HighestEnergyEnemy",
-              "chance": 1,
-              "condition": "HasMyMark",
-              "condition2": "SubjectHasNotActedThisRound",
-              "conditionOn": "Defeated",
-              "conditionOn2": "Defeated",
-              "conditionStatus": "MarkAlt",
+              "status": "Vulnerable",
+              "magnitude": 0.25,
               "duration": 2,
-              "status": "Mark"
+              "bypassResist": true
             }
           ],
-          "description": "When First Claim is defeated before acting that round, every enemy loses Energy and Merek strikes the enemy with the highest Energy and applies Anticipated."
+          "description": "At the start of each round every enemy loses Energy, and the one nearest to acting is left open to Merek."
         }
       }
     },
@@ -9874,9 +9914,22 @@
                 "conditionOn": "Target",
                 "bypassResist": true
               }
+            },
+            {
+              "ability": "basic",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "FrontEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.14,
+                "duration": 2,
+                "condition": "SubjectRepeatedActionType",
+                "conditionOn": "Target",
+                "bypassResist": true
+              }
             }
           ],
-          "description": "Quiet Dose also applies Effect Resist Down to an enemy that used the same kind of action on its last two turns."
+          "description": "Quiet Dose leaves an enemy that used the same kind of action on its last two turns easier to affect, and Zella's own blows land harder on it."
         },
         "talentII": {
           "id": "zella_forced_conclusion",
@@ -9891,24 +9944,49 @@
               "delta": 1
             }
           ],
-          "description": "The Silence from Counterargument lasts longer."
+          "description": "Counterargument breaks the guard of an enemy that repeated itself before it strikes, and the Silence it lands lasts longer.",
+          "appends": [
+            {
+              "ability": "active",
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "EnemyWithMyMark",
+                "status": "DefenseDown",
+                "magnitude": 0.25,
+                "duration": 2,
+                "condition": "SubjectRepeatedActionType",
+                "conditionOn": "Target",
+                "bypassResist": true
+              }
+            }
+          ]
         },
         "talentIII": {
           "id": "zella_changing_testimony",
-          "name": "Changing Testimony",
+          "name": "Settled Testimony",
           "trigger": "OnAppliedDoTTick",
           "effects": [
             {
               "kind": "ApplyStatus",
               "target": "Self",
               "status": "Focus",
-              "magnitude": 0.85,
-              "duration": 1,
-              "condition": "SubjectChangedActionType",
+              "magnitude": 0.35,
+              "duration": 2,
+              "condition": "SubjectRepeatedActionType",
+              "conditionOn": "BroadcastSubject"
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "Self",
+              "status": "CritDamageUp",
+              "magnitude": 0.2,
+              "duration": 2,
+              "condition": "SubjectRepeatedActionType",
               "conditionOn": "BroadcastSubject"
             }
           ],
-          "description": "When Residue ticks on an enemy that has changed its kind of action, Zella gains Focus."
+          "description": "When Residue ticks on an enemy that has kept to the same kind of action, Zella reads it: she strikes more surely and her critical blows hit harder."
         }
       }
     },
