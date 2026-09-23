@@ -21,7 +21,7 @@ namespace Emberfall.DevHarness
     /// checks, a save round-trip, a readable sample battle and a full campaign balance pass.
     /// Build with build.cmd, run the exe, read the report.
     /// </summary>
-    internal static class Program
+    internal static partial class Program
     {
         private static int _failures;
 
@@ -167,6 +167,9 @@ namespace Emberfall.DevHarness
             CheckEngineGapsPassThree(content);
             CheckDarkTalents(content);
             CheckAuthoredTalentSweep(content);
+            // After the talent sweep, which asserts the talents' half of the matrix's coverage; this
+            // is the basics', actives' and passives' half, read off the same measurement.
+            CheckArenaMatrix(content);
             CheckTalentsAreWorthPicking(content);
             CheckAuthoredKitExercise(content);
             CheckEveryAuthoredActiveIsCast(content);
@@ -26894,46 +26897,60 @@ namespace Emberfall.DevHarness
                 _talentExercise.Add(report);
             }
 
-            // THE DARK ONES, SPLIT BY CAUSE, because "this talent did nothing" is three different
-            // findings and a red that lumps them together is a red nobody can act on. The two
-            // structural causes have checks of their own above and are subtracted here, so what is
-            // left is the honest measure of what this ARENA cannot light - and each is named with
-            // the gate it is waiting on.
-            Check(gated.Count == 0,
-                  gated.Count == 0
-                    ? "every one of the " + talentCount + " talents changes the fight it is picked "
-                      + "for - none produces the same fingerprint as leaving it unpicked"
-                    : gated.Count + " of " + talentCount + " talents are EXECUTED but never observed "
-                      + "doing anything here - each waits on something this arena does not raise, "
-                      + "and each is named with what it waits on: " + string.Join(", ", gated.ToArray()));
+            // WHAT THIS ONE ARENA LEAVES DARK, printed as the reading it is. It USED to be the
+            // assertion, and for weeks it was the build's standing red - "N of 90 talents are
+            // EXECUTED but never observed doing anything here" - which everyone learned to read as
+            // the one expected failure, so a real regression would have arrived looking exactly
+            // like the noise. The number was never the problem; the instrument was. One squad,
+            // one enemy line and five seeds cannot raise a kill at the right moment, a Taunt, an
+            // enemy that casts or an ally of the right role, and the note under the old red said
+            // so itself. The reading stays, because what one shared line cannot raise is still
+            // worth knowing; the ASSERTION moved to the matrix below, which is stricter, not
+            // quieter.
+            Line("  [note] the sweep arena alone leaves " + gated.Count + " of " + talentCount
+                 + " talents with a fingerprint identical to leaving them unpicked"
+                 + (gated.Count == 0 ? "." : ": " + string.Join(", ", gated.ToArray())));
 
-            // WHAT THE RED ABOVE DOES AND DOES NOT CLAIM, said here rather than left to be
-            // inferred. "Never observed doing anything HERE" is a statement about this arena, and
-            // most of the talents it names are proved to work in THE DARK TALENTS above, each in
-            // a fight built to open its own gate. What is left after that is the honest measure of
-            // what one shared enemy line cannot raise.
+            // COVERAGE ACROSS THE WHOLE MATRIX, and stricter than the reading above in two ways.
             //
-            // COUNTED RATHER THAN WRITTEN DOWN, and the reason is that it was written down and
-            // went stale: the line read "23 of the 27" for two passes after the list stopped being
-            // 27 long. DarkTalentRooms names the pairs the section fields, the count is the
-            // intersection with what the sweep actually left dark, and any talent this note claims
-            // and the section drops turns up as an uncovered name instead of as a wrong number.
-            List<string> uncovered = new List<string>();
-            for (int i = 0; i < gated.Count; i++)
+            // It counts a talent only when it CHANGED a fight - the matrix hashes each fight with
+            // the talent's own PassiveTrigger announcements taken out, and the reading above does
+            // not. Eight talents passed the old check on nothing but announcing themselves: they
+            // fired, the announcement moved the fingerprint, and the fight was otherwise the fight
+            // they were not picked in. Aeron I fires 154 times across the five sweep seeds and
+            // changes nothing.
+            //
+            // And a talent the sweep cannot raise counts only when a NAMED ROOM proves it under the
+            // house pattern: the same seed twice is byte-identical, the control (not picked) fights
+            // a different fight, and the room states what moved as a count or an amount the
+            // talent's own sentence names. A room fielding a lineup no player can field - a hero
+            // twice - is refused, so a talent seen only there has not been seen.
+            //
+            // What it does not do is go green by counting less. Every talent is in scope, the
+            // structurally dead ones included; each one still dark is named with what it waits on,
+            // and a stated reason is re-measured on this build rather than remembered.
+            List<MatrixRule> matrix = MatrixResults(live);
+            List<string> nowhere = new List<string>();
+            int sweepSeen = 0, roomSeen = 0;
+            if (matrix == null) Check(false, "the arena matrix was built for the talent coverage check");
+            else
             {
-                string name = gated[i];
-                int cut = name.IndexOf(" needs ");
-                if (cut > 0) name = name.Substring(0, cut);
-                if (DarkRoomFor(name) == null) uncovered.Add(name);
+                for (int i = 0; i < matrix.Count; i++)
+                {
+                    MatrixRule r = matrix[i];
+                    if (r.Kind != MatrixRuleKind.Talent) continue;
+                    if (r.InSweep) sweepSeen++;
+                    else if (r.RoomPassed) roomSeen++;
+                    else nowhere.Add(MatrixDarkLine(r));
+                }
+                Check(nowhere.Count == 0,
+                      nowhere.Count == 0
+                        ? "every one of the " + talentCount + " talents is observed changing a fight: " + sweepSeen
+                          + " in the sweep arena, " + roomSeen + " only in a named room of THE ARENA MATRIX"
+                        : nowhere.Count + " of " + talentCount + " talents are observed changing a fight NOWHERE in"
+                          + " the matrix (" + sweepSeen + " in the sweep arena, " + roomSeen + " only in a named room),"
+                          + " each with what it waits on: " + string.Join("; ", nowhere.ToArray()));
             }
-            Line("  [note] " + (gated.Count - uncovered.Count) + " of the " + gated.Count
-                 + " talents named above are proved in THE DARK TALENTS section, each in an arena"
-                 + " built to raise its own gate"
-                 + (uncovered.Count == 0
-                    ? "; none is left uncovered."
-                    : "; the " + uncovered.Count + " it cannot reach: "
-                      + string.Join(", ", uncovered.ToArray()) + ".")
-                 + " This red is about THIS arena.");
 
             // Only among talents that DO something. Two dead talents being identical is the dead
             // check's finding, not this one's, and counting it twice would make this red decorative.
