@@ -345,17 +345,33 @@ namespace Emberfall.Game.Cloud
         /// </summary>
         private void AdoptCloudSave(CloudSaveRecord record)
         {
-            if (record == null || string.IsNullOrEmpty(record.Data)) return;
+            if (record == null || string.IsNullOrEmpty(record.Data)) { ForgetBaseAfterFailedAdopt(); return; }
             if (_app == null) return;
+
+            // READ BEFORE WRITE. This used to write the document over the local save first and
+            // find out afterwards whether it loaded, so a cloud save this build cannot use - no
+            // hero it knows, or not a save at all - replaced the file and survived only until
+            // the next autosave put the old profile back, or until a crash made it permanent.
+            string readError;
+            PlayerProfile readable = SaveSerializer.Deserialize(record.Data, _app.Content, out readError);
+            if (readable == null || readable.Heroes.Count == 0)
+            {
+                ForgetBaseAfterFailedAdopt();
+                Set(CloudStatus.Failed, "the cloud save cannot be used by this build ("
+                    + (readable == null ? readError : "no hero in it exists in this build") + ")");
+                return;
+            }
 
             if (!SaveService.WriteDocument(record.Data))
             {
+                ForgetBaseAfterFailedAdopt();
                 Set(CloudStatus.Failed, "the cloud save could not be written to this device");
                 return;
             }
 
             if (!_app.AdoptSaveFromDisk())
             {
+                ForgetBaseAfterFailedAdopt();
                 Set(CloudStatus.Failed, "the cloud save was written but could not be read back");
                 return;
             }
@@ -369,6 +385,20 @@ namespace Emberfall.Game.Cloud
 
             _app.Notify("Cloud save loaded.");
             Raise();
+        }
+
+        /// <summary>
+        /// Undoes the base revision a download or a KeepCloud choice recorded BEFORE handing the
+        /// document here. Left in place after a failed adopt it says "this device holds cloud
+        /// revision N" while the device still holds its own save, so the next sync saw cloud ==
+        /// base and uploaded that save over the one the player had just chosen to keep. Zero makes
+        /// the next sync ask again instead. See Docs/CLOUD-GAPS.md.
+        /// </summary>
+        private void ForgetBaseAfterFailedAdopt()
+        {
+            if (_state == null) return;
+            _state.BaseRevision = 0;
+            _state.Save();
         }
 
         // ================================================================== the team snapshot

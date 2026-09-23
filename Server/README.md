@@ -20,8 +20,8 @@ project owner:
    joining, accepting, roles, leadership, chat and presence.
 6. `0006_guild_team_snapshots.sql` - the one thing guilds change about a table they did not
    create: a guildmate may read a team snapshot, so a guildmate may be duelled.
-7. `0007_guild_dungeon.sql` - the guild dungeon's attempt record, its cycle clock and its
-   attempt cap.
+7. `0007_guild_dungeon.sql` - the guild dungeon's attempt record, and the two calls that hold
+   its clock and its cap: `guild_dungeon_status` and `guild_dungeon_record`.
 8. `0008_guild_dungeon_playable.sql` - a content version and a loss count on every attempt,
    `guild_dungeon_submit` (one level for every line, floors that open as the guild clears
    them), and `guild_share_attempt`, which puts an attempt into guild chat as a playable card.
@@ -30,7 +30,7 @@ project owner:
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0006` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0008` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
 after a half-finished run, is a no-op rather than a failure to unpick.
 
@@ -63,6 +63,12 @@ privilege rather than as a policy, it is:
 `anon` is revoked on every table in every file. RLS with no anon policy already denies it; the
 revoke is there so "no table is readable by the anon role" stays true even if a later policy is
 written for `public` instead of `authenticated`.
+
+Every callable **function** is revoked from `public` and `anon` the same way, with one
+exception: `generate_friend_code()` in `0001` never was, so the anon key alone can call it. It
+returns a random string and reads nothing, so it costs nothing today; it is written up in
+`Docs/CLOUD-GAPS.md`, and `CloudChecks` in the harness pins it as the only one so a second cannot
+arrive unnoticed. Trigger functions cannot be called directly and need no revoke.
 
 ## Where a rule cannot be a policy
 
@@ -104,6 +110,9 @@ is why none of these tables have anything to migrate when a player converts.
 
 ## The live rule test
 
-`Tools/supabase-rules-test.py` creates two throwaway anonymous users and proves the rules
-above against the real project. It is the only thing here that needs credentials, and it takes
-them from the environment rather than from a file. See the header of that script.
+`Tools/supabase-rules-test.py` (accounts, saves, friends) and
+`Tools/supabase-guild-rules-test.py` (guilds and the dungeon) create throwaway users and prove
+the rules above against the real project. They are the only things here that need credentials.
+See the header of each script. Both carry cases the cloud audit added that have **not yet been
+run**; `Docs/CLOUD-GAPS.md` lists them, and a case labelled STILL PRESENT asserts a defect that
+was written up and left alone, so it passes today and goes red the day that defect is fixed.

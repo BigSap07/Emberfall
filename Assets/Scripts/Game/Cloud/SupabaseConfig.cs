@@ -1,4 +1,5 @@
 using UnityEngine;
+using Emberfall.Core.Cloud;
 using Emberfall.Core.Json;
 
 namespace Emberfall.Game.Cloud
@@ -18,9 +19,9 @@ namespace Emberfall.Game.Cloud
     /// The key this holds is the ANON PUBLIC key. It is designed to be given to clients and it
     /// grants nothing on its own: every rule in Server/supabase/migrations is written against
     /// Row Level Security and the signed-in user's own token, and the anon role is explicitly
-    /// revoked on all three tables. The service role key is a different thing entirely - it
+    /// revoked on every table. The service role key is a different thing entirely - it
     /// bypasses RLS - and it appears nowhere in this project, is read by nothing here, and must
-    /// never be put in this file.
+    /// never be put in this file. Load refuses one if it is: see SupabaseKeys.
     ///
     /// supabase.template.json sits beside it, tracked, as the thing a fresh clone copies.
     /// </summary>
@@ -99,6 +100,19 @@ namespace Emberfall.Game.Cloud
                 config.AnonKey = "";
                 config.Problem = "Assets/Resources/Config/supabase.json still holds the template's "
                                + "placeholder values - fill in the real project URL and anon key";
+                return config;
+            }
+
+            // A service-role or secret key bypasses Row Level Security, so a build carrying one
+            // hands every player every other player's save. Refused rather than warned about: the
+            // game then runs offline, which is the one failure here that costs nobody anything.
+            // The sentence names the file, never the key. See SupabaseKeys and Docs/CLOUD-GAPS.md.
+            if (SupabaseKeys.IsSecret(config.AnonKey))
+            {
+                config.Url = "";
+                config.AnonKey = "";
+                config.Problem = "Assets/Resources/Config/supabase.json holds a service-role or secret key, "
+                               + "which bypasses every database rule - replace it with the anon public key";
                 return config;
             }
 

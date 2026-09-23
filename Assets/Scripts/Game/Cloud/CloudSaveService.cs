@@ -94,12 +94,21 @@ namespace Emberfall.Game.Cloud
             if (!_account.SignedIn) { if (done != null) done(null, "not signed in"); yield break; }
             if (string.IsNullOrEmpty(saveJson)) { if (done != null) done(null, "nothing to upload"); yield break; }
 
+            // Built before the token refresh so a document that cannot be sent costs no request.
+            // Null means the local file is not a JSON object - see WritePushBody for what sending
+            // it anyway used to do to the cloud copy.
+            string body = CloudSaveCodec.WritePushBody(expectedRevision, saveVersion, _state.DeviceId, saveJson);
+            if (body == null)
+            {
+                if (done != null) done(null, "the save on this device could not be read, so it was not uploaded");
+                yield break;
+            }
+
             bool fresh = false;
             string tokenError = "";
             yield return _account.EnsureFreshToken(delegate (bool ok, string message) { fresh = ok; tokenError = message; });
             if (!fresh) { if (done != null) done(null, tokenError); yield break; }
 
-            string body = CloudSaveCodec.WritePushBody(expectedRevision, saveVersion, _state.DeviceId, saveJson);
             yield return _client.Send("POST", "rest/v1/rpc/push_save", body, delegate (SupabaseResponse response)
             {
                 if (!response.Ok)

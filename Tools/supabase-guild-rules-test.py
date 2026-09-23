@@ -67,6 +67,31 @@ FAILURES = 0
 CREATED = []
 CREATED_LOCK = threading.Lock()
 
+# Users made by sections that do not return them, so main can still disband anything they lead.
+CAST_EXTRA = []
+
+
+def looks_secret(key):
+    """True for a key that bypasses RLS: a JWT whose role is not "anon", or a new-format secret
+    key. The guard this replaced tested `"service_role" in key`, which never fires - a JWT's
+    payload is base64url, so the word is never in the key as text (Docs/CLOUD-GAPS.md P12). A JWT
+    whose payload cannot be decoded counts as secret: "could not tell" is not a reason to run."""
+    import base64
+    key = (key or "").strip()
+    if key.startswith("sb_secret_"):
+        return True
+    if key.startswith("sb_publishable_"):
+        return False
+    parts = key.split(".")
+    if len(parts) != 3:
+        return False
+    try:
+        segment = parts[1] + "=" * (-len(parts[1]) % 4)
+        payload = json.loads(base64.urlsafe_b64decode(segment.encode("ascii")).decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return True
+    return not isinstance(payload, dict) or payload.get("role") != "anon"
+
 
 # ---------------------------------------------------------------- reporting
 
@@ -796,6 +821,113 @@ def check_dungeon_race(guild, b, cycle):
     numbers = sorted(r[1].get("attempt") for r in accepted if isinstance(r[1], dict))
     check(numbers == [1, 2, 3], "numbered 1, 2 and 3 - no gap and no repeat", numbers)
 
+# ---------------------------------------------------------------- the cloud audit (Docs/CLOUD-GAPS.md)
+#
+# Added by the save and cloud audit and NOT YET RUN against the live project: every case below was
+# written from the migrations' text and confirmed to parse, nothing more. A case whose label says
+# STILL PRESENT asserts a defect the audit wrote up and left alone, so it goes red the day that
+# defect is fixed - flip it then, and move the entry in Docs/CLOUD-GAPS.md.
+
+
+def join_via_leader(user, guild, leader):
+    """Ask to join and have the leader accept. Returns True once the user is a member."""
+    rpc("guild_request_send", token=user["token"], p_code=guild["guild_code"])
+    status, body = request("GET", "/rest/v1/guild_requests?select=id,user_id&user_id=eq." + user["id"],
+                           token=leader["token"])
+    pending = body[0] if status == 200 and isinstance(body, list) and body else None
+    if pending:
+        rpc("guild_request_accept", token=leader["token"], p_request_id=pending["id"])
+    membership = my_membership(user)
+    return membership is not None and membership["guild_id"] == guild["id"]
+
+
+def check_after_leaving(guild, a, cycle):
+    section("AFTER LEAVING - a guild you have left reads as a guild you were never in")
+
+    leaver = must_sign_up("leaver")
+    CAST_EXTRA.append(leaver)
+    check(join_via_leader(leaver, guild, a), "a new member joins through the leader")
+
+    status, body = rpc("guild_post_message", token=leaver["token"], p_body="passing through")
+    check(status == 200, "posts once", (status, message_of(body)))
+    status, body = record_attempt(leaver, cycle, 5)
+    check(status == 200 and isinstance(body, dict) and body.get("attempt") == 1,
+          "and records attempt 1 at floor 5", (status, message_of(body)))
+
+    status, _ = request("DELETE", "/rest/v1/guild_members?user_id=eq." + leaver["id"], token=leaver["token"])
+    check(status in (200, 204) and my_membership(leaver) is None, "then leaves", status)
+
+    for table in ("guild_members", "guild_messages", "guild_dungeon_attempts", "guild_requests"):
+        status, body = request("GET", "/rest/v1/" + table + "?select=*&guild_id=eq." + guild["id"],
+                               token=leaver["token"])
+        check(status == 200 and isinstance(body, list) and len(body) == 0,
+              "A FORMER MEMBER READS NOTHING FROM " + table.upper() + " of the guild it left", (status, body))
+    status, body = request("GET", "/rest/v1/guilds?select=id&id=eq." + guild["id"], token=leaver["token"])
+    check(status == 200 and isinstance(body, list) and len(body) == 0,
+          "nor the guild row itself", (status, body))
+
+    status, body = rpc("guild_post_message", token=leaver["token"], p_body="still here?")
+    check(status == 403, "cannot post to it", (status, message_of(body)))
+    status, body = record_attempt(leaver, cycle, 5)
+    check(status == 403, "and cannot record an attempt against it", (status, message_of(body)))
+
+    rows = dungeon_rows(a, guild["id"])
+    check(rows is not None and any(r["user_id"] == leaver["id"] for r in rows),
+          "while the guild keeps reading the attempt the leaver made - it is a record", rows and len(rows))
+
+    # Re-joining the SAME guild in the SAME cycle must not hand back a fresh three attempts: the
+    # cap is keyed on (guild, member, cycle, floor), and the leaver's row is still there.
+    check(join_via_leader(leaver, guild, a), "the leaver rejoins the same guild in the same cycle")
+    status, body = record_attempt(leaver, cycle, 5)
+    check(status == 200 and isinstance(body, dict) and body.get("attempt") == 2,
+          "AND THE NEXT ATTEMPT IS NUMBERED 2 - leaving and rejoining does not reset the cap",
+          (status, message_of(body)))
+    request("DELETE", "/rest/v1/guild_members?user_id=eq." + leaver["id"], token=leaver["token"])
+
+
+def check_seed_is_not_checked(a, cycle):
+    """Docs/CLOUD-GAPS.md S8. guild_dungeon_record stores whatever seed it is sent. The seed is a
+    pure function of (guild id, cycle) - GuildDungeon.SeedFor - so the server could refuse a wrong
+    one, and does not: a record can claim any fight at all, including an easier one."""
+    section("THE DUNGEON SEED - trusted as sent")
+    status, body = record_attempt(a, cycle, 3, p_seed=1)
+    check(status == 200 and isinstance(body, dict) and body.get("seed") == 1,
+          "STILL PRESENT (S8) - an attempt claiming seed 1, which no guild's cycle derives, is stored",
+          (status, message_of(body)))
+
+
+def check_anon_helpers():
+    section("THE ANON ROLE AND THE HELPER FUNCTIONS - the ones check_anon_role does not call")
+    for name, args in (("my_guild", {}), ("my_guild_role", {}),
+                       ("is_guildmate", {"other_user": "00000000-0000-0000-0000-000000000000"}),
+                       ("has_guild_request", {"p_guild": "00000000-0000-0000-0000-000000000000"}),
+                       ("guild_member_cap", {}), ("guild_normalise_code", {"p_code": "abc234"}),
+                       ("guild_dungeon_attempt_cap", {}), ("guild_dungeon_floor_count", {}),
+                       ("guild_dungeon_cycle_at", {"p_at": "2026-09-22T00:00:00Z"}),
+                       ("is_friend", {"other_user": "00000000-0000-0000-0000-000000000000"})):
+        status, body = rpc(name, **args)
+        check(status not in (200, 201), "the anon role cannot call " + name, (status, message_of(body)))
+    status, body = rpc("generate_friend_code")
+    check(status == 200,
+          "STILL PRESENT (S6) - the anon role CAN call generate_friend_code, the one function 0001 never revoked",
+          (status, message_of(body)))
+
+
+def measure_unthrottled_loops(a):
+    """Docs/CLOUD-GAPS.md A-list. Everything but chat is unthrottled per account. Measured, not
+    abused: twenty calls each, and a refusal of any of them would mean a limit exists."""
+    section("CALLS IN A LOOP - what answers without a limit")
+    touches = [rpc("guild_touch", token=a["token"])[0] for _ in range(20)]
+    check(all(s == 200 for s in touches),
+          "STILL PRESENT (A-list) - twenty guild_touch calls back to back, each one a row write, none refused",
+          touches)
+    codes = ["".join(random.choice("23456789ABCDEFGHJKMNPQRSTVWXYZ") for _ in range(6)) for _ in range(20)]
+    lookups = [rpc("guild_by_code", token=a["token"], p_code=code)[0] for code in codes]
+    check(all(s == 200 for s in lookups),
+          "STILL PRESENT (A-list) - twenty random guild codes probed back to back, none refused - "
+          "guild_by_code can be walked", lookups)
+
+
 def check_friends_keep_access(c, d):
     section("0006 ADDED A POLICY - so a friend who is not a guildmate still reads a line")
 
@@ -1044,7 +1176,7 @@ def main():
     args = parser.parse_args()
 
     load_credentials()
-    if "service_role" in ANON:
+    if looks_secret(ANON):
         print("That looks like the service role key. Use the ANON PUBLIC key - the service role")
         print("bypasses RLS, so every check here would pass and none of them would mean anything.")
         return 2
@@ -1085,8 +1217,13 @@ def main():
             cycle = check_dungeon(guild, a, b, c)
             if cycle is not None:
                 check_dungeon_race(guild, b, cycle)
+                check_after_leaving(guild, a, cycle)
+                check_seed_is_not_checked(a, cycle)
+            measure_unthrottled_loops(a)
             check_one_guild_rule(guild, d)
         check_anon_role()
+        check_anon_helpers()
+        cast.extend(CAST_EXTRA)
 
         # C and D are both out of a guild by now for the friendship case, so it is run last of
         # the small-cast sections and uses two fresh accounts rather than unpicking theirs.

@@ -66,7 +66,8 @@ if (Test-Path (Join-Path $root "Assets\Editor")) {
 # SummonTiming.cs rides with it for the same reason BattleClips.cs does: it is engine-free on
 # purpose, so the harness can check the invariants DESIGN-SUMMON-PRESENTATION states against the
 # numbers the summon screen actually plays.
-$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") + (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs"))
+# CloudChecks.cs rides the same way, for the save and cloud audit's checks (Docs/CLOUD-GAPS.md).
+$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") + (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs") + (Join-Path $root "Tools\DevHarness\CloudChecks.cs"))
 $okHarness = Compile "core+harness" $harness "exe" (Join-Path $out "DevHarness.exe")
 
 $engineSources = @($core + $shim + $runtime + $editor)
