@@ -93,7 +93,7 @@ nine are drawn by the game as simple coloured 3D shapes. Ordered by how often a 
 | 2 | **Riptide Channeler** | The spine of chapter 2: 22 appearances across the campaign, more than any enemy but the Grave Moth. |
 | 3 | **Cinder Imp** | Chapter 1's damage threat: 13 appearances. |
 | 4 | **Ashen Revenant** | Chapter 1's elite: 6 appearances. |
-| 5 | **Stone Warden** | 3 appearances, including chapter 1's walls, and the only enemy that holds the front line (see item 5). |
+| 5 | **Stone Warden** | 3 appearances (1-4, 1-6, 1-10 - neither of chapter 1's walls, which are 1-9 and 1-12), and the only enemy that holds the front line (see item 5). |
 | 6 | **The Tideturned** | Chapter 2's final boss. Once, but it is the finale. |
 | 7 | **Tidecaller Wretch** | A chapter 2 healer elite: 2 appearances. |
 | 8 | **Blight Hound** | 2 appearances. |
