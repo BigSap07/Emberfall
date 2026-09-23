@@ -92,7 +92,7 @@ of them needs a stated reason in the commit that moves it.
   again; `buffsOnly` 30 (Hale, Kiva, Mireth, Seraphine, Sylven and Vanno, 5 each) and Tavia's 5 again.
   **Defect pass 3 moved 18**: Corin 5 (Settling reaching its limit), Darian 5 (Hidden Strength
   striking the enemy it names), Hale 5 (Tracking Habit at round end) and Seraphine 3 (a named body
-  no longer answered by the sweep's Taunt holder).
+  no longer answered by the sweep's Taunt holder). **The Quarry clock repair moved Hale's 5 again.**
 - **`talent-sweep-baseline.txt`: 450 lines.** All 90 talents at five seeds each, every one compared
   against the same hero at the same seed with nothing picked. **ENGINE-GAPS pass 3 moved 134**: its
   clauses and renumbers 59 (Aeron III, all three of Aminah's and Marrow's, Arden I, Cyrra II, Nereia
@@ -102,7 +102,8 @@ of them needs a stated reason in the commit that moves it.
   lines moved; Nysera II's 5, False Target striking the enemy her Link turned the blow onto; and
   the named-body repair, Seraphine's 9, Mireth III's 4 and Aeron I's 3. Defect pass 3's lines are
   attributed by which change touches each kit, not by regenerating after each step; the
-  named-body ones are the only kits in either file that change touched alone.
+  named-body ones are the only kits in either file that change touched alone. **The Quarry clock
+  repair moved Hale's 15 again**, and nothing else.
 
 ## Systems
 
