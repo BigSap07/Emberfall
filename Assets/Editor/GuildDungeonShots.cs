@@ -511,8 +511,12 @@ namespace Emberfall.EditorTools
                                          int seed, int floor, bool wantClear)
         {
             TeamSnapshot line = null;
-            for (int tries = 0; tries < 400; tries++)
+            // A loss is searched for at the asked size first, then with fewer heroes: on the
+            // 72-stage campaign's pool no five-hero line at level 40 loses floor 2 in 400 tries.
+            int shrinkTo = wantClear ? size : 1;
+            for (int tries = 0; tries < 400 * (size - shrinkTo + 1); tries++)
             {
+                if (tries > 0 && tries % 400 == 0) size--;
                 List<HeroDef> pool = new List<HeroDef>(from);
                 line = new TeamSnapshot();
                 for (int i = 0; i < size && pool.Count > 0; i++)
