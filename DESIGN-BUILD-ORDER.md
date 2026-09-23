@@ -32,10 +32,10 @@ Two runs decide whether the tree is healthy, and they measure different things.
 
 - **`Tools/build-check.ps1`: 5 failures on `main` as merged, 3 on the wall-resolve branch under In
   progress, both measured from a clean run.** It lints the docs, compiles the core and the
-  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. Two reds are
-  the arena matrix's coverage checks, one for talents and one for basics, actives and passives,
-  under **Known bugs**: standing instruments reporting a real reading rather than a break, and the
-  branch's lists match `main`'s entry for entry. The third is the campaign power-band guard. On
+  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. Two of the
+  five were the arena matrix's coverage checks, one for talents and one for basics, actives and
+  passives; the talent pass on `talents/make-them-work` turned both green (**Known bugs**). The
+  third is the campaign power-band guard. On
   `main` it is twelve stages over their band, because the table there was derived for a player who
   could not fuse; on the branch the table is re-solved under the wall rule and it is two, `2-6` and
   `2-12` at x1.197, a reading rather than a regression (**The campaign power curve**). `main`'s last
@@ -364,7 +364,9 @@ hero out of the pair, so the median is Sylven and Vaelis alone (44,942) and neit
 Kiva took x1.15 on every Damage number and reads x0.83, and Velis took x1.45 on his basic alone and
 reads x1.04, because the same step on his whole kit put three of his clauses dark in the arena
 matrix. Kiva's Unclaimed Victory crossed into a measured loss with it (-807 a battle, t -2.9, from
--410, t -1.7) and is on `KnownCostlyTalents` and `TalentAudit.Costly` as a trade: it buys a Shield.
+-410, t -1.7) and was on `KnownCostlyTalents` and `TalentAudit.Costly` as a trade. The talent pass
+took it off both: two of its four effects were authored against a rate her kit never reaches, and it
+answered OnKill, which is rarely hers. It answers a body falling now and reads +3491, t 7.8.
 The check still fails if a pinned exception reaches the floor or any rarer-aspect 5-star falls
 under it.
 **One median moved in pass 3**: the Breaker median fell from Seraphine's 90536 to Rheia's 81541
@@ -426,35 +428,42 @@ room wherever it has one (`DarkTalentRooms`, 30 pairs). The
 quantity is the star band's: damage, healing and shielding, credited by source. A talent loses when
 its mean sits more than two standard errors below zero. Five seeds could not answer this: the sweep
 rolls damage variance, and a talent that shifts the dice stream moves a five-seed total by more than
-most talents are worth. The reading is **38 gain, 45 sit within the noise or change nothing the
-output total can see, and 7 lose**, and all 7 are pinned in `KnownCostlyTalents` with a reason. The
-check fails both when a talent starts losing without being listed and when a listed one stops.
+most talents are worth. The reading is **88 gain, 0 sit within the noise or change nothing the
+output total can see, and 2 lose**, and both are pinned in `KnownCostlyTalents` with a reason. The
+check fails both when a talent starts losing without being listed and when a listed one stops. It
+read 38 / 45 / 7 before the talent pass on `talents/make-them-work`; `DESIGN-TALENTS.md`, in the
+`claude` folder, has what the forty-five were doing and why the output total could not see it.
 
 **Every room it reads is a lineup a player can field, and that is asserted now.** Brenna I's room
 fielded two Brennas, which `PlayerProfile.AssignToTeam` never allows, and her value was read off
 that fight: +364 a battle, t 0.6. The same stage with the copy removed never lets her cap bind. A
 search of 29,016 legal fights found it binding in 43, and her room is now the one where it binds
 most often, beside Darian, Nereia and Rovan. It reads inside the noise there, and so does the
-sweep now (+199, t 1.4), so she counts as flat.
+sweep now, and she gains in both since the talent pass deepened her own Lasting Guard
+rather than the line's (+1011, t 2.8 in the sweep).
 Hers was the only illegal room in the harness. That was measured by recording every battle the full
 harness fights, not by reading the room lists.
 
-- **Two are traps**, both a conflict between the talent and its own kit, so neither could be mended
-  by a number and both are in `Docs/PINOY-LIST.md` section 2e. Kael III pays 10% of his active for
-  Rubble that What Breaks Forward consumes on the next basic, so its retention and cap never act.
-  Mireth I trades a Missing Page that lands every round for two landings per enemy per battle; it is
-  read in `s_buffer` since `buffsOnly`, because the sweep no longer raises The Missing Page.
-- **Five are trades.** Nysera I strips a buff off the body targeting her, which in the sweep is a
-  taunting tank's Provoke. Rheia I is fewer casts that each hit harder, as its sentence says. Rheia
-  III and Marrow I each pay a price their own sentence names: Energy per strike, a smaller Promise
-  spread over a third ally. Kiva III buys Kiva a Shield the output total does not count. It left the
-  list in pass 3, read -410, t -1.7, and came back when the F8 pass lifted her kit x1.15: it reads
-  -807, t -2.9, in `s_soft_mid_big`.
-- **Mireth III left the list in pass 3** and gains in its own room (+960, t 3.1).
-- **At parity the list reads differently** (`Docs/PARITY-STUDY.md`). Nysera I and Kiva III gain, and
-  Rheia I and III are flat, in close fights. The two traps and Marrow I lose everywhere. The same
-  study finds 16 of the 45 flat talents worth 1% Attack or more at parity, and 29 dead or negligible
-  in every arena it has.
+- **There are no traps.** Both were rewritten rather than relabelled, because in each the
+  PURCHASE was empty rather than the price too high. Kael III bought Rubble that lasts the battle
+  while What Breaks Forward empties the pile on the next basic; it salvages a piece from every blow
+  he lands now and reads +6535, t 8.5, where it read -1726, t -36.6. Mireth I bought two landings
+  per enemy, and `firesPerSubject` is a whole-battle budget where the sentence meant one Focus's
+  duration, so the trade was fewer landings than the once-a-round limit it replaced; it takes two
+  entries off the page per landing now and reads +3317. Turning that limit off instead was measured
+  and buys nothing at all: against a body that buffs every turn the passive already lands once a
+  round, so unlimited lands the same fourteen times.
+- **Two are trades**, and they are the two whose purchase is real and is not made of output.
+  Nysera I strips a buff off the body targeting her, which in the sweep is a taunting tank's
+  Provoke, and frees the whole line's aim. Marrow I spreads Promise over a third ally for a smaller
+  Promise heal. Three more were on the list and are not: Rheia I paid two Energy off every Applied
+  Revision - her whole cast rate - for a rider on one clause; Rheia III's own entry said her casts
+  refill the Revision it was buying back; Kiva III had two clauses no rate her kit banks at can
+  reach, and answered OnKill, which is rarely hers. All three are gains now.
+- **At parity the list reads differently** (`Docs/PARITY-STUDY.md`), and that study is what the
+  1%-of-Attack materiality floor comes from: a sham talent worth +0.2% Attack cleared the plain
+  t >= 2 rule for 24 of 30 heroes, so a reading has to be worth 1% of Attack in the same direction
+  before it counts as a talent rather than a dice shift.
 
 ### Campaign and progression
 
@@ -1134,41 +1143,43 @@ instead and is named in the coverage note under **Known bugs**.
 
 The harness reads first, then the rest.
 
-1. **The arena matrix's two coverage checks are red, and each names what every dark rule waits on.**
-   On `main` the 428 rules read **(a) 342** changing the sweep arena, **(b) 78** only in a
-   purpose-built room, and **(c) 8** nowhere. With the dead-clause pass (**In progress**) they read
-   (a) 344, (b) 77 and (c) 7. Two AUTHORING rows remain, meaning the clause as written cannot do
-   what its sentence says: Aeron's Interest Owed (talent I, in `Docs/PINOY-LIST.md` section 2h)
-   and Finn's Ringing Toll. Finn's is not an ordering bug, and that was measured: raising the toll
-   ahead of the spend changes no fight, because every active empties a full bar. Kora's First
-   Opening was the third, and it was an ordering bug in the engine: it is repaired on that branch
-   and has a room now. Two are
-   UNRAISED, meaning no room has been found: Eira's Leave No Corner and Vaelis's Opening Moves.
-   **The other three are rooms that stopped working when the fusion spine merged**: Aminah's
-   No Wasted Recovery (`aminah_emergency_release`), Aminah III and Caldus III. The arena matrix read (b) 81 and (c) 6 on its own
-   branch, and merged `main` reads (b) 78 and (c) 9; these three are the whole difference. Aminah
-   and Caldus are the two heroes the F8 lifts changed, and the cause was not traced. All three still
-   fire and change fights in normal play (below), so it is the rooms that broke, not the rules.
-   Finn's Aftershock Clock was the ninth rule, reported as ENGINE, until the round-end repair lit it.
+1. **The arena matrix's two coverage checks are green.** They were the two standing reds, and the
+   talent pass on `talents/make-them-work` closed both. The talent half read (c) 3 - Aeron I,
+   Aminah III and Caldus III - and reads (a) 70, (b) 20, (c) 0. The rule half read (c) 4 and reads
+   zero: every basic, active and passive in the roster is observed changing a fight, in the sweep
+   arena or in a named room.
 
-   **What a class (b) pass is worth in play was measured, not assumed.** `EMBERFALL_MATRIX_NORMAL=both`
-   fields each class (b) rule's hero in the pinned line and in the balance line, across every
-   shipped stage: 1,152 battles a rule. Over the 81 the matrix branch counted, **71 fire and change
-   a fight in normal play, 2 fire and never change one, and 8 never do anything at all**:
-   - fire and change nothing: Arno's Rubble Resolve (3,343 firings) and Hale's No Safe Distance
-     against an enemy that hides itself (707);
-   - never fire: Brenna's Survival of the Stubborn, and her talent III, which waits on it; Hale's No
-     Safe Distance against an enemy that Wards itself; Mireth II; Nadine's Proper Place; Vaelis II;
-     Velis's What Was Taken; and Velis III.
+   **`MatrixWaits` is empty, and that is the finding rather than a list nobody filled in.** Three of
+   the four rules were re-authored, because a rule that fires and changes nothing is broken and not
+   quiet, and the fourth only ever needed a different room:
 
-   The dead-clause pass sorted all ten, plus Aeron I and Brenna I, in `Docs/PINOY-LIST.md` section
-   2i. Two were ordering bugs in the engine, and both are repaired on that branch: Brenna's Survival
-   of the Stubborn, with Brenna III behind it, and Kora's First Opening. Arno's Rubble Resolve, both
-   of Hale's No Safe Distance cases and Nadine's Proper Place wait on an enemy that Wards or hides
-   itself, and the shipped campaign fields none. Mireth II, Vaelis II, Velis's What Was Taken and
-   Velis III are authoring. Two rules depend on the line:
-   Kael's Unusable Cover changes fights only in the balance line and Darian's The Cost of Knowing only
-   in the pinned one. Roan's Leave Before Asked works, but changed 3 fights in 1,152.
+   - `finn_ringing_toll` took Energy off the bar of the enemy whose cast raised it, and `TakeTurn`
+     sets that bar to 0 for the cast before the trigger goes out. That is not an ordering bug and it
+     was measured as one: every active costs a full bar against a cap of one, so the toll lands on an
+     empty bar whichever happens first. The bell is heard by the OTHER Ringing enemies now.
+   - `eira_leave_no_corner` asked for an ally holding Mobile Cover to be singled out. Each gate lands
+     alone in its room and the pair never did in 96 rooms - one firing with only the Cover gate, six
+     with only the single-target gate, none with both. It keeps the gate it is named for.
+   - `vaelis_opening_moves` asked for the DEFEATED body to carry Departure, and none did in 360
+     rooms, because an ally's hit on a linked body spends the link before a killing blow finds it.
+     The link is mutual, so the clause reads it from the end that survives.
+   - `aminah_emergency_release` is the one where the rule was right and the ROOM was wrong, which is
+     what this entry used to suspect when it said the three rooms broke rather than the rules.
+     Beside Eira AND Isara nothing holding Priority ever crossed the line; beside Isara alone it
+     crosses once. Eira's Mobile Cover stood between them. The hero is untouched.
+
+   Aminah III and Caldus III were the other two of those three rooms, and both turned out to be the
+   talent rather than the room: Aminah III hung off `aminah_emergency_release` itself and now hangs
+   off the Priority expiring, and Caldus III waited on a Declared Target falling under a third of its
+   HP, once per battle, which no arena arranges.
+
+   **What a class (b) pass is worth in play is still measured rather than assumed.**
+   `EMBERFALL_MATRIX_NORMAL=both` fields each class (b) rule's hero in the pinned line and in the
+   balance line across every shipped stage, 1,152 battles a rule. That reading is a report and not a
+   check, and it is the slow half of the matrix by a wide margin - the coverage checks alone run in
+   about two seconds. The list of rules that fire in a room and never change a normal-play fight was
+   last taken before the talent pass and eight of its ten entries are talents the pass rewrote, so it
+   is worth retaking rather than quoting.
 
 Beyond the harness:
 
