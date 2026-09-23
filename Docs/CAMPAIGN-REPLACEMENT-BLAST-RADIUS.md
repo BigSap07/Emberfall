@@ -160,7 +160,8 @@ Assertions that `the_unmade` never appears in generated content:
   It then asserts none of the first 120 Recital floors fields any member of that set, and that
   every floor fields a full line of 5.
 - **`GuildDungeonChecks.CheckFloors`** asserts no floor's `EnemyId == "the_unmade"` (checked). It
-  covers one seed ("floors-check", cycle 1) and its 5 floors.
+  covered one seed ("floors-check", cycle 1) and its 5 floors when this was written. The roster
+  job widened it to cycles 1-1000 of that seed, 5,000 floors (`CAMPAIGN-SPEC.md` 9.5).
 
 The code side excludes it in two places:
 

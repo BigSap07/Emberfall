@@ -541,30 +541,68 @@ level each stage sets, which is the stage job's.
 
 ### 9.3 Aspects - the constraint first, then flavour
 
-**Constraints, in order:** every one of the six Aspects covered, so the Deep Recital has no empty
-floor once the shipped 12 retire; **every chapter on its own also covers all six**, so no chapter
-reads as one Aspect and the guarantee survives chapters being cut or reordered; and no Aspect
-holding so many of one guild behaviour that a guild floor can come out single-Aspect (9.5 says
-how that one was found).
+**Constraints, in order:**
 
-**Flavour second,** from the Curator's own naming of the Six in chapter 6: Ember is Escalation
-(raiders, marauders, Freeblades, the Standard Bearer), Tide is Redirection (the Shepherd, the
-Peacemaker, menders), Verdant is Persistence (things that keep going by muscle memory: patrols,
-pilgrims, gatekeepers), Gale is Disruption (trappers, skirmishers, cutpurses), Umbra is Removal
-(the Hollowed who lost something, thieves, the Collector) and Lumen is Definition (rules, law and
-classification: the Waykeeper, the Magistrate, the Arbiter, the Archivist, the Curator).
+1. Every one of the six Aspects covered, so the Deep Recital has no empty floor once the shipped 12
+   retire.
+2. **Every chapter on its own also covers all six**, so no chapter reads as one Aspect and the
+   guarantee survives chapters being cut or reordered.
+3. **No Aspect carries a disproportionate share of the strong templates**: exactly one boss per
+   Aspect, and the 30 elite-kind templates (24 elites, 6 minibosses) at 4-6 per Aspect. The
+   Recital draws every template of a floor's Aspect (9.6), so an Aspect that collects the bosses
+   or the elites becomes a wall on every sixth floor.
+4. No Aspect holding so many of one guild behaviour that a guild floor comes out single-Aspect
+   (9.5).
 
-| Aspect | total | ch1 | ch2 | ch3 | ch4 | ch5 | ch6 |
-|---|---|---|---|---|---|---|---|
-| Ember | 15 | 3 | 3 | 2 | 2 | 3 | 2 |
-| Tide | 12 | 2 | 2 | 2 | 2 | 2 | 2 |
-| Verdant | 17 | 2 | 3 | 3 | 4 | 3 | 2 |
-| Gale | 11 | 2 | 2 | 2 | 1 | 2 | 2 |
-| Umbra | 13 | 4 | 2 | 2 | 2 | 1 | 2 |
-| Lumen | 16 | 1 | 2 | 3 | 3 | 3 | 4 |
+**What Pinoy's lore constrains: nothing, for any boss.** The lore never ties a boss to one Aspect.
+The Six are unnamed until chapter 6 ("We don't name Ember, Verdant, Tide, Gale, Umbra or Lumen. Not
+yet."), and the bosses that touch them at all are about **all six**:
 
-Bosses: Collector Umbra, Shepherd Tide, Arbiter Lumen, Archivist Lumen, Peacemaker Tide, Curator
-Lumen. Minibosses: Forsaken Tide, Waykeeper Lumen, Gatewarden Verdant, Castellan Verdant, Standard
+- The Archivist: "Six classifications recognized." / "Seventh classification..."
+- The Peacemaker: "Six beliefs created six ways to disagree. Therefore: Six must become one."
+- The Curator: "The Curator was created to protect the teachings of all Six. Its original
+  command: Preserve the Six."
+- The Penitent (miniboss): "They spent their life trying to determine: Which belief was correct?
+  Ember? Tide? Verdant? Gale? Umbra? Lumen?"
+- The sanctuary itself: "The sanctuary was never dedicated to one Aspect."
+
+The Collector, the Shepherd and the Arbiter are never linked to an Aspect or to the Six at all.
+So every boss's Aspect is ours, and the one reading the lore does give (these bosses belong to no
+single Aspect) cannot be expressed, because an enemy must carry exactly one.
+
+**Flavour second,** from the Curator's own naming of the Six in chapter 6: "EMBER — Escalation,
+TIDE — Redirection, VERDANT — Persistence, GALE — Disruption, UMBRA — Removal, LUMEN —
+Definition". Raiders, marauders and Freeblades escalate; menders and the Shepherd redirect; patrols,
+pilgrims and gatekeepers persist by muscle memory; trappers and skirmishers disrupt; the Hollowed,
+thieves and the Collector remove; rules and law define. Bosses: the **Collector** Umbra (it removes
+conviction), the **Shepherd** Tide (it redirects the emptied), the **Arbiter** Lumen (absolute
+rules), the **Curator** Verdant (it forbids any belief to change: persistence past the point of
+sense), the **Peacemaker** Ember (every failed peace escalated its methods) and the **Archivist**
+Gale, the weakest fit of the six, placed there because Gale was the Aspect left.
+
+**The first assignment put the Arbiter, the Archivist and the Curator all in Lumen** (all three
+are about rules or records, so Definition), and gave Lumen 9 of the 24 elites, because the
+late-chapter institutional enemies are elites. Measured in the Recital, Lumen floors carried 41%
+more enemy power than main's and became the hardest band (9.6). Two passes fixed it:
+
+- Three bosses moved: Archivist Lumen to Gale, Peacemaker Tide to Ember, Curator Lumen to Verdant.
+  That cut Lumen's boss slots from 18 to 8 of 100, and Lumen stayed the hardest band, because
+  the elites were the rest of the cause.
+- Five same-chapter swaps between an elite and a minion, so each chapter keeps every Aspect:
+  Graven Watcher and Forgotten Archer, Veiled Custodian and Oathbound Seer, War Chaplain and
+  Border Wolf, Hollowed Sentinel and Carrion Vulture (each elite Lumen to Gale, each minion Gale
+  to Lumen), and Hollowed Captain and Canal Rat (elite Umbra to Tide, minion Tide to Umbra).
+
+| Aspect | total | minion | elite | miniboss | boss | ch1 | ch2 | ch3 | ch4 | ch5 | ch6 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Ember | 16 | 11 | 3 | 1 | 1 | 3 | 3 | 2 | 2 | 4 | 2 |
+| Tide | 11 | 5 | 4 | 1 | 1 | 2 | 2 | 2 | 2 | 1 | 2 |
+| Verdant | 18 | 12 | 3 | 2 | 1 | 2 | 3 | 3 | 4 | 3 | 3 |
+| Gale | 12 | 6 | 5 | 0 | 1 | 2 | 2 | 2 | 2 | 2 | 2 |
+| Umbra | 13 | 7 | 4 | 1 | 1 | 4 | 2 | 2 | 2 | 1 | 2 |
+| Lumen | 14 | 7 | 5 | 1 | 1 | 1 | 2 | 3 | 2 | 3 | 3 |
+
+Minibosses: Forsaken Tide, Waykeeper Lumen, Gatewarden Verdant, Castellan Verdant, Standard
 Bearer Ember, Penitent Umbra.
 
 ### 9.4 The 84
@@ -599,11 +637,11 @@ Bearer Ember, Penitent Umbra.
 | `road_marauder` | Human | Vanguard | minion | Ember | - | 920 / 112 / 54 / 96 |
 | `marauder_crossbowman` | Human | Marksman | minion | Ember | Hunter | 750 / 131 / 36 / 106 |
 | `bog_crawler` | Beast | Stalker | minion | Tide | Hunter | 720 / 129 / 37 / 121 |
-| `carrion_vulture` | Beast | Striker | minion | Gale | Hunter | 770 / 129 / 39 / 110 |
+| `carrion_vulture` | Beast | Striker | minion | Lumen | Hunter | 770 / 129 / 39 / 110 |
 | `drifting_pilgrim` | Human | Warden | elite | Verdant | - | 1480 / 139 / 72 / 101 |
 | `hollowed_woodsman` | Human/Hollowed | Vanguard | elite | Verdant | - | 1570 / 143 / 82 / 89 |
 | `hollowed_apothecary` | Human/Hollowed | Binder | elite | Umbra | Spreader | 1280 / 138 / 67 / 102 |
-| `hollowed_sentinel` | Human/Hollowed | Bulwark | elite | Lumen | Wall | 1700 / 128 / 100 / 81 |
+| `hollowed_sentinel` | Human/Hollowed | Bulwark | elite | Gale | Wall | 1700 / 128 / 100 / 81 |
 | `the_waykeeper` | Human | Warden | elite (miniboss) | Lumen | - | 2010 / 171 / 88 / 94 |
 | `the_shepherd` | Human | Binder | boss | Tide | (boss: never drawn) | 2430 / 231 / 99 / 92 |
 
@@ -612,7 +650,7 @@ Bearer Ember, Penitent Umbra.
 | id | race | role | kind | aspect | guild behaviour | hp / atk / def / spd |
 |---|---|---|---|---|---|---|
 | `field_hound` | Beast | Striker | minion | Verdant | Hunter | 810 / 135 / 42 / 116 |
-| `canal_rat` | Beast | Stalker | minion | Tide | Hunter | 720 / 126 / 35 / 124 |
+| `canal_rat` | Beast | Stalker | minion | Umbra | Hunter | 720 / 126 / 35 / 124 |
 | `gate_extortionist` | Human | Vanguard | minion | Ember | - | 940 / 118 / 55 / 97 |
 | `rooftop_cutpurse` | Human | Stalker | minion | Gale | Hunter | 720 / 128 / 37 / 127 |
 | `dock_enforcer` | Human | Bulwark | minion | Verdant | Wall | 1110 / 93 / 72 / 87 |
@@ -622,7 +660,7 @@ Bearer Ember, Penitent Umbra.
 | `unmoored_citizen` | Human/Affected | Binder | elite | Gale | Spreader | 1220 / 143 / 63 / 99 |
 | `hollowed_physician` | Human/Hollowed | Mender | elite | Tide | - | 1290 / 125 / 67 / 100 |
 | `hollowed_magistrate` | Human/Hollowed | Binder | elite | Lumen | Spreader | 1220 / 146 / 65 / 96 |
-| `hollowed_captain` | Human/Hollowed | Vanguard | elite | Umbra | - | 1460 / 153 / 80 / 92 |
+| `hollowed_captain` | Human/Hollowed | Vanguard | elite | Tide | - | 1460 / 153 / 80 / 92 |
 | `the_gatewarden` | Human | Bulwark | elite (miniboss) | Verdant | Wall | 2380 / 163 / 112 / 83 |
 | `the_arbiter` | Human | Binder | boss | Lumen | (boss: never drawn) | 2460 / 235 / 98 / 89 |
 
@@ -637,19 +675,19 @@ Bearer Ember, Penitent Umbra.
 | `cave_lurker` | Beast | Stalker | minion | Umbra | Hunter | 680 / 127 / 37 / 127 |
 | `sporekeeper` | Fungal Humanoid | Binder | minion | Verdant | Spreader | 780 / 109 / 42 / 107 |
 | `forgotten_soldier` | Undead | Vanguard | minion | Verdant | - | 970 / 116 / 53 / 95 |
-| `forgotten_archer` | Undead | Marksman | minion | Gale | Hunter | 730 / 124 / 35 / 107 |
+| `forgotten_archer` | Undead | Marksman | minion | Lumen | Hunter | 730 / 124 / 35 / 107 |
 | `crypt_acolyte` | Undead | Mender | elite | Tide | - | 1360 / 130 / 67 / 96 |
 | `graven_guardian` | Construct | Bulwark | elite | Lumen | Wall | 1710 / 120 / 100 / 84 |
-| `graven_watcher` | Construct | Binder | elite | Lumen | Spreader | 1270 / 146 / 63 / 101 |
+| `graven_watcher` | Construct | Binder | elite | Gale | Spreader | 1270 / 146 / 63 / 101 |
 | `forgotten_knight` | Undead | Warden | elite | Umbra | - | 1470 / 130 / 75 / 99 |
 | `the_last_castellan` | Undead Human | Warden | elite (miniboss) | Verdant | - | 2060 / 167 / 86 / 93 |
-| `the_archivist` | Ancient Construct | Binder | boss | Lumen | (boss: never drawn) | 2470 / 229 / 95 / 89 |
+| `the_archivist` | Ancient Construct | Binder | boss | Gale | (boss: never drawn) | 2470 / 229 / 95 / 89 |
 
 **Chapter 5**
 
 | id | race | role | kind | aspect | guild behaviour | hp / atk / def / spd |
 |---|---|---|---|---|---|---|
-| `border_wolf` | Beast | Striker | minion | Gale | Hunter | 800 / 128 / 39 / 116 |
+| `border_wolf` | Beast | Striker | minion | Lumen | Hunter | 800 / 128 / 39 / 116 |
 | `carrion_hyena` | Beast | Stalker | minion | Tide | Hunter | 750 / 128 / 36 / 124 |
 | `border_levy` | Human | Vanguard | minion | Verdant | - | 950 / 113 / 55 / 100 |
 | `border_scout` | Human | Marksman | minion | Verdant | Hunter | 730 / 135 / 35 / 105 |
@@ -657,12 +695,12 @@ Bearer Ember, Penitent Umbra.
 | `ironshield_arbalist` | Human | Marksman | minion | Lumen | Hunter | 770 / 125 / 37 / 111 |
 | `freeblade_raider` | Human | Striker | minion | Ember | - | 780 / 131 / 41 / 112 |
 | `freeblade_skirmisher` | Human | Tinkerer | minion | Gale | Spreader | 720 / 112 / 40 / 114 |
-| `war_chaplain` | Human | Warden | elite | Lumen | - | 1390 / 139 / 77 / 99 |
+| `war_chaplain` | Human | Warden | elite | Gale | - | 1390 / 139 / 77 / 99 |
 | `oathbreaker` | Human | Stalker | elite | Umbra | Hunter | 1100 / 167 / 52 / 120 |
 | `ironshield_justicar` | Human | Vanguard | elite | Lumen | - | 1560 / 155 / 79 / 92 |
 | `freeblade_reaver` | Human | Striker | elite | Ember | - | 1240 / 180 / 59 / 106 |
 | `the_standard_bearer` | Human | Warden | elite (miniboss) | Ember | - | 1950 / 176 / 88 / 97 |
-| `the_peacemaker` | Human | Binder | boss | Tide | (boss: never drawn) | 2610 / 232 / 97 / 92 |
+| `the_peacemaker` | Human | Binder | boss | Ember | (boss: never drawn) | 2610 / 232 / 97 / 92 |
 
 **Chapter 6**
 
@@ -675,13 +713,13 @@ Bearer Ember, Penitent Umbra.
 | `sanctuary_pilgrim` | Undead | Warden | minion | Umbra | - | 930 / 108 / 51 / 105 |
 | `sanctuary_keeper` | Undead | Vanguard | minion | Lumen | - | 970 / 114 / 55 / 100 |
 | `oathbound_monk` | Undead | Striker | minion | Ember | - | 810 / 133 / 41 / 114 |
-| `oathbound_seer` | Undead | Binder | minion | Gale | Spreader | 820 / 108 / 43 / 107 |
+| `oathbound_seer` | Undead | Binder | minion | Lumen | Spreader | 820 / 108 / 43 / 107 |
 | `scripture_golem` | Construct | Bulwark | elite | Lumen | Wall | 1670 / 123 / 100 / 85 |
 | `echo_wisp` | Spirit | Breaker | elite | Tide | Spreader | 1220 / 150 / 62 / 100 |
-| `veiled_custodian` | Construct | Binder | elite | Lumen | Spreader | 1180 / 140 / 65 / 100 |
+| `veiled_custodian` | Construct | Binder | elite | Gale | Spreader | 1180 / 140 / 65 / 100 |
 | `sanctuary_champion` | Undead | Vanguard | elite | Ember | - | 1460 / 149 / 84 / 89 |
 | `the_penitent` | Undead Human | Warden | elite (miniboss) | Umbra | - | 1970 / 179 / 86 / 91 |
-| `the_curator` | Ancient Construct | Binder | boss | Lumen | (boss: never drawn) | 2550 / 233 / 96 / 88 |
+| `the_curator` | Ancient Construct | Binder | boss | Verdant | (boss: never drawn) | 2550 / 233 / 96 / 88 |
 
 ### 9.5 The guild dungeon - Wall, Hunter, Spreader, **measured**
 
@@ -699,7 +737,7 @@ floors each, and every floor's themed slots were read back against `GuildDungeon
 | fielded | non-boss Walls | Hunters | Spreaders | Wall slot | Hunt slots | Attrition slots | Champion lead elite | single-Aspect floors |
 |---|---|---|---|---|---|---|---|---|
 | the 84 only | 9 | 25 | 12 | 300/300 | 900/900 | 900/900 | 300/300 | 0 of 1500 |
-| shipped 12 + the 84 | 10 | 27 | 16 | 300/300 | 900/900 | 900/900 | 300/300 | 2 of 1500 |
+| shipped 12 + the 84 | 10 | 27 | 16 | 300/300 | 900/900 | 900/900 | 300/300 | 1 of 1500 |
 | chapter 1 only | 1 | 5 | 2 | all | all | all | all | 0 |
 | chapter 2 only | 1 | 5 | 2 | all | all | all | all | 0 |
 | chapter 3 only | 2 | 4 | 2 | all | all | all | all | 0 |
@@ -716,57 +754,96 @@ that is still the right behaviour.
 the 25 Hunters in Gale, and 2 of 1500 floors came out as five Gale bodies on a Hunt floor. The
 guild's own check (`GuildDungeonChecks.CheckFloors`) builds one seed, which was not one of them, so
 it would have passed. Four Hunters moved off Gale (Outlaw Archer and Marauder Crossbowman to Ember,
-Field Hound and Border Scout to Verdant) and the count went to 0. **With the shipped 12 still
-fielded beside the 84 it is 2 of 1500**, so the stage job should re-run this measurement on
-whatever it actually fields: "no floor is one Aspect" is a probability, not a rule the generator
-enforces.
+Field Hound and Border Scout to Verdant) and the count went to 0. "No floor is one Aspect" is a
+probability, not a rule the generator enforces.
+
+**So the check now builds 1,000 dungeons, 5,000 floors,** not one (`CompositionCycles` in
+`GuildDungeonChecks.cs`). Full lines, target power, mixed Aspects and no scripted boss are all
+asserted across every one. It is sized against the rate seen: at 1 in 750 per floor, 5,000 floors
+miss every failure about 0.1% of the time, and a 1-in-100 failure about e^-50 of the time. The
+single seed missed a 1-in-750 failure 99.3% of the time. **Its sensitivity was measured** by
+running the same seeds against content it should reject:
+
+| content | single-Aspect floors, new check (5,000) | old check (5) |
+|---|---|---|
+| this branch as shipped (no stage fields the 84) | 0 | 0 |
+| the 84 fielded, final assignment | 0 | 0 |
+| **shipped 12 + the 84 fielded**, final assignment | **6** (first at cycle 8) | 0 |
+| the 84 fielded, first-pass assignment | **6** (first at cycle 75) | 0 |
+| shipped 12 + the 84, first-pass assignment | **7** (first at cycle 80) | 0 |
+
+**The stage job will meet this.** Fielding the 84 beside the shipped 12 makes 6 single-Aspect
+floors in 5,000, and the check now goes red on it where it used to pass. That is the check working:
+the fix is in what is fielded (the blast radius's plan retires the 12 in the same move) or in the
+generator, not in the check.
 
 ### 9.6 The Deep Recital moved - **measured**, and exactly how
 
 `RecitalGenerator.BuildFloor` draws every template of the floor's Aspect except the prologue's
 scripted loss, **campaign-fielded or not, bosses included**. So the 84 are live in the Recital the
-moment they are in `enemies.json`. Measured against main's content, floors 1-120:
+moment they are in `enemies.json`. Measured against main's content, floors 1-120, with the final
+assignment in 9.3:
 
 - **Every floor's line changes: 120 of 120.** Levels do not: 0 of 120 floors change a level,
   because level is a function of the floor number alone.
-- Each Aspect's pool grows from 1-3 templates to 12-19. 49 floors still field at least one of the
-  shipped 12 (69 of 600 slots).
-- Boss templates fielded as ordinary floor enemies fall from 100 of 600 slots to 54: the old Tide
-  and Umbra pools were a third bosses, and the new pools are mostly minions and elites.
+- Each Aspect's pool grows from 1-3 templates to 13-20. 47 floors still field at least one of the
+  shipped 12 (67 of 600 slots).
+- Boss templates fielded as ordinary floor enemies fall from 100 of 600 slots to 57: Tide 18,
+  Umbra 12, Lumen 8, Gale 7, Ember 6, Verdant 6. Main's were Tide 40 and Umbra 60, the
+  Tideturned and the Sundered Colossus.
 - The Unmade is still never drawn, and every floor still fields a full line of 5
   (`CheckRecitalDrawsNoScriptedLoss`, green).
 
 Difficulty, measured as the three starting heroes at one level fighting floors 1-60, 20 seeds a
-floor, identical seeds for old and new:
+floor, identical seeds throughout. "First pass" is the assignment before 9.3's two corrections,
+kept because it is what the Lumen finding was measured on:
 
-| starters at level | wins, main | wins, this content |
-|---|---|---|
-| 45 | 437 / 1200 | 510 / 1200 |
-| 60 | 609 / 1200 | 639 / 1200 |
-| 80 | 853 / 1200 | 921 / 1200 |
-| 100 | 986 / 1200 | 1089 / 1200 |
+| | main | first pass | bosses spread | final |
+|---|---|---|---|---|
+| wins at level 45 | 437 / 1200 | 510 | 486 | **515** |
+| wins at level 80 | 853 / 1200 | 921 | 908 | **942** |
+| **Lumen** wins at 45 | 97 / 200 | 60 | 61 | **93** |
+| **Lumen** wins at 80 | 188 / 200 | 115 | 134 | **155** |
+| **Lumen** power, floors 1-60 | 296k | 418k (+41%) | 385k | **357k (+21%)** |
+| hardest band at 80 | Tide 72 | Lumen 115 | Lumen 134 | **Tide and Umbra, 150** |
+| spread at 80, best band minus worst | 128 | 80 | 33 | **17** |
 
-Slightly easier overall, and **redistributed by Aspect**. Summed enemy power on floors 1-60:
+The final assignment, by Aspect:
 
-| Aspect | power, main → this | wins at level 80, main → this |
-|---|---|---|
-| Ember | 355k → 308k | 145 → 171 |
-| Tide | 492k → 377k | 72 → 121 |
-| Verdant | 340k → 318k | 173 → 179 |
-| Gale | 250k → 287k | 200 → 195 |
-| Umbra | 479k → 370k | 75 → 140 |
-| Lumen | 296k → 418k | 188 → 115 |
+| Aspect | power, main → final | wins at 45, main → final | wins at 80, main → final |
+|---|---|---|---|
+| Ember | 355k → 339k | 77 → 99 | 145 → 160 |
+| Tide | 492k → 385k | 36 → 43 | 72 → 150 |
+| Verdant | 340k → 344k | 89 → 100 | 173 → 167 |
+| Gale | 250k → 342k | 105 → 100 | 200 → 160 |
+| Umbra | 479k → 361k | 33 → 80 | 75 → 150 |
+| Lumen | 296k → 357k | 97 → 93 | 188 → 155 |
 
-Tide and Umbra ease because the Tideturned and the Sundered Colossus stop filling two of every five
-slots. **Lumen hardens the most**: it was five Fractured Choristers, and it now draws three of the
-six bosses (Arbiter, Archivist, Curator) beside elites. That is the flavour assignment in 9.3
-showing up in a mode it was not chosen for. If Lumen floors need to come back down, the lever is
-the Recital's pool rule (for example, skip `kind: boss` outside Guardian floors, as the guild
-does), not the Aspects. Nothing in the Recital was changed here.
+**What moved instead of Lumen.** Main's Lumen and Gale floors were soft because each was one
+minion drawn five times (the Fractured Chorister, the Grave Moth). With real pools they rise to
+the pack: Gale's power goes up 37% and its wins at level 80 fall from 200 to 160, and all six
+bands now land within 17 wins of each other at level 80. Tide and Umbra ease the most,
+because the Tideturned and the Colossus stop filling two of every five slots. At level 45 the
+hardest band is Tide (43), which is still easier than main's Tide (36): the shipped Tideturned,
+Tidecaller and Riptide Channeler are the heaviest Tide templates, and they are untouched. Against
+the first pass, though, Tide at level 45 fell from 68 to 43: it lost the Peacemaker and a minion
+(Canal Rat) and gained an elite (Hollowed Captain), so it has the fewest minions of any band (5).
 
-Harness numbers that moved with it, both still green: `CheckRecitalDifficultyEscalates`' floor 1 to
-13 power went from 11263 → 22048 to 10357 → 21846, and `CheckRecitalGuardians`' floor 10 Guardian
-lead is now the Cliff Harpy (power 3137 at level 46; it was a Grave Moth at 2795). The
+**What survives, and the proposal.** No band is a wall any more: the worst band at level 80 is
+150 of 200 against main's 72. The mechanism that made the spike is still there, though. The
+Recital draws `kind: boss` templates as ordinary floor enemies: 57 of 600 slots are campaign
+bosses fighting at escort level, and one Aspect that collects bosses gets a harder band every
+sixth floor for the life of the mode. Nobody designed that. `RecitalGenerator`'s comments talk
+about "a small pool of enemy templates" and a Guardian every tenth floor, and the blast radius
+missed it (corrected there). **Proposed, not made, because it is a mode-wide rule:** the Recital
+pool skips `kind: boss` on ordinary floors and for escorts, the way the guild dungeon's
+`BuildFloor` already skips them, and lets only a Guardian floor's lead slot draw one, since a boss
+at a raised level is the Guardian's stated shape. That makes Recital
+difficulty independent of how any future Aspect assignment spreads the bosses.
+
+Harness numbers that moved, all still green: `CheckRecitalDifficultyEscalates`' floor 1 to 13
+power went from 11263 → 22048 to 10357 → 25470. `CheckRecitalGuardians`' floor 10 Guardian lead is
+now the War Chaplain, an elite (power 4071 at level 46; it was the Grave Moth at 2795), and the
 level-45 line still clears floors 9 and 10.
 
 ### 9.7 Left plain, and concepts only partly expressed
@@ -816,5 +893,7 @@ engine work; they were held back only by this job's rule of staying inside what 
   Revenant's basic) and `RandomEnemy` do not. Corrected there.
 - **The same file's 4.1 did not say the Recital draws bosses** as ordinary floor enemies. It does,
   which is how the six bosses reach Recital floors (9.6). Corrected there.
+- **No boss's Aspect comes from the lore** (9.3). The three that first went to Lumen went there on
+  our reading of Definition, and that reading is what made the Lumen spike.
 - **The Shepherd's sprite id corrects the delivered stem.** `The_sheperd` must be renamed
   `the_shepherd` on import, deliberately.
