@@ -27,6 +27,9 @@ namespace Emberfall.Game
             string floorConditions = ReadTextOptional("floor-conditions");
 
             ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor, floorConditions);
+            // After Load, and outside ContentVersion: nothing in the Guild Path is read by a
+            // fight, so its prices must not retire a guild dungeon replay (ContentDatabase.GuildPath).
+            db.LoadGuildPath(ReadTextOptional("guild-path"));
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

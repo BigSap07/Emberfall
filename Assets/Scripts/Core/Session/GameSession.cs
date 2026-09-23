@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Emberfall.Core.Cloud;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
@@ -1270,6 +1271,119 @@ namespace Emberfall.Core.Session
 
             hero.SelectedTalent = selection;
             return true;
+        }
+
+        // ------------------------------------------------------------------ the Guild Path
+
+        /// <summary>
+        /// Whether the player owns a Guild Path node. Read off the server's last answer
+        /// (PlayerProfile.GuildPathNodes) against this build's guild-path.json, so a node the build
+        /// does not know grants nothing here.
+        /// </summary>
+        public bool OwnsGuildPathNode(string id)
+        {
+            return Content.GuildPath.Node(id) != null && Profile.GuildPathNodes.Contains(id);
+        }
+
+        private bool OwnsGuildPathKind(GuildPathNodeKind kind)
+        {
+            for (int i = 0; i < Content.GuildPath.Nodes.Count; i++)
+            {
+                GuildPathNodeDef n = Content.GuildPath.Nodes[i];
+                if (n.Kind == kind && Profile.GuildPathNodes.Contains(n.Id)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>Lines the formation can switch between: the one every player has, plus one
+        /// per Line node owned.</summary>
+        public int LinesAllowed
+        {
+            get
+            {
+                int lines = 1;
+                for (int i = 0; i < Content.GuildPath.Nodes.Count; i++)
+                {
+                    GuildPathNodeDef n = Content.GuildPath.Nodes[i];
+                    if (n.Kind == GuildPathNodeKind.Line && Profile.GuildPathNodes.Contains(n.Id)) lines++;
+                }
+                return lines;
+            }
+        }
+
+        public bool LinesKeepTalents
+        {
+            get { return OwnsGuildPathKind(GuildPathNodeKind.LineTalents); }
+        }
+
+        /// <summary>
+        /// Takes the server's answer as the truth about the Path: the balance and the nodes owned,
+        /// replacing whatever the save held. The server is the only place either can change, so a
+        /// save that disagrees is simply behind (or edited), and the answer wins. Clamps the active
+        /// line if the answer allows fewer lines than the save was on.
+        /// </summary>
+        public void ApplyGuildPathState(GuildPathState state)
+        {
+            if (state == null) return;
+            Profile.Waymarks = state.Balance;
+            Profile.GuildPathNodes.Clear();
+            for (int i = 0; i < state.Nodes.Count; i++) Profile.GuildPathNodes.Add(state.Nodes[i]);
+            if (Profile.ActiveLine >= LinesAllowed) SwitchLine(0);
+        }
+
+        /// <summary>
+        /// Makes another saved line the formation. The line being left is written back into its
+        /// slot first - its heroes, and its talent picks once the player owns Lines Keep Talents -
+        /// so nothing set on it is lost. A line switched to for the first time starts as a copy of
+        /// the one being left, which is what a player editing a variant wants.
+        ///
+        /// Heroes the player no longer owns are dropped from the loaded line and NormaliseTeam
+        /// fills the gap, exactly as it does for Team on load. Talent picks are restored through
+        /// SelectTalent, so a pick naming a slot the hero no longer authors is refused rather than
+        /// written. Formation only: nothing here changes what any hero is.
+        /// </summary>
+        public bool SwitchLine(int index)
+        {
+            if (index < 0 || index >= LinesAllowed) return false;
+            int from = Profile.ActiveLine < 0 ? 0 : Profile.ActiveLine;
+            while (Profile.Lines.Count <= Math.Max(index, from)) Profile.Lines.Add(null);
+
+            SavedLine left = CaptureLine();
+            Profile.Lines[from] = left;
+            if (index == from) return true;
+
+            SavedLine target = Profile.Lines[index] ?? CaptureLine();
+            Profile.Lines[index] = target;
+            for (int s = 0; s < Profile.Team.Length; s++)
+            {
+                string uid = s < target.Heroes.Length ? target.Heroes[s] : null;
+                Profile.Team[s] = Profile.FindHeroByUid(uid) != null ? uid : null;
+            }
+            Profile.NormaliseTeam();
+            if (target.HasTalents && LinesKeepTalents)
+            {
+                for (int s = 0; s < Profile.Team.Length && s < target.Talents.Length; s++)
+                {
+                    HeroInstance hero = Profile.FindHeroByUid(Profile.Team[s]);
+                    if (hero != null && hero.Uid == target.Heroes[s]) SelectTalent(hero, target.Talents[s]);
+                }
+            }
+            Profile.ActiveLine = index;
+            return true;
+        }
+
+        private SavedLine CaptureLine()
+        {
+            SavedLine line = new SavedLine();
+            bool talents = LinesKeepTalents;
+            for (int s = 0; s < Profile.Team.Length && s < line.Heroes.Length; s++)
+            {
+                line.Heroes[s] = Profile.Team[s];
+                HeroInstance hero = talents ? Profile.FindHeroByUid(Profile.Team[s]) : null;
+                line.Talents[s] = hero != null ? hero.SelectedTalent : 0;
+            }
+            line.HasTalents = talents;
+            return line;
         }
 
         /// <summary>

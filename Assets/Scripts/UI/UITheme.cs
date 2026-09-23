@@ -86,6 +86,14 @@ namespace Emberfall.UI
 
         public static readonly Color EventToken = Hex("D6455E");
 
+        /// <summary>
+        /// Waymarks, the guild dungeon's own currency, spent on the Guild Path. A pale jade: the
+        /// one hue no other purse holds - distinct from Success (5BC98C) by lightness and
+        /// saturation, from Shard (blue) and Energy (cyan) by hue - so a jewel on the Path screen
+        /// never reads as a stamina or a victory mark.
+        /// </summary>
+        public static readonly Color Waymark = Hex("86D4BC");
+
         public static readonly Color Success = Hex("5BC98C");
         public static readonly Color Danger = Hex("E0574C");
         public static readonly Color Warning = Hex("EAA640");

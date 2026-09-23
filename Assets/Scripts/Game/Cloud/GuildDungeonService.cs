@@ -69,7 +69,8 @@ namespace Emberfall.Game.Cloud
     }
 
     /// <summary>
-    /// The live backend: migration 0007's status call and table, 0008's submit and share calls.
+    /// The live backend: migration 0007's status call and table, 0008's share call, and 0011's
+    /// attempt call, which pays the Guild Path.
     ///
     /// The chat read asks for each message's attempt INLINE, so a shared attempt arrives as a
     /// whole record and a card can be drawn and played with no second request. If the server has
@@ -130,13 +131,19 @@ namespace Emberfall.Game.Cloud
             });
         }
 
+        /// <summary>
+        /// Stores an attempt through 0011's guild_dungeon_attempt, which also records the boards it
+        /// entered and pays the Guild Path's base. If the project has not had 0011 applied,
+        /// PostgREST answers 404 for the unknown function and this files the same attempt through
+        /// 0008's guild_dungeon_submit instead: the attempt counts and pays nothing, rather than
+        /// the dungeon refusing every fight because a migration is behind the client.
+        /// </summary>
         public IEnumerator Record(GuildDungeonAttempt attempt, Action<GuildDungeonAttempt, string> done)
         {
             if (!Ready) { done(null, NotReadyReason); yield break; }
             string name = _cloud.Profile != null ? _cloud.Profile.DisplayName : "";
-            yield return _cloud.Client.Send("POST", "rest/v1/rpc/guild_dungeon_submit",
-                GuildDungeon.WriteRpcArgs(attempt).ToJson(false),
-                delegate (SupabaseResponse response)
+            bool unknownFunction = false;
+            Action<SupabaseResponse> read = delegate (SupabaseResponse response)
                 {
                     if (!response.Ok) { done(null, response.Error); return; }
                     JsonValue root;
@@ -147,7 +154,21 @@ namespace Emberfall.Game.Cloud
                     if (stored.Id == 0) { done(null, "the attempt was not stored"); return; }
                     stored.DisplayName = name;
                     done(stored, "");
+                };
+            yield return _cloud.Client.Send("POST", "rest/v1/rpc/guild_dungeon_attempt",
+                GuildDungeon.WriteRpcArgs(attempt).ToJson(false),
+                delegate (SupabaseResponse response)
+                {
+                    if (response.Status == 404) { unknownFunction = true; return; }
+                    read(response);
                 });
+            if (!unknownFunction) yield break;
+            // 0008's function takes no p_boards, and PostgREST refuses an argument it does not name.
+            int claimed = attempt.Boards;
+            attempt.Boards = -1;
+            string before0011 = GuildDungeon.WriteRpcArgs(attempt).ToJson(false);
+            attempt.Boards = claimed;
+            yield return _cloud.Client.Send("POST", "rest/v1/rpc/guild_dungeon_submit", before0011, read);
         }
 
         public IEnumerator Share(GuildDungeonAttempt attempt, Action<bool, string> done)

@@ -95,9 +95,17 @@ namespace Emberfall.UI.Screens
             _mine = EmberforgeUI.Label("Mine", _statusCard, "", UITheme.FontTiny, Emberforge.TextBody, TextAnchor.UpperLeft);
             UIBuilder.Box(_mine.rectTransform, 44f, -154f, 800f, 30f, new Vector2(0f, 1f));
 
+            // BOARDS over GUILD PATH in the right-hand column. Side by side, the second button ran
+            // into the guild's push line and its pips, which own the middle of the card.
             _boardsButton = EmberforgeUI.Button("Boards", _statusCard, "BOARDS", UITheme.FontSmall, ForgeButtonKind.Secondary);
-            UIBuilder.Box(_boardsButton.Root, -44f, 0f, 240f, 70f, new Vector2(1f, 0.5f));
+            UIBuilder.Box(_boardsButton.Root, -44f, 42f, 260f, 66f, new Vector2(1f, 0.5f));
             _boardsButton.OnClick(OnBoards);
+
+            // What the dungeon pays is spent on the Guild Path, so its door sits under the boards
+            // that pay the bonus.
+            UIButton path = EmberforgeUI.Button("Path", _statusCard, "GUILD PATH", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIBuilder.Box(path.Root, -44f, -42f, 260f, 66f, new Vector2(1f, 0.5f));
+            path.OnClick(delegate { App.Audio.Tap(); Router.Show(ScreenId.GuildPath); });
         }
 
         // ================================================================== lifecycle

@@ -571,8 +571,9 @@ ships on top of that, with `RelicShopScreen` as its storefront.
 
 Summoning with a pity rule that guarantees distinct unowned heroes. Idle income accrues against a
 real clock and is capped. `SaveSerializer` writes the whole document, at
-`SaveSerializer.CurrentVersion` 16, and a save from a newer build is refused rather than read.
-Version 15 keeps records this build cannot resolve; version 16 adds each hero's ascension tier.
+`SaveSerializer.CurrentVersion` 17, and a save from a newer build is refused rather than read.
+Version 15 keeps records this build cannot resolve; version 16 adds each hero's ascension tier;
+version 17 adds the Guild Path's copy of the server's answer and the formation's saved lines.
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -636,6 +637,32 @@ record. `GuildDungeonChecks.Run` is wired into the harness. Its screens are bein
   candidates and their readings.
 - **Must be re-run when the new campaign lands:** the floors are built from whatever templates the
   campaign fields.
+
+**The Guild Path (phase two, system 2).** The guild dungeon pays now, in Waymarks, and the Guild Path
+spends them. `claude/DESIGN-GUILDS-PHASE-TWO.md` ("The Guild Path, as built") holds the rules and
+the full working; this is what the files show.
+
+- **Pay.** 40 on a member's first attempt of a cycle, won or lost; 40 on their first clear of any
+  floor; up to 15 for each of floor 1's six boards once the cycle closes, at (n - rank) / (n - 1)
+  of the board beaten. Nothing grows with floor depth, because depth is opened by the guild. All
+  three numbers are derived by `DevHarness.exe --guild-path` from 3,264 real floor-1 fights over
+  guilds of 1 to 30 and rosters built by `GameSession.Summon`, and `GuildPathChecks` re-derives
+  them on every build-check. Guilds of 2 to 30 expect 96 to 102 Waymarks a cycle against the
+  100-Waymark unit; a guild of one expects 80.
+- **The Path.** Second, Third and Fourth Line (saved formation lines, `GameSession.SwitchLine`, tabs
+  on `FormationScreen`) and Lines Keep Talents, at 100, 200, 300 and 200: each node costs its depth
+  in mean cycles. `GuildPathScreen` is the storefront, reached from the formation screen and the
+  dungeon. Every node is breadth: `CheckEveryNodeIsHorizontal` allowlists the node kinds and fights
+  the same stage identically with every node owned and with none.
+- **Server.** `Server/supabase/migrations/0011_guild_path.sql` - **written, not applied.** It adds the
+  ledger, the unlocks and the node table, `guild_dungeon_attempt` (submit, board bits, base pay),
+  `guild_path_state` (settles closed cycles' board bonus, answers) and `guild_path_unlock`. Keyed by
+  account, not guild. Until it is applied the client files attempts through
+  `guild_dungeon_submit` and pays nothing.
+- **Content.** `guild-path.json` is a ninth content file and the one that is **not** hashed into
+  `ContentVersion`, because nothing in it is read by a fight.
+- **Not done:** the live guild rules test does not cover 0011; `guild_dungeon_submit` is still
+  callable; Waymarks have no sink once the four nodes are bought.
 
 ### The Deep Recital, The Proving, events, shop
 
@@ -1179,8 +1206,9 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   nowhere. They now hold player text, so putting them on the ability breakdown is a UI decision
   rather than a content one. Durations, thresholds, Energy amounts and status sizes are printed
   nowhere either, and the text no longer carries them.
-- **Guilds phase two.** A guild shop, currency, raids, rewards, guild levels and leaderboards all
-  price against the economy, and the economy's shape only settled with the curve re-derivation.
+- **Guilds phase two, systems 3 to 5.** Systems 1 and 2, the dungeon and the Guild Path, are built
+  (see **Guilds, phase one**). Guild levels, the fodder exchange and (parked) guild wars remain,
+  as sequenced in `claude/DESIGN-GUILDS-PHASE-TWO.md`.
 - **A marketplace.** Nothing built, nothing designed.
 - **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
 - **Texture compression.** The delivered art is effectively uncompressed, which is fine in a desktop

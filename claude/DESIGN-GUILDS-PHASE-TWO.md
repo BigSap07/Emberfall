@@ -107,14 +107,15 @@ The honest cost: a small guild sees less variety. There is no way around that on
 
 1. **Guild dungeon.** The shared fight above, multi-floor so the guild collectively pushes and
    size scaling falls out naturally. Build this first. Everything else decorates it, and it is
-   the only one that can be evaluated with two players.
+   the only one that can be evaluated with two players. **Built and live.**
 
 2. **The Guild Path, fed by the dungeon's own currency.** Individually owned, so it cannot be
    taken away by a bad guild and it travels with the player if they leave, which is what prevents
    guild-lock-in. Keep it mostly breadth: extra loadouts, talent respecs, roster slots, summon
    options, rather than flat stat gains. (This record first called it a personal talent tree. It
    is the Guild Path everywhere now, because hero talents are a separate system and two things
-   called talents would be confused forever.)
+   called talents would be confused forever.) **Built; see "The Guild Path, as built" below,
+   which also says why only one item of that list survived contact with the game as it stands.**
 
 3. **Guild levels and upgrades, decided by leaders.** Upgrades **unlock content**, they do not
    grant power. "Guild level 5 unlocks hard mode" is fine; "+8% attack to all members" is the
@@ -173,3 +174,157 @@ The dungeon loop itself needed rewards to ship, not to be built.
   less.
 - Open player-to-player trading.
 - Guild versus guild ranking.
+
+## The Guild Path, as built
+
+**Added 2026-09-23, when system 2 was built.** The rest of this record is the design from
+2026-09-22; this section says what was built from it, what the numbers are, and where the design
+met the game as it stands and had to be read again.
+
+### What it buys, and the four items that did not survive
+
+The Rewards section's test was applied to each item system 2 listed. A node must widen what a
+player can do with what they own and never add to what it is worth in a fight.
+
+- **Extra loadouts: built.** The **Line** nodes (Second, Third and Fourth Line) each add a saved
+  line of five that the banner switches to with one tap (`GameSession.SwitchLine`). The line being
+  left keeps its heroes, so a player can hold a floor-condition line, a campaign line and a Proving
+  line side by side.
+- **Talent respecs: nothing to sell.** A talent pick is already free, with no cost and no cooldown
+  (`GameSession.SelectTalent` is the whole rule). A respec node would sell something every player
+  already has. What a guild member can use is a line that remembers how its heroes were set, so
+  **Lines Keep Talents** makes each saved line restore its heroes' picks when it is switched to.
+  It is the same freedom made convenient, and no talent in it is new.
+- **Roster slots: nothing to sell.** The roster has no cap to raise.
+- **Summon options: refused, as vertical.** Fusion is built, and under fusion a copy is power:
+  conversion turns fodder into a 5-star, and ascension spends copies of the same hero on a tier.
+  `DESIGN-BUILD-ORDER.md` measures fusion as a two-to-three-times multiplier on the campaign's
+  wall player. Any summon option that changes which heroes or how many land therefore changes how
+  fast a player grows, which is the compounding trap under another name.
+- **Identity and cosmetics: not built.** They are horizontal. But a title or a crest is worth
+  something only if other people see it, which needs a surface guildmates can read, and that is
+  more than this job. It is the natural next node family.
+
+So the Path is four nodes in one branch, and that is an honest size for the breadth this game has
+today, not a target. Every node kind is an allowlist entry in
+`GuildPathChecks.CheckEveryNodeIsHorizontal`, which also fights the same stage event for event
+with every node owned and with none. A kind added later fails the build until somebody has written
+down why it is breadth.
+
+### The currency: Waymarks
+
+The guild dungeon's own currency, isolated like Coda and Valor, and spent only on the Path. The
+server mints it and nothing else does. Three rules, each written against a failure this record
+names:
+
+1. **The base is scored on the member's own attempt, and on no floor in particular.** The first
+   attempt of a cycle pays, won or lost, and the first clear of any floor pays again. Floor N opens
+   only when somebody in the guild clears floor N-1, so a payout that grew with depth would be a
+   payout the rest of the guild set. That is collective gating. Floor 1 is always open, so every
+   member can earn the whole base whatever the guild has done.
+2. **Only floor 1's boards pay.** The deeper boards are still boards and still recognition. They
+   carry no material value, because a guild that opened more floors would otherwise hand its
+   members more chances to be paid.
+3. **A placement pays its share of the board beaten**: (n - rank) / (n - 1), so first is 1 and last
+   is 0. Averaged over a board's entrants that is exactly one half at every size from two up, so a
+   big guild pays no more per standing than a small one. A board of one pays nothing, because first
+   of one is not a placement. Without that rule a guild of one would top all six boards every week
+   and be the best-paid guild in the game. The best six scores of a cycle are paid, one guild's
+   worth, so changing guild mid-cycle pays no more.
+
+### The numbers, and the working
+
+`DevHarness.exe --guild-path` is the study. It builds guilds of 1, 2, 5, 10, 20 and 30 members,
+16 dungeons at each size. Every member is a fresh profile given 10, 30 or 60 pulls through the
+real `GameSession.Summon` at the real rates and pity. Every member makes all three attempts on
+floor 1: first their strongest line by stars, then lines drawn from what they own. Each line is
+made legal under the floor's condition. The fights are real, the boards are `GuildDungeon.Rank`'s,
+and 3,264 fights take about four seconds. `GuildPathChecks` re-runs it on every build-check.
+
+**MEASURED** (content as of this commit):
+
+| roster | cleared floor 1 in the cycle |
+| --- | --- |
+| new (3 + 10 pulls) | 364 of 365 |
+| settled (3 + 30) | 363 of 363 |
+| deep (3 + 60) | 360 of 360 |
+
+| guild size | members | board-score sum per member, mean | median | p90 |
+| --- | --- | --- | --- | --- |
+| 1 | 16 | 0.00 | 0.00 | 0.00 |
+| 2 | 32 | 1.09 | 1.00 | 2.00 |
+| 5 | 80 | 1.36 | 1.25 | 2.92 |
+| 10 | 160 | 1.41 | 1.42 | 2.43 |
+| 20 | 320 | 1.48 | 1.41 | 2.68 |
+| 30 | 480 | 1.44 | 1.37 | 2.50 |
+
+**CHOSEN**, each a sentence of this record turned into a number:
+
+- **Fairness floor 0.8.** A new roster must expect at least 80% of the base a deep one expects.
+  This caps what a clear may be worth.
+- **A clear is worth at most as much as turning up** (k <= 1).
+- **The unit.** A member's mean cycle is 100 Waymarks, so prices read in weeks.
+- **Board share 20%**, for "recognition with small material value".
+- **The price rule.** A node costs its depth on the Path in mean cycles.
+
+**DERIVED:**
+
+- The clear-to-attempt ratio k: fairness allows k <= 0.2 / (0.8 q_deep - q_new). With
+  q_new 0.997 and q_deep 1.000 that is unbounded, **so the cap binds and k = 1.** Floor 1 is
+  cleared by practically every roster in three attempts, so the clear pay is set by the cap and
+  not by fairness. If a content change hardens floor 1, the fairness floor starts binding and the
+  gate says so.
+- attempt = 100 x 0.8 / (1 + k q_all) = 40.02 -> **40**; clear = k x attempt -> **40**.
+- S-bar, the mean board-score sum over sizes 2 to 30 weighted once each, = 1.357.
+  board point = 100 x 0.2 / 1.357 = 14.73 -> **15**.
+- Prices: **Second Line 100, Third Line 200, Lines Keep Talents 200, Fourth Line 300.** The whole
+  Path is 800, which is 8 mean cycles, or 10 for a new-roster member paid the base and no board.
+
+**WHAT THAT PAYS**, expected Waymarks per member per cycle:
+
+| guild size | base | boards | total |
+| --- | --- | --- | --- |
+| 1 | 80.0 | 0.0 | 80.0 |
+| 2 | 80.0 | 16.4 | 96.4 |
+| 5 | 80.0 | 20.4 | 100.4 |
+| 10 | 80.0 | 21.1 | 101.1 |
+| 20 | 79.9 | 22.1 | 102.0 |
+| 30 | 80.0 | 21.7 | 101.7 |
+
+Every size from 2 to 30 sits within 4% of the mean cycle, and the gate fails past 10%. A guild of
+one earns 80%. That is the "small guild sees less variety" cost, paid in recognition rather than
+in base. The most any account can be paid in a cycle, whatever it sends, is 40 + 40 + 15 x 6 = 170.
+
+The gate fails when a written pay number sits more than 10% from what the tree now derives, when a
+price breaks the price rule, when fairness or flatness breaks under the written numbers, or when
+the migration and `guild-path.json` disagree on any number.
+
+### Who can mint
+
+- **Only the server.** `guild_dungeon_attempt` (migration 0011) runs `guild_dungeon_submit`'s rules
+  by calling it, then records the board bits and pays the base. `guild_path_state` settles every
+  closed cycle's board bonus before it answers. The ledger has no client write grant, and its
+  unique key on (user, cycle, kind) makes each payment a constraint.
+- **What a modified client can still do.** Every attempt field is still the client's word, as it
+  was in 0007, so a client can claim a clear or a board it did not earn. It cannot be paid more
+  than an honest member who won everything: the cap bounds the rows, each kind pays once a cycle,
+  and six placements at most are counted. Four of the six board bits (four or fewer, no five
+  stars, first attempt, nobody fell) are checked against the row itself. Only one aspect and no
+  healer are trusted, because the server holds no aspect and no role.
+- **Keyed by account, never by guild.** The ledger and the unlocks reference `profiles`, so
+  leaving, being removed or watching a guild disband takes nothing away. The Path screen is
+  reached from the formation screen, which every player has, as well as from the dungeon.
+
+### What is not done
+
+- **Migration 0011 is written and not applied.** Until it is, the client files attempts through
+  0008's `guild_dungeon_submit` (they count, and pay nothing), and the Path screen says the Path
+  is not open on the server yet.
+- **`guild_dungeon_submit` stays callable**, for the reason 0008 left `guild_dungeon_record`
+  callable: `Tools/supabase-guild-rules-test.py` exercises it and has not been moved to
+  `guild_dungeon_attempt`. Rows it writes pay nothing. The revoke is written in 0011's closing
+  comment.
+- **Nothing in the rules test covers 0011.** The live test needs the live project, which this job
+  did not touch.
+- **After the Path, Waymarks have no sink.** They keep accruing, like Coda and Valor, until the
+  next node family (identity is the candidate above) gives them one.

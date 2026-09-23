@@ -35,6 +35,23 @@ namespace Emberfall.Core.Data
         public readonly List<string> Warnings = new List<string>();
 
         /// <summary>
+        /// The Guild Path (guild-path.json): what the guild dungeon pays and what the Path sells.
+        /// Loaded through LoadGuildPath AFTER Load, not as a ninth argument to it, because it is
+        /// the one content file that is NOT part of ContentVersion: nothing in it is read by a
+        /// fight, so a price change must not retire every guild's replays. Empty (IsUsable false)
+        /// on a database that never had it loaded, which the Path screen reads as "no Path".
+        /// </summary>
+        public GuildPathConfig GuildPath = new GuildPathConfig();
+
+        /// <summary>Parses guild-path.json into GuildPath, adding its warnings to Warnings. Does
+        /// not touch ContentVersion; see GuildPath.</summary>
+        public void LoadGuildPath(string guildPathJson)
+        {
+            GuildPath = GuildPathConfig.FromJson(guildPathJson);
+            for (int i = 0; i < GuildPath.Warnings.Count; i++) Warnings.Add(GuildPath.Warnings[i]);
+        }
+
+        /// <summary>
         /// Which content this database was built from, as one short string: a hash of the text of
         /// every file handed to Load, in a fixed order.
         ///
