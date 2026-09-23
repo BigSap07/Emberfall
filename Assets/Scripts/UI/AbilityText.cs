@@ -137,9 +137,13 @@ namespace Emberfall.UI
         /// <summary>Where a ScaleBy effect takes its amount from, in the player's words. Six
         /// effects in the roster reach this, and all six are counted and named by
         /// CheckAbilityNumbersMatchTheSimulation - so a seventh arriving without a phrase here is
-        /// a failing check rather than an empty line.</summary>
-        private static string DerivedSource(EffectDef effect)
+        /// a failing check rather than an empty line.
+        ///
+        /// Public because the talent card needs it too: a talent that moves a derived effect's
+        /// Power moves a share of THIS, and "% of Attack" would name the wrong quantity.</summary>
+        public static string DerivedSource(EffectDef effect)
         {
+            if (effect == null) return "what came before it";
             if (effect.ScaleByLastRelease) return "what its ledger last paid out";
             if (effect.ScaleByLastBanked) return "what its ledger last banked";
             if (effect.ScaleByLastRedirect) return "what it last redirected";

@@ -6,6 +6,37 @@ using Emberfall.Core.Progression;
 
 namespace Emberfall.UI
 {
+    /// <summary>
+    /// HOW TRUE A PRINTED FIGURE IS OF THE FIGHT, which is the one thing a talent card cannot
+    /// leave the reader to guess.
+    ///
+    /// AbilityMath resolves every damage, heal and ward effect in the roster against a hero's own
+    /// stats, and the harness proves the result equal to what CombatSimulation deals. For most
+    /// effects that is the whole story. For two kinds of effect it is not, and the harness pins
+    /// both by name rather than counting them: six whose amount is a share of a runtime quantity
+    /// instead of Attack, and twenty-one priced entirely off the target's health. A card that
+    /// printed those as plain numbers would be printing the minimum-damage floor as though it
+    /// were the payout.
+    ///
+    /// So a figure says which of the three it is, and the card says what that means once, under
+    /// the list, rather than qualifying every line.
+    /// </summary>
+    public enum TalentFigureBasis
+    {
+        /// <summary>A flat figure the fight deals exactly, at these stats, before the target's
+        /// Defence and before crit and variance.</summary>
+        Exact,
+
+        /// <summary>A flat figure with something the card cannot see added on top: a share of the
+        /// target's health, or a counter the fight has not built yet. It is the least it does.
+        /// AbilityValue.Partial.</summary>
+        Floor,
+
+        /// <summary>No flat figure exists outside a fight, so the clause is the whole of it.
+        /// AbilityValue.Derived, or an effect with no caster-side term at all.</summary>
+        Clause
+    }
+
     /// <summary>One printed number beside a talent's prose: where it lands, and what it is.</summary>
     public sealed class TalentNumber
     {
@@ -15,6 +46,9 @@ namespace Emberfall.UI
         /// <summary>The figure itself: "2,450 to 2,205 damage" with a guillemet for "to", or
         /// "Cinder for 2 rounds".</summary>
         public string Figure = "";
+
+        /// <summary>How true of the fight this figure is. <see cref="TalentFigureBasis"/>.</summary>
+        public TalentFigureBasis Basis = TalentFigureBasis.Exact;
 
         public Color Tint;
     }
@@ -50,6 +84,19 @@ namespace Emberfall.UI
         /// short, and it sends the reader to the numbers, which are real either way.</summary>
         public const string NoProse = "Its description is still being written. The numbers below are what it does.";
 
+        /// <summary>What "or more" means, said once under a list that contains one rather than on
+        /// every line that is one. <see cref="TalentFigureBasis.Floor"/>.</summary>
+        public const string FloorNote = "\"or more\": a share of the target's health, or a counter the"
+                                      + " fight builds, is added on top. The figure is the least of it.";
+
+        /// <summary>What a clause standing in place of a figure means.
+        /// <see cref="TalentFigureBasis.Clause"/>.</summary>
+        public const string ClauseNote = "No flat figure outside a fight: the amount is a share of"
+                                       + " something the fight settles, so the clause is the whole of it.";
+
+        /// <summary>What a talent with no numbers of its own says where the list would be.</summary>
+        public const string NoNumbers = "No numbers of its own. The sentence above is all of it.";
+
         /// <summary>The talent's player-facing sentence, or <see cref="NoProse"/>.</summary>
         public static string Prose(PassiveDef talent)
         {
@@ -76,16 +123,21 @@ namespace Emberfall.UI
                     case TalentChangeKind.OwnRule:
                     {
                         string when = FiringLimits(c.OnPassive);
-                        if (when.Length > 0) Add(lines, "WHEN IT FIRES", when, Emberforge.TextBody);
+                        if (when.Length > 0) Add(lines, "WHEN IT FIRES", when, Emberforge.TextBody,
+                                                 TalentFigureBasis.Exact);
                         for (int e = 0; e < c.OnPassive.Effects.Count; e++)
                             AddEffect(lines, c.OnPassive.Name, c.OnPassive.Effects[e], AbilityKind.Passive, stats, cfg);
                         break;
                     }
                     case TalentChangeKind.EffectField:
-                        Add(lines, c.AbilityName, FieldChange(c, stats, cfg), ChangeTint(c));
+                    {
+                        TalentFigureBasis basis;
+                        string figure = FieldChange(c, stats, cfg, out basis);
+                        Add(lines, c.AbilityName, figure, ChangeTint(c), basis);
                         break;
+                    }
                     case TalentChangeKind.OwnerField:
-                        Add(lines, c.AbilityName, OwnerChange(c), Emberforge.TextBody);
+                        Add(lines, c.AbilityName, OwnerChange(c), Emberforge.TextBody, TalentFigureBasis.Exact);
                         break;
                     case TalentChangeKind.Append:
                         AddEffect(lines, c.AbilityName + " also", c.Appended, c.AbilityKind, stats, cfg);
@@ -95,24 +147,43 @@ namespace Emberfall.UI
             return lines;
         }
 
+        /// <summary>True when any figure in a list needs the note that goes with that basis.</summary>
+        public static bool Any(List<TalentNumber> lines, TalentFigureBasis basis)
+        {
+            if (lines == null) return false;
+            for (int i = 0; i < lines.Count; i++) if (lines[i].Basis == basis) return true;
+            return false;
+        }
+
         // ------------------------------------------------------------------ effects
 
         private static void AddEffect(List<TalentNumber> lines, string where, EffectDef effect,
                                       AbilityKind kind, UnitStats stats, BalanceConfig cfg)
         {
             Color tint;
-            string figure = EffectFigure(effect, kind, stats, cfg, out tint);
+            TalentFigureBasis basis;
+            string figure = EffectFigure(effect, kind, stats, cfg, out tint, out basis);
             if (figure.Length == 0) return;
             string when = ConditionFigure(effect);
             if (when.Length > 0) figure += ", " + when;
-            Add(lines, where, figure, tint);
+            Add(lines, where, figure, tint, basis);
         }
 
-        /// <summary>The number one effect carries, or "" for an effect that carries none.</summary>
+        /// <summary>
+        /// The number one effect carries, or "" for an effect that carries none, together with how
+        /// true of the fight that number is.
+        ///
+        /// THE THREE CASES ARE THE THREE THE HARNESS PINS BY NAME. A derived effect and one priced
+        /// entirely off the target's health both print their clause, because AbilityMath has no
+        /// honest figure for either and its Amount for the second is the minimum-damage floor. An
+        /// effect with a real caster-side term AND a term the card cannot see prints the figure and
+        /// says "or more", because that figure is a floor rather than a guess.
+        /// </summary>
         public static string EffectFigure(EffectDef e, AbilityKind kind, UnitStats stats, BalanceConfig cfg,
-                                          out Color tint)
+                                          out Color tint, out TalentFigureBasis basis)
         {
             tint = Emberforge.TextBody;
+            basis = TalentFigureBasis.Exact;
             if (e == null) return "";
             switch (e.Kind)
             {
@@ -124,7 +195,18 @@ namespace Emberfall.UI
                     if (v == null) return "";
                     tint = AbilityText.Tint(v.Kind);
                     string terms = AbilityText.Secondary(v, e);
-                    if (!v.HasFlat || v.Derived) return AbilityText.Word(v.Kind) + (terms.Length > 0 ? ": " + terms : "");
+                    if (!v.HasFlat || v.Derived)
+                    {
+                        basis = TalentFigureBasis.Clause;
+                        return AbilityText.Word(v.Kind) + (terms.Length > 0 ? ": " + terms
+                                                                            : ", settled in the fight");
+                    }
+                    if (v.Partial)
+                    {
+                        basis = TalentFigureBasis.Floor;
+                        return AbilityText.Headline(v) + " or more"
+                             + (terms.Length > 0 ? " (" + terms + ")" : "");
+                    }
                     return AbilityText.Headline(v) + (terms.Length > 0 ? " (" + terms + ")" : "");
                 }
                 case EffectKind.ApplyStatus:
@@ -235,9 +317,12 @@ namespace Emberfall.UI
             return Emberforge.TextGold;
         }
 
-        /// <summary>One override, as the value it had and the value it has with the talent.</summary>
-        private static string FieldChange(TalentChange c, UnitStats stats, BalanceConfig cfg)
+        /// <summary>One override, as the value it had and the value it has with the talent, and
+        /// how true of the fight that pair is.</summary>
+        private static string FieldChange(TalentChange c, UnitStats stats, BalanceConfig cfg,
+                                          out TalentFigureBasis basis)
         {
+            basis = TalentFigureBasis.Exact;
             EffectDef before = c.Before;
             EffectDef after = c.After;
             switch (c.Field)
@@ -248,10 +333,22 @@ namespace Emberfall.UI
                     {
                         AbilityValue a = AbilityMath.ValueOf(before, c.AbilityKind, stats, cfg);
                         AbilityValue b = AbilityMath.ValueOf(after, c.AbilityKind, stats, cfg);
-                        if (a != null && b != null && a.HasFlat && !a.Derived)
+                        // A derived effect's Power multiplies a runtime amount, so the move is a
+                        // move in THAT share. "% of Attack" below would name the wrong quantity.
+                        if (a != null && a.Derived)
+                        {
+                            basis = TalentFigureBasis.Clause;
+                            return Pct(c.From) + " \u00BB " + Pct(c.To) + " of "
+                                 + AbilityText.DerivedSource(before);
+                        }
+                        if (a != null && b != null && a.HasFlat && b.HasFlat)
+                        {
+                            bool floor = a.Partial || b.Partial;
+                            if (floor) basis = TalentFigureBasis.Floor;
                             return AbilityText.Amount(a.Amount) + " \u00BB " + AbilityText.Amount(b.Amount) + " "
-                                 + AbilityText.Word(a.Kind) + " (" + Pct(before.Power) + " \u00BB " + Pct(after.Power)
-                                 + " of Attack)";
+                                 + AbilityText.Word(a.Kind) + (floor ? " or more" : "")
+                                 + " (" + Pct(before.Power) + " \u00BB " + Pct(after.Power) + " of Attack)";
+                        }
                     }
                     if (before.Kind == EffectKind.EnergyGain)
                         return Mathf.RoundToInt(before.Flat + before.Power * 100f) + " \u00BB "
@@ -424,7 +521,8 @@ namespace Emberfall.UI
         /// <summary>Adds a line, folding an identical line straight after the one before it into
         /// a count: Oris's talent raises two strikes of one ability by the same amount, and two
         /// identical rows read as a mistake rather than as "both".</summary>
-        private static void Add(List<TalentNumber> lines, string where, string figure, Color tint)
+        private static void Add(List<TalentNumber> lines, string where, string figure, Color tint,
+                                TalentFigureBasis basis)
         {
             if (string.IsNullOrEmpty(figure)) return;
             if (lines.Count > 0)
@@ -445,6 +543,7 @@ namespace Emberfall.UI
             n.Where = where;
             n.Figure = figure;
             n.Tint = tint;
+            n.Basis = basis;
             lines.Add(n);
         }
     }
