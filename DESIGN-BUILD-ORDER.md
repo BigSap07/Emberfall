@@ -218,7 +218,10 @@ Seven JSON files in `Assets/Resources/Content`. Balance and content changes go t
 
 - `heroes.json`: 94 heroes, **all 94 authored**. 8 one-star, 12 two-star, 18 three-star,
   26 four-star, 30 five-star.
-- `enemies.json`: 12 enemy templates.
+- `enemies.json`: 96 enemy templates. The shipped 12, which the campaign and the prologue field,
+  and Pinoy's 84 for chapters 1-6, which **no stage fields yet**: aspect, kind, stats and kit
+  are ours and the mapping is `Docs/CAMPAIGN-SPEC.md` section 9. Each of the 84 names its future
+  sprite and is `pending`, so it draws the mannequin. Only the Deep Recital draws them today.
 - `campaign.json`: 2 chapters, 12 stages each. `waveCount` is authored per stage now rather than 12
   everywhere, so a stage's ladder is `waveCount` times 12 battles: 36 on `1-1` to `1-4`, 72 on
   `1-5` to `1-12`, and 144 across the whole of chapter 2.
@@ -606,7 +609,9 @@ record. `GuildDungeonChecks.Run` is wired into the harness. Its screens are bein
 Aspect cycle. **It never draws the prologue's scripted loss**: `RecitalGenerator.ScriptedLossEnemies`
 reads the prologue's Boss step and skips whatever it fields that no campaign stage does, which is The
 Unmade. Before that every Umbra floor fielded it, twice on floors 5 and 11, and
-`CheckRecitalDrawsNoScriptedLoss` now climbs 120 floors to say none does. Coda is the Recital's own currency and accrues on every clear. **There is no Coda sink
+`CheckRecitalDrawsNoScriptedLoss` now climbs 120 floors to say none does. It draws every template of the
+floor's Aspect, fielded by a stage or not and bosses included, so Pinoy's 84 are in every floor's
+pool; `Docs/CAMPAIGN-SPEC.md` 9.6 measures what that did to the floors. Coda is the Recital's own currency and accrues on every clear. **There is no Coda sink
 yet.** `ProvingGenerator` builds opponent lines. The events engine is content-driven through
 `events.json`. Shop screens are wired.
 

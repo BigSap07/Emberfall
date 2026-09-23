@@ -257,6 +257,1646 @@
           { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Slow", "magnitude": 0.30, "duration": 3, "chance": 0.90 }
         ]
       }
+    },
+
+    // ================= PINOY'S CAMPAIGN ROSTER - 84 enemies, 14 per chapter =================
+    // Race, role and concept are Pinoy's; aspect, kind, stats and kit are ours, and the mapping is
+    // written down in Docs/CAMPAIGN-SPEC.md section 9. NO CAMPAIGN STAGE FIELDS ANY OF THESE YET:
+    // the stage job comes next. They are live in the Deep Recital (which draws every template of a
+    // floor's Aspect) and nowhere else. Art: each names the sprite it will be delivered as and is
+    // pending, so it draws the placeholder mannequin until the file lands.
+    // Chapter 1 has no roster table: its race, role and kind are INFERRED from the art stems.
+    // ---- Chapter 1: The Forgotten Road. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    {
+      "id": "forest_boar", "name": "Forest Boar", "kind": "minion", "aspect": "Verdant",
+      "hp": 960, "attack": 115, "defense": 52, "speed": 95,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 9, "sprite": "forest_boar", "spriteStatus": "pending" },
+      "basic": {
+        "id": "forest_boar_basic", "name": "Gore", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "forest_boar_active", "name": "Root and Charge", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "forest_spider", "name": "Forest Spider", "kind": "minion", "aspect": "Umbra",
+      "hp": 820, "attack": 105, "defense": 43, "speed": 105,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.15, "effectResist": 0.05,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 6, "sprite": "forest_spider", "spriteStatus": "pending" },
+      "basic": {
+        "id": "forest_spider_basic", "name": "Venom Nip", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "forest_spider_active", "name": "Web Veil", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.4 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.7 }
+        ]
+      }
+    },
+
+    {
+      "id": "goblin_slinger", "name": "Goblin Slinger", "kind": "minion", "aspect": "Gale",
+      "hp": 700, "attack": 128, "defense": 35, "speed": 111,
+      "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "none", "scale": 0.81, "sigil": 8, "sprite": "goblin_slinger", "spriteStatus": "pending" },
+      "basic": {
+        "id": "goblin_slinger_basic", "name": "Slingstone", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "goblin_slinger_active", "name": "Skull Shot", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 } ]
+      }
+    },
+
+    {
+      "id": "grey_wolf", "name": "Grey Wolf", "kind": "minion", "aspect": "Gale",
+      "hp": 790, "attack": 136, "defense": 41, "speed": 112,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 8, "sprite": "grey_wolf", "spriteStatus": "pending" },
+      "basic": {
+        "id": "grey_wolf_basic", "name": "Snap", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "grey_wolf_active", "name": "Hamstring Lunge", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.65 } ]
+      }
+    },
+
+    {
+      "id": "highway_thief", "name": "Highway Thief", "kind": "minion", "aspect": "Umbra",
+      "hp": 740, "attack": 124, "defense": 37, "speed": 124,
+      "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
+      "effectHit": 0.10, "effectResist": 0.05,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.95, "sigil": 6, "sprite": "highway_thief", "spriteStatus": "pending" },
+      "basic": {
+        "id": "highway_thief_basic", "name": "Cutpurse Jab", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "highway_thief_active", "name": "Ambush", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.5 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "hollowed_guard", "name": "Hollowed Guard", "kind": "elite", "aspect": "Verdant",
+      "hp": 1730, "attack": 119, "defense": 100, "speed": 88,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.20,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "spear", "scale": 1.06, "sigil": 9, "sprite": "hollowed_guard", "spriteStatus": "pending" },
+      "basic": {
+        "id": "hollowed_guard_basic", "name": "Rote Thrust", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "hollowed_guard_active", "name": "Hold the Post", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "hollowed_hunter", "name": "Hollowed Hunter", "kind": "elite", "aspect": "Umbra",
+      "hp": 1110, "attack": 171, "defense": 54, "speed": 99,
+      "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "bow", "scale": 1.06, "sigil": 6, "sprite": "hollowed_hunter", "spriteStatus": "pending" },
+      "basic": {
+        "id": "hollowed_hunter_basic", "name": "Empty Arrow", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "hollowed_hunter_active", "name": "Old Habit", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 } ]
+      }
+    },
+
+    {
+      "id": "hollowed_mage", "name": "Hollowed Mage", "kind": "elite", "aspect": "Lumen",
+      "hp": 1180, "attack": 162, "defense": 61, "speed": 101,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "staff", "scale": 1.06, "sigil": 16, "sprite": "hollowed_mage", "spriteStatus": "pending" },
+      "basic": {
+        "id": "hollowed_mage_basic", "name": "Hollow Spark", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "hollowed_mage_active", "name": "Unmeant Flare", "energyCost": 100, "vfx": "burst",
+        "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.8 } ]
+      }
+    },
+
+    {
+      "id": "lost_villager", "name": "Lost Villager", "kind": "minion", "aspect": "Tide",
+      "hp": 890, "attack": 104, "defense": 48, "speed": 100,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "none", "scale": 0.95, "sigil": 12, "sprite": "lost_villager", "spriteStatus": "pending" },
+      "basic": {
+        "id": "lost_villager_basic", "name": "Idle Swing", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "lost_villager_active", "name": "Follow the Others", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "outlaw_archer", "name": "Outlaw Archer", "kind": "minion", "aspect": "Ember",
+      "hp": 740, "attack": 134, "defense": 35, "speed": 106,
+      "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "bow", "scale": 0.95, "sigil": 7, "sprite": "outlaw_archer", "spriteStatus": "pending" },
+      "basic": {
+        "id": "outlaw_archer_basic", "name": "Loose", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "outlaw_archer_active", "name": "Pinning Shot", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 } ]
+      }
+    },
+
+    {
+      "id": "road_goblin", "name": "Road Goblin", "kind": "minion", "aspect": "Ember",
+      "hp": 800, "attack": 127, "defense": 41, "speed": 115,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.81, "sigil": 7, "sprite": "road_goblin", "spriteStatus": "pending" },
+      "basic": {
+        "id": "road_goblin_basic", "name": "Stab", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "road_goblin_active", "name": "Frenzied Stab", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.65 },
+          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "Burn", "magnitude": 0.15, "duration": 2, "chance": 0.5 }
+        ]
+      }
+    },
+
+    {
+      "id": "wild_bear", "name": "Wild Bear", "kind": "elite", "aspect": "Ember",
+      "hp": 1550, "attack": 144, "defense": 82, "speed": 95,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "beast", "weapon": "claws", "scale": 1.06, "sigil": 7, "sprite": "wild_bear", "spriteStatus": "pending" },
+      "basic": {
+        "id": "wild_bear_basic", "name": "Maul", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "wild_bear_active", "name": "Rearing Swipe", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "the_forsaken", "name": "The Forsaken", "kind": "elite", "aspect": "Tide",
+      "hp": 2060, "attack": 165, "defense": 88, "speed": 92,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12, "startEnergy": 15,
+      "effectHit": 0.05, "effectResist": 0.18,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "sword", "scale": 1.12, "sigil": 12, "sprite": "the_forsaken", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_forsaken_basic", "name": "Forsaken Blow", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "the_forsaken_active", "name": "Walk Away With Me", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      },
+      "passive": {
+        "id": "the_forsaken_passive", "name": "Nothing Left to Lose", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "Walked away from everything; below half health there is nothing left to hold it back.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 99 } ]
+      }
+    },
+
+    {
+      "id": "the_collector", "name": "The Collector", "kind": "boss", "aspect": "Umbra",
+      "hp": 2590, "attack": 235, "defense": 99, "speed": 88,
+      "critChance": 0.12, "critDamage": 1.7, "growth": 0.12, "startEnergy": 20,
+      "effectHit": 0.15, "effectResist": 0.20,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "orb", "scale": 1.2, "sigil": 13, "sprite": "the_collector", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_collector_basic", "name": "Take", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.62 } ]
+      },
+      "active": {
+        "id": "the_collector_active", "name": "Harvest Conviction", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.8 }
+        ]
+      },
+      "passive": {
+        "id": "the_collector_passive", "name": "What Was Yours", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "Takes what it harvested and turns it on the ones who still believe.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.4, "duration": 99 } ]
+      }
+    },
+
+    // ---- Chapter 2: The Abandoned Crossing. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    {
+      "id": "dire_wolf", "name": "Dire Wolf", "kind": "minion", "aspect": "Ember",
+      "hp": 770, "attack": 137, "defense": 42, "speed": 113,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 7, "sprite": "dire_wolf", "spriteStatus": "pending" },
+      "basic": {
+        "id": "dire_wolf_basic", "name": "Rend", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "dire_wolf_active", "name": "Pack Fury", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.65 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "Burn", "magnitude": 0.15, "duration": 2, "chance": 0.5 }
+        ]
+      }
+    },
+
+    {
+      // LEFT PLAIN. "Charges and knockbacks": the engine has no knockback or push primitive, and
+      // SwapPositions (the Tideturned's) is a swap, not a knockback. Damage only until one exists.
+      "id": "thornback_boar", "name": "Thornback Boar", "kind": "minion", "aspect": "Verdant",
+      "hp": 970, "attack": 113, "defense": 56, "speed": 98,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 9, "sprite": "thornback_boar", "spriteStatus": "pending" },
+      "basic": {
+        "id": "thornback_boar_basic", "name": "Tusk", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "thornback_boar_active", "name": "Thorn Charge", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 } ]
+      }
+    },
+
+    {
+      "id": "goblin_scavenger", "name": "Goblin Scavenger", "kind": "minion", "aspect": "Umbra",
+      "hp": 700, "attack": 128, "defense": 37, "speed": 126,
+      "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
+      "effectHit": 0.10, "effectResist": 0.05,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.81, "sigil": 6, "sprite": "goblin_scavenger", "spriteStatus": "pending" },
+      "basic": {
+        "id": "goblin_scavenger_basic", "name": "Pilfer", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "goblin_scavenger_active", "name": "Pick the Weak", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.5 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "goblin_trapper", "name": "Goblin Trapper", "kind": "minion", "aspect": "Gale",
+      "hp": 780, "attack": 120, "defense": 41, "speed": 109,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.15, "effectResist": 0.05,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "none", "scale": 0.81, "sigil": 8, "sprite": "goblin_trapper", "spriteStatus": "pending" },
+      "basic": {
+        "id": "goblin_trapper_basic", "name": "Hurled Snare", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "goblin_trapper_active", "name": "Rope and Spike", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.5 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Slow", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "road_marauder", "name": "Road Marauder", "kind": "minion", "aspect": "Ember",
+      "hp": 920, "attack": 112, "defense": 54, "speed": 96,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "sword", "scale": 0.95, "sigil": 7, "sprite": "road_marauder", "spriteStatus": "pending" },
+      "basic": {
+        "id": "road_marauder_basic", "name": "Hack", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "road_marauder_active", "name": "Raider's Rush", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "marauder_crossbowman", "name": "Marauder Crossbowman", "kind": "minion", "aspect": "Ember",
+      "hp": 750, "attack": 131, "defense": 36, "speed": 106,
+      "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "bow", "scale": 0.95, "sigil": 7, "sprite": "marauder_crossbowman", "spriteStatus": "pending" },
+      "basic": {
+        "id": "marauder_crossbowman_basic", "name": "Bolt", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "marauder_crossbowman_active", "name": "Scavenged Quarrel", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 } ]
+      }
+    },
+
+    {
+      "id": "bog_crawler", "name": "Bog Crawler", "kind": "minion", "aspect": "Tide",
+      "hp": 720, "attack": 129, "defense": 37, "speed": 121,
+      "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
+      "effectHit": 0.10, "effectResist": 0.05,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 12, "sprite": "bog_crawler", "spriteStatus": "pending" },
+      "basic": {
+        "id": "bog_crawler_basic", "name": "Mire Bite", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "bog_crawler_active", "name": "Drag Under", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.5 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "carrion_vulture", "name": "Carrion Vulture", "kind": "minion", "aspect": "Gale",
+      "hp": 770, "attack": 129, "defense": 39, "speed": 110,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 8, "sprite": "carrion_vulture", "spriteStatus": "pending" },
+      "basic": {
+        "id": "carrion_vulture_basic", "name": "Peck", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "carrion_vulture_active", "name": "Circling Dive", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.65 } ]
+      }
+    },
+
+    {
+      "id": "drifting_pilgrim", "name": "Drifting Pilgrim", "kind": "elite", "aspect": "Verdant",
+      "hp": 1480, "attack": 139, "defense": 72, "speed": 101,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "staff", "scale": 1.06, "sigil": 9, "sprite": "drifting_pilgrim", "spriteStatus": "pending" },
+      "basic": {
+        "id": "drifting_pilgrim_basic", "name": "Warding Staff", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "drifting_pilgrim_active", "name": "Keep Walking", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "hollowed_woodsman", "name": "Hollowed Woodsman", "kind": "elite", "aspect": "Verdant",
+      "hp": 1570, "attack": 143, "defense": 82, "speed": 89,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "hammer", "scale": 1.06, "sigil": 9, "sprite": "hollowed_woodsman", "spriteStatus": "pending" },
+      "basic": {
+        "id": "hollowed_woodsman_basic", "name": "Felling Swing", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "hollowed_woodsman_active", "name": "Muscle Memory", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "hollowed_apothecary", "name": "Hollowed Apothecary", "kind": "elite", "aspect": "Umbra",
+      "hp": 1280, "attack": 138, "defense": 67, "speed": 102,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.15, "effectResist": 0.12,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "orb", "scale": 1.06, "sigil": 6, "sprite": "hollowed_apothecary", "spriteStatus": "pending" },
+      "basic": {
+        "id": "hollowed_apothecary_basic", "name": "Thrown Vial", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "hollowed_apothecary_active", "name": "Debilitating Powder", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.4 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.7 }
+        ]
+      }
+    },
+
+    {
+      "id": "hollowed_sentinel", "name": "Hollowed Sentinel", "kind": "elite", "aspect": "Lumen",
+      "hp": 1700, "attack": 128, "defense": 100, "speed": 81,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.20,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "spear", "scale": 1.06, "sigil": 16, "sprite": "hollowed_sentinel", "spriteStatus": "pending" },
+      "basic": {
+        "id": "hollowed_sentinel_basic", "name": "Checkpoint Thrust", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "hollowed_sentinel_active", "name": "Stand Guard", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "the_waykeeper", "name": "The Waykeeper", "kind": "elite", "aspect": "Lumen",
+      "hp": 2010, "attack": 171, "defense": 88, "speed": 94,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12, "startEnergy": 15,
+      "effectHit": 0.05, "effectResist": 0.18,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "spear", "scale": 1.12, "sigil": 16, "sprite": "the_waykeeper", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_waykeeper_basic", "name": "Toll", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "the_waykeeper_active", "name": "No Passage Without Authorization", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      },
+      "passive": {
+        "id": "the_waykeeper_passive", "name": "Every Rule Remembered", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "Remembers every rule and none of the reasons; wounded, it only grows more absolute.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 99 } ]
+      }
+    },
+
+    {
+      "id": "the_shepherd", "name": "The Shepherd", "kind": "boss", "aspect": "Tide",
+      "hp": 2430, "attack": 231, "defense": 99, "speed": 92,
+      "critChance": 0.12, "critDamage": 1.7, "growth": 0.12, "startEnergy": 20,
+      "effectHit": 0.15, "effectResist": 0.20,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "staff", "scale": 1.2, "sigil": 13, "sprite": "the_shepherd", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_shepherd_basic", "name": "Crook", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.62 } ]
+      },
+      "active": {
+        "id": "the_shepherd_active", "name": "I Gave You Direction", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 1.05 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 40 }
+        ]
+      },
+      "passive": {
+        "id": "the_shepherd_passive", "name": "Gather the Lost", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "Every lost soul gathered at the Crossing lends the Shepherd its purpose.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.4, "duration": 99 } ]
+      }
+    },
+
+    // ---- Chapter 3: City of Strangers. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    {
+      "id": "field_hound", "name": "Field Hound", "kind": "minion", "aspect": "Verdant",
+      "hp": 810, "attack": 135, "defense": 42, "speed": 116,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 9, "sprite": "field_hound", "spriteStatus": "pending" },
+      "basic": {
+        "id": "field_hound_basic", "name": "Bite", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "field_hound_active", "name": "Worry", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.65 } ]
+      }
+    },
+
+    {
+      "id": "canal_rat", "name": "Canal Rat", "kind": "minion", "aspect": "Tide",
+      "hp": 720, "attack": 126, "defense": 35, "speed": 124,
+      "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
+      "effectHit": 0.10, "effectResist": 0.05,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 12, "sprite": "canal_rat", "spriteStatus": "pending" },
+      "basic": {
+        "id": "canal_rat_basic", "name": "Gnaw", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "canal_rat_active", "name": "Swarm the Fallen", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.5 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "gate_extortionist", "name": "Gate Extortionist", "kind": "minion", "aspect": "Ember",
+      "hp": 940, "attack": 118, "defense": 55, "speed": 97,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "sword", "scale": 0.95, "sigil": 7, "sprite": "gate_extortionist", "spriteStatus": "pending" },
+      "basic": {
+        "id": "gate_extortionist_basic", "name": "Shakedown", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "gate_extortionist_active", "name": "Pay or Bleed", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "rooftop_cutpurse", "name": "Rooftop Cutpurse", "kind": "minion", "aspect": "Gale",
+      "hp": 720, "attack": 128, "defense": 37, "speed": 127,
+      "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
+      "effectHit": 0.10, "effectResist": 0.05,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.95, "sigil": 8, "sprite": "rooftop_cutpurse", "spriteStatus": "pending" },
+      "basic": {
+        "id": "rooftop_cutpurse_basic", "name": "Quick Cut", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "rooftop_cutpurse_active", "name": "Drop From Above", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.5 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "dock_enforcer", "name": "Dock Enforcer", "kind": "minion", "aspect": "Verdant",
+      "hp": 1110, "attack": 93, "defense": 72, "speed": 87,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.13,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "hammer", "scale": 0.95, "sigil": 9, "sprite": "dock_enforcer", "spriteStatus": "pending" },
+      "basic": {
+        "id": "dock_enforcer_basic", "name": "Cudgel", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "dock_enforcer_active", "name": "Guard the Goods", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "backstreet_knifeman", "name": "Backstreet Knifeman", "kind": "minion", "aspect": "Ember",
+      "hp": 780, "attack": 127, "defense": 41, "speed": 116,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.95, "sigil": 7, "sprite": "backstreet_knifeman", "spriteStatus": "pending" },
+      "basic": {
+        "id": "backstreet_knifeman_basic", "name": "Shank", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "backstreet_knifeman_active", "name": "Alley Flurry", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.65 },
+          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "Burn", "magnitude": 0.15, "duration": 2, "chance": 0.5 }
+        ]
+      }
+    },
+
+    {
+      "id": "deserted_watchman", "name": "Deserted Watchman", "kind": "minion", "aspect": "Lumen",
+      "hp": 920, "attack": 105, "defense": 50, "speed": 105,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "spear", "scale": 0.95, "sigil": 16, "sprite": "deserted_watchman", "spriteStatus": "pending" },
+      "basic": {
+        "id": "deserted_watchman_basic", "name": "Halt", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "deserted_watchman_active", "name": "By the Letter", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "watch_crossbowman", "name": "Watch Crossbowman", "kind": "minion", "aspect": "Umbra",
+      "hp": 750, "attack": 128, "defense": 37, "speed": 112,
+      "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "bow", "scale": 0.95, "sigil": 6, "sprite": "watch_crossbowman", "spriteStatus": "pending" },
+      "basic": {
+        "id": "watch_crossbowman_basic", "name": "Warning Bolt", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "watch_crossbowman_active", "name": "Execute the Order", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 } ]
+      }
+    },
+
+    {
+      "id": "unmoored_citizen", "name": "Unmoored Citizen", "kind": "elite", "aspect": "Gale",
+      "hp": 1220, "attack": 143, "defense": 63, "speed": 99,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.15, "effectResist": 0.12,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "none", "scale": 1.06, "sigil": 8, "sprite": "unmoored_citizen", "spriteStatus": "pending" },
+      "basic": {
+        "id": "unmoored_citizen_basic", "name": "Lash Out", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "unmoored_citizen_active", "name": "Fragmented Conviction", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.4 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Slow", "magnitude": 0.2, "duration": 2, "chance": 0.7 }
+        ]
+      }
+    },
+
+    {
+      "id": "hollowed_physician", "name": "Hollowed Physician", "kind": "elite", "aspect": "Tide",
+      "hp": 1290, "attack": 125, "defense": 67, "speed": 100,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12, "startEnergy": 25,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "staff", "scale": 1.06, "sigil": 12, "sprite": "hollowed_physician", "spriteStatus": "pending" },
+      "basic": {
+        "id": "hollowed_physician_basic", "name": "Scalpel", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.8 } ]
+      },
+      "active": {
+        "id": "hollowed_physician_active", "name": "Rote Treatment", "energyCost": 100, "vfx": "heal",
+        "effects": [
+          { "kind": "Heal", "target": "AllAllies", "power": 0.75 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.15, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "hollowed_magistrate", "name": "Hollowed Magistrate", "kind": "elite", "aspect": "Lumen",
+      "hp": 1220, "attack": 146, "defense": 65, "speed": 96,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.15, "effectResist": 0.12,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "spellbook", "scale": 1.06, "sigil": 16, "sprite": "hollowed_magistrate", "spriteStatus": "pending" },
+      "basic": {
+        "id": "hollowed_magistrate_basic", "name": "Gavel", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "hollowed_magistrate_active", "name": "Letter of the Law", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.4 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.7 }
+        ]
+      }
+    },
+
+    {
+      "id": "hollowed_captain", "name": "Hollowed Captain", "kind": "elite", "aspect": "Umbra",
+      "hp": 1460, "attack": 153, "defense": 80, "speed": 92,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "sword", "scale": 1.06, "sigil": 6, "sprite": "hollowed_captain", "spriteStatus": "pending" },
+      "basic": {
+        "id": "hollowed_captain_basic", "name": "Drilled Cut", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "hollowed_captain_active", "name": "Form Ranks", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "the_gatewarden", "name": "The Gatewarden", "kind": "elite", "aspect": "Verdant",
+      "hp": 2380, "attack": 163, "defense": 112, "speed": 83,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12, "startEnergy": 15,
+      "effectHit": 0.05, "effectResist": 0.26,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "spear", "scale": 1.12, "sigil": 9, "sprite": "the_gatewarden", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_gatewarden_basic", "name": "Barred Gate", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "the_gatewarden_active", "name": "None Shall Enter", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 2 }
+        ]
+      },
+      "passive": {
+        "id": "the_gatewarden_passive", "name": "Decades of Service", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "Decades of service without context: wounded, the gate only closes harder.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 99 } ]
+      }
+    },
+
+    {
+      "id": "the_arbiter", "name": "The Arbiter", "kind": "boss", "aspect": "Lumen",
+      "hp": 2460, "attack": 235, "defense": 98, "speed": 89,
+      "critChance": 0.12, "critDamage": 1.7, "growth": 0.12, "startEnergy": 20,
+      "effectHit": 0.15, "effectResist": 0.20,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "spellbook", "scale": 1.2, "sigil": 13, "sprite": "the_arbiter", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_arbiter_basic", "name": "Ruling", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.62 } ]
+      },
+      "active": {
+        "id": "the_arbiter_active", "name": "Absolute Order", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.8 }
+        ]
+      },
+      "passive": {
+        "id": "the_arbiter_passive", "name": "Whose Choices", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "When the rules are challenged, the Arbiter only makes them absolute.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.4, "duration": 99 } ]
+      }
+    },
+
+    // ---- Chapter 4: Beneath the Old Kingdom. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    {
+      "id": "ruin_jackal", "name": "Ruin Jackal", "kind": "minion", "aspect": "Ember",
+      "hp": 770, "attack": 135, "defense": 39, "speed": 116,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 7, "sprite": "ruin_jackal", "spriteStatus": "pending" },
+      "basic": {
+        "id": "ruin_jackal_basic", "name": "Snap", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "ruin_jackal_active", "name": "Scavenger's Frenzy", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.65 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "Burn", "magnitude": 0.15, "duration": 2, "chance": 0.5 }
+        ]
+      }
+    },
+
+    {
+      "id": "stonehide_beetle", "name": "Stonehide Beetle", "kind": "minion", "aspect": "Verdant",
+      "hp": 1140, "attack": 95, "defense": 72, "speed": 92,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.13,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 9, "sprite": "stonehide_beetle", "spriteStatus": "pending" },
+      "basic": {
+        "id": "stonehide_beetle_basic", "name": "Mandible", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "stonehide_beetle_active", "name": "Carapace", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "relic_scavenger", "name": "Relic Scavenger", "kind": "minion", "aspect": "Tide",
+      "hp": 710, "attack": 121, "defense": 37, "speed": 127,
+      "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
+      "effectHit": 0.10, "effectResist": 0.05,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.95, "sigil": 12, "sprite": "relic_scavenger", "spriteStatus": "pending" },
+      "basic": {
+        "id": "relic_scavenger_basic", "name": "Pry", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "relic_scavenger_active", "name": "Strip the Fallen", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.5 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "ruin_delver", "name": "Ruin Delver", "kind": "minion", "aspect": "Ember",
+      "hp": 980, "attack": 120, "defense": 53, "speed": 99,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "sword", "scale": 0.95, "sigil": 7, "sprite": "ruin_delver", "spriteStatus": "pending" },
+      "basic": {
+        "id": "ruin_delver_basic", "name": "Pick Strike", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "ruin_delver_active", "name": "Cover the Crew", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "cave_lurker", "name": "Cave Lurker", "kind": "minion", "aspect": "Umbra",
+      "hp": 680, "attack": 127, "defense": 37, "speed": 127,
+      "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
+      "effectHit": 0.10, "effectResist": 0.05,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 6, "sprite": "cave_lurker", "spriteStatus": "pending" },
+      "basic": {
+        "id": "cave_lurker_basic", "name": "Pale Claw", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "cave_lurker_active", "name": "From the Dark", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.5 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "sporekeeper", "name": "Sporekeeper", "kind": "minion", "aspect": "Verdant",
+      "hp": 780, "attack": 109, "defense": 42, "speed": 107,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.15, "effectResist": 0.05,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "none", "scale": 0.95, "sigil": 9, "sprite": "sporekeeper", "spriteStatus": "pending" },
+      "basic": {
+        "id": "sporekeeper_basic", "name": "Spore Lash", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "sporekeeper_active", "name": "Spore Cloud", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.4 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.7 }
+        ]
+      }
+    },
+
+    {
+      "id": "forgotten_soldier", "name": "Forgotten Soldier", "kind": "minion", "aspect": "Verdant",
+      "hp": 970, "attack": 116, "defense": 53, "speed": 95,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "spear", "scale": 0.95, "sigil": 9, "sprite": "forgotten_soldier", "spriteStatus": "pending" },
+      "basic": {
+        "id": "forgotten_soldier_basic", "name": "Patrol Thrust", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "forgotten_soldier_active", "name": "Endless Watch", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "forgotten_archer", "name": "Forgotten Archer", "kind": "minion", "aspect": "Gale",
+      "hp": 730, "attack": 124, "defense": 35, "speed": 107,
+      "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "bow", "scale": 0.95, "sigil": 8, "sprite": "forgotten_archer", "spriteStatus": "pending" },
+      "basic": {
+        "id": "forgotten_archer_basic", "name": "Grave Arrow", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "forgotten_archer_active", "name": "Hold the Entrance", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 } ]
+      }
+    },
+
+    {
+      "id": "crypt_acolyte", "name": "Crypt Acolyte", "kind": "elite", "aspect": "Tide",
+      "hp": 1360, "attack": 130, "defense": 67, "speed": 96,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12, "startEnergy": 25,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "staff", "scale": 1.06, "sigil": 12, "sprite": "crypt_acolyte", "spriteStatus": "pending" },
+      "basic": {
+        "id": "crypt_acolyte_basic", "name": "Censer", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.8 } ]
+      },
+      "active": {
+        "id": "crypt_acolyte_active", "name": "Rite Without Meaning", "energyCost": 100, "vfx": "heal",
+        "effects": [
+          { "kind": "Heal", "target": "AllAllies", "power": 0.75 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.15, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "graven_guardian", "name": "Graven Guardian", "kind": "elite", "aspect": "Lumen",
+      "hp": 1710, "attack": 120, "defense": 100, "speed": 84,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.20,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "golem", "weapon": "hammer", "scale": 1.06, "sigil": 16, "sprite": "graven_guardian", "spriteStatus": "pending" },
+      "basic": {
+        "id": "graven_guardian_basic", "name": "Stone Fist", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "graven_guardian_active", "name": "Seal the City", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "graven_watcher", "name": "Graven Watcher", "kind": "elite", "aspect": "Lumen",
+      "hp": 1270, "attack": 146, "defense": 63, "speed": 101,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.15, "effectResist": 0.12,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "golem", "weapon": "orb", "scale": 1.06, "sigil": 16, "sprite": "graven_watcher", "spriteStatus": "pending" },
+      "basic": {
+        "id": "graven_watcher_basic", "name": "Scan", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "graven_watcher_active", "name": "Restrict Intruders", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.4 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.7 }
+        ]
+      }
+    },
+
+    {
+      "id": "forgotten_knight", "name": "Forgotten Knight", "kind": "elite", "aspect": "Umbra",
+      "hp": 1470, "attack": 130, "defense": 75, "speed": 99,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "greatsword", "scale": 1.06, "sigil": 6, "sprite": "forgotten_knight", "spriteStatus": "pending" },
+      "basic": {
+        "id": "forgotten_knight_basic", "name": "Disciplined Cut", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "forgotten_knight_active", "name": "Rally the Dead", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "the_last_castellan", "name": "The Last Castellan", "kind": "elite", "aspect": "Verdant",
+      "hp": 2060, "attack": 167, "defense": 86, "speed": 93,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12, "startEnergy": 15,
+      "effectHit": 0.05, "effectResist": 0.18,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "greatsword", "scale": 1.12, "sigil": 9, "sprite": "the_last_castellan", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_last_castellan_basic", "name": "Castellan's Cut", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "the_last_castellan_active", "name": "Move As One", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      },
+      "passive": {
+        "id": "the_last_castellan_passive", "name": "Still on Guard", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "Dead for centuries and still on guard; below half health it digs in.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 99 } ]
+      }
+    },
+
+    {
+      "id": "the_archivist", "name": "The Archivist", "kind": "boss", "aspect": "Lumen",
+      "hp": 2470, "attack": 229, "defense": 95, "speed": 89,
+      "critChance": 0.12, "critDamage": 1.7, "growth": 0.12, "startEnergy": 20,
+      "effectHit": 0.15, "effectResist": 0.20,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "golem", "weapon": "orb", "scale": 1.2, "sigil": 13, "sprite": "the_archivist", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_archivist_basic", "name": "Index", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.62 } ]
+      },
+      "active": {
+        "id": "the_archivist_active", "name": "Forbidden Knowledge Stays", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.8 }
+        ]
+      },
+      "passive": {
+        "id": "the_archivist_passive", "name": "Seventh Classification", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "Detects an unknown classification, and escalates its containment.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.4, "duration": 99 } ]
+      }
+    },
+
+    // ---- Chapter 5: The Divided Realm. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    {
+      "id": "border_wolf", "name": "Border Wolf", "kind": "minion", "aspect": "Gale",
+      "hp": 800, "attack": 128, "defense": 39, "speed": 116,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 8, "sprite": "border_wolf", "spriteStatus": "pending" },
+      "basic": {
+        "id": "border_wolf_basic", "name": "Bite", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "border_wolf_active", "name": "Driven Hunt", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.65 } ]
+      }
+    },
+
+    {
+      "id": "carrion_hyena", "name": "Carrion Hyena", "kind": "minion", "aspect": "Tide",
+      "hp": 750, "attack": 128, "defense": 36, "speed": 124,
+      "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
+      "effectHit": 0.10, "effectResist": 0.05,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 12, "sprite": "carrion_hyena", "spriteStatus": "pending" },
+      "basic": {
+        "id": "carrion_hyena_basic", "name": "Scavenge", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "carrion_hyena_active", "name": "Follow the Army", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.5 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "border_levy", "name": "Border Levy", "kind": "minion", "aspect": "Verdant",
+      "hp": 950, "attack": 113, "defense": 55, "speed": 100,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "spear", "scale": 0.95, "sigil": 9, "sprite": "border_levy", "spriteStatus": "pending" },
+      "basic": {
+        "id": "border_levy_basic", "name": "Conscript Jab", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "border_levy_active", "name": "Hold the Line", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "border_scout", "name": "Border Scout", "kind": "minion", "aspect": "Verdant",
+      "hp": 730, "attack": 135, "defense": 35, "speed": 105,
+      "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "bow", "scale": 0.95, "sigil": 9, "sprite": "border_scout", "spriteStatus": "pending" },
+      "basic": {
+        "id": "border_scout_basic", "name": "Scout Shot", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "border_scout_active", "name": "Track and Fire", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 } ]
+      }
+    },
+
+    {
+      "id": "ironshield_soldier", "name": "Ironshield Soldier", "kind": "minion", "aspect": "Verdant",
+      "hp": 1040, "attack": 92, "defense": 72, "speed": 92,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.13,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "sword", "scale": 0.95, "sigil": 9, "sprite": "ironshield_soldier", "spriteStatus": "pending" },
+      "basic": {
+        "id": "ironshield_soldier_basic", "name": "Shield Bash", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "ironshield_soldier_active", "name": "Shieldwall", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "ironshield_arbalist", "name": "Ironshield Arbalist", "kind": "minion", "aspect": "Lumen",
+      "hp": 770, "attack": 125, "defense": 37, "speed": 111,
+      "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "bow", "scale": 0.95, "sigil": 16, "sprite": "ironshield_arbalist", "spriteStatus": "pending" },
+      "basic": {
+        "id": "ironshield_arbalist_basic", "name": "Arbalest Bolt", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "ironshield_arbalist_active", "name": "Formation Volley", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 } ]
+      }
+    },
+
+    {
+      "id": "freeblade_raider", "name": "Freeblade Raider", "kind": "minion", "aspect": "Ember",
+      "hp": 780, "attack": 131, "defense": 41, "speed": 112,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "sword", "scale": 0.95, "sigil": 7, "sprite": "freeblade_raider", "spriteStatus": "pending" },
+      "basic": {
+        "id": "freeblade_raider_basic", "name": "Slash", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "freeblade_raider_active", "name": "Rapid Assault", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.65 },
+          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "Burn", "magnitude": 0.15, "duration": 2, "chance": 0.5 }
+        ]
+      }
+    },
+
+    {
+      "id": "freeblade_skirmisher", "name": "Freeblade Skirmisher", "kind": "minion", "aspect": "Gale",
+      "hp": 720, "attack": 112, "defense": 40, "speed": 114,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.15, "effectResist": 0.05,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.95, "sigil": 8, "sprite": "freeblade_skirmisher", "spriteStatus": "pending" },
+      "basic": {
+        "id": "freeblade_skirmisher_basic", "name": "Thrown Knife", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "freeblade_skirmisher_active", "name": "Caltrops", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.5 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Slow", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "war_chaplain", "name": "War Chaplain", "kind": "elite", "aspect": "Lumen",
+      "hp": 1390, "attack": 139, "defense": 77, "speed": 99,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "hammer", "scale": 1.06, "sigil": 16, "sprite": "war_chaplain", "spriteStatus": "pending" },
+      "basic": {
+        "id": "war_chaplain_basic", "name": "Blessed Mace", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "war_chaplain_active", "name": "Sermon of Conviction", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "oathbreaker", "name": "Oathbreaker", "kind": "elite", "aspect": "Umbra",
+      "hp": 1100, "attack": 167, "defense": 52, "speed": 120,
+      "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
+      "effectHit": 0.10, "effectResist": 0.12,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "dagger", "scale": 1.06, "sigil": 6, "sprite": "oathbreaker", "spriteStatus": "pending" },
+      "basic": {
+        "id": "oathbreaker_basic", "name": "Turncoat Strike", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "oathbreaker_active", "name": "Hunted Both Ways", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.5 },
+          { "kind": "ApplyStatus", "target": "LowestHpEnemy", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.6 }
+        ]
+      }
+    },
+
+    {
+      "id": "ironshield_justicar", "name": "Ironshield Justicar", "kind": "elite", "aspect": "Lumen",
+      "hp": 1560, "attack": 155, "defense": 79, "speed": 92,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "greatsword", "scale": 1.06, "sigil": 16, "sprite": "ironshield_justicar", "spriteStatus": "pending" },
+      "basic": {
+        "id": "ironshield_justicar_basic", "name": "Judgement", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "ironshield_justicar_active", "name": "Order at Any Cost", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "freeblade_reaver", "name": "Freeblade Reaver", "kind": "elite", "aspect": "Ember",
+      "hp": 1240, "attack": 180, "defense": 59, "speed": 106,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "greatsword", "scale": 1.06, "sigil": 7, "sprite": "freeblade_reaver", "spriteStatus": "pending" },
+      "basic": {
+        "id": "freeblade_reaver_basic", "name": "Reave", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "freeblade_reaver_active", "name": "Freedom's Price", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.65 },
+          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "Burn", "magnitude": 0.15, "duration": 2, "chance": 0.5 }
+        ]
+      }
+    },
+
+    {
+      "id": "the_standard_bearer", "name": "The Standard Bearer", "kind": "elite", "aspect": "Ember",
+      "hp": 1950, "attack": 176, "defense": 88, "speed": 97,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12, "startEnergy": 15,
+      "effectHit": 0.05, "effectResist": 0.18,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "spear", "scale": 1.12, "sigil": 7, "sprite": "the_standard_bearer", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_standard_bearer_basic", "name": "Banner Pole", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "the_standard_bearer_active", "name": "Beneath the Banner", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      },
+      "passive": {
+        "id": "the_standard_bearer_passive", "name": "Died for Nothing", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "The banner cannot fall, or everyone who died beneath it died for nothing.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 99 } ]
+      }
+    },
+
+    {
+      "id": "the_peacemaker", "name": "The Peacemaker", "kind": "boss", "aspect": "Tide",
+      "hp": 2610, "attack": 232, "defense": 97, "speed": 92,
+      "critChance": 0.12, "critDamage": 1.7, "growth": 0.12, "startEnergy": 20,
+      "effectHit": 0.15, "effectResist": 0.20,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "staff", "scale": 1.2, "sigil": 13, "sprite": "the_peacemaker", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_peacemaker_basic", "name": "Mediation", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.62 } ]
+      },
+      "active": {
+        "id": "the_peacemaker_active", "name": "Six Must Become One", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 1.1 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      },
+      "passive": {
+        "id": "the_peacemaker_passive", "name": "What I Tried to Create", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "Every failed peace made the next one less negotiable.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.4, "duration": 99 } ]
+      }
+    },
+
+    // ---- Chapter 6: The Forgotten Sanctuary. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    {
+      "id": "mountain_ram", "name": "Mountain Ram", "kind": "minion", "aspect": "Verdant",
+      "hp": 930, "attack": 110, "defense": 55, "speed": 99,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 9, "sprite": "mountain_ram", "spriteStatus": "pending" },
+      "basic": {
+        "id": "mountain_ram_basic", "name": "Headbutt", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "mountain_ram_active", "name": "Narrow Path", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "frostfang_lynx", "name": "Frostfang Lynx", "kind": "minion", "aspect": "Tide",
+      "hp": 760, "attack": 131, "defense": 42, "speed": 111,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 12, "sprite": "frostfang_lynx", "spriteStatus": "pending" },
+      "basic": {
+        "id": "frostfang_lynx_basic", "name": "Frostfang", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "frostfang_lynx_active", "name": "Pounce", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.65 } ]
+      }
+    },
+
+    {
+      "id": "cliff_harpy", "name": "Cliff Harpy", "kind": "minion", "aspect": "Gale",
+      "hp": 740, "attack": 129, "defense": 36, "speed": 106,
+      "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 8, "sprite": "cliff_harpy", "spriteStatus": "pending" },
+      "basic": {
+        "id": "cliff_harpy_basic", "name": "Talon Throw", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
+      },
+      "active": {
+        "id": "cliff_harpy_active", "name": "Screeching Dive", "energyCost": 100, "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 } ]
+      }
+    },
+
+    {
+      "id": "stoneback_troll", "name": "Stoneback Troll", "kind": "minion", "aspect": "Verdant",
+      "hp": 1120, "attack": 97, "defense": 72, "speed": 86,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.13,
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "brute", "weapon": "hammer", "scale": 0.95, "sigil": 9, "sprite": "stoneback_troll", "spriteStatus": "pending" },
+      "basic": {
+        "id": "stoneback_troll_basic", "name": "Boulder Fist", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "stoneback_troll_active", "name": "Occupy the Shelter", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "sanctuary_pilgrim", "name": "Sanctuary Pilgrim", "kind": "minion", "aspect": "Umbra",
+      "hp": 930, "attack": 108, "defense": 51, "speed": 105,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "staff", "scale": 0.95, "sigil": 6, "sprite": "sanctuary_pilgrim", "spriteStatus": "pending" },
+      "basic": {
+        "id": "sanctuary_pilgrim_basic", "name": "Pilgrim's Staff", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "sanctuary_pilgrim_active", "name": "Toward Somewhere", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "sanctuary_keeper", "name": "Sanctuary Keeper", "kind": "minion", "aspect": "Lumen",
+      "hp": 970, "attack": 114, "defense": 55, "speed": 100,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "spear", "scale": 0.95, "sigil": 16, "sprite": "sanctuary_keeper", "spriteStatus": "pending" },
+      "basic": {
+        "id": "sanctuary_keeper_basic", "name": "Restricted", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "sanctuary_keeper_active", "name": "Keep Them Out", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "oathbound_monk", "name": "Oathbound Monk", "kind": "minion", "aspect": "Ember",
+      "hp": 810, "attack": 133, "defense": 41, "speed": 114,
+      "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.05,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "none", "scale": 0.95, "sigil": 7, "sprite": "oathbound_monk", "spriteStatus": "pending" },
+      "basic": {
+        "id": "oathbound_monk_basic", "name": "Palm Strike", "vfx": "slash",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "oathbound_monk_active", "name": "Discipline Outlives Death", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.65 },
+          { "kind": "ApplyStatus", "target": "FrontEnemy", "status": "Burn", "magnitude": 0.15, "duration": 2, "chance": 0.5 }
+        ]
+      }
+    },
+
+    {
+      "id": "oathbound_seer", "name": "Oathbound Seer", "kind": "minion", "aspect": "Gale",
+      "hp": 820, "attack": 108, "defense": 43, "speed": 107,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.15, "effectResist": 0.05,
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "spellbook", "scale": 0.95, "sigil": 8, "sprite": "oathbound_seer", "spriteStatus": "pending" },
+      "basic": {
+        "id": "oathbound_seer_basic", "name": "Fragment", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "oathbound_seer_active", "name": "Teaching Without Context", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.4 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "Slow", "magnitude": 0.2, "duration": 2, "chance": 0.7 }
+        ]
+      }
+    },
+
+    {
+      "id": "scripture_golem", "name": "Scripture Golem", "kind": "elite", "aspect": "Lumen",
+      "hp": 1670, "attack": 123, "defense": 100, "speed": 85,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.20,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "golem", "weapon": "hammer", "scale": 1.06, "sigil": 16, "sprite": "scripture_golem", "spriteStatus": "pending" },
+      "basic": {
+        "id": "scripture_golem_basic", "name": "Tablet Slam", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "scripture_golem_active", "name": "Protect the Word", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "duration": 2 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "echo_wisp", "name": "Echo Wisp", "kind": "elite", "aspect": "Tide",
+      "hp": 1220, "attack": 150, "defense": 62, "speed": 100,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "wisp", "weapon": "none", "scale": 1.06, "sigil": 12, "sprite": "echo_wisp", "spriteStatus": "pending" },
+      "basic": {
+        "id": "echo_wisp_basic", "name": "Whisper", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "echo_wisp_active", "name": "Old Argument", "energyCost": 100, "vfx": "burst",
+        "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.8 } ]
+      }
+    },
+
+    {
+      "id": "veiled_custodian", "name": "Veiled Custodian", "kind": "elite", "aspect": "Lumen",
+      "hp": 1180, "attack": 140, "defense": 65, "speed": 100,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.15, "effectResist": 0.12,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "golem", "weapon": "orb", "scale": 1.06, "sigil": 16, "sprite": "veiled_custodian", "spriteStatus": "pending" },
+      "basic": {
+        "id": "veiled_custodian_basic", "name": "Veil", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
+      },
+      "active": {
+        "id": "veiled_custodian_active", "name": "Restricted Teachings", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 0.4 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.7 }
+        ]
+      }
+    },
+
+    {
+      "id": "sanctuary_champion", "name": "Sanctuary Champion", "kind": "elite", "aspect": "Ember",
+      "hp": 1460, "attack": 149, "defense": 84, "speed": 89,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
+      "effectHit": 0.05, "effectResist": 0.12,
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "greatsword", "scale": 1.06, "sigil": 7, "sprite": "sanctuary_champion", "spriteStatus": "pending" },
+      "basic": {
+        "id": "sanctuary_champion_basic", "name": "Champion's Cut", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
+      },
+      "active": {
+        "id": "sanctuary_champion_active", "name": "Defender of Every Belief", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 1.35 },
+          { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.25, "duration": 2 }
+        ]
+      }
+    },
+
+    {
+      "id": "the_penitent", "name": "The Penitent", "kind": "elite", "aspect": "Umbra",
+      "hp": 1970, "attack": 179, "defense": 86, "speed": 91,
+      "critChance": 0.07, "critDamage": 1.45, "growth": 0.12, "startEnergy": 15,
+      "effectHit": 0.05, "effectResist": 0.18,
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "staff", "scale": 1.12, "sigil": 6, "sprite": "the_penitent", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_penitent_basic", "name": "Self-Judgement", "vfx": "impact",
+        "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
+      },
+      "active": {
+        "id": "the_penitent_active", "name": "You Cannot All Be Right", "energyCost": 100, "vfx": "slash",
+        "effects": [
+          { "kind": "Damage", "target": "FrontEnemy", "power": 0.7 },
+          { "kind": "EnergyGain", "target": "AllAllies", "flat": 30 },
+          { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.2, "duration": 2 }
+        ]
+      },
+      "passive": {
+        "id": "the_penitent_passive", "name": "Unworthy of Any", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "Judges itself unworthy of any belief, and fights harder the closer it comes to proving it.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.3, "duration": 99 } ]
+      }
+    },
+
+    {
+      "id": "the_curator", "name": "The Curator", "kind": "boss", "aspect": "Lumen",
+      "hp": 2550, "attack": 233, "defense": 96, "speed": 88,
+      "critChance": 0.12, "critDamage": 1.7, "growth": 0.12, "startEnergy": 20,
+      "effectHit": 0.15, "effectResist": 0.20,
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "golem", "weapon": "orb", "scale": 1.2, "sigil": 13, "sprite": "the_curator", "spriteStatus": "pending" },
+      "basic": {
+        "id": "the_curator_basic", "name": "Catalogue", "vfx": "bolt",
+        "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.62 } ]
+      },
+      "active": {
+        "id": "the_curator_active", "name": "No Belief May Change", "energyCost": 100, "vfx": "burst",
+        "effects": [
+          { "kind": "Damage", "target": "AllEnemies", "power": 1.2 },
+          { "kind": "ApplyStatus", "target": "AllEnemies", "status": "AttackDown", "magnitude": 0.2, "duration": 2, "chance": 0.8 }
+        ]
+      },
+      "passive": {
+        "id": "the_curator_passive", "name": "No Governing Doctrine", "trigger": "OnHpBelowThreshold", "threshold": 0.5, "oncePerBattle": true, "vfx": "shadow",
+        "description": "Classifies any differing interpretation as a threat, and answers it as one.",
+        "effects": [ { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.4, "duration": 99 } ]
+      }
     }
   ]
 }

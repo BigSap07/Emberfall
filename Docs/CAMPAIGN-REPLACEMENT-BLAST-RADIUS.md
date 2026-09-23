@@ -185,7 +185,9 @@ Every other runtime reader reads a stage's own list.
 ### 4.1 The Deep Recital - `RecitalGenerator.BuildFloor`
 
 - **What it reads:** every `enemies.json` template whose `aspect` equals the floor's aspect. It
-  subtracts `ScriptedLossEnemies`. It does *not* restrict to campaign-fielded enemies.
+  subtracts `ScriptedLossEnemies`. It does *not* restrict to campaign-fielded enemies, and it
+  does *not* skip bosses: a `kind: boss` template is drawn as an ordinary floor enemy. (Added by
+  the roster job, which measured it: `CAMPAIGN-SPEC.md` 9.6.)
 - **Floor order:** floors cycle Ember, Tide, Verdant, Gale, Umbra, Lumen (`Cycle`,
   `AspectForFloor`).
 - **Requirement: at least one non-scripted template per aspect, all six.** An aspect with none
@@ -210,7 +212,9 @@ Every other runtime reader reads a stage's own list.
   `Classify` reads each enemy's kit:
   - `BaseDefense >= WallDefense` (90) or a Taunt status makes a **Wall**.
   - An `AllEnemies` target makes a **Spreader**.
-  - A targeting rule makes a **Hunter**.
+  - A `LowestHpEnemy` or `HighestAttackEnemy` target makes a **Hunter**. No other targeting
+    rule does: `HighestHpEnemy` and `RandomEnemy` do not. (Corrected by the roster job, which
+    read `ClassifyAbility`.)
 - **Missing behaviours fail silently.** `Fill(... Or(With(rank, behaviour), rank))` falls back to
   any enemy when no enemy has the behaviour. So if no new enemy classifies as a Wall, every Wall
   floor still builds and shows the text "something holds the front", and nothing holds the front.

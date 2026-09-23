@@ -473,3 +473,348 @@ moment their path is known.
 - 24 of 84 figures are cropped by their canvas edge, 9 of them minibosses or bosses (7.1).
 - Body alpha is 252-253, not 255.
 - Filename casing and spelling issues are listed in 7.2.
+
+---
+
+## 9. The 84 as built into `enemies.json` - the mapping, and what building it found
+
+Added 2026-09-23 by the roster job. Sections 1-8 above are Pinoy's delivery and stay as transcribed;
+this section is **our** half: the decisions the delivery left open, made once so the stage job does
+not make them again. The 84 are appended after the shipped 12 in `enemies.json`. **No campaign
+stage fields any of them yet**, and the shipped 12 are untouched (the prologue spawns seven of them
+by id).
+
+Everything marked **measured** below came from building real floors and fights with the core code
+against this content; everything else was read.
+
+### 9.1 Where race and role land
+
+The enemy schema has no race field and no role field, and none was added. Both are expressed
+through fields that exist:
+
+| Pinoy's column | lands in | rule |
+|---|---|---|
+| race | `visual.silhouette` | Beast and Harpy `beast`; Troll `brute`; Spirit `wisp`; Construct and Ancient Construct `golem`; every human-shaped race (Human, Goblin, Human/Hollowed, Human/Affected, Undead, Undead Human, Fungal Humanoid) `humanoid`. Goblins are scaled to 0.85. |
+| role | the kit shape and the stat profile | see 9.2 |
+| intro stage | `kind` | intro 1-5 is `minion`, intro 7-10 is `elite`. That is 8 minions and 4 elites per chapter, the same shape as the shipped roster. |
+| Miniboss | `kind: elite` | The engine has no miniboss. `boss` would keep it out of the guild dungeon entirely (`GuildDungeonGenerator.BuildFloor` skips every boss), while `elite` makes it a Champion-floor lead, which is what a miniboss is. It carries a boss-style one-shot passive and sits between elites and bosses in stats. |
+| Boss | `kind: boss` | |
+| art stem | `visual.sprite`, lower snake case, with `spriteStatus: "pending"` | Each enemy names the file its art will land as and draws the placeholder mannequin until it does, exactly as the 63 undrawn heroes do. **`The_sheperd` is spelled `the_shepherd`** in both id and sprite: the importer must rename that file, loudly. `The_Forsaken` becomes `the_forsaken`. |
+
+### 9.2 Role to kit and stats
+
+Kits use **only what the shipped enemies already use**: `Damage`, `ApplyStatus`, `Heal`,
+`EnergyGain`; targets `FrontEnemy`, `RandomEnemy`, `LowestHpEnemy`, `AllEnemies`, `Self`,
+`AllAllies`; statuses `Burn`, `Slow`, `AttackDown`, `AttackUp`, `DefenseUp`, `Taunt`; one
+`OnHpBelowThreshold` passive on minibosses and bosses. No hero-only status (Stun, Silence,
+DefenseDown, Shield, marks) and no gated engine feature is used. Every one has `growth` 0.12.
+
+| role | basic | active | guild behaviour it produces |
+|---|---|---|---|
+| Vanguard | FrontEnemy 1.0 | FrontEnemy 1.35 + self DefenseUp | none |
+| Bulwark | FrontEnemy 0.85 | FrontEnemy 1.2 + self **Taunt** + self DefenseUp (the Stone Warden's kit) | **Wall** |
+| Warden | FrontEnemy 0.9 | FrontEnemy 0.7 + allies Energy +30 + allies DefenseUp | none |
+| Striker | FrontEnemy 1.0; **LowestHpEnemy** for a Beast (a predator picks off the weak) | same target 1.65 (+ Burn if Ember) | **Hunter** if Beast |
+| Stalker | LowestHpEnemy 0.95 | LowestHpEnemy 1.5 + AttackDown | **Hunter** |
+| Marksman | RandomEnemy 0.95 | LowestHpEnemy 1.55 | **Hunter** |
+| Binder | FrontEnemy 0.85 | AllEnemies 0.4 + the Aspect's affliction (Ember Burn, Gale/Tide Slow, else AttackDown) | **Spreader** |
+| Mender | FrontEnemy 0.8 | Heal all allies 0.75 + DefenseUp (the Tidecaller's kit) | none |
+| Tinkerer | RandomEnemy 0.9 | AllEnemies 0.5 + Slow (snares) | **Spreader** |
+| Breaker | RandomEnemy 0.9 | AllEnemies 0.8 | **Spreader** |
+| boss (all six) | AllEnemies 0.62 | AllEnemies 1.2 + affliction; the Shepherd trades the affliction for allies Energy +40, the Peacemaker for allies DefenseUp | never drawn by the guild |
+
+Stats are a kind base times a role profile, with a fixed ±5% per-id variation so no two are
+clones. Only a non-boss Bulwark may reach the guild's Wall line of 90 defense: every other
+non-boss is clamped to 88, so a Wall is always something that means to be one. Ranges, all inside
+the harness's hero sanity bands (hp 500-3000, attack 50-400, defense 20-150, speed 50-200):
+
+| kind | count | hp | attack | defense | speed |
+|---|---|---|---|---|---|
+| minion | 48 | 680-1140 | 92-137 | 35-72 | 86-127 |
+| elite | 24 | 1100-1730 | 119-180 | 52-100 | 81-120 |
+| miniboss (elite) | 6 | 1950-2380 | 163-179 | 86-112 | 83-97 |
+| boss | 6 | 2430-2610 | 229-235 | 95-99 | 88-92 |
+
+Minion Bulwarks (hp to 1140, defense 72) sit above the shipped minions' envelope (720-950, 36-50),
+because the shipped roster has no minion tank. These are base stats: difficulty comes from the
+level each stage sets, which is the stage job's.
+
+### 9.3 Aspects - the constraint first, then flavour
+
+**Constraints, in order:** every one of the six Aspects covered, so the Deep Recital has no empty
+floor once the shipped 12 retire; **every chapter on its own also covers all six**, so no chapter
+reads as one Aspect and the guarantee survives chapters being cut or reordered; and no Aspect
+holding so many of one guild behaviour that a guild floor can come out single-Aspect (9.5 says
+how that one was found).
+
+**Flavour second,** from the Curator's own naming of the Six in chapter 6: Ember is Escalation
+(raiders, marauders, Freeblades, the Standard Bearer), Tide is Redirection (the Shepherd, the
+Peacemaker, menders), Verdant is Persistence (things that keep going by muscle memory: patrols,
+pilgrims, gatekeepers), Gale is Disruption (trappers, skirmishers, cutpurses), Umbra is Removal
+(the Hollowed who lost something, thieves, the Collector) and Lumen is Definition (rules, law and
+classification: the Waykeeper, the Magistrate, the Arbiter, the Archivist, the Curator).
+
+| Aspect | total | ch1 | ch2 | ch3 | ch4 | ch5 | ch6 |
+|---|---|---|---|---|---|---|---|
+| Ember | 15 | 3 | 3 | 2 | 2 | 3 | 2 |
+| Tide | 12 | 2 | 2 | 2 | 2 | 2 | 2 |
+| Verdant | 17 | 2 | 3 | 3 | 4 | 3 | 2 |
+| Gale | 11 | 2 | 2 | 2 | 1 | 2 | 2 |
+| Umbra | 13 | 4 | 2 | 2 | 2 | 1 | 2 |
+| Lumen | 16 | 1 | 2 | 3 | 3 | 3 | 4 |
+
+Bosses: Collector Umbra, Shepherd Tide, Arbiter Lumen, Archivist Lumen, Peacemaker Tide, Curator
+Lumen. Minibosses: Forsaken Tide, Waykeeper Lumen, Gatewarden Verdant, Castellan Verdant, Standard
+Bearer Ember, Penitent Umbra.
+
+### 9.4 The 84
+
+**Chapter 1**
+
+| id | race | role | kind | aspect | guild behaviour | hp / atk / def / spd |
+|---|---|---|---|---|---|---|
+| `forest_boar` | Beast | Vanguard | minion | Verdant | - | 960 / 115 / 52 / 95 |
+| `forest_spider` | Beast | Binder | minion | Umbra | Spreader | 820 / 105 / 43 / 105 |
+| `goblin_slinger` | Goblin | Marksman | minion | Gale | Hunter | 700 / 128 / 35 / 111 |
+| `grey_wolf` | Beast | Striker | minion | Gale | Hunter | 790 / 136 / 41 / 112 |
+| `highway_thief` | Human | Stalker | minion | Umbra | Hunter | 740 / 124 / 37 / 124 |
+| `hollowed_guard` | Human/Hollowed | Bulwark | elite | Verdant | Wall | 1730 / 119 / 100 / 88 |
+| `hollowed_hunter` | Human/Hollowed | Marksman | elite | Umbra | Hunter | 1110 / 171 / 54 / 99 |
+| `hollowed_mage` | Human/Hollowed | Breaker | elite | Lumen | Spreader | 1180 / 162 / 61 / 101 |
+| `lost_villager` | Human/Affected | Warden | minion | Tide | - | 890 / 104 / 48 / 100 |
+| `outlaw_archer` | Human | Marksman | minion | Ember | Hunter | 740 / 134 / 35 / 106 |
+| `road_goblin` | Goblin | Striker | minion | Ember | - | 800 / 127 / 41 / 115 |
+| `wild_bear` | Beast | Vanguard | elite | Ember | - | 1550 / 144 / 82 / 95 |
+| `the_forsaken` | Human/Hollowed | Warden | elite (miniboss) | Tide | - | 2060 / 165 / 88 / 92 |
+| `the_collector` | Agent | Binder | boss | Umbra | (boss: never drawn) | 2590 / 235 / 99 / 88 |
+
+**Chapter 2**
+
+| id | race | role | kind | aspect | guild behaviour | hp / atk / def / spd |
+|---|---|---|---|---|---|---|
+| `dire_wolf` | Beast | Striker | minion | Ember | Hunter | 770 / 137 / 42 / 113 |
+| `thornback_boar` **(plain)** | Beast | Vanguard | minion | Verdant | - | 970 / 113 / 56 / 98 |
+| `goblin_scavenger` | Goblin | Stalker | minion | Umbra | Hunter | 700 / 128 / 37 / 126 |
+| `goblin_trapper` | Goblin | Tinkerer | minion | Gale | Spreader | 780 / 120 / 41 / 109 |
+| `road_marauder` | Human | Vanguard | minion | Ember | - | 920 / 112 / 54 / 96 |
+| `marauder_crossbowman` | Human | Marksman | minion | Ember | Hunter | 750 / 131 / 36 / 106 |
+| `bog_crawler` | Beast | Stalker | minion | Tide | Hunter | 720 / 129 / 37 / 121 |
+| `carrion_vulture` | Beast | Striker | minion | Gale | Hunter | 770 / 129 / 39 / 110 |
+| `drifting_pilgrim` | Human | Warden | elite | Verdant | - | 1480 / 139 / 72 / 101 |
+| `hollowed_woodsman` | Human/Hollowed | Vanguard | elite | Verdant | - | 1570 / 143 / 82 / 89 |
+| `hollowed_apothecary` | Human/Hollowed | Binder | elite | Umbra | Spreader | 1280 / 138 / 67 / 102 |
+| `hollowed_sentinel` | Human/Hollowed | Bulwark | elite | Lumen | Wall | 1700 / 128 / 100 / 81 |
+| `the_waykeeper` | Human | Warden | elite (miniboss) | Lumen | - | 2010 / 171 / 88 / 94 |
+| `the_shepherd` | Human | Binder | boss | Tide | (boss: never drawn) | 2430 / 231 / 99 / 92 |
+
+**Chapter 3**
+
+| id | race | role | kind | aspect | guild behaviour | hp / atk / def / spd |
+|---|---|---|---|---|---|---|
+| `field_hound` | Beast | Striker | minion | Verdant | Hunter | 810 / 135 / 42 / 116 |
+| `canal_rat` | Beast | Stalker | minion | Tide | Hunter | 720 / 126 / 35 / 124 |
+| `gate_extortionist` | Human | Vanguard | minion | Ember | - | 940 / 118 / 55 / 97 |
+| `rooftop_cutpurse` | Human | Stalker | minion | Gale | Hunter | 720 / 128 / 37 / 127 |
+| `dock_enforcer` | Human | Bulwark | minion | Verdant | Wall | 1110 / 93 / 72 / 87 |
+| `backstreet_knifeman` | Human | Striker | minion | Ember | - | 780 / 127 / 41 / 116 |
+| `deserted_watchman` | Human | Warden | minion | Lumen | - | 920 / 105 / 50 / 105 |
+| `watch_crossbowman` | Human | Marksman | minion | Umbra | Hunter | 750 / 128 / 37 / 112 |
+| `unmoored_citizen` | Human/Affected | Binder | elite | Gale | Spreader | 1220 / 143 / 63 / 99 |
+| `hollowed_physician` | Human/Hollowed | Mender | elite | Tide | - | 1290 / 125 / 67 / 100 |
+| `hollowed_magistrate` | Human/Hollowed | Binder | elite | Lumen | Spreader | 1220 / 146 / 65 / 96 |
+| `hollowed_captain` | Human/Hollowed | Vanguard | elite | Umbra | - | 1460 / 153 / 80 / 92 |
+| `the_gatewarden` | Human | Bulwark | elite (miniboss) | Verdant | Wall | 2380 / 163 / 112 / 83 |
+| `the_arbiter` | Human | Binder | boss | Lumen | (boss: never drawn) | 2460 / 235 / 98 / 89 |
+
+**Chapter 4**
+
+| id | race | role | kind | aspect | guild behaviour | hp / atk / def / spd |
+|---|---|---|---|---|---|---|
+| `ruin_jackal` | Beast | Striker | minion | Ember | Hunter | 770 / 135 / 39 / 116 |
+| `stonehide_beetle` | Beast | Bulwark | minion | Verdant | Wall | 1140 / 95 / 72 / 92 |
+| `relic_scavenger` | Human | Stalker | minion | Tide | Hunter | 710 / 121 / 37 / 127 |
+| `ruin_delver` | Human | Vanguard | minion | Ember | - | 980 / 120 / 53 / 99 |
+| `cave_lurker` | Beast | Stalker | minion | Umbra | Hunter | 680 / 127 / 37 / 127 |
+| `sporekeeper` | Fungal Humanoid | Binder | minion | Verdant | Spreader | 780 / 109 / 42 / 107 |
+| `forgotten_soldier` | Undead | Vanguard | minion | Verdant | - | 970 / 116 / 53 / 95 |
+| `forgotten_archer` | Undead | Marksman | minion | Gale | Hunter | 730 / 124 / 35 / 107 |
+| `crypt_acolyte` | Undead | Mender | elite | Tide | - | 1360 / 130 / 67 / 96 |
+| `graven_guardian` | Construct | Bulwark | elite | Lumen | Wall | 1710 / 120 / 100 / 84 |
+| `graven_watcher` | Construct | Binder | elite | Lumen | Spreader | 1270 / 146 / 63 / 101 |
+| `forgotten_knight` | Undead | Warden | elite | Umbra | - | 1470 / 130 / 75 / 99 |
+| `the_last_castellan` | Undead Human | Warden | elite (miniboss) | Verdant | - | 2060 / 167 / 86 / 93 |
+| `the_archivist` | Ancient Construct | Binder | boss | Lumen | (boss: never drawn) | 2470 / 229 / 95 / 89 |
+
+**Chapter 5**
+
+| id | race | role | kind | aspect | guild behaviour | hp / atk / def / spd |
+|---|---|---|---|---|---|---|
+| `border_wolf` | Beast | Striker | minion | Gale | Hunter | 800 / 128 / 39 / 116 |
+| `carrion_hyena` | Beast | Stalker | minion | Tide | Hunter | 750 / 128 / 36 / 124 |
+| `border_levy` | Human | Vanguard | minion | Verdant | - | 950 / 113 / 55 / 100 |
+| `border_scout` | Human | Marksman | minion | Verdant | Hunter | 730 / 135 / 35 / 105 |
+| `ironshield_soldier` | Human | Bulwark | minion | Verdant | Wall | 1040 / 92 / 72 / 92 |
+| `ironshield_arbalist` | Human | Marksman | minion | Lumen | Hunter | 770 / 125 / 37 / 111 |
+| `freeblade_raider` | Human | Striker | minion | Ember | - | 780 / 131 / 41 / 112 |
+| `freeblade_skirmisher` | Human | Tinkerer | minion | Gale | Spreader | 720 / 112 / 40 / 114 |
+| `war_chaplain` | Human | Warden | elite | Lumen | - | 1390 / 139 / 77 / 99 |
+| `oathbreaker` | Human | Stalker | elite | Umbra | Hunter | 1100 / 167 / 52 / 120 |
+| `ironshield_justicar` | Human | Vanguard | elite | Lumen | - | 1560 / 155 / 79 / 92 |
+| `freeblade_reaver` | Human | Striker | elite | Ember | - | 1240 / 180 / 59 / 106 |
+| `the_standard_bearer` | Human | Warden | elite (miniboss) | Ember | - | 1950 / 176 / 88 / 97 |
+| `the_peacemaker` | Human | Binder | boss | Tide | (boss: never drawn) | 2610 / 232 / 97 / 92 |
+
+**Chapter 6**
+
+| id | race | role | kind | aspect | guild behaviour | hp / atk / def / spd |
+|---|---|---|---|---|---|---|
+| `mountain_ram` | Beast | Vanguard | minion | Verdant | - | 930 / 110 / 55 / 99 |
+| `frostfang_lynx` | Beast | Striker | minion | Tide | Hunter | 760 / 131 / 42 / 111 |
+| `cliff_harpy` | Harpy | Marksman | minion | Gale | Hunter | 740 / 129 / 36 / 106 |
+| `stoneback_troll` | Troll | Bulwark | minion | Verdant | Wall | 1120 / 97 / 72 / 86 |
+| `sanctuary_pilgrim` | Undead | Warden | minion | Umbra | - | 930 / 108 / 51 / 105 |
+| `sanctuary_keeper` | Undead | Vanguard | minion | Lumen | - | 970 / 114 / 55 / 100 |
+| `oathbound_monk` | Undead | Striker | minion | Ember | - | 810 / 133 / 41 / 114 |
+| `oathbound_seer` | Undead | Binder | minion | Gale | Spreader | 820 / 108 / 43 / 107 |
+| `scripture_golem` | Construct | Bulwark | elite | Lumen | Wall | 1670 / 123 / 100 / 85 |
+| `echo_wisp` | Spirit | Breaker | elite | Tide | Spreader | 1220 / 150 / 62 / 100 |
+| `veiled_custodian` | Construct | Binder | elite | Lumen | Spreader | 1180 / 140 / 65 / 100 |
+| `sanctuary_champion` | Undead | Vanguard | elite | Ember | - | 1460 / 149 / 84 / 89 |
+| `the_penitent` | Undead Human | Warden | elite (miniboss) | Umbra | - | 1970 / 179 / 86 / 91 |
+| `the_curator` | Ancient Construct | Binder | boss | Lumen | (boss: never drawn) | 2550 / 233 / 96 / 88 |
+
+### 9.5 The guild dungeon - Wall, Hunter, Spreader, **measured**
+
+`GuildDungeonGenerator.TemplatePool` takes only what a campaign stage fields, and no stage fields
+the 84, so **on this content the guild dungeon is unchanged**: 300 seeds × 5 floors built against
+main's content and this content came out line-for-line identical (measured). The only guild-side
+movement is `ContentDatabase.ContentVersion`, which hashes `enemies.json`, so a guild attempt
+stored before this lands refuses to replay as "content moved".
+
+To check the requirement the stage job will inherit, the floors were built with the 84 fielded:
+a synthetic stage listing them was appended to the loaded campaign in memory, and for the "84 only"
+case (the retired future) every shipped stage's enemy list was emptied first. 300 seeds × 5
+floors each, and every floor's themed slots were read back against `GuildDungeonGenerator.Classify`:
+
+| fielded | non-boss Walls | Hunters | Spreaders | Wall slot | Hunt slots | Attrition slots | Champion lead elite | single-Aspect floors |
+|---|---|---|---|---|---|---|---|---|
+| the 84 only | 9 | 25 | 12 | 300/300 | 900/900 | 900/900 | 300/300 | 0 of 1500 |
+| shipped 12 + the 84 | 10 | 27 | 16 | 300/300 | 900/900 | 900/900 | 300/300 | 2 of 1500 |
+| chapter 1 only | 1 | 5 | 2 | all | all | all | all | 0 |
+| chapter 2 only | 1 | 5 | 2 | all | all | all | all | 0 |
+| chapter 3 only | 2 | 4 | 2 | all | all | all | all | 0 |
+| chapter 4 only | 2 | 4 | 2 | all | all | all | all | 0 |
+| chapter 5 only | 1 | 5 | 1 | all | all | all | all | 0 |
+| chapter 6 only | 2 | 2 | 3 | all | all | all | all | 0 |
+
+So **every chapter on its own** supplies a Wall, a Hunter and a Spreader, and whatever subset the
+stage job fields first, no themed floor falls back to "any enemy". Chapter 6's Hunt floors repeat
+one of its two Hunters in the third slot (`Fill` repeats once the behaviour pool is exhausted);
+that is still the right behaviour.
+
+**Single-Aspect floors were found by building, not by reading.** The first assignment had 11 of
+the 25 Hunters in Gale, and 2 of 1500 floors came out as five Gale bodies on a Hunt floor. The
+guild's own check (`GuildDungeonChecks.CheckFloors`) builds one seed, which was not one of them, so
+it would have passed. Four Hunters moved off Gale (Outlaw Archer and Marauder Crossbowman to Ember,
+Field Hound and Border Scout to Verdant) and the count went to 0. **With the shipped 12 still
+fielded beside the 84 it is 2 of 1500**, so the stage job should re-run this measurement on
+whatever it actually fields: "no floor is one Aspect" is a probability, not a rule the generator
+enforces.
+
+### 9.6 The Deep Recital moved - **measured**, and exactly how
+
+`RecitalGenerator.BuildFloor` draws every template of the floor's Aspect except the prologue's
+scripted loss, **campaign-fielded or not, bosses included**. So the 84 are live in the Recital the
+moment they are in `enemies.json`. Measured against main's content, floors 1-120:
+
+- **Every floor's line changes: 120 of 120.** Levels do not: 0 of 120 floors change a level,
+  because level is a function of the floor number alone.
+- Each Aspect's pool grows from 1-3 templates to 12-19. 49 floors still field at least one of the
+  shipped 12 (69 of 600 slots).
+- Boss templates fielded as ordinary floor enemies fall from 100 of 600 slots to 54: the old Tide
+  and Umbra pools were a third bosses, and the new pools are mostly minions and elites.
+- The Unmade is still never drawn, and every floor still fields a full line of 5
+  (`CheckRecitalDrawsNoScriptedLoss`, green).
+
+Difficulty, measured as the three starting heroes at one level fighting floors 1-60, 20 seeds a
+floor, identical seeds for old and new:
+
+| starters at level | wins, main | wins, this content |
+|---|---|---|
+| 45 | 437 / 1200 | 510 / 1200 |
+| 60 | 609 / 1200 | 639 / 1200 |
+| 80 | 853 / 1200 | 921 / 1200 |
+| 100 | 986 / 1200 | 1089 / 1200 |
+
+Slightly easier overall, and **redistributed by Aspect**. Summed enemy power on floors 1-60:
+
+| Aspect | power, main → this | wins at level 80, main → this |
+|---|---|---|
+| Ember | 355k → 308k | 145 → 171 |
+| Tide | 492k → 377k | 72 → 121 |
+| Verdant | 340k → 318k | 173 → 179 |
+| Gale | 250k → 287k | 200 → 195 |
+| Umbra | 479k → 370k | 75 → 140 |
+| Lumen | 296k → 418k | 188 → 115 |
+
+Tide and Umbra ease because the Tideturned and the Sundered Colossus stop filling two of every five
+slots. **Lumen hardens the most**: it was five Fractured Choristers, and it now draws three of the
+six bosses (Arbiter, Archivist, Curator) beside elites. That is the flavour assignment in 9.3
+showing up in a mode it was not chosen for. If Lumen floors need to come back down, the lever is
+the Recital's pool rule (for example, skip `kind: boss` outside Guardian floors, as the guild
+does), not the Aspects. Nothing in the Recital was changed here.
+
+Harness numbers that moved with it, both still green: `CheckRecitalDifficultyEscalates`' floor 1 to
+13 power went from 11263 → 22048 to 10357 → 21846, and `CheckRecitalGuardians`' floor 10 Guardian
+lead is now the Cliff Harpy (power 3137 at level 46; it was a Grave Moth at 2795). The
+level-45 line still clears floors 9 and 10.
+
+### 9.7 Left plain, and concepts only partly expressed
+
+**Left plain** (damage only, because the defining mechanic needs something no enemy uses):
+
+- **Thornback Boar** - "charges and knockbacks". The engine has no knockback or push primitive.
+  `SwapPositions` (the Tideturned's) is a swap, not a knockback. Its charge is a plain heavy hit.
+
+**Partly expressed** - the kit carries the role and the part the shipped enemy vocabulary can say.
+The rest waits on a feature, and none was opened:
+
+| enemy | concept | expressed as | missing |
+|---|---|---|---|
+| Goblin Trapper, Freeblade Skirmisher | traps, snares, battlefield disruption | area hit + Slow | a trap (a delayed, triggered hazard) |
+| Sporekeeper, Unmoored Citizen | spores that confuse; confused and volatile | area AttackDown; random-target basic | confusion (hitting its own side) |
+| Graven Watcher | identify, **mark** and restrict | area Slow | marks: heroes use them, enemies use none |
+| Hollowed Magistrate | uses authority to control | area AttackDown | Stun or Silence: hero-shipped, not in the enemy vocabulary |
+| Goblin Scavenger, Rooftop Cutpurse, Relic Scavenger, The Collector | looting, stealing, harvesting conviction | Stalker hunter kit; boss affliction | a steal (energy or buffs moved to the thief) |
+| Drifting Pilgrim | defensively attacks anyone who tries to stop it | Warden support kit | retaliation. `OnDamaged` exists but was avoided: the guild generator's own comment measures the Tideturned's `OnDamaged` Backwash as worth far more than its stat line |
+| The Standard Bearer | the banner keeps deserters fighting | ally Energy + DefenseUp; DefenseUp when wounded | anything that keeps allies from dying |
+
+The Magistrate and the Watcher could use hero-shipped statuses (Stun, Silence, marks) without any
+engine work; they were held back only by this job's rule of staying inside what enemies already use.
+
+### 9.8 What proved wrong or ambiguous once built from
+
+- **Chapter 1 is entirely our inference.** Race, role, intro and kind for all 14 are read off the
+  art stems: wildlife and bandits as minions; the three Hollowed and the Wild Bear as elites;
+  Hollowed Guard a Bulwark; Hollowed Mage a Breaker; Lost Villager a Warden by analogy with chapter
+  2's Drifting Pilgrim; The Forsaken the miniboss and a Warden like four of the other five; The
+  Collector a Binder like every other boss. The Collector's race is recorded as "Agent", which is
+  only what the text calls it. **All of it goes back to Pinoy.**
+- **The Hollowed Mage means the Echo Wisp is no longer the campaign's only Breaker** (section 8,
+  chapter 6). That is our inference, not his.
+- **Hollowed Physician** is a Mender, so it heals its own line, while its concept is that it has
+  lost the belief that lives should be saved. The role and the concept point opposite ways; the
+  role won.
+- **Cliff Harpy** is a "bird-like humanoid": read as the `beast` silhouette. Either would do.
+- **Race vs "Type".** Chapters 4-6 head the column "Type" and put Construct, Spirit and Fungal
+  Humanoid in it; chapters 2-3 say "Race". Treated as one column.
+- **"Human/Hollowed" and "Human/Affected"** are a race and a state in one cell. Both are humanoid.
+- **Kind comes from the intro stage**, which Pinoy gave for chapters 2-6 but may have meant as
+  order only. If so, the 8/4 minion/elite split is ours.
+- **`CAMPAIGN-REPLACEMENT-BLAST-RADIUS.md` 4.2 said "a targeting rule makes a Hunter".** Read in
+  `Classify`: only `LowestHpEnemy` and `HighestAttackEnemy` do. `HighestHpEnemy` (the Ashen
+  Revenant's basic) and `RandomEnemy` do not. Corrected there.
+- **The same file's 4.1 did not say the Recital draws bosses** as ordinary floor enemies. It does,
+  which is how the six bosses reach Recital floors (9.6). Corrected there.
+- **The Shepherd's sprite id corrects the delivered stem.** `The_sheperd` must be renamed
+  `the_shepherd` on import, deliberately.
