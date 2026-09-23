@@ -83,9 +83,11 @@ namespace Emberfall.Core.Progression
         /// Builds one floor's fight. Picks MaxTeamSize enemies from whichever templates in content
         /// carry the floor's Aspect - "a small pool of enemy templates", scaled by floor rather than
         /// hand-placed. An Aspect with zero matching templates in content produces an EMPTY floor
-        /// (Enemies.Count == 0) rather than throwing; ContentDatabase.Validate warns about this at
-        /// load so a content gap is caught there; DevHarness also asserts it can't happen for any of
-        /// the six today (Fractured Chorister exists specifically to close the one gap that did).
+        /// (Enemies.Count == 0) rather than throwing. ContentDatabase.Validate does NOT warn about
+        /// it (this comment used to say it did; it has no such check); DevHarness asserts it can't
+        /// happen for any of the six today (CheckRecitalContent). The pool is only what some
+        /// campaign stage fields (see ScriptedLossEnemies), so an Aspect is covered by what the
+        /// campaign fields, not by what enemies.json holds.
         /// </summary>
         public static StageDef BuildFloor(ContentDatabase content, int floor)
         {
@@ -95,11 +97,15 @@ namespace Emberfall.Core.Progression
             int level = LevelForFloor(cfg, f);
             bool guardian = IsGuardian(cfg, f);
 
+            // Only what some campaign stage fields - GuildDungeonGenerator's pool, the same rule the
+            // guild dungeon keeps the prologue's scripted loss out with. See ScriptedLossEnemies for
+            // why the Recital used to draw everything and no longer does.
             HashSet<string> scripted = ScriptedLossEnemies(content);
+            List<EnemyDef> fielded = GuildDungeonGenerator.TemplatePool(content);
             List<EnemyDef> pool = new List<EnemyDef>();
-            for (int i = 0; i < content.Enemies.Count; i++)
-                if (content.Enemies[i].Aspect == aspect && !scripted.Contains(content.Enemies[i].Id))
-                    pool.Add(content.Enemies[i]);
+            for (int i = 0; i < fielded.Count; i++)
+                if (fielded[i].Aspect == aspect && !scripted.Contains(fielded[i].Id))
+                    pool.Add(fielded[i]);
 
             StageDef stage = new StageDef();
             stage.Id = "recital_floor_" + f;
@@ -134,9 +140,16 @@ namespace Emberfall.Core.Progression
         ///
         /// Read off the prologue rather than off a list of ids, the way GuildDungeonGenerator reads
         /// its pool off the campaign, so a second scripted loss is excluded without anyone editing
-        /// this file. NOT the Guild's rule itself: that draws only what some campaign stage fields,
-        /// and Fractured Chorister, the only Lumen template, is fielded by no stage because it was
-        /// authored for this mode. The Recital draws everything except the scripted loss.
+        /// this file.
+        ///
+        /// BuildFloor now ALSO takes the Guild's rule - only what some campaign stage fields - which
+        /// on its own already keeps this set out. It used to draw everything except this set, because
+        /// Fractured Chorister, then the only Lumen template, was fielded by no stage. Pinoy's 84
+        /// replaced the shipped campaign and cover all six Aspects among the fielded, and the twelve
+        /// shipped templates stay in enemies.json because the prologue spawns seven of them by id.
+        /// Drawing everything would have kept all twelve in the Recital, the Chorister and the
+        /// Tideturned included, with no stage fielding any of them. This set is kept, and still
+        /// subtracted, so the scripted loss stays excluded by name of what it is.
         /// </summary>
         public static HashSet<string> ScriptedLossEnemies(ContentDatabase content)
         {

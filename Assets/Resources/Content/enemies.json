@@ -1,5 +1,10 @@
 {
   // The Hollow - what crawls out of the ash after a Sundering shard lands.
+  // THE SHIPPED TWELVE, first below, are RETIRED from generated content: no campaign stage fields
+  // them, so neither the guild dungeon nor the Deep Recital draws them. They are kept, not deleted,
+  // because PrologueScript spawns seven of them by id (hollow_husk, grave_moth, sundered_colossus,
+  // blight_hound, ashen_revenant, cinder_imp, the_unmade) and CombatSimulation skips an id it cannot
+  // find, so deleting one would empty a prologue fight without a word.
   "enemies": [
     {
       "id": "hollow_husk", "name": "Hollow Husk", "kind": "minion", "aspect": "Umbra",
@@ -261,12 +266,12 @@
 
     // ================= PINOY'S CAMPAIGN ROSTER - 84 enemies, 14 per chapter =================
     // Race, role and concept are Pinoy's; aspect, kind, stats and kit are ours, and the mapping is
-    // written down in Docs/CAMPAIGN-SPEC.md section 9. NO CAMPAIGN STAGE FIELDS ANY OF THESE YET:
-    // the stage job comes next. They are live in the Deep Recital (which draws every template of a
-    // floor's Aspect) and nowhere else. Art: each names the sprite it will be delivered as and is
-    // pending, so it draws the placeholder mannequin until the file lands.
+    // written down in Docs/CAMPAIGN-SPEC.md section 9. campaign.json's 72 stages field all 84 and
+    // nothing else, so they are the whole campaign, the guild dungeon's pool and the Deep Recital's
+    // (both draw only what a stage fields; CAMPAIGN-SPEC section 10). Art: each names the sprite it
+    // will be delivered as and is pending, so it draws the placeholder mannequin until the file lands.
     // Chapter 1 has no roster table: its race, role and kind are INFERRED from the art stems.
-    // ---- Chapter 1: The Forgotten Road. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    // ---- Chapter 1: The Forgotten Road. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). Introduced by ch1 stages; a few also appear in the next chapter.
     {
       "id": "forest_boar", "name": "Forest Boar", "kind": "minion", "aspect": "Verdant",
       "hp": 960, "attack": 115, "defense": 52, "speed": 95,
@@ -531,7 +536,7 @@
       }
     },
 
-    // ---- Chapter 2: The Abandoned Crossing. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    // ---- Chapter 2: The Abandoned Crossing. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). Introduced by ch2 stages; a few also appear in the next chapter.
     {
       "id": "dire_wolf", "name": "Dire Wolf", "kind": "minion", "aspect": "Ember",
       "hp": 770, "attack": 137, "defense": 42, "speed": 113,
@@ -804,7 +809,7 @@
       }
     },
 
-    // ---- Chapter 3: City of Strangers. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    // ---- Chapter 3: City of Strangers. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). Introduced by ch3 stages; a few also appear in the next chapter.
     {
       "id": "field_hound", "name": "Field Hound", "kind": "minion", "aspect": "Verdant",
       "hp": 810, "attack": 135, "defense": 42, "speed": 116,
@@ -1078,7 +1083,7 @@
       }
     },
 
-    // ---- Chapter 4: Beneath the Old Kingdom. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    // ---- Chapter 4: Beneath the Old Kingdom. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). Introduced by ch4 stages; a few also appear in the next chapter.
     {
       "id": "ruin_jackal", "name": "Ruin Jackal", "kind": "minion", "aspect": "Ember",
       "hp": 770, "attack": 135, "defense": 39, "speed": 116,
@@ -1356,7 +1361,7 @@
       }
     },
 
-    // ---- Chapter 5: The Divided Realm. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    // ---- Chapter 5: The Divided Realm. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). Introduced by ch5 stages; a few also appear in the next chapter.
     {
       "id": "border_wolf", "name": "Border Wolf", "kind": "minion", "aspect": "Lumen",
       "hp": 800, "attack": 128, "defense": 39, "speed": 116,
@@ -1627,7 +1632,7 @@
       }
     },
 
-    // ---- Chapter 6: The Forgotten Sanctuary. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). No stage fields these yet.
+    // ---- Chapter 6: The Forgotten Sanctuary. Pinoy's campaign (Docs/CAMPAIGN-SPEC.md). Introduced by ch6 stages; a few also appear in the next chapter.
     {
       "id": "mountain_ram", "name": "Mountain Ram", "kind": "minion", "aspect": "Verdant",
       "hp": 930, "attack": 110, "defense": 55, "speed": 99,

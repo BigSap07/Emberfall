@@ -1838,6 +1838,15 @@ namespace Emberfall.Core.Data
         public int Index;            // 1-based within the chapter
         public int GlobalIndex;      // 0-based across the whole campaign
         public bool IsBoss;
+
+        /// <summary>
+        /// The chapter's miniboss stage: Pinoy's stage 6 in every chapter, whose line leads with
+        /// the chapter's miniboss (an `elite`-kind template - the engine has no miniboss kind).
+        /// Authored as `"miniboss": true` in campaign.json rather than inferred from the roster,
+        /// so the stage is a mid-chapter wall because the content says so. Nothing at runtime
+        /// reads it yet; the harness's power band does.
+        /// </summary>
+        public bool IsMiniboss;
         public string Environment = "ashen";
         public List<EnemySpawn> Enemies = new List<EnemySpawn>();
         public int RewardGold = 100;
@@ -1918,6 +1927,7 @@ namespace Emberfall.Core.Data
             s.Subtitle = j.GetString("subtitle", "");
             s.Index = j.GetInt("index", 1);
             s.IsBoss = j.GetBool("boss", false);
+            s.IsMiniboss = j.GetBool("miniboss", false);
             s.Environment = j.GetString("environment", "ashen");
             s.RewardGold = j.GetInt("gold", 100);
             s.RewardShards = j.GetInt("shards", 5);

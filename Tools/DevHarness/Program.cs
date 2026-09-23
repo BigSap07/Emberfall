@@ -11266,6 +11266,8 @@ namespace Emberfall.DevHarness
             Line("");
             Line("CAMPAIGN STRUCTURE");
             CheckCampaignCurveSchema(db);
+            CheckCampaignLinesLegal(db);
+            CheckPrologueStillFights(db);
             CheckCampaignInterpolation(db);
             CheckCampaignMonotonicity(db);
             CheckCampaignMigrationRegression(db);
@@ -11304,7 +11306,7 @@ namespace Emberfall.DevHarness
         private static void CheckCampaignCurveSchema(ContentDatabase db)
         {
             int stages = db.AllStages.Count;
-            Check(stages == 24, "24 authored stages across chapters 1 and 2 (" + stages + ")");
+            Check(stages == 72, "72 authored stages, Pinoy's six chapters of twelve (" + stages + ")");
 
             int withCurve = 0, wavesAsAuthored = 0, battles12 = 0, floorMatchesRoster = 0;
             string firstWaveMiss = "";
@@ -11343,6 +11345,161 @@ namespace Emberfall.DevHarness
 
             Check(SaveSerializer.CurrentVersion >= 11,
                   "save version is at least 11, where campaign wave progress bumped it (" + SaveSerializer.CurrentVersion + ")");
+        }
+
+        /// <summary>
+        /// EVERY STAGE'S LINE IS LEGAL, and the campaign is Pinoy's structure. Written with the stage
+        /// job that replaced the shipped 24 with his 72 (Docs/CAMPAIGN-SPEC.md section 10):
+        ///
+        ///  - no line names an enemy content does not define, since CombatSimulation.BuildUnits skips
+        ///    an unknown id and the fight would quietly come up a body short;
+        ///  - no line names the same enemy twice;
+        ///  - no line fields a template the prologue spawns, and every one of Pinoy's 84 is fielded:
+        ///    the shipped twelve are retired, the 84 are the campaign;
+        ///  - stage 12 of every chapter is the boss stage and leads with its one boss-kind template,
+        ///    stage 6 is the miniboss stage and leads with an elite-kind template no other stage
+        ///    fields, and no other stage fields a boss.
+        ///
+        /// The prologue is walked step by step here for the same reason CheckRecitalDrawsNoScriptedLoss
+        /// walks it, so the check cannot agree with the code by sharing its list.
+        /// </summary>
+        private static void CheckCampaignLinesLegal(ContentDatabase db)
+        {
+            HashSet<string> prologue = new HashSet<string>();
+            foreach (PrologueScript.Step step in Enum.GetValues(typeof(PrologueScript.Step)))
+            {
+                StageDef ps = PrologueScript.BuildStage(step);
+                for (int e = 0; e < ps.Enemies.Count; e++) prologue.Add(ps.Enemies[e].EnemyId);
+            }
+
+            List<string> unknown = new List<string>(), dup = new List<string>(), retired = new List<string>();
+            HashSet<string> fielded = new HashSet<string>();
+            Dictionary<string, int> perChapter = new Dictionary<string, int>();
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef st = db.AllStages[i];
+                if (!perChapter.ContainsKey(st.ChapterId)) perChapter[st.ChapterId] = 0;
+                perChapter[st.ChapterId]++;
+                HashSet<string> seen = new HashSet<string>();
+                for (int e = 0; e < st.Enemies.Count; e++)
+                {
+                    string id = st.Enemies[e].EnemyId;
+                    fielded.Add(id);
+                    if (db.GetEnemy(id) == null) unknown.Add(st.DisplayCode + " " + id);
+                    if (!seen.Add(id)) dup.Add(st.DisplayCode + " " + id);
+                    if (prologue.Contains(id)) retired.Add(st.DisplayCode + " " + id);
+                }
+            }
+            bool twelveEach = perChapter.Count == 6;
+            foreach (KeyValuePair<string, int> kv in perChapter) if (kv.Value != 12) twelveEach = false;
+            Check(twelveEach, "six chapters of twelve stages (" + perChapter.Count + " chapters)");
+            Check(unknown.Count == 0, "every enemy in every stage's line is defined in enemies.json"
+                  + (unknown.Count > 0 ? " - unknown: " + string.Join(", ", unknown.ToArray()) : ""));
+            Check(dup.Count == 0, "no stage's line names the same enemy twice"
+                  + (dup.Count > 0 ? " - " + string.Join(", ", dup.ToArray()) : ""));
+            Check(retired.Count == 0, "no stage fields an enemy the prologue spawns - the shipped twelve are retired"
+                  + (retired.Count > 0 ? " - " + string.Join(", ", retired.ToArray()) : ""));
+
+            List<string> unfielded = new List<string>();
+            int campaignTemplates = 0;
+            for (int i = 0; i < db.Enemies.Count; i++)
+            {
+                string id = db.Enemies[i].Id;
+                if (fielded.Contains(id)) { campaignTemplates++; continue; }
+                if (!prologue.Contains(id) && !IsRetiredTemplate(id)) unfielded.Add(id);
+            }
+            Check(unfielded.Count == 0 && campaignTemplates == 84,
+                  "the campaign fields all 84 of Pinoy's templates and nothing else (" + campaignTemplates + " fielded"
+                  + (unfielded.Count > 0 ? "; fielded by no stage: " + string.Join(", ", unfielded.ToArray()) : "") + ")");
+
+            List<string> shape = new List<string>();
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef st = db.AllStages[i];
+                int bosses = 0;
+                bool leadIsBoss = false;
+                for (int e = 0; e < st.Enemies.Count; e++)
+                {
+                    EnemyDef def = db.GetEnemy(st.Enemies[e].EnemyId);
+                    if (def != null && def.Kind == "boss") { bosses++; if (e == 0) leadIsBoss = true; }
+                }
+                bool finale = st.Index == 12;
+                if (st.IsBoss != finale) shape.Add(st.DisplayCode + (finale ? " is not" : " is") + " a boss stage");
+                if (st.IsMiniboss != (st.Index == 6)) shape.Add(st.DisplayCode + (st.Index == 6 ? " is not" : " is") + " a miniboss stage");
+                if (finale && (bosses != 1 || !leadIsBoss)) shape.Add(st.DisplayCode + " does not lead with its one boss");
+                if (!finale && bosses > 0) shape.Add(st.DisplayCode + " fields a boss outside a finale");
+                if (st.Index == 6)
+                {
+                    EnemyDef lead = st.Enemies.Count > 0 ? db.GetEnemy(st.Enemies[0].EnemyId) : null;
+                    bool onlyHere = lead != null && lead.Kind == "elite";
+                    for (int j = 0; j < db.AllStages.Count && onlyHere; j++)
+                    {
+                        if (j == i) continue;
+                        for (int e = 0; e < db.AllStages[j].Enemies.Count; e++)
+                            if (db.AllStages[j].Enemies[e].EnemyId == lead.Id) { onlyHere = false; break; }
+                    }
+                    if (!onlyHere) shape.Add(st.DisplayCode + " does not lead with a miniboss fielded nowhere else");
+                }
+            }
+            Check(shape.Count == 0, "stage 6 of every chapter leads with its miniboss and stage 12 with its boss,"
+                  + " and no other stage fields a boss" + (shape.Count > 0 ? " - " + string.Join("; ", shape.ToArray()) : ""));
+        }
+
+        /// <summary>The five shipped templates neither a stage nor a prologue step fields: stone_warden,
+        /// tidecaller_wretch, riptide_channeler, tideturned and fractured_chorister. They stay in
+        /// enemies.json beside the prologue's seven; this list exists only so the "fields all 84"
+        /// count can tell a retired template from one of Pinoy's that a stage forgot.</summary>
+        private static bool IsRetiredTemplate(string id)
+        {
+            return id == "stone_warden" || id == "tidecaller_wretch" || id == "riptide_channeler"
+                || id == "tideturned" || id == "fractured_chorister";
+        }
+
+        /// <summary>
+        /// THE PROLOGUE STILL FIGHTS, measured rather than read. PrologueScript spawns seven of the
+        /// shipped templates by id, and CombatSimulation.BuildUnits skips an id it cannot find, so a
+        /// template retired by deletion would leave a prologue fight partly or wholly empty and nothing
+        /// would say so. Each of the eight steps is built the way BattleScreen builds it -
+        /// PrologueScript.BuildStage, the level-42 squad from PrologueScript.BuildSquad,
+        /// GameSession.BuildPrologueRequest - and run, and its event count and enemy count are printed.
+        ///
+        /// Asserted: every step fields every enemy it names (the result's enemy units match the
+        /// stage's spawn list), every step is a fight (more than one event, at least one round), and
+        /// the Boss step fields The Unmade. Each step's outcome is printed, not asserted: nothing
+        /// asserted the scripted loss is lost before this, and this does not start to.
+        /// </summary>
+        private static void CheckPrologueStillFights(ContentDatabase db)
+        {
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            List<HeroInstance> squad = PrologueScript.BuildSquad(db);
+            int fights = 0, full = 0, total = 0;
+            bool unmade = false;
+            List<string> shortSteps = new List<string>();
+            foreach (PrologueScript.Step step in Enum.GetValues(typeof(PrologueScript.Step)))
+            {
+                total++;
+                StageDef stage = PrologueScript.BuildStage(step);
+                BattleResult r = CombatSimulation.Run(session.BuildPrologueRequest(stage, squad, 4200 + (int)step));
+                int enemies = 0;
+                for (int u = 0; u < r.Units.Count; u++)
+                {
+                    if (r.Units[u].IsPlayer) continue;
+                    enemies++;
+                    if (step == PrologueScript.Step.Boss && r.Units[u].DefId == "the_unmade") unmade = true;
+                }
+                if (r.Events.Count > 1 && r.Rounds >= 1) fights++;
+                if (enemies == stage.Enemies.Count && enemies > 0) full++;
+                else shortSteps.Add(step + " " + enemies + "/" + stage.Enemies.Count);
+                Line("  prologue " + step + " (" + stage.Name + "): " + r.Events.Count + " events, " + r.Rounds
+                     + " rounds, " + enemies + "/" + stage.Enemies.Count + " enemies fielded, squad of " + squad.Count
+                     + ", " + (r.Victory ? "won" : (r.TimedOut ? "timed out" : "lost")));
+            }
+            Check(full == total, "every prologue step fields every enemy it spawns by id - the retired templates are"
+                  + " still defined (" + full + "/" + total
+                  + (shortSteps.Count > 0 ? "; short: " + string.Join(", ", shortSteps.ToArray()) : "") + ")");
+            Check(fights == total, "every prologue step is a fight - more than one event and at least one round ("
+                  + fights + "/" + total + ")");
+            Check(unmade, "the prologue's Boss step fields The Unmade");
         }
 
         /// <summary>
@@ -11866,6 +12023,7 @@ namespace Emberfall.DevHarness
 
             const int floors = 120;
             List<string> found = new List<string>();
+            List<string> unfielded = new List<string>();
             int emptyOrShort = 0, umbra = 0;
             for (int f = 1; f <= floors; f++)
             {
@@ -11874,7 +12032,16 @@ namespace Emberfall.DevHarness
                 if (RecitalGenerator.AspectForFloor(f) == Aspect.Umbra) umbra++;
                 for (int e = 0; e < floor.Enemies.Count; e++)
                     if (unwinnable.Contains(floor.Enemies[e].EnemyId)) { found.Add("floor " + f); break; }
+                for (int e = 0; e < floor.Enemies.Count; e++)
+                    if (!campaign.Contains(floor.Enemies[e].EnemyId) && !unfielded.Contains(floor.Enemies[e].EnemyId))
+                        unfielded.Add(floor.Enemies[e].EnemyId);
             }
+            // Pinoy's campaign retired the shipped twelve from generated content without deleting them
+            // (the prologue spawns seven by id). A retired template is one no stage fields, and the
+            // Recital drawing it is the failure this reads, the Unmade's case generalised.
+            Check(unfielded.Count == 0,
+                  "none of the first " + floors + " Recital floors fields a template no campaign stage fields - the"
+                  + " retired twelve stay out" + (unfielded.Count > 0 ? " (drawn: " + string.Join(", ", unfielded.ToArray()) + ")" : ""));
             Check(found.Count == 0 && emptyOrShort == 0,
                   found.Count == 0 && emptyOrShort == 0
                     ? "none of the first " + floors + " Recital floors fields the prologue's scripted loss, and every one, the "
@@ -11885,17 +12052,25 @@ namespace Emberfall.DevHarness
 
         private static void CheckRecitalContent(ContentDatabase db)
         {
+            // Counted over what a campaign stage fields, not over enemies.json: the Recital draws only
+            // that pool now (RecitalGenerator.BuildFloor), so a template the campaign retired covers
+            // nothing. The fielded set is built here from the stages, not read from the generator.
+            HashSet<string> fieldedByStage = new HashSet<string>();
+            for (int s = 0; s < db.AllStages.Count; s++)
+                for (int e = 0; e < db.AllStages[s].Enemies.Count; e++) fieldedByStage.Add(db.AllStages[s].Enemies[e].EnemyId);
             bool allAspectsCovered = true;
-            List<string> missing = new List<string>();
+            List<string> missing = new List<string>(), perAspect = new List<string>();
             foreach (Aspect aspect in Enum.GetValues(typeof(Aspect)))
             {
-                bool found = false;
-                for (int i = 0; i < db.Enemies.Count; i++) if (db.Enemies[i].Aspect == aspect) { found = true; break; }
-                if (!found) { allAspectsCovered = false; missing.Add(aspect.ToString()); }
+                int found = 0;
+                for (int i = 0; i < db.Enemies.Count; i++)
+                    if (db.Enemies[i].Aspect == aspect && fieldedByStage.Contains(db.Enemies[i].Id)) found++;
+                perAspect.Add(aspect + " " + found);
+                if (found == 0) { allAspectsCovered = false; missing.Add(aspect.ToString()); }
             }
             Check(allAspectsCovered,
-                  "every Aspect has at least one enemy template for the Recital to draw from - the mode's whole"
-                  + " point fails silently for any band that has none"
+                  "every Aspect has at least one campaign-fielded enemy template for the Recital to draw from - the"
+                  + " mode's whole point fails silently for any band that has none (" + string.Join(", ", perAspect.ToArray()) + ")"
                   + (allAspectsCovered ? "" : " (missing: " + string.Join(", ", missing.ToArray()) + ")"));
 
             Check(db.Balance.RecitalEchoesMax > 0, "recitalEchoesMax is positive (" + db.Balance.RecitalEchoesMax + ")");
@@ -16183,24 +16358,24 @@ namespace Emberfall.DevHarness
         // ---------------------------------------------------------------- the curve band
 
         /// <summary>
-        /// The mid-chapter difficulty spike in each chapter, named rather than derived.
+        /// The mid-chapter wall in each chapter is its MINIBOSS stage, read off the content
+        /// (StageDef.IsMiniboss, authored as "miniboss": true in campaign.json) rather than named here.
         ///
-        /// "Which stage is the spike" is a design decision, not a measurement, so it is authored
-        /// here and the reasoning is written down instead of being re-inferred every run. Both were
-        /// picked off the curve as it stood before this pass, by the two signals that agree:
-        ///
-        ///   ch1_9  Mothlight Steps   the largest recommendedPower step in chapter 1 (+23.3% over
-        ///                            1-8) and the lowest power ratio the simulated player reached
-        ///                            anywhere in the chapter.
-        ///   ch2_6  Undertow Channel  a +17.9% step and a genuine local DIP - the ratio falls from
-        ///                            2.37 at 2-5 to 2.07 here and climbs back to 2.13 at 2-7, so
-        ///                            it is a spike in the curve rather than a point on a slope.
-        ///
-        /// Chapter finales are not listed: a finale is found from StageDef.IsBoss, so a chapter added
-        /// later gets its wall without anybody remembering to add it here. A chapter with no entry
-        /// in this list simply has no mid-chapter wall, which is a shape the guard permits.
+        /// Until Pinoy's campaign replaced the shipped one this was a hard-coded list, ch1_9 and
+        /// ch2_6, picked off the old curve as its two spikes (the largest recommendedPower step in
+        /// chapter 1, and a genuine local dip in chapter 2's ratio). His structure puts a miniboss at
+        /// stage 6 of every chapter - "Stage 6: Miniboss" in the pacing rule he states in chapter 2's
+        /// lore - so the wall is where the content says the miniboss stands, and a chapter added
+        /// later gets its wall by authoring one, the way a finale already gets its wall from
+        /// StageDef.IsBoss. Docs/CAMPAIGN-SPEC.md section 10 records the move from stage 9 to 6.
         /// </summary>
-        private static readonly string[] MidChapterWallStageIds = { "ch1_9", "ch2_6" };
+        private static List<string> MidChapterWallStageIdsOf(ContentDatabase db)
+        {
+            List<string> ids = new List<string>();
+            for (int i = 0; i < db.AllStages.Count; i++)
+                if (db.AllStages[i].IsMiniboss && !db.AllStages[i].IsBoss) ids.Add(db.AllStages[i].Id);
+            return ids;
+        }
 
         /// <summary>Stages before the game has taught the player anything. The target curve puts no
         /// band on them on purpose: the opening stages are over-geared by construction because the
@@ -16269,8 +16444,8 @@ namespace Emberfall.DevHarness
         ///   ordinary stages     x1.10 to x1.30, comfortably ahead but not safe;
         ///   walls               x1.00 to x1.05 in chapter 1, x0.95 to x1.02 from chapter 2 on.
         /// See WallBandLowChapter1 for why the wall band is per chapter and the ordinary one is not.
-        /// A wall is a chapter finale (StageDef.IsBoss) or one authored mid-chapter spike; see
-        /// MidChapterWallStageIds for which and why.
+        /// A wall is a chapter finale (StageDef.IsBoss) or the chapter's miniboss stage
+        /// (StageDef.IsMiniboss); see MidChapterWallStageIdsOf.
         ///
         /// Measured at ENTRY, not at exit. A wall is something a player hits on the way in; the
         /// campaign balance table's teamPwr column is the reading after the stage is already
@@ -16302,8 +16477,8 @@ namespace Emberfall.DevHarness
                  + " in chapter 1, x" + Fmt(WallBandLowLater) + " to x" + Fmt(WallBandHighLater)
                  + " from chapter 2 on - measured off how many extra sittings a wall at each ratio"
                  + " actually costs.");
-            Line("  A wall is a chapter finale or the one authored mid-chapter spike:"
-                 + " " + string.Join(", ", MidChapterWallStageIds) + ".");
+            Line("  A wall is a chapter finale or a chapter's miniboss stage:"
+                 + " " + string.Join(", ", MidChapterWallStageIdsOf(db).ToArray()) + ".");
             Line("  entryPwr is read BEFORE the stage's first sitting. The balance table's teamPwr"
                  + " is the exit reading and cannot show a wall.");
             Line("  entryPwr splits into roster (the deployed five at Lv1), levels (what gold bought)"
@@ -16429,9 +16604,7 @@ namespace Emberfall.DevHarness
         private static string BandKindOf(StageDef stage, int walkIndex)
         {
             if (walkIndex < EconomyTutorialStages) return "tutorial";
-            if (stage.IsBoss) return "wall    ";
-            for (int i = 0; i < MidChapterWallStageIds.Length; i++)
-                if (MidChapterWallStageIds[i] == stage.Id) return "wall    ";
+            if (stage.IsBoss || stage.IsMiniboss) return "wall    ";
             return "ordinary";
         }
 
@@ -18024,7 +18197,7 @@ namespace Emberfall.DevHarness
                  + ", chapter 1 wall x" + Fmt3(SolverMiddleWallChapter1)
                  + ", ordinary later x" + Fmt3(SolverMiddleOrdinaryLater)
                  + ", later wall x" + Fmt3(SolverMiddleWallLater) + ".");
-            Line("  A wall is a chapter finale or one of " + string.Join(", ", MidChapterWallStageIds)
+            Line("  A wall is a chapter finale or one of " + string.Join(", ", MidChapterWallStageIdsOf(db).ToArray())
                  + "; the first " + EconomyTutorialStages + " stages are the tutorial.");
             Line("  floorLevel, ceilingLevel and the authored enemy levels follow by inverting"
                  + " scale(level) = 1 + " + Fmt(EnemyGrowthPerLevel) + " * (level - 1).");

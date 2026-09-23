@@ -8,6 +8,11 @@ campaign itself is specified in `CAMPAIGN-SPEC.md`.
 Everything below was read from the tree at the time of writing. Symbols are cited, never line
 numbers. "Checked" means the claim was re-read in the source during this pass.
 
+**The stage job has since done the replacement** (`CAMPAIGN-SPEC.md` section 10): 72 stages, only
+the 84 fielded, the 12 kept as data. Where this file describes the tree it now describes the tree
+before that job. The claims the job changed are corrected in place below and marked **(stage
+job)**; the rest is the work list as it was, and stays useful as the list of what moved.
+
 ---
 
 ## 1. The 24 shipped stages his chapters 1 and 2 replace
@@ -45,8 +50,8 @@ stages by index only. That is where each of his stages lands, not a mapping of c
 
 The shipped stage structure the harness pins, and where Pinoy's differs:
 
-- **Size.** `CheckCampaignCurveSchema` asserts `stages == 24` (checked). His chapters 3-6 add 48
-  more.
+- **Size.** `CheckCampaignCurveSchema` asserted `stages == 24`. **(stage job)** It asserts 72 now,
+  and `CheckCampaignLinesLegal` asserts six chapters of twelve.
 - **Waves.** `ExpectedWaveCount` pins the waves: 3 per stage for 1-1 to 1-4, 6 for 1-5 to 1-12, and
   12 for every later stage. Each wave is 12 battles. His delivery says nothing about waves.
 - **Tutorial stages.** `EconomyTutorialStages = 4`.
@@ -54,8 +59,12 @@ The shipped stage structure the harness pins, and where Pinoy's differs:
   the last fields exactly 5. His distributions name 2 to 4 distinct enemies per stage, not a
   formation size.
 - **Walls.** `MidChapterWallStageIds = { "ch1_9", "ch2_6" }`. His miniboss is at stage 6 in every
-  chapter, so chapter 1's wall position moves from stage 9 to stage 6.
+  chapter, so chapter 1's wall position moves from stage 9 to stage 6. **(stage job)** The list is
+  gone: `MidChapterWallStageIdsOf` reads `StageDef.IsMiniboss`, so the walls are stage 6 of all six
+  chapters.
 - **Minibosses.** There is no miniboss flag in the stage schema. `StageDef` has `IsBoss` only.
+  **(stage job)** `StageDef.IsMiniboss` exists now, read from `"miniboss": true`; nothing at runtime
+  reads it, the harness's power band does.
 
 Other places that name a shipped stage id:
 
@@ -165,7 +174,10 @@ Assertions that `the_unmade` never appears in generated content:
 
 The code side excludes it in two places:
 
-- `RecitalGenerator.ScriptedLossEnemies` computes the same set the check does.
+- `RecitalGenerator.ScriptedLossEnemies` computes the same set the check does. **(stage job)**
+  `RecitalGenerator.BuildFloor` now also draws only what some campaign stage fields
+  (`GuildDungeonGenerator.TemplatePool`), which is what keeps all twelve shipped templates out of
+  the Recital now that no stage fields them.
 - `GuildDungeonGenerator.TemplatePool` excludes it because no stage fields it, and
   `GuildDungeonGenerator.BuildFloor` also skips every `kind == "boss"`.
 
@@ -188,7 +200,8 @@ Every other runtime reader reads a stage's own list.
 - **What it reads:** every `enemies.json` template whose `aspect` equals the floor's aspect. It
   subtracts `ScriptedLossEnemies`. It does *not* restrict to campaign-fielded enemies, and it
   does *not* skip bosses: a `kind: boss` template is drawn as an ordinary floor enemy. (Added by
-  the roster job, which measured it: `CAMPAIGN-SPEC.md` 9.6.)
+  the roster job, which measured it: `CAMPAIGN-SPEC.md` 9.6.) **(stage job)** It restricts to
+  campaign-fielded enemies now, the guild's rule; it still draws bosses.
 - **Floor order:** floors cycle Ember, Tide, Verdant, Gale, Umbra, Lumen (`Cycle`,
   `AspectForFloor`).
 - **Requirement: at least one non-scripted template per aspect, all six.** An aspect with none
@@ -196,7 +209,8 @@ Every other runtime reader reads a stage's own list.
   so. `CheckRecitalContent` asserts `allAspectsCovered`. `CheckRecitalDrawsNoScriptedLoss` asserts
   a full line of 5 on each of the first 120 floors.
 - **Today:** Lumen is covered only by `fractured_chorister`, which was added for this reason and
-  no stage fields.
+  no stage fields. **(stage job)** The Chorister is retired with the rest; Lumen is covered by the
+  14 Lumen templates the campaign fields.
 - **With the old roster retired:** the new roster must carry all six aspects, or keep a stand-in
   per aspect.
 - **Difficulty** scales by floor level (`RecitalLevelsPerFloor`, `RecitalBonusLevelsPerCycle`),
@@ -219,7 +233,8 @@ Every other runtime reader reads a stage's own list.
 - **Missing behaviours fail silently.** `Fill(... Or(With(rank, behaviour), rank))` falls back to
   any enemy when no enemy has the behaviour. So if no new enemy classifies as a Wall, every Wall
   floor still builds and shows the text "something holds the front", and nothing holds the front.
-- **Today:** Stone Warden is the only non-boss Wall.
+- **Today:** Stone Warden is the only non-boss Wall. **(stage job)** It is retired; the fielded
+  pool has 9 non-boss Walls, 25 Hunters and 12 Spreaders (measured, `CAMPAIGN-SPEC.md` 10.7).
 - **The new roster needs, among its campaign-fielded non-bosses, at least one Wall, one Hunter and
   one Spreader.** This is a kit requirement, not an art one.
 - **Power targets:** the floor power targets in `balance.json` are calibrated against the current
