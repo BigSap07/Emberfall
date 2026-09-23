@@ -172,7 +172,7 @@ Each candidate below was authored, fought through the same study, and cut. The n
 **No enemy-opening and no tempo condition survived.** That is a finding about this engine on these floors, not a verdict on those families:
 
 - **Enemy opening.** A stat buff on the enemy line hurts every roster roughly equally. Dispel is not common enough in the roster to reorder who does best.
-- **Tempo.** A round is every living unit acting once, so turn order within a round barely changes outcomes. Three full rounds of enemies acting first moved the mean margin by 0.00 to 0.06.
+- **Tempo.** Three full rounds of enemies acting first moved the mean margin by 0.00 to 0.06 on these floors, and that reading stands for these floors. The explanation first written beside it, that turn order within a round barely changes outcomes because every living unit acts once, does not generalise. `Docs/TEMPO-STUDY.md` measured order deciding a large share of campaign CEIL battles and mirror duels: enemies acting first in every round cost the campaign line 12 win-rate points, and always acting last against always first moved duels from 23% to 77%. Order matters in the rounds where units die. The opening rounds, where nothing dies yet, are the one place it is nearly free.
 
 Section 4's argument for those families stands; the shapes tried here did not deliver it.
 
