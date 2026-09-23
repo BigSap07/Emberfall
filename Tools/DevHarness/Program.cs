@@ -38,6 +38,8 @@ namespace Emberfall.DevHarness
             string tempoMode = null;
             bool solvePrereqs = false;
             string solvePrereqsMode = null;
+            bool parityStudy = false;
+            string parityMode = null;
             string reconcileStage = null, reconcileLevels = null;
             string only = null;
             string contentDir = null;
@@ -71,6 +73,12 @@ namespace Emberfall.DevHarness
                 // before WantedLine, so the gate or a solve against a scratch copy of the content
                 // can be read against the old reference player.
                 if (args[i] == "--role-blind") { _walkRoleBlind = true; continue; }
+                if (args[i] == "--parity-study")
+                {
+                    parityStudy = true;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("-") && !Directory.Exists(args[i + 1])) parityMode = args[++i];
+                    continue;
+                }
                 if (args[i] == "--ceil-reconcile")
                 {
                     reconcile = true;
@@ -97,6 +105,8 @@ namespace Emberfall.DevHarness
             if (tempoStudy) return RunTempoStudy(contentDir, tempoMode);
             // Nor this: the solve's prerequisites (SolvePrereqs.cs) measure and write nothing.
             if (solvePrereqs) return RunSolvePrereqs(contentDir, solvePrereqsMode);
+            // Nor the parity study (ParityStudy.cs): it measures and writes nothing.
+            if (parityStudy) return RunParityStudy(contentDir, parityMode);
 
             Console.OutputEncoding = Encoding.UTF8;
             Line("EMBERFALL CORE HARNESS");
