@@ -24,7 +24,7 @@ makes the game look better without holding anything up.
 | 6 | Backdrops for chapters 3 to 6 | **BLOCKING** for those chapters | four environments |
 | 7 | Battle sheets for the 63 heroes on the mannequin | no, but it is the biggest gap in the game | 63 heroes, smaller sets for low tiers |
 | 8 | The summon screen's replaceable pieces | no | six small pieces |
-| 9 | Missing second-basic and stunned sheets on drawn heroes | no, and the stunned ones can wait indefinitely | thirteen sheets |
+| 9 | Missing second-basic and stunned sheets on drawn heroes | no; stuns are rare, see item 9 | thirteen sheets |
 | 10 | Notes for future paintings | no | nothing to draw now |
 | 11 | Three questions about your own deliveries | no | answers only |
 
@@ -138,7 +138,7 @@ is a 1-star, three in ten a 2-star, three in ten a 3-star, about one in six a 4-
 hundred a 5-star. So nearly every hero a player pulls fights as a mannequin.
 
 **Smaller sets for the low tiers.** A 1-star or 2-star hero has no active skill, so a skill sheet
-would never play, and the stunned loop does not play for anyone yet (item 9). **For the 20 one- and
+would never play, and the stunned loop plays only rarely (item 9). **For the 20 one- and
 two-star heroes, four sheets are enough: idle, basic attack, hit reaction and death.** A second
 basic attack sheet is a bonus, not a requirement. 3-stars and 4-stars need the skill sheet too.
 
@@ -186,10 +186,12 @@ the stunned sheet replaces the idle while a hero is stunned. Some drawn heroes a
 
 - **Second basic attack** missing for **Aeron, Dahlia, Merek, Oris, Talren, Vaelis and Zella.** Until
   it arrives, every basic plays the first one, which is fine but repetitive.
-- **Stunned loop** missing for **Aeron, Dahlia, Merek, Mireth, Oris and Zella.** **Please leave these
-  until asked.** Only one ability in the game can stun, and in practice it never lands, so no player
-  has ever seen a stunned sheet. The ones already delivered are right to exist and will show the day
-  a stun can land.
+- **Stunned loop** missing for **Aeron, Dahlia, Merek, Mireth, Oris and Zella.** Only one ability in
+  the game can stun, Corin's Weight of Time, and until recently it never landed at all. **It lands
+  now, but rarely**: in about 3 of every 100 battles Corin fights. A hero's stunned sheet plays when
+  Corin stuns that hero from the other side, which happens in the Proving and in friend duels, so
+  the stunned sheets already delivered are now seen in play. The missing six are still low on this
+  list; they are no longer art that nobody will see.
 
 ## 10. Notes for future paintings
 

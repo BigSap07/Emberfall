@@ -600,6 +600,13 @@ namespace Emberfall.Core.Combat
             /// resolves BEFORE the Taunt anchor so a provoke cannot intercept it.</summary>
             private CombatUnit _broadcastVictim;
 
+            /// <summary>The body a redirected share landed on, non-null only while
+            /// OnRedirectReceived or OnRedirectSent is being raised. Resolves
+            /// TargetMode.RedirectDestination, the one redirect party the broadcast did not already
+            /// name: _broadcastVictim is the body the share came OFF, which for a Deflect aimed at
+            /// the link's owner is the owner itself.</summary>
+            private CombatUnit _redirectDestination;
+
             /// <summary>The unit that broke the current shield, or -1 outside OnShieldBreak.
             /// Read by EffectCondition.ShieldBrokenByCaster.</summary>
             private int _shieldBreakerId = -1;
@@ -2113,8 +2120,35 @@ namespace Emberfall.Core.Combat
                             }
                             else
                             {
-                                DealRawDamage(s.SourceId, unit, payout, false, "burst",
-                                              StatusKind.None, 1f, "Ledger");
+                                // THE AUTHORED TARGET, for a damage payout exactly as for a heal.
+                                // LedgerAutoReleaseTarget has always said "any other TargetMode
+                                // resolves against the applier at expiry time", and the heal branch
+                                // above honoured it while this one struck the holder regardless.
+                                // Darian's Hidden Strength sits on Darian and names the
+                                // highest-Attack enemy, so every payout it made struck Darian
+                                // himself: 48 self-hits over the sweep arena and a campaign pass
+                                // before this, found by the check that no ability lands its damage
+                                // on its own caster.
+                                //
+                                // Nobody to strike means no strike, NOT a fall back to the holder,
+                                // which would put the payout back on the body the author aimed away
+                                // from. Self (the default) is untouched, so every Ledger that pays
+                                // the body it sits on - Edrin's Watcher's Ledger among them - is
+                                // resolved exactly as before.
+                                CombatUnit strikeTarget = unit;
+                                if (s.AutoReleaseTarget != TargetMode.Self)
+                                {
+                                    strikeTarget = null;
+                                    CombatUnit applier = FindUnit(s.SourceId);
+                                    if (applier != null && applier.Alive)
+                                    {
+                                        List<CombatUnit> targets = ResolveTargets(applier, s.AutoReleaseTarget);
+                                        if (targets.Count > 0) strikeTarget = targets[0];
+                                    }
+                                }
+                                if (strikeTarget != null)
+                                    DealRawDamage(s.SourceId, strikeTarget, payout, false, "burst",
+                                                  StatusKind.None, 1f, "Ledger");
                                 // Split heal: a fraction of the stored amount heals the applier on
                                 // top of the damage to the holder. Zero on every Ledger in shipped
                                 // content, so no existing auto-release gains a heal nobody authored.
@@ -3179,6 +3213,16 @@ namespace Emberfall.Core.Combat
                         {
                             int cap = effect.MaxStacks > 0 ? effect.MaxStacks : 1;
                             target.AddStack(effect.Status, duration, magnitude, source.Id, cap);
+                            // The whole counter lives as long as its latest stack. Only this
+                            // caster's entries of this kind, and never shortened: a stack that
+                            // somehow holds more rounds than the new one keeps them.
+                            if (effect.RefreshStacks)
+                                for (int rs = 0; rs < target.Statuses.Count; rs++)
+                                {
+                                    StatusInstance st = target.Statuses[rs];
+                                    if (st.Kind == effect.Status && st.SourceId == source.Id && st.RoundsLeft < duration)
+                                        st.RoundsLeft = duration;
+                                }
                         }
                         else
                             target.AddOrRefresh(effect.Status, duration, magnitude, source.Id);
@@ -4859,10 +4903,13 @@ namespace Emberfall.Core.Combat
                     CombatUnit prevSubject = _broadcastSubject;
                     CombatUnit prevVictim = _broadcastVictim;
                     int prevSourceId = _broadcastSourceId;
+                    CombatUnit prevDestination = _redirectDestination;
                     _broadcastSubject = target;
                     _broadcastVictim = target;
                     _broadcastSourceId = sourceId;
+                    _redirectDestination = destination;
                     TriggerPassive(destination, PassiveTrigger.OnRedirectReceived, 0);
+                    _redirectDestination = prevDestination;
                     _broadcastSourceId = prevSourceId;
                     _broadcastVictim = prevVictim;
                     _broadcastSubject = prevSubject;
@@ -4893,10 +4940,13 @@ namespace Emberfall.Core.Combat
                     CombatUnit prevSubject = _broadcastSubject;
                     CombatUnit prevVictim = _broadcastVictim;
                     int prevSourceId = _broadcastSourceId;
+                    CombatUnit prevDestination = _redirectDestination;
                     _broadcastSubject = target;
                     _broadcastVictim = target;
                     _broadcastSourceId = sourceId;
+                    _redirectDestination = destination;
                     TriggerPassive(ruleOwner, PassiveTrigger.OnRedirectSent, 0);
+                    _redirectDestination = prevDestination;
                     _broadcastSourceId = prevSourceId;
                     _broadcastVictim = prevVictim;
                     _broadcastSubject = prevSubject;
@@ -7375,6 +7425,16 @@ namespace Emberfall.Core.Combat
                         return result;
                     }
 
+                    // The far end of a redirect, beside the victim and for the same reason. Nobody
+                    // outside the two redirect broadcasts, rather than a fallback: a clause about
+                    // where a share landed has no referent when nothing was redirected.
+                    case TargetMode.RedirectDestination:
+                    {
+                        if (_redirectDestination != null && _redirectDestination.Alive && _redirectDestination != excluded)
+                            result.Add(_redirectDestination);
+                        return result;
+                    }
+
                     // BEFORE THE ANCHOR, for the identical reason BroadcastVictim is: a Link names
                     // one specific body and that body may stand on either side - an ally for a ward,
                     // an enemy for a paired mark. A Taunt holder answering here would hand back a
@@ -7462,19 +7522,70 @@ namespace Emberfall.Core.Combat
 
                 }
 
-                // A BROADCAST ABOUT ONE OF THE CASTER'S OWN SIDE IS NOT A PICK OF AN ENEMY.
-                // BroadcastSubject resolves in the single-enemy switch below, which is right when
-                // the news is about an enemy and wrong when it is about an ally: everything between
-                // here and that switch - a Provoke on the caster, the other side's Taunt anchor,
-                // concealment - is a rule about which ENEMY a single-target pick may reach. Asked
-                // of a heal aimed at the ally whose turn was opening, the enemy's Taunt holder
-                // answered instead, and Marrow's Promise healed the sweep's Warden 5 times in 17.
-                // ENGINE-GAPS pass 3 found it the moment that heal moved to the ally's turn start.
-                if (mode == TargetMode.BroadcastSubject && caster != null && _broadcastSubject != null
-                    && _broadcastSubject.IsPlayer == caster.IsPlayer)
+                // A BODY THE ENGINE HAS ALREADY NAMED IS NOT A PICK, ON EITHER SIDE.
+                //
+                // Five modes answer with one specific unit the simulation chose before the effect
+                // ran: the body a broadcast is about, the unit whose death is being dispatched, the
+                // enemy that crossed the energy threshold, and the two bodies a swap moved. None of
+                // them compares candidates, so none of them is a question a Taunt holder can
+                // answer for its side. Everything below this point - the Dev Arena's hand-driven
+                // pick, a Provoke on the caster, the other side's Taunt anchor - is a rule about
+                // which enemy a single-target PICK may reach, and letting it intercept a named body
+                // aims the effect at a unit the event never touched while its conditions are still
+                // read off the one it did.
+                //
+                // ENGINE-GAPS pass 3 made the first half of this repair, for a BroadcastSubject on
+                // the caster's own side: Marrow's Promise healed the sweep's Warden 5 times in 17.
+                // Defect pass 3 measured the rest over the sweep arena with every talent and over a
+                // campaign pass. The enemy side of BroadcastSubject went to the Taunt holder 669
+                // times across twelve heroes - Mireth's Missing Page 200, Sylven's Wounds Remember
+                // 153, Hale's No Safe Distance 108 and Aeron's two Turn Debt clauses 78 among them.
+                // Rovan's Return the Guard took the ENEMY Taunt holder's Ward instead of his fallen
+                // ally's 24 times, and Merek's Stolen Interval slowed the Taunt holder rather than
+                // the enemy it moved back. BroadcastVictim, BroadcastSource and the link modes were
+                // already above the anchor for this reason; these five were the ones left below.
+                //
+                // Each keeps its own gates exactly as it had them in the switch below: DefeatedUnit
+                // alone may name a corpse, and none of the five is thinned by concealment or a
+                // target ban, which none of them ever was.
+                switch (mode)
                 {
-                    if (_broadcastSubject.Alive && _broadcastSubject != excluded) result.Add(_broadcastSubject);
-                    return result;
+                    // THE ONE MODE THAT CAN NAME A DEAD UNIT, and only inside the window where
+                    // that means something. Outside a defeat broadcast _defeated is null and this
+                    // resolves to nobody, which is the honest answer rather than a fallback.
+                    //
+                    // The Alive gate every other mode applies is deliberately NOT applied: the
+                    // whole point is to reach a corpse whose statuses have not been cleared yet.
+                    // Effects that cannot act on a corpse refuse it themselves - ApplyHealValue
+                    // returns on a dead target, DealRawDamage on a dead target does nothing - so a
+                    // mis-authored effect aimed here is inert rather than wrong.
+                    case TargetMode.DefeatedUnit:
+                        if (_defeated != null && _defeated != excluded) result.Add(_defeated);
+                        return result;
+
+                    // The two bodies a swap moved. Alive-gated where the corpse above is not:
+                    // a swap moves the living, and a body that died between the swap and the
+                    // effect reading it is not a body the effect can do anything to.
+                    case TargetMode.SwapAdvancedUnit:
+                        if (_swapAdvanced != null && _swapAdvanced.Alive && _swapAdvanced != excluded)
+                            result.Add(_swapAdvanced);
+                        return result;
+
+                    case TargetMode.SwapDelayedUnit:
+                        if (_swapDelayed != null && _swapDelayed.Alive && _swapDelayed != excluded)
+                            result.Add(_swapDelayed);
+                        return result;
+
+                    case TargetMode.ThresholdUnit:
+                        if (_thresholdUnit != null && _thresholdUnit.Alive && _thresholdUnit != excluded)
+                            result.Add(_thresholdUnit);
+                        return result;
+
+                    // Alive, not excluded, nobody outside a broadcast.
+                    case TargetMode.BroadcastSubject:
+                        if (_broadcastSubject != null && _broadcastSubject.Alive && _broadcastSubject != excluded)
+                            result.Add(_broadcastSubject);
+                        return result;
                 }
 
                 // THE HAND-DRIVEN PICK, and the only line in this method that is not about the
@@ -7718,42 +7829,9 @@ namespace Emberfall.Core.Combat
                         break;
                     }
 
-                    // THE ONE MODE THAT CAN NAME A DEAD UNIT, and only inside the window where
-                    // that means something. Outside a defeat broadcast _defeated is null and this
-                    // resolves to nobody, which is the honest answer rather than a fallback.
-                    //
-                    // The Alive gate every other mode applies is deliberately NOT applied: the
-                    // whole point is to reach a corpse whose statuses have not been cleared yet.
-                    // Effects that cannot act on a corpse refuse it themselves - ApplyHealValue
-                    // returns on a dead target, DealRawDamage on a dead target does nothing - so a
-                    // mis-authored effect aimed here is inert rather than wrong.
-                    case TargetMode.DefeatedUnit:
-                        picked = _defeated != null && _defeated != excluded ? _defeated : null;
-                        break;
-
-                    // The two bodies a swap moved. Alive-gated where the corpse above is not:
-                    // a swap moves the living, and a body that died between the swap and the
-                    // effect reading it is not a body the effect can do anything to.
-                    case TargetMode.SwapAdvancedUnit:
-                        picked = _swapAdvanced != null && _swapAdvanced.Alive && _swapAdvanced != excluded
-                            ? _swapAdvanced : null;
-                        break;
-
-                    case TargetMode.SwapDelayedUnit:
-                        picked = _swapDelayed != null && _swapDelayed.Alive && _swapDelayed != excluded
-                            ? _swapDelayed : null;
-                        break;
-
-                    case TargetMode.ThresholdUnit:
-                        picked = _thresholdUnit != null && _thresholdUnit.Alive && _thresholdUnit != excluded
-                            ? _thresholdUnit : null;
-                        break;
-
-                    case TargetMode.BroadcastSubject:
-                        // Like ThresholdUnit: alive, not excluded, null outside a broadcast.
-                        picked = _broadcastSubject != null && _broadcastSubject.Alive && _broadcastSubject != excluded
-                            ? _broadcastSubject : null;
-                        break;
+                    // DefeatedUnit, ThresholdUnit, BroadcastSubject and the two swap modes used to
+                    // resolve here, below the anchor. They return above it now: see "A BODY THE
+                    // ENGINE HAS ALREADY NAMED IS NOT A PICK".
 
                     case TargetMode.EnemyWithStatus:
                     {

@@ -92,6 +92,10 @@ TARGET_MODES = {
     "HighestEnergyAlly", "LargestShieldAlly",
     # the gaps pass, group 8: the last act against our line, as against the biggest career total.
     "EnemyThatLastDamagedAlly",
+    # defect pass 3: the body a redirected share landed on, which False Target's extra damage
+    # names. Without it the only redirect bodies a kit could aim at were the one the share came
+    # off and the attacker.
+    "RedirectDestination",
 }
 
 # ---------------------------------------------------------------------------
