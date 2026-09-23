@@ -223,7 +223,25 @@ namespace Emberfall.Core.Save
         /// sentence, the way a newer build's save is: a string, a null, a fraction, zero, a
         /// negative, or a number too large for an int, which used to overflow negative and read as
         /// an old save.
-        public const int CurrentVersion = 15;
+        ///
+        /// 16: each owned hero's ascension tier (HeroInstance.Ascension). Written per hero and only
+        /// when non-zero, the way selectedTalent is, so a profile nobody has ascended serialises
+        /// exactly as version 15 did apart from the version number.
+        ///
+        /// Upgrade needs no migration and gets none: a version 15 save has no ascension key, which
+        /// reads as 0, and 0 is precisely true - ascension did not exist when it was written. The
+        /// level already on each hero stays what it was, and it means what it meant: Level is still
+        /// the one number a stat line is built from (StatMath.LevelAt). What changes under an
+        /// upgraded save is the
+        /// cap it is read against: caps are now a function of star and ascension tier rather than
+        /// of account rank (F7), so a hero above its new cap keeps the levels it bought and simply
+        /// cannot buy another until it ascends. Nothing is taken away on load.
+        ///
+        /// WHY THIS IS A BUMP. Version 15 code reads no ascension key, so it would hand an ascended
+        /// hero back to tier 0 at a level far past tier 0's cap, where it could never level again -
+        /// and a version 15 build caps by account rank, so it would also let that hero be levelled
+        /// one ladder level at a time at tier 0's price. Both are silent, and the bump refuses them.
+        public const int CurrentVersion = 16;
 
         /// <summary>
         /// The save's format version, or false with a sentence a player can read. The one reader
@@ -604,6 +622,9 @@ namespace Emberfall.Core.Save
                 // existed. Version 13.
                 if (h.SelectedTalent > 0) hj.Set("selectedTalent", h.SelectedTalent);
 
+                // Version 16, same reasoning again: absent is tier 0.
+                if (h.Ascension > 0) hj.Set("ascension", h.Ascension);
+
                 heroes.Add(hj);
             }
             // Version 15: the heroes this build could not resolve, written back exactly as they
@@ -834,6 +855,13 @@ namespace Emberfall.Core.Save
                 int selectedTalent = hj.GetInt("selectedTalent", 0);
                 if (selectedTalent < 0 || selectedTalent > HeroDef.MaxTalents) selectedTalent = 0;
                 h.SelectedTalent = selectedTalent;
+
+                // THE VERSION 15 -> 16 MIGRATION, which is again the absence of one: no key reads
+                // as tier 0. A negative tier is corrupt and reads as 0. A tier above what this
+                // build authors is kept as written, the way a talent past the end is: the cap and
+                // the ladder read it as the highest tier here, and a build that authors it again
+                // gets it back.
+                h.Ascension = Math.Max(0, hj.GetInt("ascension", 0));
 
                 profile.Heroes.Add(h);
             }

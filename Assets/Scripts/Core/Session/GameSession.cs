@@ -40,6 +40,31 @@ namespace Emberfall.Core.Session
         }
     }
 
+    /// <summary>What one ascension did (GameSession.Ascend).</summary>
+    public sealed class AscensionResult
+    {
+        public bool Success;
+        public string Message = "";
+        public int FromTier;
+        public int ToTier;
+        public int CopiesSpent;
+        /// <summary>The level the hero stood at before the reset to 1 (F6).</summary>
+        public int LevelBefore;
+    }
+
+    /// <summary>What one conversion did (GameSession.Convert).</summary>
+    public sealed class ConversionResult
+    {
+        public bool Success;
+        public string Message = "";
+        public Aspect Aspect;
+        public HeroDef Hero;
+        public HeroInstance Instance;
+        public bool IsNew;
+        public int PointsSpent;
+        public int BodiesSpent;
+    }
+
     public sealed class SummonOutcome
     {
         public bool Success;
@@ -243,20 +268,52 @@ namespace Emberfall.Core.Session
 
         // ------------------------------------------------------------------ hero levelling
 
-        public int HeroLevelCap
+        /// <summary>
+        /// The Level this hero stops at: its star tier and its ascension tier decide it, and
+        /// account rank does not (F7). A 1-star and a 5-star never share one. A Level, not a tier
+        /// level - StatMath.HeroLevelCap is the same cap counted in tier levels.
+        /// </summary>
+        public int HeroLevelCapOf(HeroInstance hero)
         {
-            get { return StatMath.HeroLevelCap(Balance, Profile.PlayerLevel); }
+            if (hero == null) return 1;
+            return StatMath.CapLevel(Balance, StarsOf(hero), hero.Ascension);
         }
 
+        private static int StarsOf(HeroInstance hero)
+        {
+            return hero.Def != null ? hero.Def.Stars : 5;
+        }
+
+        /// <summary>The level inside this hero's ascension tier: 1 on the day it ascends (F6), and
+        /// equal to Level for every hero at tier 0 and every hero below five stars.</summary>
+        public int TierLevelOf(HeroInstance hero)
+        {
+            if (hero == null) return 1;
+            if (StarsOf(hero) < 5) return hero.Level;
+            return StatMath.TierLevelOf(Balance, hero.Ascension, hero.Level);
+        }
+
+        /// <summary>The Level one more tier level puts this hero at: the next step of its tier's
+        /// stride (StatMath.LevelAt).</summary>
+        public int NextLevelOf(HeroInstance hero)
+        {
+            if (hero == null) return 1;
+            if (StarsOf(hero) < 5) return hero.Level + 1;
+            return StatMath.LevelAt(Balance, hero.Ascension, TierLevelOf(hero) + 1);
+        }
+
+        /// <summary>The next level's price, read off the tier level: each ascension reopens the
+        /// gold sink at the level-1 price, times the tier's curve multiplier, which is also how many
+        /// Levels that tier level buys - so a coin buys the same stride of the ladder at every tier.</summary>
         public int LevelUpCost(HeroInstance hero)
         {
-            return StatMath.LevelUpCost(Balance, hero.Level);
+            return StatMath.LevelUpCost(Balance, TierLevelOf(hero), hero.Ascension);
         }
 
         public bool CanLevelUp(HeroInstance hero)
         {
             if (hero == null) return false;
-            if (hero.Level >= HeroLevelCap) return false;
+            if (hero.Level >= HeroLevelCapOf(hero)) return false;
             return Profile.Gold >= LevelUpCost(hero);
         }
 
@@ -266,20 +323,24 @@ namespace Emberfall.Core.Session
             if (hero == null) { result.Message = "No hero selected."; return result; }
             result.NewLevel = hero.Level;
 
-            int cap = HeroLevelCap;
+            int cap = HeroLevelCapOf(hero);
             if (hero.Level >= cap)
             {
-                result.Message = "Level cap reached. Raise your Wayfarer rank to continue.";
+                result.Message = hero.Def != null && hero.Def.Stars >= 5
+                    ? (hero.Ascension < StatMath.MaxAscensionTier(Balance)
+                        ? "Level cap reached. Ascend to raise it."
+                        : "Level cap reached at the highest ascension.")
+                    : "Level cap reached. A hero below five stars stops here.";
                 return result;
             }
 
             for (int i = 0; i < times; i++)
             {
                 if (hero.Level >= cap) break;
-                int cost = StatMath.LevelUpCost(Balance, hero.Level);
+                int cost = LevelUpCost(hero);
                 if (Profile.Gold < cost) break;
                 Profile.Gold -= cost;
-                hero.Level++;
+                hero.Level = Math.Min(cap, NextLevelOf(hero));
                 result.GoldSpent += cost;
                 result.LevelsGained++;
             }
@@ -288,6 +349,194 @@ namespace Emberfall.Core.Session
             result.Success = result.LevelsGained > 0;
             if (!result.Success) result.Message = "Not enough gold.";
             else if (hero.Level >= cap) result.Message = "Level cap reached.";
+            return result;
+        }
+
+        // ------------------------------------------------------------------ ascension
+
+        /// <summary>
+        /// Why this hero cannot ascend right now, or null when it can. Only a 5-star ascends (F2),
+        /// only up to the highest tier balance.json authors, and only by spending copies of ITSELF
+        /// (F5): Copies counts the hero's own body, so a step costing n needs n + 1.
+        /// </summary>
+        public string AscensionBlocker(HeroInstance hero)
+        {
+            if (hero == null || hero.Def == null) return "No hero selected.";
+            if (hero.Def.Stars < 5) return "Only a five-star hero ascends.";
+            int need = StatMath.AscensionCopiesFor(Balance, hero.Ascension);
+            if (need < 0) return "This hero is at the highest ascension.";
+            if (hero.Copies - 1 < need)
+                return "Needs " + need + " more cop" + (need == 1 ? "y" : "ies") + " of this hero.";
+            return null;
+        }
+
+        /// <summary>
+        /// One ascension: spends the copies, raises the tier and resets the tier level to 1 on the
+        /// higher curve (F6), which is one Level past the old tier's cap (StatMath.LevelAt). Gold
+        /// spent on the old tier's levels is not refunded - the new tier's level 1 already
+        /// out-powers the old tier at its cap, which is what makes the reset a promotion rather than
+        /// a loss.
+        ///
+        /// Level never goes down, and that is the one case the reset needs a rule for: a hero
+        /// carried over from before caps can stand above its tier's cap. It lands on the first
+        /// step of the new tier above where it stood, or stays where it is if that is past the new
+        /// tier's cap too, so an ascension is a promotion for it as well.
+        /// </summary>
+        public AscensionResult Ascend(HeroInstance hero)
+        {
+            AscensionResult result = new AscensionResult();
+            string blocker = AscensionBlocker(hero);
+            if (blocker != null) { result.Message = blocker; return result; }
+
+            int cost = StatMath.AscensionCopiesFor(Balance, hero.Ascension);
+            result.FromTier = hero.Ascension;
+            result.LevelBefore = TierLevelOf(hero);
+            result.CopiesSpent = cost;
+            int before = hero.Level;
+            hero.Copies -= cost;
+            hero.Ascension++;
+            int landing = StatMath.TierBaseLevel(Balance, hero.Ascension);
+            if (landing <= before)
+            {
+                int tierLevel = StatMath.TierLevelOf(Balance, hero.Ascension, before) + 1;
+                landing = Math.Max(before, Math.Min(HeroLevelCapOf(hero), StatMath.LevelAt(Balance, hero.Ascension, tierLevel)));
+            }
+            hero.Level = landing;
+            result.ToTier = hero.Ascension;
+            result.Success = true;
+            result.Message = "Ascended to tier " + hero.Ascension + ".";
+            return result;
+        }
+
+        // ------------------------------------------------------------------ conversion
+
+        /// <summary>What one body of this hero is worth in a conversion, or 0 for a 5-star, which
+        /// is never fodder: above five stars only copies of the same hero count (F5).</summary>
+        public int FodderPoints(HeroDef def)
+        {
+            if (def == null || def.Stars >= 5 || def.Stars < 1) return 0;
+            int[] points = Balance.ConversionFodderPoints;
+            if (points == null || points.Length < def.Stars) return 0;
+            return points[def.Stars - 1];
+        }
+
+        /// <summary>True for an aspect whose conversion takes one seed of that aspect and fodder of
+        /// any aspect (F9), false for one whose fodder must all be of that aspect (F4).</summary>
+        public bool IsSeedAspect(Aspect aspect)
+        {
+            string[] seeds = Balance.ConversionSeedAspects;
+            if (seeds == null) return false;
+            string name = aspect.ToString();
+            for (int i = 0; i < seeds.Length; i++) if (seeds[i] == name) return true;
+            return false;
+        }
+
+        /// <summary>The 5-stars a conversion into this aspect can produce: every fusable 5-star of
+        /// it. The roll over them is uniform and the player never chooses (F3).</summary>
+        public List<HeroDef> ConversionPool(Aspect aspect)
+        {
+            List<HeroDef> pool = new List<HeroDef>();
+            for (int i = 0; i < Content.Heroes.Count; i++)
+            {
+                HeroDef h = Content.Heroes[i];
+                if (h.Stars == 5 && h.Aspect == aspect && h.Fusable) pool.Add(h);
+            }
+            return pool;
+        }
+
+        /// <summary>
+        /// Why these bodies cannot be converted into this aspect, or null when they can. `bodies`
+        /// names one entry per body, so a hero listed twice gives two of its copies. The rules:
+        /// every body is below five stars (F3); no hero gives more bodies than it has, and a
+        /// deployed hero keeps the one on the team; the bodies are worth
+        /// ConversionPointsRequired; and either every body is of the target aspect (F4) or, for a
+        /// seed aspect, at least one is (F9).
+        /// </summary>
+        public string ConversionBlocker(Aspect target, List<HeroInstance> bodies)
+        {
+            if (bodies == null || bodies.Count == 0) return "Choose heroes to convert.";
+            if (ConversionPool(target).Count == 0) return "No five-star of that aspect can be converted into.";
+
+            Dictionary<HeroInstance, int> taken = new Dictionary<HeroInstance, int>();
+            int points = 0;
+            bool seeded = false, allSame = true;
+            for (int i = 0; i < bodies.Count; i++)
+            {
+                HeroInstance b = bodies[i];
+                if (b == null || b.Def == null || !Profile.Heroes.Contains(b)) return "A chosen hero is not in the collection.";
+                if (b.Def.Stars >= 5) return "A five-star hero is never fodder.";
+                int n;
+                taken.TryGetValue(b, out n);
+                taken[b] = n + 1;
+                points += FodderPoints(b.Def);
+                if (b.Def.Aspect == target) seeded = true;
+                else allSame = false;
+            }
+            foreach (KeyValuePair<HeroInstance, int> kv in taken)
+            {
+                int spare = kv.Key.Copies - (Profile.IsDeployed(kv.Key.Uid) ? 1 : 0);
+                if (kv.Value > spare)
+                    return kv.Key.DisplayName + " cannot give " + kv.Value + " (has " + spare + " to spare).";
+            }
+            if (IsSeedAspect(target))
+            {
+                if (!seeded) return Article(target, true) + " " + target + " conversion needs one " + target + " hero as its seed.";
+            }
+            else if (!allSame) return "Every hero in " + Article(target, false) + " " + target + " conversion must be " + target + ".";
+            if (points < Balance.ConversionPointsRequired)
+                return "Worth " + points + " of the " + Balance.ConversionPointsRequired + " a conversion needs.";
+            return null;
+        }
+
+        private static string Article(Aspect aspect, bool capital)
+        {
+            string name = aspect.ToString();
+            bool vowel = name.Length > 0 && "AEIOU".IndexOf(name[0]) >= 0;
+            return capital ? (vowel ? "An" : "A") : (vowel ? "an" : "a");
+        }
+
+        /// <summary>
+        /// One conversion: spends the bodies and grants one 5-star of the target aspect, rolled
+        /// uniformly from ConversionPool with the given seed (F3 - random, never chosen, because the
+        /// randomness is what manufactures the duplicate 5-stars ascension eats). A hero whose last
+        /// body is spent leaves the collection. A 5-star already owned gains a copy and nothing
+        /// else: no duplicate refund, because that copy is what ascension spends.
+        /// </summary>
+        public ConversionResult Convert(Aspect target, List<HeroInstance> bodies, int seed, long nowUnix)
+        {
+            ConversionResult result = new ConversionResult();
+            result.Aspect = target;
+            string blocker = ConversionBlocker(target, bodies);
+            if (blocker != null) { result.Message = blocker; return result; }
+
+            for (int i = 0; i < bodies.Count; i++)
+            {
+                HeroInstance b = bodies[i];
+                result.PointsSpent += FodderPoints(b.Def);
+                b.Copies--;
+                if (b.Copies <= 0) Profile.RemoveHero(b);
+            }
+            result.BodiesSpent = bodies.Count;
+
+            List<HeroDef> pool = ConversionPool(target);
+            DeterministicRng rng = new DeterministicRng(seed);
+            HeroDef rolled = pool[rng.Range(0, pool.Count)];
+            result.Hero = rolled;
+
+            HeroInstance existing = Profile.FindHeroByDefId(rolled.Id);
+            if (existing == null)
+            {
+                result.IsNew = true;
+                result.Instance = AddHero(Profile, rolled, nowUnix);
+                Profile.NormaliseTeam();
+            }
+            else
+            {
+                existing.Copies++;
+                result.Instance = existing;
+            }
+            result.Success = true;
+            result.Message = result.IsNew ? "A new five-star answers the conversion." : "A copy of a five-star you command.";
             return result;
         }
 

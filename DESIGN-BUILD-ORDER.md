@@ -10,7 +10,9 @@ Checked against the repository on 2026-09-23, after the roster reached 94 of 94,
 review and the Dispel repair closed the open kit decisions, every talent was measured for what it
 costs its own hero, and ENGINE-GAPS pass 3 said the nine clauses pass 2 left, turned `buffsOnly` on
 and re-solved the campaign once at the end, and the economy model started summoning at the real
-placeholder rates in `balance.json` and the campaign was re-solved against them - against a live `Tools/build-check.ps1` run, a live
+placeholder rates in `balance.json` and the campaign was re-solved against them, and then after the
+fusion and ascension spine (star-gated level caps, conversions, ascension) was built and measured
+against the campaign as committed - against a live `Tools/build-check.ps1` run, a live
 `validate_heroes.py` run and the files themselves, not against this document's own prior claims.
 Where this file and the archive disagree, this file is right about status and the archive is right
 about reasoning.
@@ -28,10 +30,14 @@ about reasoning.
 
 Two runs decide whether the tree is healthy, and they measure different things.
 
-- **`Tools/build-check.ps1`: 1 failure.** It lints the docs, compiles the core and the
-  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. The one red
-  is the talent coverage note under **Known bugs**, a standing instrument reporting a real reading
-  rather than a break. The campaign power-band guard and the geared curve's CEIL band are green. The
+- **`Tools/build-check.ps1`: 1 failure on `main`, 2 with the fusion spine under In progress.** It
+  lints the docs, compiles the core and the Unity-facing code against the shim in `Tools/UnityShim`,
+  and runs `Tools/DevHarness`. The standing red is the talent coverage note under **Known bugs**, a
+  standing instrument reporting a real reading rather than a break. The fusion spine's second red is
+  the campaign power-band guard, and it is a reading rather than a regression: a player who fuses
+  and ascends meets chapter 2 at x1.3 to x1.8 of a `recommendedPower` table derived for a player who
+  could not, and re-deriving that table is a decision (open decision 4). The geared curve's CEIL
+  band is green. The
   balance line is Kael, Kiva, Isara, Adric and Orelle, and the pinned line the CEIL is read with is
   Kael, Aeron, Nereia, Seraphine and Isolde. ENGINE-GAPS pass 3 turned `buffsOnly` on, which took
   chapter 1's finale CEIL from 68% to 27% and four walls out of the power band, so
@@ -50,11 +56,23 @@ Two runs decide whether the tree is healthy, and they measure different things.
   `1-9` (x1.00), `1-12` (x0.96) and `2-1` (x1.10) had slid just under their bands. The solver moved
   18 stages and put all three back on their band middles. It left `1-12`'s geared CEIL at 53%,
   under the finale band's 55%, where its 600-sample reading said 62%, so one of `1-12`'s Grave Moths
-  went down a level by hand, and it reads 57.5%. That one level moved `2-12` from x0.98 to x0.95,
+  went down a level by hand, and it reads 57.5%. **The two readings were one instrument and the 53%
+  was luck.** `DevHarness.exe --ceil-reconcile` fields both lines and reads each at the other's
+  seed: the solver and the guard build the same five heroes at the same levels and power (8,627), in
+  the same gear, against the same ceiling battle, and each reproduces the other's number exactly at
+  the other's seed base. They differ only in seed base and sample count. A 5,000-sample reference
+  read 60.8% before the hand move and 61.7% after it, so the Grave Moth moved the truth by under a
+  point and moved the guard's draw from its low tail to 57.5%. Across all fourteen stages the guard
+  grades, the solver sits within 1.5 standard errors of a 4,000-sample reference everywhere and the
+  guard falls outside two once, at `1-9` (80% against a reference of 87.8%). That one level moved `2-12` from x0.98 to x0.95,
   just under its band, through the armor the simulated player happens to pick up on the way
   (4,807 to 3,772), so the solver was run again on top of the hand move. It changed only chapter 2,
   and `2-12` reads x0.99. The solver and `build-check.ps1` compile the harness from the same file
-  list now, `SummonTiming.cs`, `GuildDungeonChecks.cs` and `CloudChecks.cs` included.
+  list, and `CheckSolverAndGateCompileOneList` asserts it: it reads both scripts, expands every
+  variable and glob against the tree, and fails if the two resolved lists differ or if any `.cs`
+  file directly under `Tools/DevHarness` is missing from either.
+  **The power-band guard allows 0.005 past either edge** (`BandTolerance`) **and prints ratios to
+  three decimals.** `2-1` once failed the build by 0.09% and printed as "x1.1 under x1.1".
   **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
@@ -95,6 +113,10 @@ of them needs a stated reason in the commit that moves it.
   II, and Velis I, II and III); `buffsOnly` 75 (all three talents of Hale, Kiva, Mireth, Seraphine
   and Sylven); the Taunt-anchor repair moved Marrow's 15 again. `Docs/ENGINE-GAPS.md` pass 3 has
   every group.
+- **The fusion spine moves 10 hero-sweep lines and 30 talent-sweep lines and no stage
+  fingerprint**: Aminah's and Caldus's five seeds each, and all three of each one's talents, from
+  the F8 lifts under **The star band**. Caps and ascension move none, because a fingerprint is a
+  fresh starting three at level 1 and a sweep fights at a fixed level.
 
 ## Systems
 
@@ -252,7 +274,19 @@ beside `FiveStarFloor`.
 
 **It failed one hero on its first run: Aminah, at x0.50, under two of the three Mender 4-stars.**
 Her numbers were Pinoy's; her kit does less than Marrow's on the same stat line. Her basic, its heal
-and her active went from 105%, 55% and 155% of Attack to 170%, 115% and 230%, and she reads x0.86.
+and her active went from 105%, 55% and 155% of Attack to 170%, 115% and 230%, and she read x0.86.
+
+**Umbra and Lumen 5-stars have a floor of x1.00 since the fusion spine (F8 in
+`DESIGN-HERO-FUSION.md`)**: they are the aspects whose conversions take a seed, so their 5-stars
+are the slow ones to fuse, and rarity with no payoff is a pool players learn to avoid. The aspects
+are read off `balance.json`'s `conversionSeedAspects` rather than named in the check. Three read
+under it. **Aminah and Caldus were lifted** by the smallest uniform step on every Damage and Heal
+number in their kits - x1.12 and x1.05 - that puts each above the hero holding their role's median,
+so each is the median now and it moved by under 1%. **Velis is pinned in `KnownF8Exceptions`
+instead**, at x0.91: the Striker role has four 5-stars, so its median is the mean of the middle two,
+and his smallest clearing lift raises it about 9% and drops Kiva to x0.72, under the x0.78 floor.
+Kiva is a starting hero, so that fix is a kit decision, and it is open. The check fails if Velis
+reaches the floor, which makes the pin stale, and if any other rarer-aspect 5-star falls under it.
 Nearest the edges now: Kiva and Hale at x0.79, and Edrin x1.53, Darian x1.48 and Cyrra x1.37 above.
 **One median moved in pass 3**: the Breaker median fell from Seraphine's 90536 to Rheia's 81541
 when `buffsOnly` took the bookkeeping out of Seraphine's Contrary Evidence, which raised every graded
@@ -333,7 +367,30 @@ check fails both when a talent starts losing without being listed and when a lis
 
 `CampaignWaveGenerator` resolves a stage into its ladder, which is `waveCount` times 12 battles.
 `GameSession` owns rank, levels, purse and the progression API. `Debrief` reads a loss back into a
-reason a player can act on. Account rank raises `HeroLevelCap`; gold buys levels.
+reason a player can act on. Gold buys levels up to a cap that the hero's star tier and ascension
+tier set and account rank does not (`GameSession.HeroLevelCapOf`); see **Fusion and ascension**.
+
+### Fusion and ascension
+
+`DESIGN-HERO-FUSION.md` holds the rules, F1 to F9, and the reasoning; this is what the files show.
+
+- **Caps** are `StatMath.HeroLevelCap` of star tier and ascension tier: 5, 6, 7 and 8 for one to four
+  stars, and 9, 18 and 39 tier levels for a 5-star at tiers 0, 1 and 2. Account rank sets none of it.
+- **Ascension** is `GameSession.Ascend`: copies of the same hero only (1 for the first step, 4 for
+  the second), and the tier level resets to 1. **A hero's Level stays the one number its stat line
+  is built from** - each tier walks the one level ladder at its own stride, x2.035 and x6.175
+  Levels per tier level (`StatMath.LevelAt`) - because combat reads Level for Defense mitigation, and
+  a multiplier on the stats instead made an ascended line of the same power clear `2-12`'s ceiling
+  39% of the time against 63%. The level cost is read off the tier level, times the same multiplier.
+- **Conversion** is `GameSession.Convert`: heroes below five stars worth 100 points (15, 10, 10 and
+  18 per body by star tier) for a random 5-star of the chosen aspect. Ember, Tide, Verdant and Gale
+  take same-aspect fodder; Umbra and Lumen take one seed of their own and fodder of any aspect.
+- **Every number is derived, not declared**: `CheckFusionEconomyDerivation` rederives each one from
+  the summon weights, the hero growth rate, the starting line and the finale's `recommendedPower`,
+  prints the F6 crossover for every 5-star, and fails if `balance.json` disagrees.
+  `CheckFusionRules` holds `GameSession` to each rule and to save version 16.
+- **There is no fusion screen.** The hero card's level readout counts Levels, so an ascended hero
+  reads its Level on the ladder over the Level its cap is at.
 
 **The chapter 1 ladder is shorter than chapter 2's, deliberately.** It was 12 waves everywhere,
 which is 144 battles, which at a 40-battle sitting costs four sittings before difficulty has been
@@ -365,7 +422,14 @@ had only ever been answered by reading the content files, and reading them got i
 idle income is 86% of all gold earned and 56.3% of all power.
 
 `ReportPaceTargets` grades the shape the campaign is meant to have against the one it has, and is
-reported rather than failing because both of its targets wait on fusion. See open decision 4.
+reported rather than failing. `ReportFusionWalk` shows every line change the walk made and the line
+at each stage's first attempt, and `ReportPaceAcrossSeeds` reads both targets over eight walks with
+eight first seeds, because a conversion's roll makes one walk's roster one draw. See open
+decision 4.
+
+**The economy responds to shards now, not gold.** `CheckEconomyRespondsToIncome` scales gold and
+shards together on the back half of the campaign; the late-campaign ratio moves 2.36. Gold alone,
+still printed, moves it 0.08, because gold stops at each hero's cap.
 
 ### The campaign power curve, and the walls
 
@@ -405,7 +469,8 @@ ships on top of that, with `RelicShopScreen` as its storefront.
 
 Summoning with a pity rule that guarantees distinct unowned heroes. Idle income accrues against a
 real clock and is capped. `SaveSerializer` writes the whole document, at
-`SaveSerializer.CurrentVersion` 14, and a save from a newer build is refused rather than read.
+`SaveSerializer.CurrentVersion` 16, and a save from a newer build is refused rather than read.
+Version 15 keeps records this build cannot resolve; version 16 adds each hero's ascension tier.
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -549,6 +614,9 @@ sweep. **`CheckEveryAuthoredActiveIsCast` is new**: it walks all 74 authored act
 sweep's own arena and seeds, asserts that the set never cast is exactly Roan's - a second hero going
 quiet is a failure now - and then proves his in a dark arena that lets him live to round 4, which
 the sweep does not. CI runs `build-check.ps1` on every push and pull request.
+`DevHarness.exe --ceil-reconcile [stage [levels]]` is a second development aid: it reads the solver's
+and the guard's CEIL side by side against a 4,000-sample reference, and it is how the `1-12`
+disagreement under **The instruments** was settled.
 
 ### Build targets
 
@@ -559,11 +627,13 @@ differs between them.
 
 ## In progress
 
-**`balance/rates-resolve`** carries the campaign re-solved against real summon rates, described
-under **The instruments**: `campaign.json`'s `recommendedPower` on 18 stages and the floor, ceiling
-and enemy levels under 16 of them, one hand move at `1-12`, the regenerated stage fingerprint baseline, the solver's file
-list, and this file. ENGINE-GAPS pass 3 has landed on `main` and is observable in the files;
-`Docs/ENGINE-GAPS.md` pass 3 is its record.
+**`balance/fusion-spine`** carries the fusion and ascension spine described under **Fusion and
+ascension**, with no screen: star-gated caps, ascension, conversion, save version 16, the derived
+numbers in `balance.json`, the F8 floor with Aminah and Caldus lifted and Velis pinned, the economy
+walk's conversion, ascension and line policy, and the eight-walk pace table. It also carries the
+instrument work under **The instruments** - `--ceil-reconcile`, the file-list check and the band
+tolerance - and the doc edits that go with it. It does not re-solve `campaign.json`, which is why
+the power-band guard is its second red; open decision 4 says what re-solving would decide.
 
 ## Next
 
@@ -691,7 +761,10 @@ instead and is named in the coverage note under **Known bugs**.
    x1.00 to x1.05 about one. **The decision is to validate this with real playtests rather than
    with more simulation.** The simulated player never loses to anything the model does not price,
    and "a wall that costs nothing" is either a correct reading of a generous economy or a model
-   that cannot see what a wall is; another harness pass cannot tell those apart.
+   that cannot see what a wall is; another harness pass cannot tell those apart. **The fusion spine
+   did not change the answer against the committed curve**: over eight walks with eight first seeds
+   the four walls cost 0 extra sittings in 31 of 32 readings and 1 in the other, because the player
+   who fuses meets them above their bands. See open decision 4.
 2. **The CEIL band is blind on most of chapter 1.** The geared curve is what content is tuned
    against and its band assertion covers non-pinned stages only. The instrument's own geared level-1
    line is worth about 6,900 to 7,400 power and chapter 1 asks for 2,977 to 8,623, so ten of its
@@ -707,6 +780,16 @@ instead and is named in the coverage note under **Known bugs**.
    would need chapter 1 income to roughly quadruple, which is a different game, so the alternative
    is a second cheaper yardstick for the opening stages, or a solver that measures a pinned stage
    whenever the instrument sits within a few percent of what it asks.
+   **What grades chapter 1 today is two stages, both walls.** Of chapter 1's twelve, only `1-9` and
+   `1-12` are CEIL-graded, so no ordinary chapter 1 stage has been held to the 78% to 92% band by
+   anything; chapter 2 grades all twelve. `1-9` sits 5.2% above the pin and `1-12` 19.6% above it
+   (`--ceil-reconcile` prints the margin), `1-10` is pinned by 4.8% and `1-11` by 2.9%. The solver's
+   only lever for an entry ratio under its band is lowering `recommendedPower`, and lowering it is
+   the same move that takes a stage under the pin and out of grading - which is how `1-11` left. So
+   the band is structurally weakest exactly where the solver works hardest: each fix of an under-band
+   chapter 1 stage risks removing the only instrument that could have said the fix was wrong. Two
+   walls with margins of 5% and 20% can say whether those two walls are the right height; they
+   cannot grade chapter 1's shape.
 3. **The Hub's right rail sits on painted architecture.** The delivered `hub.png` puts the Proving's
    gatehouse hard against the right edge, roughly x 0.82 to 0.97 of the painting, and the rail's
    discs land on its right tower at every supported aspect. No marker and no label is covered -
@@ -718,12 +801,32 @@ instead and is named in the coverage note under **Known bugs**.
    either way; a right-hand rail is what the brief asked for, so which of the two rules wins is not
    the layout's call. The other two ways out are repainting the right 7% as landscape, or accepting
    it.
-4. **The campaign is a gold-into-levels treadmill, and the targets that say how far off it is are
-   not settled.** At the first attempt of `2-12` the POWER SOURCES block reads levels 64.4% of team
-   power, roster 20.1% and armor 15.5%, and 86% of the gold that bought those levels is idle income.
+4. **The fusion spine moved the power mix and did not make walls bite, and the committed campaign
+   is now the wrong yardstick for it.** Before the spine the campaign was a gold-into-levels
+   treadmill: at the first attempt of `2-12` the POWER SOURCES block read levels 64.4% of team
+   power, roster 20.1% and armor 15.5%, with 86% of the gold that bought those levels idle income.
    The intended shape is roster-led with levels as a top-up, the way an ascension-gated idle RPG
-   works, and fusion is meant to deliver it. `ReportPaceTargets` grades two targets on every run,
-   **reported and never failing**, because they will read off until fusion lands:
+   works. `ReportPaceTargets` grades two targets on every run, **reported and never failing**, and
+   `ReportPaceAcrossSeeds` reads them over eight walks:
+   - **With the spine, on the committed campaign**: roster 49.7% to 56.9% (target over 50%, met in
+     seven walks of eight) and levels 40.0% to 45.7% (target under 35%, met in none); both finales
+     cost 0 extra sittings in all eight walks (target 2 to 4, met in none). The simulated player
+     swaps a 5-star made by a conversion into the line in every walk, and in seven of eight does it
+     in the same sitting the conversion made it. It meets chapter 2 at x1.3 to x1.8 of
+     `recommendedPower`, which is the power-band guard's red.
+   - **Why A stops short**: the caps put levels at 35% only if the rest of the growth is roster, and
+     the roster a walk builds by `2-12` is a line of tier-1 heroes, x3.1 its starting line at level 1
+     against the x5.9 A needs at the levels it carries. Tier 2 costs four more copies of the same
+     hero. And the split is partly definitional under F6: an ascended hero's first level stands
+     where the old tier's cap was, so levels bought below a tier count as roster from the moment it
+     ascends.
+   - **Why B stops short**: walls cost sittings when a player arrives under them and has to grow;
+     this player arrives over them, because the curve was derived for one who could not fuse.
+   **What is open is whether to re-solve the campaign against the fusion economy.** The solver says
+   to after any economy change, and it would move `1-9`, `1-12` and `2-1` along with everything
+   else, which this spine was told not to do. Until it is decided, the power-band guard reads red
+   on this economy, and the targets are reported against a curve built for the old one. The rest of
+   this entry is the record from before the spine:
    - **A, the power mix at the last stage: levels under 35%, roster over 50%.** It is graded on a
      multiplicative split rather than on POWER SOURCES' blocks, because `StatMath.Build` multiplies
      level growth and the star multiplier together: the additive roster share is about

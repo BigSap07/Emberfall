@@ -46,8 +46,10 @@ multipliers against it.
 
 Gold and shards accrue at different rates by design. Gold has an infinite sink (levels); shards
 buy heroes, and with six heroes an overnight that pays a full summon empties the roster in a
-week. **Account XP must not accrue at all** — it raises the hero level cap, which should be
-earned by fighting.
+week. **Account XP must not accrue at all** — when this was written it raised the hero level cap,
+which should be earned by fighting. Caps are set by star and ascension tier now rather than by
+account rank (F7 in `DESIGN-HERO-FUSION.md`), so that reason is gone; rank is still earned by
+fighting and nothing here re-opens idle XP.
 
 The state needs no new home. `LastIdleClaimUnix` lives on `PlayerProfile`, is written by
 `SaveSerializer` as `lastIdleClaimUnix`, and the rate is a pure function of the already-saved

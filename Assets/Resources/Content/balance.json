@@ -38,12 +38,52 @@
   // the campaign around level 30 rather than level 58, and that is the point: at level 58 the
   // pinned five-body line was between 1.55 and 3.2 times every stage's recommendedPower and
   // cleared all 24 ceilings at 100%.
+  // At an ascension tier the price is read off the TIER level and multiplied by that tier's curve
+  // multiplier below, which is also how many Levels one of its tier levels buys, so a coin buys the
+  // same stride of the ladder at every tier (StatMath.LevelUpCost).
   "levelCostA": 600,
   "levelCostB": 470,
   "levelCostC": 0,
-  "heroLevelCapBase": 12,
-  "heroLevelCapPerPlayerLevel": 4,
-  "heroLevelHardCap": 80,
+
+  // LEVEL CAPS, ASCENSION AND CONVERSION. Every number in this block is
+  // DERIVED by CheckFusionEconomyDerivation in Tools/DevHarness and asserted equal to what is written
+  // here; change the tree and the harness says what these should become. The design rules they
+  // implement are F1 to F9 in DESIGN-HERO-FUSION.md.
+  //
+  // Level caps are a function of star tier and ascension tier and NOT of account rank (F7). They
+  // were 12 + 4 per rank up to 80, one number for every hero, which made gold the whole of power: at
+  // the first attempt of 2-12 levels were 70.7% of the growth since 1-1 against a target under 35%.
+  //
+  // fiveStarLevelCaps[t]: a 5-star's cap at ascension tier t, in levels of that tier. Tier 0 is
+  // where levels reach 35% of the campaign's growth - 2-12's entry of 27,187 over the 3,572
+  // starting line is x7.611, and x7.611^0.35 = x2.035 is the most levels may multiply; level 9 is
+  // the last inside it. Each higher tier applies the same 35% to the roster already under it, which
+  // is why the caps rise (F2). The list stops at the first tier whose first level out-powers the
+  // finale's per-hero demand.
+  "fiveStarLevelCaps": [9, 18, 39],
+  // ascensionCurveMultipliers[t]: tier t's curve. A hero's Level is still the one number every stat
+  // line and every mitigation roll is built from; tier t's first level stands one Level past tier
+  // t - 1's cap (F6), and each of its tier levels walks this many Levels, so its HP, Attack and
+  // Defense run at this multiple of tier 0's along the tier. M_t = 1 + 0.115 * (first Level - 1):
+  // tier 1 starts at Level 10 (x2.035) and tier 2 at Level 46 (x6.175). StatMath.LevelAt says why
+  // it is done on Level rather than as a multiplier on the stats: combat reads Level for mitigation.
+  "ascensionCurveMultipliers": [1, 2.035, 6.175],
+  // ascensionCopies[t]: copies of the SAME hero (F5) the step from tier t to t + 1 spends, beyond
+  // the hero itself - M(t+1) - M(t), rounded, because a copy is one hero's tier-0 level-1 power.
+  "ascensionCopies": [1, 4],
+  // Caps for 1 to 4 stars, which never ascend (F1): the 5-star tier-0 cap times the tier's measured
+  // share of a 5-star's level-1 power (0.513, 0.635, 0.756, 0.874).
+  "levelCapsBelowFiveStars": [5, 6, 7, 8],
+  // A conversion (F3): heroes below five stars in, a RANDOM 5-star of the chosen aspect out. A body
+  // of star s is worth 100 * w5 / ws points out of 100, from the summon weights below: a 5-star
+  // costs 33 pulls, and each lower tier's bodies from those same 33 pulls make one conversion. So a
+  // conversion is never a cheaper 5-star than a pull; it makes the pulls that missed count.
+  "conversionFodderPoints": [15, 10, 10, 18],
+  "conversionPointsRequired": 100,
+  // Aspects whose same-aspect conversion would take over twice the median aspect's pulls to fill
+  // (192 against 36) take one seed of their own aspect plus fodder of any aspect instead (F9). Every
+  // other aspect's fodder must all be of that aspect (F4).
+  "conversionSeedAspects": ["Umbra", "Lumen"],
 
   // account xp needed for the next rank = base * level^exponent
   "playerXpBase": 120,

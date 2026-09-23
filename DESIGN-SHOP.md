@@ -31,11 +31,14 @@ this document.
 `600 + 470L` — it was `55 + 26L + 3.2L²` when this document was written, and the economy-curve
 pass replaced it — so a single hero from 1 to the hard cap of 80 costs about **1,533,000 Gold**
 rather than the 622,000 this paragraph used to quote. The argument below is unchanged and the
-sink got larger, not smaller. But `HeroLevelCap` is `12 + 4 × (playerLevel − 1)`, capped at 80. A player levels
-every fielded hero to the current cap and then **cannot spend Gold on levels at all** until account
-rank rises. Gold does not stop arriving during that window: idle income alone floors at 140/hour
-against a 10-hour cap, and four other sources keep paying. The sink is periodically **blocked**,
-not exhausted.
+sink got larger, not smaller. When this was written `HeroLevelCap` was `12 + 4 × (playerLevel − 1)`,
+capped at 80. **It is no longer a function of account rank**: a hero's cap is set by its star tier and
+its ascension tier (`StatMath.HeroLevelCap`, `GameSession.HeroLevelCapOf`; the rules are F7 in
+`DESIGN-HERO-FUSION.md`), and the values sit in `balance.json`. The argument holds with ascension in
+place of rank: a player levels every fielded hero to its cap and then **cannot spend Gold on levels at
+all** until a hero ascends or a higher-capped hero joins the line. Gold does not stop arriving during
+that window: idle income alone floors at 140/hour against a 10-hour cap, and four other sources keep
+paying. The sink is periodically **blocked**, not exhausted.
 
 **Relic Dust's sink terminates permanently.** `BuyRelic` refuses a relic the player already owns,
 and there are ten relics. Once all ten are bought, Dust has **no sink at all, ever**. The obvious

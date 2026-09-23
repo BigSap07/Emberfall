@@ -2176,7 +2176,7 @@ namespace Emberfall.UI.Screens
                 AddRewardRow("EMBER SHARDS", "+" + rewards.Shards, UITheme.Shard);
                 AddRewardRow("WAYFARER XP", "+" + rewards.AccountXp, UITheme.Shard);
                 if (rewards.PlayerLevelsGained > 0)
-                    AddRewardRow("RANK UP", "+" + rewards.PlayerLevelsGained + "  (hero cap " + App.Session.HeroLevelCap + ")", UITheme.Success);
+                    AddRewardRow("RANK UP", "+" + rewards.PlayerLevelsGained, UITheme.Success);
                 if (rewards.UnlockedNextStage) AddRewardRow("NEW STAGE UNLOCKED", "AHEAD", UITheme.Ember);
                 // Named by its temper rather than just "ARMOR", because the temper is the only part
                 // of the drop a player can judge before opening the inventory.

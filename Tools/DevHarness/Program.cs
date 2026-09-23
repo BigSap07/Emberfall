@@ -30,6 +30,8 @@ namespace Emberfall.DevHarness
             bool solve = false;
             bool talentValue = false;
             bool fidelity = false;
+            bool reconcile = false;
+            string reconcileStage = null, reconcileLevels = null;
             string only = null;
             string contentDir = null;
             for (int i = 0; i < args.Length; i++)
@@ -37,6 +39,15 @@ namespace Emberfall.DevHarness
                 if (args[i] == "--solve-recommended-power") { solve = true; continue; }
                 if (args[i] == "--talents-worth-picking") { talentValue = true; continue; }
                 if (args[i] == "--fidelity") { fidelity = true; continue; }
+                if (args[i] == "--ceil-reconcile")
+                {
+                    reconcile = true;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("-") && args[i + 1].Contains("-")
+                        && args[i + 1].Length <= 5) reconcileStage = args[++i];
+                    if (reconcileStage != null && i + 1 < args.Length && args[i + 1].Contains("/")
+                        && !Directory.Exists(args[i + 1])) reconcileLevels = args[++i];
+                    continue;
+                }
                 if (args[i] == "--check" && i + 1 < args.Length) { only = args[++i]; continue; }
                 if (contentDir == null) contentDir = args[i];
             }
@@ -46,6 +57,8 @@ namespace Emberfall.DevHarness
             // campaign.json, so it returns before one check has read the file it is about to
             // change. The guards run on the NEXT build-check, against what it wrote.
             if (solve) return RunRecommendedPowerSolver(contentDir);
+            // Also not a check, and not run by the gate: see RunCeilReconcile.
+            if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
 
             Console.OutputEncoding = Encoding.UTF8;
             Line("EMBERFALL CORE HARNESS");
@@ -74,7 +87,9 @@ namespace Emberfall.DevHarness
                     System.Reflection.MethodInfo m = typeof(Program).GetMethod(names[n].Trim(),
                         System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
                     if (m == null) { Check(false, "no check called " + names[n]); continue; }
-                    m.Invoke(null, m.GetParameters().Length == 0 ? new object[0] : new object[] { content });
+                    System.Reflection.ParameterInfo[] ps = m.GetParameters();
+                    m.Invoke(null, ps.Length == 0 ? new object[0]
+                        : new object[] { ps[0].ParameterType == typeof(string) ? (object)contentDir : content });
                 }
                 Line(_failures == 0 ? "RESULT: all checks passed" : "RESULT: " + _failures + " check(s) FAILED");
                 return _failures == 0 ? 0 : 1;
@@ -185,14 +200,19 @@ namespace Emberfall.DevHarness
                 ReportRecommendedPowerDerivation(content);
             CheckArmoredCurveDelta(content);
             CheckUnderlevelledLoses(content);
+            CheckFusionEconomyDerivation(content);
+            CheckFusionRules(content);
             EconomyRun economy = RunCampaignBalancePass(content);
             ReportPowerSources(content, economy);
             CheckCampaignPowerCurve(content, economy);
             ReportPaceTargets(economy);
+            ReportFusionWalk(content, economy);
+            ReportPaceAcrossSeeds(content);
             CheckEconomyRespondsToIncome(content);
             // After all of them, because it asserts on what they actually resolved
             // while running - the economy responsiveness probe included.
             CheckInstrumentsSeeTheWholeCurve(content);
+            CheckSolverAndGateCompileOneList(contentDir);
             PrintInstrumentComparison();
 
             Line("");
@@ -14153,16 +14173,7 @@ namespace Emberfall.DevHarness
                 int guard = 0;
                 while (profile.TeamPower() < stage.RecommendedPower && guard < 5000)
                 {
-                    HeroInstance cheapest = null;
-                    int cheapestCost = int.MaxValue;
-                    for (int i = 0; i < team.Count; i++)
-                    {
-                        if (team[i].Level >= session.HeroLevelCap) continue;
-                        int cost = session.LevelUpCost(team[i]);
-                        if (cost < cheapestCost) { cheapestCost = cost; cheapest = team[i]; }
-                    }
-                    if (cheapest == null) break;
-                    session.LevelUpHero(cheapest, 1);
+                    if (!InstrumentStep(session, team)) break;
                     guard++;
                 }
 
@@ -14554,16 +14565,7 @@ namespace Emberfall.DevHarness
                 int guard = 0;
                 while (profile.TeamPower() < stage.RecommendedPower && guard < 20000)
                 {
-                    HeroInstance cheapest = null;
-                    int cheapestCost = int.MaxValue;
-                    for (int i = 0; i < team.Count; i++)
-                    {
-                        if (team[i].Level >= session.HeroLevelCap) continue;
-                        int cost = session.LevelUpCost(team[i]);
-                        if (cost < cheapestCost) { cheapestCost = cost; cheapest = team[i]; }
-                    }
-                    if (cheapest == null) break;
-                    session.LevelUpHero(cheapest, 1);
+                    if (!InstrumentStep(session, team)) break;
                     guard++;
                 }
 
@@ -15065,6 +15067,43 @@ namespace Emberfall.DevHarness
         /// its power - so the only thing that moves between candidates is hero level, which is
         /// exactly the thing a player actually controls.
         /// </summary>
+        /// <summary>
+        /// ONE STEP TOWARD A POWER, for every instrument that levels a line to a target: one Level
+        /// for the hero whose next Level is cheapest at the tier-0 price, set directly, up to the
+        /// highest Level any tier authors (StatMath.CapLevel at the last tier). False when every
+        /// hero is there.
+        ///
+        /// IT WALKS LEVELS, NOT TIERS, AND THAT IS NOT A WAY ROUND THE CAPS. On the one ladder
+        /// (StatMath.LevelAt) a hero's Level is the whole of its stat line: a tier-1 hero at Level
+        /// 20 and a tier-0 hero at Level 20 are the same fighter. These instruments measure a line
+        /// AT a power, not how a player reaches one - the economy walk measures the reaching - so a
+        /// line at a Level is the thing to field, whichever tier would have carried it there.
+        ///
+        /// Walking the tiers instead was built first and measured. Tier-1 levels step two Levels at
+        /// a time, so a line cannot stand at every Level: at 2-8 the pinned line reached its power
+        /// as 16/16/16/14/14 where the Level-by-Level walk stands it at 15 across the board, 0.8%
+        /// more power and a ceiling of 93.4% over 4,000 samples against 84.4%. That is the
+        /// instrument's sensitivity to which hero holds a Level, not anything about the stage or
+        /// the caps, and the CEIL band was set against the even line. Before that, ascending one
+        /// hero at a time had put every Level after it on him alone, and the line read 100%.
+        /// </summary>
+        private static bool InstrumentStep(GameSession session, List<HeroInstance> team)
+        {
+            HeroInstance cheapest = null;
+            int cheapestCost = int.MaxValue;
+            for (int i = 0; i < team.Count; i++)
+            {
+                HeroInstance h = team[i];
+                int stars = h.Def != null ? h.Def.Stars : 5;
+                if (h.Level >= StatMath.CapLevel(session.Balance, stars, StatMath.MaxAscensionTier(session.Balance))) continue;
+                int cost = StatMath.LevelUpCost(session.Balance, h.Level);
+                if (cost < cheapestCost) { cheapestCost = cost; cheapest = h; }
+            }
+            if (cheapest == null) return false;
+            cheapest.Level++;
+            return true;
+        }
+
         private static GameSession BuildPinnedLineAt(ContentDatabase db, StageDef stage, bool armored,
                                                      int targetPower)
         {
@@ -15108,16 +15147,7 @@ namespace Emberfall.DevHarness
             {
                 int power = armored ? profile.EffectiveTeamPower(db) : profile.TeamPower();
                 if (power >= targetPower) break;
-                HeroInstance cheapest = null;
-                int cheapestCost = int.MaxValue;
-                for (int i = 0; i < team.Count; i++)
-                {
-                    if (team[i].Level >= session.HeroLevelCap) continue;
-                    int cost = session.LevelUpCost(team[i]);
-                    if (cost < cheapestCost) { cheapestCost = cost; cheapest = team[i]; }
-                }
-                if (cheapest == null) break;
-                session.LevelUpHero(cheapest, 1);
+                if (!InstrumentStep(session, team)) break;
                 guard++;
             }
 
@@ -15208,6 +15238,10 @@ namespace Emberfall.DevHarness
             /// nothing on them; Bare adds the levels gold has bought; Entry adds worn armor.</summary>
             public int EntryRosterPower;
             public int EntryBarePower;
+            /// <summary>The deployed five at that instant, as "name tN LvL" for each.</summary>
+            public string EntryLine = "";
+            /// <summary>Roster work done during this stage's sittings.</summary>
+            public int Conversions, Ascensions, Swaps;
             /// <summary>Cumulative income ledger as it stood at that same instant.</summary>
             public EconomyLedger EntryLedger;
 
@@ -15237,6 +15271,10 @@ namespace Emberfall.DevHarness
             public long ShardStart, ShardIdle, ShardFirstClear, ShardFarm, ShardDuplicate;
             public long GoldSpentOnLevels, ShardsSpentOnSummons;
             public int ArmorDrops, Summons, HeroLevelsBought;
+            /// <summary>Fusion and ascension, counted the same way: conversions made, the bodies
+            /// they spent, ascensions made, heroes swapped into the line, and of those the ones
+            /// swapped in during the same sitting a conversion first produced them.</summary>
+            public int Conversions, FodderBodies, Ascensions, Swaps, FreshFusedSwaps;
 
             public long GoldTotal
             {
@@ -15263,9 +15301,14 @@ namespace Emberfall.DevHarness
             public int TotalBattles;
             public int TotalSessions;
             public EconomyLedger Ledger = new EconomyLedger();
+            /// <summary>Every line change, in order, as one readable sentence each.</summary>
+            public List<string> SwapLog = new List<string>();
+            /// <summary>The sitting a conversion first produced each hero in, by def id.</summary>
+            public Dictionary<string, int> FusedInSitting = new Dictionary<string, int>();
 
             private int _seed = 1;
             public int NextSeed() { return _seed++; }
+            public void SetFirstSeed(int seed) { _seed = seed; }
         }
 
         /// <summary>
@@ -15274,7 +15317,17 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static EconomyRun SimulateEconomy(ContentDatabase db, bool verbose)
         {
+            return SimulateEconomy(db, verbose, 1);
+        }
+
+        /// <summary>The walk from a chosen first seed. Every battle, pull and conversion draws the
+        /// next seed in order, so a different first seed is a different player of the same
+        /// economy - which matters since conversions roll which 5-star comes out (F3), and one
+        /// walk's roster is one draw of it.</summary>
+        private static EconomyRun SimulateEconomy(ContentDatabase db, bool verbose, int firstSeed)
+        {
             EconomyRun run = new EconomyRun();
+            run.SetFirstSeed(firstSeed);
             PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
             GameSession session = new GameSession(db, profile);
             run.Profile = profile;
@@ -15296,7 +15349,8 @@ namespace Emberfall.DevHarness
                 // is here and not at the bottom of the loop.
                 outcome.EntryPower = profile.EffectiveTeamPower(db);
                 outcome.EntryBarePower = profile.TeamPower();
-                outcome.EntryRosterPower = DeployedRosterPowerAtLevelOne(profile);
+                outcome.EntryRosterPower = DeployedRosterPowerAtLevelOne(profile, db.Balance);
+                outcome.EntryLine = DescribeLine(session);
                 outcome.EntryLedger = run.Ledger.Snapshot();
 
                 int rounds = 0;
@@ -15313,13 +15367,11 @@ namespace Emberfall.DevHarness
                     IdleReport idle = session.ClaimIdle(run.Now);
                     run.Ledger.GoldIdle += idle.Gold;
                     run.Ledger.ShardIdle += idle.Shards;
-                    long goldBeforeLevels = profile.Gold;
-                    int levelsBefore = TotalDeployedLevels(profile);
-                    if (SpendGold(session)) run.CapBlockedSessions++;
-                    else run.SpendableSessions++;
-                    run.Ledger.GoldSpentOnLevels += goldBeforeLevels - profile.Gold;
-                    run.Ledger.HeroLevelsBought += TotalDeployedLevels(profile) - levelsBefore;
-                    if (profile.Gold > run.PeakGold) run.PeakGold = profile.Gold;
+                    // THE ORDER OF A SITTING'S ROSTER WORK, and it changed with fusion. Gold used to
+                    // go first, into the line as it stood, and the pulls came after it, so a hero
+                    // pulled this sitting waited for the next one to be levelled. Now the pulls
+                    // come first, then conversions and ascensions, then the line is chosen, and
+                    // only then is gold spent - into the line that will actually fight.
                     while (session.CanSummon)
                     {
                         SummonOutcome so = session.Summon(run.NextSeed(), run.Now);
@@ -15330,6 +15382,14 @@ namespace Emberfall.DevHarness
                         run.Ledger.ShardDuplicate += so.ShardRefund;
                     }
                     profile.NormaliseTeam();
+                    bool rosterMoved = EconomyConvertAscendAndDeploy(session, run, outcome, stageIdx);
+                    long goldBeforeLevels = profile.Gold;
+                    int levelsBought;
+                    if (SpendGold(session, out levelsBought)) run.CapBlockedSessions++;
+                    else run.SpendableSessions++;
+                    run.Ledger.GoldSpentOnLevels += goldBeforeLevels - profile.Gold;
+                    run.Ledger.HeroLevelsBought += levelsBought;
+                    if (profile.Gold > run.PeakGold) run.PeakGold = profile.Gold;
                     // Wear what has actually been earned - GrantBattleResult rolls the real drops
                     // at the real drop chance, and this instrument has been accumulating them all
                     // along.
@@ -15406,8 +15466,14 @@ namespace Emberfall.DevHarness
                         }
                     }
 
+                    // STALLED means neither power nor the roster moved. Before caps, power was the
+                    // only thing a sitting could raise, so a flat power line meant farming had
+                    // stopped helping. Under star-gated caps a capped line can sit at one power for
+                    // several sittings while the pulls pile up the fodder and copies its next step
+                    // is made of, and that is a player waiting, not a player stuck.
                     int power = profile.EffectiveTeamPower(db);
                     if (power > bestPower) { bestPower = power; stalled = 0; }
+                    else if (rosterMoved) stalled = 0;
                     else stalled++;
                     if (!cleared && stalled >= EconomyStallSessions) break;
                 }
@@ -15432,6 +15498,144 @@ namespace Emberfall.DevHarness
             }
 
             return run;
+        }
+
+        // ---------------------------------------------------------------- fusion, as walked
+
+        /// <summary>
+        /// What fusion and ascension did inside the one walk the tables above read: per stage, the
+        /// line the player brought to its first attempt and the roster work its sittings did; then
+        /// every change to the line, in order. Report only. The question it answers is the one the
+        /// caps were built for: does the simulated player ever swap a 5-star in, and is it one a
+        /// conversion just made?
+        /// </summary>
+        private static void ReportFusionWalk(ContentDatabase db, EconomyRun run)
+        {
+            Line("");
+            Line("FUSION AND ASCENSION, AS WALKED (the same walk as CAMPAIGN BALANCE; report only)");
+            Line("  " + run.Ledger.Conversions + " conversions spent " + run.Ledger.FodderBodies + " bodies; "
+                 + run.Ledger.Ascensions + " ascensions; " + run.Ledger.Swaps + " swaps into the line, "
+                 + run.Ledger.FreshFusedSwaps + " of them a 5-star swapped in during the sitting a conversion first made it.");
+            Line("");
+            Line("  stage   entry  conv  asc  swap   the line at first attempt (stars, +ascension tier, tier level)");
+            for (int i = 0; i < run.Stages.Count; i++)
+            {
+                EconomyStageOutcome o = run.Stages[i];
+                Line("  " + o.Stage.DisplayCode.PadRight(6) + ("x" + Ratio3(o.EntryRatio)).PadLeft(7)
+                     + o.Conversions.ToString().PadLeft(6) + o.Ascensions.ToString().PadLeft(5)
+                     + o.Swaps.ToString().PadLeft(6) + "   " + o.EntryLine);
+            }
+            Line("");
+            Line("  every change to the line, in order:");
+            for (int i = 0; i < run.SwapLog.Count; i++) Line("    " + run.SwapLog[i]);
+            if (run.SwapLog.Count == 0) Line("    none - the line the walk started with is the line it finished with.");
+            Line("");
+        }
+
+        /// <summary>One walk's pace readings, the same quantities ReportPaceTargets grades.</summary>
+        private sealed class PaceReading
+        {
+            public int FirstSeed;
+            public bool Stuck;
+            public string StuckAt = "";
+            public float EntryRatioLast;
+            public double LevelShare, RosterShare;
+            public Dictionary<string, int> WallExtra = new Dictionary<string, int>();
+            public int Conversions, Ascensions, Swaps, FreshFusedSwaps, Sittings;
+        }
+
+        private static PaceReading ReadPace(ContentDatabase db, EconomyRun run, int firstSeed)
+        {
+            PaceReading r = new PaceReading();
+            r.FirstSeed = firstSeed;
+            r.Stuck = run.StuckAt >= 0;
+            if (r.Stuck) r.StuckAt = db.AllStages[run.StuckAt].DisplayCode;
+            r.Conversions = run.Ledger.Conversions;
+            r.Ascensions = run.Ledger.Ascensions;
+            r.Swaps = run.Ledger.Swaps;
+            r.FreshFusedSwaps = run.Ledger.FreshFusedSwaps;
+            r.Sittings = run.TotalSessions;
+            for (int i = 0; i < run.Stages.Count; i++)
+            {
+                EconomyStageOutcome o = run.Stages[i];
+                if (!BandKindOf(o.Stage, i).StartsWith("wall")) continue;
+                int ladder, floor;
+                r.WallExtra[o.Stage.DisplayCode] = WallExtraSittings(o, out ladder, out floor);
+            }
+            if (run.Stages.Count > 0)
+            {
+                EconomyStageOutcome first = run.Stages[0], last = run.Stages[run.Stages.Count - 1];
+                r.EntryRatioLast = last.EntryRatio;
+                double total = Math.Log(last.EntryPower / (double)Math.Max(1, first.EntryRosterPower));
+                if (total > 0)
+                {
+                    r.RosterShare = Math.Log(last.EntryRosterPower / (double)Math.Max(1, first.EntryRosterPower)) / total;
+                    r.LevelShare = Math.Log(last.EntryBarePower / (double)Math.Max(1, last.EntryRosterPower)) / total;
+                }
+            }
+            return r;
+        }
+
+        private const int PaceSeeds = 8;
+
+        /// <summary>
+        /// THE PACE TARGETS OVER EIGHT PLAYERS, not one. A conversion rolls which 5-star comes out
+        /// (F3), so since fusion one walk's line is one draw of what the economy produces, and a
+        /// wall that costs one walk nothing can cost the next one three sittings. The single walk
+        /// above is kept because every other table reads it; this is the spread around it, and
+        /// the finale verdict of target B is read here rather than off one draw. Report only.
+        /// </summary>
+        private static void ReportPaceAcrossSeeds(ContentDatabase db)
+        {
+            Line("");
+            Line("PACE ACROSS " + PaceSeeds + " WALKS (the same economy, " + PaceSeeds + " first seeds; report only)");
+            List<PaceReading> readings = new List<PaceReading>();
+            List<string> walls = new List<string>();
+            for (int k = 0; k < PaceSeeds; k++)
+            {
+                int seed = 1 + k * 1000003;
+                PaceReading r = ReadPace(db, SimulateEconomy(db, false, seed), seed);
+                readings.Add(r);
+                foreach (string w in r.WallExtra.Keys) if (!walls.Contains(w)) walls.Add(w);
+            }
+
+            StringBuilder head = new StringBuilder("  seed      ");
+            for (int w = 0; w < walls.Count; w++) head.Append(("+" + walls[w]).PadLeft(7));
+            head.Append("   last entry   levels  roster   conv  asc  swaps  fresh  sittings");
+            Line(head.ToString());
+            int finalesInTarget = 0, finalesGraded = 0, seedsWithFreshSwap = 0;
+            for (int k = 0; k < readings.Count; k++)
+            {
+                PaceReading r = readings[k];
+                StringBuilder row = new StringBuilder("  " + r.FirstSeed.ToString().PadRight(10));
+                for (int w = 0; w < walls.Count; w++)
+                {
+                    int extra;
+                    row.Append((r.WallExtra.TryGetValue(walls[w], out extra) ? extra.ToString() : "-").PadLeft(7));
+                }
+                row.Append(("x" + Ratio3(r.EntryRatioLast)).PadLeft(13) + Pct((float)r.LevelShare).PadLeft(9)
+                           + Pct((float)r.RosterShare).PadLeft(8) + r.Conversions.ToString().PadLeft(7)
+                           + r.Ascensions.ToString().PadLeft(5) + r.Swaps.ToString().PadLeft(7)
+                           + r.FreshFusedSwaps.ToString().PadLeft(7) + r.Sittings.ToString().PadLeft(10)
+                           + (r.Stuck ? "   STUCK at " + r.StuckAt : ""));
+                Line(row.ToString());
+                if (r.FreshFusedSwaps > 0) seedsWithFreshSwap++;
+                for (int i = 0; i < db.AllStages.Count; i++)
+                {
+                    StageDef s = db.AllStages[i];
+                    int extra;
+                    if (!s.IsBoss || !r.WallExtra.TryGetValue(s.DisplayCode, out extra)) continue;
+                    finalesGraded++;
+                    if (extra >= PaceFinaleExtraMin && extra <= PaceFinaleExtraMax) finalesInTarget++;
+                }
+            }
+            Line("");
+            Line("  +stage is a wall's EXTRA sittings over its ladder floor. levels and roster are target A's shares at the last stage.");
+            Line("  fresh counts 5-stars swapped into the line in the sitting a conversion first made them.");
+            Line("  " + finalesInTarget + " of " + finalesGraded + " finale readings cost " + PaceFinaleExtraMin + " to "
+                 + PaceFinaleExtraMax + " extra sittings (target B); " + seedsWithFreshSwap + " of " + readings.Count
+                 + " walks swapped a freshly fused 5-star into the line.");
+            Line("");
         }
 
         /// <summary>The per-stage table row, plus the damage-share and healer probes. Verbose path
@@ -15521,14 +15725,14 @@ namespace Emberfall.DevHarness
                  + ", " + profile.Heroes.Count + " heroes"
                  + ", gold " + profile.Gold
                  + ", shards " + profile.Shards
-                 + ", hero cap Lv" + run.Session.HeroLevelCap
+                 + ", " + run.Ledger.Conversions + " conversions, " + run.Ledger.Ascensions + " ascensions"
                  + ", total battles " + run.TotalBattles
                  + ", " + run.TotalSessions + " sittings over " + Fmt(run.Now / 86400f) + " days");
 
             int totalSessions = run.CapBlockedSessions + run.SpendableSessions;
             float blockedShare = totalSessions > 0 ? run.CapBlockedSessions / (float)totalSessions : 0f;
             Line("  gold sink: " + run.CapBlockedSessions + " of " + totalSessions + " sittings ("
-                 + Pct(blockedShare) + ") ended CAP-BLOCKED - every deployed hero at HeroLevelCap"
+                 + Pct(blockedShare) + ") ended CAP-BLOCKED - every deployed hero at its own level cap"
                  + " with Gold still in hand. Peak balance " + run.PeakGold + ", ending " + profile.Gold + ".");
             Line("           A high share is the Gold surplus DESIGN-SHOP argues for, measured rather than"
                  + " reasoned: it is time spent earning Gold that has nowhere to go. A low share means the"
@@ -15538,7 +15742,10 @@ namespace Emberfall.DevHarness
             {
                 HeroInstance h = profile.Heroes[i];
                 Line("    " + (profile.IsDeployed(h.Uid) ? "*" : " ") + " "
-                     + h.DisplayName.PadRight(20) + " Lv" + h.Level.ToString().PadLeft(2)
+                     + h.DisplayName.PadRight(20) + " Lv" + run.Session.TierLevelOf(h).ToString().PadLeft(2)
+                     + "/" + StatMath.HeroLevelCap(db.Balance, h.Def.Stars, h.Ascension).ToString().PadRight(2)
+                     + (h.Ascension > 0 ? " asc" + h.Ascension : "     ")
+                     + "  x" + h.Copies.ToString().PadRight(3)
                      + "  power " + h.Power.ToString().PadLeft(6)
                      + "  " + h.Def.Role + "/" + h.Def.Aspect + "  " + h.Def.Stars + "*");
             }
@@ -15601,8 +15808,9 @@ namespace Emberfall.DevHarness
                  + " shards.");
             Line("    level cost       " + Fmt(db.Balance.LevelCostA) + " + " + Fmt(db.Balance.LevelCostB)
                  + "*L + " + Fmt(db.Balance.LevelCostC) + "*L^2 gold for the level above L,"
-                 + " ceilinged at HeroLevelCap = " + db.Balance.HeroLevelCapBase + " + "
-                 + db.Balance.HeroLevelCapPerPlayerLevel + " per account rank.");
+                 + " times the ascension tier's curve multiplier, ceilinged at the hero's own cap:"
+                 + " 1 to 4 stars " + IntList(db.Balance.LevelCapsBelowFiveStars) + ", a 5-star "
+                 + IntList(db.Balance.FiveStarLevelCaps) + " by ascension tier. Account rank sets none of it.");
             Line("    armor            rolled on an uncapped clear at the armor table's drop chance.");
             Line("    starting purse   " + db.Balance.StartingGold + " gold, "
                  + db.Balance.StartingShards + " shards.");
@@ -15623,7 +15831,7 @@ namespace Emberfall.DevHarness
             Line("");
             Line("  " + label + "   effective team power " + o.EntryPower
                  + " against recommendedPower " + o.Stage.RecommendedPower
-                 + " = x" + Fmt(o.EntryRatio));
+                 + " = x" + Ratio3(o.EntryRatio));
             Line("    power block          value    share");
             Line("      roster (5 bodies at Lv1) " + roster.ToString().PadLeft(8)
                  + Pct(roster / total).PadLeft(9) + "   what summoning and deployment bought");
@@ -15745,6 +15953,22 @@ namespace Emberfall.DevHarness
         private const float WallBandHighLater = 1.02f;
 
         /// <summary>
+        /// HOW FAR PAST AN EDGE A RATIO MAY SIT BEFORE THE GUARD CALLS IT OUT, on both edges of
+        /// every band. The entry ratio is one simulated player's entry power over an integer
+        /// recommendedPower, so it carries a rounding floor of its own - one point of
+        /// recommendedPower on 8,623 is 0.0001 of ratio - and the economy walk under it moves by
+        /// whole purchases. 2-1 failed the build at x1.099 against x1.10, a miss of 0.09%, and the
+        /// report printed it as "x1.1 under x1.1", which is why nobody owned it for a session: the
+        /// verdict and the number disagreed on the page. Half a hundredth is five times that miss
+        /// and a twentieth of the narrowest band (the chapter 1 wall's 0.05), so it absorbs rounding
+        /// without hiding a stage that has actually moved. Ratios print to three decimals via
+        /// Ratio3 for the same reason: a verdict has to be checkable against the number beside it.
+        /// </summary>
+        private const float BandTolerance = 0.005f;
+
+        private static string Ratio3(float v) { return v.ToString("0.000", CultureInfo.InvariantCulture); }
+
+        /// <summary>
         /// THE GUARD. One line per stage: the power a simulated player brings to their first
         /// attempt, divided by that stage's recommendedPower, against the band that stage is
         /// supposed to sit in.
@@ -15801,7 +16025,8 @@ namespace Emberfall.DevHarness
                  + " and armor (what clears dropped).");
             Line("");
             Line("  stage  name                    entryPwr  roster  levels   armor    goldEarned"
-                 + "  recPwr  ratio  band                 verdict");
+                 + "  recPwr   ratio  band                    verdict");
+            Line("  A ratio within " + Ratio3(BandTolerance) + " of an edge is in band: see BandTolerance.");
 
             int outOfBand = 0;
             List<string> offenders = new List<string>();
@@ -15850,21 +16075,24 @@ namespace Emberfall.DevHarness
                             + "; recommendedPower " + wouldNeed + " would retire it");
                     }
 
-                    if (ratio < lo)
+                    if (ratio < lo - BandTolerance)
                     {
                         verdict = "UNDER"; outOfBand++;
-                        offenders.Add(stage.DisplayCode + " x" + Fmt(ratio) + " under x" + Fmt(lo));
+                        offenders.Add(stage.DisplayCode + " x" + Ratio3(ratio) + " under x" + Ratio3(lo)
+                                      + " (tolerance " + Ratio3(BandTolerance) + ")");
                     }
-                    else if (ratio > effectiveHigh)
+                    else if (ratio > effectiveHigh + BandTolerance)
                     {
                         verdict = "OVER"; outOfBand++;
-                        offenders.Add(stage.DisplayCode + " x" + Fmt(ratio) + " over x" + Fmt(effectiveHigh));
+                        offenders.Add(stage.DisplayCode + " x" + Ratio3(ratio) + " over x" + Ratio3(effectiveHigh)
+                                      + " (tolerance " + Ratio3(BandTolerance) + ")");
                     }
+                    else if (ratio < lo || ratio > effectiveHigh) verdict = "ok (within tolerance)";
                     else verdict = relaxed ? "ok (relaxed)" : "ok";
 
                     bandText = relaxed
-                        ? ("x" + Fmt(lo) + "-x" + Fmt(effectiveHigh) + "*")
-                        : ("x" + Fmt(lo) + "-x" + Fmt(hi));
+                        ? ("x" + Ratio3(lo) + "-x" + Ratio3(effectiveHigh) + "*")
+                        : ("x" + Ratio3(lo) + "-x" + Ratio3(hi));
 
                     if (lo * rec > floorPower) { floorPower = lo * rec; floorFrom = stage.DisplayCode; }
                 }
@@ -15877,8 +16105,8 @@ namespace Emberfall.DevHarness
                      + (o.EntryPower - o.EntryBarePower).ToString().PadLeft(8)
                      + o.EntryLedger.GoldTotal.ToString().PadLeft(12)
                      + stage.RecommendedPower.ToString().PadLeft(8)
-                     + ("x" + Fmt(ratio)).PadLeft(7)
-                     + "  " + (kind + " " + bandText).PadRight(21)
+                     + ("x" + Ratio3(ratio)).PadLeft(8)
+                     + "  " + (kind + " " + bandText).PadRight(24)
                      + verdict);
             }
 
@@ -15984,6 +16212,579 @@ namespace Emberfall.DevHarness
             floorSittings = (ladder + EconomySessionBattleBudget - 1) / EconomySessionBattleBudget;
             int extra = o.Sessions - floorSittings;
             return extra < 0 ? 0 : extra;
+        }
+
+        // ==================================================================== the fusion economy
+        //
+        // CheckFusionEconomyDerivation DERIVES every number fusion and ascension run on and asserts
+        // that balance.json says the same, the way the star band's rungs were read off the tiers
+        // already authored rather than declared. Six rules, each one sentence, each applied to
+        // numbers measured off the tree as it stands:
+        //
+        //   CAPS AT TIER 0 (F7). A 5-star's tier-0 cap is where levels reach PaceLevelShareMax of
+        //   the campaign's growth. The growth is the finale's entry power - its recommendedPower at
+        //   its band middle - over the starting line at level 1: the quantity pace target A grades.
+        //   Levels are allowed a factor of growth^0.35 and no more, and the cap is the last level
+        //   inside that.
+        //
+        //   CAPS AT HIGHER TIERS (F2, F7). The same share, as if the line sat at that tier: the part
+        //   of the growth that is not levels is the tier-0 remainder plus every ascension below,
+        //   and levels may be 35/65 of that. A deeper tier has more roster under it, so it may have
+        //   more levels on top of it: the caps rise because the rule holds still.
+        //
+        //   THE CURVE (F6). Tier t + 1's first level stands one Level past tier t's cap, so it
+        //   out-powers that cap by exactly one Level and never by less; its curve multiplier is what
+        //   that first level is worth against tier 0's, 1 + growth * (Level - 1), and each of its
+        //   tier levels walks that many Levels of the one ladder (StatMath.LevelAt).
+        //
+        //   COPIES (F5). An ascension costs the bodies whose level-1 power it adds: M(t+1) - M(t)
+        //   copies, rounded, since one copy is one hero's worth of tier-0 level-1 power. Nothing is
+        //   made from nothing.
+        //
+        //   FODDER (F3, F4, F9). A body of star s is worth what it cost to pull against what a
+        //   5-star costs to pull: w5 / ws of a conversion, from the summon weights. A conversion is
+        //   never a cheaper 5-star than a pull; it makes the pulls that missed count. Below five
+        //   stars a tier's cap is its measured share of a 5-star's level-1 power times the 5-star
+        //   tier-0 cap: a hero gets the share of a 5-star's levels that it has of a 5-star.
+        //
+        //   SEEDS (F9). An aspect whose same-aspect conversion takes more than twice the median
+        //   aspect's pulls to fill is a wall rather than a slower path, and takes one seed of its
+        //   own aspect plus fodder of any aspect instead.
+        //
+        // The number of tiers is derived too: tiers are authored up to and including the first one
+        // whose level-1 hero already out-powers the finale's per-hero demand, because a tier past
+        // that serves content that does not exist yet. A chapter 3 raises the finale and the
+        // derivation extends the ladder on its own.
+
+        private sealed class FusionDerivation
+        {
+            public double Growth;
+            public bool GrowthUniform;
+            public int StartLine;
+            public StageDef Finale;
+            public double FinaleMiddle;
+            public double FinaleEntry;
+            public double CampaignGrowth;
+            public double PerHeroDemand;
+            public List<int> FiveCaps = new List<int>();
+            public List<double> LevelFactors = new List<double>();
+            public List<double> Multipliers = new List<double>();
+            public List<int> BaseLevels = new List<int>();
+            public List<int> Copies = new List<int>();
+            public List<double> TierLevelOnePower = new List<double>();
+            public List<double> TierCapPower = new List<double>();
+            public double[] StarShare = new double[5];
+            public int[] LowCaps = new int[4];
+            public double[] Weights = new double[5];
+            public int[] Points = new int[4];
+            public int Required = 100;
+            public Dictionary<Aspect, double> PullsPerConversion = new Dictionary<Aspect, double>();
+            public Dictionary<Aspect, double> PullsPerSeed = new Dictionary<Aspect, double>();
+            public double MedianPulls;
+            public List<string> SeedAspects = new List<string>();
+        }
+
+        private static double MeanPowerAtLevel(ContentDatabase db, int stars, int level)
+        {
+            double sum = 0; int n = 0;
+            for (int i = 0; i < db.Heroes.Count; i++)
+            {
+                HeroDef h = db.Heroes[i];
+                if (h.Stars != stars) continue;
+                sum += StatMath.PowerScore(StatMath.ForHero(h, level));
+                n++;
+            }
+            return n > 0 ? sum / n : 0;
+        }
+
+        private static FusionDerivation DeriveFusionEconomy(ContentDatabase db)
+        {
+            FusionDerivation d = new FusionDerivation();
+            double s = PaceLevelShareMax;
+
+            d.Growth = 0; d.GrowthUniform = true;
+            for (int i = 0; i < db.Heroes.Count; i++)
+            {
+                if (db.Heroes[i].Stars != 5) continue;
+                if (d.Growth > 0 && Math.Abs(db.Heroes[i].Growth - d.Growth) > 1e-6) d.GrowthUniform = false;
+                d.Growth = Math.Max(d.Growth, db.Heroes[i].Growth);
+            }
+
+            PlayerProfile fresh = GameSession.CreateNewProfile(db, 0);
+            d.StartLine = fresh.TeamPower();
+            d.Finale = db.AllStages[db.AllStages.Count - 1];
+            d.FinaleMiddle = SolverBandMiddle(d.Finale, db.AllStages.Count - 1);
+            d.FinaleEntry = d.FinaleMiddle * d.Finale.RecommendedPower;
+            d.CampaignGrowth = d.FinaleEntry / Math.Max(1, d.StartLine);
+            d.PerHeroDemand = d.FinaleEntry / Math.Max(1, db.Balance.MaxTeamSize);
+            double lnG = Math.Log(d.CampaignGrowth);
+
+            double nonLevel = (1 - s) * lnG;
+            int baseLevel = 1;
+            for (int t = 0; t < 12; t++)
+            {
+                double m = Math.Round(1 + d.Growth * (baseLevel - 1), 4);
+                double lf = Math.Exp(s / (1 - s) * nonLevel);
+                int cap = Math.Max(1, (int)Math.Floor(1 + (lf - 1) / d.Growth + 1e-9));
+                int capLevel = baseLevel + (int)Math.Round(m * (cap - 1), MidpointRounding.AwayFromZero);
+                d.FiveCaps.Add(cap);
+                d.LevelFactors.Add(lf);
+                d.Multipliers.Add(m);
+                d.BaseLevels.Add(baseLevel);
+                double l1 = MeanPowerAtLevel(db, 5, baseLevel);
+                d.TierLevelOnePower.Add(l1);
+                d.TierCapPower.Add(MeanPowerAtLevel(db, 5, capLevel));
+                if (l1 > d.PerHeroDemand) break;
+                int nextBase = capLevel + 1;
+                double next = Math.Round(1 + d.Growth * (nextBase - 1), 4);
+                d.Copies.Add(Math.Max(1, (int)Math.Round(next - m, MidpointRounding.AwayFromZero)));
+                nonLevel += Math.Log(next / m);
+                baseLevel = nextBase;
+            }
+
+            double fiveMean = MeanPowerAtLevel(db, 5, 1);
+            for (int st = 1; st <= 4; st++)
+            {
+                d.StarShare[st - 1] = fiveMean > 0 ? MeanPowerAtLevel(db, st, 1) / fiveMean : 0;
+                d.LowCaps[st - 1] = Math.Max(1, (int)Math.Round(d.FiveCaps[0] * d.StarShare[st - 1]));
+            }
+
+            BalanceConfig b = db.Balance;
+            double[] w = { b.SummonWeight1, b.SummonWeight2, b.SummonWeight3, b.SummonWeight4, b.SummonWeight5 };
+            double wt = 0;
+            for (int i = 0; i < 5; i++) { if (db.HeroesOfStars(i + 1).Count == 0) w[i] = 0; wt += w[i]; }
+            for (int i = 0; i < 5; i++) d.Weights[i] = wt > 0 ? w[i] / wt : 0;
+            for (int st = 1; st <= 4; st++)
+                d.Points[st - 1] = d.Weights[st - 1] > 0
+                    ? (int)Math.Round(d.Required * d.Weights[4] / d.Weights[st - 1]) : 0;
+
+            List<double> pulls = new List<double>();
+            foreach (Aspect a in Enum.GetValues(typeof(Aspect)))
+            {
+                bool hasFive = false;
+                for (int i = 0; i < db.Heroes.Count; i++)
+                    if (db.Heroes[i].Stars == 5 && db.Heroes[i].Aspect == a) hasFive = true;
+                if (!hasFive) continue;
+                double pointsPerPull = 0, seedsPerPull = 0;
+                for (int st = 1; st <= 4; st++)
+                {
+                    List<HeroDef> tier = db.HeroesOfStars(st);
+                    if (tier.Count == 0) continue;
+                    int inAspect = 0;
+                    for (int i = 0; i < tier.Count; i++) if (tier[i].Aspect == a) inAspect++;
+                    double share = inAspect / (double)tier.Count;
+                    pointsPerPull += d.Weights[st - 1] * d.Points[st - 1] * share;
+                    seedsPerPull += d.Weights[st - 1] * share;
+                }
+                double p = pointsPerPull > 0 ? d.Required / pointsPerPull : double.PositiveInfinity;
+                d.PullsPerConversion[a] = p;
+                d.PullsPerSeed[a] = seedsPerPull > 0 ? 1 / seedsPerPull : double.PositiveInfinity;
+                pulls.Add(p);
+            }
+            pulls.Sort();
+            d.MedianPulls = pulls.Count == 0 ? 0
+                : pulls.Count % 2 == 1 ? pulls[pulls.Count / 2]
+                : (pulls[pulls.Count / 2 - 1] + pulls[pulls.Count / 2]) / 2;
+            foreach (KeyValuePair<Aspect, double> kv in d.PullsPerConversion)
+                if (kv.Value > 2 * d.MedianPulls) d.SeedAspects.Add(kv.Key.ToString());
+            return d;
+        }
+
+        /// <summary>
+        /// THE FUSION AND ASCENSION RULES, F1 to F9, each asserted against GameSession's own API
+        /// rather than against the derivation: CheckFusionEconomyDerivation says the numbers are
+        /// right, this says the game obeys them.
+        /// </summary>
+        private static void CheckFusionRules(ContentDatabase db)
+        {
+            Line("");
+            Line("FUSION AND ASCENSION RULES (F1 to F9, against GameSession itself)");
+            BalanceConfig b = db.Balance;
+
+            HeroDef five = null, fiveOther = null, four = null, one = null;
+            for (int i = 0; i < db.Heroes.Count; i++)
+            {
+                HeroDef h = db.Heroes[i];
+                if (h.StartingHero) continue;
+                if (h.Stars == 5 && h.Aspect == Aspect.Ember && five == null) five = h;
+                else if (h.Stars == 5 && h.Aspect == Aspect.Ember && fiveOther == null) fiveOther = h;
+                if (h.Stars == 4 && four == null) four = h;
+                if (h.Stars == 1 && one == null) one = h;
+            }
+            if (five == null || fiveOther == null || four == null || one == null)
+            {
+                Check(false, "content has two Ember 5-stars, a 4-star and a 1-star to test with");
+                return;
+            }
+
+            // ---- F7: the cap is star tier and ascension tier, and account rank does not move it.
+            GameSession low = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            HeroInstance lowFive = low.GrantHeroDirect(five, 0);
+            GameSession high = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            high.Profile.PlayerLevel = 60;
+            HeroInstance highFive = high.GrantHeroDirect(five, 0);
+            HeroInstance lowOne = low.GrantHeroDirect(one, 0);
+            Check(low.HeroLevelCapOf(lowFive) == high.HeroLevelCapOf(highFive),
+                  "F7: a 5-star's cap is " + low.HeroLevelCapOf(lowFive) + " at account rank 1 and "
+                  + high.HeroLevelCapOf(highFive) + " at rank 60 - rank does not set it");
+            Check(low.HeroLevelCapOf(lowOne) < low.HeroLevelCapOf(lowFive),
+                  "F7: a 1-star and a 5-star do not share a cap (" + low.HeroLevelCapOf(lowOne) + " against "
+                  + low.HeroLevelCapOf(lowFive) + ")");
+
+            low.Profile.Gold = 100000000L;
+            low.LevelUpHero(lowFive, 500);
+            LevelUpResult blocked = low.LevelUpHero(lowFive, 1);
+            Check(lowFive.Level == low.HeroLevelCapOf(lowFive) && !blocked.Success,
+                  "gold stops at the cap: a tier-0 5-star with a hundred million gold stands at Level "
+                  + lowFive.Level + " and buys no more (\"" + blocked.Message + "\")");
+
+            // ---- F1, F2: below five stars nothing ascends.
+            HeroInstance lowFour = low.GrantHeroDirect(four, 0);
+            lowFour.Copies = 50;
+            Check(low.AscensionBlocker(lowFour) != null && !low.Ascend(lowFour).Success && lowFour.Ascension == 0,
+                  "F1/F2: a 4-star with fifty copies does not ascend (\"" + low.AscensionBlocker(lowFour) + "\")");
+
+            // ---- F5: only copies of the same hero count.
+            HeroInstance other = low.GrantHeroDirect(fiveOther, 0);
+            other.Copies = 50;
+            Check(low.AscensionBlocker(lowFive) != null,
+                  "F5: a 5-star with one body does not ascend while a different 5-star holds fifty copies (\""
+                  + low.AscensionBlocker(lowFive) + "\")");
+
+            // ---- F6: the reset reads as a promotion, and it reopens the gold sink.
+            int need = StatMath.AscensionCopiesFor(b, 0);
+            lowFive.Copies = 1 + need;
+            int powerAtCap = lowFive.Power;
+            int levelAtCap = lowFive.Level;
+            int costAtCap = low.LevelUpCost(lowFive);
+            AscensionResult up = low.Ascend(lowFive);
+            Check(up.Success && lowFive.Ascension == 1 && lowFive.Copies == 1 && low.TierLevelOf(lowFive) == 1,
+                  "F5/F6: ascending spends " + need + " cop" + (need == 1 ? "y" : "ies") + " of the same hero and puts it at"
+                  + " tier 1, tier level 1 (copies left " + lowFive.Copies + ")");
+            Check(lowFive.Power > powerAtCap && lowFive.Level == levelAtCap + 1,
+                  "F6: tier 1 at its first level out-powers tier 0 at its cap (" + lowFive.Power + " against "
+                  + powerAtCap + "), one Level past it (" + lowFive.Level + " against " + levelAtCap + ")");
+            int costAfter = low.LevelUpCost(lowFive);
+            Check(costAfter == StatMath.LevelUpCost(b, 1, 1) && costAfter < costAtCap * StatMath.CurveMultiplier(b, 1),
+                  "F6: the gold sink reopens at the level-1 price times the tier's curve (" + costAfter
+                  + " gold, where tier 0's last level cost " + costAtCap + ")");
+            int before = lowFive.Level;
+            low.LevelUpHero(lowFive, 1);
+            Check(lowFive.Level - before == StatMath.LevelAt(b, 1, 2) - StatMath.LevelAt(b, 1, 1) && lowFive.Level - before >= 2,
+                  "one tier-1 level walks " + (lowFive.Level - before) + " Levels of the one ladder, the tier's curve x"
+                  + Fmt(StatMath.CurveMultiplier(b, 1)) + " rounded (StatMath.LevelAt)");
+
+            int maxTier = StatMath.MaxAscensionTier(b);
+            lowFive.Copies = 1000;
+            for (int t = lowFive.Ascension; t < maxTier; t++) low.Ascend(lowFive);
+            Check(lowFive.Ascension == maxTier && !low.Ascend(lowFive).Success,
+                  "nothing ascends past the highest tier balance.json authors (" + maxTier + ")");
+
+            // A hero carried over from before caps can stand above its cap; ascending must not
+            // lower it.
+            GameSession legacy = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            HeroInstance old = legacy.GrantHeroDirect(five, 0);
+            old.Level = 30;
+            old.Copies = 1 + need;
+            legacy.Ascend(old);
+            Check(old.Level > 30 && old.Ascension == 1,
+                  "a Level-30 hero from before caps ascends to Level " + old.Level + ", never below where it stood");
+
+            // ---- F3, F4, F9: conversions.
+            GameSession conv = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            List<HeroDef> emberLow = new List<HeroDef>(), tideLow = new List<HeroDef>(), umbraLow = new List<HeroDef>();
+            for (int i = 0; i < db.Heroes.Count; i++)
+            {
+                HeroDef h = db.Heroes[i];
+                if (h.Stars >= 5) continue;
+                if (h.Aspect == Aspect.Ember) emberLow.Add(h);
+                if (h.Aspect == Aspect.Tide) tideLow.Add(h);
+                if (h.Aspect == Aspect.Umbra) umbraLow.Add(h);
+            }
+            List<HeroInstance> emberBodies = new List<HeroInstance>();
+            for (int i = 0; i < emberLow.Count; i++)
+            {
+                HeroInstance h = conv.GrantHeroDirect(emberLow[i], 0);
+                h.Copies = 20;
+                if (!conv.Profile.IsDeployed(h.Uid)) emberBodies.Add(h);
+            }
+            HeroInstance tideBody = conv.GrantHeroDirect(tideLow[0], 0);
+            tideBody.Copies = 20;
+
+            List<HeroInstance> mixed = BodiesWorth(conv, emberBodies, b.ConversionPointsRequired);
+            mixed[mixed.Count - 1] = tideBody;
+            Check(conv.ConversionBlocker(Aspect.Ember, mixed) != null,
+                  "F4: an Ember conversion with a Tide body in it is refused (\"" + conv.ConversionBlocker(Aspect.Ember, mixed) + "\")");
+
+            List<HeroInstance> shortList = BodiesWorth(conv, emberBodies, b.ConversionPointsRequired);
+            shortList.RemoveAt(shortList.Count - 1);
+            Check(conv.ConversionBlocker(Aspect.Ember, shortList) != null,
+                  "a conversion worth less than " + b.ConversionPointsRequired + " points is refused");
+
+            List<HeroInstance> withFive = BodiesWorth(conv, emberBodies, b.ConversionPointsRequired);
+            withFive.Add(conv.GrantHeroDirect(fiveOther, 0));
+            Check(conv.ConversionBlocker(Aspect.Ember, withFive) != null,
+                  "F5: a 5-star is never fodder");
+
+            HashSet<string> rolled = new HashSet<string>();
+            bool outsideAspect = false;
+            int conversions = 0;
+            for (int seed = 1; seed <= 60; seed++)
+            {
+                List<HeroInstance> fodder = BodiesWorth(conv, emberBodies, b.ConversionPointsRequired);
+                if (fodder == null) break;
+                int bodiesBefore = CountBodies(conv.Profile);
+                ConversionResult r = conv.Convert(Aspect.Ember, fodder, seed * 7919, 0);
+                if (!r.Success) break;
+                conversions++;
+                rolled.Add(r.Hero.Id);
+                if (r.Hero.Aspect != Aspect.Ember || r.Hero.Stars != 5) outsideAspect = true;
+                if (CountBodies(conv.Profile) != bodiesBefore - fodder.Count + 1) outsideAspect = true;
+                for (int i = 0; i < emberBodies.Count; i++)
+                    if (!conv.Profile.Heroes.Contains(emberBodies[i])) { emberBodies.RemoveAt(i); i--; }
+            }
+            int emberFives = conv.ConversionPool(Aspect.Ember).Count;
+            Check(conversions > 20 && !outsideAspect && rolled.Count == emberFives,
+                  "F3: " + conversions + " Ember conversions each spent their bodies and made one Ember 5-star, and between"
+                  + " them made all " + emberFives + " - a roll over the aspect, never a choice");
+
+            GameSession seeded = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            List<HeroInstance> anyAspect = new List<HeroInstance>();
+            for (int i = 0; i < tideLow.Count; i++)
+            {
+                HeroInstance h = seeded.GrantHeroDirect(tideLow[i], 0);
+                h.Copies = 20;
+                if (!seeded.Profile.IsDeployed(h.Uid)) anyAspect.Add(h);
+            }
+            List<HeroInstance> noSeed = BodiesWorth(seeded, anyAspect, b.ConversionPointsRequired);
+            Check(seeded.IsSeedAspect(Aspect.Umbra) && seeded.ConversionBlocker(Aspect.Umbra, noSeed) != null,
+                  "F9: an Umbra conversion of Tide bodies alone is refused - it needs its seed (\""
+                  + seeded.ConversionBlocker(Aspect.Umbra, noSeed) + "\")");
+            HeroInstance seed1 = seeded.GrantHeroDirect(umbraLow[0], 0);
+            List<HeroInstance> withSeed = new List<HeroInstance>();
+            withSeed.Add(seed1);
+            int seedPoints = seeded.FodderPoints(seed1.Def);
+            List<HeroInstance> rest = BodiesWorth(seeded, anyAspect, b.ConversionPointsRequired - seedPoints);
+            withSeed.AddRange(rest);
+            ConversionResult umbra = seeded.Convert(Aspect.Umbra, withSeed, 12345, 0);
+            Check(umbra.Success && umbra.Hero.Aspect == Aspect.Umbra && umbra.Hero.Stars == 5 && !seeded.Profile.Heroes.Contains(seed1),
+                  "F9: one Umbra seed plus Tide fodder makes an Umbra 5-star (" + (umbra.Hero != null ? umbra.Hero.Id : "none")
+                  + "), and the seed's last body leaves the collection");
+            Check(!seeded.IsSeedAspect(Aspect.Ember) && !seeded.IsSeedAspect(Aspect.Tide),
+                  "F4: the four large aspects take same-aspect fodder, not a seed");
+
+            // A deployed hero keeps the body standing in the line.
+            GameSession line = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            HeroInstance deployedLow = line.GrantHeroDirect(emberLow[0], 0);
+            line.Profile.AssignToTeam(0, deployedLow.Uid);
+            List<HeroInstance> lastBody = new List<HeroInstance>();
+            for (int i = 0; i < 20; i++) lastBody.Add(deployedLow);
+            Check(line.ConversionBlocker(Aspect.Ember, lastBody) != null && line.Profile.IsDeployed(deployedLow.Uid),
+                  "a deployed hero cannot give the body standing in the line (\"" + line.ConversionBlocker(Aspect.Ember, lastBody) + "\")");
+
+            // ---- the pity rule is untouched: three pulls, then duplicates flow.
+            Check(GameSession.PityGuaranteedSummons == 3,
+                  "the pity rule is the three-pull starter guarantee it was (PityGuaranteedSummons " + GameSession.PityGuaranteedSummons + ")");
+
+            // ---- save version 16.
+            GameSession saved = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            HeroInstance asc = saved.GrantHeroDirect(five, 0);
+            asc.Copies = 1 + need;
+            saved.Ascend(asc);
+            saved.LevelUpHero(asc, 0);
+            saved.Profile.Gold = 1000000;
+            saved.LevelUpHero(asc, 3);
+            string json = SaveSerializer.Serialize(saved.Profile);
+            string err;
+            PlayerProfile back = SaveSerializer.Deserialize(json, db, out err);
+            HeroInstance backAsc = back != null ? back.FindHeroByDefId(five.Id) : null;
+            GameSession backSession = back != null ? new GameSession(db, back) : null;
+            Check(SaveSerializer.CurrentVersion == 16 && backAsc != null && backAsc.Ascension == asc.Ascension
+                  && backAsc.Level == asc.Level && backAsc.Copies == asc.Copies
+                  && backSession.TierLevelOf(backAsc) == saved.TierLevelOf(asc) && backAsc.Power == asc.Power,
+                  "save version 16 carries a hero's ascension: tier " + (backAsc != null ? backAsc.Ascension : -1)
+                  + ", Level " + (backAsc != null ? backAsc.Level : -1) + ", the same power after the round trip");
+            Check(SaveSerializer.Serialize(back) == json,
+                  "an ascended profile round-trips byte for byte");
+
+            string v15 = System.Text.RegularExpressions.Regex.Replace(json, @"""ascension""(\s*):", @"""ascensionIgnored""$1:");
+            v15 = System.Text.RegularExpressions.Regex.Replace(v15, @"""version""(\s*):(\s*)16", @"""version""$1:${2}15");
+            PlayerProfile upgraded = SaveSerializer.Deserialize(v15, db, out err);
+            HeroInstance up15 = upgraded != null ? upgraded.FindHeroByDefId(five.Id) : null;
+            Check(up15 != null && up15.Ascension == 0 && up15.Level == asc.Level,
+                  "a version 15 save (no ascension key) loads every hero at tier 0 with the level it had ("
+                  + (up15 != null ? up15.Level.ToString() : "none") + ")");
+            Line("");
+        }
+
+        /// <summary>Spare bodies from the list, highest points first, until they are worth `need`;
+        /// null when they cannot be.</summary>
+        private static List<HeroInstance> BodiesWorth(GameSession session, List<HeroInstance> from, int need)
+        {
+            List<HeroInstance> pool = new List<HeroInstance>();
+            for (int i = 0; i < from.Count; i++)
+            {
+                HeroInstance h = from[i];
+                if (!session.Profile.Heroes.Contains(h)) continue;
+                int spare = h.Copies - (session.Profile.IsDeployed(h.Uid) ? 1 : 0);
+                for (int k = 0; k < spare; k++) pool.Add(h);
+            }
+            SortFodder(session, pool);
+            return TakeToPoints(session, pool, new List<HeroInstance>(), need);
+        }
+
+        private static int CountBodies(PlayerProfile p)
+        {
+            int n = 0;
+            for (int i = 0; i < p.Heroes.Count; i++) n += p.Heroes[i].Copies;
+            return n;
+        }
+
+        private static void CheckFusionEconomyDerivation(ContentDatabase db)
+        {
+            Line("");
+            Line("FUSION ECONOMY - caps, curves, copies and fodder, derived from the tree and checked against balance.json");
+            FusionDerivation d = DeriveFusionEconomy(db);
+            BalanceConfig b = db.Balance;
+
+            Line("  inputs, all measured off the files:");
+            Line("    hero growth per level " + Fmt3((float)d.Growth) + (d.GrowthUniform ? " on every 5-star" : " (the largest; 5-stars differ)")
+                 + "; starting line at level 1 " + d.StartLine + " power");
+            Line("    finale " + d.Finale.DisplayCode + ": recommendedPower " + d.Finale.RecommendedPower + " at its band middle x"
+                 + Fmt3((float)d.FinaleMiddle) + " = entry " + (int)Math.Round(d.FinaleEntry) + ", so the campaign grows x"
+                 + Fmt3((float)d.CampaignGrowth) + " since 1-1; per hero " + (int)Math.Round(d.PerHeroDemand));
+            Line("    levels may be " + Pct(PaceLevelShareMax) + " of that growth (pace target A), so a factor of x"
+                 + Fmt3((float)Math.Pow(d.CampaignGrowth, PaceLevelShareMax)) + " at the finale");
+            Line("");
+            Line("  5-star tiers   cap   factor at cap   curve xM   Levels   copies to next   mean power at tier Lv1   at cap");
+            for (int t = 0; t < d.FiveCaps.Count; t++)
+            {
+                int capLevel = d.BaseLevels[t] + (int)Math.Round(d.Multipliers[t] * (d.FiveCaps[t] - 1), MidpointRounding.AwayFromZero);
+                Line("    tier " + t.ToString().PadRight(8)
+                     + d.FiveCaps[t].ToString().PadLeft(5)
+                     + ("x" + Fmt3((float)(1 + d.Growth * (d.FiveCaps[t] - 1)))).PadLeft(16)
+                     + ("x" + Fmt3((float)d.Multipliers[t])).PadLeft(11)
+                     + (d.BaseLevels[t] + "-" + capLevel).PadLeft(9)
+                     + (t < d.Copies.Count ? d.Copies[t].ToString() : "-").PadLeft(17)
+                     + ((int)Math.Round(d.TierLevelOnePower[t])).ToString().PadLeft(25)
+                     + ((int)Math.Round(d.TierCapPower[t])).ToString().PadLeft(9)
+                     + (t == d.FiveCaps.Count - 1 ? "   last: its Lv1 already exceeds the finale's " + (int)Math.Round(d.PerHeroDemand) + " per hero" : ""));
+            }
+            Line("    cap_t = floor(1 + (factor - 1) / growth), factor_t = exp(0.35/0.65 * (0.65 ln G + ln M_t));"
+                 + " a tier's first Level is one past the last tier's cap, M_t = 1 + growth * (that Level - 1),"
+                 + " each tier level walks M_t Levels, copies_t = round(M(t+1) - M(t)).");
+            Line("");
+            Line("  below five stars   Lv1 power share of a 5-star   cap = round(" + d.FiveCaps[0] + " x share)");
+            for (int st = 1; st <= 4; st++)
+                Line("    " + st + "-star " + Fmt3((float)d.StarShare[st - 1]).PadLeft(33) + d.LowCaps[st - 1].ToString().PadLeft(22));
+            Line("");
+            Line("  fodder   pull weight   points per body = round(100 x w5 / ws)   bodies per conversion");
+            for (int st = 1; st <= 4; st++)
+                Line("    " + st + "-star " + Pct((float)d.Weights[st - 1]).PadLeft(11) + d.Points[st - 1].ToString().PadLeft(30)
+                     + (d.Points[st - 1] > 0 ? Fmt((float)(d.Required / (double)d.Points[st - 1])) : "-").PadLeft(24));
+            Line("    a conversion needs " + d.Required + " points; one 5-star costs 1/w5 = " + Fmt((float)(1 / Math.Max(1e-9, d.Weights[4])))
+                 + " pulls, and every lower tier's points per pull come to the same "
+                 + Fmt((float)(d.Weights[0] * d.Points[0])) + ", so each lower tier makes one conversion per 5-star's worth of pulls.");
+            Line("");
+            Line("  aspect    pulls to fill a same-aspect conversion   pulls per seed   recipe");
+            foreach (KeyValuePair<Aspect, double> kv in d.PullsPerConversion)
+                Line("    " + kv.Key.ToString().PadRight(8) + Fmt((float)kv.Value).PadLeft(40) + Fmt((float)d.PullsPerSeed[kv.Key]).PadLeft(17)
+                     + (d.SeedAspects.Contains(kv.Key.ToString()) ? "   SEED + ANY ASPECT (over twice the median " + Fmt((float)d.MedianPulls) + ")" : "   same aspect"));
+            Line("");
+
+            // THE CROSSOVER, for every 5-star rather than for a mean: F6 is a promise to each hero,
+            // and it is read off the runtime's own ladder (StatMath.LevelAt), not the derivation's.
+            Line("  F6, the crossover: every 5-star's tier t + 1 at its first level against its tier t at cap, on balance.json's own ladder.");
+            Line("    hero                           tier   Level  power at tier Lv1   Level at cap  power   next tier Lv1  power   margin");
+            int worstMargin = int.MaxValue; string worst = "";
+            int maxTier = StatMath.MaxAscensionTier(b);
+            string[] shown = { "kael_the_unyielding", "isolde_the_slow_fading", "velis_the_hollow_vow" };
+            for (int i = 0; i < db.Heroes.Count; i++)
+            {
+                HeroDef h = db.Heroes[i];
+                if (h.Stars != 5) continue;
+                for (int t = 0; t < maxTier; t++)
+                {
+                    int firstLevel = StatMath.TierBaseLevel(b, t);
+                    int capLevel = StatMath.CapLevel(b, 5, t);
+                    int nextLevel = StatMath.TierBaseLevel(b, t + 1);
+                    int l1 = StatMath.PowerScore(StatMath.ForHero(h, firstLevel));
+                    int atCap = StatMath.PowerScore(StatMath.ForHero(h, capLevel));
+                    int next = StatMath.PowerScore(StatMath.ForHero(h, nextLevel));
+                    if (next - atCap < worstMargin) { worstMargin = next - atCap; worst = h.Id + " tier " + t; }
+                    if (Array.IndexOf(shown, h.Id) >= 0)
+                        Line("    " + h.Id.PadRight(31) + t.ToString().PadLeft(4) + firstLevel.ToString().PadLeft(8)
+                             + l1.ToString().PadLeft(19) + capLevel.ToString().PadLeft(15) + atCap.ToString().PadLeft(7)
+                             + nextLevel.ToString().PadLeft(16) + next.ToString().PadLeft(7) + ("+" + (next - atCap)).PadLeft(9));
+                }
+            }
+            Line("");
+
+            Check(d.GrowthUniform, "every 5-star carries one growth rate, so one curve multiplier per tier serves them all");
+            Check(maxTier > 0 && worstMargin > 0,
+                  "every 5-star's next tier at its first level out-powers its current tier at its cap (F6; tightest: " + worst
+                  + " by " + worstMargin + " power)");
+            Check(SameInts(b.FiveStarLevelCaps, d.FiveCaps.ToArray()),
+                  "balance.json fiveStarLevelCaps " + IntList(b.FiveStarLevelCaps) + " is the derived " + IntList(d.FiveCaps.ToArray()));
+            Check(SameMultipliers(b.AscensionCurveMultipliers, d.Multipliers),
+                  "balance.json ascensionCurveMultipliers " + FloatList(b.AscensionCurveMultipliers) + " is the derived "
+                  + FloatList(ToFloats(d.Multipliers)));
+            bool ladderAgrees = true;
+            for (int t = 0; t < d.BaseLevels.Count && t <= maxTier; t++)
+                if (StatMath.TierBaseLevel(b, t) != d.BaseLevels[t]) ladderAgrees = false;
+            Check(ladderAgrees, "the runtime ladder (StatMath.TierBaseLevel) starts each tier where the derivation does");
+            Check(SameInts(b.AscensionCopies, d.Copies.ToArray()),
+                  "balance.json ascensionCopies " + IntList(b.AscensionCopies) + " is the derived " + IntList(d.Copies.ToArray()));
+            Check(SameInts(b.LevelCapsBelowFiveStars, d.LowCaps),
+                  "balance.json levelCapsBelowFiveStars " + IntList(b.LevelCapsBelowFiveStars) + " is the derived " + IntList(d.LowCaps));
+            bool ordered = true;
+            for (int st = 1; st < 4; st++) if (d.LowCaps[st] <= d.LowCaps[st - 1]) ordered = false;
+            if (d.LowCaps[3] >= d.FiveCaps[0]) ordered = false;
+            Check(ordered, "caps rise strictly with star tier, and no two star tiers share one (F7): "
+                  + IntList(d.LowCaps) + " below a 5-star's " + d.FiveCaps[0]);
+            Check(SameInts(b.ConversionFodderPoints, d.Points) && b.ConversionPointsRequired == d.Required,
+                  "balance.json conversionFodderPoints " + IntList(b.ConversionFodderPoints) + " of " + b.ConversionPointsRequired
+                  + " is the derived " + IntList(d.Points) + " of " + d.Required);
+            List<string> authoredSeeds = new List<string>(b.ConversionSeedAspects ?? new string[0]);
+            authoredSeeds.Sort(StringComparer.Ordinal);
+            d.SeedAspects.Sort(StringComparer.Ordinal);
+            Check(string.Join(",", authoredSeeds.ToArray()) == string.Join(",", d.SeedAspects.ToArray()),
+                  "balance.json conversionSeedAspects [" + string.Join(", ", authoredSeeds.ToArray()) + "] is the derived ["
+                  + string.Join(", ", d.SeedAspects.ToArray()) + "]");
+            Line("");
+        }
+
+        private static bool SameInts(int[] a, int[] b)
+        {
+            if (a == null || b == null || a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++) if (a[i] != b[i]) return false;
+            return true;
+        }
+
+        private static bool SameMultipliers(float[] authored, List<double> derived)
+        {
+            if (authored == null || authored.Length != derived.Count) return false;
+            for (int i = 0; i < authored.Length; i++) if (Math.Abs(authored[i] - derived[i]) > 0.0005) return false;
+            return true;
+        }
+
+        private static float[] ToFloats(List<double> values)
+        {
+            float[] f = new float[values.Count];
+            for (int i = 0; i < f.Length; i++) f[i] = (float)values[i];
+            return f;
+        }
+
+        private static string FloatList(float[] values)
+        {
+            if (values == null) return "[]";
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < values.Length; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                sb.Append(values[i].ToString("0.####", CultureInfo.InvariantCulture));
+            }
+            return sb.Append(']').ToString();
         }
 
         // ---------------------------------------------------------------- the pace targets
@@ -16285,6 +17086,283 @@ namespace Emberfall.DevHarness
                            || PriorCeiling != NewCeiling;
                 }
             }
+        }
+
+        /// <summary>
+        /// THE TWO CEIL INSTRUMENTS, READ SIDE BY SIDE. A development aid, never run by the gate:
+        ///
+        ///     DevHarness.exe [contentDir] --ceil-reconcile [stage [l1/l2/...]]
+        ///
+        /// The solver (SolverProbe) and the guard (CheckArmoredCurveDelta) both build the line with
+        /// BuildPinnedLineAt at the stage's recommendedPower and both read it with CurveRate at the
+        /// ceiling battle with the same seed stride. They differ in exactly two arguments: the seed
+        /// base (9,100,000 + 131 per stage against 6,000,013 + 97 per stage) and the sample count
+        /// (600 against 200). This measures what that difference is worth. It fields both lines and
+        /// prints their power and levels so "the same line" is shown rather than asserted, reads
+        /// each line at the OTHER instrument's seed so any difference in the lines themselves would
+        /// show up as a mismatch, and reads a 4,000-sample reference at a third seed base that
+        /// neither instrument uses. A guard reading more than two standard errors off the
+        /// reference is flagged; one in twenty such flags is what a fair instrument produces.
+        ///
+        /// Given a stage code, it reads that stage alone, optionally at a hand-written roster.
+        /// 2026-09-23, on 1-12 at its pre-hand-move roster 13/11/11/12/12: both lines 8,627 power
+        /// at identical levels; guard 53% at its seed, solver 62% at its own, each line reproducing
+        /// the other's number exactly at the other's seed, reference 60.8% over 5,000.
+        /// </summary>
+        private static int RunCeilReconcile(string contentDir, string onlyStage, string levels)
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+            ContentDatabase db = LoadContent(contentDir);
+            if (db == null) return 1;
+            const int referenceSamples = 4000;
+
+            Line("");
+            Line("CEIL RECONCILIATION - guard (200 samples, its seed) against solver (600, its seed)"
+                 + " against a " + referenceSamples + "-sample reference at a seed neither uses");
+            Line("  stage  roster              power  guard  solver  swapped   reference   guard z  solver z"
+                 + "  pin margin");
+
+            int flagged = 0, read = 0;
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef stage = db.AllStages[s];
+                if (onlyStage != null && stage.DisplayCode != onlyStage) continue;
+                if (levels != null)
+                {
+                    string[] parts = levels.Split('/');
+                    int ramp = stage.CeilingLevel - stage.FloorLevel;
+                    int top = 1;
+                    for (int i = 0; i < parts.Length && i < stage.Enemies.Count; i++)
+                    {
+                        stage.Enemies[i].Level = int.Parse(parts[i], CultureInfo.InvariantCulture);
+                        top = Math.Max(top, stage.Enemies[i].Level);
+                    }
+                    stage.FloorLevel = top;
+                    stage.CeilingLevel = top + ramp;
+                }
+
+                int minPower = MinAttainablePower(db, stage);
+                float margin = stage.RecommendedPower / (float)minPower - 1f;
+                if (IsFloorPinned(db, stage))
+                {
+                    Line("  " + stage.DisplayCode.PadRight(6) + " " + SolverRosterText(stage).PadRight(18)
+                         + "   FLOOR-PINNED: recommendedPower " + stage.RecommendedPower
+                         + " is under the geared level-1 line's " + minPower + " (" + Pct(-margin) + " under)");
+                    continue;
+                }
+
+                int w = Math.Max(1, stage.WaveCount), b = Math.Max(1, stage.BattleCount);
+                int guardSeed = 6000000 + stage.GlobalIndex * 97 + 13;
+                int solverSeed = 9100000 + stage.GlobalIndex * 131;
+                GameSession guardLine = BuildPinnedLine(db, stage, true);
+                GameSession solverLine = BuildPinnedLineAt(db, stage, true, stage.RecommendedPower);
+
+                string gl = "", sl = "";
+                foreach (HeroInstance h in guardLine.Profile.TeamHeroes()) gl += h.Def.Id + ":" + h.Level + (h.Ascension > 0 ? "+" + h.Ascension : "") + " ";
+                foreach (HeroInstance h in solverLine.Profile.TeamHeroes()) sl += h.Def.Id + ":" + h.Level + (h.Ascension > 0 ? "+" + h.Ascension : "") + " ";
+                int gp = guardLine.Profile.EffectiveTeamPower(db), sp = solverLine.Profile.EffectiveTeamPower(db);
+
+                float guard = CurveRate(guardLine, stage, w, b, ReportSamples, guardSeed, _gearedCurveOrdinals);
+                float solver = CurveRate(solverLine, stage, w, b, SolverCeilSamples, solverSeed, _gearedCurveOrdinals);
+                // Each line at the OTHER instrument's seed: equal to the other's reading if and only
+                // if the two lines fight identically.
+                bool swappedAgree =
+                    CurveRate(solverLine, stage, w, b, ReportSamples, guardSeed, _gearedCurveOrdinals) == guard
+                    && CurveRate(guardLine, stage, w, b, SolverCeilSamples, solverSeed, _gearedCurveOrdinals) == solver;
+                float reference = CurveRate(guardLine, stage, w, b, referenceSamples, 31000000 + stage.GlobalIndex * 7919,
+                                            _gearedCurveOrdinals);
+
+                double p = Math.Min(0.999, Math.Max(0.001, reference));
+                double gz = (guard - reference) / Math.Sqrt(p * (1 - p) / ReportSamples);
+                double sz = (solver - reference) / Math.Sqrt(p * (1 - p) / SolverCeilSamples);
+                read++;
+                if (Math.Abs(gz) > 2) flagged++;
+
+                Line("  " + stage.DisplayCode.PadRight(6) + " " + SolverRosterText(stage).PadRight(18)
+                     + (gp == sp ? gp.ToString() : gp + "/" + sp).PadLeft(7)
+                     + Pct(guard).PadLeft(7) + Pct(solver).PadLeft(8)
+                     + (swappedAgree && gl == sl ? "same" : "DIFFER").PadLeft(9)
+                     + Pct(reference).PadLeft(12)
+                     + gz.ToString("+0.0;-0.0", CultureInfo.InvariantCulture).PadLeft(10)
+                     + sz.ToString("+0.0;-0.0", CultureInfo.InvariantCulture).PadLeft(10)
+                     + ("+" + Pct(margin)).PadLeft(12)
+                     + (Math.Abs(gz) > 2 ? "   guard more than 2 SE off the reference" : ""));
+                if (gl != sl || Environment.GetEnvironmentVariable("EF_SHOWLINE") == "1") Line("         guard line " + gl + "| solver line " + sl);
+            }
+            Line("");
+            Line("  " + read + " stage(s) read; " + flagged + " guard reading(s) more than two standard errors"
+                 + " off the reference. swapped = each line re-read at the other instrument's seed and"
+                 + " reproducing the other's number exactly, with identical heroes and levels. pin"
+                 + " margin = how far recommendedPower sits above the geared level-1 line; a stage whose"
+                 + " margin reaches zero leaves CEIL grading.");
+            return 0;
+        }
+
+        /// <summary>
+        /// THE SOLVER AND THE GATE COMPILE ONE HARNESS, asserted from the two scripts themselves.
+        ///
+        /// Tools/solve-recommended-power.ps1 and Tools/build-check.ps1 each carry their own list of
+        /// the files the harness is compiled from, and each comment says the two are the same list.
+        /// Twice that sentence was false: a file Program.cs names was added to one script and not
+        /// the other, the other stopped compiling, and the check its output fed stopped running
+        /// without anything going red - the gate does not run the solver, and the solver is only
+        /// run when somebody means to re-solve.
+        ///
+        /// So the lists are read out of the scripts, every variable in the list's statement is
+        /// expanded from its own assignment, every Get-ChildItem glob is resolved against the tree
+        /// as it stands, and the two resolved sets of files must be equal. Three guards against a
+        /// vacuous pass: both sets must be non-empty, both must hold Program.cs, and every .cs file
+        /// directly under Tools/DevHarness must be in both, because a harness file neither script
+        /// names is the same failure one step earlier.
+        /// </summary>
+        private static void CheckSolverAndGateCompileOneList(string contentDir)
+        {
+            Line("");
+            Line("HARNESS FILE LISTS - build-check.ps1 and solve-recommended-power.ps1 compile one harness");
+
+            string root = Path.GetFullPath(Path.Combine(Path.Combine(Path.Combine(contentDir, ".."), ".."), ".."));
+            string gatePath = Path.Combine(Path.Combine(root, "Tools"), "build-check.ps1");
+            string solverPath = Path.Combine(Path.Combine(root, "Tools"), "solve-recommended-power.ps1");
+            if (!File.Exists(gatePath) || !File.Exists(solverPath))
+            {
+                Check(false, "both scripts are found under " + Path.Combine(root, "Tools")
+                             + " (is the content dir " + contentDir + " inside a checkout?)");
+                return;
+            }
+
+            string error;
+            HashSet<string> gate = ResolveScriptFileList(root, File.ReadAllLines(gatePath), "harness", out error);
+            if (gate == null) { Check(false, "build-check.ps1's $harness list can be read: " + error); return; }
+            HashSet<string> solver = ResolveScriptFileList(root, File.ReadAllLines(solverPath), "sources", out error);
+            if (solver == null) { Check(false, "solve-recommended-power.ps1's $sources list can be read: " + error); return; }
+
+            Line("  build-check.ps1 $harness resolves to " + gate.Count + " files, solve-recommended-power.ps1"
+                 + " $sources to " + solver.Count + ".");
+
+            List<string> onlyGate = new List<string>(), onlySolver = new List<string>();
+            foreach (string f in gate) if (!solver.Contains(f)) onlyGate.Add(f);
+            foreach (string f in solver) if (!gate.Contains(f)) onlySolver.Add(f);
+            onlyGate.Sort(StringComparer.Ordinal);
+            onlySolver.Sort(StringComparer.Ordinal);
+
+            List<string> unlisted = new List<string>();
+            string harnessDir = Path.Combine(Path.Combine(root, "Tools"), "DevHarness");
+            foreach (string f in Directory.GetFiles(harnessDir, "*.cs", SearchOption.TopDirectoryOnly))
+            {
+                string rel = RelativeTo(root, f);
+                if (!gate.Contains(rel) || !solver.Contains(rel)) unlisted.Add(rel);
+            }
+
+            string program = RelativeTo(root, Path.Combine(harnessDir, "Program.cs"));
+            Check(gate.Count > 0 && solver.Count > 0 && gate.Contains(program) && solver.Contains(program),
+                  "both lists resolve to real files and both hold " + program);
+            Check(onlyGate.Count == 0 && onlySolver.Count == 0,
+                  "the two scripts compile the same file list"
+                  + (onlyGate.Count > 0 ? " - only build-check.ps1 has " + string.Join(", ", onlyGate.ToArray()) : "")
+                  + (onlySolver.Count > 0 ? " - only the solver has " + string.Join(", ", onlySolver.ToArray()) : ""));
+            Check(unlisted.Count == 0,
+                  "every .cs file directly under Tools/DevHarness is in both lists"
+                  + (unlisted.Count > 0 ? " - missing: " + string.Join(", ", unlisted.ToArray()) : ""));
+        }
+
+        private static string RelativeTo(string root, string path)
+        {
+            string full = Path.GetFullPath(path);
+            string r = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (full.StartsWith(r, StringComparison.OrdinalIgnoreCase)) full = full.Substring(r.Length);
+            return full.Replace(Path.DirectorySeparatorChar, '/');
+        }
+
+        /// <summary>The statement assigning $name, from its line to the end of its expression: it
+        /// runs on while a parenthesis is open or the line ends in '+'. Comment lines are
+        /// skipped.</summary>
+        private static string ScriptStatement(string[] lines, string name)
+        {
+            System.Text.RegularExpressions.Regex head = new System.Text.RegularExpressions.Regex(
+                @"^\s*\$" + name + @"\s*=");
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (!head.IsMatch(lines[i])) continue;
+                StringBuilder sb = new StringBuilder();
+                int depth = 0;
+                for (int j = i; j < lines.Length; j++)
+                {
+                    string line = lines[j];
+                    if (line.TrimStart().StartsWith("#")) continue;
+                    sb.Append(line).Append(' ');
+                    bool quoted = false;
+                    foreach (char c in line)
+                    {
+                        if (c == '"') quoted = !quoted;
+                        if (quoted) continue;
+                        if (c == '(') depth++;
+                        else if (c == ')') depth--;
+                    }
+                    if (depth <= 0 && !line.TrimEnd().EndsWith("+")) break;
+                }
+                return sb.ToString();
+            }
+            return null;
+        }
+
+        private static HashSet<string> ResolveScriptFileList(string root, string[] lines, string name,
+                                                             out string error)
+        {
+            HashSet<string> files = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!ResolveScriptVariable(root, lines, name, files, new HashSet<string>(), out error)) return null;
+            return files;
+        }
+
+        /// <summary>Adds every file one script variable names: its Get-ChildItem globs resolved
+        /// against the tree, its single Join-Path files checked to exist, and every other variable
+        /// it mentions expanded the same way from that variable's own assignment.</summary>
+        private static bool ResolveScriptVariable(string root, string[] lines, string name,
+                                                  HashSet<string> into, HashSet<string> seen, out string error)
+        {
+            error = null;
+            if (!seen.Add(name)) return true;
+            string stmt = ScriptStatement(lines, name);
+            if (stmt == null) { error = "no assignment to $" + name; return false; }
+            stmt = stmt.Substring(stmt.IndexOf('=') + 1);
+
+            System.Text.RegularExpressions.Regex glob = new System.Text.RegularExpressions.Regex(
+                @"Get-ChildItem\s*\(\s*Join-Path\s+\$root\s+""([^""]+)""\s*\)\s*-Filter\s+(\S+)(\s+-Recurse)?");
+            foreach (System.Text.RegularExpressions.Match m in glob.Matches(stmt))
+            {
+                string dir = Path.Combine(root, m.Groups[1].Value.Replace('\\', Path.DirectorySeparatorChar));
+                if (!Directory.Exists(dir))
+                {
+                    error = "$" + name + " globs " + m.Groups[1].Value + ", which does not exist";
+                    return false;
+                }
+                SearchOption opt = m.Groups[3].Success ? SearchOption.AllDirectories : SearchOption.TopDirectoryOnly;
+                foreach (string f in Directory.GetFiles(dir, m.Groups[2].Value, opt)) into.Add(RelativeTo(root, f));
+            }
+            stmt = glob.Replace(stmt, " ");
+
+            System.Text.RegularExpressions.Regex single = new System.Text.RegularExpressions.Regex(
+                @"Join-Path\s+\$root\s+""([^""]+)""");
+            foreach (System.Text.RegularExpressions.Match m in single.Matches(stmt))
+            {
+                string f = Path.Combine(root, m.Groups[1].Value.Replace('\\', Path.DirectorySeparatorChar));
+                if (!File.Exists(f))
+                {
+                    error = "$" + name + " names " + m.Groups[1].Value + ", which does not exist";
+                    return false;
+                }
+                into.Add(RelativeTo(root, f));
+            }
+            stmt = single.Replace(stmt, " ");
+
+            System.Text.RegularExpressions.Regex variable = new System.Text.RegularExpressions.Regex(
+                @"\$([A-Za-z_][A-Za-z0-9_]*)");
+            foreach (System.Text.RegularExpressions.Match m in variable.Matches(stmt))
+            {
+                string v = m.Groups[1].Value;
+                if (v == "root" || v == "_" || v == "PSScriptRoot") continue;
+                if (!ResolveScriptVariable(root, lines, v, into, seen, out error)) return false;
+            }
+            return true;
         }
 
         private static RecPowerProposal ProposeRecommendedPower(EconomyStageOutcome outcome, int walkIndex,
@@ -16907,6 +17985,16 @@ namespace Emberfall.DevHarness
             Line("");
             Line("ECONOMY RESPONDS TO INCOME (the guard the old model would have failed)");
 
+            // WHAT IS SCALED CHANGED WITH THE CAPS, and the reason is the thing the caps were for.
+            // This probe used to scale gold alone, because gold bought 70% of the simulated
+            // player's power and was the lever a severed link would sever. Under star-gated caps
+            // (F7) gold stops at each hero's cap and power comes from the roster, which shards
+            // buy: measured the first time the caps ran, the gold-only response read -0.29 and then
+            // -0.09 on the next run with nothing changed between them but the order of a sitting's
+            // work - which is not a response at all, it is which random 5-star a conversion
+            // happened to roll. So the guarded response is to ALL income, gold and shards together,
+            // and the gold-only response is still printed beside it as a reading.
+
             const float Multiplier = 2.5f;
 
             // Set from the measured spread, not from a wish. The broken model moved 0.03 on this
@@ -16916,9 +18004,10 @@ namespace Emberfall.DevHarness
             //
             // It is not set higher because 0.16 is genuinely the ceiling, for a reason the line
             // below prints: at 2.5x gold, 49% of sittings end CAP-BLOCKED against 7.3% at 1x. Gold
-            // buys hero levels, hero levels stop at HeroLevelCap, and only account rank raises that.
-            // Half the extra gold has nowhere to go. That is the game's design working as written,
-            // so demanding a bigger response here would be demanding the model lie.
+            // buys hero levels, and hero levels stop at each hero's own cap, which only an
+            // ascension raises. Past the cap the extra gold has nowhere to go. That is the game's
+            // design working as written, so demanding a bigger response here would be demanding
+            // the model lie.
             const float MinimumResponse = 0.10f;
 
             List<StageDef> scaled = new List<StageDef>();
@@ -16936,14 +18025,20 @@ namespace Emberfall.DevHarness
             int[] gold = new int[scaled.Count];
             int[] firstClear = new int[scaled.Count];
             int[] idle = new int[scaled.Count];
+            int[] shards = new int[scaled.Count];
+            int[] firstShards = new int[scaled.Count];
+            int[] idleShards = new int[scaled.Count];
             for (int i = 0; i < scaled.Count; i++)
             {
                 gold[i] = scaled[i].RewardGold;
                 firstClear[i] = scaled[i].FirstClearGold;
                 idle[i] = scaled[i].IdleGoldPerHour;
+                shards[i] = scaled[i].RewardShards;
+                firstShards[i] = scaled[i].FirstClearShards;
+                idleShards[i] = scaled[i].IdleShardsPerHour;
             }
 
-            float richRatio;
+            float richRatio, goldOnlyRatio;
             EconomyRun rich = null;
             try
             {
@@ -16952,6 +18047,13 @@ namespace Emberfall.DevHarness
                     scaled[i].RewardGold = (int)(gold[i] * Multiplier);
                     scaled[i].FirstClearGold = (int)(firstClear[i] * Multiplier);
                     scaled[i].IdleGoldPerHour = (int)(idle[i] * Multiplier);
+                }
+                goldOnlyRatio = LateCampaignRatio(SimulateEconomy(db, false));
+                for (int i = 0; i < scaled.Count; i++)
+                {
+                    scaled[i].RewardShards = (int)(shards[i] * Multiplier);
+                    scaled[i].FirstClearShards = (int)(firstShards[i] * Multiplier);
+                    scaled[i].IdleShardsPerHour = (int)(idleShards[i] * Multiplier);
                 }
                 rich = SimulateEconomy(db, false);
                 richRatio = LateCampaignRatio(rich);
@@ -16963,27 +18065,32 @@ namespace Emberfall.DevHarness
                     scaled[i].RewardGold = gold[i];
                     scaled[i].FirstClearGold = firstClear[i];
                     scaled[i].IdleGoldPerHour = idle[i];
+                    scaled[i].RewardShards = shards[i];
+                    scaled[i].FirstClearShards = firstShards[i];
+                    scaled[i].IdleShardsPerHour = idleShards[i];
                 }
             }
 
             float response = richRatio - poorRatio;
             Line("  " + scaled.Count + " stages (the back half of the campaign) at " + Fmt(Multiplier)
-                 + "x gold - reward, first clear and idle rate together.");
+                 + "x income - gold and shards, reward, first clear and idle rate together.");
             Line("  late-campaign power ratio: x" + Fmt(poorRatio) + " -> x" + Fmt(richRatio)
                  + "   response " + Fmt(response));
+            Line("  gold alone, reported: x" + Fmt(poorRatio) + " -> x" + Fmt(goldOnlyRatio)
+                 + "   response " + Fmt(goldOnlyRatio - poorRatio));
             // Why the response is not larger, stated rather than guessed at: gold buys hero levels,
-            // and hero levels stop at HeroLevelCap, which is set by account rank and account rank
-            // comes only from stage clears. Past the cap the extra gold has nowhere to go, and the
-            // share of sittings that ended holding gold they could not spend says how much of the
-            // 2.5x hit that wall.
+            // and hero levels stop at each hero's cap, which star tier and ascension tier set and
+            // gold cannot move (F7). Past the cap the extra gold has nowhere to go, and the share
+            // of sittings that ended holding gold they could not spend says how much of the 2.5x
+            // hit that wall.
             Line("  sittings that ended CAP-BLOCKED: " + Pct(CapBlockedShare(poor))
                  + " at 1x, " + Pct(CapBlockedShare(rich)) + " at " + Fmt(Multiplier) + "x"
-                 + "   (gold buys levels; levels stop at HeroLevelCap, which only account rank raises)");
+                 + "   (gold buys levels; levels stop at each hero's cap, which only ascension raises)");
             Line("  The old one-session-per-attempt model responded about 0.03 to this same input,");
             Line("  which is how it was caught. Anything near that means the link is severed again.");
 
             Check(response > MinimumResponse,
-                  "the economy model responds to a " + Fmt(Multiplier) + "x change in authored gold"
+                  "the economy model responds to a " + Fmt(Multiplier) + "x change in authored income"
                   + " (moved " + Fmt(response) + ", needs more than " + Fmt(MinimumResponse) + ")");
             Line("");
         }
@@ -17172,17 +18279,289 @@ namespace Emberfall.DevHarness
         /// the same StatMath entry point EffectiveTeamPower uses, with the level pinned, so the
         /// three readings in EconomyStageOutcome are the same quantity measured three ways and
         /// subtract cleanly.</summary>
-        private static int DeployedRosterPowerAtLevelOne(PlayerProfile profile)
+        private static int DeployedRosterPowerAtLevelOne(PlayerProfile profile, BalanceConfig balance)
         {
             int total = 0;
             List<HeroInstance> team = profile.TeamHeroes();
             for (int i = 0; i < team.Count; i++)
             {
                 if (team[i].Def == null) continue;
+                // Tier level 1, not Level 1: an ascended hero's first level stands one Level past
+                // the tier below's cap (StatMath.LevelAt), and that is roster, not gold.
+                int first = team[i].Def.Stars >= 5 ? Emberfall.Core.Progression.StatMath.TierBaseLevel(balance, team[i].Ascension) : 1;
                 total += Emberfall.Core.Progression.StatMath.PowerScore(
-                    Emberfall.Core.Progression.StatMath.ForHero(team[i].Def, 1));
+                    Emberfall.Core.Progression.StatMath.ForHero(team[i].Def, first));
             }
             return total;
+        }
+
+        // ------------------------------------------------------------ fusion in the economy walk
+
+        /// <summary>
+        /// A sitting's roster work, after its pulls: every conversion the fodder affords, every
+        /// ascension the copies afford, then the line. True when any of it changed anything.
+        ///
+        /// THE POLICY, stated because every number the walk reports depends on it, and chosen as
+        /// the plain player rather than a clever one.
+        ///
+        /// Conversions. Heroes below five stars are fodder the moment they are pulled, except the
+        /// one body of each that stands in the line. An ordinary aspect converts whenever its own
+        /// spare bodies reach ConversionPointsRequired (F4), the aspect holding the most points
+        /// first, spending its highest-value bodies first so the overshoot is as small as it can
+        /// be. A seed aspect (F9) converts only once no ordinary aspect can: its seed plus the
+        /// highest-value spare bodies of any ordinary aspect, which by then are remainders too
+        /// small to make a conversion of their own. The player never chooses which 5-star comes
+        /// out (F3), so the policy cannot aim at copies either.
+        ///
+        /// Ascensions. Every 5-star with the copies for its next tier ascends, benched or not: the
+        /// new tier's level 1 out-powers the old tier's cap (F6), so an ascension is never a loss.
+        ///
+        /// The line. The five heroes with the highest CEILING - power at their own cap - are the
+        /// line the player wants, ties to current power, and a deployed hero gives up its slot to
+        /// one of them only when it is AT its own cap or the newcomer is already the stronger of
+        /// the two. That is the rule that swaps a fresh 5-star in over a capped 4-star: the 4-star
+        /// cannot be levelled past its cap, so nothing bought into it is thrown away, and the
+        /// 5-star can. Before caps, PlayerProfile.NormaliseTeam only ever filled an empty slot, so
+        /// the line the walk fielded at 2-12 was the line it had at 1-3.
+        ///
+        /// The cap condition is measured, not taste. Ranking by ceiling alone swapped three
+        /// Level-5 and Level-6 5-stars out at 1-11 for Level-1 ones whose ceilings were 5% higher,
+        /// and the walk met the 1-12 wall at x0.982, under its band, having traded power it could
+        /// still grow for power it had not bought yet.
+        /// </summary>
+        private static bool EconomyConvertAscendAndDeploy(GameSession session, EconomyRun run,
+                                                          EconomyStageOutcome outcome, int stageIdx)
+        {
+            bool moved = false;
+            PlayerProfile profile = session.Profile;
+
+            for (int guard = 0; guard < 500; guard++)
+            {
+                Aspect target;
+                List<HeroInstance> bodies = PlanConversion(session, out target);
+                if (bodies == null) break;
+                ConversionResult r = session.Convert(target, bodies, run.NextSeed(), run.Now);
+                if (!r.Success) break;
+                run.Ledger.Conversions++;
+                run.Ledger.FodderBodies += r.BodiesSpent;
+                outcome.Conversions++;
+                if (r.IsNew && !run.FusedInSitting.ContainsKey(r.Hero.Id))
+                    run.FusedInSitting[r.Hero.Id] = run.TotalSessions;
+                moved = true;
+            }
+            profile.NormaliseTeam();
+
+            for (int i = 0; i < profile.Heroes.Count; i++)
+            {
+                HeroInstance h = profile.Heroes[i];
+                while (session.AscensionBlocker(h) == null)
+                {
+                    if (!session.Ascend(h).Success) break;
+                    run.Ledger.Ascensions++;
+                    outcome.Ascensions++;
+                    moved = true;
+                }
+            }
+
+            if (EconomyDeployHighestCeilings(session, run, outcome, stageIdx)) moved = true;
+            return moved;
+        }
+
+        /// <summary>A hero's power at its own level cap, where it stands now: what levelling it can
+        /// ever make of it without an ascension.</summary>
+        private static int CeilingPower(GameSession session, HeroInstance h)
+        {
+            if (h == null || h.Def == null) return 0;
+            return StatMath.PowerScore(StatMath.ForHero(h.Def, session.HeroLevelCapOf(h)));
+        }
+
+        /// <summary>One entry per spare body below five stars: a hero with Copies n contributes n
+        /// entries, less the one standing in the line if it is deployed.</summary>
+        private static List<HeroInstance> SpareFodder(GameSession session)
+        {
+            List<HeroInstance> spare = new List<HeroInstance>();
+            PlayerProfile p = session.Profile;
+            for (int i = 0; i < p.Heroes.Count; i++)
+            {
+                HeroInstance h = p.Heroes[i];
+                if (h.Def == null || h.Def.Stars >= 5) continue;
+                int n = h.Copies - (p.IsDeployed(h.Uid) ? 1 : 0);
+                for (int k = 0; k < n; k++) spare.Add(h);
+            }
+            return spare;
+        }
+
+        /// <summary>Highest points first, then by uid so the plan is identical on every run.</summary>
+        private static void SortFodder(GameSession session, List<HeroInstance> bodies)
+        {
+            bodies.Sort(delegate(HeroInstance a, HeroInstance b)
+            {
+                int c = session.FodderPoints(b.Def).CompareTo(session.FodderPoints(a.Def));
+                return c != 0 ? c : string.CompareOrdinal(a.Uid, b.Uid);
+            });
+        }
+
+        private static List<HeroInstance> TakeToPoints(GameSession session, List<HeroInstance> from,
+                                                       List<HeroInstance> into, int need)
+        {
+            int have = 0;
+            for (int i = 0; i < into.Count; i++) have += session.FodderPoints(into[i].Def);
+            for (int i = 0; i < from.Count && have < need; i++)
+            {
+                into.Add(from[i]);
+                have += session.FodderPoints(from[i].Def);
+            }
+            return have >= need ? into : null;
+        }
+
+        /// <summary>The next conversion EconomyConvertAscendAndDeploy's policy makes, or null.</summary>
+        private static List<HeroInstance> PlanConversion(GameSession session, out Aspect target)
+        {
+            target = Aspect.Ember;
+            int need = session.Balance.ConversionPointsRequired;
+            List<HeroInstance> spare = SpareFodder(session);
+            SortFodder(session, spare);
+
+            Aspect best = Aspect.Ember;
+            int bestPoints = -1;
+            foreach (Aspect a in Enum.GetValues(typeof(Aspect)))
+            {
+                if (session.IsSeedAspect(a) || session.ConversionPool(a).Count == 0) continue;
+                int pts = 0;
+                for (int i = 0; i < spare.Count; i++) if (spare[i].Def.Aspect == a) pts += session.FodderPoints(spare[i].Def);
+                if (pts >= need && pts > bestPoints) { bestPoints = pts; best = a; }
+            }
+            if (bestPoints >= 0)
+            {
+                List<HeroInstance> same = new List<HeroInstance>();
+                for (int i = 0; i < spare.Count; i++) if (spare[i].Def.Aspect == best) same.Add(spare[i]);
+                target = best;
+                return TakeToPoints(session, same, new List<HeroInstance>(), need);
+            }
+
+            foreach (Aspect a in Enum.GetValues(typeof(Aspect)))
+            {
+                if (!session.IsSeedAspect(a) || session.ConversionPool(a).Count == 0) continue;
+                HeroInstance seed = null;
+                for (int i = spare.Count - 1; i >= 0; i--) if (spare[i].Def.Aspect == a) { seed = spare[i]; break; }
+                if (seed == null) continue;
+                List<HeroInstance> rest = new List<HeroInstance>();
+                bool seedSkipped = false;
+                for (int i = 0; i < spare.Count; i++)
+                {
+                    if (!seedSkipped && spare[i] == seed) { seedSkipped = true; continue; }
+                    // Another seed aspect's bodies are that aspect's seeds, not this one's fodder.
+                    if (session.IsSeedAspect(spare[i].Def.Aspect) && spare[i].Def.Aspect != a) continue;
+                    rest.Add(spare[i]);
+                }
+                List<HeroInstance> plan = new List<HeroInstance>();
+                plan.Add(seed);
+                if (TakeToPoints(session, rest, plan, need) != null) { target = a; return plan; }
+            }
+            return null;
+        }
+
+        /// <summary>Puts the five highest-ceiling heroes in the line, keeping every hero who stays
+        /// in the slot it already had. True when the line changed; each change is logged.</summary>
+        private static bool EconomyDeployHighestCeilings(GameSession session, EconomyRun run,
+                                                        EconomyStageOutcome outcome, int stageIdx)
+        {
+            PlayerProfile p = session.Profile;
+            List<HeroInstance> ranked = new List<HeroInstance>(p.Heroes);
+            ranked.Sort(delegate(HeroInstance a, HeroInstance b)
+            {
+                int c = CeilingPower(session, b).CompareTo(CeilingPower(session, a));
+                if (c != 0) return c;
+                c = b.Power.CompareTo(a.Power);
+                return c != 0 ? c : string.CompareOrdinal(a.Uid, b.Uid);
+            });
+            int size = Math.Min(p.Team.Length, ranked.Count);
+            HashSet<string> want = new HashSet<string>();
+            for (int i = 0; i < size; i++) want.Add(ranked[i].Uid);
+
+            // Empty slots fill freely, best ceiling first.
+            List<HeroInstance> challengers = new List<HeroInstance>();
+            for (int i = 0; i < size; i++) if (!p.IsDeployed(ranked[i].Uid)) challengers.Add(ranked[i]);
+            bool filled = false;
+            for (int s = 0; s < p.Team.Length && challengers.Count > 0; s++)
+            {
+                if (!string.IsNullOrEmpty(p.Team[s])) continue;
+                p.AssignToTeam(s, challengers[0].Uid);
+                challengers.RemoveAt(0);
+                filled = true;
+            }
+
+            // Then each remaining challenger, best ceiling first, takes the slot of the
+            // lowest-ceiling incumbent the line no longer wants - if that incumbent is capped, or
+            // the challenger is already the stronger of the two.
+            List<HeroInstance> entering = new List<HeroInstance>(), leaving = new List<HeroInstance>();
+            for (int c = 0; c < challengers.Count; c++)
+            {
+                HeroInstance inn = challengers[c];
+                int bestSlot = -1;
+                HeroInstance bestOut = null;
+                for (int s = 0; s < p.Team.Length; s++)
+                {
+                    HeroInstance incumbent = p.FindHeroByUid(p.Team[s]);
+                    if (incumbent == null || want.Contains(incumbent.Uid)) continue;
+                    bool capped = incumbent.Level >= session.HeroLevelCapOf(incumbent);
+                    if (!capped && inn.Power < incumbent.Power) continue;
+                    if (bestOut == null || CeilingPower(session, incumbent) < CeilingPower(session, bestOut))
+                    {
+                        bestOut = incumbent;
+                        bestSlot = s;
+                    }
+                }
+                if (bestOut == null) continue;
+                p.ClearTeamSlot(bestSlot);
+                p.AssignToTeam(bestSlot, inn.Uid);
+                entering.Add(inn);
+                leaving.Add(bestOut);
+            }
+
+            for (int i = 0; i < entering.Count; i++)
+            {
+                HeroInstance inn = entering[i], outt = leaving[i];
+                int fused;
+                bool fresh = run.FusedInSitting.TryGetValue(inn.Def.Id, out fused) && fused == run.TotalSessions;
+                run.Ledger.Swaps++;
+                outcome.Swaps++;
+                if (fresh) run.Ledger.FreshFusedSwaps++;
+                run.SwapLog.Add(outcome.Stage.DisplayCode + " sitting " + run.TotalSessions + ": "
+                    + inn.DisplayName + " (" + inn.Def.Stars + "*" + (inn.Ascension > 0 ? " asc" + inn.Ascension : "")
+                    + ", ceiling " + CeilingPower(session, inn) + ", Lv" + session.TierLevelOf(inn)
+                    + (fresh ? ", FUSED THIS SITTING" : run.FusedInSitting.ContainsKey(inn.Def.Id) ? ", from a conversion" : "")
+                    + ") in for " + outt.DisplayName + " (" + outt.Def.Stars + "*, ceiling "
+                    + CeilingPower(session, outt) + ", Lv" + session.TierLevelOf(outt) + "/"
+                    + StatMath.HeroLevelCap(session.Balance, outt.Def.Stars, outt.Ascension) + ")");
+            }
+            return filled || entering.Count > 0;
+        }
+
+        private static string DescribeLine(GameSession session)
+        {
+            StringBuilder sb = new StringBuilder();
+            List<HeroInstance> team = session.Profile.TeamHeroes();
+            for (int i = 0; i < team.Count; i++)
+            {
+                if (i > 0) sb.Append(", ");
+                HeroInstance h = team[i];
+                string name = h.DisplayName;
+                int space = name.IndexOf(' ');
+                if (space > 0) name = name.Substring(0, space);
+                sb.Append(name).Append(' ').Append(h.Def.Stars).Append('*');
+                if (h.Ascension > 0) sb.Append("+").Append(h.Ascension);
+                sb.Append(" Lv").Append(session.TierLevelOf(h));
+            }
+            return sb.ToString();
+        }
+
+        private static string IntList(int[] values)
+        {
+            if (values == null) return "[]";
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < values.Length; i++) { if (i > 0) sb.Append(", "); sb.Append(values[i]); }
+            return sb.Append(']').ToString();
         }
 
         private static int TotalDeployedLevels(PlayerProfile profile)
@@ -17195,6 +18574,13 @@ namespace Emberfall.DevHarness
 
         private static bool SpendGold(GameSession session)
         {
+            int levels;
+            return SpendGold(session, out levels);
+        }
+
+        private static bool SpendGold(GameSession session, out int levelsBought)
+        {
+            levelsBought = 0;
             for (int guard = 0; guard < 500; guard++)
             {
                 List<HeroInstance> team = session.Profile.TeamHeroes();
@@ -17203,13 +18589,13 @@ namespace Emberfall.DevHarness
                 for (int i = 0; i < team.Count; i++)
                 {
                     HeroInstance h = team[i];
-                    if (h.Level >= session.HeroLevelCap) continue;
+                    if (h.Level >= session.HeroLevelCapOf(h)) continue;
                     int cost = session.LevelUpCost(h);
                     if (cost < cheapestCost) { cheapestCost = cost; cheapest = h; }
                 }
                 if (cheapest == null) return true;                        // cap-blocked
                 if (session.Profile.Gold < cheapestCost) return false;    // out of gold
-                session.LevelUpHero(cheapest, 1);
+                if (session.LevelUpHero(cheapest, 1).Success) levelsBought++;
             }
             return false;
         }
@@ -26082,6 +27468,46 @@ namespace Emberfall.DevHarness
         private const float FiveStarCeiling = 1.64f;
 
         /// <summary>
+        /// F8: A RARER ASPECT'S 5-STAR SITS AT OR ABOVE ITS ROLE'S MEDIAN, x1.00 to the same x1.64
+        /// ceiling. The rarer aspects are the ones whose conversions take a seed
+        /// (balance.json conversionSeedAspects, derived by CheckFusionEconomyDerivation): their
+        /// fodder pools are four heroes against fourteen, so their 5-stars are the slow ones to
+        /// fuse, and rarity with no payoff is a pool players learn to avoid. The other four aspects
+        /// keep the whole x0.78 to x1.64 band. Reading the list off the recipe rather than naming
+        /// two aspects here means the payoff follows the rarity if the rarity ever moves.
+        /// </summary>
+        private const float RareAspectFiveStarFloor = 1.00f;
+
+        /// <summary>
+        /// The one rarer-aspect 5-star F8's floor is not yet enforced on, and why. The check fails
+        /// if he reaches the floor (the pin is stale) and if anybody else falls under it.
+        ///
+        /// VELIS IS A STRIKER, AND THE STRIKER ROLE HAS FOUR 5-STARS. With an even count the median
+        /// is the mean of the middle two, so Velis at x0.91 can only reach it by passing Sylven into
+        /// the top two, and doing that lifts the median itself by about 9%: measured, his smallest
+        /// lift that clears F8 (x1.30 on his Damage, reading x1.01) takes Kiva from x0.79 to x0.72,
+        /// under the x0.78 floor every 5-star keeps. Kiva is a starting hero and the Striker in the
+        /// balance line, so the lift that closes both is a Kiva change too - it moves all 72 stage
+        /// fingerprints and the economy walk's line - and that is a kit decision, not a number to
+        /// nudge from here. Aminah (x1.12) and Caldus (x1.05) sit in roles of five and three, where
+        /// the smallest lift makes each the new median and moves it by under 1%, and both were
+        /// lifted.
+        /// </summary>
+        private static readonly Dictionary<string, string> KnownF8Exceptions = new Dictionary<string, string>
+        {
+            { "velis_the_hollow_vow", "a Striker, one of four: reaching the median lifts it past Kiva's x0.78 floor" },
+        };
+
+        private static float FiveStarFloorFor(ContentDatabase db, HeroDef def)
+        {
+            string[] seeds = db.Balance.ConversionSeedAspects;
+            if (seeds != null)
+                for (int i = 0; i < seeds.Length; i++)
+                    if (seeds[i] == def.Aspect.ToString()) return RareAspectFiveStarFloor;
+            return FiveStarFloor;
+        }
+
+        /// <summary>
         /// A 4-STAR HAS TO SIT BELOW THE 5-STARS OF ITS OWN ROLE, AND UNTIL NOW NOTHING SAID SO.
         ///
         /// The star contract is a shape rule - basic, active, passive1, passive2 where the design
@@ -26213,6 +27639,10 @@ namespace Emberfall.DevHarness
             List<string> ungradedRoles = new List<string>();
             List<string> fivesOut = new List<string>();
             List<string> fivesIn = new List<string>();
+            List<string> rareOut = new List<string>();
+            List<string> rareIn = new List<string>();
+            List<string> rarePinned = new List<string>();
+            List<string> rareStale = new List<string>();
             int graded = 0;
             Array roles = Enum.GetValues(typeof(HeroRole));
             for (int ri = 0; ri < roles.Length; ri++)
@@ -26274,9 +27704,24 @@ namespace Emberfall.DevHarness
                         ratio = "   x" + fiveShare.ToString("0.00", CultureInfo.InvariantCulture) + " of the role's 5-star median";
                         if (fives.Count >= 2)
                         {
-                            bool outside = fiveShare < FiveStarFloor || fiveShare > FiveStarCeiling;
-                            if (outside) fivesOut.Add(reading); else fivesIn.Add(reading);
-                            ratio += outside ? (fiveShare < FiveStarFloor ? "   BELOW THE 5-STAR FLOOR" : "   ABOVE THE 5-STAR CEILING") : "";
+                            float floor = FiveStarFloorFor(live, def);
+                            bool outside = fiveShare < floor || fiveShare > FiveStarCeiling;
+                            // The band grades every 5-star against x0.78 to x1.64 as it always did;
+                            // F8's floor for the rarer aspects is its own check below.
+                            if (fiveShare < FiveStarFloor || fiveShare > FiveStarCeiling) fivesOut.Add(reading);
+                            else fivesIn.Add(reading);
+                            if (floor > FiveStarFloor)
+                            {
+                                string rare = def.Id + " (" + def.Aspect + ") x" + fiveShare.ToString("0.00", CultureInfo.InvariantCulture);
+                                bool pinned = KnownF8Exceptions.ContainsKey(def.Id);
+                                if (fiveShare < floor && pinned) rarePinned.Add(rare + " - " + KnownF8Exceptions[def.Id]);
+                                else if (fiveShare < floor) rareOut.Add(rare);
+                                else if (pinned) rareStale.Add(rare);
+                                else rareIn.Add(rare);
+                            }
+                            ratio += outside ? (fiveShare < floor
+                                ? (floor > FiveStarFloor ? "   BELOW ITS ASPECT'S x1.00 FLOOR (F8)" : "   BELOW THE 5-STAR FLOOR")
+                                : "   ABOVE THE 5-STAR CEILING") : "";
                         }
                         else ratio += "   (the role's only 5-star)";
                     }
@@ -26418,6 +27863,20 @@ namespace Emberfall.DevHarness
                     : fivesOut.Count + " 5-star(s) sit further from their own role's 5-star median than half a tier "
                       + "step down or a whole one up, so the yardstick every lower tier is graded against is "
                       + "not the middle of a tier: " + string.Join(", ", fivesOut.ToArray()));
+
+            Check(rareOut.Count == 0,
+                  rareOut.Count == 0
+                    ? "all " + rareIn.Count + " 5-star(s) of a seed-recipe aspect in a role with two or more read at or above"
+                      + " that role's 5-star median, the x1.00 floor F8 gives the rarer aspects ("
+                      + string.Join(", ", rareIn.ToArray()) + ")"
+                    : rareOut.Count + " 5-star(s) of a seed-recipe aspect read under their role's 5-star median, the x1.00"
+                      + " floor F8 gives the rarer aspects: " + string.Join(", ", rareOut.ToArray()));
+            Check(rareStale.Count == 0,
+                  rareStale.Count == 0
+                    ? "every pinned F8 exception is still under the floor, so each pin is still needed ("
+                      + string.Join("; ", rarePinned.ToArray()) + ")"
+                    : "pinned F8 exception(s) now read at or above their median - remove them from KnownF8Exceptions: "
+                      + string.Join(", ", rareStale.ToArray()));
 
             Check(over.Count == 0,
                   over.Count == 0
