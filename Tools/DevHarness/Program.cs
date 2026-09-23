@@ -11702,32 +11702,24 @@ namespace Emberfall.DevHarness
                   + (firstMismatch.Length > 0 ? " - first mismatch: " + firstMismatch : "")
                   + " (" + identical + "/" + db.AllStages.Count + ")");
 
-            // Spot-check the two the eye can verify against campaign.json by hand.
-            StageDef ch1_1 = db.GetStage("ch1_1");
-            StageDef opener = CampaignWaveGenerator.BuildBattle(ch1_1, 1, 1);
-            Check(opener != null && opener.Enemies.Count == 3
-                  && opener.Enemies[0].EnemyId == "hollow_husk" && opener.Enemies[0].Level == 2
-                  && opener.Enemies[1].EnemyId == "hollow_husk" && opener.Enemies[1].Level == 2
-                  && opener.Enemies[2].EnemyId == "grave_moth" && opener.Enemies[2].Level == 2,
-                  "ch1_1 wave 1 battle 1 is still two level-2 hollow husks and a level-2 grave moth");
-
-            // The reward half of this is the original claim and still holds: no pass since the wave
-            // migration has touched what ch1_1 pays, and a restructure that moved it would be a
-            // retune wearing a restructure's clothes.
+            // THE 1-1 SPOT-CHECKS ARE RETIRED, NOT RE-PINNED. There were three, all about the
+            // retired 24's first stage: its opener (two level-2 hollow husks and a level-2 grave
+            // moth), its purse (120 gold, 6 shards) and its recommendedPower (2,977, the
+            // campaign-curve pass's derivation). Pinoy's Roadside Shrine replaced that stage under
+            // the same id. The opener pin failed on the first run against it, because no stage
+            // fields a husk or a moth. The other two still passed, but only because
+            // _author_campaign_stages.py carries every number by position from the retired stage.
+            // They were pinning seeds the next solve is meant to replace.
             //
-            // recommendedPower is the other half and it MOVED, deliberately. It read 3,950 from
-            // task 13 until the campaign-curve pass re-derived all 24 stages against the shortened
-            // chapter 1 ladder, and 2,977 is what the simulated player's entry power at ch1_1
-            // divided by the ordinary band's midpoint comes to. The pin stays because a derived
-            // number nobody watches drifts; it is not a claim that the number is permanent, it is
-            // a claim that moving it is a decision somebody made on purpose and wrote down.
-            Check(ch1_1 != null && ch1_1.RewardGold == 120 && ch1_1.RewardShards == 6,
-                  "ch1_1's authored rewards survived the migration untouched - a restructure does not"
-                  + " retune a purse");
-            Check(ch1_1 != null && ch1_1.RecommendedPower == 2977,
-                  "ch1_1's recommendedPower is the campaign-curve pass's derived 2977 (got "
-                  + (ch1_1 == null ? "no stage" : ch1_1.RecommendedPower.ToString())
-                  + ") - it is derived content, so a move here needs a stated reason, not a re-pin");
+            // Nothing replaces them here. The opener spot-check was a hand-readable instance of
+            // the all-stage identity check above, which still runs on all 72 stages and reads the
+            // opener out of campaign.json itself. The purse and recommendedPower are the solve's to
+            // set: the reward curve and the solver's table. The power band guards recommendedPower
+            // from 1-5 on, and 1-1 to 1-4 are the tutorial, which the band skips. The one claim
+            // about 1-1 that is design rather than a number is already a check:
+            // CheckTeamSizeStructure's "a brand new account's 3 starters can win stage 1". It reads
+            // the opener only, and asks for one win in twenty. Docs/SOLVE-PREREQS.md item 3 has the
+            // reading and what the solve should make of the tutorial.
         }
 
         /// <summary>
