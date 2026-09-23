@@ -15,12 +15,22 @@ formation to the ramp size below. Anything not listed in `proposed` is his, verb
 match Docs/CAMPAIGN-SPEC.md sections 2-6 already record. The collected list for him is
 Docs/CAMPAIGN-SPEC.md section 10.
 
-THE MECHANICAL SEEDS ARE NOT SOLVED, AND ARE NOT MEANT TO BE. recommendedPower, floorLevel,
-ceilingLevel and every authored enemy level are carried from the shipped stage at the same position
-(chapters 3-6 from chapter 2's position) and every unit in a line stands at floorLevel. They are
-starting points for Tools/solve-recommended-power.ps1, which has not been run on this content. The
-purse, first-clear rewards and idle rates are carried the same way for chapters 1 and 2, and chapters
-3-6 hold 2-12's values flat - see REWARD_PLATEAU below for why flat rather than grown.
+THE MECHANICAL SEEDS ARE SEEDS. recommendedPower, floorLevel, ceilingLevel and every authored
+enemy level below are carried from the shipped stage at the same position (chapters 3-6 from
+chapter 2's position), with every unit in a line standing at floorLevel. They are starting points
+for Tools/solve-recommended-power.ps1.
+
+**RE-RUNNING THIS SCRIPT THROWS AWAY A SOLVE.** The solver writes recommendedPower, floorLevel,
+ceilingLevel and the per-unit enemy levels into campaign.json; this script writes the SEEDS back
+over all four. If the tree has been solved - the giveaway is that a stage's units no longer all
+stand at floorLevel - re-run the solver afterwards, or do not run this at all. Everything this
+script owns that the solver does not touch (the lines, the names, the environments, the reward
+curve) is safe.
+
+THE REWARD CURVE IS COMPUTED, NOT CARRIED. The purse, the first-clear bonus and the idle rates are
+one power law of the global stage index across all 72 stages - see REWARD_K and rewards_at below
+for the law, the fit it came from and why it has the exponents it has. It replaced a flat plateau
+that paid 2-12's numbers for all 49 stages from 2-12 to 6-12.
 """
 import json
 import re
@@ -98,6 +108,11 @@ LEADERS = {"the_forsaken", "the_collector", "the_waykeeper", "the_shepherd", "th
 # Shipped values by stage position: gold, shards, accountXp, firstClearGold, firstClearShards,
 # recommendedPower, idleGoldPerHour, idleShardsPerHour, floorLevel, ceilingLevel. Read off
 # campaign.json as it stood on main before this pass (the wall-rule re-solve), not re-derived.
+#
+# ONLY THREE COLUMNS OF THESE ROWS ARE STILL READ: recommendedPower, floorLevel and ceilingLevel,
+# the mechanical seeds the solver replaces. The six reward columns are dead - rewards_at() below
+# computes every one of them from the stage index now. They are left in place because they are the
+# record of what the shipped 24 paid, and the reward curve's exponents were fitted to them.
 SHIPPED_CH1 = [
     (120, 6, 26, 260, 35, 2977, 96, 9, 2, 6),
     (150, 8, 32, 300, 40, 3797, 120, 11, 6, 10),
@@ -127,13 +142,112 @@ SHIPPED_CH2 = [
     (3600, 180, 500, 6100, 1040, 9984, 15659, 78, 22, 23),
 ]
 
-# REWARD_PLATEAU: chapters 3-6 pay exactly what 2-12 pays, every stage. Not a design - a
-# placeholder that is harmless until the economy decision sets a real curve. The two alternatives
-# measured on paper were worse: repeating chapter 2's rewards by position makes 3-1 pay a quarter of
-# 2-12 and drops the idle rate a player has already earned by 19x the moment they clear it, and
-# growing chapter 2's shape onward has to multiply about 4x a chapter just to stay monotonic across
-# a chapter boundary (2-12's purse is 3.75x 2-1's), which is 256x by chapter 6.
-REWARD_PLATEAU = SHIPPED_CH2[11][:5] + (SHIPPED_CH2[11][6], SHIPPED_CH2[11][7])
+# ---------------------------------------------------------------------------------------------
+# THE REWARD CURVE. One law for all 72 stages, in the GLOBAL stage index i (0 at 1-1, 71 at 6-12).
+# It replaces REWARD_PLATEAU, which paid 2-12's numbers flat for all 49 stages from 2-12 on, and
+# with it the six hand-authored reward columns of SHIPPED_CH1 and SHIPPED_CH2. Those tables are
+# kept below because their MECHANICAL seeds (recommendedPower, floorLevel, ceilingLevel) are still
+# read; their reward columns are not read any more.
+#
+# WHY A POWER LAW OF THE STAGE INDEX, and why this one. Fit each shipped reward channel over the
+# 24 authored stages to v(i) = v(0) * (1 + i/k)^p, anchored on 1-1, and six of the seven come back
+# as clean power laws: gold rms 3.2%, shards 4.9%, accountXp 4.8%, idleShardsPerHour 3.7%,
+# firstClearGold 7.4%, firstClearShards 9.0%. The shipped economy was already ONE CURVE; nobody had
+# written it down, and it stopped at stage 24. The seventh channel, idleGoldPerHour, is the
+# exception: no power law fits it better than 31% rms, because chapter 2 puts an extra x1.16 a
+# stage on top of the purse rule chapter 1 uses. That extra term IS the spike - the cache outruns
+# the purse 5.4-fold inside one chapter, from 0.80x the purse at 1-1 to 4.35x at 2-12 - and the
+# flat plateau after it IS the dead stretch. Both go.
+#
+# WHY THESE EXPONENTS. (k, p) is close to degenerate over 24 stages: every p from 2.6 to 4.4 fits
+# chapters 1-2 within 3-9% once k is re-fitted with it, so the authored data does not pin the
+# extrapolation and the choice has to be made on something else. It is made on the campaign's
+# TOTAL: p = 3.20 with k = 13.2 holds the whole campaign's gold within a few percent of what the
+# plateau pays today (about 32M against 33.5M on the same walk model), so nothing downstream is
+# starved or inflated in aggregate - the money is redistributed, not created. The steeper fitted
+# p = 4.37 would have tripled it, which is what an exponent fitted over the first third of a run
+# does to the other two thirds.
+#
+# WHAT THE SHAPE GUARANTEES, by construction rather than by inspection:
+#   - no dead stretch: every channel is STRICTLY increasing at every one of the 71 steps;
+#   - no spike: the per-stage growth rate falls monotonically, +25.0% at 1-2 down to +3.9% at 6-12,
+#     and never rises once - so no step is a jump against its neighbours, and no chapter boundary
+#     resets or re-bases anything. There are no finale or miniboss bumps for exactly that reason:
+#     a x1.25 finale bump has to be given back at the next chapter's opener, which is the
+#     non-monotonic step the two rejected shapes both died on.
+#
+# WHY EACH CHANNEL HAS THE EXPONENT IT HAS.
+#   gold          p = 3.20. The purse is the curve; everything gold-side is a multiple of it.
+#   shards        gold / 20, the ratio the shipped 24 already hold at every stage to within 4%.
+#   idleGold      0.80 x gold - chapter 1's own rule, restored campaign-wide. One clear is worth
+#                 1 hour 15 minutes of cache at every stage in the game instead of 75 minutes at
+#                 1-1 and 14 minutes at 2-12. This is the rule DESIGN-IDLE-PROGRESSION states
+#                 (idleGoldPerHour = the stage's gold x a fixed notional clear rate) and whose
+#                 slide that document already flags as the bug to fix.
+#   idleShards    its own law, 9 * (1 + i/8.4)^1.60, fitted at 3.7% - deliberately much flatter
+#                 than the purse, and the shipped content is right about that: a level's price
+#                 climbs with the level (600 + 470L, times the ascension tier's multiplier) and a
+#                 summon's never does - summonCost is 120 at 1-1 and 120 at 6-12.
+#   accountXp     p = 2.60, flatter than the purse. Account rank gates nothing (caps are set by
+#                 star and ascension tier, F7) - it is a read-out of distance travelled, so it
+#                 tracks the stage index rather than the purse.
+#   firstClear*   a multiple of the same stage's purse, decaying from x2.17 gold at 1-1 to x1.62
+#                 by the back half, which is the shape the authored 24 already have.
+REWARD_K = 13.2          # gold, shards, firstClear*: v(i) = v(0) * (1 + i/REWARD_K)^REWARD_P
+REWARD_P = 3.20
+XP_K = 13.2
+XP_P = 2.60
+IDLE_SHARD_K = 8.4       # idleShardsPerHour: 9 * (1 + i/IDLE_SHARD_K)^IDLE_SHARD_P
+IDLE_SHARD_P = 1.60
+GOLD_AT_1_1 = 120
+SHARDS_PER_GOLD = 20.0   # shards = gold / 20
+IDLE_CLEARS_PER_HOUR = 0.80   # idleGoldPerHour = 0.80 * gold
+XP_AT_1_1 = 26
+IDLE_SHARDS_AT_1_1 = 9
+
+
+def _grain_of(v):
+    """The rounding grid _round_nice uses at magnitude v. Three significant figures, roughly."""
+    if v < 100:
+        return 1
+    if v < 1000:
+        return 5
+    if v < 10000:
+        return 10
+    if v < 100000:
+        return 100
+    return 1000
+
+
+def _round_nice(v):
+    """Round to about three significant figures, the way the authored 24 are written.
+
+    The grid is coarse enough that a reader sees a curve rather than a spreadsheet, and fine
+    enough that the smallest step in the table (+3.9%, at 6-12) still clears it - which is what
+    keeps every channel STRICTLY increasing after rounding. build() asserts that rather than
+    trusting it.
+    """
+    step = _grain_of(v)
+    return int(round(v / step) * step)
+
+
+def rewards_at(i):
+    """The seven reward fields at global stage index i (0-based). The whole curve, one function."""
+    u = (1.0 + i / REWARD_K) ** REWARD_P
+    gold = GOLD_AT_1_1 * u
+    shards = gold / SHARDS_PER_GOLD
+    # The first-clear bonus is worth relatively more on the stages a player meets first, which is
+    # the shape the authored 24 carry: x2.17 the purse at 1-1, settling toward x1.62.
+    fc = 0.57 / (1.0 + i / 3.0)
+    return (
+        _round_nice(gold),
+        max(1, _round_nice(shards)),
+        _round_nice(XP_AT_1_1 * ((1.0 + i / XP_K) ** XP_P)),
+        _round_nice(gold * (1.60 + fc)),
+        max(1, _round_nice(shards * (4.85 + fc * 1.75))),
+        _round_nice(gold * IDLE_CLEARS_PER_HOUR),
+        max(1, _round_nice(IDLE_SHARDS_AT_1_1 * ((1.0 + i / IDLE_SHARD_K) ** IDLE_SHARD_P))),
+    )
 
 # Environments. Chapter 1 keeps the painted backdrops it has by position (ashen, ember, hollow).
 # Chapters 2-6 each get one new id named for Pinoy's setting; none is painted, so each falls through
@@ -402,9 +516,11 @@ def build():
             else:
                 seed = SHIPPED_CH2[i - 1]
                 env = CHAPTER_ENV[n]
-            gold, shards, xp, fcg, fcs, rec, idle_g, idle_s, floor, ceil = seed
-            if n >= 3:
-                gold, shards, xp, fcg, fcs, idle_g, idle_s = REWARD_PLATEAU
+            rec, floor, ceil = seed[5], seed[8], seed[9]
+            # The purse, the first-clear bonus and the idle rates are the reward curve, computed
+            # from the global stage index for all 72 stages alike - not carried by position and
+            # not held flat past 2-12. See REWARD_K above.
+            gold, shards, xp, fcg, fcs, idle_g, idle_s = rewards_at((n - 1) * 12 + (i - 1))
 
             marks = [p.strip() for p in parts.split(",") if p.strip()]
             if proposed:
@@ -427,6 +543,36 @@ def build():
                 if lines[a] == lines[b]:
                     errors.append("%s and %s field the identical line" % (stages_out[a]["id"], stages_out[b]["id"]))
         chapters_out.append((ch, stages_out))
+
+    # THE REWARD CURVE HAS NO DEAD STRETCH AND NO SPIKE, asserted rather than eyeballed. Every one
+    # of the seven channels must rise at every one of the 71 steps (no dead stretch, and none lost
+    # to _round_nice's grid), and the growth RATE must never rise (no spike, and no chapter
+    # boundary that re-bases anything).
+    flat = [st for _, ss in chapters_out for st in ss]
+    for key in ("gold", "shards", "accountXp", "firstClearGold", "firstClearShards",
+                "idleGoldPerHour", "idleShardsPerHour"):
+        for a in range(1, len(flat)):
+            if flat[a][key] <= flat[a - 1][key]:
+                errors.append("reward curve: %s does not rise from %s to %s (%d -> %d)"
+                              % (key, flat[a - 1]["id"], flat[a]["id"], flat[a - 1][key], flat[a][key]))
+    # No spike, read on the EXACT curve rather than the written one. (1 + i/k)^p has a growth rate
+    # that falls at every step by construction, so this asserts the property the law is chosen for;
+    # what could still break it is a typo in an exponent, and that is what this catches. It is not
+    # read on the rounded numbers because _round_nice's grid moves a step by up to half a grain in
+    # either direction, which at 1-3 (x1.2433 exact, 150 -> 190 written) reads as an acceleration
+    # that is not in the curve.
+    exact = [GOLD_AT_1_1 * ((1.0 + i / REWARD_K) ** REWARD_P) for i in range(len(flat))]
+    for a in range(2, len(exact)):
+        prev = exact[a - 1] / exact[a - 2]
+        here = exact[a] / exact[a - 1]
+        if here > prev:
+            errors.append("reward curve: the purse ACCELERATES into %s (x%.4f after x%.4f)"
+                          % (flat[a]["id"], here, prev))
+    # And the written number is the curve, not a number beside it: within one rounding grain.
+    for a in range(len(flat)):
+        if abs(flat[a]["gold"] - exact[a]) > 0.5 * _grain_of(exact[a]) + 1e-6:
+            errors.append("reward curve: %s's purse %d is not the curve's %.1f"
+                          % (flat[a]["id"], flat[a]["gold"], exact[a]))
 
     all84 = [e for e in enemies if e not in SHIPPED_TWELVE]
     if len(all84) != 84:
