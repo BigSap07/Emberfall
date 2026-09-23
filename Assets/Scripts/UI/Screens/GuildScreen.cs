@@ -66,6 +66,7 @@ namespace Emberfall.UI.Screens
         private Text _guildCounts;
         private UIButton _requestsButton;
         private UIButton _chatButton;
+        private UIButton _dungeonButton;
         private UIButton _leaveButton;
 
         private RectTransform _settingsCard;
@@ -232,7 +233,9 @@ namespace Emberfall.UI.Screens
 
             _guildBlurb = EmberforgeUI.Body("Blurb", card, "", UITheme.FontTiny,
                                                  Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(_guildBlurb.rectTransform, 30f, -182f, CardWidth - 120f, 60f, new Vector2(0f, 1f));
+            // 600 wide, not the card's width: the button column (LEAVE, DUNGEON) sits at the same height on
+            // the right and a full-width blurb ran underneath both.
+            UIBuilder.Box(_guildBlurb.rectTransform, 30f, -182f, 600f, 76f, new Vector2(0f, 1f));
 
             _guildCounts = EmberforgeUI.Label("Counts", card, "", UITheme.FontSmall, Emberforge.TextQuiet,
                                            TextAnchor.UpperRight);
@@ -249,6 +252,12 @@ namespace Emberfall.UI.Screens
             _leaveButton = EmberforgeUI.Button("Leave", card, "LEAVE", UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(_leaveButton.Root, -30f, -162f, 260f, 66f, new Vector2(1f, 1f));
             _leaveButton.OnClick(OnLeave);
+
+            // The guild dungeon's door. Under CHAT, which is where its handover lands, and ember
+            // like CHAT: these are the two things a member opens this card to do.
+            _dungeonButton = EmberforgeUI.Button("Dungeon", card, "DUNGEON", UITheme.FontSmall, ForgeButtonKind.Primary);
+            UIBuilder.Box(_dungeonButton.Root, -300f, -162f, 240f, 66f, new Vector2(1f, 1f));
+            _dungeonButton.OnClick(OnOpenDungeon);
 
             // ---- roster, ABOVE the settings card and not below it.
             //
@@ -953,6 +962,12 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.GuildChat);
+        }
+
+        private void OnOpenDungeon()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.GuildDungeon);
         }
 
         /// <summary>

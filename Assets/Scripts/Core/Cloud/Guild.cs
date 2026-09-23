@@ -362,6 +362,19 @@ namespace Emberfall.Core.Cloud
         public string Body = "";
         public long CreatedUnix;
         public bool IsMine;
+
+        /// <summary>
+        /// The guild dungeon attempt this message carries, when it is a SHARED ATTEMPT rather than
+        /// a line of text (guild_messages.attempt_id, 0008). The whole record comes inline with the
+        /// message, embedded by PostgREST, so the chat can draw a playable card and a guildmate
+        /// can watch the fight without a second request. Null on an ordinary line, and on a shared
+        /// attempt whose row this reader cannot see - which the card then says rather than hides.
+        /// </summary>
+        public GuildDungeonAttempt Attempt;
+
+        /// <summary>guild_messages.attempt_id, or 0. Kept apart from Attempt so "this pointed at an
+        /// attempt that did not come back" is a state the screen can tell from "plain text".</summary>
+        public long AttemptId;
     }
 
     /// <summary>
@@ -535,6 +548,17 @@ namespace Emberfall.Core.Cloud
             JsonValue profile = row["profiles"];
             if (profile != null && profile.IsObject)
                 entry.DisplayName = profile.GetString("display_name", "");
+
+            // A shared dungeon attempt: the id, and the row itself under the "attempt" alias the
+            // chat read asks for (GuildDungeonService.ChatSelect). Both absent on every message
+            // written before 0008 and on every ordinary line after it.
+            entry.AttemptId = row.GetLong("attempt_id", 0);
+            JsonValue attempt = row["attempt"];
+            if (entry.AttemptId != 0 && attempt != null && attempt.IsObject)
+            {
+                entry.Attempt = GuildDungeon.ReadRow(attempt);
+                if (string.IsNullOrEmpty(entry.Attempt.DisplayName)) entry.Attempt.DisplayName = entry.DisplayName;
+            }
             return entry.Id == 0 ? null : entry;
         }
 

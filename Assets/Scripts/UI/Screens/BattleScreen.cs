@@ -150,7 +150,7 @@ namespace Emberfall.UI.Screens
         /// What the gold button means for THIS result. Was a bool ("continues, or replays"), which
         /// only had room for the two answers a win needs; a loss needs a third.
         /// </summary>
-        private enum PrimaryAction { Replay, Continue, Exit, Prologue, NextBattle }
+        private enum PrimaryAction { Replay, Continue, Exit, Prologue, NextBattle, Guild }
 
         private PrimaryAction _primaryAction = PrimaryAction.Replay;
 
@@ -284,6 +284,35 @@ namespace Emberfall.UI.Screens
         private int _duelSeed;
 
         /// <summary>
+        /// A guild dungeon fight, or a replay of one, while this battle is either; null for every
+        /// other mode. The SIXTH discriminator, and the only one whose result is HANDED IN rather
+        /// than computed here: GuildDungeon.Fight or GuildDungeon.Replay produced it in Core, and
+        /// this screen plays it back. A replay that recomputed would be a second fight that looked
+        /// like the first, and the whole point of the handover is that it is the first.
+        ///
+        /// It also carries what the result panel says and where its buttons lead, because the
+        /// dungeon's flow (the result screen, the floor, the chat) lives on screens this one knows
+        /// nothing about.
+        /// </summary>
+        private GuildBattleRun _guildRun;
+
+        /// <summary>
+        /// Plays a guild dungeon attempt or a replay. Spends nothing and grants nothing: an attempt
+        /// was stored before it got here (GuildDungeonFlow.Attempt), and a replay is a record.
+        /// REMATCH is WATCH AGAIN in this mode, and it replays the same result - there is no second
+        /// roll to be had, which is the rule the dungeon is built on.
+        /// </summary>
+        public void SetGuildRun(GuildBattleRun run)
+        {
+            _recitalFloor = -1;
+            _provingOpponent = null;
+            _duelOpponent = null;
+            _prologueSquad = null;
+            _guildRun = run;
+            _stage = run != null ? run.Stage : null;
+        }
+
+        /// <summary>
         /// Enters a campaign stage, resuming wherever the player left it.
         ///
         /// The resume point comes from the session rather than defaulting to (1,1), which is what
@@ -298,6 +327,7 @@ namespace Emberfall.UI.Screens
             _provingOpponent = null;
             _duelOpponent = null;
             _prologueSquad = null;
+            _guildRun = null;
 
             _campaignWave = 1;
             _campaignBattle = 1;
@@ -318,6 +348,7 @@ namespace Emberfall.UI.Screens
             _provingOpponent = null;
             _duelOpponent = null;
             _prologueSquad = null;
+            _guildRun = null;
             _stage = App.Session.BuildRecitalStage(floor);
         }
 
@@ -337,6 +368,7 @@ namespace Emberfall.UI.Screens
             _provingOpponent = opponent;
             _duelOpponent = null;
             _prologueSquad = null;
+            _guildRun = null;
             _stage = ProvingGenerator.BuildStage();
         }
 
@@ -361,6 +393,7 @@ namespace Emberfall.UI.Screens
             _recitalFloor = -1;
             _provingOpponent = null;
             _prologueSquad = null;
+            _guildRun = null;
             _duelOpponent = opponent;
             _duelOpponentName = string.IsNullOrEmpty(friendName)
                 ? (opponent != null ? opponent.Label : "") : friendName;
@@ -392,6 +425,7 @@ namespace Emberfall.UI.Screens
             _recitalFloor = -1;
             _provingOpponent = null;
             _duelOpponent = null;
+            _guildRun = null;
             _prologueSquad = squad;
             _prologueOnResolved = onResolved;
             _stage = PrologueScript.BuildStage(step);
@@ -643,7 +677,7 @@ namespace Emberfall.UI.Screens
             // control is hidden rather than shown-and-inert.
             bool chainable = _stage != null && _stage.HasWaveCurve
                              && _recitalFloor < 0 && _provingOpponent == null && _duelOpponent == null
-                             && _prologueSquad == null;
+                             && _prologueSquad == null && _guildRun == null;
             _autoButton.Root.gameObject.SetActive(chainable);
             if (!chainable) _auto = false;
             else _auto = PlayerPrefs.GetInt(AutoPrefKey, 0) == 1;
@@ -658,7 +692,13 @@ namespace Emberfall.UI.Screens
                 return;
             }
 
-            if (_duelOpponent != null)
+            if (_guildRun != null)
+            {
+                // No spend point here either: an attempt was stored before it was handed in, and a
+                // replay is a record. See SetGuildRun.
+                _stageLabel.text = _guildRun.Label;
+            }
+            else if (_duelOpponent != null)
             {
                 // No spend point at all, and that absence is the mode. Checked BEFORE the Proving
                 // branch because both carry a BattleLoadout and falling into that one would charge
@@ -775,6 +815,16 @@ namespace Emberfall.UI.Screens
             // Three request shapes, one per mode that does not use the player's own line as-is.
             // Checked most-specific first: a prologue fight has no profile at all, so it must not
             // fall through to BuildBattleRequest, which reads Profile.TeamHeroes().
+            // A guild dungeon fight arrives already resolved - see SetGuildRun. Nothing is built
+            // and nothing is run: the screen populates from the result it was given.
+            if (_guildRun != null)
+            {
+                _result = _guildRun.Result;
+                _world.Populate(_result);
+                BuildBars();
+                return;
+            }
+
             BattleRequest request;
             if (_prologueSquad != null) request = App.Session.BuildPrologueRequest(_stage, _prologueSquad, seed);
             else if (_duelOpponent != null)
@@ -1861,6 +1911,7 @@ namespace Emberfall.UI.Screens
             // the wrong panel; it would corrupt the campaign progress of an account that has not
             // started the campaign. ShowPrologueResult grants nothing at all.
             if (_prologueSquad != null) ShowPrologueResult();
+            else if (_guildRun != null) ShowGuildResult();
             else if (_duelOpponent != null) ShowDuelResult();
             else if (_provingOpponent != null) ShowProvingResult();
             else if (_recitalFloor >= 0) ShowRecitalResult();
@@ -1899,7 +1950,7 @@ namespace Emberfall.UI.Screens
             // campaign, skipping the entire scripted ending this feature exists to deliver.
             StageDef nextStage = (_result.Victory && _recitalFloor < 0
                                   && _provingOpponent == null && _duelOpponent == null
-                                  && _prologueSquad == null)
+                                  && _prologueSquad == null && _guildRun == null)
                 ? App.Session.NextStage : null;
             bool canContinue = nextStage != null && (_stage == null || nextStage.Id != _stage.Id);
 
@@ -1920,6 +1971,34 @@ namespace Emberfall.UI.Screens
             //
             // REMATCH keeps existing, demoted to the middle slot. It is still the right answer
             // sometimes; it is no longer the only one.
+            // THE GUILD DUNGEON'S BUTTONS ARE ITS FLOW'S. The gold one goes forward - to the
+            // result screen after an attempt, into the floor after a replay (RUN IT YOURSELF, the
+            // handover) - the teal one goes back to wherever the fight was opened from, and the
+            // middle one is WATCH AGAIN, which replays the same result because there is no other.
+            if (_guildRun != null)
+            {
+                _primaryAction = PrimaryAction.Guild;
+                _resultPrimary.SetText(_guildRun.PrimaryLabel);
+                _resultPrimary.Root.name = "GuildPrimary";
+                _resultSecondary.SetText(_guildRun.SecondaryLabel);
+                _resultSecondary.Root.gameObject.SetActive(!string.IsNullOrEmpty(_guildRun.SecondaryLabel));
+                _resultTertiary.SetText("WATCH AGAIN");
+                _resultTertiary.Root.gameObject.SetActive(true);
+                UIBuilder.Box(_resultSecondary.Root, -460f, -170f, 620f, 96f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Box(_resultTertiary.Root, -460f, -276f, 620f, 96f, new Vector2(0.5f, 0.5f));
+                UIBuilder.Box(_resultPrimary.Root, -460f, -400f, 620f, 132f, new Vector2(0.5f, 0.5f));
+                _resultPanel.gameObject.SetActive(true);
+                _resultPanel.SetAsLastSibling();
+                if (_topHud != null) _topHud.SetAsLastSibling();
+                _resultGroup.alpha = 1f;
+                return;
+            }
+
+            // Every other mode speaks the panel's own words, which the branch above can have
+            // replaced on a previous fight: this screen is built once and reused.
+            _resultSecondary.SetText("ADJUST LINE");
+            _resultTertiary.SetText("REMATCH");
+
             // THE PROLOGUE OWNS ITS OWN EXIT, AND IT IS THE ONLY ONE.
             //
             // Every other mode ends on three buttons: ADJUST LINE, REMATCH, and a forward action.
@@ -2214,6 +2293,20 @@ namespace Emberfall.UI.Screens
             if (_result.Victory) App.Audio.Victory(); else App.Audio.Defeat();
         }
 
+        /// <summary>
+        /// A guild dungeon attempt or replay: the rows its flow wrote, and nothing granted. The
+        /// subtitle says which of the two this is, under VICTORY or DEFEAT, for the reason the duel
+        /// puts "nothing is at stake" there - it is the line that gets read.
+        /// </summary>
+        private void ShowGuildResult()
+        {
+            _resultSub.text = _guildRun.Subtitle;
+            for (int i = 0; i < _guildRun.Rows.Count; i++)
+                AddRewardRow(_guildRun.Rows[i].Key, _guildRun.Rows[i].Value,
+                             i == 0 ? UITheme.TextPrimary : UITheme.TextMuted);
+            if (_result.Victory) App.Audio.Victory(); else App.Audio.Defeat();
+        }
+
         private void ShowProvingResult()
         {
             ProvingRewards rewards = App.Session.GrantProvingResult(_result.Victory, TimeUtil.NowUnix());
@@ -2451,6 +2544,10 @@ namespace Emberfall.UI.Screens
                 case PrimaryAction.Exit: ExitToOrigin(); break;
                 case PrimaryAction.Prologue: ResolvePrologueStep(); break;
                 case PrimaryAction.NextBattle: FightNextBattle(); break;
+                case PrimaryAction.Guild:
+                    App.Audio.Tap();
+                    if (_guildRun != null && _guildRun.OnPrimary != null) _guildRun.OnPrimary();
+                    break;
                 default: Replay(); break;
             }
         }
@@ -2608,6 +2705,13 @@ namespace Emberfall.UI.Screens
         private void AdjustLine()
         {
             App.Audio.Tap();
+            // In the guild dungeon this slot is the way back to wherever the fight was opened
+            // from; the line is chosen on the floor view, not on Formation.
+            if (_guildRun != null)
+            {
+                if (_guildRun.OnSecondary != null) _guildRun.OnSecondary();
+                return;
+            }
             // Going to change the banner is a deliberate stop: the line that comes back is not the
             // line the chain was running with, so continuing on the old decision would be wrong.
             SetAuto(false);

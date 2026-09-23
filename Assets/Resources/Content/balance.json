@@ -157,5 +157,9 @@
   "guildDungeonAttemptsPerFloor": 3,
   "guildDungeonFloorOnePower": 21000,
   "guildDungeonPowerPerFloor": 0.05,
-  "guildDungeonChampionLevelBonus": 3
+  "guildDungeonChampionLevelBonus": 3,
+
+  // Every hero fights the guild dungeon at this level, with no relics and no armor; talents stay.
+  // The floors above are calibrated against lines at exactly this level, so the two move together.
+  "guildDungeonHeroLevel": 40
 }

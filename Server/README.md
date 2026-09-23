@@ -20,6 +20,12 @@ project owner:
    joining, accepting, roles, leadership, chat and presence.
 6. `0006_guild_team_snapshots.sql` - the one thing guilds change about a table they did not
    create: a guildmate may read a team snapshot, so a guildmate may be duelled.
+7. `0007_guild_dungeon.sql` - the guild dungeon's attempt record, its cycle clock and its
+   attempt cap.
+8. `0008_guild_dungeon_playable.sql` - a content version and a loss count on every attempt,
+   `guild_dungeon_submit` (one level for every line, floors that open as the guild clears
+   them), and `guild_share_attempt`, which puts an attempt into guild chat as a playable card.
+   Additive to `0007`, and re-appliable the same way.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:

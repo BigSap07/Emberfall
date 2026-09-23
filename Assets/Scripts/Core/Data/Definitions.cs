@@ -2804,6 +2804,17 @@ namespace Emberfall.Core.Data
         /// <summary>Extra levels the Champion floor's lead enemy gets over its escorts.</summary>
         public int GuildDungeonChampionLevelBonus = 3;
 
+        /// <summary>
+        /// The level EVERY hero fights at in the guild dungeon, whatever level it has reached, and
+        /// the level the floors are calibrated against. Dungeon fights also strip relics and armor
+        /// and keep talents (GuildDungeon.NormaliseTeam says why). A guild spans every level there
+        /// is, and a floor tuned for one of them was trivial for some members and a wall for
+        /// others; with every line at one level the floor asks the same question of everybody.
+        /// Moving it moves every floor's difficulty, so GuildDungeonChecks' sample rosters read it
+        /// rather than carrying a copy.
+        /// </summary>
+        public int GuildDungeonHeroLevel = 40;
+
         public static BalanceConfig FromJson(JsonValue j)
         {
             BalanceConfig b = new BalanceConfig();
@@ -2880,6 +2891,7 @@ namespace Emberfall.Core.Data
             b.GuildDungeonFloorOnePower = j.GetInt("guildDungeonFloorOnePower", b.GuildDungeonFloorOnePower);
             b.GuildDungeonPowerPerFloor = j.GetFloat("guildDungeonPowerPerFloor", b.GuildDungeonPowerPerFloor);
             b.GuildDungeonChampionLevelBonus = j.GetInt("guildDungeonChampionLevelBonus", b.GuildDungeonChampionLevelBonus);
+            b.GuildDungeonHeroLevel = j.GetInt("guildDungeonHeroLevel", b.GuildDungeonHeroLevel);
             return b;
         }
     }
