@@ -33,7 +33,8 @@ namespace Emberfall.UI
         GuildDungeon,
         GuildFloor,
         GuildDungeonResult,
-        GuildDungeonBoards
+        GuildDungeonBoards,
+        GuildPath
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -123,6 +124,7 @@ namespace Emberfall.UI
         public Screens.GuildFloorScreen GuildFloor;
         public Screens.GuildDungeonResultScreen GuildDungeonResult;
         public Screens.GuildDungeonBoardsScreen GuildDungeonBoards;
+        public Screens.GuildPathScreen GuildPath;
 
         public UIScreen Current { get; private set; }
 
@@ -173,6 +175,10 @@ namespace Emberfall.UI
             GuildFloor = Create<Screens.GuildFloorScreen>();
             GuildDungeonResult = Create<Screens.GuildDungeonResultScreen>();
             GuildDungeonBoards = Create<Screens.GuildDungeonBoardsScreen>();
+
+            // The Guild Path: the player's own, so reached from the formation screen, where its
+            // lines are switched, and from the dungeon that pays for it.
+            GuildPath = Create<Screens.GuildPathScreen>();
         }
 
         /// <summary>

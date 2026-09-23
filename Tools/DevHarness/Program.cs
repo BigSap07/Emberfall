@@ -31,6 +31,7 @@ namespace Emberfall.DevHarness
             bool talentValue = false;
             bool fidelity = false;
             bool guildConditions = false;
+            bool guildPath = false;
             bool reconcile = false;
             int wallStudy = 0;
             bool lineCalibration = false;
@@ -57,6 +58,7 @@ namespace Emberfall.DevHarness
                     continue;
                 }
                 if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
+                if (args[i] == "--guild-path") { guildPath = true; continue; }
                 if (args[i] == "--tempo-study")
                 {
                     tempoStudy = true;
@@ -146,6 +148,9 @@ namespace Emberfall.DevHarness
             // The guild floor conditions' study (GuildDungeonChecks.RunConditionStudy). Not a check:
             // the instrument floor-conditions.json's pool, magnitudes and floor lists are read from.
             if (guildConditions) return GuildDungeonChecks.RunConditionStudy(content);
+            // The Guild Path's study (GuildPathChecks.RunStudy). Not a check: the instrument
+            // guild-path.json's pay and prices are derived from.
+            if (guildPath) return GuildPathChecks.RunStudy(content);
 
             // The fidelity pass and the star band alone, for a content pass that is moving kits
             // against their sentences and wants both readings without the rest of the harness.
@@ -242,6 +247,9 @@ namespace Emberfall.DevHarness
             // The guild dungeon's own checks live in GuildDungeonChecks.cs so the guild branch and
             // this file never edit the same lines; this is the one line that wires them in.
             _failures += GuildDungeonChecks.Run(content, contentDir);
+            // The Guild Path (GuildPathChecks.cs): its numbers re-derived, the server's copy of
+            // them, and the property it exists for - breadth, never power.
+            _failures += GuildPathChecks.Run(content, contentDir);
             CheckSummonPity(content);
             CheckRepeatCap(content);
             CheckRelicDust(content);
@@ -4442,7 +4450,10 @@ namespace Emberfall.DevHarness
                 string armor = File.Exists(armorPath) ? File.ReadAllText(armorPath) : null;
                 string conditionsPath = Path.Combine(dir, "floor-conditions.json");
                 string conditions = File.Exists(conditionsPath) ? File.ReadAllText(conditionsPath) : null;
-                return ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor, conditions);
+                ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor, conditions);
+                string pathPath = Path.Combine(dir, "guild-path.json");
+                db.LoadGuildPath(File.Exists(pathPath) ? File.ReadAllText(pathPath) : null);
+                return db;
             }
             catch (Exception ex)
             {
@@ -17093,7 +17104,7 @@ namespace Emberfall.DevHarness
             PlayerProfile back = SaveSerializer.Deserialize(json, db, out err);
             HeroInstance backAsc = back != null ? back.FindHeroByDefId(five.Id) : null;
             GameSession backSession = back != null ? new GameSession(db, back) : null;
-            Check(SaveSerializer.CurrentVersion == 16 && backAsc != null && backAsc.Ascension == asc.Ascension
+            Check(SaveSerializer.CurrentVersion >= 16 && backAsc != null && backAsc.Ascension == asc.Ascension
                   && backAsc.Level == asc.Level && backAsc.Copies == asc.Copies
                   && backSession.TierLevelOf(backAsc) == saved.TierLevelOf(asc) && backAsc.Power == asc.Power,
                   "save version 16 carries a hero's ascension: tier " + (backAsc != null ? backAsc.Ascension : -1)
@@ -17102,7 +17113,7 @@ namespace Emberfall.DevHarness
                   "an ascended profile round-trips byte for byte");
 
             string v15 = System.Text.RegularExpressions.Regex.Replace(json, @"""ascension""(\s*):", @"""ascensionIgnored""$1:");
-            v15 = System.Text.RegularExpressions.Regex.Replace(v15, @"""version""(\s*):(\s*)16", @"""version""$1:${2}15");
+            v15 = System.Text.RegularExpressions.Regex.Replace(v15, @"""version""(\s*):(\s*)" + SaveSerializer.CurrentVersion, @"""version""$1:${2}15");
             PlayerProfile upgraded = SaveSerializer.Deserialize(v15, db, out err);
             HeroInstance up15 = upgraded != null ? upgraded.FindHeroByDefId(five.Id) : null;
             Check(up15 != null && up15.Ascension == 0 && up15.Level == asc.Level,

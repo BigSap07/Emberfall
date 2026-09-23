@@ -134,6 +134,14 @@ namespace Emberfall.Core.Cloud
         /// stored before the field existed.</summary>
         public string ContentVersion = "";
 
+        /// <summary>
+        /// The boards this client claims the attempt entered, as guild_dungeon_attempts.boards'
+        /// bits (GuildPath.BoardMask), or -1 when none was computed. Sent as p_boards and never read
+        /// back: the boards screen still decides membership with Satisfies, and the server keeps
+        /// only the part of the claim it can check (0011).
+        /// </summary>
+        public int Boards = -1;
+
         public string CreatedAt = "";
     }
 
@@ -828,9 +836,10 @@ namespace Emberfall.Core.Cloud
         // ---------------------------------------------------------------- the wire
 
         /// <summary>
-        /// The arguments of guild_dungeon_submit (Server/supabase/migrations/0008), named as the
-        /// function names them. The server assigns the attempt number, the user and the guild;
-        /// sending them would only invite a client to choose.
+        /// The arguments of guild_dungeon_attempt (Server/supabase/migrations/0011), named as the
+        /// function names them - or of 0008's guild_dungeon_submit when the record carries no board
+        /// claim, since the two differ only by p_boards. The server assigns the attempt number, the
+        /// user and the guild; sending them would only invite a client to choose.
         /// </summary>
         public static JsonValue WriteRpcArgs(GuildDungeonAttempt a)
         {
@@ -845,6 +854,7 @@ namespace Emberfall.Core.Cloud
             j.Set("p_avg_stars", (double)a.AverageStars);
             j.Set("p_fallen", Math.Max(0, a.Fallen));
             j.Set("p_content_version", a.ContentVersion ?? "");
+            if (a.Boards >= 0) j.Set("p_boards", a.Boards);
             return j;
         }
 

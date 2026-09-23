@@ -113,6 +113,12 @@ namespace Emberfall.UI.Screens
             BattleResult result;
             GuildDungeonAttempt record = GuildDungeon.Attempt(app.Content, line, state.Status.Seed,
                                                               state.Cycle, floor, out result);
+            string self = backend.SelfUserId;
+            record.Boards = GuildPath.ClaimMask(app.Content, record,
+                                                GuildDungeon.AttemptsUsed(state.Attempts, self, state.Cycle, floor) + 1);
+            // What the Guild Path's base pays for this attempt, predicted from this member's own
+            // rows before and after it. The server pays; this only says what it will pay.
+            int baseBefore = GuildPath.BaseFor(app.Content.GuildPath, state.Attempts, self, state.Cycle);
             GuildDungeonAttempt stored = null;
             string error = "";
             yield return backend.Record(record, delegate (GuildDungeonAttempt a, string e) { stored = a; error = e; });
@@ -137,6 +143,12 @@ namespace Emberfall.UI.Screens
             run.Rows.Add(new KeyValuePair<string, string>("BOARDS ENTERED",
                 GuildDungeon.BoardsMet(app.Content, stored).Count + " OF " + GuildDungeon.Boards.Length));
             run.Rows.Add(new KeyValuePair<string, string>("ATTEMPTS LEFT", left + " OF " + state.Cap));
+            if (app.Content.GuildPath.IsUsable)
+            {
+                int paid = GuildPath.BaseFor(app.Content.GuildPath, state.Attempts, self, state.Cycle) - baseBefore;
+                run.Rows.Add(new KeyValuePair<string, string>(app.Content.GuildPath.Currency.ToUpperInvariant(),
+                    paid > 0 ? "+" + paid : "0 - PAID ONCE A CYCLE"));
+            }
             run.PrimaryLabel = "SEE WHERE IT PLACES YOU";
             run.OnPrimary = delegate { router.Show(ScreenId.GuildDungeonResult, false); };
             run.SecondaryLabel = "BACK TO THE FLOOR";

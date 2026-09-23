@@ -241,7 +241,23 @@ namespace Emberfall.Core.Save
         /// hero back to tier 0 at a level far past tier 0's cap, where it could never level again -
         /// and a version 15 build caps by account rank, so it would also let that hero be levelled
         /// one ladder level at a time at tier 0's price. Both are silent, and the bump refuses them.
-        public const int CurrentVersion = 16;
+        ///
+        /// 17: the Guild Path (claude/DESIGN-GUILDS-PHASE-TWO.md, system 2). A `guildPath` object -
+        /// the Waymark balance and the node ids owned, both a copy of the server's last answer -
+        /// and the formation's saved `lines` with `activeLine`. All three are written only once
+        /// they hold something, so a player who has never been paid by the guild dungeon
+        /// serialises exactly as version 16 did apart from the version number.
+        ///
+        /// Upgrade needs no migration and gets none: a version 16 save has none of the keys,
+        /// which read as no Waymarks, no nodes and one line, and all three are precisely true -
+        /// the Path did not exist when it was written. The server holds the real balance and the
+        /// real nodes, keyed by account, and the next guild_path_state replaces the copy.
+        ///
+        /// WHY THIS IS A BUMP. Version 16 code reads none of the keys, so it would drop every
+        /// saved line a player built and, on its next push, write a cloud save that no longer
+        /// holds them. The Waymarks and nodes would survive on the server; the lines are only
+        /// ever in the save. The bump refuses that instead.
+        public const int CurrentVersion = 17;
 
         /// <summary>
         /// The save's format version, or false with a sentence a player can read. The one reader
@@ -695,6 +711,24 @@ namespace Emberfall.Core.Save
             for (int i = 0; i < profile.Team.Length; i++) team.Add(new JsonValue(profile.Team[i]));
             root.Set("team", team);
 
+            // Version 17. Each key only once it holds something - see CurrentVersion.
+            if (profile.Waymarks > 0 || profile.GuildPathNodes.Count > 0)
+            {
+                JsonValue path = JsonValue.NewObject();
+                path.Set("waymarks", profile.Waymarks);
+                JsonValue nodes = JsonValue.NewArray();
+                for (int i = 0; i < profile.GuildPathNodes.Count; i++) nodes.Add(profile.GuildPathNodes[i]);
+                path.Set("nodes", nodes);
+                root.Set("guildPath", path);
+            }
+            if (profile.Lines.Count > 0)
+            {
+                JsonValue lines = JsonValue.NewArray();
+                for (int l = 0; l < profile.Lines.Count; l++) lines.Add(WriteLine(profile.Lines[l]));
+                root.Set("lines", lines);
+                root.Set("activeLine", profile.ActiveLine);
+            }
+
             return root.ToJson(true);
         }
 
@@ -955,11 +989,60 @@ namespace Emberfall.Core.Save
                 profile.Team[i] = team[i].AsString(null);
             }
 
+            // Version 17's Guild Path copy and saved lines. Absent reads as nothing owned and one
+            // line, which is true of every save written before them.
+            JsonValue guildPath = root["guildPath"];
+            profile.Waymarks = Math.Max(0, guildPath.GetLong("waymarks", 0));
+            List<JsonValue> pathNodes = guildPath.GetList("nodes");
+            for (int i = 0; i < pathNodes.Count; i++)
+            {
+                string id = pathNodes[i].AsString("");
+                if (id.Length > 0 && !profile.GuildPathNodes.Contains(id)) profile.GuildPathNodes.Add(id);
+            }
+            List<JsonValue> lines = root.GetList("lines");
+            for (int l = 0; l < lines.Count; l++) profile.Lines.Add(ReadLine(lines[l]));
+            profile.ActiveLine = Math.Max(0, root.GetInt("activeLine", 0));
+            if (profile.ActiveLine >= Math.Max(1, profile.Lines.Count)) profile.ActiveLine = 0;
+
             profile.NormaliseTeam();
             profile.NormaliseRelics();
             profile.NormaliseArmor();
             profile.NormaliseRecital();
             return profile;
+        }
+
+        /// <summary>One saved line: its hero uids by slot (null for an empty slot), and its talent
+        /// picks only when it carries them. A null line - one never visited - is written as null.</summary>
+        private static JsonValue WriteLine(SavedLine line)
+        {
+            if (line == null) return new JsonValue();
+            JsonValue o = JsonValue.NewObject();
+            JsonValue heroes = JsonValue.NewArray();
+            for (int s = 0; s < line.Heroes.Length; s++) heroes.Add(new JsonValue(line.Heroes[s]));
+            o.Set("heroes", heroes);
+            if (line.HasTalents)
+            {
+                JsonValue talents = JsonValue.NewArray();
+                for (int s = 0; s < line.Talents.Length; s++) talents.Add(line.Talents[s]);
+                o.Set("talents", talents);
+            }
+            return o;
+        }
+
+        private static SavedLine ReadLine(JsonValue o)
+        {
+            if (o == null || !o.IsObject) return null;
+            SavedLine line = new SavedLine();
+            List<JsonValue> heroes = o.GetList("heroes");
+            for (int s = 0; s < heroes.Count && s < line.Heroes.Length; s++) line.Heroes[s] = heroes[s].AsString(null);
+            if (o.Has("talents"))
+            {
+                line.HasTalents = true;
+                List<JsonValue> talents = o.GetList("talents");
+                for (int s = 0; s < talents.Count && s < line.Talents.Length; s++)
+                    line.Talents[s] = Math.Max(0, Math.Min(HeroDef.MaxTalents, talents[s].AsInt(0)));
+            }
+            return line;
         }
     }
 }

@@ -237,6 +237,22 @@ namespace Emberfall.Core.Model
         public readonly List<long> ClaimedMilestoneThresholds = new List<long>();
     }
 
+    /// <summary>
+    /// One saved line of the formation (the Guild Path's Line nodes). Hero uids by slot, and -
+    /// once the player owns Lines Keep Talents - each slot's talent pick as it stood when the line
+    /// was last left. Uids, not def ids, for PlayerProfile.Team's reason: the formation names owned
+    /// heroes, and a uid whose hero is gone is dropped on switch the way NormaliseTeam drops it.
+    /// </summary>
+    public sealed class SavedLine
+    {
+        public readonly string[] Heroes = new string[PlayerProfile.TeamSize];
+
+        /// <summary>Talent slot per team slot, meaningful only when HasTalents: a line saved
+        /// before the player owned Lines Keep Talents carries none and restores none.</summary>
+        public readonly int[] Talents = new int[PlayerProfile.TeamSize];
+        public bool HasTalents;
+    }
+
     /// <summary>Everything the player owns. Pure data - serialised by SaveSerializer.</summary>
     public sealed class PlayerProfile
     {
@@ -458,6 +474,30 @@ namespace Emberfall.Core.Model
         public BattleLoadout ProvingOpponent;
 
         public readonly string[] Team = new string[TeamSize]; // hero uids, null = empty slot
+
+        // ---------------------------------------------------------------- the Guild Path
+        // claude/DESIGN-GUILDS-PHASE-TWO.md, system 2. THE SERVER OWNS BOTH NUMBERS BELOW: the
+        // balance is minted only inside guild_dungeon_attempt and guild_path_settle and spent only
+        // inside guild_path_unlock (Server/supabase/migrations/0011_guild_path.sql). These are the
+        // last answer it gave, kept so an offline session still has the lines it paid for.
+        // Keyed by account, never by guild: leaving a guild takes nothing away.
+
+        /// <summary>Waymarks unspent, as the server last reported them. Display only.</summary>
+        public long Waymarks;
+
+        /// <summary>Guild Path node ids owned, as the server last reported them. An id this
+        /// build's guild-path.json does not name is kept and grants nothing.</summary>
+        public readonly List<string> GuildPathNodes = new List<string>();
+
+        /// <summary>
+        /// Saved formation lines, index 0 upward. The ACTIVE one lives in Team, not here: Lines
+        /// holds what each line was when it was last left, and GameSession.SwitchLine writes Team
+        /// back into its slot before loading another. Empty until a player first switches.
+        /// </summary>
+        public readonly List<SavedLine> Lines = new List<SavedLine>();
+
+        /// <summary>Which line Team is. 0 for every player who owns no Line node.</summary>
+        public int ActiveLine;
 
         public long LastIdleClaimUnix;
         public long LastSaveUnix;

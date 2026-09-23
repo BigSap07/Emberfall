@@ -59,6 +59,11 @@ namespace Emberfall.UI.Screens
         private RectTransform _rosterList;
         private Text _powerLabel;
 
+        /// <summary>The Guild Path's saved lines, one tab each, rebuilt on refresh because an
+        /// unlock can add one. Hidden entirely for a player who owns only the one line.</summary>
+        private RectTransform _lineTabs;
+        private static readonly string[] LineNumerals = { "I", "II", "III", "IV", "V", "VI" };
+
         private readonly ForgeCard[] _slotButtons = new ForgeCard[SlotCount];
         private readonly RectTransform[] _slotBodies = new RectTransform[SlotCount];
 
@@ -124,7 +129,13 @@ namespace Emberfall.UI.Screens
             Text heading = EmberforgeUI.Title("RosterHeading", Root, "YOUR ROSTER", UITheme.FontSmall,
                                               Emberforge.TextGold, TextAnchor.MiddleLeft);
             UIBuilder.Box(heading.rectTransform, UITheme.ScreenPadding, -(UITheme.TopBarHeight + RosterLabelTop),
-                          600f, 30f, new Vector2(0f, 1f));
+                          260f, 30f, new Vector2(0f, 1f));
+
+            // The saved lines sit on the roster's own row, between its heading and VIEW ALL: a
+            // line is a choice of who from this roster stands in the banner above.
+            _lineTabs = UIBuilder.Node("Lines", Root);
+            UIBuilder.Box(_lineTabs, UITheme.ScreenPadding + 280f, -(UITheme.TopBarHeight + RosterLabelTop - 12f),
+                          6 * 158f, 54f, new Vector2(0f, 1f));
 
             // The collection survives as a separate screen and is reached from here. See the class
             // note in HeroesScreen for what it is FOR - it answers "what am I missing", which is a
@@ -135,6 +146,15 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(viewAll.Root, -UITheme.ScreenPadding, -(UITheme.TopBarHeight + RosterLabelTop - 12f),
                           320f, 54f, new Vector2(1f, 1f));
             viewAll.OnClick(OpenCollection);
+
+            // The Guild Path sells the lines this row switches between, and it is the player's own
+            // whatever guild they are in or have left - so its door is here, on a screen every
+            // player has, rather than only inside the guild.
+            UIButton path = EmberforgeUI.Button("GuildPath", Root, "GUILD PATH", UITheme.FontTiny,
+                                                ForgeButtonKind.Secondary);
+            UIBuilder.Box(path.Root, -(UITheme.ScreenPadding + 340f), -(UITheme.TopBarHeight + RosterLabelTop - 12f),
+                          260f, 54f, new Vector2(1f, 1f));
+            path.OnClick(delegate { App.Audio.Tap(); Router.Show(ScreenId.GuildPath); });
 
             ScrollRect scroll;
             _rosterList = UIBuilder.ScrollList("Roster", Root, out scroll, 10f, new RectOffset(0, 0, 4, 32));
@@ -153,6 +173,7 @@ namespace Emberfall.UI.Screens
 
         private void Refresh()
         {
+            RefreshLineTabs();
             RefreshBanner();
             RefreshRoster();
             RefreshPrompt();
@@ -166,8 +187,36 @@ namespace Emberfall.UI.Screens
             // here than Campaign shows for the same team would be a new disagreement, and aligning
             // every power display is its own pass.
             _powerLabel.text = "BANNER POWER   " + profile.TeamPower();
-            _headerSubtitle.text = deployed + " OF " + SlotCount + " SLOTS FILLED"
+            _headerSubtitle.text = (App.Session.LinesAllowed > 1 && profile.ActiveLine < LineNumerals.Length
+                                        ? "LINE " + LineNumerals[profile.ActiveLine] + "   -   " : "")
+                                   + deployed + " OF " + SlotCount + " SLOTS FILLED"
                                    + "   -   SLOT 1 IS THE FRONT OF THE LINE";
+        }
+
+        private void RefreshLineTabs()
+        {
+            for (int i = _lineTabs.childCount - 1; i >= 0; i--) Destroy(_lineTabs.GetChild(i).gameObject);
+            int lines = App.Session.LinesAllowed;
+            _lineTabs.gameObject.SetActive(lines > 1);
+            for (int i = 0; i < lines && i < LineNumerals.Length; i++)
+            {
+                int index = i;
+                ForgeTab tab = EmberforgeUI.Tab("LINE " + LineNumerals[i], _lineTabs, 146f, 54f, delegate { OnLine(index); });
+                UIBuilder.Box(tab.Root, i * 158f, 0f, 146f, 54f, new Vector2(0f, 0.5f));
+                EmberforgeUI.SetTabSelected(tab, i == App.Session.Profile.ActiveLine);
+            }
+        }
+
+        /// <summary>Switches the banner to another saved line (GameSession.SwitchLine). The line
+        /// being left keeps what it was, so nothing edited here is lost by switching.</summary>
+        private void OnLine(int index)
+        {
+            if (index == App.Session.Profile.ActiveLine) return;
+            App.Audio.Tap();
+            _selectedUid = "";
+            if (!App.Session.SwitchLine(index)) return;
+            App.SaveNow();
+            Refresh();
         }
 
         private void RefreshBanner()

@@ -238,6 +238,69 @@ namespace Emberfall.EditorTools
     }
 
     /// <summary>
+    /// A GUILD PATH IN MEMORY, for the same run: a ledger and an unlock list held the way 0011
+    /// holds them, with 0011's four refusals on a purchase - unknown node, owned, requirement not
+    /// owned, not enough Waymarks - so the screen is driven against the rules it meets in play.
+    /// Like the guild above, not the proof of those rules; the harness pins the server's numbers.
+    /// </summary>
+    public sealed class LocalGuildPathBackend : IGuildPathBackend
+    {
+        private readonly ContentDatabase _content;
+        public long Earned;
+        public readonly List<string> Owned = new List<string>();
+
+        public LocalGuildPathBackend(ContentDatabase content) { _content = content; }
+
+        public bool Ready { get { return true; } }
+        public string NotReadyReason { get { return ""; } }
+
+        public long Balance
+        {
+            get
+            {
+                long spent = 0;
+                for (int i = 0; i < Owned.Count; i++)
+                {
+                    GuildPathNodeDef n = _content.GuildPath.Node(Owned[i]);
+                    if (n != null) spent += n.Cost;
+                }
+                return Earned - spent;
+            }
+        }
+
+        public IEnumerator State(Action<GuildPathState, string> done)
+        {
+            done(Answer(), "");
+            yield break;
+        }
+
+        public IEnumerator Unlock(string nodeId, Action<GuildPathState, string> done)
+        {
+            GuildPathNodeDef n = _content.GuildPath.Node(nodeId);
+            if (n == null) { done(null, "there is no Path node called " + nodeId); yield break; }
+            if (Owned.Contains(n.Id)) { done(null, "you already own " + n.Id); yield break; }
+            if (!string.IsNullOrEmpty(n.Requires) && !Owned.Contains(n.Requires)) { done(null, n.Id + " needs " + n.Requires + " first"); yield break; }
+            if (Balance < n.Cost) { done(null, n.Id + " costs " + n.Cost + " Waymarks and you have " + Balance); yield break; }
+            Owned.Add(n.Id);
+            done(Answer(), "");
+        }
+
+        /// <summary>Through the same reader the live answer goes through.</summary>
+        private GuildPathState Answer()
+        {
+            JsonValue row = JsonValue.NewObject();
+            row.Set("balance", Balance);
+            row.Set("earned", Earned);
+            JsonValue nodes = JsonValue.NewArray();
+            for (int i = 0; i < Owned.Count; i++) nodes.Add(Owned[i]);
+            row.Set("nodes", nodes);
+            JsonValue array = JsonValue.NewArray();
+            array.Add(row);
+            return GuildPathState.Read(JsonValue.Parse(array.ToJson(false)));
+        }
+    }
+
+    /// <summary>
     /// PHOTOGRAPHS THE GUILD DUNGEON, AND DRIVES IT END TO END, on a scratch copy of the real save.
     ///
     /// Two members of one guild (you, from the copied save, and Mira; Oren is a third so the
@@ -296,6 +359,7 @@ namespace Emberfall.EditorTools
         private static int _waited;
         private static string _pending;
         private static LocalGuildDungeonBackend _guild;
+        private static LocalGuildPathBackend _path;
         private static GuildDungeonAttempt _miraLoss;
         private static BattleResult _miraLossFight;
         private static readonly List<string> _report = new List<string>();
@@ -388,6 +452,14 @@ namespace Emberfall.EditorTools
             _guild.Self = You;
             GuildDungeonBackends.Override = _guild;
 
+            // Three weeks of the dungeon at the numbers guild-path.json pays, less the Second Line
+            // already bought: enough for one more node at depth two and not for two.
+            _path = new LocalGuildPathBackend(content);
+            GuildPathConfig pay = content.GuildPath;
+            _path.Earned = 3 * (pay.PayAttempt + pay.PayClear) + 4 * pay.PayBoardPoint;
+            _path.Owned.Add("second-line");
+            GuildPathBackends.Override = _path;
+
             int seed = GuildDungeon.SeedFor(LocalGuildDungeonBackend.Guild, _guild.Cycle);
             DeterministicRng rng = new DeterministicRng(0x6D17A);
             List<HeroDef> all = new List<HeroDef>(content.Heroes);
@@ -439,8 +511,12 @@ namespace Emberfall.EditorTools
                                          int seed, int floor, bool wantClear)
         {
             TeamSnapshot line = null;
-            for (int tries = 0; tries < 400; tries++)
+            // A loss is searched for at the asked size first, then with fewer heroes: on the
+            // 72-stage campaign's pool no five-hero line at level 40 loses floor 2 in 400 tries.
+            int shrinkTo = wantClear ? size : 1;
+            for (int tries = 0; tries < 400 * (size - shrinkTo + 1); tries++)
             {
+                if (tries > 0 && tries % 400 == 0) size--;
                 List<HeroDef> pool = new List<HeroDef>(from);
                 line = new TeamSnapshot();
                 for (int i = 0; i < size && pool.Count > 0; i++)
@@ -602,6 +678,63 @@ namespace Emberfall.EditorTools
                 Do = delegate { CheckMiraWatchesYou(app); },
                 Ready = delegate { return true; },
                 Settle = 2
+            });
+
+            // ---- the Guild Path, and the lines it sells
+            long before = 0;
+            steps.Add(new Step
+            {
+                Name = "guild path",
+                Do = delegate { router.Show(ScreenId.GuildPath); },
+                Ready = delegate { return router.Current == router.GuildPath && !router.GuildPath.Loading; },
+                Settle = 30,
+                Shot = "guild-path"
+            });
+            steps.Add(new Step
+            {
+                Name = "unlock Lines Keep Talents",
+                Do = delegate
+                {
+                    before = app.Session.Profile.Waymarks;
+                    Check(app.Session.OwnsGuildPathNode("second-line") && app.Session.LinesAllowed == 2,
+                          "path: the server's answer is on the profile - Second Line owned, two lines");
+                    Check(Press(Child(router.GuildPath.Root, "line-talents"), "Unlock"), "path: UNLOCK on Lines Keep Talents is pressable");
+                },
+                Ready = delegate { return Find(app.OverlayLayer, "Confirm") != null; },
+                Settle = 10
+            });
+            steps.Add(new Step
+            {
+                Name = "confirm the unlock",
+                Do = delegate { Check(Press(app.OverlayLayer, "Confirm"), "path: the confirm dialog's UNLOCK is pressable"); },
+                Ready = delegate { return app.Session.OwnsGuildPathNode("line-talents") && !router.GuildPath.Busy; },
+                // Long enough for the toast to fade, as the chat shot above.
+                Settle = 420,
+                Shot = "guild-path-unlocked"
+            });
+            steps.Add(new Step
+            {
+                Name = "the banner, with its lines",
+                Do = delegate
+                {
+                    GuildPathNodeDef bought = app.Content.GuildPath.Node("line-talents");
+                    Check(bought != null && app.Session.Profile.Waymarks == before - bought.Cost,
+                          "path: the unlock cost exactly its price (" + before + " to " + app.Session.Profile.Waymarks + ")");
+                    Check(Find(Child(router.GuildPath.Root, "third-line"), "Unlock") == null,
+                          "path: with " + app.Session.Profile.Waymarks + " left, Third Line cannot be bought");
+                    router.Show(ScreenId.Formation);
+                },
+                Ready = delegate { return router.Current == router.Formation; },
+                Settle = 30,
+                Shot = "formation-lines"
+            });
+            steps.Add(new Step
+            {
+                Name = "switch to line II",
+                Do = delegate { Check(Press(router.Formation.Root, "TabLINE II"), "formation: the LINE II tab is pressable"); },
+                Ready = delegate { return app.Session.Profile.ActiveLine == 1; },
+                Settle = 20,
+                Shot = "formation-line-two"
             });
             return steps;
         }
@@ -769,6 +902,16 @@ namespace Emberfall.EditorTools
             return null;
         }
 
+        /// <summary>The first active descendant with this name, so a button can be pressed
+        /// inside one card of several that each carry a button of the same name.</summary>
+        private static Transform Child(Transform root, string name)
+        {
+            if (root == null) return null;
+            RectTransform[] all = root.GetComponentsInChildren<RectTransform>(false);
+            for (int i = 0; i < all.Length; i++) if (all[i].gameObject.name == name) return all[i];
+            return null;
+        }
+
         private static int Count(Transform root, string name)
         {
             int n = 0;
@@ -881,6 +1024,7 @@ namespace Emberfall.EditorTools
                 Directory.CreateDirectory(Path.GetDirectoryName(ReportPath()));
                 File.WriteAllLines(ReportPath(), _report.ToArray());
                 GuildDungeonBackends.Override = null;
+                GuildPathBackends.Override = null;
                 SessionState.SetBool(ActiveKey, false);
                 SessionState.SetBool(RestoreKey, true);
                 Debug.Log("GuildDungeonShots: done");
@@ -901,6 +1045,12 @@ namespace Emberfall.EditorTools
             state.LastAttempt = null;
             state.LastResult = null;
             state.Watched = null;
+            // The Path and the lines too: each aspect starts owning what SeedGuild seeds and
+            // standing on line I, not on whatever the last pass bought and switched to.
+            if (app.Session.Profile.ActiveLine != 0) app.Session.SwitchLine(0);
+            app.Session.Profile.Lines.Clear();
+            app.Session.Profile.GuildPathNodes.Clear();
+            app.Session.Profile.Waymarks = 0;
             _steps = BuildSteps(app);
             _stepIndex = 0;
             _pending = null;

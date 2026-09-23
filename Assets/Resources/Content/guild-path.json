@@ -1,0 +1,70 @@
+{
+  // THE GUILD PATH - claude/DESIGN-GUILDS-PHASE-TWO.md, system 2. What the guild dungeon pays, in
+  // Waymarks, and what the Path sells for them.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, on purpose: nothing here is read by a fight, so a
+  // price change must not retire every guild's replays. That is why it is its own file and not a
+  // block of balance.json.
+  //
+  // THE SERVER HAS THE REAL COPY. Server/supabase/migrations/0011_guild_path.sql pays and charges;
+  // this file is what the client predicts and prints. GuildPathChecks fails the build-check when
+  // the two disagree on any number here.
+  //
+  // EVERY NUMBER IS DERIVED. `DevHarness.exe --guild-path` prints the working; GuildPathChecks
+  // re-derives on every build-check and fails when a pay number sits more than 10% from what the
+  // tree now measures, or a price breaks the price rule.
+  "currency": "Waymarks",
+
+  "pay": {
+    // Once a cycle, on the member's first attempt of it, won or lost.
+    "attempt": 40,
+    // Once a cycle, on the member's first clear of ANY floor. Never more for a deeper floor:
+    // floor N opens only when the guild clears N-1, so a deeper floor paying more would be pay the
+    // rest of the guild set.
+    "clear": 40,
+    // Per board point, after the cycle closes. A place on a board of n entrants is worth
+    // (n - rank) / (n - 1) points: first 1, last 0, and a board of one pays nothing.
+    "boardPoint": 15,
+    // The best this many board scores of a cycle are paid: the number of boards, so a member who
+    // changes guild mid-cycle is paid for one guild's worth.
+    "boardsCounted": 6,
+    // Only this floor's boards pay, for the same reason a deeper clear pays no more.
+    "boardFloor": 1
+  },
+
+  // THE PRICE RULE: a node costs its depth on the Path in mean member-cycles, 100 Waymarks each.
+  // Every node is breadth - a way to hold more options, never a number a fight reads.
+  "nodes": [
+    {
+      "id": "second-line",
+      "name": "Second Line",
+      "kind": "line",
+      "text": "Keep a second line of five and switch the formation to it in one tap.",
+      "cost": 100
+    },
+    {
+      "id": "third-line",
+      "name": "Third Line",
+      "kind": "line",
+      "requires": "second-line",
+      "text": "A third saved line.",
+      "cost": 200
+    },
+    {
+      "id": "line-talents",
+      "name": "Lines Keep Talents",
+      "kind": "lineTalents",
+      "requires": "second-line",
+      "text": "Each saved line remembers its heroes' talent picks and puts them back when you switch to it.",
+      "cost": 200
+    },
+    {
+      "id": "fourth-line",
+      "name": "Fourth Line",
+      "kind": "line",
+      "requires": "third-line",
+      "text": "A fourth saved line.",
+      "cost": 300
+    }
+  ]
+}
