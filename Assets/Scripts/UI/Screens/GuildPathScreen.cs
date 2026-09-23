@@ -252,7 +252,12 @@ namespace Emberfall.UI.Screens
 
             Text name = EmberforgeUI.Title("Name", card.Body, n.Name.ToUpperInvariant(), UITheme.FontBody,
                                            owned ? Emberforge.TextGold : Emberforge.TextBody, TextAnchor.UpperLeft);
-            UIBuilder.Box(name.rectTransform, 26f, -20f, NodeWidth - 210f, 36f, new Vector2(0f, 1f));
+            UIBuilder.Box(name.rectTransform, 26f, -20f, NodeWidth - 236f, 36f, new Vector2(0f, 1f));
+            // LINES KEEP TALENTS ran into its cost chip at full size; the name shrinks to fit instead.
+            name.horizontalOverflow = HorizontalWrapMode.Wrap;
+            name.resizeTextForBestFit = true;
+            name.resizeTextMinSize = UITheme.FontTiny - 2;
+            name.resizeTextMaxSize = UITheme.FontBody;
             UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
 
             RectTransform chip = owned
