@@ -5980,13 +5980,19 @@
           "effects": [],
           "overrides": [
             {
+              "ability": "basic",
+              "effectIndex": 1,
+              "field": "magnitude",
+              "delta": 0.15
+            },
+            {
               "ability": "active",
               "effectIndex": 2,
               "field": "storedCap",
-              "delta": 0.04
+              "delta": 0.06
             }
           ],
-          "description": "Memory from Stand Again can record more before it reaches its limit."
+          "description": "Brenna's own Lasting Guard turns away far more of the blow it meets, and the Memory Stand Again writes on the line can hold more before it reaches its limit."
         },
         "talentII": {
           "id": "brenna_shared_wall",
@@ -6006,7 +6012,15 @@
               }
             }
           ],
-          "description": "When Deep Resolve grants its Ward, the lowest-HP ally also gains Guard against the next hit they take."
+          "description": "The Ward Deep Resolve grants is far larger, and the lowest-HP ally also gains Guard against the next hit they take.",
+          "overrides": [
+            {
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "power",
+              "delta": 0.5
+            }
+          ]
         },
         "talentIII": {
           "id": "brenna_what_held_once",
@@ -6028,9 +6042,19 @@
             {
               "ability": "active",
               "effect": {
-                "kind": "LedgerDeposit",
-                "target": "Self",
-                "selfHpRatio": 0.04,
+                "kind": "Shield",
+                "target": "AllAllies",
+                "selfHpRatio": 0.035,
+                "duration": 2
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "Shield",
+                "target": "AllAllies",
+                "selfHpRatio": 0.06,
+                "duration": 2,
                 "condition": "StatusStacksAtLeast",
                 "conditionStatus": "Resolve",
                 "conditionValue": 1,
@@ -6039,7 +6063,7 @@
               }
             }
           ],
-          "description": "When Survival of the Stubborn saves an ally, Brenna gains Resolve. Her next Stand Again spends it to add a share of her Max HP to her own Memory."
+          "description": "Stand Again puts a Ward of Brenna's own Max HP on every ally, and a far larger one once Survival of the Stubborn has already caught someone."
         }
       }
     },
@@ -8654,21 +8678,29 @@
         "talentI": {
           "id": "aeron_interest_owed",
           "name": "Interest Owed",
-          "trigger": "OnEnemyTurnEnd",
+          "trigger": "OnTurnDebtRepaid",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "ApplyStatus",
               "target": "BroadcastSubject",
               "status": "Slow",
-              "magnitude": 0.05,
-              "duration": 1,
-              "condition": "HasStatus",
-              "conditionStatus": "TurnDebt",
-              "conditionOn": "Target"
+              "magnitude": 0.08,
+              "duration": 2,
+              "chance": 1,
+              "bypassResist": true
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "BroadcastSubject",
+              "status": "Vulnerable",
+              "magnitude": 0.22,
+              "duration": 2,
+              "chance": 1,
+              "bypassResist": true
             }
           ],
-          "description": "When an enemy ends its turn still carrying Turn Debt, it gains Mire."
+          "description": "An enemy that repays Turn Debt pays interest with it: it is Mired, and Aeron's blows land harder on it."
         },
         "talentII": {
           "id": "aeron_shared_tempo",
@@ -8684,9 +8716,21 @@
                 "target": "LowestEnergyAlly",
                 "magnitude": 0.1
               }
+            },
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "ThresholdUnit",
+                "status": "Vulnerable",
+                "magnitude": 0.3,
+                "duration": 3,
+                "chance": 1,
+                "bypassResist": true
+              }
             }
           ],
-          "description": "When Momentum Breaker calls in a debt, the lowest-Energy ally also advances its turn."
+          "description": "When Momentum Breaker calls in a debt, the lowest-Energy ally also advances its turn, and the enemy that owed is left open to Aeron."
         },
         "talentIII": {
           "id": "aeron_unpaid_action",
@@ -8704,9 +8748,21 @@
               "condition": "SubjectRepaidDebtAtLeast",
               "conditionValue": 0.2,
               "conditionOn": "BroadcastSubject"
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "BroadcastSubject",
+              "status": "Vulnerable",
+              "magnitude": 0.28,
+              "duration": 2,
+              "chance": 1,
+              "bypassResist": true,
+              "condition": "SubjectRepaidDebtAtLeast",
+              "conditionValue": 0.2,
+              "conditionOn": "BroadcastSubject"
             }
           ],
-          "description": "The first enemy each round to repay a heavy Turn Debt is Silenced once its turn ends."
+          "description": "The first enemy each round to repay a heavy Turn Debt is Silenced once its turn ends, and Aeron's blows land harder on it while it recovers."
         }
       }
     },
@@ -11833,15 +11889,27 @@
             },
             {
               "ability": "active",
+              "effectIndex": 1,
+              "field": "selfHpRatio",
+              "delta": 0.05
+            },
+            {
+              "ability": "active",
               "effectIndex": 2,
               "field": "duration",
               "delta": 1
             },
             {
               "ability": "active",
+              "effectIndex": 2,
+              "field": "selfHpRatio",
+              "delta": 0.05
+            },
+            {
+              "ability": "active",
               "effectIndex": 3,
               "field": "storedCap",
-              "delta": 0.05
+              "delta": 0.15
             },
             {
               "ability": "active",
@@ -11850,7 +11918,7 @@
               "delta": 1
             }
           ],
-          "description": "Bastion of Secrecy's Wards and Hidden Strength last longer, and Hidden Strength can hold more."
+          "description": "Bastion of Secrecy's Wards are larger and last longer, and Hidden Strength holds far more of what they turn away before it breaks."
         },
         "talentII": {
           "id": "darian_shared_burden",
@@ -11866,12 +11934,12 @@
             {
               "kind": "Shield",
               "target": "BroadcastSubject",
-              "power": 0.5,
+              "power": 1.4,
               "scaleByLastRelease": true,
               "duration": 1
             }
           ],
-          "description": "When an ally's Ward breaks, Darian empties his Hidden Strength and gives that ally a brief Ward worth a share of what it held."
+          "description": "When an ally's Ward breaks, Darian empties his Hidden Strength and gives that ally a Ward worth far more than what it held."
         },
         "talentIII": {
           "id": "darian_false_opening",
@@ -11885,9 +11953,7 @@
               "target": "Self",
               "status": "Resolve2",
               "maxStacks": 2,
-              "duration": 99,
-              "condition": "HasShield",
-              "conditionOn": "Caster"
+              "duration": 99
             }
           ],
           "appends": [
@@ -11896,18 +11962,18 @@
               "effect": {
                 "kind": "Damage",
                 "target": "FrontEnemy",
-                "power": 1.2,
+                "power": 2.2,
                 "consumesResolve": true,
-                "consumeStacks": 2,
+                "consumeStacks": 1,
                 "status": "Resolve2",
                 "condition": "StatusStacksAtLeast",
                 "conditionStatus": "Resolve2",
-                "conditionValue": 2,
+                "conditionValue": 1,
                 "conditionOn": "Caster"
               }
             }
           ],
-          "description": "When a Ward Darian gave runs out while he holds a Ward himself, he gains an Opening, up to a limit. With a full set, Hidden Counter spends them for an extra blow."
+          "description": "When a Ward Darian gave runs out unbroken he finds an Opening, up to a limit, and his next Hidden Counter spends one for a heavy extra blow."
         }
       }
     },
@@ -13715,17 +13781,17 @@
             {
               "ability": "active",
               "effectIndex": 1,
-              "field": "duration",
-              "delta": 1
+              "field": "magnitude",
+              "delta": 0.35
             },
             {
-              "ability": "active",
-              "effectIndex": 1,
-              "field": "magnitude",
-              "delta": 0.1
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "power",
+              "delta": 0.9
             }
           ],
-          "description": "Priority from Restore the Balance lasts longer and stores a larger share of the healing."
+          "description": "Priority stores a far larger share of the healing, and the blow Aminah lands when it releases is much heavier for it."
         },
         "talentII": {
           "id": "aminah_shared_measure",
@@ -13738,7 +13804,7 @@
               "effect": {
                 "kind": "Heal",
                 "target": "SecondLowestHpAlly",
-                "power": 0.35,
+                "power": 0.6,
                 "scaleByLastRelease": true,
                 "condition": "MyStatusStacksAtLeast",
                 "conditionStatus": "Ledger",
@@ -13752,12 +13818,20 @@
               "effect": {
                 "kind": "Heal",
                 "target": "SecondLowestHpAlly",
-                "power": 0.35,
+                "power": 0.6,
                 "scaleByLastRelease": true
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "Heal",
+                "target": "SecondLowestHpAlly",
+                "power": 1.1
               }
             }
           ],
-          "description": "Whenever No Wasted Recovery releases stored healing, the ally with the second-lowest HP is also healed for a share of the amount released."
+          "description": "Restore the Balance mends the ally with the second-lowest HP as well, and whenever No Wasted Recovery releases stored healing that ally is healed again for a share of what was released."
         },
         "talentIII": {
           "id": "aminah_perfect_timing",
@@ -13766,36 +13840,28 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive",
+              "ability": "passive1",
+              "atIndex": 0,
               "effect": {
                 "kind": "Heal",
                 "target": "BroadcastSubject",
-                "power": 0.04,
+                "power": 0.5,
                 "perStack": 1.0,
-                "perStackStatus": "Resolve",
-                "condition": "MyStatusStacksAtLeast",
-                "conditionStatus": "Ledger",
-                "conditionValue": 1,
-                "conditionOn": "BroadcastSubject"
-              },
-              "atIndex": 2
+                "perStackStatus": "Resolve"
+              }
             },
             {
-              "ability": "passive",
+              "ability": "passive1",
+              "atIndex": 1,
               "effect": {
                 "kind": "Cleanse",
                 "target": "BroadcastSubject",
                 "hits": 3,
-                "consumesResolve": true,
-                "condition": "MyStatusStacksAtLeast",
-                "conditionStatus": "Ledger",
-                "conditionValue": 1,
-                "conditionOn": "BroadcastSubject"
-              },
-              "atIndex": 3
+                "consumesResolve": true
+              }
             }
           ],
-          "description": "When No Wasted Recovery releases Priority early because its holder fell to low HP, that ally is healed again, more for each Measure Aminah holds, and cleansed of debuffs. Every Measure is spent."
+          "description": "When a Priority Aminah gave an ally ends, that ally is healed again - more for each Measure she is holding - and cleansed of what was on them. Every Measure is spent."
         }
       }
     },

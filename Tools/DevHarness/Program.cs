@@ -26723,7 +26723,7 @@ namespace Emberfall.DevHarness
                       "Brenna I lets one ally's Lasting Guard release " + b.BiggestHealToOther
                       + " where the 8% ceiling stopped it at " + a.BiggestHealToOther
                       + " - the Guard prevented more than 8% of Max HP, so the cap was what was "
-                      + "binding and raising it to 12% let the rest through");
+                      + "binding and the talent raising it let the rest through");
 
             // ---- Altheon III: LIT, and it is now a check rather than a note.
             //
