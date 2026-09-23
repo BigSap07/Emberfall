@@ -698,8 +698,13 @@ namespace Emberfall.DevHarness
                 "a Misdirected body dying"),
             new MatrixRoom("velis_no_second_breath", "s_mender", "", 1, false, "payments.subject:+10", 1,
                 "an enemy healed below half HP"),
-            new MatrixRoom("velis_what_was_taken", "s_mender", "", 1, false, "hits", 1,
+            // Seed 5, not 1: once Denied Return's second strike read the enemy's HP rather than
+            // Velis's own, the seed-1 fight ends a round sooner and the one firing's blows are
+            // absorbed into a shorter fight - it still fires, and still changes the fight.
+            new MatrixRoom("velis_what_was_taken", "s_mender", "", 5, false, "hits", 1,
                 "Remnants reaching three, which needs Hollowed heals to convert"),
+            new MatrixRoom("kora_first_opening", "s_frail_big", "", 1, false, "hits", 1,
+                "an enemy that has not acted yet when Kora's basic lands - t_big is slower than she is"),
             new MatrixRoom("zella_reaction_study", "s_caster_tail", "", 1, false, "payments.enemy:-10", 1,
                 "an enemy that CHANGES its kind of action - one that alternates basic and active"),
             new MatrixRoom("zella_nothing_stays_settled", "m_buffer_brittle", "", 1, false, "applied:Burn", 1,
@@ -754,10 +759,11 @@ namespace Emberfall.DevHarness
                 + " inside an enemy's turn", EvidenceInterestOwed),
             new MatrixWait("finn_ringing_toll", "AUTHORING",
                 "the toll answers OnEnemyActive, which TakeTurn raises after it has set the caster's"
-                + " Energy to 0 for the cast, so its -5 always lands on an empty bar", EvidenceRingingToll),
-            new MatrixWait("kora_first_opening", "AUTHORING",
-                "First Opening reads LastTarget after the basic, and the basic's LAST effect is the"
-                + " TurnShift on Kora herself, so LastTarget is always Kora - who has acted", EvidenceFirstOpening),
+                + " Energy to 0 for the cast, so its -5 always lands on an empty bar. NO ORDER MENDS IT:"
+                + " every active costs 100 against a bar capped at 100, so a cast empties the bar whatever"
+                + " was taken first. Raised ahead of the spend (measured, not shipped) the toll moves Energy"
+                + " on 0 empty bars of 5 and changes nothing across 1,152 campaign battles - deaths, rounds"
+                + " and Energy lost identical, only the extra Energy event differs", EvidenceRingingToll),
             new MatrixWait("eira_leave_no_corner", "UNRAISED",
                 "each of its two gates lands alone and the pair never has: in the one blow of"
                 + " m_fastbruiser where an un-acted ally held Mobile Cover, IncomingHitIsSingleTarget"
@@ -814,26 +820,6 @@ namespace Emberfall.DevHarness
             q.OncePerBattle = p.OncePerBattle; q.Limit = p.Limit; q.Threshold = p.Threshold;
             for (int i = 0; i < p.Effects.Count; i++) q.Effects.Add(edit(p.Effects[i].Clone()));
             return q;
-        }
-
-        /// <summary>Kora as authored, against Kora with the self-advance moved ahead of the blow -
-        /// a what-if that is never shipped, only measured, so the reason above is a count.</summary>
-        private static string EvidenceFirstOpening()
-        {
-            ContentDatabase db = MatrixArena(false);
-            HeroDef kora = db == null ? null : db.GetHero("kora_the_interrupted_queue");
-            if (kora == null || kora.BasicAttack == null) return "Kora not found";
-            HeroDef reordered = (HeroDef)_memberwiseClone.Invoke(kora, null);
-            AbilityDef b = HollowAbility(kora.BasicAttack);
-            for (int i = kora.BasicAttack.Effects.Count - 1; i >= 0; i--)
-                if (kora.BasicAttack.Effects[i].Target == TargetMode.Self) b.Effects.Add(kora.BasicAttack.Effects[i]);
-            for (int i = 0; i < kora.BasicAttack.Effects.Count; i++)
-                if (kora.BasicAttack.Effects[i].Target != TargetMode.Self) b.Effects.Add(kora.BasicAttack.Effects[i]);
-            reordered.BasicAttack = b;
-            long asShipped = MatrixLanded(kora, "kora_first_opening", "s_frail_big", "", 1, "hits");
-            long whatIf = MatrixLanded(reordered, "kora_first_opening", "s_frail_big", "", 1, "hits");
-            return "in s_frail_big it lands " + asShipped + " extra blow(s) as shipped and " + whatIf
-                   + " with the basic's self-advance moved ahead of the strike (a measurement, not a change)";
         }
 
         private static string EvidenceLeaveNoCorner()
@@ -1116,11 +1102,29 @@ namespace Emberfall.DevHarness
                 if (live.AllStages[i].TotalBattles > 1) stages.Add(live.AllStages[i]);
             Dictionary<string, GameSession> sessions = new Dictionary<string, GameSession>();
 
+            // EMBERFALL_MATRIX_NORMAL_RULES="rule[@tally],..." reads the named rules instead of
+            // class (b), whatever class they are in, and adds the named tally with the rule against
+            // without it - the amount a rule's own sentence promises, beside whether it changed a
+            // fight. How a dead clause is measured before and after an engine repair.
+            Dictionary<string, string> named = null;
+            string namedSpec = Environment.GetEnvironmentVariable("EMBERFALL_MATRIX_NORMAL_RULES");
+            if (!string.IsNullOrEmpty(namedSpec))
+            {
+                named = new Dictionary<string, string>();
+                foreach (string part in namedSpec.Split(','))
+                {
+                    int at = part.IndexOf('@');
+                    named[(at < 0 ? part : part.Substring(0, at)).Trim()] = at < 0 ? null : part.Substring(at + 1).Trim();
+                }
+            }
+
             int covered = 0, changes = 0, firesOnly = 0, never = 0;
             List<string> neverNames = new List<string>(), firesOnlyNames = new List<string>();
             for (int k = 0; k < rules.Count; k++)
             {
-                if (rules[k].InSweep || !rules[k].RoomPassed) continue;
+                if (named != null ? !named.ContainsKey(rules[k].Name)
+                                  : rules[k].InSweep || !rules[k].RoomPassed) continue;
+                string tally = named != null ? named[rules[k].Name] : null;
                 covered++;
                 HeroDef hero = live.GetHero(rules[k].Hero.Id);
                 MatrixRule rule = RebindRule(rules[k], hero);
@@ -1131,7 +1135,7 @@ namespace Emberfall.DevHarness
                 {
                     string how;
                     string[] line = NormalPlayLineFor(live, lines[l], hero, out how);
-                    long lf = 0;
+                    long lf = 0, lt = 0, lw = 0;
                     int lc = 0, lb = 0;
                     for (int s = 0; s < stages.Count; s++)
                     {
@@ -1150,10 +1154,13 @@ namespace Emberfall.DevHarness
                                 lf += rule.Kind == MatrixRuleKind.Basic || rule.Kind == MatrixRuleKind.Active
                                       ? with.Get("casts") : with.Get("firings");
                                 if (with.Hash != without.Hash) lc++;
+                                if (tally != null) { lt += with.Get(tally) - without.Get(tally); lw += with.Get(tally); }
                             }
                     }
                     fires += lf; changed += lc; battles += lb;
-                    per.Add(names[l] + " (" + how + "): fires " + lf + ", changes " + lc + "/" + lb);
+                    per.Add(names[l] + " (" + how + "): fires " + lf + ", changes " + lc + "/" + lb
+                            + (tally != null ? ", " + tally + " " + lw + " with it, " + (lt >= 0 ? "+" : "") + lt
+                                              + " against without" : ""));
                 }
                 // A rule with no trigger of its own - a talent that rewrites its host - has nothing to
                 // announce, so for it "fires" is the same statement as "changes".

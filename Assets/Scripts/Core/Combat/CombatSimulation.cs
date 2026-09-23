@@ -563,6 +563,13 @@ namespace Emberfall.Core.Combat
             private bool _inDeathCheck;
 
             /// <summary>
+            /// The dying body, for the length of its OnAllyWouldDie broadcast, when the blow that
+            /// put it there spent that body's last Guard charge on the way in. Null otherwise.
+            /// Read by SpentByLethalBlow, and nowhere else.
+            /// </summary>
+            private CombatUnit _lethalBlowSpentGuardOn;
+
+            /// <summary>
             /// The round's live initiative list, and the index of the turn being taken out of it.
             /// Null outside the round loop - Execute() fires the BattleStart passives before any
             /// round exists, and an effect that fires there has no round order to reorder. Both
@@ -2530,6 +2537,18 @@ namespace Emberfall.Core.Combat
                         break;
                     }
 
+                    // The pure function's own answer, plus the one status a lethal blow may have
+                    // spent off the dying body before its save could ask (SpentByLethalBlow).
+                    case EffectCondition.HasStatus:
+                        first = effect.ConditionStatus != StatusKind.None
+                                && (subject.Has(effect.ConditionStatus) || SpentByLethalBlow(subject, effect.ConditionStatus));
+                        break;
+
+                    case EffectCondition.LacksStatus:
+                        first = effect.ConditionStatus != StatusKind.None
+                                && !subject.Has(effect.ConditionStatus) && !SpentByLethalBlow(subject, effect.ConditionStatus);
+                        break;
+
                     // GAP GROUP 1. Sim-side with its neighbours rather than in the pure
                     // ConditionMet, so the whole family of readings that need the battle's own
                     // memory stays in one place.
@@ -2577,6 +2596,24 @@ namespace Emberfall.Core.Combat
                 if (caster == null) return false;
                 float paid = GetLastLedgerRelease(caster.Id);
                 return paid > 0f && paid >= min;
+            }
+
+            /// <summary>
+            /// Whether `kind` is a status the killing blow spent off `subject` while that body's
+            /// OnAllyWouldDie broadcast is open - so a save that asks what the dying ally holds is
+            /// answered AS THE BLOW FOUND IT, not after the blow has used it up.
+            ///
+            /// THE ORDER WAS THE WHOLE BUG. A one-charge Guard is spent inline in DealRawDamage,
+            /// entry removed, before the funnel reaches the death branch, so a lethal blow always
+            /// arrives at the question "is this ally holding Guard?" having just taken the Guard
+            /// away. Brenna's Survival of the Stubborn names Lasting Guard - the one-charge Guard
+            /// her own basic and active hand out - and could only ever save an ally holding a SECOND
+            /// Guard from somewhere else. The charge still did its work on the blow; only the
+            /// question about it is moved to before it.
+            /// </summary>
+            private bool SpentByLethalBlow(CombatUnit subject, StatusKind kind)
+            {
+                return kind == StatusKind.Guard && subject != null && subject == _lethalBlowSpentGuardOn;
             }
 
             /// <summary>G4: the subject is the body the chosen ability first struck, and it carried
@@ -2636,6 +2673,12 @@ namespace Emberfall.Core.Combat
                         return LostThisFiring(subject2, gate2.ConditionStatus);
                     case EffectCondition.SubjectHadStatusWhenStruck:
                         return StruckFirstHad(subject2, gate2.ConditionStatus);
+                    case EffectCondition.HasStatus:
+                        return gate2.ConditionStatus != StatusKind.None
+                            && (subject2.Has(gate2.ConditionStatus) || SpentByLethalBlow(subject2, gate2.ConditionStatus));
+                    case EffectCondition.LacksStatus:
+                        return gate2.ConditionStatus != StatusKind.None
+                            && !subject2.Has(gate2.ConditionStatus) && !SpentByLethalBlow(subject2, gate2.ConditionStatus);
                     case EffectCondition.LastReleaseAtLeast:
                         return LastReleasePaid(caster, gate2.ConditionValue);
                 }
@@ -2698,6 +2741,12 @@ namespace Emberfall.Core.Combat
                         return LostThisFiring(subject3, gate3.ConditionStatus);
                     case EffectCondition.SubjectHadStatusWhenStruck:
                         return StruckFirstHad(subject3, gate3.ConditionStatus);
+                    case EffectCondition.HasStatus:
+                        return gate3.ConditionStatus != StatusKind.None
+                            && (subject3.Has(gate3.ConditionStatus) || SpentByLethalBlow(subject3, gate3.ConditionStatus));
+                    case EffectCondition.LacksStatus:
+                        return gate3.ConditionStatus != StatusKind.None
+                            && !subject3.Has(gate3.ConditionStatus) && !SpentByLethalBlow(subject3, gate3.ConditionStatus);
                     case EffectCondition.LastReleaseAtLeast:
                         return LastReleasePaid(caster, gate3.ConditionValue);
                 }
@@ -3077,7 +3126,20 @@ namespace Emberfall.Core.Combat
                                     _struckFirstKinds.Add(target.Statuses[sk].Kind);
                         }
                         ApplyEffect(caster, target, landed, ability, depth);
-                        _lastTarget = target;
+                        // THE BODY ON THE OTHER SIDE, NOT THE LAST BODY OF ANY KIND. An effect that
+                        // lands on the caster or an ally does not move the register: every clause
+                        // that reads ConditionSubject.LastTarget names the enemy the ability struck,
+                        // and letting a Self rider rewrite it made the gate answer about the caster.
+                        //
+                        // MEASURED over 1,152 campaign battles. Kora's First Opening read the
+                        // register after her basic's closing TurnShift on herself, so it asked
+                        // whether KORA had acted this round: 4,112 firings, 0 blows landed; 649 now.
+                        // Velis's Denied Return asked the same way about her own HP rather than
+                        // her target's; Velis lands 1,581 more blows with it now. Oris's
+                        // Unfinished Note and Edrin's Still Here have the same shape and moved
+                        // nothing in that sample; Talren's and Vaelis's basics have it too, but
+                        // their later gate repeats the earlier one, so either body answers alike.
+                        if (caster == null || target.IsPlayer != caster.IsPlayer) _lastTarget = target;
                         if (IsBattleOver())
                         {
                             _hitIsArea = prevArea;
@@ -5287,6 +5349,9 @@ namespace Emberfall.Core.Combat
                 // block down by OnGuardPrevented, and captured here because the entry is removed
                 // inline the moment its last charge is spent.
                 int guardPreventerId = -1;
+                // Whether this blow spent the LAST charge of a Guard and so removed it, which the
+                // death branch below hands to the OnAllyWouldDie window (SpentByLethalBlow).
+                bool guardSpentOut = false;
                 for (int gi = target.Statuses.Count - 1; gi >= 0; gi--)
                 {
                     StatusInstance guard = target.Statuses[gi];
@@ -5318,6 +5383,7 @@ namespace Emberfall.Core.Combat
                         if (guard.Charges <= 0)
                         {
                             target.Statuses.RemoveAt(gi);
+                            guardSpentOut = true;
                             BattleEvent spent = Emit(BattleEventType.StatusExpired, target.Id, target.Id);
                             spent.Status = StatusKind.Guard;
                         }
@@ -5862,12 +5928,17 @@ namespace Emberfall.Core.Combat
                         _inDeathCheck = true;
                         CombatUnit prevSubject = _broadcastSubject;
                         CombatUnit prevVictim = _broadcastVictim;
+                        CombatUnit prevSpentGuard = _lethalBlowSpentGuardOn;
                         _broadcastSubject = target;
                         _broadcastVictim = target;
+                        // The save asks about the body as this blow found it: a Guard the blow
+                        // spent on the way in still counts as held (SpentByLethalBlow).
+                        _lethalBlowSpentGuardOn = guardSpentOut ? target : null;
                         int prevWdSrc = _broadcastSourceId;
                         _broadcastSourceId = sourceId;
                         BroadcastPassive(target.IsPlayer, PassiveTrigger.OnAllyWouldDie, 0, target);
                         _broadcastSourceId = prevWdSrc;
+                        _lethalBlowSpentGuardOn = prevSpentGuard;
                         _broadcastSubject = prevSubject;
                         _broadcastVictim = prevVictim;
                         _inDeathCheck = false;

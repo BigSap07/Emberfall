@@ -782,6 +782,23 @@ reading under **Tooling**. Its last commit regenerates the pinned baselines from
 `main`, and only Finn's five hero-sweep lines move. The defect pass, the Quarry clock repair, the
 fusion spine and the arena matrix have all landed on `main` and are described above.
 
+**`engine/dead-clauses`** carries the dead-clause pass (`Docs/PINOY-LIST.md` section 2i). It makes
+two ordering repairs in `CombatSimulation.cs`:
+
+- **The `LastTarget` condition subject is moved only by an effect that lands on the other side.**
+  Kora's First Opening lands 649 blows across 1,152 campaign battles where it landed 0, and Velis's
+  Denied Return, the fourth clause in the same trap, now reads the enemy's HP rather than her own.
+- **In an `OnAllyWouldDie` window, a Guard the killing blow spent is still counted as held**
+  (`SpentByLethalBlow`). Brenna's Survival of the Stubborn saves where it saved nobody, and Brenna
+  III banks Resolve 26 times where it banked 2.
+
+The same branch reads named rules in normal play through `EMBERFALL_MATRIX_NORMAL_RULES`. It
+registers a room for Kora, moves Velis's What Was Taken room to seed 5, and puts the Finn
+experiment into his stated reason. It adds one harness failure: guild 3 floor 4's "3 stars or
+fewer" rosters clear 2 of 12 where they cleared 3, because the one roster that flipped fields Kora.
+Its last commit regenerates the pinned baselines from a fresh rebase on `main`, and only Brenna's
+lines move.
+
 ## Next
 
 In order.
@@ -1039,10 +1056,14 @@ instead and is named in the coverage note under **Known bugs**.
 The harness reads first, then the rest.
 
 1. **The arena matrix's two coverage checks are red, and each names what every dark rule waits on.**
-   On this tree the 428 rules read **(a) 342** changing the sweep arena, **(b) 78** only in a
-   purpose-built room, and **(c) 8** nowhere. Of the eight, three are AUTHORING, meaning the clause
-   as written cannot do what its sentence says: Aeron's Interest Owed (talent I, in
-   `Docs/PINOY-LIST.md` section 2h), Finn's Ringing Slug and Kora's First Opening. Two are
+   On `main` the 428 rules read **(a) 342** changing the sweep arena, **(b) 78** only in a
+   purpose-built room, and **(c) 8** nowhere. With the dead-clause pass (**In progress**) they read
+   (a) 344, (b) 77 and (c) 7. Two AUTHORING rows remain, meaning the clause as written cannot do
+   what its sentence says: Aeron's Interest Owed (talent I, in `Docs/PINOY-LIST.md` section 2h)
+   and Finn's Ringing Toll. Finn's is not an ordering bug, and that was measured: raising the toll
+   ahead of the spend changes no fight, because every active empties a full bar. Kora's First
+   Opening was the third, and it was an ordering bug in the engine: it is repaired on that branch
+   and has a room now. Two are
    UNRAISED, meaning no room has been found: Eira's Leave No Corner and Vaelis's Opening Moves.
    **The other three are rooms that stopped working when the fusion spine merged**: Aminah's
    No Wasted Recovery (`aminah_emergency_release`), Aminah III and Caldus III. The arena matrix read (b) 81 and (c) 6 on its own
@@ -1061,7 +1082,12 @@ The harness reads first, then the rest.
      Safe Distance against an enemy that Wards itself; Mireth II; Nadine's Proper Place; Vaelis II;
      Velis's What Was Taken; and Velis III.
 
-   None of the ten is repaired. They are what a playtester will meet. Two rules depend on the line:
+   The dead-clause pass sorted all ten, plus Aeron I and Brenna I, in `Docs/PINOY-LIST.md` section
+   2i. Two were ordering bugs in the engine, and both are repaired on that branch: Brenna's Survival
+   of the Stubborn, with Brenna III behind it, and Kora's First Opening. Arno's Rubble Resolve, both
+   of Hale's No Safe Distance cases and Nadine's Proper Place wait on an enemy that Wards or hides
+   itself, and the shipped campaign fields none. Mireth II, Vaelis II, Velis's What Was Taken and
+   Velis III are authoring. Two rules depend on the line:
    Kael's Unusable Cover changes fights only in the balance line and Darian's The Cost of Knowing only
    in the pinned one. Roan's Leave Before Asked works, but changed 3 fights in 1,152.
 
@@ -1073,7 +1099,8 @@ Beyond the harness:
   rule. Caldus's No Uncertain Ground still strikes the Taunt holder when the enemy that hit an ally
   is not it (126 times in 240 campaign battles he fought in, 72 in his 20 sweep-arena runs), and
   his Defined Duty and Jory's Worn Hinges do the same. Whether a counterattack answers to Taunt is
-  a rules decision rather than a defect.
+  a rules decision rather than a defect. The rule stays, so it is Caldus's card that is wrong:
+  replacement text is proposed in `Docs/PINOY-LIST.md` section 2i.
 - **Marn's Relief After Loss healed an enemy once in 8,832 campaign battles**, because the
   Coverguard it answers was on an enemy when it was spent. How the Guard got there was not traced.
 

@@ -7,7 +7,7 @@ designer and does not need someone who draws. The art queue is `Docs/PINOY-ART.m
 anything not overturned stands as proposed. Items marked **SHOW PINOY** change who a character is,
 so the designer should see the outcome even though he is not deciding it.
 
-**Where it came from.** `Docs/PINOY-LIST.md` (sections 2a to 2g, the working record, which keeps the
+**Where it came from.** `Docs/PINOY-LIST.md` (sections 2a to 2i, the working record, which keeps the
 measurements), `Docs/ENGINE-GAPS.md`, `Docs/archive/ABILITY-TEXT-REWRITES.md`, the shipped kits in
 `heroes.json` and the designer's original sentences in `import/Heroes.json`. Checked against the
 tree on 2026-09-23.
@@ -16,7 +16,7 @@ tree on 2026-09-23.
 
 1. **Identity**: decisions that change what a character is. Read all of these. (I1 to I9)
 2. **Worth changing**: departures where the shipped kit is weaker, stranger or buggier than it
-   needs to be, and a cheap fix exists. (W1 to W6)
+   needs to be, and a cheap fix exists. (W1 to W7)
 3. **Fine as shipped**: the full ledger of every place a written sentence and the built kit
    disagree, with a one-line verdict each. Skim. (L1 to L51)
 4. **Text only**: the 30 pinned drafting notes, each answered and each with the replacement card
@@ -249,6 +249,23 @@ tree on 2026-09-23.
   line is wrong for exactly the three pulls a new player makes first.
 - **Proposed: keep the guarantee and say it on the Rift**: "your first three summons are always a
   hero you do not own". The guarantee is the better new-player experience; the fix is the words.
+
+### W7. The dead-clause pass: Caldus's card, Finn's toll and Kora's extra blow
+
+The measurements are in `Docs/PINOY-LIST.md` section 2i.
+
+- **Caldus, No Uncertain Ground.** The card says Caldus strikes the enemy that hit the ally. While
+  an enemy holds Provoke, the strike lands on that enemy instead, because the Taunt rule outranks
+  the strike's target. **Proposed: keep the rule and fix the card** to *"When his Declared Target
+  damages another ally, Caldus strikes back and gains Energy, and the ally it hit gains a Ward worth
+  a share of Caldus's Max HP. An enemy with Provoke draws the strike."* Defined Duty and Jory's Worn
+  Hinges need the same wording.
+- **Finn, Ringing Toll.** It cannot work in any order, because a cast empties a full bar. **Proposed:
+  drop the toll.** No Quiet Moment already takes Energy off every Ringing enemy. A toll that
+  carries past the cast would need `Disrupted`, which is a different rule. SHOW PINOY.
+- **Kora, First Opening.** It works now. As an added blow, it gives an enemy that has not acted yet
+  a second hit's worth of Energy, and measured it is a small net loss. **Proposed: leave it** until
+  the 2b approximation is answered. Pinoy's "10% more damage" would not feed that bar.
 
 ---
 
