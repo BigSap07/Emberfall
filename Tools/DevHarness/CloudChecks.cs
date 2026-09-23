@@ -49,6 +49,7 @@ namespace Emberfall.DevHarness
             CheckFreshStartDecision();
             CheckUnreadableDocumentIsNotUploadable(content);
             CheckConflictCardCannotTellApart(content);
+            CheckResetSaysCloud(root);
             CheckSecretKeyRecognition();
             CheckSessionRenewal(root);
             CheckOfflineHasOneDoor(root);
@@ -559,10 +560,12 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// CLOUD-GAPS P9. The conflict card shows name, rank, stages cleared and heroes owned, plus
-        /// when each save was written. Two saves a week of play apart - a fortune in gold, every
-        /// hero ten levels higher, a Recital run - can agree on all four, and then the only thing
-        /// separating them on the card is the timestamp.
+        /// CLOUD-GAPS P9, FIXED. The conflict card showed name, rank, stages cleared and heroes
+        /// owned, plus when each save was written. Two saves a week of play apart - a fortune in
+        /// gold, every hero ten levels higher, a Recital run - agreed on all four, and the only thing
+        /// separating them on the card was the timestamp. The card now draws SaveComparison, and
+        /// this holds it to the same pair: the week-old save on this device, the rich one in the
+        /// cloud, which is the case that loses a week to one wrong tap.
         /// </summary>
         private static void CheckConflictCardCannotTellApart(ContentDatabase content)
         {
@@ -578,9 +581,98 @@ namespace Emberfall.DevHarness
 
             SaveSummary sa = SaveSummaryReader.From(a);
             SaveSummary sb = SaveSummaryReader.From(b);
-            Check(sa.Readable && sb.Readable && sa.Describe() == sb.Describe() && sa.LastSaveUnix != sb.LastSaveUnix,
-                  "STILL PRESENT (P9) - a week apart and two million gold apart, the card's four rows are identical: \""
-                  + sa.Describe() + "\"");
+            Check(sa.Readable && sb.Readable && sa.Describe() == sb.Describe(),
+                  "the pair P9 was proven on: the old four facts are still identical (\"" + sa.Describe() + "\")");
+
+            SaveComparison c = SaveComparison.Of(sa, sb, content);
+            Check(c.Rows.Exists(r => r.Ahead != SaveSide.Neither),
+                  "FIXED (P9) - the same pair no longer renders as the same rows: the card marks where they differ");
+            Check(!c.Rows.Exists(r => r.Ahead == SaveSide.Local) && c.LocalVerdict == "Nothing the other save lacks"
+                  && !c.LocalLeads,
+                  "the week-old side is told it has nothing the other lacks: \"" + c.LocalVerdict + "\"");
+            Check(c.CloudLeads && c.CloudVerdict.Contains("gold") && c.CloudVerdict.Contains("shards")
+                  && c.CloudVerdict.Contains("hero levels") && c.CloudVerdict.Contains("the Recital"),
+                  "and the week-on side names every lead in one line: \"" + c.CloudVerdict + "\"");
+
+            SaveComparisonRow gold = c.Rows.Find(r => r.Label == "GOLD");
+            SaveComparisonRow best = c.Rows.Find(r => r.Label == "BEST HEROES");
+            SaveComparisonRow recital = c.Rows.Find(r => r.Label == "RECITAL");
+            Check(gold != null && gold.Ahead == SaveSide.Cloud && gold.Lead == "+2M"
+                  && gold.LocalText == "123.5K" && gold.CloudText == "2.12M",
+                  "gold reads 123.5K against 2.12M, the cloud lit with +2M"
+                  + (gold != null ? " (" + gold.LocalText + " | " + gold.CloudText + ", " + gold.Lead + ")" : ""));
+            Check(best != null && best.Ahead == SaveSide.Cloud && best.Lead == "+" + (after.Heroes.Count * 10) + " levels"
+                  && best.CloudText.Contains(content.GetHero(after.Heroes[0].DefId).Name),
+                  "the best heroes are named, and ten levels each is a lead of " + (after.Heroes.Count * 10)
+                  + (best != null ? " (\"" + best.CloudText + "\", " + best.Lead + ")" : ""));
+            Check(recital != null && recital.LocalText == "Not yet" && recital.CloudText == "Floor 40",
+                  "the Recital earns a row once either save has been there, and reads Not yet against Floor 40");
+            Check(!c.Rows.Exists(r => r.Label == "PROVING") && c.Rows.Count <= SaveComparison.MaxRows,
+                  "the Proving, which neither save has entered, earns no row");
+            SaveComparisonRow campaign = c.Rows.Find(r => r.Label == "CAMPAIGN");
+            Check(campaign != null && campaign.Ahead == SaveSide.Neither && campaign.LocalText == campaign.CloudText,
+                  "a row they agree on marks neither side (" + (campaign != null ? campaign.LocalText : "no campaign row") + ")");
+
+            // The other shape of conflict: each save has something the other lacks. The card must
+            // light both, on different rows, and never rank them against each other.
+            PlayerProfile further = Rich(content);
+            GameSession session = new GameSession(content, further);
+            session.GrantBattleResult(content.AllStages[1], true, 1700000200);
+            further.RelicDust += 500;
+            PlayerProfile richer = Rich(content);
+            richer.Gold += 300000;
+            SaveComparison mixed = SaveComparison.Of(SaveSummaryReader.From(SaveSerializer.Serialize(further)),
+                                                     SaveSummaryReader.From(SaveSerializer.Serialize(richer)), content);
+            Check(mixed.LocalLeads && mixed.CloudLeads && mixed.LocalVerdict.Contains("campaign")
+                  && mixed.CloudVerdict.Contains("gold") && mixed.LocalAlso.Contains("relic dust"),
+                  "when each save leads on something, both say so: \"" + mixed.LocalVerdict + "\" / \""
+                  + mixed.CloudVerdict + "\", and the smaller lead is named, not tabled: \"" + mixed.LocalAlso + "\"");
+
+            // A fresh pull is a hero, not training: one more level-1 hero leads on HEROES and
+            // leaves BEST HEROES, which compares levels gained, marking neither side.
+            PlayerProfile pulled = Rich(content);
+            HeroDef extra = content.Heroes.Find(h => pulled.Heroes.TrueForAll(o => o.DefId != h.Id));
+            pulled.Heroes.Add(new HeroInstance { Uid = "h-extra", DefId = extra.Id, Level = 1 });
+            SaveComparison pull = SaveComparison.Of(SaveSummaryReader.From(SaveSerializer.Serialize(pulled)), sa, content);
+            Check(pull.Rows.Find(r => r.Label == "HEROES").Ahead == SaveSide.Local
+                  && pull.Rows.Find(r => r.Label == "BEST HEROES").Ahead == SaveSide.Neither,
+                  "one more level-1 hero leads on heroes owned and not on hero levels");
+
+            SaveComparison same = SaveComparison.Of(sa, SaveSummaryReader.From(a), content);
+            Check(same.NoDifference && !same.LocalLeads && !same.CloudLeads,
+                  "two identical saves are called the same: \"" + same.LocalVerdict + "\"");
+
+            SaveComparison broken = SaveComparison.Of(sa, SaveSummaryReader.From(b.Substring(0, b.Length / 2)), content);
+            Check(broken.CloudVerdict == "This save cannot be read" && broken.Rows.Count > 0
+                  && broken.Rows.TrueForAll(r => r.CloudText == "-" && r.Ahead == SaveSide.Neither),
+                  "an unreadable side is said to be unreadable, and the readable side is still described in full");
+
+            SaveComparison blind = SaveComparison.Of(sa, sb, null);
+            Check(blind.Rows.Count == c.Rows.Count && blind.CloudVerdict == c.CloudVerdict,
+                  "and with no content to name heroes or stages by, the card still compares");
+        }
+
+        /// <summary>
+        /// CLOUD-GAPS P11, FIXED in words. RESET PROGRESS also replaces the cloud save at the next
+        /// sync, and its dialog said only that it "starts a fresh account". What reset does is
+        /// unchanged - that is a product decision the doc leaves open - so this holds the dialog to
+        /// saying it. A tripwire on the source, like the P13 one: the dialog is UI and needs an
+        /// engine, and what matters is that the words cannot quietly lose the cloud half again.
+        /// </summary>
+        private static void CheckResetSaysCloud(string root)
+        {
+            string path = Path.Combine(root, Path.Combine("Assets", Path.Combine("Scripts", Path.Combine("UI",
+                              Path.Combine("Screens", "SettingsScreen.cs")))));
+            string source = File.ReadAllText(path);
+            string code = StripComments(source);
+            Check(Regex.IsMatch(code, "ShowResetConfirm\\(App,\\s*ResetReachesCloud\\(App\\)\\)")
+                  && Regex.IsMatch(code, "ResetReachesCloud\\(Game\\.GameApp app\\)\\s*\\{\\s*return app != null && app\\.Cloud != null;"),
+                  "FIXED (P11) - the RESET PROGRESS button asks whether the account service exists, signed in or not");
+            Check(code.Contains("AND in your \"") && code.Contains("\"cloud save. At the next sync the fresh start replaces your cloud copy")
+                  && code.Contains("Your account stays the same."),
+                  "and when it does, the dialog says the cloud copy goes too, and that the account is the same one");
+            Check(!code.Contains("starts a fresh account") && !code.Contains("Useful for testing"),
+                  "and nothing still calls it a fresh account or a testing tool");
         }
 
         // ---------------------------------------------------------------- keys

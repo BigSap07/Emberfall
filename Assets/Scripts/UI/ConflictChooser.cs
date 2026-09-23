@@ -28,20 +28,36 @@ namespace Emberfall.UI
     ///   - no "keep both", which this game has no meaning for, and no merge, which would lose
     ///     work more quietly than picking a side does.
     ///
-    /// The four facts per side are SaveSummary's, read out of each document without deserialising
-    /// it - so a save from a build this one cannot fully read is still described rather than shown
-    /// as a blank the player is asked to gamble on.
+    /// WHAT IT SHOWS, AND WHY THAT (Docs/CLOUD-GAPS.md P9). It used to show four numbers per side,
+    /// and two saves a week and two million gold apart rendered as the same four rows. The player
+    /// in this card is asking "which one is mine", anxious and one tap from an irreversible
+    /// answer, so the card reads top to bottom as glance, then evidence:
+    ///   - under each heading, when it was saved and, on the cloud side, whether this device wrote
+    ///     it. The name only when the two names differ, because then the name is the answer.
+    ///   - a VERDICT per side, in one line: what that save has that the other does not. "Ahead on
+    ///     gold, shards, hero levels and the Recital" against "Nothing the other save lacks" is
+    ///     the commonest conflict answered without reading a number.
+    ///   - the ROWS, which are the evidence: campaign position, rank, heroes owned, the three best
+    ///     heroes by name, gold and ember shards, and the Recital and Proving once either save has
+    ///     been there. The side ahead on a row is lit and carries its lead ("+2M"); the side
+    ///     behind is dimmed; a row where they agree is plain on both, so the eye goes to the
+    ///     differences and skips the rest.
+    ///   - an ALSO line for the smaller purses and collections (relic dust, slag, coda, valor,
+    ///     armor, relics, summons, battles won): named when one side has more, never tabled.
+    /// All of it is SaveComparison's, in Core, so the harness holds it to the audit's own pair. It
+    /// is read out of each document without deserialising it, so a save from a build this one
+    /// cannot fully read is still described rather than shown as a blank.
+    ///
+    /// Nothing on the card says which one to keep. More gold is not more progress when the other
+    /// save is further in the campaign; the verdicts are facts about each save, never advice.
     /// </summary>
     public sealed class ConflictChooser
     {
         private readonly RectTransform _root;
         private readonly Text _reason;
-        private readonly Text _localWhen;
-        private readonly Text _cloudWhen;
-        private readonly Text _localDevice;
-        private readonly Text _cloudDevice;
-        private readonly Text[] _localValues;
-        private readonly Text[] _cloudValues;
+        private readonly Side _local;
+        private readonly Side _cloud;
+        private readonly Text[] _labels;
         private readonly UIButton _keepLocal;
         private readonly UIButton _keepCloud;
 
@@ -57,20 +73,50 @@ namespace Emberfall.UI
         /// from a decision the game is waiting on.</summary>
         private UiLayerStack.Layer _layer;
 
-        /// <summary>The rows, in the order the card lists them. One array so the two columns
-        /// cannot drift out of step with each other or with the labels between them.</summary>
-        private static readonly string[] RowLabels = { "WAYFARER", "RANK", "STAGES CLEARED", "HEROES OWNED" };
+        /// <summary>One column: everything drawn for one of the two saves.</summary>
+        private sealed class Side
+        {
+            public Text When;
+            public Text Verdict;
+            public Text Also;
+            public Cell[] Cells;
+        }
+
+        /// <summary>One value in one column. The wash and the bar show only on the side that is
+        /// ahead, so a row lights on exactly one side or on neither.</summary>
+        private sealed class Cell
+        {
+            public RectTransform Root;
+            public Image Wash;
+            public Image Bar;
+            public Text Value;
+            public Text Lead;
+        }
 
         private const float CardWidth = 1180f;
-        private const float CardHeight = 720f;
+
+        /// <summary>
+        /// Sized for the 20:9 canvas, which is the short one: the scaler blends width and height,
+        /// so a 2400x1080 phone gets a canvas about 966 units tall, and this card and its ribbon
+        /// have to sit inside that with a margin. 880 leaves roughly 40 above and below.
+        /// </summary>
+        private const float CardHeight = 880f;
         private const float ColumnWidth = 480f;
-        private const float RowHeight = 54f;
+        private const float ColumnTop = 148f;
+
+        /// <summary>Where each block starts inside a column, from the column's top edge.</summary>
+        private const float WhenTop = 56f;
+        private const float VerdictTop = 88f;
+        private const float VerdictHeight = 64f;
+        private const float RowsTop = 160f;
+        private const float RowHeight = 45f;
+        private const float ColumnHeight = RowsTop + SaveComparison.MaxRows * RowHeight + 36f;
 
         /// <summary>
         /// Distance from the card's centre to each column's centre.
         ///
         /// It was ColumnWidth/2 + 60, which put the two columns 120 apart and left the row labels
-        /// between them overlapping both. "STAGES CLEARED" is wider than 120 at any size worth
+        /// between them overlapping both. "EMBER SHARDS" is wider than 120 at any size worth
         /// reading, so the widest label decided this rather than a round number: 335 leaves a 190
         /// gap, which the labels fit inside, and still leaves 15 units of card margin either side
         /// (335 + 240 = 575, against a half-width of 590).
@@ -81,6 +127,14 @@ namespace Emberfall.UI
         /// than to the longest word - so a longer label in future overflows visibly into a gap
         /// instead of invisibly onto a column.</summary>
         private const float LabelWidth = 190f;
+
+        /// <summary>The right-hand strip of a cell that holds the lead ("+2M", "+30 levels").</summary>
+        private const float LeadWidth = 128f;
+
+        /// <summary>The colour that means "this side has more": the kit's success green. Gold is
+        /// structure on this card and ember is the two buttons, so a third warm colour would read
+        /// as one more frame rather than as a difference.</summary>
+        private static readonly Color Ahead = UITheme.Success;
 
         public ConflictChooser(RectTransform layer)
         {
@@ -101,38 +155,31 @@ namespace Emberfall.UI
             EmberforgeUI.PanelOn(card, true);
 
             // A ribbon, because this card has exactly one subject.
-            Text title = EmberforgeUI.TitleRibbon("Title", card, "TWO SAVES",
-                                                  CardWidth - Emberforge.RibbonOverhang * 2f);
+            EmberforgeUI.TitleRibbon("Title", card, "TWO SAVES", CardWidth - Emberforge.RibbonOverhang * 2f);
 
-            _reason = EmberforgeUI.Body("Reason", card, "", UITheme.FontSmall, Emberforge.TextBody,
+            _reason = EmberforgeUI.Body("Reason", card, "", UITheme.FontTiny, Emberforge.TextQuiet,
                                         TextAnchor.UpperCenter);
-            UIBuilder.Box(_reason.rectTransform, 0f, -88f, CardWidth - 120f, 68f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_reason.rectTransform, 0f, -84f, CardWidth - 120f, 56f, new Vector2(0.5f, 1f));
             UIBuilder.Outlined(_reason, Emberforge.Outline, Emberforge.StrokeThin);
 
-            float columnTop = 172f;
+            _local = BuildColumn(card, "Local", "THIS DEVICE", -ColumnOffset);
+            _cloud = BuildColumn(card, "Cloud", "THE CLOUD", ColumnOffset);
 
-            _localValues = new Text[RowLabels.Length];
-            _cloudValues = new Text[RowLabels.Length];
-
-            RectTransform local = BuildColumn(card, "Local", "THIS DEVICE", -ColumnOffset,
-                                              columnTop, _localValues, out _localWhen, out _localDevice);
-            RectTransform cloud = BuildColumn(card, "Cloud", "THE CLOUD", ColumnOffset,
-                                              columnTop, _cloudValues, out _cloudWhen, out _cloudDevice);
-
-            // The row labels run down the middle, between the two columns, so each number is read
-            // against its own name rather than against the number opposite it.
-            for (int i = 0; i < RowLabels.Length; i++)
+            // The row labels run down the middle, between the two columns, so each value is read
+            // against its own name rather than against the value opposite it.
+            _labels = new Text[SaveComparison.MaxRows];
+            for (int i = 0; i < _labels.Length; i++)
             {
-                Text label = EmberforgeUI.Label("Row" + i, card, RowLabels[i], UITheme.FontTiny - 2,
+                _labels[i] = EmberforgeUI.Label("Row" + i, card, "", UITheme.FontTiny - 2,
                                                 Emberforge.TextQuiet, TextAnchor.MiddleCenter);
-                UIBuilder.Box(label.rectTransform, 0f, -(columnTop + 58f + i * RowHeight),
+                UIBuilder.Box(_labels[i].rectTransform, 0f, -(ColumnTop + RowsTop + i * RowHeight),
                               LabelWidth, RowHeight, new Vector2(0.5f, 1f));
             }
 
             Text warning = EmberforgeUI.Body("Warning", card,
                 "Whichever you keep replaces the other. There is no way back, and nothing is merged.",
                 UITheme.FontTiny, UITheme.Warning, TextAnchor.UpperCenter);
-            UIBuilder.Box(warning.rectTransform, 0f, 148f, CardWidth - 140f, 32f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(warning.rectTransform, 0f, 132f, CardWidth - 140f, 32f, new Vector2(0.5f, 0f));
             UIBuilder.Outlined(warning, Emberforge.Outline, Emberforge.StrokeThin);
 
             // BOTH PRIMARY, both the same size. Neither is the recommended one because there is no
@@ -141,12 +188,12 @@ namespace Emberfall.UI
             // worth making: teal means "the way back out", and on this card there is no way out.
             _keepLocal = EmberforgeUI.Button("KeepLocal", card, "KEEP THIS DEVICE", UITheme.FontBody,
                                              ForgeButtonKind.Primary);
-            UIBuilder.Box(_keepLocal.Root, -ColumnOffset, 40f, ColumnWidth, 92f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_keepLocal.Root, -ColumnOffset, 32f, ColumnWidth, 88f, new Vector2(0.5f, 0f));
             _keepLocal.OnClick(delegate { Answer(ConflictChoice.KeepLocal); });
 
             _keepCloud = EmberforgeUI.Button("KeepCloud", card, "KEEP THE CLOUD", UITheme.FontBody,
                                              ForgeButtonKind.Primary);
-            UIBuilder.Box(_keepCloud.Root, ColumnOffset, 40f, ColumnWidth, 92f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_keepCloud.Root, ColumnOffset, 32f, ColumnWidth, 88f, new Vector2(0.5f, 0f));
             _keepCloud.OnClick(delegate { Answer(ConflictChoice.KeepCloud); });
 
             _root.gameObject.SetActive(false);
@@ -154,42 +201,91 @@ namespace Emberfall.UI
 
         public bool IsOpen { get { return _root != null && _root.gameObject.activeSelf; } }
 
-        private RectTransform BuildColumn(RectTransform card, string name, string heading, float x, float top,
-                                          Text[] values, out Text when, out Text device)
+        private Side BuildColumn(RectTransform card, string name, string heading, float x)
         {
+            Side side = new Side();
             RectTransform column = UIBuilder.Node(name, card);
-            UIBuilder.Box(column, x, -top, ColumnWidth, CardHeight - top - 200f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(column, x, -ColumnTop, ColumnWidth, ColumnHeight, new Vector2(0.5f, 1f));
             // A RECESS, because a column is one of two things set into the card rather than a
             // second card on top of it - and because two sunken columns either side of the label
             // strip is what makes the strip read as running BETWEEN them.
             EmberforgeUI.SunkenOn(column);
 
+            float inner = ColumnWidth - 32f;
+
             Text title = EmberforgeUI.Title("Heading", column, heading, UITheme.FontHeading,
                                             Emberforge.TextGold, TextAnchor.UpperCenter);
-            UIBuilder.Box(title.rectTransform, 0f, -16f, ColumnWidth - 32f, 40f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(title.rectTransform, 0f, -14f, inner, 40f, new Vector2(0.5f, 1f));
             UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
 
-            for (int i = 0; i < RowLabels.Length; i++)
-            {
-                values[i] = EmberforgeUI.Label("Value" + i, column, "", UITheme.FontBody,
-                                               Emberforge.TextBody, TextAnchor.MiddleCenter);
-                UIBuilder.Box(values[i].rectTransform, 0f, -(58f + i * RowHeight), ColumnWidth - 32f,
-                              RowHeight, new Vector2(0.5f, 1f));
-                UIBuilder.Outlined(values[i], Emberforge.Outline, Emberforge.StrokeThin);
-            }
+            side.When = EmberforgeUI.Label("When", column, "", UITheme.FontTiny, Emberforge.TextBody,
+                                           TextAnchor.UpperCenter);
+            UIBuilder.Box(side.When.rectTransform, 0f, -WhenTop, inner, 28f, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(side.When, Emberforge.Outline, Emberforge.StrokeThin);
 
-            when = EmberforgeUI.Label("When", column, "", UITheme.FontTiny, Emberforge.TextGold,
-                                      TextAnchor.UpperCenter);
-            UIBuilder.Box(when.rectTransform, 0f, -(58f + RowLabels.Length * RowHeight + 10f),
-                          ColumnWidth - 32f, 30f, new Vector2(0.5f, 1f));
-            UIBuilder.Outlined(when, Emberforge.Outline, Emberforge.StrokeThin);
+            side.Verdict = EmberforgeUI.Body("Verdict", column, "", UITheme.FontSmall, Emberforge.TextQuiet,
+                                             TextAnchor.MiddleCenter);
+            UIBuilder.Box(side.Verdict.rectTransform, 0f, -VerdictTop, inner, VerdictHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Outlined(side.Verdict, Emberforge.Outline, Emberforge.StrokeThin);
 
-            device = EmberforgeUI.Label("Device", column, "", UITheme.FontTiny - 2,
-                                        Emberforge.TextQuiet, TextAnchor.UpperCenter);
-            UIBuilder.Box(device.rectTransform, 0f, -(58f + RowLabels.Length * RowHeight + 42f),
-                          ColumnWidth - 32f, 28f, new Vector2(0.5f, 1f));
+            side.Cells = new Cell[SaveComparison.MaxRows];
+            for (int i = 0; i < side.Cells.Length; i++) side.Cells[i] = BuildCell(column, i);
 
-            return column;
+            side.Also = EmberforgeUI.Label("Also", column, "", UITheme.FontTiny - 2, Emberforge.TextQuiet,
+                                           TextAnchor.UpperCenter);
+            UIBuilder.Box(side.Also.rectTransform, 0f, -(RowsTop + SaveComparison.MaxRows * RowHeight + 4f),
+                          inner, 28f, new Vector2(0.5f, 1f));
+            BestFit(side.Also, UITheme.FontTiny - 6, UITheme.FontTiny - 2);
+
+            return side;
+        }
+
+        private static Cell BuildCell(RectTransform column, int i)
+        {
+            Cell cell = new Cell();
+            cell.Root = UIBuilder.Node("Cell" + i, column);
+            UIBuilder.Box(cell.Root, 0f, -(RowsTop + i * RowHeight + 2f), ColumnWidth - 20f, RowHeight - 4f,
+                          new Vector2(0.5f, 1f));
+
+            cell.Wash = cell.Root.gameObject.AddComponent<Image>();
+            cell.Wash.sprite = TextureLab.White;
+            cell.Wash.color = UITheme.WithAlpha(Ahead, 0.14f);
+            cell.Wash.raycastTarget = false;
+
+            RectTransform bar = UIBuilder.Node("Bar", cell.Root);
+            UIBuilder.Box(bar, 0f, 0f, 5f, RowHeight - 4f, new Vector2(0f, 0.5f));
+            bar.pivot = new Vector2(0f, 0.5f);
+            cell.Bar = bar.gameObject.AddComponent<Image>();
+            cell.Bar.sprite = TextureLab.White;
+            cell.Bar.color = Ahead;
+            cell.Bar.raycastTarget = false;
+
+            // Best fit, because BEST HEROES carries three names and a hero's name is content: a
+            // long one shrinks on its own row rather than running under the lead.
+            cell.Value = EmberforgeUI.Label("Value", cell.Root, "", UITheme.FontBody, Emberforge.TextBody,
+                                            TextAnchor.MiddleCenter);
+            UIBuilder.Box(cell.Value.rectTransform, 8f - LeadWidth / 2f, 0f, ColumnWidth - 48f - LeadWidth,
+                          RowHeight - 4f, new Vector2(0.5f, 0.5f));
+            BestFit(cell.Value, UITheme.FontTiny - 4, UITheme.FontBody);
+            UIBuilder.Outlined(cell.Value, Emberforge.Outline, Emberforge.StrokeThin);
+
+            cell.Lead = EmberforgeUI.Label("Lead", cell.Root, "", UITheme.FontTiny, Ahead, TextAnchor.MiddleRight);
+            UIBuilder.Box(cell.Lead.rectTransform, -12f, 0f, LeadWidth, RowHeight - 4f, new Vector2(1f, 0.5f));
+            cell.Lead.rectTransform.pivot = new Vector2(1f, 0.5f);
+            BestFit(cell.Lead, UITheme.FontTiny - 6, UITheme.FontTiny);
+            UIBuilder.Outlined(cell.Lead, Emberforge.Outline, Emberforge.StrokeThin);
+            return cell;
+        }
+
+        /// <summary>Shrink to fit on one line. Best fit only shrinks a label that may wrap - see
+        /// EmberforgeUI.TitleRibbon for why - so wrapping goes on and vertical overflow comes off.</summary>
+        private static void BestFit(Text label, int min, int max)
+        {
+            label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            label.verticalOverflow = VerticalWrapMode.Truncate;
+            label.resizeTextForBestFit = true;
+            label.resizeTextMinSize = min;
+            label.resizeTextMaxSize = max;
         }
 
         /// <summary>
@@ -204,47 +300,78 @@ namespace Emberfall.UI
 
             _reason.text = outcome.Reason;
 
-            Fill(_localValues, _localWhen, _localDevice, outcome.Local, "", 0L);
-            Fill(_cloudValues, _cloudWhen, _cloudDevice, outcome.Cloud,
-                 outcome.Record != null ? outcome.Record.DeviceId : "",
-                 outcome.Record != null ? outcome.Record.Revision : 0);
+            Game.GameApp app = Game.GameApp.Instance;
+            SaveComparison comparison = SaveComparison.Of(outcome.Local, outcome.Cloud,
+                                                          app != null ? app.Content : null);
+
+            for (int i = 0; i < _labels.Length; i++)
+                _labels[i].text = i < comparison.Rows.Count ? comparison.Rows[i].Label : "";
+
+            bool namesDiffer = outcome.Local != null && outcome.Cloud != null
+                               && outcome.Local.Readable && outcome.Cloud.Readable
+                               && NameOf(outcome.Local) != NameOf(outcome.Cloud);
+
+            Fill(_local, comparison, SaveSide.Local, outcome.Local, namesDiffer, "");
+            Fill(_cloud, comparison, SaveSide.Cloud, outcome.Cloud, namesDiffer,
+                 outcome.Record != null ? outcome.Record.DeviceId : "");
 
             _root.gameObject.SetActive(true);
             _root.SetAsLastSibling();
 
-            Game.GameApp app = Game.GameApp.Instance;
             if (app != null && app.Layers != null && _layer == null)
                 _layer = app.Layers.PushBlocking("popup:conflict", null);
         }
 
-        private void Fill(Text[] values, Text when, Text device, SaveSummary summary,
-                          string deviceId, long revision)
+        private static void Fill(Side side, SaveComparison comparison, SaveSide which, SaveSummary summary,
+                                 bool namesDiffer, string deviceId)
         {
-            if (summary == null || !summary.Readable)
+            bool readable = summary != null && summary.Readable;
+            bool leads = which == SaveSide.Local ? comparison.LocalLeads : comparison.CloudLeads;
+
+            side.When.text = readable ? When(summary, namesDiffer, deviceId) : "";
+            side.Verdict.text = which == SaveSide.Local ? comparison.LocalVerdict : comparison.CloudVerdict;
+            side.Verdict.color = !readable ? UITheme.Warning : (leads ? Ahead : Emberforge.TextQuiet);
+            side.Also.text = which == SaveSide.Local ? comparison.LocalAlso : comparison.CloudAlso;
+
+            for (int i = 0; i < side.Cells.Length; i++)
             {
-                for (int i = 0; i < values.Length; i++) values[i].text = "-";
-                values[0].text = "UNREADABLE";
-                when.text = "";
-                device.text = "this save cannot be described";
-                return;
+                Cell cell = side.Cells[i];
+                bool used = i < comparison.Rows.Count;
+                cell.Root.gameObject.SetActive(used);
+                if (!used) continue;
+
+                SaveComparisonRow row = comparison.Rows[i];
+                bool ahead = row.Ahead == which;
+                bool behind = row.Ahead != SaveSide.Neither && !ahead;
+
+                cell.Value.text = which == SaveSide.Local ? row.LocalText : row.CloudText;
+                cell.Value.color = ahead ? Emberforge.GoldLit : (behind ? Emberforge.TextQuiet : Emberforge.TextBody);
+                cell.Lead.text = ahead ? row.Lead : "";
+                cell.Wash.enabled = ahead;
+                cell.Bar.enabled = ahead;
             }
+        }
 
-            values[0].text = string.IsNullOrEmpty(summary.PlayerName) ? "Wayfarer" : summary.PlayerName;
-            values[1].text = summary.PlayerLevel.ToString();
-            values[2].text = summary.StagesCleared.ToString();
-            values[3].text = summary.HeroesOwned.ToString();
+        private static string NameOf(SaveSummary summary)
+        {
+            return string.IsNullOrEmpty(summary.PlayerName) ? "Wayfarer" : summary.PlayerName;
+        }
 
-            when.text = summary.LastSaveUnix > 0 ? "SAVED " + Ago(summary.LastSaveUnix) : "NEVER SAVED";
-
-            // The writing device is shown only for the cloud side, where it answers a real
-            // question - "was that me on my tablet?" - and only as "this device" or "another
-            // device", never as the id itself. The id is a random GUID; printing it would be 32
-            // characters that mean nothing to anybody.
-            if (string.IsNullOrEmpty(deviceId)) { device.text = ""; return; }
+        /// <summary>
+        /// "Saved 3 hours ago on another device". The writing device is named only for the cloud
+        /// side, where it answers a real question - "was that me on my tablet?" - and only as "this
+        /// device" or "another device", never as the id itself: the id is a random GUID. The cloud
+        /// revision used to sit beside it; it answers nothing a player asks, and the reason line at
+        /// the top already carries it. The name leads only when the two saves disagree on it.
+        /// </summary>
+        private static string When(SaveSummary summary, bool namesDiffer, string deviceId)
+        {
+            string text = summary.LastSaveUnix > 0 ? "Saved " + Ago(summary.LastSaveUnix) : "Never saved";
+            if (namesDiffer) text = NameOf(summary) + ", " + char.ToLowerInvariant(text[0]) + text.Substring(1);
+            if (string.IsNullOrEmpty(deviceId)) return text;
             bool mine = Game.GameApp.Instance != null && Game.GameApp.Instance.Cloud != null
                         && deviceId == Game.GameApp.Instance.Cloud.State.DeviceId;
-            device.text = (mine ? "written by this device" : "written by another device")
-                        + (revision > 0 ? "   -   revision " + revision : "");
+            return text + (mine ? " on this device" : " on another device");
         }
 
         /// <summary>

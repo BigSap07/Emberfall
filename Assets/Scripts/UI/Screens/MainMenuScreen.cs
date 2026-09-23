@@ -809,12 +809,12 @@ namespace Emberfall.UI.Screens
                 // is opened through App.Modal rather than built here, so what a capture sees is
                 // the dialog every screen shares - and it is opened on the RESET copy because
                 // that is the only two-answer dialog with real words in it.
+                // The words are SettingsScreen.ResetBody's, on the cloud copy, which says the most.
+                // The answers stay unwired: PlayModeScreenshot runs on the real identity, and a
+                // capture door must not be one tap from wiping a real save.
                 case "dialog":
-                    App.Modal.ShowConfirm(
-                        "RESET PROGRESS",
-                        "This wipes your heroes, currency and campaign progress and starts a fresh "
-                        + "account. Useful for testing the first-run experience.",
-                        "RESET", "KEEP PLAYING", null, null);
+                    App.Modal.ShowConfirm("RESET PROGRESS", SettingsScreen.ResetBody(true),
+                                          "RESET", "KEEP PLAYING", null, null);
                     break;
 
                 case "heroes": Router.Show(ScreenId.Heroes); break;

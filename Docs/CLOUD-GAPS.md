@@ -84,9 +84,9 @@ Ranked by what each finding would cost a player once there are players.
 | P6 | a failed download leaves the device claiming the cloud's revision, so the next sync overwrites the save the player chose | the save the player picked on the conflict card | **fixed** |
 | P7 | an older build drops heroes it does not know, and its next upload deletes them from the cloud | heroes, when two devices run two builds | **fixed**, version 15 |
 | P8 | rotating the anon key makes every old build abandon its account | every anonymous account on an old build | open |
-| P9 | the conflict card cannot tell two saves apart except by when they were written | a week of play, lost to a coin toss | open, UI |
+| P9 | the conflict card cannot tell two saves apart except by when they were written | a week of play, lost to a coin toss | **fixed**, UI pass |
 | P10 | every save from versions 1 to 12 loses all its heroes and becomes a new game | nothing today: no player holds one | open by decision, contained by P7 |
-| P11 | RESET PROGRESS also erases the cloud save, and the dialog does not say so | the cloud copy a player may have counted on | open |
+| P11 | RESET PROGRESS also erases the cloud save, and the dialog does not say so | the cloud copy a player may have counted on | **fixed in words**, behaviour unchanged by decision |
 | P12 | nothing stopped a service-role key reaching the game, and the Python guards could not fire | every save in the project, if it ever happened | **fixed** |
 | P13 | nothing retries a 401, though the code said it did | failed syncs for the rest of a session on a slow clock | **fixed** |
 | P14 | a version field that is not a number reads as version 1 | only a hand-edited save | **fixed**, version 15 |
@@ -347,6 +347,34 @@ card can still describe a save from a build it cannot fully read.
 conflict card, and another agent held the editor and the UI screens that day. Nothing about the
 format blocks it: every value it needs is already in the document.
 
+**The fix, as made (UI pass).** No format change and no server work. `SaveSummary` now also reads
+the purses, the XP, the campaign stage and wave, the Recital and Proving highs, the armor, relic,
+summon and win counts, and every hero's id and level, all with fallbacks, still without
+deserialising. `SaveComparison` in Core turns two of them into the card, and `ConflictChooser`
+only draws it. The card answers "which one is mine" in three layers:
+
+- **a verdict per side**, one line: what that save has that the other does not. On the audit's
+  pair the week-old side reads "Nothing the other save lacks" and the cloud side "Ahead on hero
+  levels, gold, shards and the Recital". It never says which to keep.
+- **the rows**, as evidence: campaign, rank, heroes owned, the three best heroes by name and level,
+  gold, ember shards, and the Recital and Proving only once either save has been there. The side
+  ahead on a row is lit green and carries its lead (+2M, +30 levels); the side behind is dimmed; a
+  row they agree on is plain on both.
+- **an also line** for the smaller things (relic dust, slag, coda, valor, armor, relics, summons
+  made, battles won), named when one side has more, never tabled.
+
+Left off on purpose: the cloud revision (the reason line above the columns still carries it), the
+device id, which relic or armor roll each save holds, events, talents, the team, and any score or
+recommendation. Hero levels compare levels gained, so a fresh level-1 pull counts on HEROES and
+not as training.
+
+`CloudChecks.CheckConflictCardCannotTellApart` is turned around: it still shows the old four facts
+agreeing on the pair, then asserts the verdicts, the gold, hero and Recital rows, a mixed pair where
+both sides lead, a fresh pull, identical saves, an unreadable side and missing content.
+`ConflictShots` in `Assets/Editor` photographs the pair on a scratch identity:
+`Docs/ui-shots/conflict-chooser-before.png` and `-before-2400` are the old card, `conflict-chooser`
+and `-2400` the new one, `conflict-chooser-mixed` and `-2400` the mixed pair.
+
 ### P10. Every save from versions 1 to 12 loses all its heroes
 
 **The migration table.** Each version was built in the exact key shape its own build wrote. The
@@ -421,6 +449,17 @@ experience". It does not say that the cloud copy goes too, or that the account i
 **The fix, not made.** This is a product decision, not a bug with one right answer. If resetting
 should keep the cloud copy, forget the base as P1 does, and the next sync will ask. The dialog is
 UI either way.
+
+**The words, fixed (UI pass).** What reset does is unchanged; the product decision above is still
+open. The dialog now says it. `SettingsScreen.ShowResetConfirm` is the one door, and
+`SettingsScreen.ResetReachesCloud` picks the copy: whenever the account service exists, signed in
+or offline, it reads "This wipes your heroes, currency and campaign progress on this device AND in
+your cloud save. At the next sync the fresh start replaces your cloud copy, so no other device can
+bring your progress back. Your account stays the same." A build with no account service says "on
+this device" only. The START OVER card's note follows the same rule, and nothing calls it a fresh
+account or a testing tool any more. `CloudChecks.CheckResetSaysCloud` holds the words, as a source
+tripwire like P13's. Shots: `Docs/ui-shots/reset-dialog-before.png`, `reset-dialog.png`,
+`reset-dialog-no-account.png`, each with a `-2400` pair.
 
 ### P12. Nothing stopped a service-role key reaching the game
 
@@ -511,6 +550,10 @@ it be proven in this tree?
 | P9 | open | the fix is the conflict card, a UI screen another agent held; the format already carries every value it needs |
 | P8 | open | not a format question; narrowing `TokenWasRejected` without GoTrue's real error codes could leave a dead token retried forever. S3's live case measures them. The P13 retry does not widen it: a failed renewal clears nothing |
 | P11 | open | a product decision (should reset keep the cloud copy?) and a dialog, which is UI |
+
+**UI pass, afterwards.** P9 and P11's dialog were the two findings both audits had left because
+they were UI. Both are now done: P9 in full, P11 in words (the reset still reaches the cloud,
+and the dialog says so before the button). See each entry.
 | P3, the rest | open | atomic writes need `File.Replace` verified on an Android device, and none exists. Preferring the newer of file and mirror by `lastSaveUnix` is cheap but has nothing to do with the format being free, and it changes which copy boots, so it belongs with the atomic-write work |
 | S2 | open | the format being free makes "the document's version must equal `save_version`" easy to state, but it is a server migration, it cannot be applied or measured from here, and this client never sends a mismatch: `Push` always labels a document `Serialize` just wrote at `CurrentVersion` |
 | S6, S7, S8 | open | server migrations, unrelated to the save format, and unmeasurable without the live project |
@@ -542,7 +585,8 @@ not move (probe S1). On the server, see S1: expected to hold, cases written, unr
 **ConflictChooser never overwrites silently.** The card itself never does. It has no default, no
 dismiss and no timeout, and the only overwrite is a KeepLocal the player tapped. But three paths
 around the card did overwrite silently: P1, P6 and P11. P1 and P6 are fixed. Whether what it
-shows is enough to choose on: it is not (P9).
+shows is enough to choose on: it was not (P9), and since the UI pass it shows what differs and
+which side is ahead on each difference.
 
 **An email that already belongs to another account.** GoTrue should refuse it. The client then
 reports the error and changes nothing. That is expected, not measured: S5. The player's natural
