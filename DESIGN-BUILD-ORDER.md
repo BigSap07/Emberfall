@@ -298,6 +298,11 @@ half that ceiling.**
 | 2-star | x0.18 to x0.36 | the thirteen graded 3-stars read a median of x0.365 | x0.20 to x0.30, median x0.225 |
 | 1-star | x0.10 to x0.20 | the twelve 2-stars read a median of x0.205 | x0.11 to x0.13 |
 
+The band's arena reads output where nothing is close. `Docs/PARITY-STUDY.md` reads the same 94
+heroes in matched fights. Its rank agrees with the band's (Spearman 0.84), but parity compresses the
+lower tiers, so these edges do not transfer to it. Heroes whose kits carry enemy-facing control or
+debuffs sit about 0.16 of a 5-star median higher there than here, and tempo kits do not.
+
 The floor is half the ceiling on the three lower rungs and 0.53 of it on the 4-star one, which is
 where the halving was read from. The ladder of ceilings is 0.85, 0.60, 0.36, 0.20, a step of x0.71,
 x0.60 and x0.56: **the step widens as the tier falls, and that is the shape of the roster rather
@@ -421,16 +426,16 @@ room wherever it has one (`DarkTalentRooms`, 30 pairs). The
 quantity is the star band's: damage, healing and shielding, credited by source. A talent loses when
 its mean sits more than two standard errors below zero. Five seeds could not answer this: the sweep
 rolls damage variance, and a talent that shifts the dice stream moves a five-seed total by more than
-most talents are worth. The reading is **39 gain, 45 sit within the noise or change nothing the
-output total can see, and 6 lose**, and all 6 are pinned in `KnownCostlyTalents` with a reason. The
+most talents are worth. The reading is **38 gain, 45 sit within the noise or change nothing the
+output total can see, and 7 lose**, and all 7 are pinned in `KnownCostlyTalents` with a reason. The
 check fails both when a talent starts losing without being listed and when a listed one stops.
 
 **Every room it reads is a lineup a player can field, and that is asserted now.** Brenna I's room
 fielded two Brennas, which `PlayerProfile.AssignToTeam` never allows, and her value was read off
 that fight: +364 a battle, t 0.6. The same stage with the copy removed never lets her cap bind. A
 search of 29,016 legal fights found it binding in 43, and her room is now the one where it binds
-most often, beside Darian, Nereia and Rovan. It reads +61, t 0.2. That is still inside the noise,
-so her count does not move: the sweep, where she gains +92 at t 7.6, is what counts her a gain.
+most often, beside Darian, Nereia and Rovan. It reads inside the noise there, and so does the
+sweep now (+199, t 1.4), so she counts as flat.
 Hers was the only illegal room in the harness. That was measured by recording every battle the full
 harness fights, not by reading the room lists.
 
@@ -439,12 +444,17 @@ harness fights, not by reading the room lists.
   Rubble that What Breaks Forward consumes on the next basic, so its retention and cap never act.
   Mireth I trades a Missing Page that lands every round for two landings per enemy per battle; it is
   read in `s_buffer` since `buffsOnly`, because the sweep no longer raises The Missing Page.
-- **Four are trades.** Nysera I strips a buff off the body targeting her, which in the sweep is a
+- **Five are trades.** Nysera I strips a buff off the body targeting her, which in the sweep is a
   taunting tank's Provoke. Rheia I is fewer casts that each hit harder, as its sentence says. Rheia
   III and Marrow I each pay a price their own sentence names: Energy per strike, a smaller Promise
-  spread over a third ally.
-- **Kiva III and Mireth III left the list in pass 3**: once both heroes' listeners heard real buffs
-  only, Kiva III reads inside the noise and Mireth III gains in its own room.
+  spread over a third ally. Kiva III buys Kiva a Shield the output total does not count. It left the
+  list in pass 3, read -410, t -1.7, and came back when the F8 pass lifted her kit x1.15: it reads
+  -807, t -2.9, in `s_soft_mid_big`.
+- **Mireth III left the list in pass 3** and gains in its own room (+960, t 3.1).
+- **At parity the list reads differently** (`Docs/PARITY-STUDY.md`). Nysera I and Kiva III gain, and
+  Rheia I and III are flat, in close fights. The two traps and Marrow I lose everywhere. The same
+  study finds 16 of the 45 flat talents worth 1% Attack or more at parity, and 29 dead or negligible
+  in every arena it has.
 
 ### Campaign and progression
 
