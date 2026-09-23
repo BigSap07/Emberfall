@@ -159,6 +159,7 @@ namespace Emberfall.DevHarness
             ReportTalentExercise();
 
             CheckDebrief();
+            CheckDebriefRealVictories(content);
             CheckRelics(content);
             CheckEvents(content);
             CheckRecital(content);
@@ -10121,7 +10122,119 @@ namespace Emberfall.DevHarness
             CheckDebriefAspectCanFire();
             CheckDebriefAspect();
             CheckDebriefFallback();
+            CheckDebriefLossClausesStayOnLosses();
             Line("");
+        }
+
+        /// <summary>
+        /// Clauses 2 to 5 explain what went wrong for the line, and the numbers they read do not
+        /// know who won. The same fixture is summarised twice, identical but for Victory: as a
+        /// loss the clause fires, as a win it must not. Speed and Aspect are the two built here,
+        /// Speed because it is the one a real win printed ("you were outsped, not outmatched").
+        /// </summary>
+        private static void CheckDebriefLossClausesStayOnLosses()
+        {
+            // Speed: in every round all three enemies act before the hero does.
+            BattleResult r = new BattleResult();
+            r.Units.Add(DebriefUnit(0, true, "Hero", ""));
+            r.Units.Add(DebriefUnit(1, false, "FoeA", ""));
+            r.Units.Add(DebriefUnit(2, false, "FoeB", ""));
+            r.Units.Add(DebriefUnit(3, false, "FoeC", ""));
+            for (int round = 1; round <= 3; round++)
+            {
+                foreach (int id in new[] { 1, 2, 3, 0 })
+                {
+                    BattleEvent turn = BattleEvent.Make(BattleEventType.TurnStart, round);
+                    turn.SourceId = id;
+                    r.Events.Add(turn);
+                }
+            }
+            DebriefDamage(r, 0, 1, 90, "Cleave", 1f, 3);
+
+            r.Victory = false;
+            DebriefClause asLoss = Debrief.Summarize(r).Clause;
+            r.Victory = true;
+            DebriefResult asWin = Debrief.Summarize(r);
+            Check(asLoss == DebriefClause.Speed,
+                  "a line acting after every enemy, every round, is told it was outsped when it loses (got " + asLoss + ")");
+            Check(asWin.Clause != DebriefClause.Speed && !asWin.Text.Contains("outsped"),
+                  "and the SAME fight won is not - a win never prints a loss's reason (got " + asWin.Clause + ": " + asWin.Text + ")");
+
+            // Aspect: CheckDebriefAspect's construction, won.
+            BattleResult a = new BattleResult();
+            a.Units.Add(DebriefUnit(0, true, "Hero", ""));
+            a.Units.Add(DebriefUnit(1, false, "FoeA", ""));
+            a.Units.Add(DebriefUnit(2, false, "FoeB", ""));
+            a.Units.Add(DebriefUnit(3, false, "FoeC", ""));
+            DebriefDamage(a, 1, 0, 233, "Ash Nova", AspectChart.Advantage, 1);
+            DebriefDamage(a, 2, 0, 233, "Brine Lash", AspectChart.Advantage, 1);
+            DebriefDamage(a, 3, 0, 234, "Wing Dust", 1.0f, 1);
+            a.Victory = true;
+            DebriefClause aspectWon = Debrief.Summarize(a).Clause;
+            Check(aspectWon != DebriefClause.Aspect && aspectWon != DebriefClause.AbilityDominant,
+                  "nor is a won fight told its line was the wrong colour (got " + aspectWon + ")");
+        }
+
+        /// <summary>
+        /// The fight that found it, as a family. The live shakedown's replay was a VICTORY on the
+        /// guild dungeon's floor 1 with the three starter heroes at level 40, and its result
+        /// screen said OUTSPED. Every order and subset of those heroes against every floor of that
+        /// cycle's seed is fought here for real. Asked as a loss, some of the wins really are
+        /// outsped by the numbers - so the case exists, and is not a constructed one - and asked
+        /// as what they are, not one win prints a clause that explains a loss.
+        /// </summary>
+        private static void CheckDebriefRealVictories(ContentDatabase content)
+        {
+            string[] ids = { "kael_the_unyielding", "isara_the_second_chance", "kiva_the_forsaken_oath" };
+            List<List<string>> lines = new List<List<string>>();
+            foreach (string x in ids)
+            {
+                lines.Add(new List<string> { x });
+                foreach (string y in ids)
+                {
+                    if (y == x) continue;
+                    lines.Add(new List<string> { x, y });
+                    foreach (string z in ids)
+                        if (z != x && z != y) lines.Add(new List<string> { x, y, z });
+                }
+            }
+
+            const int Seed = 288421801;
+            int wins = 0, outspedWins = 0, lossClauseOnWin = 0;
+            string example = "";
+            foreach (List<string> line in lines)
+            {
+                TeamSnapshot team = new TeamSnapshot();
+                foreach (string id in line)
+                {
+                    HeroDef def = content.GetHero(id);
+                    if (def == null) continue;
+                    team.Units.Add(new SnapshotUnit { DefId = id, Level = 40, Stars = def.Stars });
+                }
+                if (team.Units.Count != line.Count) continue;
+                for (int floor = 1; floor <= new GuildDungeonStatus().FloorCount; floor++)
+                {
+                    BattleResult fight = GuildDungeon.Fight(content, team, Seed, floor);
+                    if (!fight.Victory) continue;
+                    wins++;
+                    DebriefResult told = Debrief.Summarize(fight);
+                    if (told.Clause == DebriefClause.AbilityDominant || told.Clause == DebriefClause.Aspect
+                        || told.Clause == DebriefClause.Resisted || told.Clause == DebriefClause.Speed)
+                    {
+                        lossClauseOnWin++;
+                        if (example.Length == 0) example = string.Join("+", line.ToArray()) + " floor " + floor + ": " + told.Text;
+                    }
+                    fight.Victory = false;
+                    if (Debrief.Summarize(fight).Clause == DebriefClause.Speed) outspedWins++;
+                    fight.Victory = true;
+                }
+            }
+            Check(wins > 0 && outspedWins > 0,
+                  "real guild-dungeon wins exist that the numbers alone call outsped (" + outspedWins + " of " + wins
+                  + " wins) - the case the live shakedown saw, fought here rather than constructed");
+            Check(lossClauseOnWin == 0,
+                  "and none of those " + wins + " wins prints a clause that explains a loss"
+                  + (example.Length > 0 ? " - e.g. " + example : ""));
         }
 
         private static void CheckDebriefTimeout()

@@ -78,7 +78,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV13-the-trigger-carries-its-own-aspect";
+        private const string BuildMarker = "FIXV14-toast-fits-its-message";
 
         static PlayModeScreenshot()
         {
@@ -519,7 +519,7 @@ namespace Emberfall.EditorTools
                              "Forge", "Inventory", "RelicShop", "Events", "Recital", "Proving",
                              "Profile", "Account", "Friends", "FriendTeam", "Settings",
                              "Guild", "GuildRequests", "GuildChat", "Battle", "Result",
-                             "Claim", "Sheet", "Menu", "Gallery", "Dialog" };
+                             "Claim", "Sheet", "Menu", "Gallery", "Dialog", "Toast", "ToastLong" };
             string[] list = which == "ALL" ? all : new string[] { which };
 
             // Per screen: show at (index * Step), capture at (index * Step + its settle).
@@ -603,6 +603,14 @@ namespace Emberfall.EditorTools
                 // BY the Hub, over it, and a capture schedule that only ever calls Router.Show
                 // can photograph none of the three. MainMenuScreen.OpenLayerForCapture is the
                 // door they already have, and it opens each one the way a tap does.
+                // THE TOAST is not a screen either: it lands on top of whatever is showing. The Hub
+                // is put up here and the message is sent just before the shot, below, because a
+                // toast only holds for a second and a half.
+                if (name == "Toast" || name == "ToastLong")
+                {
+                    app.Router.Show(ScreenId.MainMenu);
+                    return;
+                }
                 if (name == "Claim" || name == "Sheet" || name == "Menu"
                     || name == "Gallery" || name == "Dialog")
                 {
@@ -759,8 +767,25 @@ namespace Emberfall.EditorTools
                 else hub.OpenLayerForCapture(HubLayerName(pendingLayer));
             }
 
+            if ((name == "Toast" || name == "ToastLong") && frame == shotAt - 30) app.Notify(ToastSample(name));
+
             if (frame == shotAt - 20) Canvas.ForceUpdateCanvases();
             if (frame == shotAt) Shoot(name, frame, slot);
+        }
+
+        /// <summary>
+        /// What the toast targets say. "Toast" is the sentence the live guild dungeon actually
+        /// raised when floor 2 was asked for too early - the one that ran past both ends of the
+        /// strip. "ToastLong" is longer than any one line can hold at either aspect, so the strip
+        /// has to wrap and grow rather than only widen.
+        /// </summary>
+        private static string ToastSample(string name)
+        {
+            if (name == "Toast")
+                return "The attempt was not recorded, so it was not spent. floor 2 opens when somebody in your guild clears floor 1";
+            return "The attempt was not recorded, so it was not spent. The server said: no attempts left on floor 1 this "
+                 + "cycle (3 of 3). Your three attempts come back when the cycle turns over, and the boards keep "
+                 + "your best clear until then.";
         }
 
         /// <summary>

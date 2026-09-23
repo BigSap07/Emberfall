@@ -86,10 +86,21 @@ namespace Emberfall.Core.Combat
             }
 
             if (TryTimeout(result, out clause)) return clause;
-            if (TryAbilityDominant(result, out clause)) return clause;
-            if (TryAspect(result, out clause)) return clause;
-            if (TryResisted(result, out clause)) return clause;
-            if (TrySpeed(result, out clause)) return clause;
+
+            // Clauses 2 to 5 explain what went WRONG for the line: one ability tore it apart, it
+            // was the wrong colour, its afflictions did not land, it was outsped. Each is measured
+            // from the fight's numbers alone, and the numbers do not know who won - a line can be
+            // outsped and win anyway, which is how a VICTORY came to print "you were outsped, not
+            // outmatched". On a win none of them is the reason the fight went the way it did, so
+            // they are only asked on a loss. A win goes to the clauses that read true either way:
+            // an active the fight ended too soon to see, or the fallback's two plain numbers.
+            if (!result.Victory)
+            {
+                if (TryAbilityDominant(result, out clause)) return clause;
+                if (TryAspect(result, out clause)) return clause;
+                if (TryResisted(result, out clause)) return clause;
+                if (TrySpeed(result, out clause)) return clause;
+            }
             if (TryUnspentActive(result, out clause)) return clause;
             return Fallback(result);
         }

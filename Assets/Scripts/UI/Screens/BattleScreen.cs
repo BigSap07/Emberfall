@@ -1088,7 +1088,7 @@ namespace Emberfall.UI.Screens
             switch (e.Type)
             {
                 case BattleEventType.RoundStart:
-                    _roundLabel.text = "ROUND " + e.Value + " / " + App.Session.Balance.MaxRounds;
+                    _roundLabel.text = RoundText(e.Value);
                     RebuildTurnStrip(index);
                     yield return Wait(0.10f);
                     break;
@@ -2498,6 +2498,10 @@ namespace Emberfall.UI.Screens
             if (_finished) return;
             App.Audio.Tap();
             if (_playback != null) { StopCoroutine(_playback); _playback = null; }
+            // An ability banner caught mid-fade by the skip has nobody left to fade it out, so it
+            // used to stay on screen, half drawn, behind the result.
+            if (_bannerRoutine != null) { StopCoroutine(_bannerRoutine); _bannerRoutine = null; }
+            _bannerGroup.alpha = 0f;
             if (_world == null) { ShowResult(); return; }
             if (_world.Vfx != null) _world.Vfx.StopAll();
 
@@ -2512,7 +2516,34 @@ namespace Emberfall.UI.Screens
                     if (actor.Rig != null) actor.Rig.Root.gameObject.SetActive(false);
                 }
             }
+            SettleHeaderOnFinalRound();
             ShowResult();
+        }
+
+        private string RoundText(int round)
+        {
+            return "ROUND " + round + " / " + App.Session.Balance.MaxRounds;
+        }
+
+        /// <summary>
+        /// The header as a fight played to the end leaves it: the last round's number, and that
+        /// round's turn order with the last turn taken lit. A skip stops playback before the rest
+        /// of the RoundStart events play, and they are the only thing that moves the header, so it
+        /// used to keep the round it was skipped from ("ROUND 2 / 30" over a 4-turn result). Read
+        /// from the event list the fight already produced, the same events playback reads, so the
+        /// header cannot disagree with the result it sits above.
+        /// </summary>
+        private void SettleHeaderOnFinalRound()
+        {
+            int lastRound = -1;
+            for (int i = 0; i < _result.Events.Count; i++)
+                if (_result.Events[i].Type == BattleEventType.RoundStart) lastRound = i;
+            if (lastRound < 0) return;
+
+            _roundLabel.text = RoundText(_result.Events[lastRound].Value);
+            RebuildTurnStrip(lastRound);
+            for (int i = lastRound + 1; i < _result.Events.Count; i++)
+                if (_result.Events[i].Type == BattleEventType.TurnStart) AdvanceTurnStrip(_result.Events[i].SourceId);
         }
 
         private bool SurvivedBattle(int unitId)
