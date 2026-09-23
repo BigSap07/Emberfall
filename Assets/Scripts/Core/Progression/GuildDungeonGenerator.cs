@@ -269,6 +269,87 @@ namespace Emberfall.Core.Progression
             return stage;
         }
 
+        // ---------------------------------------------------------------- floor conditions
+
+        /// <summary>
+        /// The condition each floor carries this cycle (DESIGN-GUILD-FLOOR-CONDITIONS), 0-based by
+        /// floor. ONE PER FLOOR (C1), drawn from THE SAME SEED that builds the floors (C2), so every
+        /// member of a guild sees the same five all week and nothing about replay or the boards
+        /// changes. An entry is null only when no condition in content may be drawn by that floor's
+        /// theme - which, with an empty pool, is every floor, and a dungeon with no conditions is
+        /// exactly the dungeon that existed before them.
+        ///
+        /// A stream of its own, so drawing conditions moves no enemy on any floor. One draw per
+        /// floor whether or not it has candidates, so an empty theme never shifts a later floor's
+        /// pick. A cycle prefers five DIFFERENT FAMILIES, then five different conditions, and
+        /// repeats only when a theme's candidates leave it no choice: five floors that all ask the
+        /// same question are one floor five times.
+        ///
+        /// Which condition a theme may draw is the condition's own "floors" list, set from the
+        /// harness's reading (GuildDungeonChecks) and never from here: this file knows shapes of
+        /// enemy behaviour, not which of them a condition turns into a puzzle.
+        /// </summary>
+        public static FloorConditionDef[] ConditionsFor(ContentDatabase content, int seed)
+        {
+            int floors = Math.Max(1, content != null ? content.Balance.GuildDungeonFloors : 1);
+            FloorConditionDef[] drawn = new FloorConditionDef[floors];
+            if (content == null || content.FloorConditions.Count == 0) return drawn;
+
+            GuildDungeonTheme[] themes = ThemesFor(floors, seed);
+            DeterministicRng rng = new DeterministicRng(Mix(seed, 0xC0D1));
+            int[] rolls = new int[floors];
+            for (int f = 0; f < floors; f++) rolls[f] = rng.Range(0, 1 << 30);
+
+            // THE MOST CONSTRAINED FLOOR CHOOSES FIRST. A theme only one condition passed on (the
+            // harness decides which) must not find that condition already spent by a floor that had
+            // five to choose from. Ties go to the lower floor; each floor keeps its own roll, so the
+            // order changes which list a roll picks from, never which roll a floor gets.
+            int[] order = new int[floors];
+            int[] choices = new int[floors];
+            for (int f = 0; f < floors; f++)
+            {
+                order[f] = f;
+                for (int i = 0; i < content.FloorConditions.Count; i++)
+                    if (content.FloorConditions[i].AllowsTheme(themes[f])) choices[f]++;
+            }
+            Array.Sort(order, (x, y) => choices[x] != choices[y] ? choices[x].CompareTo(choices[y]) : x.CompareTo(y));
+
+            HashSet<string> usedIds = new HashSet<string>();
+            HashSet<FloorConditionFamily> usedFamilies = new HashSet<FloorConditionFamily>();
+            for (int o = 0; o < floors; o++)
+            {
+                int f = order[o];
+                int roll = rolls[f];
+                List<FloorConditionDef> open = new List<FloorConditionDef>();
+                List<FloorConditionDef> fresh = new List<FloorConditionDef>();
+                List<FloorConditionDef> newFamily = new List<FloorConditionDef>();
+                for (int i = 0; i < content.FloorConditions.Count; i++)
+                {
+                    FloorConditionDef c = content.FloorConditions[i];
+                    if (!c.AllowsTheme(themes[f])) continue;
+                    open.Add(c);
+                    if (usedIds.Contains(c.Id)) continue;
+                    fresh.Add(c);
+                    if (!usedFamilies.Contains(c.Family)) newFamily.Add(c);
+                }
+                List<FloorConditionDef> from = newFamily.Count > 0 ? newFamily : fresh.Count > 0 ? fresh : open;
+                if (from.Count == 0) continue;
+                FloorConditionDef pick = from[roll % from.Count];
+                drawn[f] = pick;
+                usedIds.Add(pick.Id);
+                usedFamilies.Add(pick.Family);
+            }
+            return drawn;
+        }
+
+        /// <summary>One floor's condition, or null. Floor is 1-based and clamped as BuildFloor clamps it.</summary>
+        public static FloorConditionDef ConditionFor(ContentDatabase content, int seed, int floor)
+        {
+            FloorConditionDef[] all = ConditionsFor(content, seed);
+            int f = Math.Min(all.Length, Math.Max(1, floor));
+            return all[f - 1];
+        }
+
         /// <summary>
         /// Draws without repeating a template already on the line while the pool still has one it
         /// has not used. Repeats are allowed only once the pool is exhausted. This is what keeps a

@@ -214,7 +214,7 @@ rather than a defect.
 
 ### Content
 
-Seven JSON files in `Assets/Resources/Content`. Balance and content changes go there, not into code.
+Eight JSON files in `Assets/Resources/Content`. Balance and content changes go there, not into code.
 
 - `heroes.json`: 94 heroes, **all 94 authored**. 8 one-star, 12 two-star, 18 three-star,
   26 four-star, 30 five-star.
@@ -228,6 +228,9 @@ Seven JSON files in `Assets/Resources/Content`. Balance and content changes go t
   sentinels, and the file's own comment still calls them first-pass and untuned. Nobody should
   treat them as an announcement schedule without deciding to.
 - `balance.json`: every tuning constant the engine and the economy read.
+- `floor-conditions.json`: the guild dungeon's floor conditions. There are 6, across the resource, healing
+  and composition families, and each lists the floor themes the harness measured it passing on. See
+  **Guilds, phase one**.
 
 ### Heroes and kits
 
@@ -600,6 +603,26 @@ fight per guild per cycle, each floor a shape of enemy behaviour drawn only from
 campaign stage fields, and `GuildDungeon` scores an attempt three ways and stores it as a replayable
 record. `GuildDungeonChecks.Run` is wired into the harness. Its screens are being built separately.
 
+**Floor conditions (DESIGN-GUILD-FLOOR-CONDITIONS).** Every floor carries one condition, drawn by
+`GuildDungeonGenerator.ConditionsFor` from the same (guild, cycle) seed as the floors.
+
+- **The fight half** is `BattleRules` on `BattleRequest.Rules`. It is null everywhere else, and no pinned
+  fingerprint moved.
+- **The line half** is `LineRules`, checked by `GuildDungeon.LineLegal` before a line can be attempted.
+- **The conditions file is hashed into `ContentVersion`**, so a replay under another condition set is refused.
+- **C7 is decided: a board a condition grants every legal line is suspended on that floor**
+  (`GuildDungeon.Grants`).
+- **On screen:** the condition shows on the dungeon row, across the top of the floor view, and next to the
+  six boards with their current leads, all before a line is committed.
+- **Measured:** `DevHarness.exe --guild-conditions` is the study the pool was read from.
+  `GuildDungeonChecks.CheckConditionShape` re-asserts on every build that each pooled condition reorders
+  the rosters by at least x1.5 what a matched difficulty knob or a reseed does, with the three
+  guardrails held, on every theme it may draw.
+- **Cut by that test:** every enemy-opening and tempo candidate. The design record lists all 30
+  candidates and their readings.
+- **Must be re-run when the new campaign lands:** the floors are built from whatever templates the
+  campaign fields.
+
 ### The Deep Recital, The Proving, events, shop
 
 `RecitalGenerator` builds an endless floor ladder with a Guardian every tenth floor and an unbroken
@@ -735,6 +758,24 @@ and never ascends, `CheckFusionNeverGates` failing if any of twenty such walks s
 derivation's growth pinned, and chapter 2 nearly flat as the price (**The campaign power curve**,
 open decision 4). Its stage, sweep and talent fingerprints move with the Kiva lift and the
 re-solve, and are regenerated as its last commit.
+**`guild/floor-conditions`** carries the guild dungeon's floor conditions described under **Guilds,
+phase one**:
+
+- `BattleRules`, `floor-conditions.json` and the seeded draw;
+- the C7 suspension rule and line legality;
+- the condition band and board tiles on the floor view, and the condition on the dungeon row;
+- the `--guild-conditions` study and the gate checks that re-assert it;
+- this file's and the design record's edits.
+
+It moves no pinned baseline, and it adds no harness failure to the five `main` already has.
+
+**`engine/round-end-and-rooms`** carries the round-end repair described under **Combat** (Finn's
+Aftershock Clock delays at last, and `BattleSession.EndRound` raises `RoundEnd`), Brenna I's room
+rebuilt as a legal lineup with the harness now asserting every talent room is one, the Aftershock
+Clock's stated reason taken out of the matrix now that it is lit, and the `EMBERFALL_MATRIX_NORMAL`
+reading under **Tooling**. Its last commit regenerates the pinned baselines from a fresh rebase on
+`main`, and only Finn's five hero-sweep lines move. The defect pass, the Quarry clock repair, the
+fusion spine and the arena matrix have all landed on `main` and are described above.
 
 ## Next
 

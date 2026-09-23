@@ -41,9 +41,10 @@ campaign progression, summoning, idle income, local saving. Landscape, touch-fir
   outcome. **No game logic goes in UI.** If the screen seems to be missing information, it is
   almost always already in the event list and merely unread — read the record, don't recompute
   it. See `DESIGN-BATTLE-READABILITY.md`.
-- **Content is JSON** in `Assets/Resources/Content`, seven files: `armor.json`, `balance.json`,
-  `campaign.json`, `enemies.json`, `events.json`, `heroes.json`, `relics.json`. Balance and
-  content changes go there, not into code.
+- **Content is JSON** in `Assets/Resources/Content`, eight files: `armor.json`, `balance.json`,
+  `campaign.json`, `enemies.json`, `events.json`, `floor-conditions.json`, `heroes.json`,
+  `relics.json`. Balance and content changes go there, not into code. All eight are hashed into
+  `ContentDatabase.ContentVersion`, so any edit retires every recorded guild dungeon replay.
 - **Code goes on branches, never on `main`.** Branch first, commit there, leave `main` alone.
 - **Design docs commit straight to `main`.** They touch no code, and every agent needs to read
   them.

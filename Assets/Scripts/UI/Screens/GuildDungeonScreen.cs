@@ -26,7 +26,7 @@ namespace Emberfall.UI.Screens
         public override ScreenId Id { get { return ScreenId.GuildDungeon; } }
 
         private const float CardWidth = 1180f;
-        private const float RowHeight = 136f;
+        private const float RowHeight = 178f;
 
         /// <summary>Shared with the floor, result and boards screens through the router.</summary>
         public readonly GuildDungeonState State = new GuildDungeonState();
@@ -230,8 +230,24 @@ namespace Emberfall.UI.Screens
                 EnemyDef def = App.Content.GetEnemy(stage.Enemies[i].EnemyId);
                 if (def == null) continue;
                 RectTransform face = EmberforgeUI.PortraitFrame("Enemy" + i, row, def, 3, 76f);
-                UIBuilder.Box(face, 280f + i * 84f, 0f, 76f, 76f, new Vector2(0f, 0.5f));
+                UIBuilder.Box(face, 280f + i * 84f, 18f, 76f, 76f, new Vector2(0f, 0.5f));
             }
+
+            // THE FLOOR'S CONDITION, ON THE ROW (DESIGN-GUILD-FLOOR-CONDITIONS C3): readable from
+            // here, before the floor is even opened, let alone a line committed. A board it
+            // suspends (C7) is named with it.
+            FloorConditionDef condition = GuildDungeon.ConditionOf(App.Content, State.Status.Seed, floor);
+            RectTransform strip = UIBuilder.Node("Condition", row);
+            UIBuilder.Box(strip, 280f, 10f, 700f, 36f, new Vector2(0f, 0f));
+            EmberforgeUI.SunkenOn(strip);
+            string suspended = "";
+            for (int b = 0; b < GuildDungeon.Boards.Length; b++)
+                if (GuildDungeon.Grants(condition, GuildDungeon.Boards[b]))
+                    suspended += "   -   " + GuildDungeon.BoardTitle(GuildDungeon.Boards[b]) + " SUSPENDED";
+            Text conditionText = EmberforgeUI.Label("Text", strip,
+                condition == null ? "NO CONDITION" : condition.Name.ToUpperInvariant() + ":  " + condition.Text + suspended,
+                UITheme.FontTiny - 4, condition == null ? Emberforge.TextQuiet : Emberforge.TextGold, TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(conditionText.rectTransform, 14f, 0f, 10f, 0f);
             Text level = EmberforgeUI.Label("Level", row, "LV " + stage.Enemies[stage.Enemies.Count - 1].Level,
                                             UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(level.rectTransform, 280f, -10f, 200f, 22f, new Vector2(0f, 1f));

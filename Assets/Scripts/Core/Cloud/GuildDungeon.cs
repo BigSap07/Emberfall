@@ -318,11 +318,36 @@ namespace Emberfall.Core.Cloud
         /// </summary>
         public static BattleResult Fight(ContentDatabase content, TeamSnapshot team, int dungeonSeed, int floor)
         {
+            // The floor's condition, from the same seed as the floor itself (C2). The fight half
+            // only: the line half is checked before a line is committed (LineLegal), and a fight is
+            // fought with whatever it is handed, so a replay shows what was actually sent.
+            return FightUnder(content, team, dungeonSeed, floor, ConditionOf(content, dungeonSeed, floor));
+        }
+
+        /// <summary>
+        /// Fights one floor under a condition NAMED BY THE CALLER rather than drawn by the seed, or
+        /// under none. The live game never calls this - an attempt and a replay both go through
+        /// Fight, which asks the seed - it exists so the harness can fight the same floor under every
+        /// condition in the pool and measure what each one does to it.
+        /// </summary>
+        public static BattleResult FightUnder(ContentDatabase content, TeamSnapshot team, int dungeonSeed, int floor,
+                                              FloorConditionDef condition)
+        {
+            return FightUnder(content, team, dungeonSeed, floor, condition, FightSeedFor(dungeonSeed, floor));
+        }
+
+        /// <summary>The same, with the combat seed named too. Harness only: the study fights an
+        /// unchanged floor under a second seed to measure what chance alone does to the order of
+        /// the rosters, which is the floor every condition's reading has to clear.</summary>
+        public static BattleResult FightUnder(ContentDatabase content, TeamSnapshot team, int dungeonSeed, int floor,
+                                              FloorConditionDef condition, int fightSeed)
+        {
             TeamSnapshot line = NormaliseTeam(content, team);
             BattleRequest request = new BattleRequest();
             request.Content = content;
             request.Stage = GuildDungeonGenerator.BuildFloor(content, dungeonSeed, floor);
-            request.Seed = FightSeedFor(dungeonSeed, floor);
+            request.Seed = fightSeed;
+            request.Rules = condition != null ? condition.Fight : null;
 
             for (int i = 0; i < line.Units.Count; i++)
             {
@@ -443,6 +468,87 @@ namespace Emberfall.Core.Cloud
             return (float)Math.Round((double)total / team.Units.Count, 2);
         }
 
+        // ---------------------------------------------------------------- floor conditions
+
+        /// <summary>The condition a floor carries this cycle, or null. See
+        /// GuildDungeonGenerator.ConditionsFor.</summary>
+        public static FloorConditionDef ConditionOf(ContentDatabase content, int dungeonSeed, int floor)
+        {
+            return content == null ? null : GuildDungeonGenerator.ConditionFor(content, dungeonSeed, floor);
+        }
+
+        /// <summary>
+        /// Whether a line may be fielded under a condition, and if not, the sentence that says what
+        /// to change - "two Strikers; this floor allows one of each role". Null condition, or one
+        /// with no line rules: always legal. Unknown heroes are skipped, as NormaliseTeam drops them.
+        /// </summary>
+        public static bool LineLegal(ContentDatabase content, FloorConditionDef condition, TeamSnapshot team, out string reason)
+        {
+            reason = "";
+            if (condition == null || condition.Line.IsEmpty || team == null) return true;
+            LineRules rules = condition.Line;
+            List<SnapshotUnit> units = team.Units;
+            if (rules.MaxHeroes > 0 && units.Count > rules.MaxHeroes)
+            {
+                reason = units.Count + " heroes; this floor allows " + rules.MaxHeroes;
+                return false;
+            }
+            Dictionary<HeroRole, int> perRole = new Dictionary<HeroRole, int>();
+            for (int i = 0; i < units.Count; i++)
+            {
+                HeroDef d = content != null ? content.GetHero(units[i].DefId) : null;
+                if (d == null) continue;
+                if (rules.MaxStars > 0 && d.Stars > rules.MaxStars)
+                {
+                    reason = d.Name + " is " + d.Stars + "-star; this floor allows " + rules.MaxStars + " stars at most";
+                    return false;
+                }
+                if (rules.BannedRoles.Contains(d.Role))
+                {
+                    reason = d.Name + " is a " + d.Role + "; this floor allows no " + d.Role;
+                    return false;
+                }
+                int n; perRole.TryGetValue(d.Role, out n); perRole[d.Role] = ++n;
+                if (rules.MaxPerRole > 0 && n > rules.MaxPerRole)
+                {
+                    reason = n + " " + d.Role + "s; this floor allows " + rules.MaxPerRole + " of each role";
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// DESIGN-GUILD-FLOOR-CONDITIONS C7, THE RULE CHOSEN: a board that a floor's condition hands
+        /// to EVERY legal line is SUSPENDED on that floor - nobody enters it, and the floor card
+        /// says why. The other rule on offer, forbidding such a condition outright, would have cut
+        /// the composition family's bluntest tool (a four-hero cap) to protect one board of six; a
+        /// suspension costs that floor one board and keeps the question the cap asks.
+        ///
+        /// Read off the condition's LINE RULES, never declared by it, so a condition added later
+        /// cannot forget to suspend what it grants. Only the three boards a line rule can grant are
+        /// asked about: FIRST ATTEMPT and NOBODY FELL are about the attempt, not the line, and no
+        /// line rule here can make every line one Aspect.
+        /// </summary>
+        public static bool Grants(FloorConditionDef condition, GuildDungeonBoard board)
+        {
+            if (condition == null) return false;
+            LineRules rules = condition.Line;
+            switch (board)
+            {
+                case GuildDungeonBoard.FourOrFewer: return rules.MaxHeroes > 0 && rules.MaxHeroes <= 4;
+                case GuildDungeonBoard.NoFiveStar: return rules.MaxStars > 0 && rules.MaxStars < 5;
+                case GuildDungeonBoard.NoHealer: return rules.BannedRoles.Contains(HeroRole.Mender);
+            }
+            return false;
+        }
+
+        /// <summary>Whether a board is suspended on this floor this cycle. See Grants.</summary>
+        public static bool Suspended(ContentDatabase content, int dungeonSeed, int floor, GuildDungeonBoard board)
+        {
+            return Grants(ConditionOf(content, dungeonSeed, floor), board);
+        }
+
         // ---------------------------------------------------------------- constraints
 
         /// <summary>
@@ -456,6 +562,13 @@ namespace Emberfall.Core.Cloud
         public static bool Satisfies(ContentDatabase content, GuildDungeonAttempt a, GuildDungeonBoard board)
         {
             if (a == null || !a.Victory || a.Team == null || a.Team.Units.Count == 0) return false;
+            // The floor's condition first. A board the condition hands to everybody is suspended
+            // (C7), and a line that broke the condition's line rules is on no board at all: the
+            // client refuses to commit one, so a record carrying one did not come from a fair try.
+            FloorConditionDef condition = ConditionOf(content, a.Seed, a.Floor);
+            if (Grants(condition, board)) return false;
+            string broke;
+            if (!LineLegal(content, condition, a.Team, out broke)) return false;
             List<SnapshotUnit> units = a.Team.Units;
             switch (board)
             {
@@ -508,6 +621,10 @@ namespace Emberfall.Core.Cloud
         {
             if (Satisfies(content, a, board)) return "";
             if (a == null || !a.Victory) return "the floor was not cleared";
+            FloorConditionDef condition = ConditionOf(content, a.Seed, a.Floor);
+            if (Grants(condition, board)) return "suspended on this floor: " + condition.Name + " grants it to every line";
+            string broke;
+            if (!LineLegal(content, condition, a.Team, out broke)) return "the line broke this floor's condition: " + broke;
             List<SnapshotUnit> units = a.Team.Units;
             switch (board)
             {

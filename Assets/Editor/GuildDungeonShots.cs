@@ -449,6 +449,9 @@ namespace Emberfall.EditorTools
                     line.Units.Add(new SnapshotUnit { DefId = pool[pick].Id, Level = 40, Stars = pool[pick].Stars });
                     pool.RemoveAt(pick);
                 }
+                // A line the floor's condition refuses would never have been committed.
+                string broke;
+                if (!GuildDungeon.LineLegal(content, GuildDungeon.ConditionOf(content, seed, floor), line, out broke)) continue;
                 if (GuildDungeon.Fight(content, line, seed, floor).Victory == wantClear) return line;
             }
             Check(false, "seeding: found a line that " + (wantClear ? "clears" : "loses") + " floor " + floor);
@@ -507,12 +510,23 @@ namespace Emberfall.EditorTools
             });
             steps.Add(new Step
             {
-                Name = "attempt",
+                Name = "make the line fit the floor",
                 Do = delegate
                 {
                     GuildDungeonState state = router.GuildDungeon.State;
                     Check(state.Watched != null && state.Watched.Id == _miraLoss.Id && state.Floor == _miraLoss.Floor,
                           "handover: the floor view opened on Mira's floor, carrying the fight that was watched");
+                    FitLineToCondition(app);
+                },
+                Ready = delegate { return router.Current == router.GuildFloor; },
+                Settle = 20,
+                Shot = "guild-dungeon-floor-condition"
+            });
+            steps.Add(new Step
+            {
+                Name = "attempt",
+                Do = delegate
+                {
                     Check(Press(router.GuildFloor.Root, "Attempt"), "floor: ATTEMPT is pressable");
                 },
                 Ready = delegate { return Find(app.OverlayLayer, "Confirm") != null; },
@@ -667,6 +681,67 @@ namespace Emberfall.EditorTools
             GuildDungeonReplay refused = old == null ? null : GuildDungeon.Replay(app.Content, old.Attempt);
             Check(refused != null && refused.Verdict == GuildDungeonReplayVerdict.ContentMoved && refused.Result == null,
                   "and Oren's pre-patch card is refused, not played: \"" + (refused != null ? refused.Explanation : "") + "\"");
+        }
+
+        /// <summary>
+        /// THE FLOOR'S CONDITION, MET THE WAY A PLAYER MEETS IT: read on the card, then answered by
+        /// tapping. Every hero the condition refuses comes out of the line through its slot, and
+        /// heroes it allows go in from the roster strip until the line is as full as the condition
+        /// lets it be. Nothing here reaches past the buttons a player has.
+        /// </summary>
+        private static void FitLineToCondition(GameApp app)
+        {
+            ScreenRouter router = app.Router;
+            GuildDungeonState state = router.GuildDungeon.State;
+            FloorConditionDef condition = GuildDungeon.ConditionOf(app.Content, state.Status.Seed, state.Floor);
+            Note("  floor " + state.Floor + " carries " + (condition != null ? condition.Name + ": " + condition.Text : "no condition"));
+            string broke;
+            bool refused = !GuildDungeon.LineLegal(app.Content, condition, LineOf(app, router.GuildFloor.CurrentLine), out broke);
+            Note("  your formation " + (refused ? "is refused on the card before anything is spent: " + broke : "may enter as it is"));
+            Check(!refused || Find(router.GuildFloor.Root, "Attempt") == null,
+                  "floor: while the line breaks the condition, ATTEMPT cannot be pressed");
+
+            for (int guard = 0; guard < 12; guard++)
+            {
+                IList<string> line = router.GuildFloor.CurrentLine;
+                if (GuildDungeon.LineLegal(app.Content, condition, LineOf(app, line), out broke)) break;
+                int drop = line.Count - 1;
+                for (int i = line.Count - 1; i >= 0; i--)
+                {
+                    string alone;
+                    if (!GuildDungeon.LineLegal(app.Content, condition, LineOf(app, new List<string> { line[i] }), out alone)) { drop = i; break; }
+                }
+                Press(router.GuildFloor.Root, "Slot" + drop);
+            }
+
+            int size = app.Content.Balance.MaxTeamSize;
+            if (condition != null && condition.Line.MaxHeroes > 0) size = Math.Min(size, condition.Line.MaxHeroes);
+            List<HeroInstance> owned = new List<HeroInstance>();
+            foreach (HeroInstance h in app.Session.Profile.Heroes) if (h != null && h.Def != null) owned.Add(h);
+            owned.Sort((a, b) => b.Def.Stars != a.Def.Stars ? b.Def.Stars.CompareTo(a.Def.Stars) : string.CompareOrdinal(a.Def.Name, b.Def.Name));
+            foreach (HeroInstance h in owned)
+            {
+                List<string> line = new List<string>(router.GuildFloor.CurrentLine);
+                if (line.Count >= size) break;
+                if (line.Contains(h.DefId)) continue;
+                line.Add(h.DefId);
+                if (GuildDungeon.LineLegal(app.Content, condition, LineOf(app, line), out broke)) Press(router.GuildFloor.Root, "Pick_" + h.DefId);
+            }
+
+            List<string> final = new List<string>(router.GuildFloor.CurrentLine);
+            Check(final.Count > 0 && GuildDungeon.LineLegal(app.Content, condition, LineOf(app, final), out broke),
+                  "floor: tapped into a line the condition allows (" + string.Join(", ", final.ToArray()) + ")");
+        }
+
+        private static TeamSnapshot LineOf(GameApp app, IList<string> ids)
+        {
+            TeamSnapshot t = new TeamSnapshot();
+            for (int i = 0; i < ids.Count; i++)
+            {
+                HeroDef d = app.Content.GetHero(ids[i]);
+                if (d != null) t.Units.Add(new SnapshotUnit { DefId = d.Id, Level = 40, Stars = d.Stars });
+            }
+            return t;
         }
 
         private static bool SameFight(BattleResult a, BattleResult b)

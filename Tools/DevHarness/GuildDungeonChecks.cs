@@ -72,8 +72,395 @@ namespace Emberfall.DevHarness
             CheckBoards(content);
             CheckTwoMembers(content);
             CheckServerAgrees(content, contentDir);
+            CheckConditionContent(content, contentDir);
+            CheckConditionDraw(content, contentDir);
+            CheckConditionFight(content, contentDir);
+            CheckConditionBoards(content);
+            CheckConditionGuardrails(content);
+            CheckConditionShape(content);
             CheckNotAHeroCheck(content);
             return _failures;
+        }
+
+        // ---------------------------------------------------------------- floor conditions
+
+        private static readonly FloorConditionFamily[] AuthoredFamilies =
+        {
+            FloorConditionFamily.Resource, FloorConditionFamily.Healing, FloorConditionFamily.Composition,
+            FloorConditionFamily.EnemyOpening, FloorConditionFamily.Tempo
+        };
+
+        private static readonly GuildDungeonTheme[] AllThemes =
+        {
+            GuildDungeonTheme.Swarm, GuildDungeonTheme.Wall, GuildDungeonTheme.Hunt,
+            GuildDungeonTheme.Attrition, GuildDungeonTheme.Champion
+        };
+
+        /// <summary>
+        /// THE POOL AS CONTENT. Every family the design names except Aspect is authored; Aspect is
+        /// not (section 6). The file names no enemy and no hero - the campaign it draws templates
+        /// from is about to be replaced, and a condition keyed to one unit is a hero check (C6).
+        /// Every number on a card is a number in the rules, so the card cannot promise one fight
+        /// and the engine play another.
+        /// </summary>
+        private static void CheckConditionContent(ContentDatabase content, string contentDir)
+        {
+            List<FloorConditionDef> pool = content.FloorConditions;
+            Line("  floor conditions: " + pool.Count + " in the pool");
+            string raw = ReadContent(contentDir, "floor-conditions") ?? "";
+            Check(raw.Length > 0 && pool.Count > 0, "floor-conditions.json loads a pool (" + pool.Count + ")");
+            Check(!content.Warnings.Exists(w => w.StartsWith("floor-conditions.json")),
+                  "and loads without a warning");
+
+            // Every family the design names was authored and measured (DESIGN-GUILD-FLOOR-CONDITIONS
+            // section 9). A family is in the pool only if one of its conditions passed C5, so this is
+            // a reading, not a requirement: a family the study cut is absent and says so.
+            List<string> present = new List<string>(), cut = new List<string>();
+            foreach (FloorConditionFamily fam in AuthoredFamilies)
+                (pool.Exists(c => c.Family == fam) ? present : cut).Add(fam.ToString());
+            Line("    families in the pool: " + string.Join(", ", present.ToArray())
+                 + (cut.Count > 0 ? "; none of " + string.Join(", ", cut.ToArray()) + " passed C5, so none is pooled" : ""));
+            Check(present.Count >= 3, "the pool spans at least three families, so a cycle's five floors do not all ask one question ("
+                  + present.Count + ")");
+            Check(!pool.Exists(c => c.Family == FloorConditionFamily.Aspect),
+                  "and no Aspect condition is - section 6 of the design is a separate decision");
+
+            string lower = raw.ToLowerInvariant();
+            List<string> named = new List<string>();
+            foreach (EnemyDef e in content.Enemies)
+                if (lower.Contains("\"" + e.Id.ToLowerInvariant() + "\"") || lower.Contains(e.Name.ToLowerInvariant())) named.Add(e.Id);
+            foreach (HeroDef h in content.Heroes)
+                if (lower.Contains(h.Id.ToLowerInvariant()) || lower.Contains(h.Name.ToLowerInvariant())) named.Add(h.Id);
+            Check(named.Count == 0, "no condition names an enemy template or a hero - they are written against themes and primitives"
+                  + (named.Count > 0 ? " - names " + string.Join(", ", named.ToArray()) : ""));
+
+            List<string> badText = new List<string>(), noFloor = new List<string>(), requires = new List<string>();
+            foreach (FloorConditionDef c in pool)
+            {
+                string why = TextAgreesWithRules(c);
+                if (why.Length > 0) badText.Add(c.Id + " (" + why + ")");
+                if (c.Themes.Count == 0) noFloor.Add(c.Id);
+                if (c.Line.BannedRoles.Count > 0 && c.Line.BannedRoles.Count >= Enum.GetValues(typeof(HeroRole)).Length - 1)
+                    requires.Add(c.Id);
+            }
+            Check(badText.Count == 0, "every number on a condition's card is a number in its rules"
+                  + (badText.Count > 0 ? " - " + string.Join("; ", badText.ToArray()) : ""));
+            Check(noFloor.Count == 0, "every condition names at least one floor theme that may draw it"
+                  + (noFloor.Count > 0 ? " - " + string.Join(", ", noFloor.ToArray()) : ""));
+            Check(requires.Count == 0, "no line rule bans its way to a single allowed role - that would require one kind of hero");
+        }
+
+        /// <summary>Empty when every number in the card's sentence is a number the rules carry,
+        /// else the first number that is not.</summary>
+        private static string TextAgreesWithRules(FloorConditionDef c)
+        {
+            HashSet<int> allowed = new HashSet<int>();
+            Action<float> pct = delegate (float x)
+            {
+                if (x == 1f) return;
+                allowed.Add((int)Math.Round(x * 100f));
+                allowed.Add((int)Math.Round((1f - x) * 100f));
+                allowed.Add((int)Math.Round((x - 1f) * 100f));
+            };
+            BattleRules r = c.Fight;
+            pct(r.HeroEnergyGain); pct(r.EnemyEnergyGain); pct(r.HeroHealing); pct(r.EnemyHealing);
+            pct(r.HeroMaxHp); pct(r.EnemyMaxHp);
+            allowed.Add(r.HeroStartEnergy); allowed.Add(r.EnemyStartEnergy); allowed.Add(r.EnemiesActFirstRounds);
+            foreach (RuleEffect e in r.Effects)
+            {
+                if (e.Effect == null) continue;
+                allowed.Add((int)Math.Round(e.Effect.Magnitude * 100f));
+                allowed.Add((int)Math.Round(e.Effect.SelfHpRatio * 100f));
+                allowed.Add(e.Effect.Duration);
+            }
+            allowed.Add(c.Line.MaxHeroes); allowed.Add(c.Line.MaxPerRole); allowed.Add(c.Line.MaxStars);
+            if (c.Line.MaxStars > 0) allowed.Add(c.Line.MaxStars + 1);
+            foreach (Match m in Regex.Matches(c.Text ?? "", @"\d+"))
+            {
+                int n = int.Parse(m.Value, CultureInfo.InvariantCulture);
+                if (!allowed.Contains(n)) return "says " + n;
+            }
+            return "";
+        }
+
+        /// <summary>
+        /// C1 AND C2. One condition per floor, drawn from the same (guild, cycle) seed as the floors:
+        /// the same seed draws the same five every time, a different guild or cycle draws others,
+        /// every theme has a condition it may draw, and drawing them moves no enemy on any floor.
+        /// </summary>
+        private static void CheckConditionDraw(ContentDatabase content, string contentDir)
+        {
+            int floors = content.Balance.GuildDungeonFloors;
+            List<string> emptyThemes = new List<string>();
+            foreach (GuildDungeonTheme theme in AllThemes)
+                if (!content.FloorConditions.Exists(c => c.AllowsTheme(theme))) emptyThemes.Add(theme.ToString());
+            Check(emptyThemes.Count == 0, "every floor theme has at least one condition it may draw"
+                  + (emptyThemes.Count > 0 ? " - none for " + string.Join(", ", emptyThemes.ToArray()) : ""));
+
+            bool same = true, full = true, noRepeat = true, differs = false;
+            int cycles = 200, fiveFamilies = 0;
+            Dictionary<string, int> drawnCount = new Dictionary<string, int>();
+            string previous = null;
+            for (int s = 0; s < cycles; s++)
+            {
+                int seed = GuildDungeon.SeedFor("draw-check", s);
+                FloorConditionDef[] a = GuildDungeonGenerator.ConditionsFor(content, seed);
+                FloorConditionDef[] b = GuildDungeonGenerator.ConditionsFor(content, seed);
+                GuildDungeonTheme[] themes = GuildDungeonGenerator.ThemesFor(floors, seed);
+                HashSet<string> ids = new HashSet<string>();
+                HashSet<FloorConditionFamily> fams = new HashSet<FloorConditionFamily>();
+                for (int f = 0; f < floors; f++)
+                {
+                    if (a[f] == null) { full = false; continue; }
+                    if (b[f] == null || a[f].Id != b[f].Id) same = false;
+                    if (!a[f].AllowsTheme(themes[f])) full = false;
+                    if (!ids.Add(a[f].Id)) noRepeat = false;
+                    fams.Add(a[f].Family);
+                    int n; drawnCount.TryGetValue(a[f].Id, out n); drawnCount[a[f].Id] = n + 1;
+                    if (GuildDungeonGenerator.ConditionFor(content, seed, f + 1) != a[f]) same = false;
+                }
+                if (fams.Count == floors) fiveFamilies++;
+                string print = string.Join(",", Array.ConvertAll(a, c => c == null ? "-" : c.Id));
+                if (previous != null && print != previous) differs = true;
+                previous = print;
+            }
+            Check(same, "the same guild and cycle draw the same condition on every floor, every time (" + cycles + " cycles)");
+            Check(full, "every floor of every cycle carries exactly one condition, and one its theme may draw");
+            Check(noRepeat, "no cycle hands two floors the same condition");
+            Check(differs, "different guilds and cycles draw different conditions");
+            Line("    " + fiveFamilies + " of " + cycles + " cycles draw five different families; draws per condition: "
+                 + string.Join(" ", new List<string>(Keys(drawnCount)).ToArray()));
+            List<string> neverDrawn = content.FloorConditions.FindAll(c => !drawnCount.ContainsKey(c.Id)).ConvertAll(c => c.Id);
+            Check(neverDrawn.Count == 0, "every condition in the pool is drawn somewhere in " + cycles + " cycles"
+                  + (neverDrawn.Count > 0 ? " - never: " + string.Join(", ", neverDrawn.ToArray()) : ""));
+
+            ContentDatabase bare = LoadWith(contentDir, ReadContent(contentDir, "balance"), null);
+            bool unmoved = bare != null && bare.FloorConditions.Count == 0;
+            for (int s = 0; s < 20 && unmoved; s++)
+            {
+                int seed = GuildDungeon.SeedFor("unmoved-check", s);
+                for (int f = 1; f <= floors; f++)
+                    if (Describe(GuildDungeonGenerator.BuildFloor(content, seed, f)) != Describe(GuildDungeonGenerator.BuildFloor(bare, seed, f)))
+                        unmoved = false;
+            }
+            Check(unmoved, "drawing conditions moves no enemy on any floor - the floors are built exactly as they were without them");
+            bool noneWithout = true;
+            for (int s = 0; s < 20 && bare != null; s++)
+                foreach (FloorConditionDef c in GuildDungeonGenerator.ConditionsFor(bare, GuildDungeon.SeedFor("unmoved-check", s)))
+                    if (c != null) noneWithout = false;
+            Check(noneWithout, "and content with no conditions file draws none, so every floor plays as it did before them");
+        }
+
+        private static IEnumerable<string> Keys(Dictionary<string, int> counts)
+        {
+            List<string> keys = new List<string>(counts.Keys);
+            keys.Sort(string.CompareOrdinal);
+            foreach (string k in keys) yield return k + ":" + counts[k];
+        }
+
+        /// <summary>
+        /// C4 AND THE ENGINE. The conditions file is content: editing one number in it is a new
+        /// content version, and a replay recorded before the edit is refused, exactly as for a
+        /// balance patch. A fight under a condition is a different fight from the same line without
+        /// one, and a BattleRules left at its defaults is the same fight as none at all.
+        /// </summary>
+        private static void CheckConditionFight(ContentDatabase content, string contentDir)
+        {
+            string file = ReadContent(contentDir, "floor-conditions") ?? "";
+            string balance = ReadContent(contentDir, "balance");
+            string edited = Regex.Replace(file, "\"duration\": (\\d+)", m => "\"duration\": " + (int.Parse(m.Groups[1].Value) + 1), RegexOptions.None);
+            if (edited == file) edited = file.Replace("}\n  ]", "}\n  ] ").Replace("}\r\n  ]", "}\r\n  ] ");
+            ContentDatabase moved = LoadWith(contentDir, balance, edited);
+            ContentDatabase without = LoadWith(contentDir, balance, null);
+            Check(moved.ContentVersion != content.ContentVersion && without.ContentVersion != content.ContentVersion,
+                  "the conditions file is inside the content version - one edited number, or no file, is a different version");
+
+            int seed = GuildDungeon.SeedFor("condition-replay-check", 3);
+            BattleResult live;
+            GuildDungeonAttempt record = GuildDungeon.Attempt(content, Conform(content, SampleRosters(content, 0xC0DE)[2],
+                GuildDungeon.ConditionOf(content, seed, 2), new DeterministicRng(1)).Team, seed, 3, 2, out live);
+            GuildDungeonAttempt stored = ThroughTheWire(record, "u-cond", 1, 11);
+            Check(GuildDungeon.Replay(content, stored).Playable,
+                  "a record fought under this cycle's condition replays exactly under the same content");
+            GuildDungeonReplay underOther = GuildDungeon.Replay(moved, stored);
+            Check(underOther.Verdict == GuildDungeonReplayVerdict.ContentMoved && underOther.Result == null,
+                  "and is REFUSED under a different condition set, with a reason and no fight: \"" + underOther.Explanation + "\"");
+            Check(GuildDungeon.Replay(without, stored).Verdict == GuildDungeonReplayVerdict.ContentMoved,
+                  "and under a build with no conditions at all");
+
+            List<string> inert = new List<string>();
+            TeamSnapshot line = SampleRosters(content, 0xF1E1D)[0].Team;
+            foreach (FloorConditionDef c in content.FloorConditions)
+            {
+                if (c.Fight.Effects.Count == 0 && IsDefault(c.Fight)) continue;
+                bool changed = false;
+                for (int s = 0; s < 6 && !changed; s++)
+                {
+                    int sd = GuildDungeon.SeedFor("condition-bites", s);
+                    for (int f = 1; f <= content.Balance.GuildDungeonFloors && !changed; f++)
+                        if (Fingerprint(GuildDungeon.FightUnder(content, line, sd, f, c)) != Fingerprint(GuildDungeon.FightUnder(content, line, sd, f, null)))
+                            changed = true;
+                }
+                if (!changed) inert.Add(c.Id);
+            }
+            Check(inert.Count == 0, "every condition with fight rules changes the fight it is applied to"
+                  + (inert.Count > 0 ? " - inert: " + string.Join(", ", inert.ToArray()) : ""));
+
+            FloorConditionDef defaults = new FloorConditionDef();
+            bool noop = true;
+            for (int f = 1; f <= content.Balance.GuildDungeonFloors; f++)
+                if (Fingerprint(GuildDungeon.FightUnder(content, line, seed, f, defaults)) != Fingerprint(GuildDungeon.FightUnder(content, line, seed, f, null)))
+                    noop = false;
+            Check(noop, "a BattleRules left at its defaults fights exactly the fight no rules do - null is not the only no-op");
+        }
+
+        private static bool IsDefault(BattleRules r)
+        {
+            return r.HeroEnergyGain == 1f && r.EnemyEnergyGain == 1f && r.HeroStartEnergy == 0 && r.EnemyStartEnergy == 0
+                && r.HeroHealing == 1f && r.EnemyHealing == 1f && r.HeroMaxHp == 1f && r.EnemyMaxHp == 1f
+                && r.EnemiesActFirstRounds == 0;
+        }
+
+        /// <summary>
+        /// C7, AS BUILT: a board a condition hands to every legal line is suspended on that floor.
+        /// Asserted from both ends - Grants must be true exactly when every legal sample line
+        /// satisfies the board's rule, and a clear on a floor whose condition grants a board enters
+        /// every other board it earns and not that one, with the reason on the card.
+        /// </summary>
+        private static void CheckConditionBoards(ContentDatabase content)
+        {
+            GuildDungeonBoard[] lineBoards = { GuildDungeonBoard.FourOrFewer, GuildDungeonBoard.NoFiveStar, GuildDungeonBoard.NoHealer };
+            List<Sample> samples = SampleRosters(content, 0xB0A2D);
+            List<string> wrong = new List<string>(), suspends = new List<string>();
+            foreach (FloorConditionDef c in content.FloorConditions)
+            {
+                List<Sample> legal = ConformAll(content, samples, c, 0x51);
+                foreach (GuildDungeonBoard b in lineBoards)
+                {
+                    bool all = true;
+                    foreach (Sample s in legal)
+                    {
+                        GuildDungeonAttempt probe = new GuildDungeonAttempt { Victory = true, Team = s.Team, Attempt = 2, Fallen = 1 };
+                        // Asked of the rule alone: a seed with no condition on this floor.
+                        if (!Satisfies(content, probe, b)) all = false;
+                    }
+                    if (all != GuildDungeon.Grants(c, b)) wrong.Add(c.Id + "/" + b);
+                    if (GuildDungeon.Grants(c, b)) suspends.Add(c.Id + " suspends " + GuildDungeon.BoardTitle(b));
+                }
+            }
+            Check(wrong.Count == 0, "a condition suspends exactly the boards every legal line would enter anyway"
+                  + (wrong.Count > 0 ? " - disagrees: " + string.Join(", ", wrong.ToArray()) : " (" + (suspends.Count == 0 ? "none in the pool" : string.Join("; ", suspends.ToArray())) + ")"));
+
+            FloorConditionDef granting = content.FloorConditions.Find(c => GuildDungeon.Grants(c, GuildDungeonBoard.FourOrFewer)
+                                                                           || GuildDungeon.Grants(c, GuildDungeonBoard.NoHealer)
+                                                                           || GuildDungeon.Grants(c, GuildDungeonBoard.NoFiveStar));
+            if (granting == null) { Line("    (no condition in the pool grants a board, so the suspension is not exercised)"); return; }
+            int seed = -1, floor = -1;
+            for (int s = 0; s < 4000 && seed < 0; s++)
+            {
+                int sd = GuildDungeon.SeedFor("suspend-check", s);
+                FloorConditionDef[] drawn = GuildDungeonGenerator.ConditionsFor(content, sd);
+                for (int f = 0; f < drawn.Length; f++) if (drawn[f] == granting) { seed = sd; floor = f + 1; break; }
+            }
+            Check(seed >= 0, "a cycle that draws " + granting.Id + " exists to test the suspension on");
+            if (seed < 0) return;
+
+            Sample legalLine = Conform(content, samples[0], granting, new DeterministicRng(3));
+            GuildDungeonAttempt clear = new GuildDungeonAttempt { Victory = true, Team = legalLine.Team, Attempt = 1, Fallen = 0, Seed = seed, Floor = floor, Cycle = 1 };
+            List<string> met = GuildDungeon.BoardsMet(content, clear).ConvertAll(b => b.ToString());
+            bool suspended = true, others = met.Contains("FirstAttempt") && met.Contains("Flawless");
+            string said = "";
+            foreach (GuildDungeonBoard b in lineBoards)
+            {
+                if (!GuildDungeon.Grants(granting, b)) continue;
+                if (met.Contains(b.ToString()) || !GuildDungeon.Suspended(content, seed, floor, b)) suspended = false;
+                said = GuildDungeon.Unmet(content, clear, b);
+                if (!said.StartsWith("suspended")) suspended = false;
+            }
+            Check(suspended && others, "on a floor drawing " + granting.Name + ", a clear enters FIRST ATTEMPT and NOBODY FELL but not the board it grants: \""
+                  + said + "\" [" + string.Join(",", met.ToArray()) + "]");
+
+            // And a line that breaks the rule is on no board at all.
+            if (!granting.Line.IsEmpty)
+            {
+                // Five heroes, a Mender, a 5-star and two sharing a role: it breaks every kind of line
+                // rule the file can write, so whichever one the granting condition carries, it bites.
+                List<HeroDef> worst = new List<HeroDef>();
+                worst.Add(content.Heroes.Find(h => h.Role == HeroRole.Mender));
+                worst.Add(content.Heroes.Find(h => h.Stars >= 5 && !worst.Contains(h)));
+                HeroDef pairA = content.Heroes.Find(h => !worst.Contains(h) && h.Role == HeroRole.Striker);
+                worst.Add(pairA);
+                worst.Add(content.Heroes.Find(h => !worst.Contains(h) && h.Role == HeroRole.Striker));
+                worst.Add(content.Heroes.Find(h => !worst.Contains(h)));
+                TeamSnapshot broke = Line(worst);
+                string why;
+                bool legal = GuildDungeon.LineLegal(content, granting, broke, out why);
+                GuildDungeonAttempt cheat = new GuildDungeonAttempt { Victory = true, Team = broke, Attempt = 1, Fallen = 0, Seed = seed, Floor = floor, Cycle = 1 };
+                Check(!legal && why.Length > 0 && GuildDungeon.BoardsMet(content, cheat).Count == 0,
+                      "a line that breaks the floor's condition is refused with a reason (\"" + why + "\") and a record of one enters no board");
+            }
+        }
+
+        /// <summary>Board membership asked of the line alone, on a floor with no condition.</summary>
+        private static bool Satisfies(ContentDatabase content, GuildDungeonAttempt a, GuildDungeonBoard b)
+        {
+            a.Seed = NeutralSeed(content, a.Floor);
+            return GuildDungeon.Satisfies(content, a, b);
+        }
+
+        private static int NeutralSeed(ContentDatabase content, int floor)
+        {
+            for (int s = 0; s < 10000; s++)
+            {
+                int seed = GuildDungeon.SeedFor("neutral", s);
+                FloorConditionDef c = GuildDungeon.ConditionOf(content, seed, floor);
+                if (c == null || c.Line.IsEmpty) return seed;
+            }
+            return 0;
+        }
+
+        /// <summary>
+        /// C6 WITH CONDITIONS APPLIED, FOR EVERY CONDITION ON EVERY FLOOR IT MAY BE DRAWN ON - not
+        /// only the ones the six sample guilds below happen to draw. Each (condition, theme) pair is
+        /// fought on two floors of that theme against the gate's spread, made legal under the
+        /// condition the way a player would, and all three guardrails must hold on each.
+        /// </summary>
+        private static void CheckConditionGuardrails(ContentDatabase content)
+        {
+            List<Sample> samples = SampleRosters(content, 0x6D1C);
+            int floors = content.Balance.GuildDungeonFloors;
+            Dictionary<GuildDungeonTheme, List<int[]>> where = new Dictionary<GuildDungeonTheme, List<int[]>>();
+            for (int s = 0; s < 40; s++)
+            {
+                int seed = GuildDungeon.SeedFor("guard-check", s);
+                GuildDungeonTheme[] themes = GuildDungeonGenerator.ThemesFor(floors, seed);
+                for (int f = 1; f <= floors; f++)
+                {
+                    List<int[]> list;
+                    if (!where.TryGetValue(themes[f - 1], out list)) where[themes[f - 1]] = list = new List<int[]>();
+                    if (list.Count < 2) list.Add(new[] { seed, f });
+                }
+            }
+            int pairs = 0, held = 0;
+            List<string> failures = new List<string>();
+            foreach (FloorConditionDef c in content.FloorConditions)
+            {
+                foreach (GuildDungeonTheme theme in c.Themes)
+                {
+                    List<int[]> at;
+                    if (!where.TryGetValue(theme, out at)) continue;
+                    foreach (int[] sf in at)
+                    {
+                        pairs++;
+                        string guard = Guardrails(FightAdapted(content, samples, sf[0], sf[1], c, 0x6D1C));
+                        if (guard.Length == 0) held++;
+                        else Note(failures, c.Id + " on " + theme + ": " + guard);
+                    }
+                }
+            }
+            for (int i = 0; i < failures.Count; i++) Line("    ! " + failures[i]);
+            Check(held == pairs, "every condition, on every floor theme it may be drawn on, keeps all three guardrails ("
+                  + held + " of " + pairs + " floors): 40% of rosters clear, 25% of every group missing an obvious answer, no hero in over 35% of clears");
         }
 
         // ---------------------------------------------------------------- seeds
@@ -418,6 +805,7 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static void CheckBoards(ContentDatabase content)
         {
+            _madeSeed = NeutralSeed(content, 2);
             Check(GuildDungeon.Boards.Length == 6
                   && string.Join(",", Array.ConvertAll(GuildDungeon.Boards, b => b.ToString()))
                      == "FourOrFewer,NoFiveStar,OneAspect,NoHealer,FirstAttempt,Flawless",
@@ -499,6 +887,10 @@ namespace Emberfall.DevHarness
 
         private static long _madeId;
 
+        /// <summary>A dungeon seed whose floor 2 carries no line rule, so the board checks above read
+        /// the boards' own rules and not a condition's. The conditions' part is CheckConditionBoards'.</summary>
+        private static int _madeSeed;
+
         private static string BoardOrder(ContentDatabase content, List<GuildDungeonAttempt> attempts, GuildDungeonBoard b)
         {
             return Order(GuildDungeon.Rank(content, attempts, 7, 2, b));
@@ -512,8 +904,14 @@ namespace Emberfall.DevHarness
 
         private static ContentDatabase LoadWith(string dir, string balance)
         {
+            return LoadWith(dir, balance, ReadContent(dir, "floor-conditions"));
+        }
+
+        private static ContentDatabase LoadWith(string dir, string balance, string floorConditions)
+        {
             return ContentDatabase.Load(ReadContent(dir, "heroes"), ReadContent(dir, "enemies"), ReadContent(dir, "campaign"),
-                                        balance, ReadContent(dir, "relics"), ReadContent(dir, "events"), ReadContent(dir, "armor"));
+                                        balance, ReadContent(dir, "relics"), ReadContent(dir, "events"), ReadContent(dir, "armor"),
+                                        floorConditions);
         }
 
         private static TeamSnapshot Line(List<HeroDef> heroes)
@@ -528,7 +926,7 @@ namespace Emberfall.DevHarness
         {
             GuildDungeonAttempt a = new GuildDungeonAttempt();
             a.UserId = user; a.Attempt = attempt; a.Victory = victory; a.Turns = turns; a.Fallen = fallen;
-            a.Team = team; a.Cycle = 7; a.Floor = 2; a.Id = ++_madeId;
+            a.Team = team; a.Cycle = 7; a.Floor = 2; a.Id = ++_madeId; a.Seed = _madeSeed;
             return a;
         }
 
@@ -595,10 +993,12 @@ namespace Emberfall.DevHarness
             const int cycle = 38;
             int seed = GuildDungeon.SeedFor(guild, cycle);
 
-            List<Sample> pool = SampleRosters(content, 0x7A11);
+            // Both lines made legal under floor 1's condition, the way each of them would.
+            FloorConditionDef floorOne = GuildDungeon.ConditionOf(content, seed, 1);
+            List<Sample> pool = ConformAll(content, SampleRosters(content, 0x7A11), floorOne, 0x7A11);
             TeamSnapshot miraLine = pool[3].Team;
-            TeamSnapshot tomasLine = pool.Find(s => s.Group == "3 stars or fewer").Team;
-            tomasLine.Units.RemoveAt(tomasLine.Units.Count - 1);
+            TeamSnapshot tomasLine = CopyLine(pool.Find(s => s.Group == "3 stars or fewer").Team, 40);
+            if (tomasLine.Units.Count == 5) tomasLine.Units.RemoveAt(tomasLine.Units.Count - 1);
 
             StandInServer server = new StandInServer(content, guild, seed, cycle);
             List<GuildDungeonAttempt> stored = server.Stored;
@@ -623,9 +1023,10 @@ namespace Emberfall.DevHarness
                 if (tomasOn != GuildDungeon.Satisfies(content, tomasAttempt, b)) boardsRight = false;
             }
             Check(boardsRight, "each appears on exactly the boards its line satisfies, and on no other");
-            Check(Met(content, tomasAttempt).Contains("FourOrFewer") == tomasAttempt.Victory
-                  && Met(content, tomasAttempt).Contains("NoFiveStar") == tomasAttempt.Victory,
-                  "Tomas's four-hero, three-star line enters FOUR OR FEWER and NO FIVE STARS exactly when it clears");
+            Check(Met(content, tomasAttempt).Contains("FourOrFewer") == (tomasAttempt.Victory && !GuildDungeon.Grants(floorOne, GuildDungeonBoard.FourOrFewer))
+                  && Met(content, tomasAttempt).Contains("NoFiveStar") == (tomasAttempt.Victory && !GuildDungeon.Grants(floorOne, GuildDungeonBoard.NoFiveStar)),
+                  "Tomas's four-hero, three-star line enters FOUR OR FEWER and NO FIVE STARS exactly when it clears"
+                  + " and the floor's condition (" + (floorOne != null ? floorOne.Name : "none") + ") has not suspended them");
 
             // Mira shares. The message row as the chat read returns it: the line, the author's name,
             // the attempt id and the attempt row embedded under "attempt".
@@ -817,20 +1218,24 @@ namespace Emberfall.DevHarness
                 for (int f = 1; f <= floors; f++)
                 {
                     total++;
+                    // The floor's own condition this cycle, with each sample made legal under it -
+                    // the guardrails are asserted WITH CONDITIONS APPLIED, as the design requires.
+                    FloorConditionDef condition = GuildDungeon.ConditionOf(content, seed, f);
+                    List<Sample> lines = ConformAll(content, samples, condition, 0x6D1C);
                     Dictionary<string, int[]> byGroup = new Dictionary<string, int[]>();
                     Dictionary<string, int> heroInClears = new Dictionary<string, int>();
                     int clears = 0;
                     for (int s = 0; s < samples.Count; s++)
                     {
                         int[] tally;
-                        if (!byGroup.TryGetValue(samples[s].Group, out tally)) byGroup[samples[s].Group] = tally = new int[2];
+                        if (!byGroup.TryGetValue(lines[s].Group, out tally)) byGroup[lines[s].Group] = tally = new int[2];
                         tally[1]++;
-                        if (!GuildDungeon.Fight(content, samples[s].Team, seed, f).Victory) continue;
+                        if (!GuildDungeon.Fight(content, lines[s].Team, seed, f).Victory) continue;
                         tally[0]++;
                         clears++;
-                        for (int u = 0; u < samples[s].Team.Units.Count; u++)
+                        for (int u = 0; u < lines[s].Team.Units.Count; u++)
                         {
-                            string id = samples[s].Team.Units[u].DefId;
+                            string id = lines[s].Team.Units[u].DefId;
                             int n; heroInClears.TryGetValue(id, out n); heroInClears[id] = n + 1;
                         }
                     }
@@ -854,9 +1259,9 @@ namespace Emberfall.DevHarness
                     }
                     Line("    " + g.ToString().PadRight(7) + f.ToString().PadRight(7) + themes[f - 1].ToString().PadRight(11)
                          + Pct(share).PadRight(6) + string.Join("", cells.ToArray())
-                         + Pct(topShare) + " " + topHero);
+                         + Pct(topShare) + " " + topHero + "   [" + (condition != null ? condition.Id : "no condition") + "]");
 
-                    string where = "guild " + g + " floor " + f + " (" + themes[f - 1] + ")";
+                    string where = "guild " + g + " floor " + f + " (" + themes[f - 1] + ", " + (condition != null ? condition.Id : "no condition") + ")";
                     if (share < MinClearShare) { badShare++; Note(firstFailures, where + ": only " + Pct(share) + " of rosters clear"); }
                     if (worstShare < MinGroupClearShare) { badGroup++; Note(firstFailures, where + ": '" + worstGroup + "' lines clear only " + Pct(worstShare)); }
                     if (clears > 0 && topShare > MaxHeroShareOfClears) { badHero++; Note(firstFailures, where + ": " + topHero + " is in " + Pct(topShare) + " of clears"); }
@@ -889,6 +1294,551 @@ namespace Emberfall.DevHarness
             return group;
         }
 
+        // ---------------------------------------------------------------- line rules on a sample
+
+        /// <summary>The heroes a sample group draws from, by the group's own name - the same
+        /// filters SampleRosters applied when it drew the group.</summary>
+        private static List<HeroDef> GroupPool(ContentDatabase content, string group)
+        {
+            List<HeroDef> all = new List<HeroDef>(content.Heroes);
+            for (int family = 0; family < FamilyNames.Length; family++)
+                if (group == FamilyNames[family]) return all.FindAll(h => FamilyOf(h.Role) != family);
+            if (group == "3 stars or fewer") return all.FindAll(h => h.Stars <= 3);
+            return all;
+        }
+
+        /// <summary>
+        /// A sample made legal under a condition's line rules, THE WAY A PLAYER WOULD: keep every
+        /// hero the rule allows, in slot order, and refill the freed slots from the same group's
+        /// pool (so a "no healer" sample stays one) with heroes that keep the line legal, up to the
+        /// cap. A condition with no line rules returns the sample itself, so a fight-only condition
+        /// is measured on exactly the lines the unconditioned floor was.
+        /// </summary>
+        internal static Sample Conform(ContentDatabase content, Sample sample, FloorConditionDef condition, DeterministicRng rng)
+        {
+            if (condition == null || condition.Line.IsEmpty) return sample;
+            LineRules rules = condition.Line;
+            int size = content.Balance.MaxTeamSize;
+            if (rules.MaxHeroes > 0) size = Math.Min(size, rules.MaxHeroes);
+
+            Sample s = new Sample();
+            s.Group = sample.Group;
+            s.Team.Label = sample.Team.Label;
+            for (int i = 0; i < sample.Team.Units.Count && s.Team.Units.Count < size; i++)
+                if (Fits(content, rules, s.Team, sample.Team.Units[i].DefId)) s.Team.Units.Add(sample.Team.Units[i]);
+
+            List<HeroDef> pool = GroupPool(content, sample.Group);
+            while (s.Team.Units.Count < size)
+            {
+                List<HeroDef> ok = pool.FindAll(h => !s.Team.Units.Exists(u => u.DefId == h.Id) && Fits(content, rules, s.Team, h.Id));
+                if (ok.Count == 0) break;
+                HeroDef def = ok[rng.Range(0, ok.Count)];
+                s.Team.Units.Add(new SnapshotUnit { DefId = def.Id, Level = ReferenceLevel, Stars = def.Stars });
+            }
+            return s;
+        }
+
+        private static bool Fits(ContentDatabase content, LineRules rules, TeamSnapshot line, string defId)
+        {
+            HeroDef d = content.GetHero(defId);
+            if (d == null) return false;
+            if (rules.MaxStars > 0 && d.Stars > rules.MaxStars) return false;
+            if (rules.BannedRoles.Contains(d.Role)) return false;
+            if (rules.MaxPerRole > 0)
+            {
+                int same = 0;
+                for (int i = 0; i < line.Units.Count; i++)
+                {
+                    HeroDef o = content.GetHero(line.Units[i].DefId);
+                    if (o != null && o.Role == d.Role) same++;
+                }
+                if (same >= rules.MaxPerRole) return false;
+            }
+            return true;
+        }
+
+        private static List<Sample> ConformAll(ContentDatabase content, List<Sample> samples, FloorConditionDef condition, int seed)
+        {
+            if (condition == null || condition.Line.IsEmpty) return samples;
+            DeterministicRng rng = new DeterministicRng(seed);
+            List<Sample> result = new List<Sample>(samples.Count);
+            for (int i = 0; i < samples.Count; i++) result.Add(Conform(content, samples[i], condition, rng));
+            return result;
+        }
+
+        // ---------------------------------------------------------------- THE CONDITION STUDY
+
+        /// <summary>
+        /// A DIFFICULTY KNOB, BUILT TO FAIL C5. "Enemies have more health" is the design's own
+        /// example of a condition that changes how hard a floor is and not which line clears it.
+        /// The study fights every floor on a LADDER of these, so each real condition can be compared
+        /// with a pure knob that stops the SAME NUMBER of lines: if the condition stops the same
+        /// lines the knob does, it is a knob too.
+        /// </summary>
+        private static FloorConditionDef Knob(string id, float enemyHp, float heroHp)
+        {
+            FloorConditionDef c = new FloorConditionDef();
+            c.Id = id;
+            c.Name = id;
+            c.Text = "control";
+            c.Fight.EnemyMaxHp = enemyHp;
+            c.Fight.HeroMaxHp = heroHp;
+            return c;
+        }
+
+        private static readonly float[] EnemyHpLadder = { 0.7f, 0.85f, 1f, 1.15f, 1.3f, 1.5f, 1.75f, 2f, 2.4f, 2.9f, 3.5f, 4.2f };
+        private static readonly float[] HeroHpLadder = { 1.3f, 1.15f, 1f, 0.9f, 0.8f, 0.7f, 0.6f, 0.5f, 0.42f, 0.35f, 0.28f, 0.22f };
+
+        /// <summary>One floor's outcomes for one population: who fought, who cleared, and by how
+        /// much - the MARGIN, the share of HP the heroes kept minus the share the enemies kept, in
+        /// [-1, 1]. A clear is a margin above zero.</summary>
+        private sealed class Outcome
+        {
+            public List<Sample> Lines;
+            public bool[] Cleared;
+            public float[] Margin;
+            public float Share;
+            public float MeanMargin;
+        }
+
+        private static Outcome FightAll(ContentDatabase content, List<Sample> lines, int seed, int floor, FloorConditionDef condition)
+        {
+            return FightAll(content, lines, seed, floor, condition, GuildDungeon.FightSeedFor(seed, floor));
+        }
+
+        private static Outcome FightAll(ContentDatabase content, List<Sample> lines, int seed, int floor, FloorConditionDef condition,
+                                        int fightSeed)
+        {
+            Outcome o = new Outcome();
+            o.Lines = lines;
+            o.Cleared = new bool[lines.Count];
+            o.Margin = new float[lines.Count];
+            int clears = 0;
+            double sum = 0;
+            for (int i = 0; i < lines.Count; i++)
+            {
+                BattleResult r = GuildDungeon.FightUnder(content, lines[i].Team, seed, floor, condition, fightSeed);
+                o.Cleared[i] = r.Victory;
+                o.Margin[i] = MarginOf(r);
+                sum += o.Margin[i];
+                if (o.Cleared[i]) clears++;
+            }
+            o.Share = lines.Count == 0 ? 0f : (float)clears / lines.Count;
+            o.MeanMargin = lines.Count == 0 ? 0f : (float)(sum / lines.Count);
+            return o;
+        }
+
+        private static float MarginOf(BattleResult r)
+        {
+            return r.PlayerHpRatio - r.EnemyHpRatio;
+        }
+
+        /// <summary>
+        /// Spearman's rank correlation between two readings of the same rosters: 1 when the
+        /// condition leaves every roster in the order it stood, lower the more it reorders them.
+        /// Ties share their mean rank.
+        /// </summary>
+        internal static float RankCorrelation(float[] a, float[] b)
+        {
+            double[] ra = Ranks(a), rb = Ranks(b);
+            int n = a.Length;
+            if (n < 3) return 1f;
+            double ma = 0, mb = 0;
+            for (int i = 0; i < n; i++) { ma += ra[i]; mb += rb[i]; }
+            ma /= n; mb /= n;
+            double cov = 0, va = 0, vb = 0;
+            for (int i = 0; i < n; i++)
+            {
+                cov += (ra[i] - ma) * (rb[i] - mb);
+                va += (ra[i] - ma) * (ra[i] - ma);
+                vb += (rb[i] - mb) * (rb[i] - mb);
+            }
+            return va <= 0 || vb <= 0 ? 1f : (float)(cov / Math.Sqrt(va * vb));
+        }
+
+        private static double[] Ranks(float[] v)
+        {
+            int n = v.Length;
+            int[] idx = new int[n];
+            for (int i = 0; i < n; i++) idx[i] = i;
+            Array.Sort(idx, (x, y) => { int c = v[x].CompareTo(v[y]); return c != 0 ? c : x.CompareTo(y); });
+            double[] r = new double[n];
+            for (int i = 0; i < n; )
+            {
+                int j = i;
+                while (j + 1 < n && v[idx[j + 1]] == v[idx[i]]) j++;
+                double mean = (i + j) / 2.0;
+                for (int k = i; k <= j; k++) r[idx[k]] = mean;
+                i = j + 1;
+            }
+            return r;
+        }
+
+        /// <summary>The ladder rung whose MEAN MARGIN is nearest a condition's: the pure knob that
+        /// bites exactly as hard.</summary>
+        private static Outcome NearestBite(List<Outcome> ladder, float meanMargin)
+        {
+            Outcome best = ladder[0];
+            for (int i = 1; i < ladder.Count; i++)
+                if (Math.Abs(ladder[i].MeanMargin - meanMargin) < Math.Abs(best.MeanMargin - meanMargin)) best = ladder[i];
+            return best;
+        }
+
+        /// <summary>
+        /// A player's answer to a line rule: of several legal versions of their line (each one
+        /// dropping or replacing a DIFFERENT hero), the one that does best on this floor. Returns
+        /// the outcome with each roster fighting its best version. A condition with no line rules
+        /// fights the roster's own line.
+        /// </summary>
+        private static Outcome FightAdapted(ContentDatabase content, List<Sample> population, int seed, int floor,
+                                            FloorConditionDef condition, int salt)
+        {
+            if (condition == null || condition.Line.IsEmpty) return FightAll(content, population, seed, floor, condition);
+            Outcome best = null;
+            for (int v = 0; v < AdaptVariants; v++)
+            {
+                DeterministicRng rng = new DeterministicRng(salt * 31 + v);
+                List<Sample> lines = new List<Sample>(population.Count);
+                for (int i = 0; i < population.Count; i++) lines.Add(ConformFrom(content, population[i], condition, rng, v));
+                Outcome o = FightAll(content, lines, seed, floor, condition);
+                if (best == null) { best = o; continue; }
+                for (int i = 0; i < population.Count; i++)
+                {
+                    if (o.Margin[i] <= best.Margin[i]) continue;
+                    best.Margin[i] = o.Margin[i];
+                    best.Cleared[i] = o.Cleared[i];
+                    best.Lines[i] = o.Lines[i];
+                }
+            }
+            int clears = 0; double sum = 0;
+            for (int i = 0; i < population.Count; i++) { if (best.Cleared[i]) clears++; sum += best.Margin[i]; }
+            best.Share = (float)clears / population.Count;
+            best.MeanMargin = (float)(sum / population.Count);
+            return best;
+        }
+
+        private const int AdaptVariants = 5;
+
+        /// <summary>Conform, but walking the line from slot `start` round, so each variant keeps a
+        /// different subset when the rule makes the line drop someone.</summary>
+        private static Sample ConformFrom(ContentDatabase content, Sample sample, FloorConditionDef condition, DeterministicRng rng, int start)
+        {
+            Sample rotated = new Sample();
+            rotated.Group = sample.Group;
+            rotated.Team.Label = sample.Team.Label;
+            int n = sample.Team.Units.Count;
+            for (int i = 0; i < n; i++) rotated.Team.Units.Add(sample.Team.Units[(i + start) % n]);
+            return Conform(content, rotated, condition, rng);
+        }
+
+        /// <summary>The line features the guardrails already name - the "obvious answers" - plus
+        /// the star extremes. The study reports which of them a condition moves among the best lines.</summary>
+        private static readonly string[] FeatureNames = { "tank", "healer", "area", "support", "single", "all<=3*", "any 5*" };
+
+        private static bool[] Features(ContentDatabase content, TeamSnapshot line)
+        {
+            bool[] f = new bool[FeatureNames.Length];
+            bool humble = line.Units.Count > 0;
+            for (int i = 0; i < line.Units.Count; i++)
+            {
+                HeroDef d = content.GetHero(line.Units[i].DefId);
+                if (d == null) continue;
+                f[FamilyOf(d.Role)] = true;
+                if (d.Stars > 3) humble = false;
+                if (d.Stars >= 5) f[6] = true;
+            }
+            f[5] = humble;
+            return f;
+        }
+
+        /// <summary>Among the best quarter of rosters by margin, the share carrying each feature.</summary>
+        private static float[] TopMix(ContentDatabase content, Outcome o)
+        {
+            int n = o.Lines.Count;
+            int[] idx = new int[n];
+            for (int i = 0; i < n; i++) idx[i] = i;
+            Array.Sort(idx, (x, y) => { int c = o.Margin[y].CompareTo(o.Margin[x]); return c != 0 ? c : x.CompareTo(y); });
+            int top = Math.Max(1, n / 4);
+            float[] mix = new float[FeatureNames.Length];
+            for (int k = 0; k < top; k++)
+            {
+                bool[] f = Features(content, o.Lines[idx[k]].Team);
+                for (int j = 0; j < f.Length; j++) if (f[j]) mix[j]++;
+            }
+            for (int j = 0; j < mix.Length; j++) mix[j] /= top;
+            return mix;
+        }
+
+        /// <summary>The guardrails of C6 on one floor's outcome: all rosters, the worst group, the
+        /// most-used hero among clears. Empty when they hold, else the first that failed.</summary>
+        private static string Guardrails(Outcome o)
+        {
+            if (o.Share < MinClearShare) return "only " + Pct(o.Share) + " clear";
+            Dictionary<string, int[]> byGroup = new Dictionary<string, int[]>();
+            Dictionary<string, int> heroInClears = new Dictionary<string, int>();
+            int clears = 0;
+            for (int i = 0; i < o.Lines.Count; i++)
+            {
+                int[] t;
+                if (!byGroup.TryGetValue(o.Lines[i].Group, out t)) byGroup[o.Lines[i].Group] = t = new int[2];
+                t[1]++;
+                if (!o.Cleared[i]) continue;
+                t[0]++;
+                clears++;
+                for (int u = 0; u < o.Lines[i].Team.Units.Count; u++)
+                {
+                    string id = o.Lines[i].Team.Units[u].DefId;
+                    int n; heroInClears.TryGetValue(id, out n); heroInClears[id] = n + 1;
+                }
+            }
+            foreach (KeyValuePair<string, int[]> kv in byGroup)
+            {
+                float gs = (float)kv.Value[0] / kv.Value[1];
+                if (gs < MinGroupClearShare) return "'" + kv.Key + "' clears " + Pct(gs);
+            }
+            foreach (KeyValuePair<string, int> kv in heroInClears)
+                if (clears > 0 && (float)kv.Value / clears > MaxHeroShareOfClears)
+                    return kv.Key + " in " + Pct((float)kv.Value / clears) + " of clears";
+            return "";
+        }
+
+        /// <summary>One condition's reading on one floor. See RunConditionStudy for each column.</summary>
+        private sealed class FloorReading
+        {
+            public float Base, Cond, Bite, Shift, KnobA, KnobB, Chaos, Forced;
+            public float[] MixShift = new float[FeatureNames.Length];
+            public string Guard = "";
+        }
+
+        private static FloorReading[] ReadFloor(ContentDatabase content, List<Sample> population, List<FloorConditionDef> ladderA,
+                                                List<FloorConditionDef> ladderB, List<FloorConditionDef> studied, int seed, int f)
+        {
+            Outcome baseline = FightAll(content, population, seed, f, null);
+            List<Outcome> rungsA = new List<Outcome>(), rungsB = new List<Outcome>();
+            for (int i = 0; i < ladderA.Count; i++) rungsA.Add(FightAll(content, population, seed, f, ladderA[i]));
+            for (int i = 0; i < ladderB.Count; i++) rungsB.Add(FightAll(content, population, seed, f, ladderB[i]));
+            // CHANCE ALONE: the same floor, the same lines, no condition, a different combat seed.
+            // What that does to the order of the rosters is the floor under every reading below.
+            Outcome reseeded = FightAll(content, population, seed, f, null, GuildDungeon.FightSeedFor(seed, f) ^ 0x5A5A);
+            float chaos = 1f - RankCorrelation(baseline.Margin, reseeded.Margin);
+
+            FloorReading[] result = new FloorReading[studied.Count];
+            for (int c = 0; c < studied.Count; c++)
+            {
+                FloorConditionDef cond = studied[c];
+                Outcome under = FightAdapted(content, population, seed, f, cond, StudySeed ^ GuildDungeon.SeedFor(cond.Id, 0));
+                Outcome matchA = NearestBite(rungsA, under.MeanMargin);
+                Outcome matchB = NearestBite(rungsB, under.MeanMargin);
+
+                int forced = 0, baseClears = 0;
+                for (int i = 0; i < population.Count; i++)
+                {
+                    if (!baseline.Cleared[i]) continue;
+                    baseClears++;
+                    string why;
+                    if (!GuildDungeon.LineLegal(content, cond, population[i].Team, out why)) forced++;
+                }
+
+                FloorReading r = new FloorReading();
+                r.Base = baseline.Share;
+                r.Cond = under.Share;
+                r.Bite = baseline.MeanMargin - under.MeanMargin;
+                r.Shift = 1f - RankCorrelation(baseline.Margin, under.Margin);
+                r.KnobA = 1f - RankCorrelation(baseline.Margin, matchA.Margin);
+                r.KnobB = 1f - RankCorrelation(baseline.Margin, matchB.Margin);
+                r.Chaos = chaos;
+                r.Forced = baseClears == 0 ? 0f : (float)forced / baseClears;
+                float[] mc = TopMix(content, under), mk = TopMix(content, matchA);
+                for (int k = 0; k < mc.Length; k++) r.MixShift[k] = mc[k] - mk[k];
+                r.Guard = Guardrails(under);
+                result[c] = r;
+            }
+            return result;
+        }
+
+        /// <summary>The study's per-(condition, theme) tally, summed over every floor of that theme.</summary>
+        private sealed class Tally
+        {
+            public int Floors, GuardFails;
+            public float Base, Cond, Bite, Shift, KnobA, KnobB, Chaos, Forced;
+            public float[] MixShift = new float[FeatureNames.Length];
+            public string FirstGuardFail = "";
+        }
+
+        internal const int StudyGuilds = 12;
+        internal const int StudySeed = 0x57D1;
+
+        /// <summary>
+        /// C5's PASS MARK: a condition reorders the rosters by at least this multiple of what the
+        /// harder-reordering of two pure difficulty knobs does at the same bite. Two knobs of
+        /// different kinds (enemy HP up, hero HP down) already reorder the rosters somewhat, because
+        /// no knob is perfectly neutral and a fight is chaotic; a condition that reorders no more
+        /// than they do is, measurably, a knob.
+        /// </summary>
+        internal const float ShapeFactor = 1.5f;
+
+        /// <summary>
+        /// THE CONDITION STUDY: DevHarness.exe --guild-conditions. Not a check and not run by the gate;
+        /// the instrument the pool, each condition's magnitude and each condition's "floors" list
+        /// are read from (DESIGN-GUILD-FLOOR-CONDITIONS section 7).
+        ///
+        /// For every floor of StudyGuilds dungeons it fights a large sample population (the gate's
+        /// spread, four times over) with no condition, on two ladders of pure difficulty knobs, and
+        /// under every condition in content. A roster under a condition with line rules fields the
+        /// best of AdaptVariants legal versions of its line, as a player would. Per condition and
+        /// floor theme it prints:
+        ///
+        ///   base / cond   the clear rate without and with the condition
+        ///   bite          how far the mean margin (hero HP kept minus enemy HP kept) fell
+        ///   SHIFT         1 - the rank correlation of every roster's margin with and without the
+        ///                 condition: 0 = the rosters stand in the same order, higher = reordered.
+        ///                 THE C5 READING: which rosters do best, not how many clear
+        ///   knobA / knobB the same number for a pure enemy-HP knob and a pure hero-HP knob biting
+        ///                 exactly as hard - what "only harder" reads
+        ///   chaos         the same number for the unconditioned floor fought under a second combat
+        ///                 seed: what chance alone does to the order, with nothing changed at all
+        ///   ratio         SHIFT over the largest of knobA, knobB and chaos; C5 passes at ShapeFactor
+        ///   forced        for a line rule, the share of the unconditioned floor's clearing lines the
+        ///                 rule makes illegal - lines their owner must change
+        ///   guard         floors of the theme on which all three C6 guardrails held
+        ///   mix           the feature that moved most among the best quarter of rosters, against the
+        ///                 enemy-HP knob biting as hard
+        /// </summary>
+        internal static int RunConditionStudy(ContentDatabase content)
+        {
+            List<FloorConditionDef> studied = new List<FloorConditionDef>(content.FloorConditions);
+            // The knob as a candidate in its own right, so the table shows a C5 failure next to the
+            // conditions it is read against.
+            studied.Insert(0, Knob("CONTROL: enemies +75% HP", 1.75f, 1f));
+
+            Dictionary<string, Tally> tallies = Study(content, studied, true);
+
+            Line("  " + "condition".PadRight(26) + "theme".PadRight(11) + "base".PadRight(6) + "cond".PadRight(6) + "bite".PadRight(7)
+                 + "SHIFT".PadRight(7) + "knobA".PadRight(7) + "knobB".PadRight(7) + "chaos".PadRight(7) + "ratio".PadRight(7) + "C5".PadRight(6)
+                 + "forced".PadRight(8) + "guard".PadRight(7) + "mix (best quarter vs knob)");
+            for (int c = 0; c < studied.Count; c++)
+            {
+                for (int th = 0; th < AllThemes.Length; th++)
+                {
+                    Tally t;
+                    if (!tallies.TryGetValue(studied[c].Id + "|" + AllThemes[th], out t) || t.Floors == 0) continue;
+                    float n = t.Floors;
+                    int top = 0;
+                    for (int k = 1; k < t.MixShift.Length; k++) if (Math.Abs(t.MixShift[k]) > Math.Abs(t.MixShift[top])) top = k;
+                    float shift = t.MixShift[top] / n;
+                    float ratio = RatioOf(t);
+                    string verdict = ratio >= ShapeFactor ? (t.GuardFails == 0 ? "PASS" : "guard") : "knob";
+                    Line("  " + studied[c].Id.PadRight(26) + AllThemes[th].ToString().PadRight(11) + Pct(t.Base / n).PadRight(6)
+                         + Pct(t.Cond / n).PadRight(6) + F2(t.Bite / n).PadRight(7) + F2(t.Shift / n).PadRight(7)
+                         + F2(t.KnobA / n).PadRight(7) + F2(t.KnobB / n).PadRight(7) + F2(t.Chaos / n).PadRight(7) + F2(Math.Min(ratio, 99f)).PadRight(7)
+                         + verdict.PadRight(6) + Pct(t.Forced / n).PadRight(8) + ((t.Floors - t.GuardFails) + "/" + t.Floors).PadRight(7)
+                         + FeatureNames[top] + " " + (shift >= 0 ? "+" : "") + (shift * 100f).ToString("0", CultureInfo.InvariantCulture) + "pp"
+                         + (t.FirstGuardFail.Length > 0 ? "   ! " + t.FirstGuardFail : ""));
+                }
+            }
+            return 0;
+        }
+
+        /// <summary>SHIFT over the largest of the two matched knobs and chance alone.</summary>
+        private static float RatioOf(Tally t)
+        {
+            float knob = Math.Max(Math.Max(t.KnobA, t.KnobB), t.Chaos) / t.Floors;
+            return knob <= 0.0001f ? 99f : (t.Shift / t.Floors) / knob;
+        }
+
+        /// <summary>
+        /// The study's measurement, shared by the study table and the gate: every floor of
+        /// StudyGuilds dungeons, the population, both knob ladders and chance, and every condition
+        /// in `studied`, summed per (condition id, theme).
+        /// </summary>
+        private static Dictionary<string, Tally> Study(ContentDatabase content, List<FloorConditionDef> studied, bool progress)
+        {
+            ReferenceLevel = content.Balance.GuildDungeonHeroLevel;
+            int floors = content.Balance.GuildDungeonFloors;
+            List<Sample> population = new List<Sample>();
+            for (int k = 0; k < 4; k++) population.AddRange(SampleRosters(content, StudySeed + k));
+
+            List<FloorConditionDef> ladderA = new List<FloorConditionDef>(), ladderB = new List<FloorConditionDef>();
+            for (int i = 0; i < EnemyHpLadder.Length; i++) ladderA.Add(Knob("enemy hp x" + EnemyHpLadder[i], EnemyHpLadder[i], 1f));
+            for (int i = 0; i < HeroHpLadder.Length; i++) ladderB.Add(Knob("hero hp x" + HeroHpLadder[i], 1f, HeroHpLadder[i]));
+
+            if (progress)
+                Line("GUILD FLOOR CONDITIONS - STUDY: " + StudyGuilds + " dungeons x " + floors + " floors, "
+                     + population.Count + " sample lines per floor, level " + ReferenceLevel);
+
+            // Every floor is independent - combat is a pure function and the engine holds no mutable
+            // static state - so the floors are fought in parallel and their readings MERGED IN FLOOR
+            // ORDER afterwards, which keeps every sum, and so every printed number, identical to a
+            // one-thread run.
+            int total = StudyGuilds * floors;
+            FloorReading[][] readings = new FloorReading[total][];
+            GuildDungeonTheme[] floorTheme = new GuildDungeonTheme[total];
+            int done = 0;
+            System.Threading.Tasks.Parallel.For(0, total, index =>
+            {
+                int g = index / floors, f = index % floors + 1;
+                int seed = GuildDungeon.SeedFor("condition-study-" + g, 1);
+                floorTheme[index] = GuildDungeonGenerator.ThemesFor(floors, seed)[f - 1];
+                readings[index] = ReadFloor(content, population, ladderA, ladderB, studied, seed, f);
+                int n = System.Threading.Interlocked.Increment(ref done);
+                if (progress) Console.Error.WriteLine("  study: floor " + n + " of " + total);
+            });
+
+            Dictionary<string, Tally> tallies = new Dictionary<string, Tally>();
+            for (int index = 0; index < total; index++)
+            {
+                int g = index / floors, f = index % floors + 1;
+                for (int c = 0; c < studied.Count; c++)
+                {
+                    FloorReading r = readings[index][c];
+                    string key = studied[c].Id + "|" + floorTheme[index];
+                    Tally t;
+                    if (!tallies.TryGetValue(key, out t)) tallies[key] = t = new Tally();
+                    t.Floors++;
+                    t.Base += r.Base; t.Cond += r.Cond; t.Bite += r.Bite; t.Shift += r.Shift;
+                    t.KnobA += r.KnobA; t.KnobB += r.KnobB; t.Chaos += r.Chaos; t.Forced += r.Forced;
+                    for (int k = 0; k < r.MixShift.Length; k++) t.MixShift[k] += r.MixShift[k];
+                    if (r.Guard.Length > 0)
+                    {
+                        t.GuardFails++;
+                        if (t.FirstGuardFail.Length == 0) t.FirstGuardFail = "g" + g + "f" + f + ": " + r.Guard;
+                    }
+                }
+            }
+            return tallies;
+        }
+
+        /// <summary>
+        /// C5 IN THE GATE. The study is the instrument the pool was read from; this re-reads it on
+        /// every build, so a content or engine change that turns a pooled condition into a knob -
+        /// or breaks a guardrail on a floor it may be drawn on - fails the build rather than
+        /// quietly shipping. Every condition must pass on EVERY theme its "floors" list names.
+        /// Fully seeded, so the reading is the same on every run.
+        /// </summary>
+        private static void CheckConditionShape(ContentDatabase content)
+        {
+            Dictionary<string, Tally> tallies = Study(content, new List<FloorConditionDef>(content.FloorConditions), false);
+            List<string> knobs = new List<string>(), guards = new List<string>(), read = new List<string>();
+            foreach (FloorConditionDef c in content.FloorConditions)
+            {
+                foreach (GuildDungeonTheme theme in c.Themes)
+                {
+                    Tally t;
+                    if (!tallies.TryGetValue(c.Id + "|" + theme, out t) || t.Floors == 0) { knobs.Add(c.Id + " on " + theme + " (never measured)"); continue; }
+                    float ratio = RatioOf(t);
+                    read.Add(c.Id + "/" + theme + " x" + F2(Math.Min(ratio, 99f)));
+                    if (ratio < ShapeFactor) knobs.Add(c.Id + " on " + theme + " x" + F2(ratio));
+                    if (t.GuardFails > 0) guards.Add(c.Id + " on " + theme + ": " + t.FirstGuardFail);
+                }
+            }
+            Line("    C5 readings (SHIFT over the larger of two matched knobs and chance): " + string.Join(", ", read.ToArray()));
+            Check(knobs.Count == 0, "C5: every condition reorders the rosters by at least x" + F2(ShapeFactor)
+                  + " what a pure difficulty knob or chance alone does, on every floor theme it may be drawn on"
+                  + (knobs.Count > 0 ? " - a knob: " + string.Join("; ", knobs.ToArray()) : ""));
+            Check(guards.Count == 0, "and on the study's larger population every guardrail holds on all " + StudyGuilds
+                  + " dungeons' floors of each of those themes" + (guards.Count > 0 ? " - " + string.Join("; ", guards.ToArray()) : ""));
+        }
+        private static string F2(float v) { return v.ToString("0.00", CultureInfo.InvariantCulture); }
         // ---------------------------------------------------------------- output
 
         private static string Pct(float v) { return (v * 100f).ToString("0", CultureInfo.InvariantCulture) + "%"; }
