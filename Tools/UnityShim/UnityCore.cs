@@ -30,6 +30,7 @@ namespace UnityEngine
         public static T[] FindObjectsOfType<T>() where T : Object { return new T[0]; }
         public static T FindFirstObjectByType<T>() where T : Object { return null; }
         public static T FindAnyObjectByType<T>() where T : Object { return null; }
+        public static T[] FindObjectsByType<T>() where T : Object { return new T[0]; }
         public static T[] FindObjectsByType<T>(FindObjectsSortMode sortMode) where T : Object { return new T[0]; }
         public static T[] FindObjectsByType<T>(FindObjectsInactive findObjectsInactive, FindObjectsSortMode sortMode) where T : Object { return new T[0]; }
 

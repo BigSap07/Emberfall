@@ -35,6 +35,7 @@ namespace Emberfall.UI.Screens
         private UIButton _fastSummonButton;
         private Text _fastSummonNote;
         private Text _saveNote;
+        private Text _resetNote;
 
         protected override void Build()
         {
@@ -137,11 +138,11 @@ namespace Emberfall.UI.Screens
             RectTransform card = Card(parent, 230f);
             Heading(card, "START OVER");
 
-            Text note = EmberforgeUI.Body("Note", card,
-                "Wipes your heroes, currency and campaign progress and starts a fresh account. "
-                + "There is no way back from this.",
-                UITheme.FontTiny, Emberforge.TextBody, TextAnchor.UpperLeft);
-            UIBuilder.Box(note.rectTransform, 30f, -56f, CardWidth - 90f, 70f, new Vector2(0f, 1f));
+            // Filled on show rather than here, because what a reset reaches depends on whether this
+            // build has an account service, and the card is built once. See ResetNote.
+            _resetNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
+                                           TextAnchor.UpperLeft);
+            UIBuilder.Box(_resetNote.rectTransform, 30f, -56f, CardWidth - 90f, 70f, new Vector2(0f, 1f));
 
             // TEAL, and that is the point rather than an oversight. The kit has two voices and
             // ember is the thing to press; the one destructive control in the game is deliberately
@@ -156,13 +157,55 @@ namespace Emberfall.UI.Screens
         private void ConfirmReset()
         {
             App.Audio.Tap();
-            App.Modal.ShowConfirm(
-                "RESET PROGRESS",
-                "This wipes your heroes, currency and campaign progress and starts a fresh account. " +
-                "Useful for testing the first-run experience.",
-                "RESET", "KEEP PLAYING",
-                App.ResetProgress,
-                null);
+            ShowResetConfirm(App, ResetReachesCloud(App));
+        }
+
+        /// <summary>
+        /// Whether a reset on this device also replaces the cloud save. Docs/CLOUD-GAPS.md P11.
+        ///
+        /// GameApp.ResetProgress deletes the save, writes a starter profile and leaves the base
+        /// revision where it was, so the next sync finds the cloud where this device last left it,
+        /// reads the starter profile as descending from it, and uploads it. That is true whenever
+        /// the account service exists, signed in or not: an offline device uploads the moment it
+        /// is back. Only a build with no account service at all resets this device alone.
+        /// </summary>
+        public static bool ResetReachesCloud(Game.GameApp app)
+        {
+            return app != null && app.Cloud != null;
+        }
+
+        /// <summary>
+        /// The RESET PROGRESS confirm, in the words of what it actually does. It used to say only
+        /// that it "starts a fresh account", which was wrong twice: the account is the same one,
+        /// and the cloud copy a player may have been counting on goes with it. A player resetting
+        /// a device expects to reset that device, so the cloud half is stated in the dialog itself,
+        /// before the button, rather than left for them to find out.
+        ///
+        /// Public and static so the capture tools open exactly this dialog, not a copy of its words.
+        /// </summary>
+        public static void ShowResetConfirm(Game.GameApp app, bool reachesCloud)
+        {
+            app.Modal.ShowConfirm("RESET PROGRESS", ResetBody(reachesCloud), "RESET", "KEEP PLAYING",
+                                  app.ResetProgress, null);
+        }
+
+        public static string ResetBody(bool reachesCloud)
+        {
+            return reachesCloud
+                ? "This wipes your heroes, currency and campaign progress on this device AND in your "
+                  + "cloud save. At the next sync the fresh start replaces your cloud copy, so no other "
+                  + "device can bring your progress back. Your account stays the same."
+                : "This wipes your heroes, currency and campaign progress on this device. "
+                  + "There is no way back from this.";
+        }
+
+        private static string ResetNote(bool reachesCloud)
+        {
+            return reachesCloud
+                ? "Wipes your heroes, currency and campaign progress, on this device and in your cloud "
+                  + "save. There is no way back from this."
+                : "Wipes your heroes, currency and campaign progress on this device. "
+                  + "There is no way back from this.";
         }
 
         // ------------------------------------------------------------------ behaviour
@@ -227,6 +270,7 @@ namespace Emberfall.UI.Screens
             RefreshSound();
             RefreshFastSummon();
             RefreshSave();
+            _resetNote.text = ResetNote(ResetReachesCloud(App));
         }
 
         // ------------------------------------------------------------------ shared

@@ -29,14 +29,18 @@ namespace Emberfall.Core.Cloud
     }
 
     /// <summary>
-    /// The four facts a player needs to tell two saves apart, read straight out of a save document
-    /// without deserialising it into a profile.
+    /// What a player needs to tell two saves apart, read straight out of a save document without
+    /// deserialising it into a profile.
     ///
     /// Without a full deserialise on purpose. A conflict card has to describe BOTH saves, and one
     /// of the two may be from a build this one cannot fully read - refusing to describe it would
-    /// leave the player choosing blind between "this device" and a blank. These five keys have
-    /// been in the save format since before the version guard existed and are read here with
-    /// fallbacks, so a document that is merely unfamiliar still renders.
+    /// leave the player choosing blind between "this device" and a blank. Every key is read with a
+    /// fallback, so a document that is merely unfamiliar, or older than a key, still renders.
+    ///
+    /// It used to hold four facts, and two saves a week and two million gold apart agreed on all
+    /// four (Docs/CLOUD-GAPS.md P9). It now holds what a week of play actually moves: the purses,
+    /// every hero's level, where the campaign stands and how far the two side modes have gone.
+    /// SaveComparison is what turns two of these into a card.
     /// </summary>
     public sealed class SaveSummary
     {
@@ -48,6 +52,45 @@ namespace Emberfall.Core.Cloud
         public int HeroesOwned;
         public long LastSaveUnix;
 
+        public int PlayerXp;
+        public long Gold;
+        public long Shards;
+        public long RelicDust;
+        public long Slag;
+        public long Coda;
+        public long Valor;
+
+        /// <summary>Where the campaign button would take this save next. Empty in a save that has
+        /// never fought, and possibly a stage this build's content no longer has.</summary>
+        public string CampaignStageId = "";
+        public int CampaignWave = 1;
+        public int CampaignBattle = 1;
+
+        public int RecitalHighestFloor;
+        public int ProvingHighestStanding;
+        public int ArmorOwned;
+        public int RelicsOwned;
+        public int TotalSummons;
+        public int TotalBattlesWon;
+
+        /// <summary>Every hero in the save, id and level, in the save's own order. Ids rather than
+        /// names, like the save itself: naming them needs content, and SaveComparison does that
+        /// with whatever content this build has.</summary>
+        public readonly List<SaveSummaryHero> Heroes = new List<SaveSummaryHero>();
+
+        /// <summary>Levels GAINED across the roster: each hero's level above 1. Not the plain sum,
+        /// because a hero pulled yesterday at level 1 would then read as "+1 level" of training,
+        /// and owning more heroes is already its own row.</summary>
+        public long HeroLevelsGained
+        {
+            get
+            {
+                long total = 0;
+                for (int i = 0; i < Heroes.Count; i++) total += Math.Max(0, Heroes[i].Level - 1);
+                return total;
+            }
+        }
+
         /// <summary>A one-line description for the conflict card. Deliberately the same sentence
         /// for both sides, so the player is comparing values rather than two layouts.</summary>
         public string Describe()
@@ -58,6 +101,13 @@ namespace Emberfall.Core.Cloud
                  + ", " + StagesCleared + " stage" + (StagesCleared == 1 ? "" : "s") + " cleared"
                  + ", " + HeroesOwned + " hero" + (HeroesOwned == 1 ? "" : "es");
         }
+    }
+
+    /// <summary>One hero as a SaveSummary holds it: which one, and how far it has been levelled.</summary>
+    public sealed class SaveSummaryHero
+    {
+        public string DefId = "";
+        public int Level = 1;
     }
 
     public static class SaveSummaryReader
@@ -85,6 +135,38 @@ namespace Emberfall.Core.Cloud
             summary.LastSaveUnix = root.GetLong("lastSaveUnix", 0);
             List<JsonValue> heroes = root.GetList("heroes");
             summary.HeroesOwned = heroes != null ? heroes.Count : 0;
+
+            summary.PlayerXp = root.GetInt("playerXp", 0);
+            summary.Gold = root.GetLong("gold", 0);
+            summary.Shards = root.GetLong("shards", 0);
+            summary.RelicDust = root.GetLong("relicDust", 0);
+            summary.Slag = root.GetLong("slag", 0);
+            summary.Coda = root.GetLong("coda", 0);
+            summary.Valor = root.GetLong("valor", 0);
+            summary.CampaignStageId = root.GetString("campaignCurrentStageId", "");
+            summary.CampaignWave = root.GetInt("campaignCurrentWave", 1);
+            summary.CampaignBattle = root.GetInt("campaignCurrentBattle", 1);
+            summary.RecitalHighestFloor = root.GetInt("recitalHighestFloor", 0);
+            summary.ProvingHighestStanding = root.GetInt("provingHighestStanding", 0);
+            List<JsonValue> armor = root.GetList("ownedArmor");
+            summary.ArmorOwned = armor != null ? armor.Count : 0;
+            List<JsonValue> relics = root.GetList("ownedRelics");
+            summary.RelicsOwned = relics != null ? relics.Count : 0;
+            summary.TotalSummons = root.GetInt("totalSummons", 0);
+            summary.TotalBattlesWon = root.GetInt("totalBattlesWon", 0);
+            if (heroes != null)
+            {
+                for (int i = 0; i < heroes.Count; i++)
+                {
+                    JsonValue h = heroes[i];
+                    if (h == null || !h.IsObject) continue;
+                    summary.Heroes.Add(new SaveSummaryHero
+                    {
+                        DefId = h.GetString("defId", ""),
+                        Level = h.GetInt("level", 1)
+                    });
+                }
+            }
             return summary;
         }
     }
