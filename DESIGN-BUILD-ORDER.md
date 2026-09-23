@@ -28,11 +28,10 @@ about reasoning.
 
 Two runs decide whether the tree is healthy, and they measure different things.
 
-- **`Tools/build-check.ps1`: 2 failures.** It lints the docs, compiles the core and the
-  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. Both reds
-  are under **Known bugs**: the talent coverage note, a standing instrument reporting a real reading
-  rather than a break, and Hale reading under the 5-star floor in the sweep arena since defect
-  pass 3 moved his Tracking Habit to round end, which is a balance call nobody has made yet. The campaign power-band guard and the geared curve's CEIL band are green. The
+- **`Tools/build-check.ps1`: 1 failure.** It lints the docs, compiles the core and the
+  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. The one red
+  is the talent coverage note under **Known bugs**, a standing instrument reporting a real reading
+  rather than a break. The campaign power-band guard and the geared curve's CEIL band are green. The
   balance line is Kael, Kiva, Isara, Adric and Orelle, and the pinned line the CEIL is read with is
   Kael, Aeron, Nereia, Seraphine and Isolde. ENGINE-GAPS pass 3 turned `buffsOnly` on, which took
   chapter 1's finale CEIL from 68% to 27% and four walls out of the power band, so
@@ -56,7 +55,7 @@ Two runs decide whether the tree is healthy, and they measure different things.
   (4,807 to 3,772), so the solver was run again on top of the hand move. It changed only chapter 2,
   and `2-12` reads x0.99. The solver and `build-check.ps1` compile the harness from the same file
   list now, `SummonTiming.cs`, `GuildDungeonChecks.cs` and `CloudChecks.cs` included.
-  **A 3rd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
+  **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
 - **Doc lint is clean.** `Tools/doc-lint.ps1` scans 43 tracked markdown files and reports 122
@@ -274,7 +273,11 @@ beside `FiveStarFloor`.
 **It failed one hero on its first run: Aminah, at x0.50, under two of the three Mender 4-stars.**
 Her numbers were Pinoy's; her kit does less than Marrow's on the same stat line. Her basic, its heal
 and her active went from 105%, 55% and 155% of Attack to 170%, 115% and 230%, and she reads x0.86.
-Nearest the edges now: Kiva and Hale at x0.79, and Edrin x1.53, Darian x1.48 and Cyrra x1.37 above.
+Nearest the edges now: Kiva at x0.79, and Edrin x1.53, Darian x1.32 and Cyrra x1.37 above. **Hale
+reads x0.84.** Defect pass 3 moved his Tracking Habit to round end and he fell to x0.61, under the
+floor. The cause was the Quarry's clock, not his numbers: a Quarry named at round end kept whatever
+it had left from the turn it was laid, so it often ran out before Hale's next turn. Tracking Habit
+now lays it for two rounds whether it moves or stays (`transferDuration`), and he was not retuned.
 **One median moved in pass 3**: the Breaker median fell from Seraphine's 90536 to Rheia's 81541
 when `buffsOnly` took the bookkeeping out of Seraphine's Contrary Evidence, which raised every graded
 Breaker below five - Siofra x0.66, Tamsin x0.57, Aster and Avera x0.34 - and left all of them in
@@ -588,6 +591,12 @@ documentation changes are described above as the files on that branch show them,
 pinned baselines were regenerated as its last commit, from a fresh rebase on `main`. The campaign
 re-solve against real summon rates has landed on `main` and is described under **The instruments**.
 
+**`engine/hale-quarry`** is stacked on `engine/defect-pass-3` and merges after it. It makes the Quarry
+Hale's Tracking Habit names at round end last two rounds whether it moves or stays, which takes Hale
+from x0.61 back to x0.84 in the star band with no number of his changed, restates the Fresh Trail
+fidelity finding so it survives Quarries that live longer, and regenerates the baselines again as
+its last commit.
+
 ## Next
 
 In order.
@@ -775,7 +784,7 @@ instead and is named in the coverage note under **Known bugs**.
 
 ## Known bugs
 
-The two harness reds first, then the rest.
+The one harness red first, then the rest.
 
 1. **24 of 90 talents execute but are never observed doing anything** in the sweep arena. Each waits
    on something that arena does not raise: a kill, a mark, a host passive resolving first, a
@@ -790,17 +799,11 @@ The two harness reds first, then the rest.
    both hosts listen for an enemy gaining a buff; in the sweep the only "buff" either ever heard
    was their own Mark, and its enemies grant themselves none. Both are proved in their dark rooms.
    The three the dark rooms still do not reach are Aminah III, Brenna III and Caldus III.
-   **Defect pass 3 took it to 24: Hale II joined**, because Cornered rides Closing Radius's
-   missing-HP blow and, with Quarry moving at round end, Closing Radius found a Quarry on one of
-   Hale's five sweep casts rather than three. It is proved in its dark room, so 21 of the 24 are.
-2. **Hale reads x0.61 of the Marksman 5-star median in the sweep arena, under the floor of x0.78.**
-   Defect pass 3 moved his Tracking Habit to round end, as Pinoy wrote it, after measuring that at
-   the start of his turn 37% of its picks landed on an enemy that had dealt no damage yet and so
-   went to the front slot on the tie. His sweep output rests on five Closing Radius casts, and a
-   Quarry handed over at round end with a round left expires on a faster carrier's turn before two
-   of them. Over 1,440 campaign battles built around him his damage per battle is unchanged (7,869
-   against 7,838) and he wins slightly more. **Not retuned**: whether to raise his numbers, keep
-   him, or read the band over more than five casts is a balance call.
+   **Defect pass 3 took it to 24: Hale II joined** when Tracking Habit moved to round end. Cornered
+   overrides a condition on Closing Radius's missing-HP blow, and in the sweep that condition's
+   answer no longer changes. Why was not traced: it stayed dark after the Quarry clock was repaired
+   and Closing Radius went back to landing on three of Hale's five sweep casts, so fewer casts is
+   not the reason. It is proved in its dark room, so 21 of the 24 are.
 
 Beyond the harness:
 

@@ -121,7 +121,8 @@
             "kind": "TransferStatus",
             "target": "EnemyWithMyMark",
             "status": "Mark",
-            "secondaryTarget": "HighestDamageDealtEnemy"
+            "secondaryTarget": "HighestDamageDealtEnemy",
+            "transferDuration": 2
           },
           {
             "kind": "ApplyStatus",

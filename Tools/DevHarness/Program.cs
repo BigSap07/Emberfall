@@ -32741,10 +32741,16 @@ namespace Emberfall.DevHarness
                   + "inverted nothing - an inversion is not recorded as a removal, so no condition can ask (group 30's primitive)");
 
 
-            int crit, fresh;
-            HaleFreshTrail(hale, out crit, out fresh);
-            Check(crit > fresh,
-                  "Hale, Fresh Trail (I): " + crit + " Critical Damage grants against " + fresh + " new Quarry bodies - "
+            // Grants paid with no new Quarry since the last grant, rather than total grants against
+            // total new bodies. The totals were a proxy for the same finding and stopped holding once
+            // a Quarry laid at round end survived to Hale's turn (the hale-quarry pass): surviving
+            // Quarries move more, so the arena grew more new bodies (21) than turn starts (20) while
+            // Fresh Trail still paid on turns that had no new Quarry at all.
+            int crit, fresh, unearned;
+            HaleFreshTrail(hale, out crit, out fresh, out unearned);
+            Check(unearned > 0,
+                  "Hale, Fresh Trail (I): " + unearned + " of " + crit + " Critical Damage grants came at a turn start "
+                  + "with no new Quarry since the last grant (" + fresh + " new Quarry bodies in all) - "
                   + "it is paid at every turn start for the whole turn, where the text pays the first attack on a new Quarry");
         }
 
@@ -34655,20 +34661,30 @@ namespace Emberfall.DevHarness
             }
         }
 
-        private static void HaleFreshTrail(FidRuns runs, out int crit, out int fresh)
+        private static void HaleFreshTrail(FidRuns runs, out int crit, out int fresh, out int unearned)
         {
-            crit = 0; fresh = 0;
+            crit = 0; fresh = 0; unearned = 0;
             for (int r = 0; r < runs.Results.Count; r++)
             {
                 List<BattleEvent> ev = runs.Results[r].Events;
                 int id = runs.Subjects[r];
                 FidCarry carry = new FidCarry();
+                bool newSinceGrant = false;
                 for (int k = 0; k < ev.Count; k++)
                 {
                     BattleEvent e = ev[k];
-                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.CritDamageUp && e.TargetId == id && e.SourceId == id) crit++;
-                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Mark && e.SourceId == id && !carry.Has(e.TargetId, StatusKind.Mark)) fresh++;
-                    if (e.Type == BattleEventType.StatusSpread && e.Status == StatusKind.Mark) fresh++;
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.CritDamageUp && e.TargetId == id && e.SourceId == id)
+                    {
+                        crit++;
+                        if (!newSinceGrant) unearned++;
+                        newSinceGrant = false;
+                    }
+                    if ((e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Mark && e.SourceId == id && !carry.Has(e.TargetId, StatusKind.Mark))
+                        || (e.Type == BattleEventType.StatusSpread && e.Status == StatusKind.Mark))
+                    {
+                        fresh++;
+                        newSinceGrant = true;
+                    }
                     carry.Step(e);
                 }
             }
