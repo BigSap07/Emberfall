@@ -92,11 +92,19 @@
   "relicMythicShopPrice": 2400,
 
   "summonCost": 120,
-  "summonWeight1": 0,
-  "summonWeight2": 0,
-  "summonWeight3": 0,
-  "summonWeight4": 0,
-  "summonWeight5": 100,
+  // SUMMON RATES, PLACEHOLDERS. Relative weights per star tier, read by GameSession.RollHero and
+  // printed as percentages on the Rift; they sum to 100 here only so each one reads as its own
+  // percentage. These are the numbers to change: nothing in code restates them. They replace a
+  // 100% 5-star table, under which every pull was gold and the summon tell could never vary.
+  // Placeholders pending a fusion economy (DESIGN-HERO-FUSION): once low tiers feed fusion, their
+  // share should be set by what fusion needs, not by these. A tier with no heroes in content is
+  // skipped and the rest renormalise. The first PityGuaranteedSummons pulls of an account ignore
+  // these entirely (RollUnownedHero draws uniformly from unowned heroes of any tier).
+  "summonWeight1": 20,
+  "summonWeight2": 30,
+  "summonWeight3": 30,
+  "summonWeight4": 17,
+  "summonWeight5": 3,
   // 450 before the economy-curve pass. A duplicate's gold refund was the second largest gold
   // channel in the whole economy - 13% of everything earned by 2-1 and 18% by 2-12, measured by
   // the POWER SOURCES instrument - and it is the only large one whose size nobody chose: it

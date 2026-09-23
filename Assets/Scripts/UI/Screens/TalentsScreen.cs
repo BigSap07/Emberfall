@@ -446,6 +446,9 @@ namespace Emberfall.UI.Screens
                     AddNumberRow(view.NumbersList, numbers[n].Figure, numbers[n].Tint);
                 }
 
+                // Read from the list, never named here: a talent that leaves the audit (Velis III
+                // did) loses its line with no change to this screen. The harness keeps the list
+                // equal to its KnownCostlyTalents in CheckTalentAuditMatchesHarness.
                 AuditedTalent audit = TalentAudit.For(def.Id, view.Selection);
                 view.Audit.text = audit != null ? audit.Note : "";
                 view.Audit.color = audit != null && audit.Trap ? UITheme.Danger : UITheme.Warning;

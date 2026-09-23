@@ -46,13 +46,15 @@ after the tell, so the length of the wait cannot leak the result before the colo
 | 5 | gold, `RarityDeep(5)`, hot centre `RarityLit(5)` | a screen shake that decays over 0.45s, a second wider ring, strong light rays, 0.30s longer hold |
 | 4 | purple, `RarityDeep(4)` | faint rays, 0.10s longer hold |
 | 3 | blue, `RarityDeep(3)` | one ring |
-| 2 | green, `RarityDeep(2)` | one ring |
-| 1 | grey, `RarityDeep(1)` | one ring |
+| 2 | green, `RarityDeep(2)` | a smaller ring and half the punch, then the flat reveal (below) |
+| 1 | grey, `RarityDeep(1)` | a smaller ring and half the punch, then the flat reveal (below) |
 
 The colours ARE the rarity frame's colours, read through `Emberforge.SummonTell` rather than
 written again, so the light and the frame the hero lands in cannot drift apart.
 
-Tiers 1 and 2 are listed because they can really come out. See **A roll finding** below.
+Tiers 1 and 2 are listed because they can really come out: since 2026-09-23 the live rates reach
+every tier (see **Rates** below), and the first three pulls of an account could reach them before
+that. See **A roll finding** below.
 
 Before the tell, the light is `SummonNeutral`, a cool near-white. The first pass used a warm cream,
 and the timing strip showed cream sits so close to gold that the gold tell was the smallest colour
@@ -85,12 +87,58 @@ All times are seconds. **Full** is the default; **Fast** is the settings switch.
 | Settled | NEW ALLY or the duplicate conversion, and TAP TO CONTINUE | 0.55 | 0.35 |
 
 Tap to reveal on a 3-star is therefore 0.22 + 1.25 + 0.06 = 1.53s at Full, and 1.83s on a 5-star.
-At Fast it is 0.46s and 0.54s.
+At Fast it is 0.46s and 0.54s. For the 1 and 2 star timings see **The flat tiers** below.
 
 The brief's starting numbers were 0.2 dim, a 1.2 buildup and a tell at 0.8. The tell stayed at 0.8,
 the dim went to 0.22 and the buildup to 1.25 so a 3-star still has 0.45s of committed colour before
 the flash. The tier lingers are new: without them a 5-star and a 3-star got the same length of
 knowing, and the knowing is the payload.
+
+### The flat tiers: 1 and 2 stars
+
+Added 2026-09-23, when the live rates made half of all pulls a 1 or 2 star. A grey pull given the
+full show teaches players to skip the show, and the gold tell loses its meaning by association. So
+a 1 or 2 star gets a short flat reveal. `SummonTiming.IsFlat` is the switch and `FlatMaxStars` the
+line.
+
+**The cut is after the tell, never before it.** Up to the tell a flat pull looks and lasts exactly
+like a 3, 4 or 5 star: the same dim, the same growing light, the same neutral colour, and the
+tell at the same 0.80. That is the rule the tell rests on and it still holds. Once the light has
+gone grey or green there is nothing left to build to, so it holds briefly and flashes. In
+`SummonTiming` terms, a flat tier's linger is negative: `LingerFor(1)` is
+`Tell + FlatHold - Buildup`. That keeps the harness's `CheckSummonTiming` invariant (every tier's
+buildup is the shared buildup plus its own linger, applied after the tell) true without a special
+case.
+
+| Beat, flat tiers | What changes | Full | Fast |
+|---|---|---|---|
+| Up to the tell | nothing, identical to every tier | 0.80 | 0.10 |
+| Committed hold | tell to flash; replaces the 0.45 a 3-star holds | 0.14 | 0.06 |
+| Charge | none; no swell into the flash | - | - |
+| Punch and ring | half the punch, a ring that reaches 2.2 rather than 3.2 | - | - |
+| Flash | peaks at 55% white rather than a full white-out | 0.06 in | 0.04 in |
+| Flash out | the soft flash clears | 0.12 | 0.10 |
+| Portrait | 1.04 to 1.0 over the flash out, rather than 1.15 over 0.34 | - | - |
+| Name, title and stars | fade in together at size, no stamp, no per-star ping, at | 0.04 | 0.02 |
+| Backlight | the tell colour behind the hero at 0.45 rather than 0.75 | - | - |
+| Settled | NEW ALLY or the refund, and TAP TO CONTINUE | 0.28 | 0.20 |
+| Mini tell in a ten-pull | replaces the 0.34 mini tell | 0.18 | 0.10 |
+
+Press to settled at Full: 1-star or 2-star 0.22 + 0.94 + 0.06 + 0.28 = **1.50s**, 3-star
+0.22 + 1.25 + 0.06 + 0.55 = 2.08s, 5-star 2.38s. In a ten-pull, a flat pull after the first costs
+0.18 + 0.06 + 0.28 = 0.52s from the tap to its settled hero, against 0.95s for a 3-star.
+
+**Why the buildup is still 0.94s and not shorter.** The brief asked for no 1.2 second buildup on a
+1 or 2 star. The 0.80 before the tell is shared by every tier by design, so a flat pull cannot be
+shorter than that without the length of the wait telling the player it is grey before the colour
+does. What was cut is everything after the tell, which was where the drama for a low tier lived: the
+0.45 hold, the charge, the full white flash, the stamp. The pre-tell 0.80 is the one number left to
+move if the flat pull still feels long; moving it moves it for gold too.
+
+**Picked by feel**, from the captures and a live ten-pull (see **Watching a ten-pull**): 0.14 of
+committed grey is long enough to register the colour as a decision rather than a flicker, and
+short enough that the flash follows the tell like a shrug. 0.28 to settled is about the time it
+takes to read a name that did not stamp.
 
 ### Ten-pull
 
@@ -99,7 +147,8 @@ in already committed to that pull's own colour, rings, and flashes.
 
 | Mini tell | Full | Fast |
 |---|---|---|
-| any tier | 0.34 | 0.18 |
+| 3 and 4 star | 0.34 | 0.18 |
+| 1 and 2 star | 0.18 | 0.10 |
 | extra for a 5-star | +0.30, with the shake and the second ring | +0.08 |
 
 A counter at the top reads `n / 10`. After the tenth reveal, a tap opens the summary grid: every
@@ -167,22 +216,63 @@ shader, no post-processing, no new texture.
 - **Nothing is simulated.** Every frame is posed from the pull, the phase and the time, including
   the motes, which are a hash of their index and the time. No per-frame allocation.
 
+## Rates
+
+The summon rates are content: `summonWeight1` to `summonWeight5` in `balance.json`, read by
+`RollHero` in `GameSession.cs`. The Rift prints them as percentages once, on the stage under the
+headline. Until 2026-09-23 they were 100% 5-star, so every real pull was gold, the tell never
+varied and the sequence could only be tested through the preview.
+
+| Tier | Weight |
+|---|---|
+| 1 | 20 |
+| 2 | 30 |
+| 3 | 30 |
+| 4 | 17 |
+| 5 | 3 |
+
+**These are placeholders pending a fusion economy** (`DESIGN-HERO-FUSION.md`). Once low tiers feed
+fusion, their share should come from what fusion needs. The comment above them in `balance.json`
+says the same, so a designer changing them meets it.
+
+What the change costs elsewhere: the harness's economy model pulls with the live rates, so a campaign
+power ratio that was built on every pull being a 5-star moved. On the run that set these rates,
+three stages fell just under their power band (1-9 at x1.00, 1-12 at x0.96, 2-1 at x1.10). That is
+a campaign balance question for whoever owns the band, not a presentation one.
+
 ## Testing without grinding
 
-The live weights make every real pull a 5-star, so the 3-star and 4-star paths cannot be reached by
-playing at all. `SummonScreen.DebugPreview` plays the sequence for heroes of chosen tiers **without
+Real pulls reach every tier now, but a 5-star is 3% of a pull, so a chosen tier still cannot be
+reached on demand. `SummonScreen.DebugPreview` plays the sequence for heroes of chosen tiers **without
 rolling**: no `GameSession.Summon` call, no shards spent, nothing granted, nothing saved. It does not
 force the roll, because forcing the roll would be a change to the summon logic.
 
 - **Editor only.** It is compiled inside `#if UNITY_EDITOR`, so a player build does not contain it.
 - **Clearly marked.** The sequence prints EDITOR PREVIEW, NOTHING WAS ROLLED OR GRANTED in the
   corner for the whole of a preview, including in the captures.
-- **Reached from** the cheat panel (Emberfall, Debug, Cheat Panel: 3-star, 4-star, 5-star, x10
-  mixed, and a Fast summon toggle) and from `SummonSequenceShots`.
+- **Reached from** the cheat panel (Emberfall, Debug, Cheat Panel: 1-star to 5-star, x10 mixed,
+  and a Fast summon toggle) and from `SummonSequenceShots`.
 
-`SummonSequenceShots` photographs each beat by freezing the sequence at an exact instant through
-`SummonSequence.FreezeAt`, so two runs produce the same pictures. It also writes a timing strip, a
-5-star pull every 0.1s, which is how the pacing was tuned.
+`SummonSequenceShots` photographs each beat of every tier by freezing the sequence at an exact
+instant through `SummonSequence.FreezeAt`, so two runs produce the same pictures. It also writes two
+timing strips, a 5-star and a 1-star pull every 0.1s, which is how the pacing was tuned.
+
+### Watching a ten-pull
+
+`SummonSequenceShots.RunRealtime` plays the preview ten-pull (`DebugCheatPanel.PreviewBatch`, tiers
+3 1 2 4 2 5 3 1 2 3) live at Full, tapping 0.4s after each hero settles, and writes every phase
+change with its time to `Docs/ui-shots/summon-realtime/x10-timeline.txt`. It is the run to screen
+record when judging whether the buildup drags on repeat viewing.
+
+Measured on 2026-09-23, with the rates and flat tiers above: press to summary grid in **13.0s**.
+The one full buildup (pull 1, a 3-star) is 1.25s of it. From a tap to the settled hero, a flat pull
+took 0.52s, a 3-star 0.97s, a 4-star 1.03s and the gold 1.26s, each matching the tables. Watched as
+a screen recording stepped frame by frame beside that log: the gold mini tell holds for about four
+frames at 5 per second, a 3-star two, and a grey or green pull commits and flashes inside one or two.
+On repeat viewing the buildup does not drag, because nine of the ten pulls never have one; what
+reads longest is a 3-star's 0.55 settle next to the 0.28 of the flat pulls around it, and that
+contrast is the point. If anything is shortened next it is the first pull's 1.25 when that pull is
+flat, which the tell rule allows only after 0.80.
 
 ## What is left for Pinoy to replace
 
@@ -204,19 +294,27 @@ All of these are placeholders built from the kit, and each is one sprite referen
 
 `GameSession.Summon` sends the first three pulls of an account through `RollUnownedHero`, which draws
 uniformly from every unowned hero **of any tier** and ignores the summon weights entirely. With the
-live weights at 100% 5-star, the Rift's odds line says EVERY PULL IS 5-STAR, while a fresh account's
-first three pulls can land a 1-star, 2-star, 3-star or 4-star hero. Either the odds line or the
-guarantee is wrong. This pass did not touch it; the tell handles every tier honestly either way.
+live weights at 100% 5-star, the Rift's odds line said EVERY PULL IS 5-STAR, while a fresh account's
+first three pulls could land a 1-star, 2-star, 3-star or 4-star hero. Either the odds line or the
+guarantee is wrong. The tell handles every tier honestly either way.
 
-## A harness check that belongs here
+**Still left alone on 2026-09-23, on purpose, and now visible rather than hidden.** With real rates
+the gap is in the other direction: the odds line says 5-STAR 3%, and a fresh account's first three
+pulls are drawn from the unowned pool's shape instead. Measured over 2,000 fresh accounts against
+the rates above, pulls 1 to 3 came out 8.7% 1-star, 12.7% 2-star, 20.1% 3-star, 28.6% 4-star and
+30.0% 5-star, ten times the stated 5-star rate, while pulls 4 to 13 came out 20.0, 30.1, 30.1, 16.8
+and 3.1, matching the rates.
 
-Not added, because `Tools/DevHarness/Program.cs` is being edited on another branch.
-`SummonTiming.cs` is engine-free so it can join the harness's compile list, and the check would
-assert, for both `Full` and `Fast`:
+## The harness check
+
+This section first recorded a check that could not be added yet. It exists now as
+`CheckSummonTiming` in the harness. `SummonTiming.cs` is engine-free so it compiles beside the core,
+and the check asserts, for both `Full` and `Fast`:
 
 - the tell lands inside the buildup: `0 < Tell < Buildup`;
-- the time before the tell does not depend on tier, which holds if `BuildupFor(s) - Tell` only
-  grows with the tier and `Tell` is not a function of it;
+- the time before the tell does not depend on tier: every tier's `BuildupFor(s)` is the shared
+  `Buildup` plus its own `LingerFor(s)`, and `Tell` is not a function of tier. The flat tiers meet
+  it with a negative linger, cut after the tell;
 - a tier's committed hold never shrinks as the tier rises: `LingerFor(3) <= LingerFor(4) <= LingerFor(5)`;
 - the mini tell is shorter than a full buildup: `MiniFor(5) < BuildupFor(3)`;
 - Fast is actually fast: `Fast.Dim + Fast.BuildupFor(5) <= 0.5`.

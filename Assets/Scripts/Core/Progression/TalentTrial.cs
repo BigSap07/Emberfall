@@ -109,8 +109,10 @@ namespace Emberfall.Core.Progression
         /// <summary>
         /// Fights per reading. Forty, the harness's own TalentValueSeeds, and measured here rather
         /// than borrowed: on a real save (thirty 5-stars at level 13) sixteen seeds left both
-        /// audited traps inside the noise, and forty puts Kael's Lasting Materials at t -4.5 and
-        /// Velis's Final Denial at t -2.2, the same side of the line the harness finds them on.
+        /// talents then audited as traps inside the noise, and forty put Kael's Lasting Materials
+        /// at t -4.5 and Velis's Final Denial at t -2.2, the same side of the line the harness
+        /// found them on. Velis III has since left the audited list (-341 a battle, t -1.4); which
+        /// talents are traps now is TalentAudit.Costly, never this note.
         /// Four readings of forty is 160 fights, which cost 90 ms per hero on average and 129 ms
         /// at worst on a desktop CLR, so a screen spreading them over frames finishes in well
         /// under a second.

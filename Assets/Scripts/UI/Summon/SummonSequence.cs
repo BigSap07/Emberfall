@@ -18,10 +18,15 @@ namespace Emberfall.UI.Summon
     /// came out.
     ///
     /// THE TELL IS THE WHOLE PAYLOAD. The light that builds up commits to the rolled tier's
-    /// colour a beat before the hero is on screen: blue, purple, gold, read off the same ramp the
-    /// rarity frame is drawn in (Emberforge.SummonTell). The colour always comes from the real
-    /// outcome, never from the batch's best pull and never from a guess, because a gold light
-    /// that reveals a 3-star is worse than no light at all.
+    /// colour a beat before the hero is on screen: grey, green, blue, purple or gold for 1 to 5
+    /// stars, read off the same ramp the rarity frame is drawn in (Emberforge.SummonTell). The
+    /// colour always comes from the real outcome, never from the batch's best pull and never from
+    /// a guess, because a gold light that reveals a 3-star is worse than no light at all.
+    ///
+    /// THE LOW TIERS GET LESS, AFTER THE TELL. A 1 or 2 star is a flat pull
+    /// (SummonTiming.IsFlat): once its light has committed it holds briefly and flashes, softly,
+    /// and the hero fades in without the stamp. Up to the tell it is identical to every other
+    /// pull, so the wait still leaks nothing.
     ///
     /// EVERY FRAME IS A FUNCTION OF (phase, time). Nothing about a beat is accumulated from frame
     /// to frame - not the particles, not the shake, not the rings - so a skip is setting the time,
@@ -102,6 +107,8 @@ namespace Emberfall.UI.Summon
         public Phase Current { get { return _phase; } }
         public int Index { get { return _index; } }
         public bool Running { get { return _phase != Phase.Idle; } }
+        /// <summary>The current hero has landed and TAP TO CONTINUE is showing.</summary>
+        public bool IsSettled { get { return _phase == Phase.Reveal && _time >= Settled; } }
 
         // ================================================================ build
 
@@ -369,6 +376,13 @@ namespace Emberfall.UI.Summon
         /// <summary>The later pulls of a batch get the mini tell rather than the full buildup.</summary>
         private bool Mini { get { return _index > 0; } }
 
+        /// <summary>This pull is a 1 or 2 star, which gets the short flat reveal.</summary>
+        private bool Flat { get { return SummonTiming.IsFlat(Stars); } }
+
+        /// <summary>When this pull's reveal counts as landed: TAP TO CONTINUE shows, and a tap
+        /// moves on rather than completing it.</summary>
+        private float Settled { get { return _timing.SettledFor(Stars); } }
+
         private void Enter(Phase phase)
         {
             _phase = phase;
@@ -473,7 +487,7 @@ namespace Emberfall.UI.Summon
         /// for the whole row otherwise.</summary>
         private int StarsDue(float t)
         {
-            if (t < _timing.StarsAt) return 0;
+            if (t < (Flat ? _timing.FlatNameAt : _timing.StarsAt)) return 0;
             if (Stars < 5) return 5;
             return Mathf.Min(5, 1 + Mathf.FloorToInt((t - _timing.StarsAt) / _timing.StarGap));
         }
@@ -539,7 +553,7 @@ namespace Emberfall.UI.Summon
                     Enter(Phase.Reveal);
                     break;
                 case Phase.Reveal:
-                    if (_time < _timing.Settled) { _time = _timing.Settled; TickRevealAudio(); }
+                    if (_time < Settled) { _time = Settled; TickRevealAudio(); }
                     else Next();
                     break;
             }
@@ -561,7 +575,7 @@ namespace Emberfall.UI.Summon
             }
             FireTell();
             Enter(Phase.Reveal);
-            _time = _timing.Settled;
+            _time = Settled;
             _revealFired = true;
             _starsPinged = 5;
             Pose();
@@ -762,10 +776,11 @@ namespace Emberfall.UI.Summon
             _stage.gameObject.SetActive(lit);
             if (lit) PoseLight();
 
-            // ---- the flash.
+            // ---- the flash. A flat pull's is a soft cut, not a white-out.
             float flash = 0f;
-            if (_phase == Phase.Flash) flash = Mathf.Clamp01(_time / _timing.FlashIn);
-            else if (reveal) flash = 1f - Mathf.Clamp01(_time / _timing.FlashOut);
+            float peak = Flat ? 0.55f : 1f;
+            if (_phase == Phase.Flash) flash = peak * Mathf.Clamp01(_time / _timing.FlashIn);
+            else if (reveal) flash = peak * (1f - Mathf.Clamp01(_time / _timing.FlashOutFor(Stars)));
             _flash.color = new Color(1f, 1f, 1f, flash);
 
             // ---- the hero.
@@ -785,6 +800,7 @@ namespace Emberfall.UI.Summon
         private void PoseLight()
         {
             int stars = Stars;
+            bool flat = Flat;
             Color tell = Emberforge.SummonTell(stars);
             Color hot = Emberforge.SummonTellHot(stars);
             float t = _phase == Phase.Flash ? BuildupLength + _time : _time;
@@ -796,8 +812,9 @@ namespace Emberfall.UI.Summon
             // 0 to 1 over the approach to the tell; the full buildup grows through it, the mini
             // tell arrives already grown.
             float grow = tellAt > 0f ? Mathf.Clamp01(t / tellAt) : 1f;
-            // The final charge before the flash.
-            float charge = Mathf.Clamp01((t - (length - 0.14f)) / 0.14f);
+            // The final charge before the flash. None on a flat pull: its committed hold is barely
+            // longer than the charge, which would start the swell right at the tell.
+            float charge = flat ? 0f : Mathf.Clamp01((t - (length - 0.14f)) / 0.14f);
 
             // Colour commits over a few frames rather than snapping, so the change reads as the
             // light CHOOSING rather than as a cut.
@@ -808,7 +825,7 @@ namespace Emberfall.UI.Summon
             // Scale: grows in, punches on the tell, swells into the flash. It starts at 0.3, not
             // near zero: from 0.12 the timing strip showed the first half second of the buildup as
             // an empty screen, which reads as a stall rather than as something gathering.
-            float punch = committed ? Ease.Punch(Mathf.Clamp01(since / 0.28f)) * 0.22f : 0f;
+            float punch = committed ? Ease.Punch(Mathf.Clamp01(since / 0.28f)) * (flat ? 0.1f : 0.22f) : 0f;
             float scale = (Mini ? Mathf.Lerp(0.4f, 1f, Ease.Out(Mathf.Clamp01(t / 0.12f)))
                                 : Mathf.Lerp(0.3f, 0.9f, Ease.InOut(grow)))
                           + punch + charge * 0.7f;
@@ -824,7 +841,7 @@ namespace Emberfall.UI.Summon
             PoseStreaks(_rays, _rayStreaks, hot, raysAlpha * commit, scale * 0.9f + 0.1f, t * 24f);
 
             // Ring one on every tier at the tell. Ring two on gold only, a beat later and wider.
-            PoseRing(_ringOne, since, 0f, 0.55f, 3.2f, tell);
+            PoseRing(_ringOne, since, 0f, flat ? 0.4f : 0.55f, flat ? 2.2f : 3.2f, tell);
             if (stars >= 5) PoseRing(_ringTwo, since, 0.12f, 0.7f, 4.6f, hot);
             else SetImage(_ringTwo, hot, 0f, 1f);
 
@@ -873,51 +890,57 @@ namespace Emberfall.UI.Summon
             Color tell = Emberforge.SummonTell(stars);
             Color hot = Emberforge.SummonTellHot(stars);
 
-            // Backlight: the committed light, left burning behind the hero.
+            bool flat = Flat;
+
+            // Backlight: the committed light, left burning behind the hero. Lower on a flat pull.
             float back = Ease.Out(Mathf.Clamp01(t / 0.2f));
-            SetImage(_revealBack, tell, 0.75f * back, 1f + 0.03f * Mathf.Sin(t * 2.4f));
+            SetImage(_revealBack, tell, (flat ? 0.45f : 0.75f) * back, 1f + 0.03f * Mathf.Sin(t * 2.4f));
             PoseStreaks(_revealRays, _revealStreaks, hot, (stars >= 5 ? 0.5f : stars == 4 ? 0.2f : 0f) * back,
                         1f, t * 10f);
 
-            // Portrait: 1.15 down to 1.0, in over its first tenth of a second.
-            float k = Mathf.Clamp01(t / timing.PortraitIn);
-            float scale = Mathf.Lerp(1.15f, 1f, Ease.Out(k));
+            // Portrait: 1.15 down to 1.0, in over its first tenth of a second. A flat pull barely
+            // moves: 1.04 to 1.0, over the time its soft flash takes to clear.
+            float k = Mathf.Clamp01(t / (flat ? timing.FlatFlashOut : timing.PortraitIn));
+            float scale = Mathf.Lerp(flat ? 1.04f : 1.15f, 1f, Ease.Out(k));
             _portraitHost.localScale = new Vector3(scale, scale, 1f);
-            SetGroupAlpha(_portraitHost, Mathf.Clamp01(t / 0.1f));
+            SetGroupAlpha(_portraitHost, Mathf.Clamp01(t / (flat ? 0.06f : 0.1f)));
 
-            // Name and title stamp: big to size, overshooting slightly.
-            float n = Mathf.Clamp01((t - timing.NameAt) / timing.NameIn);
-            float nameScale = t < timing.NameAt ? 0f : Mathf.Lerp(1.6f, 1f, Ease.OutBack(n));
+            // Name and title stamp: big to size, overshooting slightly. A flat pull fades them in
+            // at size, with no stamp.
+            float nameAt = flat ? timing.FlatNameAt : timing.NameAt;
+            float n = Mathf.Clamp01((t - nameAt) / timing.NameIn);
+            float nameScale = t < nameAt ? 0f : flat ? 1f : Mathf.Lerp(1.6f, 1f, Ease.OutBack(n));
             _nameBlock.localScale = new Vector3(nameScale, nameScale, 1f);
             _name.color = UITheme.WithAlpha(_name.color, Mathf.Clamp01(n * 2f));
             _title.color = UITheme.WithAlpha(Emberforge.TextQuiet, Mathf.Clamp01(n));
 
-            // Stars: all at once below 5, one at a time at 5.
+            // Stars: all at once below 5, one at a time at 5. A flat pull's fade in with its name,
+            // at size.
             Color filled = Emberforge.RarityLit(stars);
             Color empty = UITheme.WithAlpha(UITheme.TextDim, 0.55f);
             for (int i = 0; i < 5; i++)
             {
-                float at = timing.StarsAt + (stars >= 5 ? i * timing.StarGap : 0f);
+                float at = flat ? nameAt : timing.StarsAt + (stars >= 5 ? i * timing.StarGap : 0f);
                 float s = Mathf.Clamp01((t - at) / timing.StarIn);
                 bool on = i < stars;
-                float starScale = t < at ? 0f : Mathf.Lerp(on ? 2f : 1.3f, 1f, Ease.OutBack(s));
+                float starScale = t < at ? 0f : flat ? 1f : Mathf.Lerp(on ? 2f : 1.3f, 1f, Ease.OutBack(s));
                 _stars[i].rectTransform.localScale = new Vector3(starScale, starScale, 1f);
                 _stars[i].color = UITheme.WithAlpha(on ? filled : empty, (on ? 1f : empty.a) * Mathf.Clamp01(s * 2f));
             }
 
-            float noteAlpha = Mathf.Clamp01((t - (timing.Settled - 0.12f)) / 0.12f);
+            float noteAlpha = Mathf.Clamp01((t - (Settled - 0.12f)) / 0.12f);
             _note.color = UITheme.WithAlpha(_note.color, noteAlpha);
         }
 
         private void PoseHint()
         {
-            bool settled = _phase == Phase.Reveal && _time >= _timing.Settled;
+            bool settled = _phase == Phase.Reveal && _time >= Settled;
             if (settled)
             {
                 bool last = _index + 1 >= _outcomes.Count;
                 _hint.text = last ? (IsBatch ? "TAP TO SEE ALL PULLS" : "TAP TO CONTINUE") : "TAP FOR THE NEXT PULL";
-                float pulse = 0.65f + 0.35f * Mathf.Sin((_time - _timing.Settled) * 4f);
-                _hint.color = UITheme.WithAlpha(Emberforge.TextBody, Mathf.Clamp01((_time - _timing.Settled) / 0.15f) * pulse);
+                float pulse = 0.65f + 0.35f * Mathf.Sin((_time - Settled) * 4f);
+                _hint.color = UITheme.WithAlpha(Emberforge.TextBody, Mathf.Clamp01((_time - Settled) / 0.15f) * pulse);
                 return;
             }
             // Before the hero lands the hint says how to get past the wait, quietly.
