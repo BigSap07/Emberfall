@@ -36,10 +36,12 @@ namespace Emberfall.UI.Screens
     /// AND THE THREE WAYS A FIGURE CAN BE TRUE ARE TOLD APART rather than flattened. Six effects
     /// in the roster take their amount from a runtime quantity and twenty-one are priced entirely
     /// off the target's health: neither has an honest flat number outside a fight, so those print
-    /// their clause. Twenty-eight carry a real caster-side figure with something the card cannot
-    /// see added on top: those print the figure and say "or more". TalentFigureBasis is the
-    /// distinction and TalentText.FloorNote and ClauseNote are the two sentences that explain it,
-    /// said once under a list that contains one rather than on every line that is one.
+    /// their clause. Twenty-eight carry a term the card cannot see, and the seven of those that
+    /// also carry a real caster-side figure - the other twenty-one being the flatless list again -
+    /// print that figure and say "or more", because it is the least the fight deals rather than
+    /// the whole. TalentFigureBasis is the distinction and TalentText.FloorNote and ClauseNote are
+    /// the two sentences that explain it, said once under a list that contains one rather than on
+    /// every line that is one.
     ///
     /// NONE IS ONE OF THE OPTIONS, not the absence of one. It sits under the three as a bar in
     /// the same plate, selected the same way, with the same kind of button - because an
@@ -510,11 +512,17 @@ namespace Emberfall.UI.Screens
         /// <summary>
         /// The three cards, filled from the hero's own kit.
         ///
-        /// Every block's height is decided here rather than at build time, because two of them are
-        /// conditional: a cost banner exists on seven talents in the roster and the footnotes exist
-        /// only where a figure needs one. Reserving room for all of them on every card would take
-        /// the numbers list - the one block the page is for - down to three lines everywhere to
-        /// spare four cards a scroll.
+        /// Two of the blocks are conditional, so the heights are decided here rather than at build
+        /// time: a cost banner exists on seven talents in the roster and the footnotes exist only
+        /// where a figure needs one. Reserving room for all of them on every card would take the
+        /// numbers list - the one block the page is for - down to three lines everywhere to spare
+        /// a handful of cards a scroll.
+        ///
+        /// The two are decided at DIFFERENT SCOPES, and that is deliberate. The cost banner sits
+        /// above the numbers, so its height moves the band's top, and the band's top is read
+        /// across the three cards - it is decided once for the hero. The footnotes sit below the
+        /// numbers, under a rule, where nothing is read across, so each card takes only the ones
+        /// its own figures earned.
         /// </summary>
         private void FillCards(HeroInstance hero)
         {
