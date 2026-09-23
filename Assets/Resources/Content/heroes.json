@@ -1538,9 +1538,15 @@
               "effectIndex": 1,
               "field": "magnitude",
               "delta": -0.1
+            },
+            {
+              "ability": "passive2",
+              "effectIndex": 3,
+              "field": "power",
+              "delta": 0.9
             }
           ],
-          "description": "When Volume Closed fires, the enemy also loses turn progress."
+          "description": "When Volume Closed fires, the enemy loses turn progress and the record it pays out lands far harder."
         }
       }
     },
@@ -3140,14 +3146,23 @@
           "trigger": "None",
           "oncePerBattle": false,
           "effects": [],
-          "description": "When Change of Course saves an ally, Nereia also strikes the enemy with the highest Attack for part of the damage she took in their place.",
+          "description": "Whenever damage is turned onto Nereia she sends part of it back at the enemy with the highest Attack, and far more of it when Change of Course catches an ally outright.",
           "appends": [
+            {
+              "ability": "passive1",
+              "effect": {
+                "kind": "Damage",
+                "target": "HighestAttackEnemy",
+                "power": 2.2,
+                "scaleByLastRedirect": true
+              }
+            },
             {
               "ability": "passive2",
               "effect": {
                 "kind": "Damage",
                 "target": "HighestAttackEnemy",
-                "power": 0.8,
+                "power": 1.5,
                 "scaleByLastRedirect": true,
                 "condition": "MyStatusStacksAtLeast",
                 "conditionStatus": "Covered",
@@ -3442,6 +3457,26 @@
           "appends": [
             {
               "ability": "passive2",
+              "atIndex": 2,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "status": "Vulnerable",
+                "magnitude": 0.4,
+                "duration": 3,
+                "chance": 1,
+                "bypassResist": true,
+                "condition": "HasStatus",
+                "conditionStatus": "DefenseDown",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve",
+                "conditionValue2": 4,
+                "conditionOn2": "Caster"
+              }
+            },
+            {
+              "ability": "passive2",
               "atIndex": 3,
               "effect": {
                 "kind": "ApplyStatus",
@@ -3477,7 +3512,7 @@
               }
             }
           ],
-          "description": "When Second Draft fires at full Revision, the target also gains Attack Down if it holds Attack Up, and Rheia gains Guard Up."
+          "description": "When Second Draft fires at full Revision the target is left open to Rheia, gains Attack Down if it holds Attack Up, and Rheia gains Guard Up."
         },
         "talentIII": {
           "id": "rheia_perfect_reversal",
@@ -4447,28 +4482,50 @@
               }
             }
           ],
-          "description": "Leaving Cut also lowers the Departure target's Effect Resist, until an ally's strike sets Departure off."
+          "description": "Leaving Cut lowers the Departure target's Effect Resist until an ally's strike sets Departure off, and the cut Vaelis answers with lands far harder.",
+          "overrides": [
+            {
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "power",
+              "delta": 0.9
+            }
+          ]
         },
         "talentII": {
           "id": "vaelis_stolen_position",
           "name": "Stolen Position",
           "trigger": "None",
           "effects": [],
-          "overrides": [
+          "description": "Passed Position leaves both bodies it moves between open to Vaelis before it strikes either of them.",
+          "appends": [
             {
               "ability": "active",
-              "effectIndex": 2,
-              "field": "hits",
-              "delta": -8
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "HighestAttackEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.3,
+                "duration": 2,
+                "chance": 1,
+                "bypassResist": true
+              }
             },
             {
               "ability": "active",
-              "effectIndex": 3,
-              "field": "hits",
-              "delta": -8
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.3,
+                "duration": 2,
+                "chance": 1,
+                "bypassResist": true
+              }
             }
-          ],
-          "description": "Passed Position moves buffs only up to a limit, rather than all of them."
+          ]
         },
         "talentIII": {
           "id": "vaelis_no_place_to_hold",
@@ -6251,23 +6308,29 @@
               "effectIndex": 1,
               "field": "duration",
               "delta": 1
+            },
+            {
+              "ability": "basic",
+              "effectIndex": 1,
+              "field": "maxStacks",
+              "delta": 2
             }
           ],
           "appends": [
             {
               "ability": "basic",
               "effect": {
-                "kind": "Heal",
-                "target": "Self",
-                "selfHpRatio": 0.04,
-                "condition": "MyStatusStacksAtLeast",
-                "conditionStatus": "Mark",
-                "conditionValue": 3,
-                "conditionOn": "LastTarget"
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.15,
+                "duration": 2,
+                "chance": 1,
+                "bypassResist": true
               }
             }
           ],
-          "description": "Observed Mark lasts longer, and whenever Mark of Survival strikes an enemy whose Mark is at full depth, Edrin heals a share of his Max HP."
+          "description": "Observed Mark lasts longer and can be driven deeper, and every blow Mark of Survival lands leaves the enemy it struck open to Edrin."
         },
         "talentII": {
           "id": "edrin_watchfires",
@@ -6298,17 +6361,17 @@
               "effect": {
                 "kind": "Damage",
                 "target": "LowestHpEnemy",
-                "power": 0.5,
+                "power": 2.0,
                 "scaleByLastRelease": true,
                 "condition": "StatusStacksAtLeast",
                 "conditionStatus": "Resolve",
-                "conditionValue": 4,
+                "conditionValue": 3,
                 "conditionOn": "Caster",
                 "consumesResolve": true
               }
             }
           ],
-          "description": "After Edrin's basic attack, if his Resolve is full, he spends it all to strike the enemy with the lowest HP for a share of what his Watcher's Ledger last paid out."
+          "description": "After Edrin's basic attack, if he has banked enough Resolve, he spends it all to strike the enemy with the lowest HP for a heavy share of what his Watcher's Ledger last paid out."
         }
       }
     },
@@ -6552,9 +6615,9 @@
           "oncePerBattle": false,
           "effects": [
             {
-              "kind": "EnergyGain",
-              "target": "Self",
-              "flat": 5
+              "kind": "Heal",
+              "target": "LowestHpAlly",
+              "power": 0.6
             }
           ],
           "overrides": [
@@ -6571,7 +6634,7 @@
               "delta": 1
             }
           ],
-          "description": "Mire from Patient Measure and Sanctuary Unbroken lasts longer, and whenever a Mire Elyra applied expires, she gains Energy."
+          "description": "Mire from Patient Measure and Sanctuary Unbroken lasts longer, and whenever a Mire Elyra set fades she mends the ally with the lowest HP."
         },
         "talentII": {
           "id": "elyra_sanctuary_spreads",
@@ -12189,37 +12252,18 @@
           "overrides": [
             {
               "ability": "passive2",
-              "field": "limitOff",
+              "effectIndex": 0,
+              "field": "hits",
               "delta": 1
             },
             {
-              "ability": "passive2",
-              "field": "firesPerSubject",
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "maxStacks",
               "delta": 2
-            },
-            {
-              "ability": "passive2",
-              "effectIndex": 1,
-              "field": "power",
-              "delta": -0.21
             }
           ],
-          "appends": [
-            {
-              "ability": "passive2",
-              "effect": {
-                "kind": "Damage",
-                "target": "BroadcastSubject",
-                "power": 0.21,
-                "condition": "HasMyMark",
-                "conditionOn": "BroadcastSubject",
-                "condition2": "PassiveFiredOnSubjectBelow",
-                "conditionValue2": 1,
-                "conditionOn2": "BroadcastSubject"
-              }
-            }
-          ],
-          "description": "The Missing Page is no longer limited to once per round, but can fire only a limited number of times against each enemy. Its first strike on an enemy lands at full strength and later strikes land softer."
+          "description": "The Missing Page erases two marks from the page instead of one, and Mireth can carry more Absence for what she takes away."
         },
         "talentII": {
           "id": "mireth_blank_space",
@@ -12227,6 +12271,25 @@
           "trigger": "None",
           "effects": [],
           "appends": [
+            {
+              "ability": "passive2",
+              "atIndex": 5,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "status": "Vulnerable",
+                "magnitude": 0.35,
+                "duration": 3,
+                "chance": 1,
+                "bypassResist": true,
+                "condition": "HasMyMark",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve2",
+                "conditionValue2": 3,
+                "conditionOn2": "Caster"
+              }
+            },
             {
               "ability": "passive2",
               "atIndex": 5,
@@ -12256,7 +12319,7 @@
               }
             }
           ],
-          "description": "When The Missing Page spends a full set of Pages, Mireth also gains Energy and the marked enemy loses Energy."
+          "description": "When The Missing Page spends a full set of Pages, Mireth gains Energy, the marked enemy loses Energy, and the blank it leaves stays open to her."
         },
         "talentIII": {
           "id": "mireth_no_record_remains",
@@ -13525,11 +13588,11 @@
             {
               "kind": "Damage",
               "target": "LowestHpEnemy",
-              "power": 0.5,
+              "power": 4.0,
               "scaleByLastRelease": true
             }
           ],
-          "description": "When the Subject's record expires, Altheon also strikes the enemy with the lowest HP for a share of what the record paid out."
+          "description": "When the Subject's record expires, Altheon also strikes the enemy with the lowest HP for a large share of what the record paid out."
         },
         "talentIII": {
           "id": "altheon_final_record",
@@ -14374,23 +14437,32 @@
         },
         "talentIII": {
           "id": "caldus_final_verdict",
-          "name": "Final Verdict",
-          "trigger": "OnEnemyHpBelowThreshold",
-          "oncePerBattle": true,
-          "threshold": 0.3,
+          "name": "The Verdict Stands",
+          "trigger": "AfterBasicAttack",
+          "oncePerBattle": false,
           "effects": [
             {
               "kind": "GainResolve",
               "target": "Self",
-              "maxStacks": 3,
-              "hits": 2,
-              "duration": 99,
-              "condition": "HasMyMark",
-              "conditionOn": "BroadcastSubject"
+              "maxStacks": 5,
+              "duration": 99
             }
           ],
-          "description": "Once per battle, when Caldus's Declared Target falls to low HP, he gains Resolve for his counterattacks.",
-          "chargeOnLanding": true
+          "description": "Caldus banks Resolve on his own turn as well as when he answers a blow, holds more of it, and each one he holds makes his counterattack land far harder.",
+          "overrides": [
+            {
+              "ability": "passive1",
+              "effectIndex": 1,
+              "field": "maxStacks",
+              "delta": 2
+            },
+            {
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "perStack",
+              "delta": 0.12
+            }
+          ]
         }
       }
     },

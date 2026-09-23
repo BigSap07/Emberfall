@@ -26667,14 +26667,23 @@ namespace Emberfall.DevHarness
                       + a.Count(StatusKind.EffectResistDown) + ") and takes it off again when "
                       + "Departure triggers");
 
-            // ---- Vaelis II: two positive effects move instead of all of them.
+            // ---- Vaelis II: both bodies the swap touches are opened before it strikes them.
+            //
+            // WHAT THIS CHECK USED TO ASSERT WAS THE TALENT BEING A RESTRICTION. Stolen Position
+            // capped Passed Position at two positive effects moved each way instead of every one,
+            // and moving fewer buffs is strictly less than moving all of them - the card said so in
+            // as many words, and the reading was an exact zero in every room. The talent buys the
+            // opening the swap creates now, and this reads that.
             if (!DarkPair("vaelis_the_unfixed_blade", 2, "s_soft4_triple", "", 4, false, out a, out b))
                 Check(false, "vaelis II arena built");
             else
-                Check(b.Spreads > 0 && b.Spreads < a.Spreads,
-                      "Vaelis II moves 2 positive effects each way instead of every one ("
-                      + b.Spreads + " crossings against " + a.Spreads
-                      + ") - the bound body has to be carrying more than two for the number to matter");
+                Check(b.Count(StatusKind.Vulnerable) > a.Count(StatusKind.Vulnerable)
+                      && b.SubjectDamage > a.SubjectDamage,
+                      "Vaelis II opens both bodies Passed Position moves between before either is "
+                      + "struck (" + b.Count(StatusKind.Vulnerable) + " opening(s) against "
+                      + a.Count(StatusKind.Vulnerable) + ", " + b.SubjectDamage + " damage against "
+                      + a.SubjectDamage + ") - the Vulnerable is source-keyed, so it is his own "
+                      + "blows it moves and nobody else's");
 
             // ---- Vaelis III: twelve Energy when the ally that triggered Departure is a Mender.
             if (!DarkPair("vaelis_the_unfixed_blade", 3, "s_soft_soft_big", "isara_the_second_chance",
@@ -26775,7 +26784,17 @@ namespace Emberfall.DevHarness
                       + (b.ResolveSpent - a.ResolveSpent) + " extra Traces spent, "
                       + b.SubjectDamage + " damage against " + a.SubjectDamage + ")");
 
-            // ---- Mireth I: two landings per enemy, against one every round.
+            // ---- Mireth I: the same landings, each one erasing twice as much.
+            //
+            // THE TRAP THIS CHECK USED TO PIN IS GONE, and it was pinned exactly right:
+            // firesPerSubject is a WHOLE-BATTLE budget where the sentence meant one Focus's
+            // duration, so buying two landings per enemy bought FEWER than the once-a-round limit
+            // it replaced, and the talent paid a fifth of the strike's damage for the privilege.
+            // Turning the limit off instead was measured and buys nothing at all - against one body
+            // that buffs every turn the passive already lands once a round, so an unlimited version
+            // lands the same fourteen times and the reading was an exact zero. What the talent
+            // deepens now is the erasure itself: the Dispel takes two entries instead of one, so
+            // Absence banks twice as fast, and Absence is what makes her hit a marked body harder.
             if (!DarkPair("mireth_the_erased_name", 1, "s_buffer", "", 1, false, out a, out b))
                 Check(false, "mireth I arena built");
             else
@@ -26783,10 +26802,11 @@ namespace Emberfall.DevHarness
                 int fa, fb;
                 a.Fired.TryGetValue("mireth_the_missing_page", out fa);
                 b.Fired.TryGetValue("mireth_the_missing_page", out fb);
-                Check(fb > 0 && fb <= 2 && fb < fa,
-                      "Mireth I trades The Missing Page's once-a-round limit for two landings on each enemy, and against "
-                      + "one enemy that buffs every turn that is " + fb + " landing(s) against " + fa + " - the trap "
-                      + "KnownCostlyTalents names");
+                Check(fb > 0 && fb == fa && b.SubjectDamage > a.SubjectDamage,
+                      "Mireth I takes two entries off the page per landing instead of one, on the "
+                      + "same " + fb + " landing(s) as without it (" + fa + " without), and the "
+                      + "Absence that banks is worth " + b.SubjectDamage + " damage against "
+                      + a.SubjectDamage);
             }
 
             // ---- Mireth II: the Energy either side of the third Page.
@@ -27104,13 +27124,6 @@ namespace Emberfall.DevHarness
         }
 
         private static readonly CostlyTalent[] KnownCostlyTalents = {
-            new CostlyTalent("mireth_the_erased_name I", "TRAP",
-                "Deeper Erasure trades The Missing Page's once-a-round limit for two landings per enemy,"
-                + " and since ENGINE-GAPS pass 2 (chargeOnLanding, C11) the base passive lands once in"
-                + " every round it is raised, so the trade is fewer landings. firesPerSubject counts the"
-                + " whole battle where the sentence counts one Focus's duration, and nothing can reset a"
-                + " budget when Focus is reapplied. A kit conflict, waiting on Pinoy. Read in s_buffer since"
-                + " C13, where a marked enemy buffs every turn: the sweep no longer raises the passive"),
             new CostlyTalent("marrow_the_irrevocable_vow I", "TRADE",
                 "as written: a third ally holds Promise, so Marrow takes a share of three allies' damage"
                 + " instead of two, which the output total does not count; the smaller Promise heal it"
