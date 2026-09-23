@@ -639,7 +639,7 @@ record. `GuildDungeonChecks.Run` is wired into the harness. Its screens are bein
   campaign fields.
 
 **The Guild Path (phase two, system 2).** The guild dungeon pays now, in Waymarks, and the Guild Path
-spends them. `claude/DESIGN-GUILDS-PHASE-TWO.md` ("The Guild Path, as built") holds the rules and
+spends them. `DESIGN-GUILDS-PHASE-TWO.md` in the `claude` folder ("The Guild Path, as built") holds the rules and
 the full working; this is what the files show.
 
 - **Pay.** 40 on a member's first attempt of a cycle, won or lost; 40 on their first clear of any
@@ -1208,7 +1208,7 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   nowhere either, and the text no longer carries them.
 - **Guilds phase two, systems 3 to 5.** Systems 1 and 2, the dungeon and the Guild Path, are built
   (see **Guilds, phase one**). Guild levels, the fodder exchange and (parked) guild wars remain,
-  as sequenced in `claude/DESIGN-GUILDS-PHASE-TWO.md`.
+  as sequenced in `DESIGN-GUILDS-PHASE-TWO.md`.
 - **A marketplace.** Nothing built, nothing designed.
 - **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
 - **Texture compression.** The delivered art is effectively uncompressed, which is fine in a desktop

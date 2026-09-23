@@ -241,7 +241,10 @@ floor 1: first their strongest line by stars, then lines drawn from what they ow
 made legal under the floor's condition. The fights are real, the boards are `GuildDungeon.Rank`'s,
 and 3,264 fights take about four seconds. `GuildPathChecks` re-runs it on every build-check.
 
-**MEASURED** (content as of this commit):
+**MEASURED** on the campaign of 72 stages and its 84 enemies, which is the pool the dungeon's
+floors are now drawn from (`GuildDungeonGenerator.TemplatePool` takes only what some stage fields).
+The run before that campaign landed gave the same clear counts and board-score means within 0.04,
+and every number below derives to the same rounded pay:
 
 | roster | cleared floor 1 in the cycle |
 | --- | --- |
@@ -253,10 +256,10 @@ and 3,264 fights take about four seconds. `GuildPathChecks` re-runs it on every 
 | --- | --- | --- | --- | --- |
 | 1 | 16 | 0.00 | 0.00 | 0.00 |
 | 2 | 32 | 1.09 | 1.00 | 2.00 |
-| 5 | 80 | 1.36 | 1.25 | 2.92 |
-| 10 | 160 | 1.41 | 1.42 | 2.43 |
-| 20 | 320 | 1.48 | 1.41 | 2.68 |
-| 30 | 480 | 1.44 | 1.37 | 2.50 |
+| 5 | 80 | 1.34 | 1.33 | 2.50 |
+| 10 | 160 | 1.45 | 1.38 | 2.54 |
+| 20 | 320 | 1.47 | 1.37 | 2.61 |
+| 30 | 480 | 1.42 | 1.36 | 2.50 |
 
 **CHOSEN**, each a sentence of this record turned into a number:
 
@@ -275,8 +278,8 @@ and 3,264 fights take about four seconds. `GuildPathChecks` re-runs it on every 
   not by fairness. If a content change hardens floor 1, the fairness floor starts binding and the
   gate says so.
 - attempt = 100 x 0.8 / (1 + k q_all) = 40.02 -> **40**; clear = k x attempt -> **40**.
-- S-bar, the mean board-score sum over sizes 2 to 30 weighted once each, = 1.357.
-  board point = 100 x 0.2 / 1.357 = 14.73 -> **15**.
+- S-bar, the mean board-score sum over sizes 2 to 30 weighted once each, = 1.355.
+  board point = 100 x 0.2 / 1.355 = 14.76 -> **15**.
 - Prices: **Second Line 100, Third Line 200, Lines Keep Talents 200, Fourth Line 300.** The whole
   Path is 800, which is 8 mean cycles, or 10 for a new-roster member paid the base and no board.
 
@@ -286,10 +289,10 @@ and 3,264 fights take about four seconds. `GuildPathChecks` re-runs it on every 
 | --- | --- | --- | --- |
 | 1 | 80.0 | 0.0 | 80.0 |
 | 2 | 80.0 | 16.4 | 96.4 |
-| 5 | 80.0 | 20.4 | 100.4 |
-| 10 | 80.0 | 21.1 | 101.1 |
-| 20 | 79.9 | 22.1 | 102.0 |
-| 30 | 80.0 | 21.7 | 101.7 |
+| 5 | 79.5 | 20.1 | 99.6 |
+| 10 | 80.0 | 21.8 | 101.8 |
+| 20 | 80.0 | 22.0 | 102.0 |
+| 30 | 80.0 | 21.3 | 101.3 |
 
 Every size from 2 to 30 sits within 4% of the mean cycle, and the gate fails past 10%. A guild of
 one earns 80%. That is the "small guild sees less variety" cost, paid in recognition rather than
