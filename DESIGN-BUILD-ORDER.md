@@ -30,19 +30,18 @@ about reasoning.
 
 Two runs decide whether the tree is healthy, and they measure different things.
 
-- **`Tools/build-check.ps1`: 5 failures on `main` as merged, measured from a clean checkout of it.**
-  It lints the docs, compiles the core and the Unity-facing code against the shim in
-  `Tools/UnityShim`, and runs `Tools/DevHarness`. Two reds are the arena matrix's coverage checks,
-  one for talents and one for basics, actives and passives, under **Known bugs**: standing
-  instruments reporting a real reading rather than a break. The third is the campaign power-band
-  guard, which the fusion spine brought, and it is a reading rather than a regression: a player who
-  fuses and ascends meets chapter 2 at x1.2 to x1.8 of a `recommendedPower` table derived for a
-  player who could not (twelve stages over their band), and re-deriving that table is a decision
-  (open decision 4). **The last two are a merge seam, not a reading**: `CheckSolverAndGateCompileOneList`
-  finds `Tools/DevHarness/ArenaMatrix.cs` in `build-check.ps1`'s file list and not in
-  `solve-recommended-power.ps1`'s, because the matrix and the solver's list landed on different
-  branches. The fix is one entry in the solver script, which belongs with whoever next runs the
-  solver. The geared curve's CEIL band is green. The
+- **`Tools/build-check.ps1`: 5 failures on `main` as merged, 3 on the wall-resolve branch under In
+  progress, both measured from a clean run.** It lints the docs, compiles the core and the
+  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. Two reds are
+  the arena matrix's coverage checks, one for talents and one for basics, actives and passives,
+  under **Known bugs**: standing instruments reporting a real reading rather than a break, and the
+  branch's lists match `main`'s entry for entry. The third is the campaign power-band guard. On
+  `main` it is twelve stages over their band, because the table there was derived for a player who
+  could not fuse; on the branch the table is re-solved under the wall rule and it is two, `2-6` and
+  `2-12` at x1.197, a reading rather than a regression (**The campaign power curve**). `main`'s last
+  two are a merge seam the branch closes: `CheckSolverAndGateCompileOneList` found
+  `Tools/DevHarness/ArenaMatrix.cs` in `build-check.ps1`'s file list and not in
+  `solve-recommended-power.ps1`'s.  The geared curve's CEIL band is green. The
   balance line is Kael, Kiva, Isara, Adric and Orelle, and the pinned line the CEIL is read with is
   Kael, Aeron, Nereia, Seraphine and Isolde. ENGINE-GAPS pass 3 turned `buffsOnly` on, which took
   chapter 1's finale CEIL from 68% to 27% and four walls out of the power band, so
@@ -133,6 +132,11 @@ of them needs a stated reason in the commit that moves it.
   fingerprint**: Aminah's and Caldus's five seeds each, and all three of each one's talents, from
   the F8 lifts under **The star band**. Caps and ascension move none, because a fingerprint is a
   fresh starting three at level 1 and a sweep fights at a fixed level.
+- **The wall-resolve branch moves all 72 stage fingerprints, 10 hero-sweep lines and 30
+  talent-sweep lines**, regenerated as its last commit from a fresh rebase on `main`. The sweep
+  lines are Kiva's and Velis's five seeds and all three of each one's talents, from the Striker
+  pass. The fingerprints are two causes that were not regenerated apart: Kiva stands in every
+  opening battle, and the re-solve moved the authored roster of 20 of the 24 stages.
 
 ## Systems
 
