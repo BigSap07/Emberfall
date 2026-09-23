@@ -139,7 +139,7 @@ Damage, healing, energy and turn-shift effects either happen or do not.
 
 | hero | clause as Pinoy wrote it | what the engine lacks | how it is approximated now | size |
 |---|---|---|---|---|
-| Finn | "have a **35% chance** to be delayed by 15% turn progress" | a probability gate on a non-status effect | the delay is certain. It used to be held to once a round as well, which stood in for the chance; that limit went when `RoundEnd` closed group 14, so the clause is now certain against every Ringing enemy once a round | small |
+| Finn | "have a **35% chance** to be delayed by 15% turn progress" | a probability gate on a non-status effect | the delay is certain. It used to be held to once a round as well, which stood in for the chance; that limit went when `RoundEnd` closed group 14, so the clause is now certain against every Ringing enemy once a round. **Until the round-end repair it was certain and never landed**: `CloseRound` released the turn order before raising `RoundEnd`, and `ApplyTurnShift` returns on a missing order ahead of the branch that carries a delay into the next round. The order now outlives the boundary | small |
 | Avera | "has a **50% chance** to delay each by 15% turn progress" | the same probability gate, on the same kind of effect | the delay is certain against every Disrupted enemy the cast reaches | small |
 
 ---

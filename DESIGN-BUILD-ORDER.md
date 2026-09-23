@@ -30,14 +30,19 @@ about reasoning.
 
 Two runs decide whether the tree is healthy, and they measure different things.
 
-- **`Tools/build-check.ps1`: 1 failure on `main`, 2 with the fusion spine under In progress.** It
-  lints the docs, compiles the core and the Unity-facing code against the shim in `Tools/UnityShim`,
-  and runs `Tools/DevHarness`. The standing red is the talent coverage note under **Known bugs**, a
-  standing instrument reporting a real reading rather than a break. The fusion spine's second red is
-  the campaign power-band guard, and it is a reading rather than a regression: a player who fuses
-  and ascends meets chapter 2 at x1.3 to x1.8 of a `recommendedPower` table derived for a player who
-  could not, and re-deriving that table is a decision (open decision 4). The geared curve's CEIL
-  band is green. The
+- **`Tools/build-check.ps1`: 5 failures on `main` as merged, measured from a clean checkout of it.**
+  It lints the docs, compiles the core and the Unity-facing code against the shim in
+  `Tools/UnityShim`, and runs `Tools/DevHarness`. Two reds are the arena matrix's coverage checks,
+  one for talents and one for basics, actives and passives, under **Known bugs**: standing
+  instruments reporting a real reading rather than a break. The third is the campaign power-band
+  guard, which the fusion spine brought, and it is a reading rather than a regression: a player who
+  fuses and ascends meets chapter 2 at x1.2 to x1.8 of a `recommendedPower` table derived for a
+  player who could not (twelve stages over their band), and re-deriving that table is a decision
+  (open decision 4). **The last two are a merge seam, not a reading**: `CheckSolverAndGateCompileOneList`
+  finds `Tools/DevHarness/ArenaMatrix.cs` in `build-check.ps1`'s file list and not in
+  `solve-recommended-power.ps1`'s, because the matrix and the solver's list landed on different
+  branches. The fix is one entry in the solver script, which belongs with whoever next runs the
+  solver. The geared curve's CEIL band is green. The
   balance line is Kael, Kiva, Isara, Adric and Orelle, and the pinned line the CEIL is read with is
   Kael, Aeron, Nereia, Seraphine and Isolde. ENGINE-GAPS pass 3 turned `buffsOnly` on, which took
   chapter 1's finale CEIL from 68% to 27% and four walls out of the power band, so
@@ -73,7 +78,7 @@ Two runs decide whether the tree is healthy, and they measure different things.
   file directly under `Tools/DevHarness` is missing from either.
   **The power-band guard allows 0.005 past either edge** (`BandTolerance`) **and prints ratios to
   three decimals.** `2-1` once failed the build by 0.09% and printed as "x1.1 under x1.1".
-  **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
+  **A 6th failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
 - **Doc lint is clean.** `Tools/doc-lint.ps1` scans 43 tracked markdown files and reports 122
@@ -111,6 +116,8 @@ of them needs a stated reason in the commit that moves it.
   **Defect pass 3 moved 18**: Corin 5 (Settling reaching its limit), Darian 5 (Hidden Strength
   striking the enemy it names), Hale 5 (Tracking Habit at round end) and Seraphine 3 (a named body
   no longer answered by the sweep's Taunt holder). **The Quarry clock repair moved Hale's 5 again.**
+  **The round-end repair moved Finn's 5**, Aftershock Clock delaying his Ringing enemies at last,
+  and moved no talent line and no stage fingerprint.
 - **`talent-sweep-baseline.txt`: 450 lines.** All 90 talents at five seeds each, every one compared
   against the same hero at the same seed with nothing picked. **ENGINE-GAPS pass 3 moved 134**: its
   clauses and renumbers 59 (Aeron III, all three of Aminah's and Marrow's, Arden I, Cyrra II, Nereia
@@ -181,6 +188,25 @@ modes that name one body the engine already chose return before the Provoke and 
 either side** - `BroadcastSubject`, `DefeatedUnit`, `ThresholdUnit`, `SwapAdvancedUnit` and
 `SwapDelayedUnit` - completing the own-side repair above. `CheckNoAbilityHitsItsOwnCaster` fails if
 any ability lands damage on its own caster without naming Self.
+
+**The round-end repair: `RoundEnd` reads the round it closes.** `CloseRound` used to release the turn
+order before raising `RoundEnd`, and `ApplyTurnShift` returns on a missing order ahead of the branch
+that carries a delay into the next round, so Finn's Aftershock Clock fired every round and never
+delayed anyone. The order now outlives the boundary, with the cursor past its end, so every unit
+reads as having acted: a delay is carried to the top of the next round, an advance is dropped for
+the reason `CarriedDelay` gives, and turn progress reads 0. `BattleSession.EndRound`, which ends a
+round by hand, had skipped `RoundEnd` outright. It now closes the round through `CloseRound`.
+**The sweep for the same shape was a measurement, not a reading**: every battle the harness fights
+was run with each turn-order reader (`ApplyTurnShift`, `ApplySwapTurnOrder`, `PendingPositionOf`,
+which `TurnProgressOf` goes through, and `NextAllyInOrder`), every condition and every target mode
+recorded at `BattleStart`, `RoundStart` and `RoundEnd`. Before the repair exactly one rule reached a
+turn-order reader with no order: Aftershock Clock, 326 delays dropped. The only other rule answering
+`RoundEnd` is Hale's Tracking Habit, and what it reads (`DamageDealtThisRound`) is cleared in
+`CombatUnit.BeginRound`, after the boundary, so it already worked. **One latent hole is left
+unrepaired, on purpose**: `OpenRound` raises `RoundStart` before building the order, so a turn shift
+authored at round start would be dropped the same way. No shipped rule does that. Repairing it means
+choosing whether a round-start buff to Speed reorders the round it opens, which is a rules decision
+rather than a defect.
 
 ### Content
 
@@ -368,13 +394,22 @@ of the harness's list, and `CheckTalentAuditMatchesHarness` holds the two equal.
 **A talent a player picks should not make their hero worse, and `CheckTalentsAreWorthPicking` says
 which ones do.** It reads every talent against the same hero with nothing picked, paired seed for
 seed over 40 seeds, in the sweep arena wherever the talent changes a sweep fight and in its dark
-room wherever it has one (`DarkTalentRooms`, the same 29 pairs the coverage note counts). The
+room wherever it has one (`DarkTalentRooms`, 30 pairs). The
 quantity is the star band's: damage, healing and shielding, credited by source. A talent loses when
 its mean sits more than two standard errors below zero. Five seeds could not answer this: the sweep
 rolls damage variance, and a talent that shifts the dice stream moves a five-seed total by more than
-most talents are worth. The reading is **37 gain, 47 sit within the noise or change nothing the
+most talents are worth. The reading is **39 gain, 45 sit within the noise or change nothing the
 output total can see, and 6 lose**, and all 6 are pinned in `KnownCostlyTalents` with a reason. The
 check fails both when a talent starts losing without being listed and when a listed one stops.
+
+**Every room it reads is a lineup a player can field, and that is asserted now.** Brenna I's room
+fielded two Brennas, which `PlayerProfile.AssignToTeam` never allows, and her value was read off
+that fight: +364 a battle, t 0.6. The same stage with the copy removed never lets her cap bind. A
+search of 29,016 legal fights found it binding in 43, and her room is now the one where it binds
+most often, beside Darian, Nereia and Rovan. It reads +61, t 0.2. That is still inside the noise,
+so her count does not move: the sweep, where she gains +92 at t 7.6, is what counts her a gain.
+Hers was the only illegal room in the harness. That was measured by recording every battle the full
+harness fights, not by reading the room lists.
 
 - **Two are traps**, both a conflict between the talent and its own kit, so neither could be mended
   by a number and both are in `Docs/PINOY-LIST.md` section 2e. Kael III pays 10% of his active for
@@ -643,6 +678,20 @@ the sweep does not. CI runs `build-check.ps1` on every push and pull request.
 and the guard's CEIL side by side against a 4,000-sample reference, and it is how the `1-12`
 disagreement under **The instruments** was settled.
 
+**The arena matrix** (`Tools/DevHarness/ArenaMatrix.cs`) measures every basic, active, passive
+and talent in the roster, 428 rules, by ablation. It fights the same hero in the same room at the
+same seed with that one rule taken out, and leaves the rule's own announcement out of the
+comparison. A rule is (a) seen changing the sweep arena, (b) seen only in a purpose-built room,
+which has to repeat byte for byte, beat its control and move the tally its own sentence names, or
+(c) seen nowhere, and then named with what it waits on. `CheckArenaMatrix` and the talent coverage
+check both read it. Three opt-in readings sit beside it and are never part of the gate:
+`EMBERFALL_MATRIX_SEARCH=1` searches for a room for each dark rule, `EMBERFALL_MATRIX_PROBE` runs
+named rooms, and **`EMBERFALL_MATRIX_NORMAL=pinned|balance|both` reads every class (b) rule in a line
+a player actually fields**. That is the pinned line or the balance line with the rule's hero in it,
+levelled and geared to each shipped stage's recommended power, at 12 battles a stage and two seeds.
+A room proves a rule can work; this says whether a playtester will ever see it. Run it with
+`--check CheckArenaMatrix`.
+
 ### Build targets
 
 A Windows desktop player builds today through `EmberfallBuild.BuildWindows`, Mono rather than
@@ -652,26 +701,13 @@ differs between them.
 
 ## In progress
 
-**`engine/defect-pass-3`** carries four combat defects and the sweep for their shape: Nysera's False
-Target striking Nysera, Corin's Stun that could never land, Hale's Tracking Habit moving Quarry at
-the start of his turn rather than at round end, and the effects named by a broadcast or by the
-engine's own record that a Taunt holder could intercept. The engine, content, harness and
-documentation changes are described above as the files on that branch show them, and the three
-pinned baselines were regenerated as its last commit, from a fresh rebase on `main`. The campaign
-re-solve against real summon rates has landed on `main` and is described under **The instruments**.
-
-**`engine/hale-quarry`** is stacked on `engine/defect-pass-3` and merges after it. It makes the Quarry
-Hale's Tracking Habit names at round end last two rounds whether it moves or stays, which takes Hale
-from x0.61 back to x0.84 in the star band with no number of his changed, restates the Fresh Trail
-fidelity finding so it survives Quarries that live longer, and regenerates the baselines again as
-its last commit.
-**`balance/fusion-spine`** carries the fusion and ascension spine described under **Fusion and
-ascension**, with no screen: star-gated caps, ascension, conversion, save version 16, the derived
-numbers in `balance.json`, the F8 floor with Aminah and Caldus lifted and Velis pinned, the economy
-walk's conversion, ascension and line policy, and the eight-walk pace table. It also carries the
-instrument work under **The instruments** - `--ceil-reconcile`, the file-list check and the band
-tolerance - and the doc edits that go with it. It does not re-solve `campaign.json`, which is why
-the power-band guard is its second red; open decision 4 says what re-solving would decide.
+**`engine/round-end-and-rooms`** carries the round-end repair described under **Combat** (Finn's
+Aftershock Clock delays at last, and `BattleSession.EndRound` raises `RoundEnd`), Brenna I's room
+rebuilt as a legal lineup with the harness now asserting every talent room is one, the Aftershock
+Clock's stated reason taken out of the matrix now that it is lit, and the `EMBERFALL_MATRIX_NORMAL`
+reading under **Tooling**. Its last commit regenerates the pinned baselines from a fresh rebase on
+`main`, and only Finn's five hero-sweep lines move. The defect pass, the Quarry clock repair, the
+fusion spine and the arena matrix have all landed on `main` and are described above.
 
 ## Next
 
@@ -898,26 +934,34 @@ instead and is named in the coverage note under **Known bugs**.
 
 ## Known bugs
 
-The one harness red first, then the rest.
+The harness reads first, then the rest.
 
-1. **24 of 90 talents execute but are never observed doing anything** in the sweep arena. Each waits
-   on something that arena does not raise: a kill, a mark, a host passive resolving first, a
-   particular matchup, a buff worth dispelling. Every one is named in the report with what it waits
-   on. **20 of them are proved separately in the dark-talent arenas**, each built to raise its own
-   gate, and the note that says so counts its own overlap. The check is red because the sweep
-   refuses to call "nothing happened" a pass. It read 29 when the roster was authored, 27 after the
-   dark-talent pass, 20 after the kit-defect pass, 19 after the Dispel repair and 21 after the
-   ENGINE-GAPS content pass.
-   **ENGINE-GAPS pass 3 took it to 23: two joined and none left, and both are `buffsOnly` doing
-   what it says.** Mireth II appends to The Missing Page and Seraphine III rides Volume Closed, and
-   both hosts listen for an enemy gaining a buff; in the sweep the only "buff" either ever heard
-   was their own Mark, and its enemies grant themselves none. Both are proved in their dark rooms.
-   The three the dark rooms still do not reach are Aminah III, Brenna III and Caldus III.
-   **Defect pass 3 took it to 24: Hale II joined** when Tracking Habit moved to round end. Cornered
-   overrides a condition on Closing Radius's missing-HP blow, and in the sweep that condition's
-   answer no longer changes. Why was not traced: it stayed dark after the Quarry clock was repaired
-   and Closing Radius went back to landing on three of Hale's five sweep casts, so fewer casts is
-   not the reason. It is proved in its dark room, so 21 of the 24 are.
+1. **The arena matrix's two coverage checks are red, and each names what every dark rule waits on.**
+   On this tree the 428 rules read **(a) 342** changing the sweep arena, **(b) 78** only in a
+   purpose-built room, and **(c) 8** nowhere. Of the eight, three are AUTHORING, meaning the clause
+   as written cannot do what its sentence says: Aeron's Interest Owed (talent I, in
+   `Docs/PINOY-LIST.md` section 2h), Finn's Ringing Slug and Kora's First Opening. Two are
+   UNRAISED, meaning no room has been found: Eira's Leave No Corner and Vaelis's Opening Moves.
+   **The other three are rooms that stopped working when the fusion spine merged**: Aminah's
+   No Wasted Recovery (`aminah_emergency_release`), Aminah III and Caldus III. The arena matrix read (b) 81 and (c) 6 on its own
+   branch, and merged `main` reads (b) 78 and (c) 9; these three are the whole difference. Aminah
+   and Caldus are the two heroes the F8 lifts changed, and the cause was not traced. All three still
+   fire and change fights in normal play (below), so it is the rooms that broke, not the rules.
+   Finn's Aftershock Clock was the ninth rule, reported as ENGINE, until the round-end repair lit it.
+
+   **What a class (b) pass is worth in play was measured, not assumed.** `EMBERFALL_MATRIX_NORMAL=both`
+   fields each class (b) rule's hero in the pinned line and in the balance line, across every
+   shipped stage: 1,152 battles a rule. Over the 81 the matrix branch counted, **71 fire and change
+   a fight in normal play, 2 fire and never change one, and 8 never do anything at all**:
+   - fire and change nothing: Arno's Rubble Resolve (3,343 firings) and Hale's No Safe Distance
+     against an enemy that hides itself (707);
+   - never fire: Brenna's Survival of the Stubborn, and her talent III, which waits on it; Hale's No
+     Safe Distance against an enemy that Wards itself; Mireth II; Nadine's Proper Place; Vaelis II;
+     Velis's What Was Taken; and Velis III.
+
+   None of the ten is repaired. They are what a playtester will meet. Two rules depend on the line:
+   Kael's Unusable Cover changes fights only in the balance line and Darian's The Cost of Knowing only
+   in the pinned one. Roan's Leave Before Asked works, but changed 3 fights in 1,152.
 
 Beyond the harness:
 

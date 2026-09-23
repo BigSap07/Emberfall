@@ -41,8 +41,11 @@ a row to either, and 2c's four-clause Energy question is now answered here rathe
 **Sections 2d and 2e are not closed**, because they hold what a MEASUREMENT produced rather than
 an authoring batch, and the instruments keep running. 2e holds two talents that cost the hero who
 picks them. **2f** is the ability text that still carries a drafting note, one yes or no question
-per note, and it shrinks as answers arrive. **2g is the newest**: eleven sentences the engine gaps
-pass 3 rewrote when it made the kits do what they say, each one to confirm.
+per note, and it shrinks as answers arrive. **2g** is eleven sentences the engine gaps pass 3
+rewrote when it made the kits do what they say, each one to confirm. **2h is the newest**: the eight
+talents the arena matrix found the old talent sweep had counted on nothing but their own
+announcement, each with what it does in normal play. One of them, Aeron's Interest Owed, needs an
+answer.
 
 ---
 
@@ -153,7 +156,10 @@ single-target gate, Finn's round-end hook, both of Halwen's, Jory's and Kest's "
 per-buff scaling, Lio's healing bonus, both of Maera's timing rows, Maren's holder tick, Mika's
 energy fold, Niko's debuff window, both of Rhys's hit-size rows, Siofra's reversal clock, Tamsin's
 skill scope, her per-buff scaling and her named delay subject, and Toren's redirect are all
-authored as written now and need no answer.
+authored as written now and need no answer. **Finn's round-end hook was authored as written and
+still did nothing until the round-end repair**: the game let go of the round's turn order before
+it announced the round's end, so Aftershock Clock fired every round and never delayed anyone. It
+delays Ringing enemies now.
 
 Nothing here was reworded quietly, and nothing here is a number. Every damage value below five
 stars differs from the original because the star band moved it, which is balance rather than
@@ -410,6 +416,37 @@ Rheia's Rewrite the Outcome now grants one Revision for each enemy it reached, a
 counts, rather than a flat amount that overpaid once fewer enemies stood. Arden's Deeper Measure
 now raises the limit on Find the Measure's Max HP damage, as its sentence always said; the game had
 been dropping that part.
+
+### 2h. Eight talents that announced themselves and were counted as working
+
+The talent sweep used to count a talent as working when the fight with it picked differed from the
+fight without it. A talent that fires puts its own name into the fight's record, so a talent that
+fired and did nothing else still read as a difference. The arena matrix takes a talent's own
+announcement out before comparing and requires a talent with a trigger to fire, and eight talents
+the old sweep passed fail that. **They are two different findings.** Five fire in the sweep and
+change nothing but their own announcement. Three never fire their own trigger in the sweep but do
+change the fight there through their other half, so the old reading was right that they did
+something and wrong about which half.
+
+"Normal play" below is the pinned line and the balance line, each with the talent's hero in it,
+levelled and geared to every shipped stage's recommended power, across 12 battles of each of the
+24 stages at two seeds: 1,152 battles. A battle counts as changed when the fight without the talent
+differs, its announcement excluded.
+
+| hero | talent | what the sweep saw | where it is proved now | in normal play | could a player notice? |
+|---|---|---|---|---|---|
+| **Aeron** | Interest Owed: "When an enemy ends its turn still carrying Turn Debt, it gains Mire." | fires 154 times over five seeds, changes nothing | **nowhere - it is on the red list.** The game repays and clears Turn Debt as the debtor's turn opens, so no enemy ever ends a turn still carrying it, and Mire is never applied | fires 20,666 times, changes 0 of 1,152 battles | **No.** The talent's name appears in the battle and nothing follows it. The question: should Mire answer the repayment itself, at the start of the enemy's turn? |
+| **Darian** | False Opening | fires 7 times, changes nothing | a room of one enemy that debuffs, beside Dahlia: Openings gained 6 against 0 | fires 1,294 times, changes 61 of 1,152 | **Rarely.** It waits on a Ward Darian gave running out while his own still stands |
+| **Isolde** | Deeper Trace | never fires; the "burns harder" half changes every sweep fight | a room where her Cinder runs its full course: 7 payments of 10 Energy against 0 | fires 822 times, changes 1,149 of 1,152 | **Yes.** Both halves work; the sweep's enemies died before a Cinder of hers ran out |
+| **Merek** | No First Move | fires 5 times, changes nothing | a room where First Claim dies before acting: enemies lose 12 Energy against 0 | fires 3,233 times, changes 722 of 1,152 | **Yes.** The sweep's single enemy line was the reason it looked inert |
+| **Nysera** | Last Known Position | never fires; the Armor Break Up half changes every sweep fight | a room where she kills while Armor Break Up is up: 22 applications against 0 | fires 694 times, changes 831 of 1,152 | **Yes.** |
+| **Talren** | Final Path | never fires; changes one sweep seed in five | a room with recorded enemies standing when Route pays out: 74 blows against 70 | fires 307 times, changes 181 of 1,152 | **Sometimes.** |
+| **Velis** | Starve the Light | fires twice, changes nothing | a room with an enemy healer: enemies lose 30 Energy against 0 | fires 8 times, changes 8 of 1,152 | **Almost never.** It waits on Hollowed converting a heal on an enemy, and in 1,152 campaign battles that happened 8 times. |
+| **Zella** | Changing Testimony | fires 13 times, changes nothing | a room with an enemy that alternates basics and actives: Focus 14 against 0 | fires 5,857 times, changes 678 of 1,152 | **Yes.** |
+
+**Aeron's is the only one of the eight that cannot work as written**, and it is the only one of
+the eight that needs an answer. Velis's works and is close to invisible. The other six work in
+normal play, and the sweep simply could not show it.
 
 ---
 

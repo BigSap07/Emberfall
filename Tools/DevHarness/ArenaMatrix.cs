@@ -4,6 +4,8 @@ using System.Reflection;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
+using Emberfall.Core.Progression;
+using Emberfall.Core.Session;
 
 namespace Emberfall.DevHarness
 {
@@ -753,10 +755,6 @@ namespace Emberfall.DevHarness
             new MatrixWait("finn_ringing_toll", "AUTHORING",
                 "the toll answers OnEnemyActive, which TakeTurn raises after it has set the caster's"
                 + " Energy to 0 for the cast, so its -5 always lands on an empty bar", EvidenceRingingToll),
-            new MatrixWait("finn_aftershock_clock", "ENGINE",
-                "CloseRound sets the turn order to null BEFORE it raises RoundEnd, and ApplyTurnShift"
-                + " returns on a null order ahead of the branch that carries a delay into the next"
-                + " round - every delay any RoundEnd passive authors is dropped", EvidenceAftershockClock),
             new MatrixWait("kora_first_opening", "AUTHORING",
                 "First Opening reads LastTarget after the basic, and the basic's LAST effect is the"
                 + " TurnShift on Kora herself, so LastTarget is always Kora - who has acted", EvidenceFirstOpening),
@@ -883,26 +881,6 @@ namespace Emberfall.DevHarness
             }
             return "in s_caster_tail it fires " + firings + " time(s), " + atEmpty + " of them on a caster whose bar"
                    + " reads 0, and moves Energy " + moved + " time(s)";
-        }
-
-        private static string EvidenceAftershockClock()
-        {
-            BattleResult r = MatrixSoloBattle("finn_the_bellmaker", "s_caster_tail");
-            if (r == null) return "Finn not found";
-            int finn = MatrixSubjectId(r, "finn_the_bellmaker");
-            Dictionary<int, int> marks = new Dictionary<int, int>();
-            int firings = 0, withRinging = 0, shifts = 0;
-            foreach (BattleEvent e in r.Events)
-            {
-                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Mark && e.SourceId == finn) marks[e.TargetId] = 1;
-                if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.Mark) marks.Remove(e.TargetId);
-                if (e.Type == BattleEventType.Death) marks.Remove(e.TargetId);
-                if (e.Type == BattleEventType.TurnOrderShift && e.SourceId == finn) shifts++;
-                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "finn_aftershock_clock")
-                { firings++; if (marks.Count > 0) withRinging++; }
-            }
-            return "in s_caster_tail it fires " + firings + " time(s), " + withRinging + " of them with a Ringing enemy"
-                   + " standing, and Finn moves a turn " + shifts + " time(s) all fight";
         }
 
         private static string EvidenceInterestOwed()
@@ -1033,6 +1011,165 @@ namespace Emberfall.DevHarness
             }
         }
 
+        // ------------------------------------------------------------------ normal play
+
+        /// <summary>
+        /// NOT A CHECK. EMBERFALL_MATRIX_NORMAL=pinned (or =balance, or =both) reads every rule the
+        /// matrix covers ONLY through a purpose-built room - class (b) - in a line a player actually
+        /// fields, across every shipped campaign stage. Class (b) is a pass for coverage and says
+        /// nothing about whether a playtester will ever see the rule: the room was built to raise it.
+        /// This is the other half of that sentence.
+        ///
+        /// THE LINE is PinnedLine or the balance line, with the rule's hero in the place of the body
+        /// that shares its role, or in the last place when none does; a hero already in the line
+        /// stays where it is. It is levelled and geared to each stage's recommendedPower the way
+        /// BuildPinnedLineAt levels the pinned line, and fights the stage's own generated battles at
+        /// wave n battle n for n = 1..12, at NormalPlaySeeds seeds each. Every other hero fights with
+        /// no talent picked, as a fresh profile does. The rule is ablated exactly as the matrix
+        /// ablates it, and a battle counts as changed when the fight without the rule differs with
+        /// the rule's own announcement excluded.
+        /// </summary>
+        private const int NormalPlaySeeds = 2;
+
+        private static readonly string[] NormalPlayBalanceLine = {
+            "kael_the_unyielding", "kiva_the_forsaken_oath", "isara_the_second_chance",
+            "adric_the_blank_map", "orelle_the_fever_warden" };
+
+        private static string[] NormalPlayLineFor(ContentDatabase db, string[] basis, HeroDef hero, out string how)
+        {
+            string[] line = (string[])basis.Clone();
+            for (int i = 0; i < line.Length; i++)
+                if (line[i] == hero.Id) { how = "already in the line"; return line; }
+            for (int i = 0; i < line.Length; i++)
+            {
+                HeroDef p = db.GetHero(line[i]);
+                if (p != null && p.Role == hero.Role) { how = "for " + p.Id; line[i] = hero.Id; return line; }
+            }
+            how = "for " + line[line.Length - 1] + ", no " + hero.Role + " in the line";
+            line[line.Length - 1] = hero.Id;
+            return line;
+        }
+
+        private static GameSession NormalPlaySession(ContentDatabase db, StageDef stage, string[] line)
+        {
+            PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+            profile.PlayerLevel = 60;
+            profile.Gold = 500000000L;
+            GameSession session = new GameSession(db, profile);
+            for (int h = 0; h < db.Heroes.Count; h++)
+                if (!profile.Owns(db.Heroes[h].Id)) session.GrantHeroDirect(db.Heroes[h], 0);
+            for (int i = 0; i < profile.Team.Length; i++) profile.ClearTeamSlot(i);
+            int assigned = 0;
+            for (int i = 0; i < line.Length; i++)
+                for (int j = 0; j < profile.Heroes.Count; j++)
+                {
+                    if (profile.Heroes[j].Def.Id != line[i]) continue;
+                    profile.AssignToTeam(assigned, profile.Heroes[j].Uid);
+                    assigned++;
+                    break;
+                }
+            EquipInstrumentArmor(db, session, stage);
+            List<HeroInstance> team = profile.TeamHeroes();
+            int guard = 0;
+            while (guard < 20000 && profile.EffectiveTeamPower(db) < stage.RecommendedPower
+                   && InstrumentStep(session, team)) guard++;
+            return session;
+        }
+
+        /// <summary>One battle of the session's line with the rule present or ablated.</summary>
+        private static MatrixReading NormalPlayFight(GameSession session, StageDef fought, MatrixRule rule,
+                                                     bool ablated, int seed)
+        {
+            BattleRequest request = session.BuildBattleRequest(fought, seed);
+            List<HeroInstance> team = new List<HeroInstance>();
+            for (int i = 0; i < request.Team.Count; i++)
+            {
+                HeroInstance h = request.Team[i];
+                if (h == null) { team.Add(null); continue; }
+                HeroInstance c = (HeroInstance)_memberwiseClone.Invoke(h, null);
+                c.SelectedTalent = 0;
+                if (h.Def != null && h.Def.Id == rule.Hero.Id)
+                {
+                    c.Def = ablated ? MatrixAblate(rule) : rule.Hero;
+                    c.SelectedTalent = rule.Kind == MatrixRuleKind.Talent && !ablated ? rule.Index : 0;
+                }
+                team.Add(c);
+            }
+            request.Team = team;
+            BattleResult r = CombatSimulation.Run(request);
+            int subject = -1;
+            for (int i = 0; i < r.Units.Count; i++)
+                if (r.Units[i].IsPlayer && r.Units[i].DefId == rule.Hero.Id) subject = r.Units[i].Id;
+            return MatrixRead(r, rule, subject);
+        }
+
+        private static void ReportMatrixNormalPlay(ContentDatabase live, List<MatrixRule> rules, string which)
+        {
+            List<string[]> lines = new List<string[]>();
+            List<string> names = new List<string>();
+            if (which == "pinned" || which == "both") { lines.Add(PinnedLine); names.Add("pinned"); }
+            if (which == "balance" || which == "both") { lines.Add(NormalPlayBalanceLine); names.Add("balance"); }
+            if (lines.Count == 0) return;
+
+            List<StageDef> stages = new List<StageDef>();
+            for (int i = 0; i < live.AllStages.Count; i++)
+                if (live.AllStages[i].TotalBattles > 1) stages.Add(live.AllStages[i]);
+            Dictionary<string, GameSession> sessions = new Dictionary<string, GameSession>();
+
+            int covered = 0, changes = 0, firesOnly = 0, never = 0;
+            List<string> neverNames = new List<string>(), firesOnlyNames = new List<string>();
+            for (int k = 0; k < rules.Count; k++)
+            {
+                if (rules[k].InSweep || !rules[k].RoomPassed) continue;
+                covered++;
+                HeroDef hero = live.GetHero(rules[k].Hero.Id);
+                MatrixRule rule = RebindRule(rules[k], hero);
+                long fires = 0;
+                int changed = 0, battles = 0;
+                List<string> per = new List<string>();
+                for (int l = 0; l < lines.Count; l++)
+                {
+                    string how;
+                    string[] line = NormalPlayLineFor(live, lines[l], hero, out how);
+                    long lf = 0;
+                    int lc = 0, lb = 0;
+                    for (int s = 0; s < stages.Count; s++)
+                    {
+                        string key = string.Join(",", line) + "@" + stages[s].Id;
+                        GameSession session;
+                        if (!sessions.TryGetValue(key, out session))
+                        { session = NormalPlaySession(live, stages[s], line); sessions[key] = session; }
+                        for (int n = 1; n <= 12; n++)
+                            for (int seed = 1; seed <= NormalPlaySeeds; seed++)
+                            {
+                                StageDef fought = CampaignWaveGenerator.BuildBattle(stages[s], n, n);
+                                int sd = 9100000 + stages[s].Index * 1000 + n * 53 + seed;
+                                MatrixReading with = NormalPlayFight(session, fought, rule, false, sd);
+                                MatrixReading without = NormalPlayFight(session, fought, rule, true, sd);
+                                lb++;
+                                lf += rule.Kind == MatrixRuleKind.Basic || rule.Kind == MatrixRuleKind.Active
+                                      ? with.Get("casts") : with.Get("firings");
+                                if (with.Hash != without.Hash) lc++;
+                            }
+                    }
+                    fires += lf; changed += lc; battles += lb;
+                    per.Add(names[l] + " (" + how + "): fires " + lf + ", changes " + lc + "/" + lb);
+                }
+                // A rule with no trigger of its own - a talent that rewrites its host - has nothing to
+                // announce, so for it "fires" is the same statement as "changes".
+                bool fired = fires > 0 || !rule.Triggered;
+                string verdict;
+                if (fired && changed > 0) { verdict = "fires and changes"; changes++; }
+                else if (fires > 0) { verdict = "FIRES, CHANGES NOTHING"; firesOnly++; firesOnlyNames.Add(rule.Name); }
+                else { verdict = "NEVER FIRES"; never++; neverNames.Add(rule.Name); }
+                Line("  [normal] " + rule.Name + " - " + verdict + ": " + string.Join("; ", per.ToArray()));
+            }
+            Line("  [normal] " + covered + " rules covered only by a room: " + changes + " fire and change a fight in"
+                 + " normal play, " + firesOnly + " fire and change nothing, " + never + " never fire");
+            if (firesOnlyNames.Count > 0) Line("  [normal] fire and change nothing: " + string.Join(", ", firesOnlyNames.ToArray()));
+            if (neverNames.Count > 0) Line("  [normal] never fire: " + string.Join(", ", neverNames.ToArray()));
+        }
+
         // ------------------------------------------------------------------ the check
 
         /// <summary>
@@ -1108,6 +1245,7 @@ namespace Emberfall.DevHarness
             if (rules == null) { Check(false, "arena matrix: sweep arena built"); Line(""); return; }
             if (Environment.GetEnvironmentVariable("EMBERFALL_MATRIX_SEARCH") == "1") SearchMatrixRooms(rules);
             ProbeMatrixRooms(rules, Environment.GetEnvironmentVariable("EMBERFALL_MATRIX_PROBE"));
+            ReportMatrixNormalPlay(live, rules, Environment.GetEnvironmentVariable("EMBERFALL_MATRIX_NORMAL"));
 
             int a = 0, b = 0, c = 0;
             Dictionary<MatrixRuleKind, int[]> byKind = new Dictionary<MatrixRuleKind, int[]>();
@@ -1159,19 +1297,27 @@ namespace Emberfall.DevHarness
                     : stale.Count + " rule(s) are observed now and still carry a reason for being dark - take the"
                       + " reason out: " + string.Join(", ", stale.ToArray()));
 
-            // Read-only, and printed rather than asserted: a room THE DARK TALENTS section fields in a
-            // lineup no player can field. The matrix already refuses to count such a room; this names
-            // the ones that section and TALENTS WORTH PICKING still read.
+            // EVERY ROOM IS A LINEUP A PLAYER CAN FIELD, asserted rather than printed. This was a note
+            // while Brenna I's room fielded two Brennas, and THE DARK TALENTS and TALENTS WORTH PICKING
+            // both read her value off that fight - the matrix refused to count it and nothing else
+            // did. The matrix's own rooms are held to the same rule by MatrixSquad as they run; this
+            // holds the registry THE DARK TALENTS section and the value check read from.
+            List<string> illegal = new List<string>();
+            ContentDatabase legalDb = MatrixArena(false);
             for (int i = 0; i < DarkTalentRooms.Length; i++)
             {
-                string[] ids = DarkTalentRooms[i].Allies.Split(',');
-                string hero = DarkTalentRooms[i].Pair.Split(' ')[0];
-                for (int k = 0; k < ids.Length; k++)
-                    if (ids[k].Trim() == hero)
-                        Line("  [note] THE DARK TALENTS reads " + DarkTalentRooms[i].Pair + " in " + DarkTalentRooms[i].Stage
-                             + " beside a squad that already holds " + hero + " - two copies of one hero, which"
-                             + " PlayerProfile.AssignToTeam never allows. The matrix does not count that room.");
+                HeroDef subject = legalDb == null ? null : legalDb.GetHero(DarkTalentRooms[i].Pair.Split(' ')[0]);
+                if (subject == null || MatrixSquad(legalDb, DarkTalentRooms[i].Allies, subject) == null)
+                    illegal.Add(DarkTalentRooms[i].Pair + " in " + DarkTalentRooms[i].Stage + " beside "
+                                + (DarkTalentRooms[i].Allies.Length > 0 ? DarkTalentRooms[i].Allies : "nobody"));
             }
+            Check(illegal.Count == 0,
+                  illegal.Count == 0
+                    ? "every one of the " + DarkTalentRooms.Length + " rooms THE DARK TALENTS and TALENTS WORTH PICKING"
+                      + " read is a lineup a player can field - no hero twice, no more than " + PlayerProfile.TeamSize
+                    : illegal.Count + " room(s) THE DARK TALENTS and TALENTS WORTH PICKING read field a lineup"
+                      + " PlayerProfile.AssignToTeam never allows (a hero twice, or more than " + PlayerProfile.TeamSize
+                      + "): " + string.Join("; ", illegal.ToArray()));
             Line("");
         }
     }
