@@ -17467,10 +17467,12 @@ namespace Emberfall.DevHarness
         ///
         /// The reference player is the one the rule is written for, but recommendedPower's levels
         /// are tuned against the instrument line, and the two do not fight alike at one power. The
-        /// reference fields its five highest-ceiling heroes whatever their roles - at 2-4 on the
-        /// second walk that was Kiva, Kael, Talren, Merek and Seraphine, no Mender, all at their
+        /// reference used to field its five highest-ceiling heroes whatever their roles - at 2-4 on
+        /// the second walk that was Kiva, Kael, Talren, Merek and Seraphine, no Mender, all at their
         /// caps - and it stuck there at x1.131 of a stage the instrument line clears 85% of the time
-        /// at x1.000: 161 losses over 18 sittings. Arriving at a band middle is not enough for that
+        /// at x1.000: 161 losses over 18 sittings. It fields a role-sane line now (WantedLine), and
+        /// Docs/SOLVE-PREREQS.md item 2 measures how much of this step that line still needs; the
+        /// step stays for whatever stage it does stick on. Arriving at a band middle is not enough for that
         /// player, and only the walk can say how much more is. So a stage it sticks on is aimed a
         /// step higher, the steps are kept for the rest of the solve, and the table settles when the
         /// walk sticks nowhere. The power band reads what that cost, stage by stage: a stage asking
@@ -18932,8 +18934,68 @@ namespace Emberfall.DevHarness
                 }
             }
 
-            if (EconomyDeployHighestCeilings(session, run, outcome, stageIdx)) moved = true;
+            if (EconomyDeployLine(session, run, outcome, stageIdx)) moved = true;
             return moved;
+        }
+
+        /// <summary>
+        /// The two jobs a walk's line keeps filled whenever the roster can fill them: someone in
+        /// front and someone healing. The front is the tank pair, Bulwark and Vanguard, as
+        /// HeroRole names it.
+        /// </summary>
+        private static bool IsFrontRole(HeroInstance h) { return h != null && h.Def != null && (h.Def.Role == HeroRole.Bulwark || h.Def.Role == HeroRole.Vanguard); }
+        private static bool IsHealerRole(HeroInstance h) { return h != null && h.Def != null && h.Def.Role == HeroRole.Mender; }
+
+        /// <summary>
+        /// Measurement only: true makes the walk field its five highest-ceiling heroes whatever
+        /// their roles, the policy the reference player had before it was made role-sane. Set only
+        /// by SolvePrereqs, which puts it back in a finally, and by the --role-blind flag, which
+        /// holds for the whole run.
+        /// </summary>
+        private static bool _walkRoleBlind = false;
+
+        /// <summary>
+        /// THE LINE A WALK WANTS, in the order it should enter. Role-sane (the default): the
+        /// highest-ceiling front hero, then the highest-ceiling Mender, then the highest ceilings
+        /// left, any role. A role the roster cannot fill is skipped and its slot goes to the next
+        /// highest ceiling. Role-blind (_walkRoleBlind): the top five by ceiling. `ranked` is
+        /// already sorted best ceiling first.
+        ///
+        /// WHY THIS IS WHAT "SANE" MEANS. It is not a claim about the best line. It is the least a
+        /// new player does, read off what the game hands them.
+        /// - The three starters are a Bulwark, a Striker and a Mender (heroes.json's startingHero
+        ///   flags), so the first line a player ever fields has someone in front and someone
+        ///   healing. Replacing a starter with a better hero of the same job keeps that line.
+        ///   Dropping the only healer for a fourth damage dealer is a choice the game never shows
+        ///   them.
+        /// - Every line the campaign is tuned against keeps both jobs. The balance line is two
+        ///   Bulwarks, two Menders and a Striker, and the pinned line is a Bulwark, a Vanguard, a
+        ///   Mender and two damage dealers. The reference player is the one recommendedPower is
+        ///   derived from, so if it fields a line with no healer, a stage's number is partly
+        ///   measuring that line's missing healer.
+        /// - Nothing beyond the two jobs is asked. Filling the other three slots by ceiling is still
+        ///   the plain player. A smarter one would pick roles for synergy, and would read easier
+        ///   than a floor player should.
+        /// </summary>
+        private static int LineCount(PlayerProfile p, Func<HeroInstance, bool> job)
+        {
+            int n = 0;
+            List<HeroInstance> team = p.TeamHeroes();
+            for (int i = 0; i < team.Count; i++) if (job(team[i])) n++;
+            return n;
+        }
+
+        private static List<HeroInstance> WantedLine(List<HeroInstance> ranked, int size)
+        {
+            List<HeroInstance> want = new List<HeroInstance>();
+            if (!_walkRoleBlind)
+            {
+                for (int i = 0; i < ranked.Count; i++) if (IsFrontRole(ranked[i])) { want.Add(ranked[i]); break; }
+                for (int i = 0; i < ranked.Count && want.Count < size; i++) if (IsHealerRole(ranked[i])) { want.Add(ranked[i]); break; }
+            }
+            for (int i = 0; i < ranked.Count && want.Count < size; i++)
+                if (!want.Contains(ranked[i])) want.Add(ranked[i]);
+            return want;
         }
 
         /// <summary>A hero's power at its own level cap, where it stands now: what levelling it can
@@ -19030,10 +19092,10 @@ namespace Emberfall.DevHarness
             return null;
         }
 
-        /// <summary>Puts the five highest-ceiling heroes in the line, keeping every hero who stays
-        /// in the slot it already had. True when the line changed; each change is logged.</summary>
-        private static bool EconomyDeployHighestCeilings(GameSession session, EconomyRun run,
-                                                        EconomyStageOutcome outcome, int stageIdx)
+        /// <summary>Puts WantedLine in the line, keeping every hero who stays in the slot it
+        /// already had. True when the line changed; each change is logged.</summary>
+        private static bool EconomyDeployLine(GameSession session, EconomyRun run,
+                                              EconomyStageOutcome outcome, int stageIdx)
         {
             PlayerProfile p = session.Profile;
             List<HeroInstance> ranked = new List<HeroInstance>(p.Heroes);
@@ -19045,12 +19107,13 @@ namespace Emberfall.DevHarness
                 return c != 0 ? c : string.CompareOrdinal(a.Uid, b.Uid);
             });
             int size = Math.Min(p.Team.Length, ranked.Count);
+            List<HeroInstance> wanted = WantedLine(ranked, size);
             HashSet<string> want = new HashSet<string>();
-            for (int i = 0; i < size; i++) want.Add(ranked[i].Uid);
+            for (int i = 0; i < wanted.Count; i++) want.Add(wanted[i].Uid);
 
-            // Empty slots fill freely, best ceiling first.
+            // Empty slots fill freely, in WantedLine's order: the two jobs first, then ceiling.
             List<HeroInstance> challengers = new List<HeroInstance>();
-            for (int i = 0; i < size; i++) if (!p.IsDeployed(ranked[i].Uid)) challengers.Add(ranked[i]);
+            for (int i = 0; i < wanted.Count; i++) if (!p.IsDeployed(wanted[i].Uid)) challengers.Add(wanted[i]);
             bool filled = false;
             for (int s = 0; s < p.Team.Length && challengers.Count > 0; s++)
             {
@@ -19060,25 +19123,40 @@ namespace Emberfall.DevHarness
                 filled = true;
             }
 
-            // Then each remaining challenger, best ceiling first, takes the slot of the
+            // Then each remaining challenger, in WantedLine's order, takes the slot of the
             // lowest-ceiling incumbent the line no longer wants - if that incumbent is capped, or
-            // the challenger is already the stronger of the two.
+            // the challenger is already the stronger of the two. Role-sane, a challenger never
+            // takes the slot of the line's last front hero or last Mender unless it does that job
+            // too, and one that does that job replaces an unwanted holder of it first. So a
+            // refused swap leaves the old holder in place, and the line keeps the job either way.
             List<HeroInstance> entering = new List<HeroInstance>(), leaving = new List<HeroInstance>();
             for (int c = 0; c < challengers.Count; c++)
             {
                 HeroInstance inn = challengers[c];
                 int bestSlot = -1;
                 HeroInstance bestOut = null;
+                bool bestSameJob = false;
                 for (int s = 0; s < p.Team.Length; s++)
                 {
                     HeroInstance incumbent = p.FindHeroByUid(p.Team[s]);
                     if (incumbent == null || want.Contains(incumbent.Uid)) continue;
                     bool capped = incumbent.Level >= session.HeroLevelCapOf(incumbent);
                     if (!capped && inn.Power < incumbent.Power) continue;
-                    if (bestOut == null || CeilingPower(session, incumbent) < CeilingPower(session, bestOut))
+                    bool sameJob = false;
+                    if (!_walkRoleBlind)
+                    {
+                        if (IsFrontRole(incumbent) && !IsFrontRole(inn) && LineCount(p, IsFrontRole) == 1) continue;
+                        if (IsHealerRole(incumbent) && !IsHealerRole(inn) && LineCount(p, IsHealerRole) == 1) continue;
+                        sameJob = (IsFrontRole(inn) && IsFrontRole(incumbent)) || (IsHealerRole(inn) && IsHealerRole(incumbent));
+                    }
+                    bool better = bestOut == null
+                        || (sameJob && !bestSameJob)
+                        || (sameJob == bestSameJob && CeilingPower(session, incumbent) < CeilingPower(session, bestOut));
+                    if (better)
                     {
                         bestOut = incumbent;
                         bestSlot = s;
+                        bestSameJob = sameJob;
                     }
                 }
                 if (bestOut == null) continue;

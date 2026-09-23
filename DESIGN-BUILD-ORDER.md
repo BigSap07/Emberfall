@@ -542,9 +542,10 @@ those numbers by position as unsolved seeds** (`CAMPAIGN-SPEC.md` 10.3 and 10.8)
 `recommendedPower` was re-derived for all 24 stages from the reference player's entry power against
 the middle of each stage's own band, with `floorLevel`, `ceilingLevel` and the authored enemy
 levels following so the CEIL band still reads in range at the new number. A stage any of the twenty
-walks sticks on is aimed 5% higher per stick (`SolverStuckStep`), because that player fields its five
-highest-ceiling heroes whatever their roles and does not fight like the instrument line at one
-power. **Chapter 2 is nearly flat under the rule**: a line of 5-stars at the tier-0 cap is worth
+walks sticks on is aimed 5% higher per stick (`SolverStuckStep`), because that player fielded its
+five highest-ceiling heroes whatever their roles and did not fight like the instrument line at one
+power. It now fields a role-sane line (`WantedLine`: a front hero and a Mender first, then
+ceiling), which sticks nowhere at the carried seeds (`Docs/SOLVE-PREREQS.md` item 2). **Chapter 2 is nearly flat under the rule**: a line of 5-stars at the tier-0 cap is worth
 about 12,000, so chapter 2 runs 8,681 to 10,322 and `2-12` asks 9,984 where it asked 27,601. `2-6`
 and `2-12` settled at x1.197 of their `recommendedPower`, over their wall bands, because at the band
 some of the twenty walks stuck there; they are the band guard's two reds, and a reading rather
