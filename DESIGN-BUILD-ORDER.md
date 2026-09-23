@@ -9,7 +9,8 @@ what is moving, and what is owed.
 Checked against the repository on 2026-09-23, after the roster reached 94 of 94, the five-star
 review and the Dispel repair closed the open kit decisions, every talent was measured for what it
 costs its own hero, and ENGINE-GAPS pass 3 said the nine clauses pass 2 left, turned `buffsOnly` on
-and re-solved the campaign once at the end - against a live `Tools/build-check.ps1` run, a live
+and re-solved the campaign once at the end, and the economy model started summoning at the real
+placeholder rates in `balance.json` and the campaign was re-solved against them - against a live `Tools/build-check.ps1` run, a live
 `validate_heroes.py` run and the files themselves, not against this document's own prior claims.
 Where this file and the archive disagree, this file is right about status and the archive is right
 about reasoning.
@@ -42,8 +43,18 @@ Two runs decide whether the tree is healthy, and they measure different things.
   floor-pinned, which the solver does not measure, and the re-solve had left it reading 55% at its
   ceiling; it reads 83%. Lowering 1-10's ceiling instead fixed that and pushed 2-12 over its band,
   because the simulated player's losses at 1-10 change the whole economy path after it: across the
-  moves tried there, 2-12 read anywhere from x0.98 to x1.04. The solver and `build-check.ps1` compile the harness from the same
-  file list now, `SummonTiming.cs` and `GuildDungeonChecks.cs` included.
+  moves tried there, 2-12 read anywhere from x0.98 to x1.04.
+  **The campaign was then re-solved against real summon rates.** Until then the economy model
+  summoned a five-star every time, so every number above was measured against a roster no player
+  gets. At the 20 / 30 / 30 / 17 / 3 rates in `balance.json` the simulated line is weaker, and
+  `1-9` (x1.00), `1-12` (x0.96) and `2-1` (x1.10) had slid just under their bands. The solver moved
+  18 stages and put all three back on their band middles. It left `1-12`'s geared CEIL at 53%,
+  under the finale band's 55%, where its 600-sample reading said 62%, so one of `1-12`'s Grave Moths
+  went down a level by hand, and it reads 57.5%. That one level moved `2-12` from x0.98 to x0.95,
+  just under its band, through the armor the simulated player happens to pick up on the way
+  (4,807 to 3,772), so the solver was run again on top of the hand move. It changed only chapter 2,
+  and `2-12` reads x0.99. The solver and `build-check.ps1` compile the harness from the same file
+  list now, `SummonTiming.cs`, `GuildDungeonChecks.cs` and `CloudChecks.cs` included.
   **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
@@ -371,8 +382,8 @@ wall - and fails when a stage leaves its band.
 `recommendedPower` is re-derived for all 24 stages from the simulated player's entry power against
 the middle of each stage's own band, with `floorLevel`, `ceilingLevel` and the authored enemy
 levels following so the CEIL band still reads in range at the new number. The curve rises inside
-each chapter, jumps 25% into `1-9`, 27% into `1-12`, 36% into `2-6` and 36% into `2-12`, and takes a
-9.6% to 10.6% relief after a wall that never falls below what the previous ordinary stage demanded.
+each chapter, jumps 25% into `1-9`, 22% into `1-12`, 31% into `2-6` and 28% into `2-12`, and takes a
+6.4% to 9.9% relief after a wall that never falls below what the previous ordinary stage demanded.
 
 A player's power never goes down, so once an earlier stage's band has demanded a power, no later
 stage can be asked for less than it. `recommendedPower` is not monotonic on its own, so the high end
@@ -548,15 +559,11 @@ differs between them.
 
 ## In progress
 
-**`balance/buffs-only`** carries ENGINE-GAPS pass 3, described throughout this file: the nine
-clauses pass 2 confirmed and left, each said as its sentence and proved in the harness section
-ENGINE GAPS PASS 3; `buffsOnly` on the twelve listeners and moves C13 named; the Taunt-anchor
-repair to `BroadcastSubject`; Tavia and Aminah renumbered to their bands; the 5-star yardstick
-check; the four checks other branches wrote; no scripted loss on a Recital floor; the campaign
-re-solved once, at the end; and all three baselines regenerated with every moved line attributed.
-`Docs/ENGINE-GAPS.md` pass 3 is the record and `Docs/PINOY-LIST.md` section 2g carries the eleven
-sentences it rewrote. Everything that was in flight before it has landed on `main` and is
-observable in the files.
+**`balance/rates-resolve`** carries the campaign re-solved against real summon rates, described
+under **The instruments**: `campaign.json`'s `recommendedPower` on 18 stages and the floor, ceiling
+and enemy levels under 16 of them, one hand move at `1-12`, the regenerated stage fingerprint baseline, the solver's file
+list, and this file. ENGINE-GAPS pass 3 has landed on `main` and is observable in the files;
+`Docs/ENGINE-GAPS.md` pass 3 is its record.
 
 ## Next
 
@@ -603,9 +610,9 @@ which was open decision 3, all recorded below. The numbers on the three that rem
 when it closed, so the Hub rail is number 3 now.
 
 **The economy decision is resolved, and what replaced it is open decision 4.** The economy and
-curve passes, and the retune after them, put a simulated player's first attempt at x1.14 to x1.21 of
-`recommendedPower` on every ordinary stage and x0.98 to x1.02 on the four walls, with every banded
-stage inside its band. The entry ratio is no longer the question. What the player's power is made of
+curve passes, the retune after them and the re-solve against real summon rates put a simulated
+player's first attempt at x1.15 to x1.20 of `recommendedPower` on every ordinary stage, x1.02 and
+x1.03 on chapter 1's two walls and x0.99 on chapter 2's two, with every banded stage inside its band. The entry ratio is no longer the question. What the player's power is made of
 is.
 
 **And so is the power-band one.** It read "the guard is red on six stages, all of them over and all
@@ -687,15 +694,16 @@ instead and is named in the coverage note under **Known bugs**.
    that cannot see what a wall is; another harness pass cannot tell those apart.
 2. **The CEIL band is blind on most of chapter 1.** The geared curve is what content is tuned
    against and its band assertion covers non-pinned stages only. The instrument's own geared level-1
-   line is worth about 6,900 to 7,400 power and chapter 1 asks for 2,977 to 9,160, so nine of its
+   line is worth about 6,900 to 7,400 power and chapter 1 asks for 2,977 to 8,623, so ten of its
    twelve stages report FLOOR-PINNED: the pin cannot level down to the target, so those rows measure
-   the five-body floor rather than `recommendedPower`. Six of the nine read 100% at their ceiling and
-   the other three read 96.5%, 94% and 85.5%, all excluded from the ordinary band of 78% to 92% rather
-   than failing it. Only `1-9`, `1-11` and `1-12` are measured against what they ask for. **The blind
+   the five-body floor rather than `recommendedPower`. Six of the ten read 100% at their ceiling and
+   the other four read 98.5%, 98%, 96.5% and 90.5%, all excluded from the ordinary band of 78% to 92%
+   rather than failing it. Only `1-9` and `1-12` are measured against what they ask for; `1-11`
+   joined the pinned rows when the re-solve against real summon rates lowered it to 7,062. **The blind
    spot bit once in pass 3**: the solver does not measure a pinned stage, and its re-solve raised
    `1-10`'s ceiling until that stage read 55%, the relief stage after the `1-9` wall reading as the
    hardest finish in the chapter; the three units under the top of its line were taken two levels
-   down by hand, and it reads 83%. Closing the gap
+   down by hand, and it read 83%. After the re-solve against real summon rates it reads 98%. Closing the gap
    would need chapter 1 income to roughly quadruple, which is a different game, so the alternative
    is a second cheaper yardstick for the opening stages, or a solver that measures a pinned stage
    whenever the instrument sits within a few percent of what it asks.
@@ -711,8 +719,8 @@ instead and is named in the coverage note under **Known bugs**.
    the layout's call. The other two ways out are repainting the right 7% as landscape, or accepting
    it.
 4. **The campaign is a gold-into-levels treadmill, and the targets that say how far off it is are
-   not settled.** At the first attempt of `2-12` the POWER SOURCES block reads levels 65.5% of team
-   power, roster 20.4% and armor 14.1%, and 86% of the gold that bought those levels is idle income.
+   not settled.** At the first attempt of `2-12` the POWER SOURCES block reads levels 64.4% of team
+   power, roster 20.1% and armor 15.5%, and 86% of the gold that bought those levels is idle income.
    The intended shape is roster-led with levels as a top-up, the way an ascension-gated idle RPG
    works, and fusion is meant to deliver it. `ReportPaceTargets` grades two targets on every run,
    **reported and never failing**, because they will read off until fusion lands:
@@ -722,8 +730,9 @@ instead and is named in the coverage note under **Known bugs**.
      `1 / (1 + 0.115 * (L - 1))` whatever the stars are, so fusion could never move it. The split
      used is roster (the deployed line at Lv1 over the starting line at Lv1), levels (bare power
      over the line at Lv1) and armor, each as its log share of the growth since `1-1`. It reads
-     levels 71.3%, roster 21.1%. Meeting both at today's levels needs the deployed line at Lv1 to
-     be x12.4 the starting line; it is x1.53.
+     levels 70.7%, roster 21.0%. Meeting both at today's levels needs the deployed line at Lv1 to
+     be x12.15 the starting line; it is x1.53. Those readings are at real summon rates, and were
+     reported rather than tuned toward when the campaign was re-solved against them.
    - **B, wall cost: a chapter finale costs 2 to 4 sittings beyond its own ladder floor.** Both
      finales read 0, two short. This grades the same table as open decision 1.
 
@@ -736,7 +745,7 @@ instead and is named in the coverage note under **Known bugs**.
    rather than by account rank. That is a decision for the fusion spec, not for a tuning pass. On
    B, chapter 1's wall band was set at x1.00 to x1.05 precisely so a chapter 1 wall clears on the
    next claim rather than two days later, which is one extra sitting; 2 to 4 contradicts it on
-   `1-12`, and a finale at x0.98 costs nothing today, so B may not be reachable inside the wall
+   `1-12`, and a finale at x0.99 costs nothing today, so B may not be reachable inside the wall
    band the curve check enforces. **The proposal is to keep A on the multiplicative split and let
    the fusion spec say which of the two levers it pulls, and to grade B at 1 to 2 on chapter 1's
    finale and 2 to 4 from chapter 2 on**, pending the playtests open decision 1 already calls for.
