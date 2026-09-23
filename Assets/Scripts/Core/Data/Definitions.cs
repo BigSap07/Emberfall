@@ -461,6 +461,24 @@ namespace Emberfall.Core.Data
         /// False (default) keeps existing AddOrRefresh behaviour for every shipped status.</summary>
         public bool StackOnReapply;
 
+        /// <summary>
+        /// With StackOnReapply: a new stack REFRESHES every stack the same caster already holds on
+        /// that body to the new duration, so the counter lives as long as the latest application
+        /// rather than each stack keeping its own clock.
+        ///
+        /// Without it, a status that lasts N rounds and gains one stack per turn can never be more
+        /// than N deep, whatever MaxStacks says: the oldest stack expires as the newest lands.
+        /// Corin's Settling is that shape - 2 rounds, one stack per basic, a limit of 3, and a Stun
+        /// at the limit - and in 1,440 favourable battles it never passed 2 and never stunned.
+        /// Pinoy's sentence is one status that deepens each round up to a limit and lasts 2 rounds
+        /// from the latest strike, which is this.
+        ///
+        /// Opt-in rather than a change to StackOnReapply, because Edrin's Observed Mark has the same
+        /// shape and a talent (Kept Watch) whose whole point is lengthening the Mark so it can reach
+        /// full depth. Defect pass 3.
+        /// </summary>
+        public bool RefreshStacks;
+
         /// <summary>Fraction of the Ledger's Stored that auto-release pays as healing to the
         /// APPLIER, on top of the damage it deals to the holder. Zero (default) means no split
         /// heal fires, which is the existing behaviour.</summary>
@@ -892,6 +910,7 @@ namespace Emberfall.Core.Data
             e.MaxHpCap = j.GetFloat("maxHpCap", 0f);
             e.ConsumeStacks = Math.Max(0, j.GetInt("consumeStacks", 0));
             e.StackOnReapply = j.GetBool("stackOnReapply", false);
+            e.RefreshStacks = j.GetBool("refreshStacks", false);
             e.LedgerAutoReleaseSplitHeal = j.GetFloat("ledgerAutoReleaseSplitHeal", 0f);
             e.DoTRecord = EnumUtil.Parse(j.GetString("doTRecord", "None"), RecordKind.None);
             e.LedgerFunnelSource = EnumUtil.Parse(j.GetString("ledgerFunnelSource", "Damage"), FunnelSource.Damage);
@@ -1008,6 +1027,7 @@ namespace Emberfall.Core.Data
             c.MaxHpCap = MaxHpCap;
             c.ConsumeStacks = ConsumeStacks;
             c.StackOnReapply = StackOnReapply;
+            c.RefreshStacks = RefreshStacks;
             c.LedgerAutoReleaseSplitHeal = LedgerAutoReleaseSplitHeal;
             c.DoTRecord = DoTRecord;
             c.LedgerFunnelSource = LedgerFunnelSource;

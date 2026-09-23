@@ -169,6 +169,12 @@ namespace Emberfall.Core.Data
         /// keep their own field because content already names them and their semantics are
         /// narrower. BroadcastSubject is the general-purpose version for every other broadcast
         /// that fires because something happened to a specific unit.
+        ///
+        /// ALL THREE, and the two swap modes, resolve BEFORE the Provoke and Taunt anchor, on
+        /// either side. Each names one body the engine has already chosen, so a Taunt holder
+        /// answering for it would aim the effect at a unit the event never touched while the
+        /// effect's conditions are still read off the one it did. Defect pass 3; the measured
+        /// cases are on the block in ResolveTargetsInner that returns them.
         /// </summary>
         BroadcastSubject,
 
@@ -207,8 +213,9 @@ namespace Emberfall.Core.Data
         ///
         /// BEFORE THE ANCHOR, alongside the ally modes: the whole point is to reach a specific
         /// unit regardless of which side it is on, and a Taunt holder must not intercept it.
-        /// BroadcastSubject in the post-anchor section has the same anchor-override problem but
-        /// is left where it is for backward compatibility.
+        /// BroadcastSubject had the same anchor-override problem and was left below the anchor
+        /// for backward compatibility until defect pass 3 moved it, with DefeatedUnit,
+        /// ThresholdUnit and the two swap modes, above it.
         /// </summary>
         BroadcastVictim,
 
@@ -410,7 +417,25 @@ namespace Emberfall.Core.Data
         /// Resolves to NOBODY rather than falling through to the front enemy when no enemy has hit
         /// the caster's line yet, which is honest about an empty first round.
         /// </summary>
-        EnemyThatLastDamagedAlly
+        EnemyThatLastDamagedAlly,
+
+        /// <summary>
+        /// The body a redirected share LANDED ON, inside OnRedirectSent and OnRedirectReceived.
+        /// Nobody outside those two broadcasts.
+        ///
+        /// A redirect has three parties and the broadcast already named two of them: the body the
+        /// share came OFF is BroadcastSubject and BroadcastVictim, and the attacker is
+        /// BroadcastSource. The third, the body that took the share, had no name, so a clause
+        /// saying "the redirected damage is increased" could only be aimed at the body it came
+        /// off. For a Deflect Link that body is the link owner being attacked - Nysera's False
+        /// Target struck Nysera herself every time it fired, 27 times over the sweep arena and a
+        /// campaign pass, until this existed.
+        ///
+        /// BEFORE THE ANCHOR, alongside BroadcastVictim and the link modes, for the same reason:
+        /// it names one specific body the engine has already chosen, and a Taunt holder answering
+        /// for it would aim the clause at a unit the redirect never touched.
+        /// </summary>
+        RedirectDestination
     }
 
     public enum EffectKind

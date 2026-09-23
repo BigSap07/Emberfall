@@ -113,7 +113,7 @@
       "passive1": {
         "id": "hale_tracking_habit",
         "name": "Tracking Habit",
-        "trigger": "TurnStart",
+        "trigger": "RoundEnd",
         "oncePerBattle": false,
         "limit": "OncePerRound",
         "effects": [
@@ -134,7 +134,7 @@
             "bypassResist": true
           }
         ],
-        "description": "At the start of each of Hale's turns, Quarry moves to the enemy that has dealt the most damage, and that enemy takes 10% more damage from Hale for 2 rounds. Both halves answer the same body: when Quarry was defeated there is no Mark to move and the rider does not land either. Pinoy writes the move as happening at the end of a round in which Quarry was not defeated; the engine's nearest hook is the start of his own turn.",
+        "description": "At the end of each round, if Quarry still stands, it moves to the enemy that dealt the most damage that round, and Hale hits it harder.",
         "chargeOnLanding": true
       },
       "passive2": {
@@ -7248,6 +7248,7 @@
             "magnitude": 0.08,
             "maxStacks": 3,
             "stackOnReapply": true,
+            "refreshStacks": true,
             "status": "Slow"
           }
         ]
@@ -7256,8 +7257,24 @@
         "id": "corin_weight_of_time",
         "name": "Weight of Time",
         "energyCost": 100,
-        "description": "Strikes every enemy with Settling. Targets whose Settling is at its limit are Stunned.",
+        "description": "Settles every enemy with Settling one step deeper, then strikes them. Targets whose Settling reaches its limit are Stunned.",
         "effects": [
+          {
+            "kind": "ApplyStatus",
+            "target": "AllEnemies",
+            "bypassResist": true,
+            "chance": 1,
+            "condition": "MyStatusStacksAtLeast",
+            "conditionOn": "Target",
+            "conditionStatus": "Slow",
+            "conditionValue": 1,
+            "duration": 2,
+            "magnitude": 0.08,
+            "maxStacks": 3,
+            "stackOnReapply": true,
+            "refreshStacks": true,
+            "status": "Slow"
+          },
           {
             "kind": "Damage",
             "target": "AllEnemies",
@@ -12403,7 +12420,7 @@
           "effects": [
             {
               "kind": "Damage",
-              "target": "BroadcastVictim",
+              "target": "RedirectDestination",
               "power": 0.25
             },
             {
@@ -12411,7 +12428,8 @@
               "target": "BroadcastSource",
               "flat": -10
             }
-          ]
+          ],
+          "description": "When her Link turns an attack away from Nysera, the enemy it lands on takes extra damage and the attacker loses Energy."
         },
         "talentIII": {
           "id": "nysera_last_known_position",

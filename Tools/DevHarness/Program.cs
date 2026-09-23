@@ -131,6 +131,7 @@ namespace Emberfall.DevHarness
             CheckAllyDonorModes(content);
             CheckEngineGapsPass(content);
             CheckAuthoredHeroSweep(content);
+            CheckNoAbilityHitsItsOwnCaster(content);
             CheckSweepFillerIsFlimsiest(content);
             CheckStarBandByRole(content);
             CheckPerTargetBudgetIsPerFiring();
@@ -6274,7 +6275,9 @@ namespace Emberfall.DevHarness
                                "SwapAdvancedUnit", "SwapDelayedUnit",
                                "HighestEnergyAlly", "LargestShieldAlly",
                                // the engine-gaps pass, group 8.
-                               "EnemyThatLastDamagedAlly" },
+                               "EnemyThatLastDamagedAlly",
+                               // defect pass 3: where a redirected share landed.
+                               "RedirectDestination" },
                 Enum.GetNames(typeof(TargetMode)));
             ok &= CheckEnumSet("EffectKind",
                 new string[] { "Damage", "Heal", "Shield", "ApplyStatus", "Cleanse",
@@ -22178,15 +22181,17 @@ namespace Emberfall.DevHarness
             "avera_break_the_measure", "lydia_no_fixed_departure", "petra_private_address",
             "clara_known_condition",
             "demos_notice_of_loss", "demos_arrears_tick",
-            "hale_field_sign", "hale_closing_radius", "hale_tracking_habit",
+            "hale_field_sign", "hale_closing_radius",
             "kiva_unclaimed_victory", "seraphine_volume_closed", "altheon_witness_script",
             "altheon_immaculate_record"
         };
 
         /// <summary>Ability ids deliberately left with no description, because their effect data
         /// is ambiguous enough that any sentence would be a guess. Listed in Docs/PINOY-LIST.md
-        /// section 2f beside the drafting notes. Empty is the goal.</summary>
-        private static readonly string[] AbilityTextPinnedUnwritten = { "nysera_false_target" };
+        /// section 2f beside the drafting notes. Empty is the goal, and it is empty: the last one,
+        /// Nysera's False Target, was unwritten because its damage struck Nysera herself, and it
+        /// has card text now that TargetMode.RedirectDestination names the body the share lands on.</summary>
+        private static readonly string[] AbilityTextPinnedUnwritten = { };
 
         /// <summary>What marks a description as a note to a designer rather than text for a
         /// player: a person, a document, the build tools or a measurement. Matched without case.
@@ -27442,6 +27447,140 @@ namespace Emberfall.DevHarness
 
         /// <summary>Enemies that died in this battle. The straggler is meant to be one of them in
         /// every run; a zero here is the arena having gone blind to defeats again.</summary>
+        /// <summary>
+        /// NO ABILITY LANDS ITS DAMAGE ON ITS OWN CASTER unless it says Self.
+        ///
+        /// Two shipped abilities did, and neither was visible to anything else in this harness,
+        /// because a hero hitting itself is a legal fight that ends, fingerprints and balances like
+        /// any other:
+        ///
+        ///   - Nysera's False Target answers her Link turning a blow away from her, and aimed its
+        ///     extra damage at BroadcastVictim - the body the share came OFF, which for a Deflect
+        ///     is always Nysera. It struck her every time it fired.
+        ///   - Darian's Hidden Strength sits on Darian and names the highest-Attack enemy as the
+        ///     body its payout strikes. The damage branch of a Ledger's auto-release ignored the
+        ///     named target and struck the holder, which is Darian.
+        ///
+        /// The rule is read off the record, which is where the screen reads it: a Damage event whose
+        /// source and target are the same unit. Two shapes are EXPLICITLY self-aimed and pass:
+        /// a Damage effect authored with target Self on an ability of that name (the sweep
+        /// straggler's Bleeding Out is one, and is what proves this check can tell the two apart),
+        /// and the donor half of an HpTransfer, whose whole meaning is that the caster pays HP
+        /// (emitted with the "transfer" vfx). A damage-over-time tick is a status resolving, not an
+        /// ability aiming, and is not read here.
+        ///
+        /// Run over the sweep arena for every hero with no talent and with each talent in turn, at
+        /// the sweep's own seeds, because a talent is where both defects lived or were reached. And
+        /// the two cases that motivated it are asserted to have FIRED and landed elsewhere, so a
+        /// repair that merely silenced them could not pass for one that aimed them.
+        /// </summary>
+        private static void CheckNoAbilityHitsItsOwnCaster(ContentDatabase live)
+        {
+            Line("NO ABILITY HITS ITS OWN CASTER (every hero, every talent, the sweep arena)");
+
+            ContentDatabase arena = BuildHeroSweepArena(live);
+            List<HeroDef> fillers = BuildHeroSweepFillers();
+            StageDef stage = arena == null ? null : arena.GetStage("sweep_arena");
+            if (arena == null || fillers == null || stage == null)
+            {
+                Check(false, "the sweep arena, its fillers and its stage were built");
+                Line("");
+                return;
+            }
+
+            List<HeroDef> heroes = new List<HeroDef>(live.Heroes);
+            heroes.Sort(delegate (HeroDef a, HeroDef b) { return string.CompareOrdinal(a.Id, b.Id); });
+
+            Dictionary<string, int> violations = new Dictionary<string, int>();
+            int battles = 0, allowedSelf = 0, falseTargetElsewhere = 0, hiddenStrengthElsewhere = 0;
+            for (int h = 0; h < heroes.Count; h++)
+            {
+                HeroDef def = heroes[h];
+                for (int talent = 0; talent <= 3; talent++)
+                {
+                    if (talent > 0 && def.TalentAt(talent) == null) continue;
+                    for (int s = 1; s <= HeroSweepSeeds; s++)
+                    {
+                        List<HeroInstance> team = new List<HeroInstance>();
+                        HeroInstance subject = MakeInstance(def, 40);
+                        subject.SelectedTalent = talent;
+                        team.Add(subject);
+                        for (int f = 0; f < fillers.Count; f++) team.Add(MakeInstance(fillers[f], 40));
+                        BattleResult r = RunWith(arena, stage, HeroSweepSeed(def.Id, s), team);
+                        if (r == null) continue;
+                        battles++;
+
+                        for (int i = 0; i < r.Events.Count; i++)
+                        {
+                            BattleEvent e = r.Events[i];
+                            if (e.Type != BattleEventType.Damage || e.SourceId < 0) continue;
+                            UnitSnapshot src = r.FindUnit(e.SourceId);
+                            if (src == null) continue;
+
+                            if (e.TargetId != e.SourceId)
+                            {
+                                if (src.DefId == "nysera_the_missing_arrow" && e.AbilityName == "False Target")
+                                    falseTargetElsewhere++;
+                                if (src.DefId == "darian_the_hidden_bulwark" && e.AbilityName == "Ledger")
+                                    hiddenStrengthElsewhere++;
+                                continue;
+                            }
+                            if (e.Status != StatusKind.None) continue;          // a DoT tick
+                            if (e.Vfx == "transfer") { allowedSelf++; continue; }  // HpTransfer's donor
+                            UnitDef owner = (UnitDef)arena.GetHero(src.DefId) ?? arena.GetEnemy(src.DefId);
+                            if (NamesSelfDamage(owner, e.AbilityName)) { allowedSelf++; continue; }
+
+                            string key = src.DefId + " / " + (string.IsNullOrEmpty(e.AbilityName) ? "(unnamed)" : e.AbilityName)
+                                         + (talent > 0 ? " [talent " + RomanOf(talent) + "]" : "");
+                            int n;
+                            violations.TryGetValue(key, out n);
+                            violations[key] = n + 1;
+                        }
+                    }
+                }
+            }
+
+            List<string> listed = new List<string>();
+            foreach (KeyValuePair<string, int> kv in violations) listed.Add(kv.Key + " x" + kv.Value);
+            listed.Sort(string.CompareOrdinal);
+            Check(violations.Count == 0,
+                  violations.Count == 0
+                    ? "no ability landed damage on its own caster in " + battles + " battles, unless it names Self ("
+                      + allowedSelf + " explicit self-hits passed)"
+                    : violations.Count + " ability/abilities landed damage on their own caster without naming Self: "
+                      + string.Join(", ", listed.ToArray()));
+            Check(allowedSelf > 0,
+                  "the check can tell an explicit self-hit from a defect - it passed " + allowedSelf
+                  + " (the straggler's Bleeding Out and HpTransfer donors), so a zero above is a reading, not a blind spot");
+            Check(falseTargetElsewhere > 0,
+                  "Nysera's False Target fired and struck a body other than Nysera " + falseTargetElsewhere
+                  + " time(s) - the body her Link turned the blow onto");
+            Check(hiddenStrengthElsewhere > 0,
+                  "Darian's Hidden Strength paid out onto a body other than Darian " + hiddenStrengthElsewhere
+                  + " time(s) - the highest-Attack enemy it names");
+            Line("");
+        }
+
+        /// <summary>Whether the unit authors, on an ability of that name, a Damage effect aimed at
+        /// Self. Names rather than ids because that is what a Damage event carries.</summary>
+        private static bool NamesSelfDamage(UnitDef def, string abilityName)
+        {
+            if (def == null || string.IsNullOrEmpty(abilityName)) return false;
+            List<List<EffectDef>> lists = new List<List<EffectDef>>();
+            if (def.BasicAttack != null && def.BasicAttack.Name == abilityName) lists.Add(def.BasicAttack.Effects);
+            if (def.Active != null && def.Active.Name == abilityName) lists.Add(def.Active.Effects);
+            for (int i = 0; i < def.Passives.Count; i++)
+                if (def.Passives[i] != null && def.Passives[i].Name == abilityName) lists.Add(def.Passives[i].Effects);
+            HeroDef hero = def as HeroDef;
+            if (hero != null)
+                for (int i = 0; i < hero.Talents.Count; i++)
+                    if (hero.Talents[i] != null && hero.Talents[i].Name == abilityName) lists.Add(hero.Talents[i].Effects);
+            for (int l = 0; l < lists.Count; l++)
+                for (int i = 0; i < lists[l].Count; i++)
+                    if (lists[l][i].Kind == EffectKind.Damage && lists[l][i].Target == TargetMode.Self) return true;
+            return false;
+        }
+
         private static int EnemyDeaths(BattleResult r)
         {
             int n = 0;

@@ -197,6 +197,16 @@ tree on 2026-09-23.
   rather than the dangerous one. At round end the whole round's damage is known. **Measure before
   and after**: this item is read from the code, not from a run. It is the only one of the fifty-one
   not recorded in `Docs/PINOY-LIST.md` sections 2a to 2d or in `Docs/ENGINE-GAPS.md`.
+- **Done in defect pass 3, and measured both ways.** Before, over 1,440 campaign battles built around
+  Hale, 2,022 of 5,470 Tracking Habit picks (37%) landed on an enemy that had dealt no damage that
+  round, which the front slot wins on the tie; at round end the same fights had a round in which
+  no enemy dealt damage 6 times in 3,035. Tracking Habit now fires on `RoundEnd`, and after the move
+  7 of 4,800 picks (0.15%) land on such an enemy. The card is T25's first sentence. Over the same
+  campaign sample Hale's damage per battle is unchanged (7,869 against 7,838) and he lands Closing
+  Radius more often (366 against 329). **In the sweep arena he reads x0.61, under the 5-star
+  floor**: his whole sweep output there rests on five casts, and a Quarry handed over at round end
+  with a round left expires on a faster carrier's own turn before two of them. That is a balance
+  call and he was not retuned; `DESIGN-BUILD-ORDER.md` carries it under Known bugs.
 
 ### W3. Nadine, Hold the Line: the card still promises the dropped clause
 
@@ -216,6 +226,14 @@ tree on 2026-09-23.
   was aimed at Nysera that body is Nysera. Only the Energy half works. It has no card text, because
   honest text would print a defect.
 - **Proposed: repair it as written**: add the damage to the redirected blow. Then write the card.
+- **Done in defect pass 3.** `TargetMode.RedirectDestination` names the body a redirected share lands
+  on, and False Target's damage aims at it. Before, it struck Nysera 27 times over the sweep arena
+  and a campaign pass; now it strikes the enemy the Link turned the blow onto. The card reads: *When
+  her Link turns an attack away from Nysera, the enemy it lands on takes extra damage and the
+  attacker loses Energy.* The harness check `CheckNoAbilityHitsItsOwnCaster` now fails if any
+  ability lands damage on its own caster without naming Self. It found one more: Darian's Hidden
+  Strength struck Darian 48 times, because a damage-shaped Ledger payout ignored the target it
+  names. That is repaired too.
 
 ### W5. Celen shows Nereia's body until her own art arrives
 
@@ -296,7 +314,7 @@ when W1's primitives land, 1 open (L23). "Keep" means the resolution in favour o
 | L48 | Aminah | 105%, 55%, 155% | 170%, 115%, 230% | Keep. She read below two 4-star Menders. |
 | L49 | Hale | 120%, 220%, Defense ignore | 250%, 570%, hits harder | Keep, see I8. |
 | L50 | Kiva | Wards only from Broken Links | the first Ward is ungated | Keep, see I9. |
-| L51 | Hale | Quarry moves at round end | at the start of his turn | **Overturn, see W2.** |
+| L51 | Hale | Quarry moves at round end | at round end, since defect pass 3 | **Overturned and done, see W2.** |
 
 **Three standing design notes, none needing an answer to ship:**
 
@@ -345,7 +363,7 @@ follows `Docs/ABILITY-TEXT-STYLE.md`: no numbers, in-battle status names, forty 
 | T22 | Demos, Notice of Loss, and its Arrears tick | Yes | Notice of Loss: Strikes the front enemy and applies Arrears. As its own turn ends, an enemy in Arrears loses a share of its current HP, up to a limit set by Demos's Attack. The tick: As its own turn ends, an enemy in Arrears loses a share of its current HP, up to a limit set by Demos's Attack. |
 | T23 | Hale, Field Sign | Yes | Strikes the enemy with the lowest HP and marks it as Quarry. Hale hits a Quarry harder. |
 | T24 | Hale, Closing Radius | Yes | Strikes the Quarry. If an ally has struck it since Hale's last turn, a second blow lands, harder the more wounded it is, up to a limit. |
-| T25 | Hale, Tracking Habit | **No, see W2** | If W2 is approved: At the end of each round, if Quarry still stands, it moves to the enemy that dealt the most damage that round, and Hale hits it harder. If W2 is overturned: At the start of each of Hale's turns, Quarry moves to the enemy that has dealt the most damage this round, and Hale hits it harder. |
+| T25 | Hale, Tracking Habit | **Done with W2** | At the end of each round, if Quarry still stands, it moves to the enemy that dealt the most damage that round, and Hale hits it harder. |
 | T26 | Kiva, Unclaimed Victory | Yes | When Kiva defeats a Forsaken enemy, she gains a Ward drawn from her Max HP, larger for each Broken Link she holds, up to a limit. Every Broken Link is spent. |
 | T27 | Seraphine, Volume Closed | Yes | When a Footnote record reaches its limit, the enemy takes the whole record as damage, loses Footnote and is Nullified, and Seraphine gains Energy. A Nullified enemy cannot gain buffs. |
 | T28 | Altheon, Witness Script | Yes | Strikes the enemy with the highest Attack, harder if Altheon has already damaged it this round. If it is the Subject and holds more HP than when he last noted it, he strikes it again. |
@@ -377,8 +395,8 @@ Cyrra's, the two that changed meaning, are I1 and I2 above.
 
 ## 5. Small housekeeping calls
 
-- **H1.** `Docs/PINOY-LIST.md` 2f says "except these 30" and lists 29. Both are right: 29 questions,
-  30 ids. **Proposed:** say so in the heading when it is next edited.
+- **H1.** `Docs/PINOY-LIST.md` 2f said "except these 30" and listed 29. Both were right: 29
+  questions, 30 ids. **Done**: with T25 answered it now says 29 ids asked as 28 questions.
 - **H2.** Six orphaned sprite files for heroes removed in the roster swap are referenced by nothing.
   **Proposed: delete them.**
 - **H3.** Every approved T item removes its id from the harness's pinned list in the same commit;
