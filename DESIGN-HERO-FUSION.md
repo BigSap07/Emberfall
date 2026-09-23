@@ -96,11 +96,15 @@ the pool.
 
 **F8** is a second floor inside `CheckStarBandByRole`: a 5-star of a seed-recipe aspect reads at or
 above its role's median. Aminah and Caldus were lifted to it (`Docs/PINOY-LIST.md` section 2d).
-**Velis is pinned in `KnownF8Exceptions` rather than lifted**, and the reason is a measurement: the
-Striker role has four 5-stars, so its median is the mean of the middle two, and his smallest lift
-that clears the floor raises the median about 9% and drops Kiva, a starting hero, to x0.72, under the
-x0.78 floor every 5-star keeps. Closing both is a Kiva change, which moves every stage fingerprint
-and the economy walk's line. That is a decision, and it is open.
+**Velis and Kiva were then lifted together, and `KnownF8Exceptions` is empty.** The Striker role
+has four 5-stars, so its median is the mean of the middle two, and a hero inside that pair drags
+the yardstick he is graded against: Velis's smallest whole-kit lift (x1.30) left him in the pair at
+x1.01 and dropped Kiva, a starting hero, to x0.72. Each lift now carries its hero out of the pair -
+Velis above it and Kiva still below - so the median is Sylven and Vaelis alone (44,942) and neither
+can move it. Kiva took x1.15 on every Damage number in her kit and reads x0.83; Velis took x1.45 on
+his basic alone and reads x1.04, because the same step on his whole kit put three of his clauses
+dark in the arena matrix. The lift moves every stage fingerprint, which the pass that made it
+regenerates.
 
 ---
 
@@ -111,7 +115,7 @@ Six rules, each applied to numbers measured off the tree:
 
 | what | rule | today |
 |---|---|---|
-| 5-star cap at tier 0 | levels may be 35% of the campaign's growth (pace target A): the finale's entry at its band middle over the starting line is x7.611, x7.611^0.35 = x2.035, and the cap is the last level inside it | 9 |
+| 5-star cap at tier 0 | levels may be 35% of the campaign's growth (pace target A): the finale's entry at its band middle over the starting line was x7.611 when this was derived, x7.611^0.35 = x2.035, and the cap is the last level inside it. **The x7.611 is pinned now** (`CapDerivationGrowth`): under the wall rule the finale is set by what a line at these caps reaches, so reading the caps back off the finale is a loop that settles near 9,000, under chapter 1's own finale | 9 |
 | 5-star caps above | the same 35%, as if the line sat at that tier, on top of every ascension below it, so they rise because the rule holds still | 18, 39 |
 | tiers authored | up to and including the first whose level 1 out-powers the finale's per-hero demand | 3 (tier 0, 1, 2) |
 | curve multiplier | tier t's first Level is one past tier t - 1's cap; M = 1 + growth * (that Level - 1) | x1, x2.035, x6.175 (Levels 1-9, 10-45, 46-281) |

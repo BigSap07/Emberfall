@@ -280,14 +280,17 @@ the star band's and is recorded in 2b's preamble rather than row by row.
 | **Aminah** | Marked Diagnosis deals "**105% of Attack**" and heals for "**55% of Attack**"; Restore the Balance deals "**155% of Attack**" | 190%, 129% and 258%, and her smaller heal and her release 25% and 56% | she read x0.50 of the Mender 5-star median, under two of the three Mender 4-stars, on the same stat line as Marrow. Her kit simply does less in the one arena the project measures in: fewer casts over a shorter life, and a Priority that holds healing back. A 5-star below the 4-stars of its own role is what the 5-star check exists to catch, and it took her to 170%, 115% and 230%, x0.86. **The second move is a design rule rather than a measurement**: Lumen and Umbra 5-stars must sit at or above their role's median, because those aspects are the slow ones to fuse and rarity with no payoff is a pool players learn to avoid. Every Damage and Heal number in her basic, active and passives went up by the same x1.12, the smallest step that puts her above Isara, and she reads x1.00 - she is the Mender median now |
 | **Caldus** | Answer the Blade "**115%**", Declare the Threat "**180%**", Defined Duty's counter "**75%**", No Uncertain Ground "**45%**" | 121%, 189%, 79% and 47% | the same rarer-aspect rule. He read x0.96 of the Vanguard median; every Damage number in his kit went up by the same x1.05, the smallest step that puts him above Aeron, and he reads x1.00 |
 | **Hale** | Field Sign deals "**120% of Attack**" and Closing Radius "**220% of Attack**" | 250% and 570% | he read x0.36 of his role's 5-star median, below every 4-star and both 3-star Marksmen. Both of his numbers are single blows at single targets where his three 5-star peers carry a second damage clause on each ability or hit the whole line; every 4-star and 3-star Marksman had a bigger single-target active than his 220%. He reads x0.79 now |
+| **Velis** | Denied Return deals "**130% of Attack**" and "an additional **45%**" below 40% HP | 189% and 65% | the rarer-aspect rule. He read x0.91 of the Striker median; see the paragraph under this table for why he and Kiva moved together. Only his basic moved: the same step on his whole kit darkened What Was Taken, because a harder Hollow the Wound kills before its Ledger reaches the threshold. He reads x1.04 |
+| **Kiva** | Cut the Escort deals "**125% of Attack**", Sever the Return "**245% of Attack**" | 144% and 282% | not for her own sake: Velis's lift raises the Striker median, and at x0.79 she was one point off the floor every 5-star keeps. Every Damage number in her kit went up by the same x1.15, and she reads x0.83. Unclaimed Victory (her talent III) now reads as a trade on the audited list: it already cost her 0.5% of output, inside the noise, and the lift took the same trade past two standard errors (see 2a for the talent itself) |
 
-**Velis is the one rarer-aspect 5-star the rule has not moved, and the reason is Kiva, not Velis.**
-He reads x0.91 of the Striker median. The Striker role has four 5-stars, so its median is the mean
-of the middle two, and Velis can only reach it by passing Sylven - which raises the median itself by
-about 9%. Measured: his smallest lift that clears the rule (x1.30 on every Damage number, reading
-x1.01) drops Kiva from x0.79 to x0.72, under the floor every 5-star keeps. Kiva is a starting hero,
-so the fix is a Kiva change too, and that is a kit decision rather than a number. The question for
-Pinoy is which of the two to move, or whether the Striker role should be an exception.
+**Velis and Kiva moved together, because the Striker role could not hold either one alone.** The
+role has four 5-stars, so its median is the mean of the middle two, and a hero inside that pair
+drags the median with him: Velis's smallest whole-kit lift that cleared the rule (x1.30, reading
+x1.01) dropped Kiva from x0.79 to x0.72. Each lift now carries its hero out of the pair - Velis above
+it, Kiva still below - so the median is Sylven and Vaelis alone and neither lift can move it again.
+Kiva is a starting hero, so hers is the change a player meets first; the question left for Pinoy is
+whether 144% and 282% are numbers he wants on her, or whether he would rather the Striker role were
+an exception to the floor.
 
 **The answer that is useful here is different from 2b's.** These are not "the approximation is fine"
 questions. Each is *the shipped number is the one I want*, or *the original number is the one I
@@ -314,14 +317,16 @@ roster is shaped that way today.
 ### 2e. Two talents that cost their own hero, and cannot be mended from content
 
 Every authored talent was measured against the same hero with nothing picked, over 40 seeds, in
-the sweep arena and in the arena built to raise it. Six cost their hero output. Four buy something
+the sweep arena and in the arena built to raise it. Seven cost their hero output. Five buy something
 the output total cannot see, or pay a price their own sentence names, and are fine as written:
 Nysera's Deeper Absence strips a buff (a taunting tank's Provoke, in the sweep), Rheia's Endless
 Revision trades casts for bigger ones, Rheia's Perfect Reversal pays Energy for every strike it
-keeps Revision for, and Marrow's Shared Oath spreads a smaller Promise over a third ally. Kiva's
-Unclaimed Victory and Mireth's No Record Remains were on that list and have left it: once
-Kiva's and Mireth's buff listeners heard real buffs only, the first reads inside the noise and the
-second gains in its own room. **These two buy nothing, and each is a conflict between the talent and the kit it hangs on**,
+keeps Revision for, Marrow's Shared Oath spreads a smaller Promise over a third ally, and Kiva's
+Unclaimed Victory buys a Shield on every Forsaken kill. Kiva's talent left the list once her buff
+listeners heard real buffs only and came back when the rarer-aspect pass lifted her kit x1.15: it
+read -410 a battle, t -1.7, and reads -807, t -2.9, in the same room, which also shows the Shield
+absorbing 308 and one ally death fewer. Mireth's No Record Remains left it the same way and gains in
+its own room. **These two buy nothing, and each is a conflict between the talent and the kit it hangs on**,
 so the smallest repair is a change to the kit rather than to a number.
 
 | hero | talent as written | what it costs | why nothing comes back |

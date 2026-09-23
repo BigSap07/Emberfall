@@ -46,7 +46,8 @@ $sources = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs 
              Select-Object -Expand FullName) + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") +
            (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") +
            (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs") +
-           (Join-Path $root "Tools\DevHarness\CloudChecks.cs")
+           (Join-Path $root "Tools\DevHarness\CloudChecks.cs") + (Join-Path $root "Tools\DevHarness\ArenaMatrix.cs") +
+           (Join-Path $root "Tools\DevHarness\WallResolve.cs")
 $rsp = Join-Path $env:TEMP "emberfall_recpwr.rsp"
 $lines = @($sources | ForEach-Object { '"' + $_ + '"' })
 [IO.File]::WriteAllLines($rsp, [string[]]$lines, [Text.UTF8Encoding]::new($false))
