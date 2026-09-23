@@ -542,9 +542,10 @@ those numbers by position as unsolved seeds** (`CAMPAIGN-SPEC.md` 10.3 and 10.8)
 `recommendedPower` was re-derived for all 24 stages from the reference player's entry power against
 the middle of each stage's own band, with `floorLevel`, `ceilingLevel` and the authored enemy
 levels following so the CEIL band still reads in range at the new number. A stage any of the twenty
-walks sticks on is aimed 5% higher per stick (`SolverStuckStep`), because that player fields its five
-highest-ceiling heroes whatever their roles and does not fight like the instrument line at one
-power. **Chapter 2 is nearly flat under the rule**: a line of 5-stars at the tier-0 cap is worth
+walks sticks on is aimed 5% higher per stick (`SolverStuckStep`), because that player fielded its
+five highest-ceiling heroes whatever their roles and did not fight like the instrument line at one
+power. It now fields a role-sane line (`WantedLine`: a front hero and a Mender first, then
+ceiling), which sticks nowhere at the carried seeds (`Docs/SOLVE-PREREQS.md` item 2). **Chapter 2 is nearly flat under the rule**: a line of 5-stars at the tier-0 cap is worth
 about 12,000, so chapter 2 runs 8,681 to 10,322 and `2-12` asks 9,984 where it asked 27,601. `2-6`
 and `2-12` settled at x1.197 of their `recommendedPower`, over their wall bands, because at the band
 some of the twenty walks stuck there; they are the band guard's two reds, and a reading rather
@@ -778,6 +779,21 @@ regenerated the stage fingerprints (216 lines) from a fresh rebase on `main`. Th
 two arena-matrix reds and the power band, now at 1-6, 1-9 and 2-6), and four it breaks deliberately:
 the retired 1-1 opener pin, armor's Rough slope, the CEIL band, and 16 of 20 non-fusing walks stuck.
 Each is listed with its cause in `CAMPAIGN-SPEC.md` 10.8.
+
+**`harness/solve-prereqs`** fixes the instruments the big solve reads, so that it is run once.
+It is based on `main` with `content/campaign-stages` merged, and holds:
+- **the reference player's line made role-sane**: `WantedLine` and `EconomyDeployLine` in
+  `Program.cs`;
+- **the three dead 1-1 pins retired** from `CheckCampaignMigrationRegression`;
+- **`--solve-prereqs`** (`Tools/DevHarness/SolvePrereqs.cs`), a measurement instrument that asserts
+  nothing;
+- **`Docs/SOLVE-PREREQS.md`**: what Speed's linear price costs each power-score consumer, with four
+  proposals for Matthias to pick from; the reference player's error per chapter; and every table
+  tuned against 24 stages, valued at stage 24 and at stage 72.
+
+It changes no content, no formula and no baseline. The build check reads **5 failures**, down from 7:
+the dead opener pin is retired, and `CheckFusionNeverGates` is green (0 of 20 walks stick). The
+power band still fails, but now reads all 72 stages, and 38 are out of band.
 
 **`balance/wall-resolve`** carries what the fusion spine left: target A re-measured by what bought
 each Level (open decision 4), the Striker pass that lifted Velis and Kiva together and emptied

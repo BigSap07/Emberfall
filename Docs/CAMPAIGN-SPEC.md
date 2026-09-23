@@ -1283,8 +1283,8 @@ was tuned.
 | 2 | `CheckStageFingerprintBaseline` | 144 not in the baseline | Chapters 3-6 are new: 48 stages × 3 seeds. | same |
 | 3 | `CheckArenaMatrix`, talents | 3 of 90 observed nowhere | Unchanged from main, and unrelated. | `DESIGN-BUILD-ORDER` Known bugs. |
 | 4 | `CheckArenaMatrix`, basics/actives/passives | 5 observed nowhere before the rebase, 4 after | Main's own red, and unrelated to stages. It moved with what the rebase brought in. | same |
-| 5 | `CheckCampaignMigrationRegression` | "ch1_1 wave 1 battle 1 is still two level-2 hollow husks and a level-2 grave moth" | It pins the retired opener by name. **Left red on purpose**: it pins content that no longer exists, and re-pinning it to the new opener before the solve moves its levels would only pin a seed. Its sibling "ch1_1's recommendedPower is 2977" is **green by coincidence**: 2977 is a carried seed. | Solve job: re-pin, or retire the check, once 1-1 is solved. |
-| 6 | Armor drop sweep | "Rough outnumbers Honed" fails, 537 vs 1599 | **Structural, and new.** Rough's `dropWeight` 55 falls by 1.6 per `stageGlobalIndex` (`armor.json`), which was tuned while the last index was 23. Now it is 71, so Rough's weight reaches zero at index 34 (3-11), and no stage past it drops Rough at all. | An economy decision: armor's slope, not this job's. |
+| 5 | `CheckCampaignMigrationRegression` | "ch1_1 wave 1 battle 1 is still two level-2 hollow husks and a level-2 grave moth" | It pins the retired opener by name. **Left red on purpose**: it pins content that no longer exists, and re-pinning it to the new opener before the solve moves its levels would only pin a seed. Its sibling "ch1_1's recommendedPower is 2977" is **green by coincidence**: 2977 is a carried seed. | **Retired since**, with its purse and 2977 siblings and none re-pinned (`SOLVE-PREREQS.md` item 3). |
+| 6 | Armor drop sweep | "Rough outnumbers Honed" fails, 537 vs 1599 | **Structural, and new.** Rough's `dropWeight` 55 falls by 1.6 per `stageGlobalIndex` (`armor.json`), which was tuned while the last index was 23. Now it is 71. **Corrected since:** the weight does not reach zero. `ArmorRoller.RollTemper` floors any weight under 1 at 1, so from index 34 (3-11) Rough is 1 of 24 (4.2%), and 5.9% at 6-12. Every stage still drops it, rarely. (`SOLVE-PREREQS.md` item 4.) | An economy decision: armor's slope, not this job's. |
 | 7 | Geared CEIL band | 66 of the 67 measurable stages out of band (5 floor-pinned); first miss 1-6 at 99.5% | Every level is a seed. Readings run from 0% (the first stage of every chapter 2-6, where a carried floor of 37 meets a new roster) to 100% (most of chapters 3-6). | The solver. |
 | 8 | `CheckCampaignPowerCurve` | 1-6 x1.182 over a wall band of x1.05; 1-9 x1.007 under x1.10; 2-6 x1.213 over x1.133 (x1.207 after the rebase) | 1-6 and 2-6 are walls now, and 1-9 no longer is, but they still carry the shipped power seeds. **It reads only 1-1 to 2-11**, because the reference walk (seed 1) sticks at 2-12. **The band has not looked at 61 stages.** "Across the board" failures are not visible here yet, only because the walk never gets there. | The solver. |
 | 9 | `CheckFusionNeverGates` | **16 of 20** reference walks STUCK after the rebase: at 2-12 ×6, 2-11 ×5, 6-12 ×4, 2-1 ×1 (12 and 14 of 20 in the two runs before it) | A reference player at the tier-0 cap cannot clear The Crossing or The Curator's line at the carried seeds. **This is the fusion tension the solve pass has to settle**: the fusing walk meets chapters 3-6 at x10 to x21 of `recommendedPower`, the reference walk sticks. The 6-12 row prints its median as 2147483647, the stuck sentinel read as a number: a display bug in the report, not in the verdict. | The solve pass, with open decision 4. |
@@ -1299,12 +1299,19 @@ was tuned.
 - "A normal player can clear the whole campaign". That reads the fusing walk, which runs x5 to x21
   over `recommendedPower` through chapters 3-6. Green, and meaningless until the solve.
 
+**Since, measured: 5 failures.** The reference player now fields a role-sane line
+(`SOLVE-PREREQS.md` item 2), and the retired pins are gone. Row 5 is retired. Row 9 is green: 0 of 20
+non-fusing walks stick. Row 8 is still red but now reads the whole campaign, because walk 1 no longer
+sticks at 2-12. **38 stages are out of band**: 1-6, 1-9, 2-6 (x1.227) and 2-12 (x1.202), and 34 in
+chapters 3 to 6. All 34 are **over** the band, because the reference player arrives richer than the
+carried chapter 2 seeds ask. Rows 3, 4, 6 and 7 read as before.
+
 **For the solve job, in order.**
 1. Settle the reward curve past chapter 2 (10.3) together with the fusion tension. The flat plateau
    is a placeholder, and the solver never touches a purse.
 2. Run `pwsh Tools/solve-recommended-power.ps1`. It will seed every level from the new
    `recommendedPower`.
-3. Re-pin or retire row 5.
+3. ~~Re-pin or retire row 5.~~ Retired (`SOLVE-PREREQS.md` item 3). Consider a tutorial band instead.
 4. Decide armor's slope (row 6).
 5. Regenerate the fingerprints last.
 
