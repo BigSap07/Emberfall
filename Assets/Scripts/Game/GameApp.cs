@@ -161,8 +161,8 @@ namespace Emberfall.Game
             // both halves.
             //
             // Kael IS summonable: RollHero draws from Content.HeroesOfStars weighted by star tier,
-            // he is five stars, and summonWeight5 is the only non-zero weight in balance.json - a
-            // live ten-pull returned him as a duplicate. And the cost of it running unconditionally
+            // he is five stars, and summonWeight5 is a non-zero weight in balance.json (it was the
+            // only one when this was written, and a live ten-pull returned him as a duplicate). And the cost of it running unconditionally
             // was worse than the convenience: it fired on EVERY editor launch, so a fresh save in
             // the editor showed a four-hero roster where a real new player gets three. Every
             // first-run check any of us has ever done in the editor was against a line-up no

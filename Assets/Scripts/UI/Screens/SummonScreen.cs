@@ -77,16 +77,18 @@ namespace Emberfall.UI.Screens
         /// the hero page's, found the same way, and fixed the same way: the fixed element is the
         /// FURNITURE and the stage takes whatever is left.
         ///
-        ///   966 short canvas - 336 header and strip - 226 action block = 404 of stage.
+        ///   966 short canvas - 336 header and strip - 198 action block = 432 of stage.
         /// </summary>
         private const float ShortestCanvasHeight = 966f;
 
         /// <summary>Everything under the stage, measured from the stage's own bottom edge: the
-        /// gap, the pull buttons, the guarantee bar and the two lines of small print.</summary>
+        /// gap, the pull buttons, the guarantee bar and its line of small print. The odds used to
+        /// be a second line of small print here, repeating the stage's own line word for word;
+        /// they now live only on the stage.</summary>
         private const float PullHeight = 88f;
         private const float PityRowHeight = 36f;
         private const float ActionBlockHeight = UITheme.Space16 + PullHeight + UITheme.Space12
-                                              + PityRowHeight + 6f + 24f + 4f + 24f + UITheme.Space16;
+                                              + PityRowHeight + 6f + 24f + UITheme.Space16;
 
         /// <summary>The band at the bottom of the stage the headline and its line occupy, which is
         /// the space the rift is centred ABOVE rather than in.</summary>
@@ -106,7 +108,6 @@ namespace Emberfall.UI.Screens
         private Image _pityFill;
         private Text _pityLabel;
         private Image _pityChest;
-        private Text _oddsLabel;
 
         /// <summary>The summon itself: press, buildup, tell, flash, reveal, and the ten-pull
         /// summary. Built on the app's overlay layer rather than inside this screen, so the dim
@@ -224,7 +225,7 @@ namespace Emberfall.UI.Screens
             // apart by hand is what the first pass did, and at "NEED 1122 MORE" the cost ran back
             // under the word PULL. Anchoring them to opposite edges means the cost can grow to
             // whatever the shortfall needs without ever reaching the label.
-            float pullY = bottom + 24f + 4f + 24f + 6f + PityRowHeight + UITheme.Space12;
+            float pullY = bottom + 24f + 6f + PityRowHeight + UITheme.Space12;
 
             _pullOne = EmberforgeUI.Button("PullOne", Root, "PULL", UITheme.FontHeading,
                                            ForgeButtonKind.Primary);
@@ -270,7 +271,7 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildPityBar(float bottom)
         {
-            float rowY = bottom + 24f + 4f + 24f + 6f;
+            float rowY = bottom + 24f + 6f;
 
             RectTransform row = UIBuilder.Node("Pity", Root);
             UIBuilder.Box(row, -34f, rowY, PullWidth + 300f, PityRowHeight, new Vector2(0.5f, 0f));
@@ -315,13 +316,8 @@ namespace Emberfall.UI.Screens
 
             _pityLabel = EmberforgeUI.Label("PityLabel", Root, "", UITheme.FontTiny - 2,
                                             Emberforge.TextQuiet, TextAnchor.LowerCenter);
-            UIBuilder.Box(_pityLabel.rectTransform, -34f, bottom + 28f, 1000f, 24f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_pityLabel.rectTransform, -34f, bottom, 1000f, 24f, new Vector2(0.5f, 0f));
             UIBuilder.Outlined(_pityLabel, Emberforge.Outline, Emberforge.StrokeThin);
-
-            _oddsLabel = EmberforgeUI.Label("Odds", Root, "", UITheme.FontTiny - 2,
-                                            Emberforge.TextQuiet, TextAnchor.LowerCenter);
-            UIBuilder.Box(_oddsLabel.rectTransform, 0f, bottom, 1200f, 24f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(_oddsLabel, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         // ------------------------------------------------------------------ behaviour
@@ -362,7 +358,6 @@ namespace Emberfall.UI.Screens
             RefreshPullButton(_pullOne, unit, shards);
             RefreshPullButton(_pullTen, unit * 10L, shards);
             RefreshPity();
-            RefreshOdds();
             RefreshStage();
         }
 
@@ -398,7 +393,7 @@ namespace Emberfall.UI.Screens
                 _stageHeadline.text = "YOU HOLD ALL " + pool + " HEROES THE RIFT OFFERS";
             else
                 _stageHeadline.text = unowned + " OF THE RIFT'S " + pool + " HEROES ARE NOT YET YOURS";
-            _stageLine.text = _oddsLabel.text;
+            _stageLine.text = OddsLine(balance);
         }
 
         /// <summary>
@@ -431,16 +426,16 @@ namespace Emberfall.UI.Screens
         }
 
         /// <summary>
-        /// The odds, as one line.
+        /// The odds, as one line, printed once: on the stage under the headline. The screen used
+        /// to print the same line again as small print under the guarantee bar.
         ///
         /// Same rule the old RIFT ODDS card used: when exactly one tier is offered, state the
         /// outcome outright, because a lone "100%" reads as "100% chance of a good pull" rather
         /// than "every pull is 5-star". Those mean the same thing today and only one of them
         /// survives the pool being widened.
         /// </summary>
-        private void RefreshOdds()
+        private static string OddsLine(BalanceConfig balance)
         {
-            BalanceConfig balance = App.Session.Balance;
             float[] w = { balance.SummonWeight1, balance.SummonWeight2, balance.SummonWeight3,
                           balance.SummonWeight4, balance.SummonWeight5 };
             float total = 0f;
@@ -453,10 +448,7 @@ namespace Emberfall.UI.Screens
                 if (w[s - 1] > 0f) { tiersOffered++; onlyTier = s; }
 
             if (tiersOffered == 1)
-            {
-                _oddsLabel.text = "RIFT ODDS  -  EVERY PULL IS " + onlyTier + "-STAR";
-                return;
-            }
+                return "RIFT ODDS  -  EVERY PULL IS " + onlyTier + "-STAR";
 
             string line = "RIFT ODDS  -  ";
             bool first = true;
@@ -467,7 +459,7 @@ namespace Emberfall.UI.Screens
                 line += s + "-STAR " + (Mathf.Round(w[s - 1] / total * 1000f) / 10f) + "%";
                 first = false;
             }
-            _oddsLabel.text = line;
+            return line;
         }
 
         /// <summary>
@@ -589,10 +581,10 @@ namespace Emberfall.UI.Screens
         /// GameSession.Summon call, no shards spent, no hero granted, nothing saved. The outcomes
         /// are built here and marked, and the sequence prints EDITOR PREVIEW over itself.
         ///
-        /// It exists because the live weights make every pull a 5-star, so the 3-star and 4-star
-        /// paths cannot otherwise be seen at all, and the 5-star path only by spending shards. It
-        /// does not force the ROLL, deliberately: a forced roll would be a change to the summon
-        /// logic, and this pass is presentation only.
+        /// It was built when the live weights made every pull a 5-star and the other tiers could
+        /// not be seen at all. The weights now reach every tier, but a 5-star is 3% of a pull, so
+        /// this is still the way to see a chosen tier on demand. It does not force the ROLL,
+        /// deliberately: a forced roll would be a change to the summon logic.
         ///
         /// Compiled out of a player build entirely by the UNITY_EDITOR guard. Reached from the
         /// cheat panel and from SummonSequenceShots.

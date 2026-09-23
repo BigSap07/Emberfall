@@ -13,8 +13,8 @@ using Emberfall.UI.Summon;
 namespace Emberfall.EditorTools
 {
     /// <summary>
-    /// PHOTOGRAPHS EVERY BEAT OF THE SUMMON, for a 3-star, a 4-star and a 5-star, plus a ten-pull,
-    /// at 1920x1080 and 2400x1080.
+    /// PHOTOGRAPHS EVERY BEAT OF THE SUMMON, for every tier from 1-star to 5-star, plus a
+    /// ten-pull, at 1920x1080 and 2400x1080.
     ///
     /// A summon is 2.5 seconds of motion and a capture that tried to catch a beat by timing would
     /// photograph whatever frame the editor happened to render. So this does not time anything:
@@ -22,9 +22,9 @@ namespace Emberfall.EditorTools
     /// exact instant of each beat and photographs that. Two runs produce the same pictures.
     ///
     /// The heroes come from SummonScreen.DebugPreview, which rolls nothing and grants nothing,
-    /// because the live weights make every real pull a 5-star and the other two tiers could not
-    /// otherwise be shown. The EDITOR PREVIEW line in the corner of every shot is that path saying
-    /// so, and it is left in rather than hidden for the capture.
+    /// because a capture has to show a chosen tier and a real roll cannot promise one. The EDITOR
+    /// PREVIEW line in the corner of every shot is that path saying so, and it is left in rather
+    /// than hidden for the capture.
     ///
     /// Runs under a scratch company/product so the quit-time save cannot touch a real save - the
     /// ArmorVerification pattern, as ClipWiringShots uses it - with the first-run prologue
@@ -34,6 +34,14 @@ namespace Emberfall.EditorTools
     ///
     /// NOT -batchMode: ScreenCapture photographs the Game view, and batch mode has none. Launched
     /// this way it quits the editor when done. From the menu it leaves the editor open.
+    ///
+    /// RunRealtime is the other half: the preview ten-pull played LIVE at the Full timings, with a
+    /// tap 0.4s after each hero settles (a player who is paying attention, not one hammering), and
+    /// every phase change written with its time to Docs/ui-shots/summon-realtime/x10-timeline.txt.
+    /// The frozen beats say what each instant looks like; this says how long the whole thing takes
+    /// to sit through, and is the run to screen-record when judging whether the buildup drags.
+    ///
+    ///   Unity.exe -projectPath . -executeMethod Emberfall.EditorTools.SummonSequenceShots.RunRealtime
     /// </summary>
     [InitializeOnLoad]
     public static class SummonSequenceShots
@@ -44,6 +52,12 @@ namespace Emberfall.EditorTools
         private const string OrigCompanyKey = "SummonSequenceShots.OrigCompany";
         private const string OrigProductKey = "SummonSequenceShots.OrigProduct";
         private const string OrigSuppressKey = "SummonSequenceShots.OrigSuppress";
+        private const string RealtimeKey = "SummonSequenceShots.Realtime";
+
+        /// <summary>How long the realtime run's pretend player looks at a settled hero before
+        /// tapping on, and at the summary before closing it.</summary>
+        private const float RealtimeTapAfter = 0.4f;
+        private const float RealtimeSummaryHold = 1.5f;
 
         private const string ScratchCompany = "Emberfall Scratch";
         private const string ScratchProduct = "Emberfall Summon Shots";
@@ -77,6 +91,14 @@ namespace Emberfall.EditorTools
         public static void Run()
         {
             SessionState.SetBool(ExitKey, true);
+            SessionState.SetBool(RealtimeKey, false);
+            Begin();
+        }
+
+        public static void RunRealtime()
+        {
+            SessionState.SetBool(ExitKey, true);
+            SessionState.SetBool(RealtimeKey, true);
             Begin();
         }
 
@@ -84,6 +106,15 @@ namespace Emberfall.EditorTools
         public static void RunFromMenu()
         {
             SessionState.SetBool(ExitKey, false);
+            SessionState.SetBool(RealtimeKey, false);
+            Begin();
+        }
+
+        [MenuItem("Emberfall/Capture/Summon x10 in real time", false, 82)]
+        public static void RunRealtimeFromMenu()
+        {
+            SessionState.SetBool(ExitKey, false);
+            SessionState.SetBool(RealtimeKey, true);
             Begin();
         }
 
@@ -110,8 +141,11 @@ namespace Emberfall.EditorTools
             PlayerPrefs.DeleteAll();
 
             string outDir = OutDir();
-            if (Directory.Exists(outDir)) Directory.Delete(outDir, true);
-            Directory.CreateDirectory(outDir);
+            if (!SessionState.GetBool(RealtimeKey, false))
+            {
+                if (Directory.Exists(outDir)) Directory.Delete(outDir, true);
+                Directory.CreateDirectory(outDir);
+            }
 
             if (!GameViewSize.Apply(Sizes[0][0], Sizes[0][1]))
                 Debug.LogWarning("SummonSequenceShots: could not pin the Game view size.");
@@ -127,6 +161,12 @@ namespace Emberfall.EditorTools
             return Path.GetFullPath(Path.Combine(Application.dataPath, "../Docs/ui-shots/summon"));
         }
 
+        private static string RealtimeLog()
+        {
+            return Path.GetFullPath(Path.Combine(Application.dataPath,
+                                                 "../Docs/ui-shots/summon-realtime/x10-timeline.txt"));
+        }
+
         // ------------------------------------------------------------------ the shot list
 
         /// <summary>Every beat of one pull, at the Full timings. Times are read off SummonTiming
@@ -138,17 +178,45 @@ namespace Emberfall.EditorTools
             Add(shots, tier + "_01_press", tiers, 0, SummonSequence.Phase.Press, t.Dim * 0.55f);
             Add(shots, tier + "_02_buildup", tiers, 0, SummonSequence.Phase.Buildup, t.Tell * 0.6f);
             Add(shots, tier + "_03_tell", tiers, 0, SummonSequence.Phase.Buildup, t.Tell + 0.06f);
-            Add(shots, tier + "_04_tell-ring", tiers, 0, SummonSequence.Phase.Buildup, t.Tell + 0.24f);
+            Add(shots, tier + "_04_tell-ring", tiers, 0, SummonSequence.Phase.Buildup,
+                Math.Min(t.Tell + 0.24f, t.BuildupFor(stars) - 0.03f));
             Add(shots, tier + "_05_charge", tiers, 0, SummonSequence.Phase.Buildup, t.BuildupFor(stars) - 0.05f);
             Add(shots, tier + "_06_flash", tiers, 0, SummonSequence.Phase.Flash, t.FlashIn * 0.7f);
             Add(shots, tier + "_07_reveal-in", tiers, 0, SummonSequence.Phase.Reveal, 0.1f);
-            Add(shots, tier + "_08_stamp", tiers, 0, SummonSequence.Phase.Reveal, t.StarsAt + t.StarGap * 2f + 0.03f);
-            Add(shots, tier + "_09_settled", tiers, 0, SummonSequence.Phase.Reveal, t.Settled + 0.5f);
+            Add(shots, tier + "_08_stamp", tiers, 0, SummonSequence.Phase.Reveal,
+                SummonTiming.IsFlat(stars) ? t.FlatNameAt + 0.06f : t.StarsAt + t.StarGap * 2f + 0.03f);
+            Add(shots, tier + "_09_settled", tiers, 0, SummonSequence.Phase.Reveal, t.SettledFor(stars) + 0.5f);
+        }
+
+        /// <summary>The timing strip: a whole pull every 0.1s, 16:9 only. Not a beat picture; it is
+        /// the pacing laid out flat, for judging whether the wait ramps and where it drags.</summary>
+        private static void AddStrip(List<Shot> shots, int stars)
+        {
+            SummonTiming t = SummonTiming.Full;
+            int[] tiers = { stars };
+            float buildup = t.BuildupFor(stars);
+            float total = t.Dim + buildup + t.FlashIn + t.SettledFor(stars) + 0.3f;
+            for (int i = 0; i * 0.1f <= total; i++)
+            {
+                float at = i * 0.1f;
+                SummonSequence.Phase phase;
+                float local;
+                if (at < t.Dim) { phase = SummonSequence.Phase.Press; local = at; }
+                else if (at < t.Dim + buildup) { phase = SummonSequence.Phase.Buildup; local = at - t.Dim; }
+                else if (at < t.Dim + buildup + t.FlashIn) { phase = SummonSequence.Phase.Flash; local = at - t.Dim - buildup; }
+                else { phase = SummonSequence.Phase.Reveal; local = at - t.Dim - buildup - t.FlashIn; }
+                Add(shots, "strip/" + stars + "star_t" + (i * 100).ToString("0000"), tiers, 0, phase, local);
+                Shot last = shots[shots.Count - 1];
+                last.FirstSizeOnly = true;
+                shots[shots.Count - 1] = last;
+            }
         }
 
         private static List<Shot> BuildShots()
         {
             List<Shot> shots = new List<Shot>();
+            AddBeats(shots, "1star", 1);
+            AddBeats(shots, "2star", 2);
             AddBeats(shots, "3star", 3);
             AddBeats(shots, "4star", 4);
             AddBeats(shots, "5star", 5);
@@ -156,30 +224,16 @@ namespace Emberfall.EditorTools
             SummonTiming t = SummonTiming.Full;
             int[] batch = DebugCheatPanel.PreviewBatch;
             int gold = Array.IndexOf(batch, 5);
-            Add(shots, "x10_01_first-reveal", batch, 0, SummonSequence.Phase.Reveal, t.Settled + 0.5f);
-            Add(shots, "x10_02_mini-tell", batch, 1, SummonSequence.Phase.Buildup, 0.12f);
+            int flat = Array.IndexOf(batch, 1);
+            Add(shots, "x10_01_first-reveal", batch, 0, SummonSequence.Phase.Reveal, t.SettledFor(batch[0]) + 0.5f);
+            Add(shots, "x10_02_mini-tell", batch, flat, SummonSequence.Phase.Buildup, 0.08f);
+            Add(shots, "x10_02b_flat-reveal", batch, flat, SummonSequence.Phase.Reveal, t.SettledFor(1) + 0.5f);
             Add(shots, "x10_03_mini-tell-gold", batch, gold, SummonSequence.Phase.Buildup, 0.14f);
-            Add(shots, "x10_04_gold-reveal", batch, gold, SummonSequence.Phase.Reveal, t.Settled + 0.5f);
+            Add(shots, "x10_04_gold-reveal", batch, gold, SummonSequence.Phase.Reveal, t.SettledFor(5) + 0.5f);
             Add(shots, "x10_05_summary", batch, 0, SummonSequence.Phase.Summary, 1f);
 
-            // The timing strip: a whole 5-star pull every 0.1s, 16:9 only. Not a beat picture;
-            // it is the pacing laid out flat, for judging whether the wait ramps and where it drags.
-            int[] five = { 5 };
-            float total = t.Dim + t.BuildupFor(5) + t.FlashIn + t.Settled + 0.3f;
-            for (int i = 0; i * 0.1f <= total; i++)
-            {
-                float at = i * 0.1f;
-                SummonSequence.Phase phase;
-                float local;
-                if (at < t.Dim) { phase = SummonSequence.Phase.Press; local = at; }
-                else if (at < t.Dim + t.BuildupFor(5)) { phase = SummonSequence.Phase.Buildup; local = at - t.Dim; }
-                else if (at < t.Dim + t.BuildupFor(5) + t.FlashIn) { phase = SummonSequence.Phase.Flash; local = at - t.Dim - t.BuildupFor(5); }
-                else { phase = SummonSequence.Phase.Reveal; local = at - t.Dim - t.BuildupFor(5) - t.FlashIn; }
-                Add(shots, "strip/5star_t" + (i * 100).ToString("0000"), five, 0, phase, local);
-                Shot last = shots[shots.Count - 1];
-                last.FirstSizeOnly = true;
-                shots[shots.Count - 1] = last;
-            }
+            AddStrip(shots, 5);
+            AddStrip(shots, 1);
             return shots;
         }
 
@@ -215,12 +269,18 @@ namespace Emberfall.EditorTools
                 _playing = null;
                 _pending = null;
                 app.Router.Show(ScreenId.Summon);
-                _wait = 30;
-                _stage = 1;
+                _wait = 60;
+                _stage = SessionState.GetBool(RealtimeKey, false) ? 10 : 1;
                 return;
             }
 
             if (_wait > 0) { _wait--; return; }
+
+            if (_stage >= 10)
+            {
+                PumpRealtime(app);
+                return;
+            }
 
             if (_stage == 1)
             {
@@ -280,6 +340,55 @@ namespace Emberfall.EditorTools
                 Debug.Log("SummonSequenceShots: done");
                 EditorApplication.isPlaying = false;
             }
+        }
+
+        // ------------------------------------------------------------------ the realtime run
+
+        private static float _rtStart;
+        private static float _rtMark;
+        private static string _rtLast;
+        private static List<string> _rtLines;
+
+        private static void PumpRealtime(GameApp app)
+        {
+            SummonSequence seq = app.Router.Summon.DebugSequence;
+            float now = Time.realtimeSinceStartup;
+
+            if (_stage == 10)
+            {
+                _rtLines = new List<string>();
+                _rtLines.Add("Preview x10 " + string.Join(",", Array.ConvertAll(DebugCheatPanel.PreviewBatch, x => x.ToString()))
+                             + " at Full, tap " + RealtimeTapAfter + "s after each hero settles");
+                _rtStart = now;
+                _rtMark = -1f;
+                _rtLast = null;
+                app.Router.Summon.DebugPreview(DebugCheatPanel.PreviewBatch);
+                _stage = 11;
+                return;
+            }
+
+            string state = !seq.Running ? "done"
+                         : seq.Current + " pull " + (seq.Index + 1) + (seq.IsSettled ? " settled" : "");
+            if (state != _rtLast)
+            {
+                _rtLines.Add((now - _rtStart).ToString("0.000").PadLeft(7) + "  " + state);
+                _rtLast = state;
+                _rtMark = now;
+            }
+
+            if (!seq.Running || (seq.Current == SummonSequence.Phase.Summary && now - _rtMark >= RealtimeSummaryHold))
+            {
+                if (seq.Running) seq.Abort();
+                _rtLines.Add((now - _rtStart).ToString("0.000").PadLeft(7) + "  end");
+                string log = RealtimeLog();
+                Directory.CreateDirectory(Path.GetDirectoryName(log));
+                File.WriteAllLines(log, _rtLines.ToArray());
+                Debug.Log("SummonSequenceShots: realtime timeline written to " + log);
+                _stage = 2;
+                return;
+            }
+
+            if (seq.IsSettled && now - _rtMark >= RealtimeTapAfter) seq.Tap();
         }
 
         /// <summary>See PlayModeScreenshot.ForceGameViewRepaint: ScreenCapture hands back what the

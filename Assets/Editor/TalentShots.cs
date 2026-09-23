@@ -45,9 +45,11 @@ namespace Emberfall.EditorTools
 
         private static readonly int[][] Sizes = { new[] { 1920, 1080 }, new[] { 2400, 1080 } };
 
-        /// <summary>The heroes photographed, by def id. Kael carries a trap in his line (III), Velis
-        /// carries the other on the bench, Talren has the longest numbers list in the roster, and
-        /// Nysera has the one talent with no sentence at all.</summary>
+        /// <summary>The heroes photographed, by def id. Kael (III) and Mireth (I) carry the two
+        /// talents TalentAudit.Costly marks as traps, Velis carries Final Denial, which was a trap
+        /// until it left the audited list and should now print no audit line, Talren has the
+        /// longest numbers list in the roster, and Nysera has the one talent with no sentence at
+        /// all. Which talents are traps is TalentAudit.Costly, read at runtime by the screen.</summary>
         private static readonly string[] TalentHeroes =
         {
             "kael_the_unyielding", "velis_the_hollow_vow", "talren_the_wayfinder",
