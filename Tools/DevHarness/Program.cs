@@ -25887,6 +25887,10 @@ namespace Emberfall.DevHarness
         private const string DarkWall =
             "kael_the_unyielding,darian_the_hidden_bulwark,isara_the_second_chance";
         private const string DarkPairUp = "brenna_the_remaining_wall,kael_the_unyielding";
+        /// <summary>Brenna I's room: the squad beside her where her Lasting Guard's cap binds. See
+        /// the Brenna I check for why it is not DarkFive, which already holds her.</summary>
+        private const string DarkBrennaCap =
+            "darian_the_hidden_bulwark,nereia_the_field_medic,rovan_the_adaptive_commander";
 
         /// <summary>
         /// EVERY DARK TALENT THIS ARENA CAN REACH, PROVED ONE AT A TIME.
@@ -25951,7 +25955,7 @@ namespace Emberfall.DevHarness
             new TalentRoom("vaelis_the_unfixed_blade II", "s_soft4_triple", "", 4, false),
             new TalentRoom("vaelis_the_unfixed_blade III", "s_soft_soft_big", "isara_the_second_chance", 2, false),
             new TalentRoom("dahlia_the_wayward_hymn II", "s_caster_bruiser_tail", DarkFive, 1, false),
-            new TalentRoom("brenna_the_remaining_wall I", "s_caster_bruiser_tail", DarkFive, 2, false),
+            new TalentRoom("brenna_the_remaining_wall I", "s_caster_bruiser_tail", DarkBrennaCap, 1, false),
             new TalentRoom("altheon_the_first_witness III", "s_buffer_tail", DarkStrikers, 1, false),
             new TalentRoom("isolde_the_slow_fading III", "s_buffer", "", 1, false),
             // Mireth I has a room since C13: the sweep no longer raises The Missing Page, so without
@@ -26130,7 +26134,15 @@ namespace Emberfall.DevHarness
             // Brenna's included; the Guard it laid shares one entry with the Lasting Guard beside it.
             // Answering only his own Ward, it stopped doing that and the cap stopped binding (675
             // either way). Of every room and seed the section fields, this is the one where it binds.
-            if (!DarkPair("brenna_the_remaining_wall", 1, "s_caster_bruiser_tail", DarkFive, 2, false,
+            //
+            // AND THEN MOVED OFF DarkFive, because DarkFive holds Brenna and this subject IS Brenna:
+            // the room fielded two of her, which PlayerProfile.AssignToTeam never allows. With the
+            // copy removed (Isara, Kael, Darian, same stage) the cap never binds - 675 released
+            // either way at seeds 1 to 4 - so what this check proved it proved with the copy. A search of legal rooms - every stage of the matrix arena, both clocks,
+            // every squad of up to three from Isara, Kael, Darian, Eira, Nereia, Rovan, Caldus and
+            // Dahlia, six seeds each - found the cap binding in 43 of 29,016 fights. This room
+            // binds at five of its six seeds, the most of any; the talent is real and narrow.
+            if (!DarkPair("brenna_the_remaining_wall", 1, "s_caster_bruiser_tail", DarkBrennaCap, 1, false,
                           out a, out b))
                 Check(false, "brenna I arena built");
             else

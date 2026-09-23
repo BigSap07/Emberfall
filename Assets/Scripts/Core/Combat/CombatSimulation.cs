@@ -1208,8 +1208,19 @@ namespace Emberfall.Core.Combat
 
             private void CloseRound()
             {
-                _order = null;
                 if (IsBattleOver()) { EndBattle(); return; }
+
+                // THE ORDER OUTLIVES THE LAST TURN, and is released only after the boundary below.
+                // It used to be set to null first, and every rule answering RoundEnd then ran with
+                // no round to read: ApplyTurnShift returned on the null order ahead of the branch
+                // that carries a delay into the next round, so Finn's Aftershock Clock fired every
+                // round of every battle and never moved a turn. Every unit has acted by now, so
+                // the cursor is put past the end: every unit reads as already acted, a delay aimed
+                // at one is carried to the top of the next round exactly as one aimed at a unit
+                // that acted mid-round is, and an advance is left alone for the reason CarriedDelay
+                // gives. Turn progress reads 0 and "acts before" reads false for everybody, which
+                // is what both mean once the round has been walked.
+                if (_order != null) _orderIndex = _order.Count;
 
                 // ENGINE-GAPS group 14: the round's other boundary. RoundStart has had no mirror,
                 // so "at round end" had to be authored as OnEnemyTurnEnd with a once-a-round
@@ -1224,6 +1235,7 @@ namespace Emberfall.Core.Combat
                     if (IsBattleOver()) break;
                     if (_units[i].Alive) TriggerPassive(_units[i], PassiveTrigger.RoundEnd, 0);
                 }
+                _order = null;
                 if (IsBattleOver()) { EndBattle(); return; }
 
                 _phase = Phase.RoundBegin;
@@ -1239,14 +1251,24 @@ namespace Emberfall.Core.Combat
 
             /// <summary>
             /// Ends the round where it stands and opens the next one. Units that had not acted do
-            /// not act: "end the round" means the clock moved on, and the engine has no separate
-            /// end-of-round work to run - durations come off in ExpireStatuses at the close of each
-            /// unit's own turn, and the per-round bookkeeping happens in BeginRound at the top of
-            /// the next one, which this calls.
+            /// not act: "end the round" means the clock moved on. Durations come off in
+            /// ExpireStatuses at the close of each unit's own turn, and the per-round bookkeeping
+            /// happens in BeginRound at the top of the next one, which this calls.
+            ///
+            /// THE ROUND STILL ENDS, through CloseRound, so RoundEnd is raised here as it is on the
+            /// natural path. This was written before RoundEnd existed and skipped it outright, so a
+            /// round ended by hand never moved Hale's Quarry or delayed Finn's Ringing enemies.
+            /// CloseRound puts the cursor past the end first, so the units that never got their
+            /// turn read as done with the round rather than as still waiting in it.
             /// </summary>
             public void EndRound()
             {
                 if (_phase == Phase.NotStarted || _phase == Phase.Done) return;
+                if (_phase == Phase.Turns)
+                {
+                    CloseRound();
+                    if (_phase != Phase.RoundBegin) return;
+                }
                 _order = null;
                 if (IsBattleOver()) { EndBattle(); return; }
                 _round++;
