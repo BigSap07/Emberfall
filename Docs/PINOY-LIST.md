@@ -1,5 +1,18 @@
 # Emberfall - waiting on Pinoy
 
+**Split on 2026-09-23, and this file is now the working record behind two lists.** Most of what is
+below is not Pinoy's to answer, and his queue should hold only what needs someone who draws.
+
+- **`Docs/PINOY-ART.md`** is what goes to Pinoy: the art queue, ordered by what it unblocks, written
+  for someone without the repository open. It covers sections 1, 3, 4 and 5 here, plus the summon
+  screen's placeholders and the enemy roster.
+- **`Docs/DECISIONS-OPEN.md`** is what goes to Matthias: every decision in section 2, each with a
+  proposed answer, the full ledger of sentence-against-kit departures with a verdict per row, and
+  replacement card text for every 2f note.
+
+Both stand alone. This file keeps the measurements and the history, and is where a row's evidence
+lives when one of those two is questioned.
+
 **What this file is.** Everything the project cannot settle by itself because the answer is Pinoy's.
 It is one file so it can be sent as one message, and it is maintained here rather than in
 `DESIGN-BUILD-ORDER.md`, which now points at it.
