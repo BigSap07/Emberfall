@@ -27097,12 +27097,6 @@ namespace Emberfall.DevHarness
         }
 
         private static readonly CostlyTalent[] KnownCostlyTalents = {
-            new CostlyTalent("kael_the_unyielding III", "TRAP",
-                "Lasting Materials buys Rubble that never expires and a cap of 5 for 10% of Take Down the"
-                + " Wall's damage, and the purchase is empty: the active banks one Rubble a cast and What"
-                + " Breaks Forward consumes all of it on the very next basic, so Rubble never lives long"
-                + " enough to expire or to pass one stack. It loses in every room it was tried in,"
-                + " including against a body holding four long buffs. A kit conflict, waiting on Pinoy"),
             new CostlyTalent("mireth_the_erased_name I", "TRAP",
                 "Deeper Erasure trades The Missing Page's once-a-round limit for two landings per enemy,"
                 + " and since ENGINE-GAPS pass 2 (chargeOnLanding, C11) the base passive lands once in"

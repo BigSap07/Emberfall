@@ -531,9 +531,19 @@
               "duration": 2,
               "condition": "HasMyMark",
               "conditionOn": "Target"
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "LastTarget",
+              "status": "Vulnerable",
+              "magnitude": 0.2,
+              "duration": 2,
+              "bypassResist": true,
+              "condition": "HasMyMark",
+              "conditionOn": "Target"
             }
           ],
-          "description": "After Kael’s basic attack, an enemy with Fault Line also gains Effect Resist Down."
+          "description": "After Kael's basic attack the fault he opened widens: an enemy with Fault Line is easier to affect, and his own blows land harder on it."
         },
         "talentII": {
           "id": "kael_clear_the_debris",
@@ -551,36 +561,49 @@
                 "condition": "SubjectLostStatusThisFiring",
                 "conditionOn": "Target"
               }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "AllEnemies",
+                "status": "Vulnerable",
+                "magnitude": 0.25,
+                "duration": 3,
+                "bypassResist": true,
+                "condition": "SubjectLostStatusThisFiring",
+                "conditionOn": "Target"
+              }
             }
           ],
-          "description": "Take Down the Wall applies Fault Line to every enemy it stripped a buff from."
+          "description": "Take Down the Wall applies Fault Line to every enemy it stripped a buff from, and leaves each of them open to Kael."
         },
         "talentIII": {
           "id": "kael_lasting_materials",
-          "name": "Lasting Materials",
+          "name": "Salvaged Materials",
           "trigger": "None",
           "effects": [],
           "overrides": [
             {
               "ability": "active",
               "effectIndex": 2,
-              "field": "duration",
-              "delta": 97
-            },
-            {
-              "ability": "active",
-              "effectIndex": 2,
               "field": "maxStacks",
               "delta": 1
-            },
-            {
-              "ability": "active",
-              "effectIndex": 0,
-              "field": "power",
-              "delta": -0.21
             }
           ],
-          "description": "Rubble from Take Down the Wall lasts for the rest of the battle and Kael can hold more of it, but Take Down the Wall deals less damage."
+          "description": "Kael salvages a piece of Rubble from every blow he lands, and can hold more of it than before.",
+          "appends": [
+            {
+              "ability": "basic",
+              "atIndex": 0,
+              "effect": {
+                "kind": "GainResolve",
+                "target": "Self",
+                "maxStacks": 5,
+                "duration": 99
+              }
+            }
+          ]
         }
       }
     },
@@ -802,36 +825,56 @@
           "appends": [
             {
               "ability": "basic",
+              "atIndex": 0,
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "LowestHpEnemy",
-                "bypassResist": true,
-                "chance": 1,
+                "status": "Vulnerable",
+                "magnitude": 0.16,
                 "duration": 2,
+                "chance": 1,
+                "bypassResist": true
+              }
+            },
+            {
+              "ability": "basic",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "status": "BlockDown",
                 "magnitude": 1.0,
-                "status": "BlockDown"
+                "duration": 2,
+                "chance": 1,
+                "bypassResist": true
               }
             }
           ],
-          "description": "Cut the Escort also applies Block Down to its target."
+          "description": "Cut the Escort strips its target's Block and leaves it open, so every blow Kiva lands on it afterwards hits harder."
         },
         "talentII": {
           "id": "kiva_cut_the_last_line",
           "name": "Cut the Last Line",
-          "trigger": "OnKill",
+          "trigger": "OnEnemyDefeated",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "ApplyStatus",
               "target": "HighestHpEnemy",
-              "chance": 1,
-              "condition": "HasMyMark",
-              "conditionOn": "Defeated",
-              "duration": 2,
-              "status": "Mark"
+              "status": "Mark",
+              "duration": 99,
+              "chance": 1
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "AllEnemies",
+              "status": "DefenseDown",
+              "magnitude": 0.2,
+              "duration": 99,
+              "bypassResist": true,
+              "chance": 1
             }
           ],
-          "description": "When Kiva defeats a Forsaken enemy, she applies Forsaken to the enemy with the highest HP."
+          "description": "When an enemy falls, Kiva names the largest body still standing Forsaken, and the whole line's guard breaks with the one that went down."
         },
         "talentIII": {
           "id": "kiva_unclaimed_victory",
@@ -3707,14 +3750,23 @@
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "LowestHpAlly",
-                "chance": 1,
-                "duration": 2,
+                "status": "EffectResistUp",
                 "magnitude": 0.1,
-                "status": "EffectResistUp"
+                "duration": 2,
+                "chance": 1
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "Shield",
+                "target": "LowestHpAlly",
+                "selfHpRatio": 0.07,
+                "duration": 3
               }
             }
           ],
-          "description": "Pass the Guard also gives the lowest-HP ally Effect Resist Up."
+          "description": "Pass the Guard gives the ally it covers Effect Resist Up and a second Ward of its own, worth a share of Rovan's Max HP."
         },
         "talentII": {
           "id": "rovan_no_wasted_guard",
@@ -3727,9 +3779,9 @@
               "effect": {
                 "kind": "EnergyGain",
                 "target": "LowestHpAlly",
+                "flat": 8,
                 "condition": "LastMovedAboveHpFraction",
-                "conditionValue": 0.1,
-                "flat": 8
+                "conditionValue": 0.1
               }
             },
             {
@@ -3737,13 +3789,24 @@
               "effect": {
                 "kind": "EnergyGain",
                 "target": "LowestHpAlly",
+                "flat": 8,
                 "condition": "LastMovedAboveHpFraction",
-                "conditionValue": 0.2,
-                "flat": 8
+                "conditionValue": 0.2
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "Shield",
+                "target": "Self",
+                "selfHpRatio": 0.09,
+                "duration": 3,
+                "condition": "LastMovedAboveHpFraction",
+                "conditionValue": 0.1
               }
             }
           ],
-          "description": "When Pass the Guard moves a large Ward, the ally who receives it gains Energy, and more Energy if the Ward was larger still."
+          "description": "When Pass the Guard moves a large Ward, the ally who receives it gains Energy, more Energy if the Ward was larger still, and Rovan keeps a share of the guard he gave away."
         },
         "talentIII": {
           "id": "rovan_guard_in_motion",
