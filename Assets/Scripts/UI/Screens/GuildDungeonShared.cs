@@ -265,6 +265,36 @@ namespace Emberfall.UI.Screens
             return theme.ToString().ToUpperInvariant();
         }
 
+        /// <summary>The condition's family as a lead-in, "RESOURCE.  ", or empty with no condition.</summary>
+        public static string FamilyLabel(FloorConditionDef condition)
+        {
+            if (condition == null) return "";
+            switch (condition.Family)
+            {
+                case FloorConditionFamily.Resource: return "A RESOURCE CONDITION.  ";
+                case FloorConditionFamily.Healing: return "A HEALING CONDITION.  ";
+                case FloorConditionFamily.Composition: return "A LINE CONDITION.  ";
+                case FloorConditionFamily.EnemyOpening: return "AN OPENING CONDITION.  ";
+                case FloorConditionFamily.Tempo: return "A TEMPO CONDITION.  ";
+            }
+            return "";
+        }
+
+        /// <summary>
+        /// One board on one floor, in a few words: the guild's current lead on it, "NOBODY YET", or
+        /// suspended because the floor's condition gives it to every line (C7). The floor card and
+        /// the dungeon row both print it, so a player sees what a board is worth before committing.
+        /// </summary>
+        public static string BoardLead(ContentDatabase content, GuildDungeonState state, int floor, GuildDungeonBoard board)
+        {
+            if (state.Status == null) return "";
+            FloorConditionDef condition = GuildDungeon.ConditionOf(content, state.Status.Seed, floor);
+            if (GuildDungeon.Grants(condition, board)) return "SUSPENDED - " + condition.Name.ToUpperInvariant() + " GIVES IT TO ALL";
+            List<GuildDungeonAttempt> ranked = GuildDungeon.Rank(content, state.Attempts, state.Cycle, floor, board);
+            if (ranked.Count == 0) return "NOBODY YET - FIRST CLEAR LEADS";
+            return "LEAD: " + ranked[0].Turns + " TURNS - " + NameOf(ranked[0]).ToUpperInvariant();
+        }
+
         // ---------------------------------------------------------------- drawing
 
         /// <summary>A line of portraits, left to right, `size` each. Used by the chat card, the

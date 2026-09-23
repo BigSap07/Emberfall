@@ -539,7 +539,8 @@ internal static class CloudProbe
                 return File.Exists(path) ? File.ReadAllText(path) : null;
             };
             return ContentDatabase.Load(read("heroes.json"), read("enemies.json"), read("campaign.json"),
-                                        read("balance.json"), read("relics.json"), read("events.json"), read("armor.json"));
+                                        read("balance.json"), read("relics.json"), read("events.json"), read("armor.json"),
+                                        read("floor-conditions.json"));
         }
         catch (Exception ex)
         {

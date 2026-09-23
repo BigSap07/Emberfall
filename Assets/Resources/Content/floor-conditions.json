@@ -1,0 +1,92 @@
+{
+  "_comment": "Guild dungeon floor conditions - DESIGN-GUILD-FLOOR-CONDITIONS. One is drawn per floor per cycle from the guild's (id, cycle) seed (GuildDungeonGenerator.ConditionsFor). 'text' is the one sentence on the floor card; the harness checks every number in it against the rules. 'floors' is which floor themes may draw the condition: exactly the themes on which DevHarness --guild-conditions measured the condition passing C5 (it reorders the rosters by at least 1.5x what a pure difficulty knob or chance alone does) with all three C6 guardrails held, and build-check re-asserts it. The candidates the study cut are recorded in DESIGN-GUILD-FLOOR-CONDITIONS, not kept here. 'fight' holds BattleRules fields; 'effects' are ordinary EffectDefs each picked body applies to itself (side Enemies/Heroes/Both, pick All/Front/Toughest, everyRound false = once at the opening); 'line' holds caps and bans checked before a line is committed. Nothing here may name an enemy template or a hero: conditions are written against floor themes and engine primitives only. This file is hashed into the content version, so editing it retires every recorded replay.",
+  "floorConditions": [
+    {
+      "id": "dead_air",
+      "name": "Dead Air",
+      "family": "Resource",
+      "text": "Heroes refill only 25% of the Energy they gain from attacking and being hit.",
+      "floors": [
+        "Wall"
+      ],
+      "fight": {
+        "heroEnergyGain": 0.25
+      }
+    },
+    {
+      "id": "primed_full",
+      "name": "Primed to Burst",
+      "family": "Resource",
+      "text": "Every hero and every enemy opens with its Active ready.",
+      "floors": [
+        "Swarm",
+        "Hunt"
+      ],
+      "fight": {
+        "heroStartEnergy": 100,
+        "enemyStartEnergy": 100
+      }
+    },
+    {
+      "id": "no_mending",
+      "name": "No Mending",
+      "family": "Healing",
+      "text": "Heroes cannot be healed.",
+      "floors": [
+        "Swarm",
+        "Wall",
+        "Hunt"
+      ],
+      "fight": {
+        "heroHealing": 0
+      }
+    },
+    {
+      "id": "one_of_each",
+      "name": "One of Each",
+      "family": "Composition",
+      "text": "No two heroes in the line may share a role.",
+      "floors": [
+        "Swarm",
+        "Wall",
+        "Hunt",
+        "Champion"
+      ],
+      "line": {
+        "maxPerRole": 1
+      }
+    },
+    {
+      "id": "no_menders",
+      "name": "Unattended",
+      "family": "Composition",
+      "text": "No Mender may enter.",
+      "floors": [
+        "Swarm",
+        "Wall",
+        "Hunt"
+      ],
+      "line": {
+        "bannedRoles": [
+          "Mender"
+        ]
+      }
+    },
+    {
+      "id": "no_legends",
+      "name": "No Legends",
+      "family": "Composition",
+      "text": "No 5-star hero may enter.",
+      "floors": [
+        "Swarm",
+        "Wall",
+        "Hunt",
+        "Attrition",
+        "Champion"
+      ],
+      "line": {
+        "maxStars": 4
+      }
+    }
+  ]
+}

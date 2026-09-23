@@ -22,8 +22,11 @@ namespace Emberfall.Game
             // Optional for the same reason: a build with no armor.json loads an unusable ArmorConfig
             // and simply never drops a piece, rather than erroring.
             string armor = ReadTextOptional("armor");
+            // Optional too: a build with no floor-conditions.json has a guild dungeon whose floors
+            // carry no condition.
+            string floorConditions = ReadTextOptional("floor-conditions");
 
-            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor);
+            ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor, floorConditions);
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

@@ -35,6 +35,13 @@ namespace Emberfall.Core.Combat
         /// who stands on the far side changes.
         /// </summary>
         public BattleLoadout Opponent;
+
+        /// <summary>
+        /// Standing changes to how this one fight is played - a guild dungeon floor's condition.
+        /// Null for every other caller, and a null here runs no branch, draws no RNG and moves no
+        /// seeded fingerprint. See BattleRules.
+        /// </summary>
+        public BattleRules Rules;
     }
 
     /// <summary>
@@ -1106,6 +1113,10 @@ namespace Emberfall.Core.Combat
 
                 Emit(BattleEventType.BattleStart, -1, -1);
 
+                // A rule's opening effects, before any BattleStart passive, so a passive that answers
+                // the opening (a cleanse, a dispel) can answer these too.
+                ApplyRuleEffects(false);
+
                 List<CombatUnit> startOrder = TurnOrder();
                 for (int i = 0; i < startOrder.Count; i++) TriggerPassive(startOrder[i], PassiveTrigger.BattleStart, 0);
 
@@ -1164,6 +1175,11 @@ namespace Emberfall.Core.Combat
                 // Empty in every battle that authors none.
                 _ignoreDefenseUses.Clear();
                 _manualActed.Clear();
+
+                // A rule's every-round effects, before the RoundStart passives and before the turn
+                // order is read, so a Slow laid here moves this round's order.
+                ApplyRuleEffects(true);
+                if (IsBattleOver()) { _phase = Phase.Turns; _order = new List<CombatUnit>(); _orderIndex = 0; return; }
 
                 // The round's own boundary, before anybody acts. Raised on every living unit
                 // rather than broadcast to a side, because "at the start of each round" is a
@@ -1409,6 +1425,8 @@ namespace Emberfall.Core.Combat
                         _units.Add(CombatUnit.FromDef(def, stats, spawns[i].Level, false, i, id++, _cfg.EnergyMax));
                     }
                 }
+
+                ApplyRulesToBodies();
 
                 // One walk, once, over a roster that is at most ten bodies and two passives each.
                 // Everything downstream reads the bool - see _anyIncludeSelf - so a battle nobody
@@ -1664,7 +1682,108 @@ namespace Emberfall.Core.Combat
                 // re-rolled every call (once per round) so who acts first isn't fixed for the whole battle
                 for (int i = 0; i < order.Count; i++) order[i].RoundSpeedJitter = _rng.Spread(_cfg.SpeedVariance);
                 order.Sort(CompareTurnOrder);
+
+                // A rule that puts the enemy line first: a stable partition AFTER the speed sort, so
+                // the jitter above is drawn exactly as it always is and each side keeps its own
+                // speed order. Round 0 is the opening's BattleStart order.
+                BattleRules rules = _request.Rules;
+                if (rules != null && _round <= rules.EnemiesActFirstRounds)
+                {
+                    List<CombatUnit> first = new List<CombatUnit>(order.Count);
+                    for (int i = 0; i < order.Count; i++) if (!order[i].IsPlayer) first.Add(order[i]);
+                    for (int i = 0; i < order.Count; i++) if (order[i].IsPlayer) first.Add(order[i]);
+                    order = first;
+                }
                 return order;
+            }
+
+            /// <summary>
+            /// A rule's effects of one timing (see RuleEffect.EveryRound): each picked body applies
+            /// the effect to itself through the ordinary ApplyEffect. Two things differ from an
+            /// ability, both so a rule reads as the field rather than as somebody's move: the landing
+            /// is never contested (the parser sets BypassResist), and the other side does not hear a
+            /// debuff "attempted" - nobody on the field attempted it.
+            /// </summary>
+            private void ApplyRuleEffects(bool everyRound)
+            {
+                BattleRules rules = _request.Rules;
+                if (rules == null || !rules.HasEffects(everyRound)) return;
+
+                AbilityDef label = new AbilityDef();
+                label.Id = "rule";
+                label.Name = rules.Name ?? "";
+
+                bool prevAttempt = _inStatusAttemptTrigger;
+                _inStatusAttemptTrigger = true;
+                for (int r = 0; r < rules.Effects.Count; r++)
+                {
+                    RuleEffect rule = rules.Effects[r];
+                    if (rule == null || rule.Effect == null || rule.EveryRound != everyRound) continue;
+                    List<CombatUnit> picked = RulePicks(rule);
+                    for (int i = 0; i < picked.Count; i++)
+                    {
+                        if (IsBattleOver()) break;
+                        if (picked[i].Alive) ApplyEffect(picked[i], picked[i], rule.Effect, label, 0);
+                    }
+                }
+                _inStatusAttemptTrigger = prevAttempt;
+            }
+
+            private List<CombatUnit> RulePicks(RuleEffect rule)
+            {
+                List<CombatUnit> side = new List<CombatUnit>();
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    CombatUnit u = _units[i];
+                    if (!u.Alive) continue;
+                    if (rule.Side == RuleSide.Heroes && !u.IsPlayer) continue;
+                    if (rule.Side == RuleSide.Enemies && u.IsPlayer) continue;
+                    side.Add(u);
+                }
+                if (rule.Pick == RulePick.All || side.Count == 0) return side;
+
+                CombatUnit best = side[0];
+                for (int i = 1; i < side.Count; i++)
+                {
+                    CombatUnit u = side[i];
+                    if (rule.Pick == RulePick.Front)
+                    {
+                        if (u.Slot < best.Slot) best = u;
+                    }
+                    else if (u.MaxHp > best.MaxHp || (u.MaxHp == best.MaxHp && u.Slot < best.Slot)) best = u;
+                }
+                return new List<CombatUnit> { best };
+            }
+
+            /// <summary>The Energy a body refills on its own, through a rule's gain multiplier. The
+            /// amount itself when there is no rule, so no existing fight moves.</summary>
+            private int RefillOf(CombatUnit unit, int amount)
+            {
+                BattleRules rules = _request.Rules;
+                if (rules == null) return amount;
+                float scale = unit.IsPlayer ? rules.HeroEnergyGain : rules.EnemyEnergyGain;
+                if (scale == 1f) return amount;
+                return (int)Math.Round(amount * Math.Max(0f, scale), MidpointRounding.AwayFromZero);
+            }
+
+            /// <summary>A rule's changes to the bodies as built: Max HP and opening Energy. Runs once,
+            /// before the fight is snapshotted, so the record shows the bodies that fought.</summary>
+            private void ApplyRulesToBodies()
+            {
+                BattleRules rules = _request.Rules;
+                if (rules == null) return;
+                for (int i = 0; i < _units.Count; i++)
+                {
+                    CombatUnit u = _units[i];
+                    float hp = u.IsPlayer ? rules.HeroMaxHp : rules.EnemyMaxHp;
+                    if (hp != 1f && hp > 0f)
+                    {
+                        u.MaxHp = u.MaxHp * hp;
+                        u.Hp = u.MaxHp;
+                    }
+                    int energy = u.IsPlayer ? rules.HeroStartEnergy : rules.EnemyStartEnergy;
+                    if (energy != 0) u.Energy = Math.Max(0, Math.Min(u.EnergyMax, u.Energy + energy));
+                }
             }
 
             private static int CompareTurnOrder(CombatUnit a, CombatUnit b)
@@ -1890,7 +2009,7 @@ namespace Emberfall.Core.Combat
                     if (unit.Alive)
                     {
                         // -1: a unit's own basic-attack refill has no granter, so it never redirects.
-                        AddEnergy(unit, _cfg.EnergyPerBasicAttack, -1);
+                        AddEnergy(unit, RefillOf(unit, _cfg.EnergyPerBasicAttack), -1);
                         int prevBasicSrc = _broadcastSourceId;
                         _broadcastSourceId = unit.Id;
                         TriggerPassive(unit, PassiveTrigger.AfterBasicAttack, 0);
@@ -5869,7 +5988,7 @@ namespace Emberfall.Core.Combat
 
                 // -1: energy from being hit is the victim's own regen, not something the attacker
                 // granted. A Tide attacker must not redirect its victim's line's energy.
-                AddEnergy(target, _cfg.EnergyOnDamaged, -1);
+                AddEnergy(target, RefillOf(target, _cfg.EnergyOnDamaged), -1);
 
                 // The victim is its own subject here, so ConditionSubject.LastAttacker resolves at
                 // OnDamaged to the unit that just hit it - the same thing it already means at
@@ -5978,6 +6097,19 @@ namespace Emberfall.Core.Combat
                 if (!target.Alive || amount <= 0) return;
 
                 if (target.Has(StatusKind.HealSuppression)) return;
+
+                // A rule's healing multiplier, ahead of every status that scales a heal, so the field
+                // and a hero's own kit compose rather than one hiding the other. Null on every fight
+                // but a conditioned guild floor.
+                if (_request.Rules != null)
+                {
+                    float fieldHeal = target.IsPlayer ? _request.Rules.HeroHealing : _request.Rules.EnemyHealing;
+                    if (fieldHeal != 1f)
+                    {
+                        amount = (int)Math.Round(amount * Math.Max(0f, fieldHeal), MidpointRounding.AwayFromZero);
+                        if (amount <= 0) return;
+                    }
+                }
 
                 // Partial reduction, read immediately after the total one and before anything
                 // else touches the amount. Deepest entry wins rather than the entries stacking:

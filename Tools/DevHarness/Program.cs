@@ -30,6 +30,7 @@ namespace Emberfall.DevHarness
             bool solve = false;
             bool talentValue = false;
             bool fidelity = false;
+            bool guildConditions = false;
             bool reconcile = false;
             string reconcileStage = null, reconcileLevels = null;
             string only = null;
@@ -39,6 +40,7 @@ namespace Emberfall.DevHarness
                 if (args[i] == "--solve-recommended-power") { solve = true; continue; }
                 if (args[i] == "--talents-worth-picking") { talentValue = true; continue; }
                 if (args[i] == "--fidelity") { fidelity = true; continue; }
+                if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
                 if (args[i] == "--ceil-reconcile")
                 {
                     reconcile = true;
@@ -94,6 +96,10 @@ namespace Emberfall.DevHarness
                 Line(_failures == 0 ? "RESULT: all checks passed" : "RESULT: " + _failures + " check(s) FAILED");
                 return _failures == 0 ? 0 : 1;
             }
+
+            // The guild floor conditions' study (GuildDungeonChecks.RunConditionStudy). Not a check:
+            // the instrument floor-conditions.json's pool, magnitudes and floor lists are read from.
+            if (guildConditions) return GuildDungeonChecks.RunConditionStudy(content);
 
             // The fidelity pass and the star band alone, for a content pass that is moving kits
             // against their sentences and wants both readings without the rest of the harness.
@@ -4385,7 +4391,9 @@ namespace Emberfall.DevHarness
                 string events = File.Exists(eventsPath) ? File.ReadAllText(eventsPath) : null;
                 string armorPath = Path.Combine(dir, "armor.json");
                 string armor = File.Exists(armorPath) ? File.ReadAllText(armorPath) : null;
-                return ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor);
+                string conditionsPath = Path.Combine(dir, "floor-conditions.json");
+                string conditions = File.Exists(conditionsPath) ? File.ReadAllText(conditionsPath) : null;
+                return ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor, conditions);
             }
             catch (Exception ex)
             {

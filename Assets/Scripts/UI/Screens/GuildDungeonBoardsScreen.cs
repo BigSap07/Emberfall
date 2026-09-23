@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Cloud;
+using Emberfall.Core.Data;
 using Emberfall.Game.Cloud;
 
 namespace Emberfall.UI.Screens
@@ -134,6 +135,19 @@ namespace Emberfall.UI.Screens
             ScrollRect scroll;
             RectTransform list = UIBuilder.ScrollList("List", card, out scroll, 6f, new RectOffset(0, 0, 0, 0));
             UIBuilder.FillParent(scroll.GetComponent<RectTransform>(), 20f, 84f, 20f, 18f);
+
+            // C7: a board the floor's condition hands to every line is suspended this cycle, and
+            // says which condition did it rather than sitting empty as though nobody had tried.
+            FloorConditionDef condition = GuildDungeon.ConditionOf(App.Content, State.Status.Seed, _floor);
+            if (GuildDungeon.Grants(condition, board))
+            {
+                title.color = Emberforge.TextQuiet;
+                Text off = EmberforgeUI.Body("Suspended", list, "SUSPENDED THIS CYCLE. " + condition.Name.ToUpperInvariant()
+                                             + " gives it to every line on this floor, so it would rank nothing.",
+                                             UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
+                UIBuilder.Sized(off.rectTransform, CardWidth - 60f, 120f);
+                return;
+            }
 
             if (ranked.Count == 0)
             {

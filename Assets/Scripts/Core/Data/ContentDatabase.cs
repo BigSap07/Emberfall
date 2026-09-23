@@ -25,6 +25,13 @@ namespace Emberfall.Core.Data
         /// of a null check plus four emptiness checks.
         /// </summary>
         public ArmorConfig Armor = new ArmorConfig();
+
+        /// <summary>
+        /// The guild dungeon's floor conditions (DESIGN-GUILD-FLOOR-CONDITIONS), in file order. Empty
+        /// on a build with no floor-conditions.json, and an empty pool is a dungeon with no
+        /// conditions - every floor plays exactly as it did before they existed.
+        /// </summary>
+        public readonly List<FloorConditionDef> FloorConditions = new List<FloorConditionDef>();
         public readonly List<string> Warnings = new List<string>();
 
         /// <summary>
@@ -84,8 +91,19 @@ namespace Emberfall.Core.Data
             return Load(heroesJson, enemiesJson, campaignJson, balanceJson, relicsJson, eventsJson, null);
         }
 
+        /// <summary>
+        /// Seven-file overload, kept so every pre-conditions caller compiles untouched - a database
+        /// loaded this way has no floor conditions, which the guild dungeon reads as "no floor
+        /// carries one".
+        /// </summary>
         public static ContentDatabase Load(string heroesJson, string enemiesJson, string campaignJson, string balanceJson,
                                            string relicsJson, string eventsJson, string armorJson)
+        {
+            return Load(heroesJson, enemiesJson, campaignJson, balanceJson, relicsJson, eventsJson, armorJson, null);
+        }
+
+        public static ContentDatabase Load(string heroesJson, string enemiesJson, string campaignJson, string balanceJson,
+                                           string relicsJson, string eventsJson, string armorJson, string floorConditionsJson)
         {
             ContentDatabase db = new ContentDatabase();
 
@@ -103,8 +121,13 @@ namespace Emberfall.Core.Data
             db.ParseRelics(relicsJson);
             db.ParseEvents(eventsJson);
             db.ParseArmor(armorJson);
+            db.ParseFloorConditions(floorConditionsJson);
             db.Validate();
-            db.ContentVersion = VersionOf(heroesJson, enemiesJson, campaignJson, balanceJson, relicsJson, eventsJson, armorJson);
+            // The conditions file is hashed with the rest (DESIGN-GUILD-FLOOR-CONDITIONS C4): a
+            // replay recorded under one condition set is refused under another, exactly as it is
+            // refused when a balance number moves.
+            db.ContentVersion = VersionOf(heroesJson, enemiesJson, campaignJson, balanceJson, relicsJson, eventsJson, armorJson,
+                                          floorConditionsJson);
             return db;
         }
 
@@ -159,6 +182,43 @@ namespace Emberfall.Core.Data
             string err;
             if (!JsonValue.TryParse(text, out root, out err)) { Warnings.Add("armor.json: " + err); return; }
             Armor = ArmorConfig.FromJson(root);
+        }
+
+        /// <summary>
+        /// Floor conditions are optional content, same reasoning as relics. Each refusal below
+        /// drops the entry rather than warning past it, because a condition that loads is a
+        /// condition some guild will be handed for a week: no id or a repeated one; no sentence to
+        /// show (C1 - a condition must be readable on the floor card); and the Aspect family, which
+        /// section 6 of the design leaves as a decision not yet taken.
+        /// </summary>
+        private void ParseFloorConditions(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return;
+            JsonValue root;
+            string err;
+            if (!JsonValue.TryParse(text, out root, out err)) { Warnings.Add("floor-conditions.json: " + err); return; }
+            List<JsonValue> list = root.GetList("floorConditions");
+            HashSet<string> ids = new HashSet<string>();
+            for (int i = 0; i < list.Count; i++)
+            {
+                FloorConditionDef c = FloorConditionDef.FromJson(list[i]);
+                string where = "floor-conditions.json: " + (string.IsNullOrEmpty(c.Id) ? "entry " + i : c.Id);
+                if (string.IsNullOrEmpty(c.Id) || !ids.Add(c.Id)) { Warnings.Add(where + " has no id or repeats one"); continue; }
+                if (string.IsNullOrEmpty(c.Text)) { Warnings.Add(where + " has no text for the floor card"); continue; }
+                if (c.Family == FloorConditionFamily.Aspect)
+                {
+                    Warnings.Add(where + " is an Aspect condition - DESIGN-GUILD-FLOOR-CONDITIONS section 6 has not been decided");
+                    continue;
+                }
+                if (c.Themes.Count == 0) Warnings.Add(where + " names no floor that may draw it");
+                FloorConditions.Add(c);
+            }
+        }
+
+        public FloorConditionDef GetFloorCondition(string id)
+        {
+            for (int i = 0; i < FloorConditions.Count; i++) if (FloorConditions[i].Id == id) return FloorConditions[i];
+            return null;
         }
 
         /// <summary>

@@ -23,8 +23,11 @@ namespace Emberfall.UI.Screens
     /// here changes that: a line built for one floor's puzzle is not the line you want the
     /// campaign to run. Every hero shows at the dungeon's level, because that is what it fights at.
     ///
-    /// The chips under the line say which boards it would enter if it clears, before it is
-    /// committed - the constraints are nobody's declaration, but they are everybody's to aim for.
+    /// THE FLOOR'S CONDITION RUNS ACROSS THE TOP, and the six board tiles under the line say which
+    /// boards it would enter if it clears, what each is up against (the guild's lead, nobody yet,
+    /// or suspended by the condition), all before anything is committed - the constraints are
+    /// nobody's declaration, but they are everybody's to aim for. A line the condition refuses
+    /// says why and cannot be attempted.
     ///
     /// Opened from a replay (RUN IT YOURSELF) the floor view carries what was watched: whose fight,
     /// how it ended, the line they used. That is the handover's second half.
@@ -34,11 +37,18 @@ namespace Emberfall.UI.Screens
         public override ScreenId Id { get { return ScreenId.GuildFloor; } }
 
         private const float PanelWidth = 880f;
-        private const float Top = UITheme.TopBarHeight + 118f;
+        /// <summary>Where the condition band starts. The panels start under it.</summary>
+        private const float BandTop = UITheme.TopBarHeight + 118f;
+        private const float BandHeight = 72f;
+        private const float Top = BandTop + BandHeight + 8f;
         private const float SlotSize = 150f;
 
         private Text _headerSubtitle;
         private Text _title;
+        private RectTransform _band;
+        private Text _conditionName;
+        private Text _conditionText;
+        private Text _lineVerdict;
         private RectTransform _enemyPanel;
         private RectTransform _enemyRows;
         private RectTransform _linePanel;
@@ -54,6 +64,10 @@ namespace Emberfall.UI.Screens
 
         /// <summary>The line being built, by hero def id, in slot order.</summary>
         private readonly List<string> _line = new List<string>();
+
+        /// <summary>The line as it stands, read-only. The capture run reads it to tap a line into
+        /// shape the way a player would; nothing else needs it.</summary>
+        public IList<string> CurrentLine { get { return _line.AsReadOnly(); } }
         private bool _reset = true;
         private int _lineFloor = -1;
         private bool _busy;
@@ -69,15 +83,42 @@ namespace Emberfall.UI.Screens
             // and the floor changes every time the screen is opened.
             Transform title = header.Find("Title/Text");
             _title = title != null ? title.GetComponent<Text>() : null;
+            BuildConditionBand();
             BuildEnemyPanel();
             BuildLinePanel();
             BuildRosterPanel();
         }
 
+        /// <summary>
+        /// THE FLOOR'S CONDITION, ACROSS THE TOP, BEFORE ANYTHING ELSE ON THE SCREEN
+        /// (DESIGN-GUILD-FLOOR-CONDITIONS C3). A condition found mid-fight is a trap; one read
+        /// before the line is chosen is the reason to choose a different line. The second line
+        /// says whether the line being built may be fielded under it, and if not, what to change.
+        /// </summary>
+        private void BuildConditionBand()
+        {
+            _band = UIBuilder.Node("Condition", Root);
+            UIBuilder.Box(_band, 0f, -BandTop, PanelWidth * 2f + 28f, BandHeight, new Vector2(0.5f, 1f));
+            EmberforgeUI.PlainPanelOn(_band);
+
+            Text label = EmberforgeUI.Label("Label", _band, "THIS CYCLE", UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+            UIBuilder.Box(label.rectTransform, 28f, -8f, 300f, 22f, new Vector2(0f, 1f));
+
+            _conditionName = EmberforgeUI.Title("Name", _band, "", UITheme.FontBody, Emberforge.TextGold, TextAnchor.UpperLeft);
+            UIBuilder.Box(_conditionName.rectTransform, 28f, -28f, 330f, 38f, new Vector2(0f, 1f));
+            UIBuilder.Outlined(_conditionName, Emberforge.Outline, Emberforge.StrokeThin);
+
+            _conditionText = EmberforgeUI.Label("Text", _band, "", UITheme.FontSmall, Emberforge.TextBody, TextAnchor.UpperLeft);
+            UIBuilder.Box(_conditionText.rectTransform, 370f, -8f, PanelWidth * 2f + 28f - 400f, 34f, new Vector2(0f, 1f));
+
+            _lineVerdict = EmberforgeUI.Label("Verdict", _band, "", UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+            UIBuilder.Box(_lineVerdict.rectTransform, 370f, -42f, PanelWidth * 2f + 28f - 400f, 28f, new Vector2(0f, 1f));
+        }
+
         private void BuildEnemyPanel()
         {
             _enemyPanel = UIBuilder.Node("EnemyLine", Root);
-            UIBuilder.Box(_enemyPanel, -PanelWidth / 2f - 14f, -Top, PanelWidth, 640f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_enemyPanel, -PanelWidth / 2f - 14f, -Top, PanelWidth, 628f, new Vector2(0.5f, 1f));
             EmberforgeUI.PanelOn(_enemyPanel, true);
             EmberforgeUI.Heading("Heading", _enemyPanel, "THE LINE YOU FACE", 36f, -20f);
 
@@ -88,7 +129,7 @@ namespace Emberfall.UI.Screens
         private void BuildLinePanel()
         {
             _linePanel = UIBuilder.Node("YourLine", Root);
-            UIBuilder.Box(_linePanel, PanelWidth / 2f + 14f, -Top, PanelWidth, 452f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_linePanel, PanelWidth / 2f + 14f, -Top, PanelWidth, 440f, new Vector2(0.5f, 1f));
             EmberforgeUI.PanelOn(_linePanel, true);
             EmberforgeUI.Heading("Heading", _linePanel, "YOUR LINE", 36f, -20f);
 
@@ -109,17 +150,17 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_watchedHost, 0f);
 
             _attemptsLeft = EmberforgeUI.Label("AttemptsLeft", _linePanel, "", UITheme.FontSmall, Emberforge.TextBody, TextAnchor.MiddleRight);
-            UIBuilder.Box(_attemptsLeft.rectTransform, -300f, 34f, 280f, 60f, new Vector2(1f, 0f));
+            UIBuilder.Box(_attemptsLeft.rectTransform, -300f, 26f, 280f, 60f, new Vector2(1f, 0f));
 
             _attemptButton = EmberforgeUI.Button("Attempt", _linePanel, "ATTEMPT", UITheme.FontBody, ForgeButtonKind.Primary);
-            UIBuilder.Box(_attemptButton.Root, -Emberforge.OrnamentClearance, 28f, 260f, 76f, new Vector2(1f, 0f));
+            UIBuilder.Box(_attemptButton.Root, -Emberforge.OrnamentClearance, 20f, 260f, 72f, new Vector2(1f, 0f));
             _attemptButton.OnClick(OnAttempt);
         }
 
         private void BuildRosterPanel()
         {
             RectTransform panel = UIBuilder.Node("Roster", Root);
-            UIBuilder.Box(panel, PanelWidth / 2f + 14f, -(Top + 464f), PanelWidth, 176f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(panel, PanelWidth / 2f + 14f, -(Top + 452f), PanelWidth, 176f, new Vector2(0.5f, 1f));
             EmberforgeUI.PanelOn(panel, false);
 
             Text label = EmberforgeUI.Label("Label", panel, "YOUR HEROES   -   TAP TO ADD OR REMOVE", UITheme.FontTiny - 2,
@@ -189,6 +230,7 @@ namespace Emberfall.UI.Screens
             IGuildDungeonBackend backend = GuildDungeonBackends.For(App);
             bool usable = backend != null && backend.Ready && State.Loaded && State.Status != null;
             _enemyPanel.gameObject.SetActive(usable);
+            _band.gameObject.SetActive(usable);
             _linePanel.gameObject.SetActive(usable);
             _rosterContent.parent.parent.gameObject.SetActive(usable);
             if (!usable)
@@ -224,7 +266,7 @@ namespace Emberfall.UI.Screens
                 int level = stage.Enemies[i].Level;
 
                 RectTransform row = UIBuilder.Node("Enemy" + i, _enemyRows);
-                UIBuilder.Box(row, 0f, -i * 112f, PanelWidth - 40f, 104f, new Vector2(0.5f, 1f));
+                UIBuilder.Box(row, 0f, -i * 110f, PanelWidth - 40f, 104f, new Vector2(0.5f, 1f));
                 EmberforgeUI.SunkenOn(row);
 
                 RectTransform face = EmberforgeUI.PortraitFrame("Face", row, def, 3, 84f);
@@ -307,26 +349,44 @@ namespace Emberfall.UI.Screens
             // of a clear that has not happened: attempt number next, nobody lost unknown.
             int floor = State.Floor;
             int used = GuildDungeon.AttemptsUsed(State.Attempts, self, State.Cycle, floor);
+            //
+            // THE SIX BOARDS, BEFORE THE LINE IS COMMITTED (DESIGN-GUILD-FLOOR-CONDITIONS section 5).
+            // Each tile says whether this line would enter it and what it is up against: the
+            // guild's current lead on this floor, nobody yet, or suspended because the floor's
+            // condition hands it to every line (C7). Read from GuildDungeon, never decided here.
             GuildDungeonAttempt probe = new GuildDungeonAttempt();
             probe.Victory = true;
             probe.Attempt = used + 1;
             probe.Fallen = -1;
+            probe.Seed = State.Status.Seed;
+            probe.Floor = floor;
+            probe.Cycle = State.Cycle;
             probe.Team = GuildDungeon.LineOf(App.Content, Heroes(), "");
+            FloorConditionDef condition = GuildDungeon.ConditionOf(App.Content, State.Status.Seed, floor);
+            string broke;
+            bool legal = GuildDungeon.LineLegal(App.Content, condition, probe.Team, out broke);
             for (int b = 0; b < GuildDungeon.Boards.Length; b++)
             {
                 GuildDungeonBoard board = GuildDungeon.Boards[b];
-                bool met = board == GuildDungeonBoard.Flawless || GuildDungeon.Satisfies(App.Content, probe, board);
-                string text = board == GuildDungeonBoard.Flawless ? "NOBODY FELL, IF NOBODY FALLS" : GuildDungeon.BoardTitle(board);
-                RectTransform chip = EmberforgeUI.Chip(board.ToString(), _chips, text,
-                                                       met ? Emberforge.TextGold : Emberforge.TextQuiet, UITheme.FontTiny - 6);
-                UIBuilder.Box(chip, 36f + (b % 3) * 272f, -252f - (b / 3) * 38f, 262f, 32f, new Vector2(0f, 1f));
-                if (!met) chip.GetComponent<Image>().color = new Color(1f, 1f, 1f, 0.55f);
+                bool suspended = GuildDungeon.Grants(condition, board);
+                bool met = !suspended && legal
+                           && (board == GuildDungeonBoard.Flawless || GuildDungeon.Satisfies(App.Content, probe, board));
+                RectTransform tile = UIBuilder.Node(board.ToString(), _chips);
+                UIBuilder.Box(tile, 36f + (b % 3) * 272f, -248f - (b / 3) * 46f, 262f, 42f, new Vector2(0f, 1f));
+                if (met) EmberforgeUI.PlainPanelOn(tile); else EmberforgeUI.SunkenOn(tile);
+
+                Text title = EmberforgeUI.Label("Title", tile, GuildDungeon.BoardTitle(board)
+                                                + (board == GuildDungeonBoard.Flawless && met ? "  (IF NOBODY FALLS)" : ""),
+                                                UITheme.FontTiny - 6, suspended ? Emberforge.TextQuiet : met ? Emberforge.TextGold : Emberforge.TextBody,
+                                                TextAnchor.UpperLeft);
+                UIBuilder.Box(title.rectTransform, 12f, -4f, 240f, 20f, new Vector2(0f, 1f));
+                Text lead = EmberforgeUI.Label("Lead", tile, GuildDungeonFlow.BoardLead(App.Content, State, floor, board),
+                                               UITheme.FontTiny - 8, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+                UIBuilder.Box(lead.rectTransform, 12f, -22f, 240f, 18f, new Vector2(0f, 1f));
             }
 
-            // Hidden while a watched fight is shown: the watched line sits in the same band.
-            _levelNote.text = "Every hero fights at level " + level + ", no relics, no armor. Talents and stars count. "
-                            + "Your formation is untouched.";
-            _levelNote.gameObject.SetActive(State.Watched == null);
+            _levelNote.gameObject.SetActive(false);
+            RenderCondition(condition, legal, broke, level);
 
             GuildDungeonAttempt watched = State.Watched;
             if (watched != null)
@@ -339,9 +399,11 @@ namespace Emberfall.UI.Screens
                     UITheme.FontTiny - 4, watched.Victory ? UITheme.Success : UITheme.Danger, TextAnchor.LowerLeft);
                 // Beside the portraits and above the attempts count: under the portraits it was hidden, and
                 // above them it met the second row of board chips.
-                UIBuilder.Box(who.rectTransform, 300f, 98f, 290f, 22f, new Vector2(0f, 0f));
+                // Above the portraits, left of the attempts count: beside them it ran into that
+                // count, and higher it would meet the second row of board tiles.
+                UIBuilder.Box(who.rectTransform, 36f, 74f, 330f, 22f, new Vector2(0f, 0f));
                 RectTransform faces = UIBuilder.Node("Faces", _watchedHost);
-                UIBuilder.Box(faces, 36f, 72f, 300f, 50f, new Vector2(0f, 0f));
+                UIBuilder.Box(faces, 36f, 20f, 300f, 50f, new Vector2(0f, 0f));
                 GuildDungeonFlow.DrawLine(faces, App.Content, watched.Team, 0f, 0f, 48f, 4f);
             }
 
@@ -350,7 +412,33 @@ namespace Emberfall.UI.Screens
             _attemptsLeft.text = !open ? "LOCKED" : left + " OF " + State.Cap + " ATTEMPTS LEFT";
             _attemptsLeft.color = left > 0 ? Emberforge.TextBody : UITheme.Danger;
             _attemptButton.SetText(_busy ? "RECORDING" : left > 0 ? "ATTEMPT" : "NONE LEFT");
-            _attemptButton.Interactable = open && left > 0 && _line.Count > 0 && !_busy;
+            _attemptButton.Interactable = open && left > 0 && _line.Count > 0 && !_busy && legal;
+        }
+
+        /// <summary>The band across the top: the condition, and whether this line may face it.</summary>
+        private void RenderCondition(FloorConditionDef condition, bool legal, string broke, int level)
+        {
+            if (condition == null)
+            {
+                _conditionName.text = "NO CONDITION";
+                _conditionText.text = "This floor plays by the dungeon's standing rules.";
+            }
+            else
+            {
+                _conditionName.text = condition.Name.ToUpperInvariant();
+                _conditionText.text = condition.Text;
+            }
+            if (!legal)
+            {
+                _lineVerdict.text = "YOUR LINE CANNOT ENTER: " + broke.ToUpperInvariant() + ".";
+                _lineVerdict.color = UITheme.Danger;
+            }
+            else
+            {
+                _lineVerdict.text = GuildDungeonFlow.FamilyLabel(condition) + "Every hero fights at level " + level
+                                  + ", no relics, no armor. Talents and stars count. Your formation is untouched.";
+                _lineVerdict.color = Emberforge.TextQuiet;
+            }
         }
 
         private static string ShortName(HeroDef def)
@@ -429,6 +517,13 @@ namespace Emberfall.UI.Screens
             App.Audio.Tap();
             IGuildDungeonBackend backend = GuildDungeonBackends.For(App);
             int floor = State.Floor;
+            string broke;
+            if (!GuildDungeon.LineLegal(App.Content, GuildDungeon.ConditionOf(App.Content, State.Status.Seed, floor),
+                                        GuildDungeon.LineOf(App.Content, Heroes(), ""), out broke))
+            {
+                App.Notify("This line cannot enter: " + broke + ".");
+                return;
+            }
             int attempt = State.Cap - State.AttemptsLeft(backend != null ? backend.SelfUserId : "", floor) + 1;
             App.Modal.ShowConfirm("COMMIT THIS LINE?",
                 "This is attempt " + attempt + " of " + State.Cap + " on floor " + floor + ". The fight is fixed: "
