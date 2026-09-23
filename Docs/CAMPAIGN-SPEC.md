@@ -4,6 +4,9 @@ Written 2026-09-23. **This is the source of truth a build job reads for the new 
 transcription of Pinoy's delivery, not a design: nothing here has been balanced, given an aspect, or
 built. Where the delivery is silent or ambiguous, this file says **GAP** and quotes what is there
 rather than filling it in. Gaps are collected per chapter in section 8; they go back to Pinoy.
+Sections 1-8 are that transcription. **Sections 9 and 10 are ours**: the 84 as built into
+`enemies.json`, and the 72 stages as built into `campaign.json`, with every placeholder we invented
+listed for him in 10.5.
 
 The blast radius of replacing the shipped campaign is in `CAMPAIGN-REPLACEMENT-BLAST-RADIUS.md`.
 
@@ -480,9 +483,10 @@ moment their path is known.
 
 Added 2026-09-23 by the roster job. Sections 1-8 above are Pinoy's delivery and stay as transcribed;
 this section is **our** half: the decisions the delivery left open, made once so the stage job does
-not make them again. The 84 are appended after the shipped 12 in `enemies.json`. **No campaign
-stage fields any of them yet**, and the shipped 12 are untouched (the prologue spawns seven of them
-by id).
+not make them again. The 84 are appended after the shipped 12 in `enemies.json`. When this was
+written no campaign stage fielded any of them; **section 10 is the stage job that now fields all 84
+and retires the 12**, and it supersedes 9.5's "unchanged on this content" and 9.6's "the Recital
+draws every template" as statements about the tree. The measurements here stand as what they were.
 
 Everything marked **measured** below came from building real floors and fights with the core code
 against this content; everything else was read.
@@ -897,3 +901,412 @@ engine work; they were held back only by this job's rule of staying inside what 
   our reading of Definition, and that reading is what made the Lumen spike.
 - **The Shepherd's sprite id corrects the delivered stem.** `The_sheperd` must be renamed
   `the_shepherd` on import, deliberately.
+
+---
+
+## 10. The 72 stages as built - the stage job
+
+Added 2026-09-23 by the stage job. `campaign.json` now holds Pinoy's six chapters of twelve, 72
+stages, and **fields only the 84**. The shipped 24 are gone. The shipped 12 enemies stay in
+`enemies.json` as data, excluded from everything generated. The stages are written by
+`Tools/_author_campaign_stages.py`, which refuses to write a line that is illegal (10.3). Re-run it
+rather than hand-editing a roster; `--check` validates without writing.
+
+**Measured** below means built and run with the core code against this content. **Read** means
+read in the source.
+
+### 10.1 His and ours, in the data
+
+Every stage carries a `"proposed"` string naming what in it is ours, each enemy with its reason.
+Anything a stage's `proposed` does not list is his, verbatim or by the name match sections 2-6
+record. Each chapter carries `"subtitleProposed": true`, because every chapter subtitle is ours. The
+loader ignores both keys. The words `proposed` uses:
+
+- **name**, **subtitle**: the stage name or subtitle is ours. A subtitle not marked is quoted from
+  his lore: his stage text in chapter 1, his distribution's purpose line in chapters 2-4 and 6, and
+  his band text or a boss line in chapter 5.
+- **ramp fill**: the stage names fewer enemies than the formation size (10.2), and this one fills
+  the line from what the chapter has already introduced. That is his rule ("enemies gradually
+  enter the pool and then remain available"); which one is ours.
+- **a quoted group** (`'wildlife'`, `'criminals'`, `'strongest defenders'` and the rest): our
+  resolution of a cell that names no one.
+- **pool**, **ch1 intro N**, **band**: chapter 1 and chapter 5 have no per-stage distribution, so
+  every placement in them is ours.
+
+### 10.2 Structure decisions
+
+| decision | what was done | why |
+|---|---|---|
+| Stage ids | `ch1_1` to `ch6_12`; chapter ids `ch1` to `ch6` | Save data keys `ClearedStageIds`, `CampaignCurrentStageId` and `StageClearsToday` on stage ids, and `StagesCleared` on global index. Keeping `chN_M` means a save written on the shipped campaign still resolves every id. What stands behind each id changed, and whether a save should keep its progress is still the migration decision the blast radius leaves open. |
+| Miniboss | stage 6 of every chapter is `"miniboss": true`, a new `StageDef.IsMiniboss`; the miniboss (an `elite`-kind template, 9.1) leads its line | The engine has no miniboss kind and had no flag. Nothing at runtime reads it; the harness does. |
+| Walls | the harness's mid-chapter walls are read from `IsMiniboss` (`MidChapterWallStageIdsOf`); the hard-coded `ch1_9`/`ch2_6` list is gone | His pacing rule puts the miniboss at stage 6 in every chapter, and a miniboss is the chapter's mid-point spike. Chapter 1's wall moves from 9 to 6, and chapters 3-6 get theirs. **This is our call** that a miniboss is a wall in the power band's sense. |
+| Boss | stage 12, `"boss": true`, the boss leads the line | As both shipped finales did. |
+| Formation size | task 10's ramp: 3 bodies at stages 1-4, 4 at 5-8, 5 at 9-12; **a stage that names more fields all of them** (2-5 fields 5, 3-3, 6-2 and 6-3 field 4) | He gives no formation size (section 8). The ramp is ours and shipped before him; his named list always wins over it. |
+| Slot order | leader first, then Bulwark, Vanguard, Warden, Striker, Stalker, Marksman, Tinkerer, Breaker, Binder, Mender; ties keep his order | Spawn order is slot order and the first entry stands in front. |
+| No duplicates | no line names an enemy twice | This brief's legality rule. **It meets his plurals head-on**; see 10.5. |
+| Waves | 3 waves at 1-1 to 1-4, 6 at 1-5 to 1-12, 12 everywhere after; 12 battles a wave | `ExpectedWaveCount` unchanged. 9,360 battles in all, asserted by `CheckCampaignCurveSchema`. |
+| Environment | chapter 1 keeps the painted `ashen`, `ember` and `hollow` by position; chapters 2-6 are `crossing`, `city`, `old_kingdom`, `divided_realm` and `sanctuary` | All ours: he gives no environments. None of the five new ids is painted, so each draws `BattleAssets`' generated backdrop until `Backgrounds/{id}.png` exists, as `coast`, `tidal` and `deep` did. |
+
+### 10.3 What is NOT solved - the seeds
+
+`recommendedPower`, `floorLevel`, `ceilingLevel` and every authored enemy level are **seeds, not
+answers**. They are carried from the shipped stage at the same position, and chapters 3-6 repeat
+chapter 2's by position. Every unit in a line stands at `floorLevel`. `Tools/solve-recommended-power.ps1`
+has **not** been run on this content, on purpose.
+
+Rewards are also carried by position for chapters 1-2. **Chapters 3-6 pay exactly what 2-12 pays,
+flat**: purse, first-clear rewards and idle rates. This is a placeholder, not a curve. The two
+curves tried on paper were worse:
+
+- Repeating chapter 2's rewards by position makes 3-1 pay a quarter of 2-12, and drops the idle
+  rate a player has already earned by 19x the moment they clear it.
+- Growing chapter 2's shape onward has to multiply about 4x a chapter to stay monotonic across a
+  chapter boundary, because 2-12's purse is 3.75x 2-1's. That is 256x by chapter 6.
+
+The reward curve past chapter 2 is an economy decision. It belongs with the fusion tension (open
+decision 4 in `DESIGN-BUILD-ORDER.md`), in the solve pass, not here.
+
+The generator refuses to write:
+- a line naming an undefined enemy, an enemy twice, or any of the shipped 12
+- a body count outside 1-5, or under the ramp in chapters 2-6
+- a finale not led by exactly one boss, or a stage 6 not led by exactly one miniboss
+- a boss or miniboss anywhere else
+- two identical lines in one chapter
+- a campaign with any of the 84 unfielded
+
+### 10.4 The 72 lines
+
+Generated from `campaign.json`. The line is front first, leader first. The last column is the stage's
+`proposed` string verbatim; `-` means everything in the stage is his.
+
+**Chapter 1 - The Forgotten Road**
+
+| stage | name | line, front first | ours (`proposed`) |
+|---|---|---|---|
+| 1-1 | The Roadside Shrine | `forest_boar`, `grey_wolf`, `road_goblin` | +forest_boar (ch1 intro 1), +grey_wolf (ch1 intro 1), +road_goblin (ch1 intro 1) |
+| 1-2 | The Stranger on the Road | `road_goblin`, `grey_wolf`, `highway_thief` | +highway_thief (ch1 intro 2: bandits), +road_goblin (creatures or bandits), +grey_wolf (creatures or bandits) |
+| 1-3 | Alderwick | `road_goblin`, `goblin_slinger`, `outlaw_archer` | +road_goblin (pool), +goblin_slinger (ch1 intro 3), +outlaw_archer (ch1 intro 3) |
+| 1-4 | The Cold Forge | `lost_villager`, `highway_thief`, `outlaw_archer` | +lost_villager (ch1 intro 4: belief loss), +highway_thief (pool), +outlaw_archer (pool) |
+| 1-5 | Beyond the Gate | `forest_boar`, `grey_wolf`, `goblin_slinger`, `forest_spider` | +forest_spider (ch1 intro 5: the forest), +forest_boar (pool), +grey_wolf (pool), +goblin_slinger (pool) |
+| 1-6 (miniboss) | Those Who Left | `the_forsaken`, `lost_villager`, `outlaw_archer`, `forest_spider` | +the_forsaken (miniboss by filename pattern only), +lost_villager (the villagers who left), +forest_spider (pool), +outlaw_archer (pool) |
+| 1-7 | Another Voice | `wild_bear`, `grey_wolf`, `goblin_slinger`, `forest_spider` | +wild_bear (ch1 intro 7), +grey_wolf (pool), +forest_spider (pool), +goblin_slinger (pool) |
+| 1-8 | The Empty Hamlet | `wild_bear`, `lost_villager`, `highway_thief`, `outlaw_archer` | +wild_bear (pool), +lost_villager (pool), +highway_thief (pool), +outlaw_archer (pool) |
+| 1-9 | Beneath the Hill | `wild_bear`, `forest_boar`, `road_goblin`, `goblin_slinger`, `forest_spider` | +wild_bear (pool), +forest_boar (pool), +road_goblin (pool), +goblin_slinger (pool), +forest_spider (pool) |
+| 1-10 | The Hollowed | `hollowed_guard`, `lost_villager`, `highway_thief`, `hollowed_hunter`, `hollowed_mage` | +hollowed_guard (ch1 intro 10: the Hollowed), +hollowed_hunter (ch1 intro 10), +hollowed_mage (ch1 intro 10), +lost_villager (pool), +highway_thief (pool) |
+| 1-11 | The One Who Takes | `hollowed_guard`, `wild_bear`, `lost_villager`, `hollowed_hunter`, `hollowed_mage` | +hollowed_guard (pool), +hollowed_hunter (pool), +hollowed_mage (pool), +wild_bear (pool), +lost_villager (pool) |
+| 1-12 (boss) | The First Echo | `the_collector`, `hollowed_guard`, `wild_bear`, `hollowed_hunter`, `hollowed_mage` | +hollowed_guard (strongest), +wild_bear (strongest), +hollowed_hunter (strongest), +hollowed_mage (strongest) |
+
+**Chapter 2 - The Abandoned Crossing**
+
+| stage | name | line, front first | ours (`proposed`) |
+|---|---|---|---|
+| 2-1 | Leaving Alderwick | `thornback_boar`, `dire_wolf`, `grey_wolf` | name; +grey_wolf ('Chapter 1 wildlife') |
+| 2-2 | The Emptied Trade Road | `dire_wolf`, `goblin_scavenger`, `goblin_trapper` | name |
+| 2-3 | Abandoned Caravans | `road_marauder`, `marauder_crossbowman`, `goblin_trapper` | name |
+| 2-4 | The Marsh Road | `road_marauder`, `bog_crawler`, `marauder_crossbowman` | name |
+| 2-5 | The Collapsed Route | `road_marauder`, `carrion_vulture`, `bog_crawler`, `goblin_scavenger`, `marauder_crossbowman` | name |
+| 2-6 (miniboss) | The Old Checkpoint | `the_waykeeper`, `road_marauder`, `dire_wolf`, `marauder_crossbowman`, `goblin_trapper` | name; +dire_wolf ('wildlife') |
+| 2-7 | Beyond the Checkpoint | `thornback_boar`, `drifting_pilgrim`, `carrion_vulture`, `dire_wolf` | name; +thornback_boar (ramp fill) |
+| 2-8 | Drawn Toward Somewhere | `hollowed_woodsman`, `drifting_pilgrim`, `goblin_scavenger`, `goblin_trapper` | name; +goblin_trapper (ramp fill) |
+| 2-9 | The Hollowed Road | `hollowed_woodsman`, `drifting_pilgrim`, `carrion_vulture`, `bog_crawler`, `hollowed_apothecary` | name; +carrion_vulture (ramp fill), +bog_crawler (ramp fill) |
+| 2-10 | Suspiciously Coordinated | `hollowed_sentinel`, `hollowed_woodsman`, `drifting_pilgrim`, `marauder_crossbowman`, `hollowed_apothecary` | name; +drifting_pilgrim (ramp fill), +marauder_crossbowman (ramp fill) |
+| 2-11 | Someone Is Organizing Them | `hollowed_sentinel`, `hollowed_woodsman`, `drifting_pilgrim`, `hollowed_hunter`, `hollowed_apothecary` | name; +hollowed_hunter ('All Hollowed variants' read as taking in chapter 1's) |
+| 2-12 (boss) | The Crossing | `the_shepherd`, `hollowed_sentinel`, `hollowed_woodsman`, `drifting_pilgrim`, `hollowed_apothecary` | name |
+
+**Chapter 3 - City of Strangers**
+
+| stage | name | line, front first | ours (`proposed`) |
+|---|---|---|---|
+| 3-1 | The Neglected Farms | `thornback_boar`, `field_hound`, `canal_rat` | name; +thornback_boar ('previous wildlife') |
+| 3-2 | The Outer Gates | `gate_extortionist`, `field_hound`, `rooftop_cutpurse` | name |
+| 3-3 | The Outer Districts | `dock_enforcer`, `gate_extortionist`, `backstreet_knifeman`, `rooftop_cutpurse` | name |
+| 3-4 | The Watch Gone Wrong | `dock_enforcer`, `deserted_watchman`, `backstreet_knifeman` | name |
+| 3-5 | Rigid Guards, Lawless Streets | `deserted_watchman`, `backstreet_knifeman`, `rooftop_cutpurse`, `watch_crossbowman` | name; +rooftop_cutpurse ('criminals'), +backstreet_knifeman ('criminals') |
+| 3-6 (miniboss) | Entry Denied | `the_gatewarden`, `dock_enforcer`, `deserted_watchman`, `watch_crossbowman` | name |
+| 3-7 | Inside the Walls | `deserted_watchman`, `rooftop_cutpurse`, `canal_rat`, `unmoored_citizen` | name; +canal_rat (ramp fill; its second stage) |
+| 3-8 | The Failing Hospital | `deserted_watchman`, `watch_crossbowman`, `unmoored_citizen`, `hollowed_physician` | name; +deserted_watchman (ramp fill) |
+| 3-9 | Strange Rules | `deserted_watchman`, `watch_crossbowman`, `hollowed_magistrate`, `unmoored_citizen`, `hollowed_physician` | name; +deserted_watchman (ramp fill), +watch_crossbowman (ramp fill) |
+| 3-10 | The Coordinated Watch | `dock_enforcer`, `hollowed_captain`, `deserted_watchman`, `watch_crossbowman`, `hollowed_magistrate` | name; +watch_crossbowman (ramp fill), +dock_enforcer (ramp fill) |
+| 3-11 | The Administrative Quarter | `hollowed_captain`, `deserted_watchman`, `watch_crossbowman`, `hollowed_magistrate`, `hollowed_physician` | name; +deserted_watchman ('city guards'), +watch_crossbowman ('city guards') |
+| 3-12 (boss) | The Heart of the City | `the_arbiter`, `hollowed_captain`, `deserted_watchman`, `hollowed_magistrate`, `hollowed_physician` | name; +hollowed_captain ('strongest institutional enemies'), +hollowed_magistrate ('strongest institutional enemies'), +hollowed_physician ('strongest institutional enemies'), +deserted_watchman ('strongest institutional enemies') |
+
+**Chapter 4 - Beneath the Old Kingdom**
+
+| stage | name | line, front first | ours (`proposed`) |
+|---|---|---|---|
+| 4-1 | The Surface Ruins | `stonehide_beetle`, `ruin_jackal`, `field_hound` | name; +field_hound (ramp fill: previous chapter's wildlife) |
+| 4-2 | The Treasure Hunters | `ruin_delver`, `ruin_jackal`, `relic_scavenger` | name |
+| 4-3 | The Natural Tunnels | `ruin_delver`, `cave_lurker`, `sporekeeper` | name |
+| 4-4 | Something Ancient | `forgotten_soldier`, `cave_lurker`, `sporekeeper` | name |
+| 4-5 | The Old Defenses | `stonehide_beetle`, `forgotten_soldier`, `cave_lurker`, `forgotten_archer` | name; +stonehide_beetle (ramp fill; its second stage) |
+| 4-6 (miniboss) | The Buried Gates | `the_last_castellan`, `forgotten_soldier`, `cave_lurker`, `forgotten_archer` | name; +cave_lurker (ramp fill) |
+| 4-7 | The Ancient Settlement | `forgotten_soldier`, `relic_scavenger`, `forgotten_archer`, `crypt_acolyte` | name; +relic_scavenger (ramp fill; its second stage) |
+| 4-8 | Restricted Areas | `graven_guardian`, `forgotten_soldier`, `forgotten_archer`, `crypt_acolyte` | name; +forgotten_archer (ramp fill) |
+| 4-9 | Intruders Identified | `graven_guardian`, `forgotten_soldier`, `forgotten_archer`, `graven_watcher`, `crypt_acolyte` | name; +forgotten_soldier (ramp fill), +forgotten_archer (ramp fill) |
+| 4-10 | The Inner District | `graven_guardian`, `forgotten_soldier`, `forgotten_knight`, `forgotten_archer`, `graven_watcher` | name; +forgotten_soldier (ramp fill), +forgotten_archer (ramp fill) |
+| 4-11 | Before the Archive | `graven_guardian`, `forgotten_knight`, `forgotten_archer`, `graven_watcher`, `crypt_acolyte` | name; +forgotten_archer (ramp fill) |
+| 4-12 (boss) | The Ancient Archive | `the_archivist`, `graven_guardian`, `forgotten_knight`, `graven_watcher`, `crypt_acolyte` | name; +crypt_acolyte (ramp fill) |
+
+**Chapter 5 - The Divided Realm**
+
+| stage | name | line, front first | ours (`proposed`) |
+|---|---|---|---|
+| 5-1 | The Borderlands | `border_wolf`, `ruin_jackal`, `carrion_hyena` | name; +ruin_jackal (ramp fill: previous chapter's wildlife) |
+| 5-2 | Pressed Into Service | `border_levy`, `border_wolf`, `border_scout` | name; subtitle; +border_wolf (band 1-2) |
+| 5-3 | Between Two Armies | `ironshield_soldier`, `border_levy`, `ironshield_arbalist` | name; +border_levy (band) |
+| 5-4 | The Opposing Line | `ironshield_soldier`, `freeblade_raider`, `border_scout` | name; subtitle; +ironshield_soldier (band 3-5), +border_scout (band) |
+| 5-5 | The War Camps | `border_levy`, `freeblade_raider`, `ironshield_arbalist`, `freeblade_skirmisher` | name; subtitle; +freeblade_raider (band 3-5), +ironshield_arbalist (band 3-5), +border_levy (band) |
+| 5-6 (miniboss) | The Banner Still Standing | `the_standard_bearer`, `ironshield_soldier`, `border_levy`, `ironshield_arbalist` | name; +ironshield_soldier (escort; his banner's side is not stated), +border_levy (escort), +ironshield_arbalist (escort; his banner's side is not stated) |
+| 5-7 | The Preachers | `ironshield_soldier`, `war_chaplain`, `freeblade_raider`, `freeblade_skirmisher` | name; +ironshield_soldier (band), +freeblade_raider (band), +freeblade_skirmisher (band) |
+| 5-8 | Hunted by Both | `war_chaplain`, `freeblade_raider`, `oathbreaker`, `ironshield_arbalist` | name; subtitle; +war_chaplain (band 7-9), +freeblade_raider (band), +ironshield_arbalist (band) |
+| 5-9 | Order at Any Cost | `ironshield_soldier`, `ironshield_justicar`, `war_chaplain`, `oathbreaker`, `freeblade_skirmisher` | name; subtitle; +oathbreaker (band 7-9), +war_chaplain (band 7-9), +ironshield_soldier (band), +freeblade_skirmisher (band) |
+| 5-10 | Freedom at Any Cost | `ironshield_justicar`, `war_chaplain`, `freeblade_reaver`, `freeblade_raider`, `ironshield_arbalist` | name; +ironshield_justicar ('strongest mixed military formations'), +war_chaplain ('strongest mixed military formations'), +ironshield_arbalist ('strongest mixed military formations'), +freeblade_raider ('strongest mixed military formations') |
+| 5-11 | The Last Field | `ironshield_soldier`, `ironshield_justicar`, `war_chaplain`, `freeblade_reaver`, `oathbreaker` | name; subtitle; +ironshield_justicar ('strongest mixed military formations'), +oathbreaker ('strongest mixed military formations'), +war_chaplain ('strongest mixed military formations'), +ironshield_soldier ('strongest mixed military formations') |
+| 5-12 (boss) | Six Must Become One | `the_peacemaker`, `ironshield_justicar`, `war_chaplain`, `freeblade_reaver`, `oathbreaker` | name; +ironshield_justicar ('Elite forces from both sides'), +freeblade_reaver ('Elite forces from both sides'), +war_chaplain ('Elite forces from both sides'), +oathbreaker ('Elite forces from both sides') |
+
+**Chapter 6 - The Forgotten Sanctuary**
+
+| stage | name | line, front first | ours (`proposed`) |
+|---|---|---|---|
+| 6-1 | The Mountain Paths | `mountain_ram`, `frostfang_lynx`, `border_wolf` | name; +border_wolf (ramp fill: previous chapter's wildlife) |
+| 6-2 | The Ruined Bridges | `stoneback_troll`, `mountain_ram`, `frostfang_lynx`, `cliff_harpy` | name |
+| 6-3 | The Pilgrimage Route | `stoneback_troll`, `sanctuary_keeper`, `sanctuary_pilgrim`, `cliff_harpy` | name |
+| 6-4 | The Outer Sanctuary | `sanctuary_keeper`, `sanctuary_pilgrim`, `oathbound_monk` | name |
+| 6-5 | First Fragments | `sanctuary_keeper`, `sanctuary_pilgrim`, `oathbound_monk`, `oathbound_seer` | name; +sanctuary_pilgrim (ramp fill) |
+| 6-6 (miniboss) | You Cannot All Be Right | `the_penitent`, `sanctuary_keeper`, `oathbound_monk`, `oathbound_seer` | name; +sanctuary_keeper ('defenders') |
+| 6-7 | The Sanctuary Archives | `scripture_golem`, `sanctuary_pilgrim`, `oathbound_monk`, `oathbound_seer` | name; +sanctuary_pilgrim (ramp fill) |
+| 6-8 | Manifested Memories | `scripture_golem`, `oathbound_monk`, `echo_wisp`, `oathbound_seer` | name; +oathbound_monk (ramp fill) |
+| 6-9 | Restricted Teachings | `scripture_golem`, `sanctuary_keeper`, `echo_wisp`, `veiled_custodian`, `oathbound_seer` | name; +oathbound_seer (ramp fill), +sanctuary_keeper (ramp fill) |
+| 6-10 | The Inner Chambers | `scripture_golem`, `sanctuary_champion`, `sanctuary_keeper`, `veiled_custodian`, `oathbound_seer` | name; +oathbound_seer (ramp fill), +sanctuary_keeper (ramp fill) |
+| 6-11 | The Central Archive | `scripture_golem`, `sanctuary_champion`, `oathbound_monk`, `echo_wisp`, `veiled_custodian` | name; +scripture_golem ('strongest defenders'), +oathbound_monk ('strongest defenders') |
+| 6-12 (boss) | Preserve the Six | `the_curator`, `scripture_golem`, `sanctuary_champion`, `echo_wisp`, `veiled_custodian` | name; +sanctuary_champion ('Elite sanctuary defenders'), +scripture_golem ('Elite sanctuary defenders'), +veiled_custodian ('Elite sanctuary defenders'), +echo_wisp ('Elite sanctuary defenders') |
+
+### 10.5 Every placeholder we invented - the list for Pinoy
+
+One list, everything in the 72 stages that is ours and his to confirm or replace. The tables in
+10.4 give each one in place.
+
+**Chapter 1 (no roster, no distribution)**
+1. Every enemy placement in every line except The Collector at 1-12: 47 placements. The pacing is
+   ours: Forest Boar, Grey Wolf and Road Goblin arrive at 1-1, Highway Thief at 1-2, Goblin Slinger
+   and Outlaw Archer at 1-3, Lost Villager at 1-4, Forest Spider at 1-5, Wild Bear at 1-7, and the
+   three Hollowed at 1-10.
+2. **The Forsaken as the 1-6 miniboss**, on the filename pattern alone (section 1).
+3. **The Collector is not fought at 1-11** ("The One Who Takes"). We read 1-11 as its reveal and
+   1-12 as the fight, because the engine has one boss stage per chapter. His text does not say.
+4. Lost Villager at 1-6 as "the villagers who left".
+5. Its race, role, kind and aspect, as section 9.8 already lists.
+
+**Stage names**, all 60 of chapters 2-6 (chapter 1's 12 are his):
+
+| ch | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 2 | Leaving Alderwick | The Emptied Trade Road | Abandoned Caravans | The Marsh Road | The Collapsed Route | The Old Checkpoint | Beyond the Checkpoint | Drawn Toward Somewhere | The Hollowed Road | Suspiciously Coordinated | Someone Is Organizing Them | The Crossing |
+| 3 | The Neglected Farms | The Outer Gates | The Outer Districts | The Watch Gone Wrong | Rigid Guards, Lawless Streets | Entry Denied | Inside the Walls | The Failing Hospital | Strange Rules | The Coordinated Watch | The Administrative Quarter | The Heart of the City |
+| 4 | The Surface Ruins | The Treasure Hunters | The Natural Tunnels | Something Ancient | The Old Defenses | The Buried Gates | The Ancient Settlement | Restricted Areas | Intruders Identified | The Inner District | Before the Archive | The Ancient Archive |
+| 5 | The Borderlands | Pressed Into Service | Between Two Armies | The Opposing Line | The War Camps | The Banner Still Standing | The Preachers | Hunted by Both | Order at Any Cost | Freedom at Any Cost | The Last Field | Six Must Become One |
+| 6 | The Mountain Paths | The Ruined Bridges | The Pilgrimage Route | The Outer Sanctuary | First Fragments | You Cannot All Be Right | The Sanctuary Archives | Manifested Memories | Restricted Teachings | The Inner Chambers | The Central Archive | Preserve the Six |
+
+Most are lifted from his own purpose text or boss lines ("Entry Denied", "Six Must Become One",
+"You Cannot All Be Right", "Preserve the Six").
+
+**Subtitles**
+- All six chapter subtitles.
+- Six chapter 5 stage subtitles, where no band text opens the stage: 5-2, 5-4, 5-5, 5-8, 5-9,
+  5-11.
+
+**Group cells resolved to named enemies**
+- 2-1 "+ Chapter 1 wildlife": **Grey Wolf**.
+- 2-6 "wildlife": **Dire Wolf**.
+- 2-11 "All Hollowed variants": the three chapter 2 Hollowed plus **Hollowed Hunter** from chapter 1,
+  reading "all" as taking in chapter 1's.
+- 3-1 "+ previous wildlife": **Thornback Boar**.
+- 3-5 "+ criminals": **Rooftop Cutpurse, Backstreet Knifeman**.
+- 3-11 "+ city guards": **Deserted Watchman, Watch Crossbowman**.
+- 3-12 "Strongest institutional enemies": **Hollowed Captain, Magistrate, Physician, Deserted
+  Watchman**.
+- 5-10, 5-11 "strongest mixed military formations": the elites plus a soldier from each side (see
+  10.4).
+- 5-12 "Elite forces from both sides": **Ironshield Justicar, Freeblade Reaver, War Chaplain,
+  Oathbreaker**.
+- 6-6 "Oathbound defenders": the two Oathbound plus **Sanctuary Keeper**.
+- 6-11 "+ strongest defenders": **Scripture Golem, Oathbound Monk**.
+- 6-12 "Elite sanctuary defenders": **the four chapter 6 elites**.
+
+**Chapter 5 per-stage placement.** Every enemy enters at the Intro stage his roster gives it. What
+else stands in each 5-x line is ours; he gives bands only. That is 33 placements.
+
+**The 5-6 escort.** The Standard Bearer's territory is not stated. We gave it Ironshield Soldier,
+Ironshield Arbalist and a Border Levy, so **which side carries the banner is our guess**.
+
+**Ramp fills.** Every `ramp fill` in 10.4 is a formation-size filler we chose from the chapter's
+own pool: 2-7 to 2-10, 3-7 to 3-10, 4-1, 4-5 to 4-12, 5-1, 6-1, 6-5, 6-7 to 6-10. Four of them give a
+second appearance to an enemy his table fields once:
+- Canal Rat at 3-7
+- Stonehide Beetle at 4-5
+- Relic Scavenger at 4-7
+- Field Hound at 4-1
+
+The chapter-opening "previous chapter's wildlife" fills are 4-1 Field Hound, 5-1 Ruin Jackal and
+6-1 Border Wolf. They follow the "+ previous wildlife" he wrote for chapters 2 and 3.
+
+**Environments**: all ours (10.2).
+
+### 10.6 Where a fix would contradict him - reported, not made
+
+Nothing below was changed. Each is for Matthias to take to Pinoy.
+
+1. **His plurals against "no duplicate ids".** He writes "Marauders" (2-5, 2-6), "Watchmen,
+   Crossbowmen, Enforcers" (3-6), "Forgotten Soldiers/Archers" (4-6) and "Forgotten Knights" (4-12).
+   Read literally, these are several bodies of one kind. The legality rule this job was given allows
+   one of each per line.
+   - Where he named two kinds, each is fielded once: "Marauders" is Road Marauder plus Marauder
+     Crossbowman.
+   - Where he named one kind in the plural, the rest of the line is filled: 4-6 fields one Soldier
+     and one Archer plus Cave Lurker, and 4-12 fields one Forgotten Knight.
+   - **Would change:** allow a repeated template in a line, as the shipped campaign did. This is a
+     rule decision, not a content one.
+2. **His general pacing against his chapter 1 narrative.** The rule he states in chapter 2 has the
+   last ~4 enemies introduced at stages 7-9. His chapter 1 text makes the Hollowed "our first
+   campaign-specific enemy type" at stage 10. **The narrative won**: the three Hollowed arrive at
+   1-10 and only the Wild Bear at 1-7. **Would change:** nothing, unless he meant the rule to bind
+   chapter 1.
+3. **"Elite forces from both sides" (5-12) and the Oathbreaker.** The Oathbreaker "abandoned one
+   side and is now hunted by both", so he belongs to neither side. We fielded him at 5-12 because
+   chapter 5 has only four elites, and the War Chaplain's side is unstated too. **Would change:**
+   swap him for an Ironshield Soldier, if "both sides" means the two armies strictly.
+4. **The Collector at 1-11.** "The One Who Takes" is "a minor agent" the heroes meet and hear, but
+   the engine has one boss stage per chapter, so it is not fought there. **Would change:** if he
+   wants a fight there, 1-11 becomes a second boss stage, which is a structure change, or fields
+   the Collector as a non-boss, which contradicts its kind.
+5. **Minibosses as walls.** Making stage 6 the mid-chapter wall is our reading of "Stage 6:
+   Miniboss" plus 2-6's "Old enemies become harder formations". He never says how hard a miniboss
+   stage should be. It is flagged here because the power band will tune to it.
+
+### 10.7 The shipped 12 retired, not deleted - and what was measured
+
+**How they are excluded (read).** No stage fields any of the 12. That alone keeps them out of the
+guild dungeon, whose `TemplatePool` is only what a stage fields, which is how the_unmade was
+already kept out. The Recital used to draw every template of a floor's Aspect, so
+`RecitalGenerator.BuildFloor` now draws from `GuildDungeonGenerator.TemplatePool` too, still minus
+`ScriptedLossEnemies`. One rule now covers both modes, and the_unmade's exclusion is that rule
+applied to all twelve. The Recital still draws `kind: boss` templates as floor enemies; 9.6's
+proposal to stop that was not made.
+
+**The prologue still fights (measured).** `CheckPrologueStillFights` builds each of the eight
+steps the way `BattleScreen` does: `PrologueScript.BuildStage`, the level-42 squad from `BuildSquad`,
+and `GameSession.BuildPrologueRequest`. It runs each one:
+
+| step | stage | events | rounds | enemies fielded | squad | outcome |
+|---|---|---|---|---|---|---|
+| Combat | The Long Retreat | 78 | 2 | 2/2 | 5 | won |
+| Formation | The Narrow Bridge | 66 | 2 | 2/2 | 5 | won |
+| Skills | The Long Watch | 245 | 4 | 2/2 | 5 | won |
+| Roles | The Long Retreat | 31 | 1 | 1/1 | 5 | won |
+| Equipment | The Long Retreat | 31 | 1 | 1/1 | 5 | won |
+| Aspects | The Colour of Things | 78 | 2 | 2/2 | 5 | won |
+| FullBattle | The Last Gate | 143 | 3 | 4/4 | 5 | won |
+| Boss | The Unmade | 70 | 2 | 1/1 | 5 | lost |
+
+Every step fields every enemy it names, and the Boss step fields The Unmade and is lost, as
+scripted. The harness asserts the first two facts and The Unmade's presence, and prints the
+outcome. Roles and Equipment fall to `BuildStage`'s default arm, one Hollow Husk.
+
+**Every stage's line is legal (measured, `CheckCampaignLinesLegal`, green).**
+- Six chapters of twelve.
+- Every enemy defined, and no enemy twice in one line.
+- No stage fields an enemy the prologue spawns, and all 84 of Pinoy's are fielded.
+- Stage 6 is led by a miniboss fielded nowhere else and stage 12 by its one boss, and no other
+  stage fields a boss.
+
+The generator asserts the same before it writes, plus no two identical lines in a chapter. That
+last rule caught 6-10 and 6-11 fielding the same five on the first draft.
+
+**The guild dungeon (measured on these stages).** Built with `GuildDungeon.SeedFor("floors-check",
+cycle)`, the check's own seed, and every themed slot read back through `Classify`:
+
+| | pool | non-boss Walls / Hunters / Spreaders | single-Aspect floors | Wall slot | Hunt slots | Attrition slots | Champion lead elite | old 12 drawn |
+|---|---|---|---|---|---|---|---|---|
+| this branch, 300 dungeons (1,500 floors) | 84 (78 non-boss) | 9 / 25 / 12 | **0** | 300/300 | 900/900 | 900/900 | 300/300 | 0 |
+| this branch, 1,000 dungeons (5,000 floors) | same | same | **0** | 1000/1000 | 3000/3000 | 3000/3000 | 1000/1000 | 0 |
+| main, 1,500 floors | 10 (8 non-boss) | 1 / 2 / 4 | 0 | 300/300 | 900/900 | 900/900 | 300/300 | 7,500 slots |
+
+This matches 9.5's "the 84 only" row exactly: 9 / 25 / 12 and 0 in 1,500. Nothing is still
+fielding the 12. With them fielded, 9.5 measured 6 single-Aspect floors in 5,000.
+`GuildDungeonChecks.CheckFloors` is green on 5,000.
+
+**The Deep Recital (measured).** Floors 1-120:
+- **0 of 600 slots are one of the 12** (main: 67).
+- Every line is full: 120/120.
+- `CheckRecitalContent` counts campaign-fielded templates per Aspect: **Ember 16, Tide 11,
+  Verdant 18, Gale 12, Umbra 13, Lumen 14**, so all six are covered.
+- Boss-kind templates fill 45 of 600 slots (main 57): Tide 9, Gale 10, Ember 7, Verdant 6, Lumen 6,
+  Umbra 7.
+
+Difficulty was measured the way 9.6 measured it: the three starters at one level, floors 1-60, 20
+seeds a floor, identical seeds on both sides. The main column was re-run here with the same
+program, and it reproduces 9.6's final column to within seed noise (512 against 515 at level 45,
+943 against 942 at level 80).
+
+| | main | this branch |
+|---|---|---|
+| wins at level 45 | 512 / 1200 | **508** |
+| wins at level 80 | 943 / 1200 | **955** |
+| by Aspect at 45 (of 200) | Ember 99, Tide 46, Verdant 100, Gale 96, Umbra 80, Lumen 91 | Ember 80, Tide 87, Verdant 100, Gale 83, Umbra 80, Lumen 78 |
+| by Aspect at 80 (of 200) | Ember 160, Tide 149, Verdant 167, Gale 160, Umbra 150, Lumen 157 | Ember 156, Tide 160, Verdant 160, Gale 173, Umbra 139, Lumen 167 |
+| spread, best band minus worst, at 45 | 54 | **22** |
+| spread at 80 | 18 | **34** |
+| line power, floors 1-60 | Ember 339k, Tide 385k, Verdant 344k, Gale 342k, Umbra 361k, Lumen 357k | Ember 323k, Tide 348k, Verdant 349k, Gale 332k, Umbra 355k, Lumen 369k |
+
+**What moved, and why:**
+- **Tide at level 45 stopped being the wall** (46 to 87). It lost the Tideturned, the Tidecaller
+  and the Riptide Channeler, the three heaviest Tide templates, which 9.6 named as the cause.
+- **Umbra is now the hardest band at level 80** (139). Umbra lost the Hollow Husk and the Sundered
+  Colossus, but its remaining boss slots fall on different floors. No band is a wall at either
+  level.
+- **The spread at 80 widened from 18 to 34.** That is Gale at 173 against Umbra at 139, and 20
+  seeds a floor is about ±10 wins of noise per band. It is a reading, not a regression, but it is
+  the number the Recital's next tuning pass starts from.
+
+### 10.8 What went red, and why - what the solve job inherits
+
+`Tools/build-check.ps1` on origin/main before this job: **3 failures** (measured). They were the two
+arena-matrix coverage checks and the power band at 2-6 and 2-12. On this content: **9 failures**
+(measured, two full runs; the second after the 6-10 fix, same nine). After a fresh rebase on main
+and the fingerprint regeneration that is this job's last commit: **7 failures** (measured). Rows 1
+and 2 are gone, and rows 4, 8 and 9 read as given below. The breakage is intended. Nothing below
+was tuned.
+
+| # | check | reading | why | whose |
+|---|---|---|---|---|
+| 1 | `CheckStageFingerprintBaseline` | 72 of 216 MOVED | Every opener in chapters 1-2 is a new line. | **Regenerated** in this job's last commit (216 lines), so green. A new baseline, not evidence that behaviour held. |
+| 2 | `CheckStageFingerprintBaseline` | 144 not in the baseline | Chapters 3-6 are new: 48 stages × 3 seeds. | same |
+| 3 | `CheckArenaMatrix`, talents | 3 of 90 observed nowhere | Unchanged from main, and unrelated. | `DESIGN-BUILD-ORDER` Known bugs. |
+| 4 | `CheckArenaMatrix`, basics/actives/passives | 5 observed nowhere before the rebase, 4 after | Main's own red, and unrelated to stages. It moved with what the rebase brought in. | same |
+| 5 | `CheckCampaignMigrationRegression` | "ch1_1 wave 1 battle 1 is still two level-2 hollow husks and a level-2 grave moth" | It pins the retired opener by name. **Left red on purpose**: it pins content that no longer exists, and re-pinning it to the new opener before the solve moves its levels would only pin a seed. Its sibling "ch1_1's recommendedPower is 2977" is **green by coincidence**: 2977 is a carried seed. | Solve job: re-pin, or retire the check, once 1-1 is solved. |
+| 6 | Armor drop sweep | "Rough outnumbers Honed" fails, 537 vs 1599 | **Structural, and new.** Rough's `dropWeight` 55 falls by 1.6 per `stageGlobalIndex` (`armor.json`), which was tuned while the last index was 23. Now it is 71, so Rough's weight reaches zero at index 34 (3-11), and no stage past it drops Rough at all. | An economy decision: armor's slope, not this job's. |
+| 7 | Geared CEIL band | 66 of the 67 measurable stages out of band (5 floor-pinned); first miss 1-6 at 99.5% | Every level is a seed. Readings run from 0% (the first stage of every chapter 2-6, where a carried floor of 37 meets a new roster) to 100% (most of chapters 3-6). | The solver. |
+| 8 | `CheckCampaignPowerCurve` | 1-6 x1.182 over a wall band of x1.05; 1-9 x1.007 under x1.10; 2-6 x1.213 over x1.133 (x1.207 after the rebase) | 1-6 and 2-6 are walls now, and 1-9 no longer is, but they still carry the shipped power seeds. **It reads only 1-1 to 2-11**, because the reference walk (seed 1) sticks at 2-12. **The band has not looked at 61 stages.** "Across the board" failures are not visible here yet, only because the walk never gets there. | The solver. |
+| 9 | `CheckFusionNeverGates` | **16 of 20** reference walks STUCK after the rebase: at 2-12 ×6, 2-11 ×5, 6-12 ×4, 2-1 ×1 (12 and 14 of 20 in the two runs before it) | A reference player at the tier-0 cap cannot clear The Crossing or The Curator's line at the carried seeds. **This is the fusion tension the solve pass has to settle**: the fusing walk meets chapters 3-6 at x10 to x21 of `recommendedPower`, the reference walk sticks. The 6-12 row prints its median as 2147483647, the stuck sentinel read as a number: a display bug in the report, not in the verdict. | The solve pass, with open decision 4. |
+
+**Checks that stayed green, and should be read as structure, not balance.**
+- `CheckCampaignCurveSchema`: 72 stages, 9,360 battles.
+- `CheckCampaignLinesLegal` and `CheckPrologueStillFights`, both new.
+- `CheckCampaignMonotonicity`.
+- `CheckTeamSizeStructure`: 1-1 fields 3, the last stage fields 5, and the starters win 1-1.
+- Every Recital check, including the new "no floor fields a template no stage fields".
+- `GuildDungeonChecks`, on 5,000 floors.
+- "A normal player can clear the whole campaign". That reads the fusing walk, which runs x5 to x21
+  over `recommendedPower` through chapters 3-6. Green, and meaningless until the solve.
+
+**For the solve job, in order.**
+1. Settle the reward curve past chapter 2 (10.3) together with the fusion tension. The flat plateau
+   is a placeholder, and the solver never touches a purse.
+2. Run `pwsh Tools/solve-recommended-power.ps1`. It will seed every level from the new
+   `recommendedPower`.
+3. Re-pin or retire row 5.
+4. Decide armor's slope (row 6).
+5. Regenerate the fingerprints last.
+
+`CheckFusionEconomyDerivation` now treats 6-12 as the campaign finale; it treated 2-12 as the
+finale before.

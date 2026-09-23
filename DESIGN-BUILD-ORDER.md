@@ -218,13 +218,20 @@ Eight JSON files in `Assets/Resources/Content`. Balance and content changes go t
 
 - `heroes.json`: 94 heroes, **all 94 authored**. 8 one-star, 12 two-star, 18 three-star,
   26 four-star, 30 five-star.
-- `enemies.json`: 96 enemy templates. The shipped 12, which the campaign and the prologue field,
-  and Pinoy's 84 for chapters 1-6, which **no stage fields yet**: aspect, kind, stats and kit
+- `enemies.json`: 96 enemy templates. **Pinoy's 84 are the campaign**: aspect, kind, stats and kit
   are ours and the mapping is `Docs/CAMPAIGN-SPEC.md` section 9. Each of the 84 names its future
-  sprite and is `pending`, so it draws the mannequin. Only the Deep Recital draws them today.
-- `campaign.json`: 2 chapters, 12 stages each. `waveCount` is authored per stage now rather than 12
-  everywhere, so a stage's ladder is `waveCount` times 12 battles: 36 on `1-1` to `1-4`, 72 on
-  `1-5` to `1-12`, and 144 across the whole of chapter 2.
+  sprite and is `pending`, so it draws the mannequin. **The shipped 12 are retired but kept**: no
+  stage fields them, so neither the guild dungeon nor the Deep Recital draws them, and they stay in
+  the file because `PrologueScript` spawns seven of them by id.
+- `campaign.json`: **Pinoy's six chapters of twelve, 72 stages** (The Forgotten Road, The Abandoned
+  Crossing, City of Strangers, Beneath the Old Kingdom, The Divided Realm, The Forgotten Sanctuary),
+  fielding only the 84. Stage 6 of each chapter is `"miniboss": true` (`StageDef.IsMiniboss`) and
+  stage 12 `"boss": true`. Written by `Tools/_author_campaign_stages.py`, which validates every
+  line; every stage's `"proposed"` names what in it is ours rather than Pinoy's
+  (`CAMPAIGN-SPEC.md` 10.5 is the list for him). **Nothing mechanical is solved**:
+  `recommendedPower` and every level are seeds carried by position, and chapters 3-6 pay 2-12's
+  rewards flat (`CAMPAIGN-SPEC.md` 10.3). A stage's ladder is `waveCount` times 12 battles: 36 on
+  `1-1` to `1-4`, 72 on `1-5` to `1-12`, and 144 from chapter 2 on, 9,360 in all.
 - `relics.json`: 10 relics across two grades, Legendary and Mythic.
 - `armor.json`: drop chance, primary and sub rolls, tempers, attunements, slot names.
 - `events.json`: 2 events. Its two windows are real calendar dates sitting in the file, not
@@ -519,7 +526,9 @@ wall - and fails when a stage leaves its band.
 - An **ordinary** stage is x1.10 to x1.30.
 - A **wall** is x1.00 to x1.05 in chapter 1 and x0.95 to x1.02 from chapter 2 on, and the per-chapter
   split was measured off how many extra sittings a wall at each ratio actually costs.
-- A wall is a chapter finale or one authored mid-chapter spike. The two spikes are `1-9` and `2-6`.
+- A wall is a chapter finale or a chapter's miniboss stage, stage 6 of every chapter, read from
+  `StageDef.IsMiniboss` (`MidChapterWallStageIdsOf`). Until Pinoy's campaign landed the two
+  mid-chapter walls were a hard-coded `1-9` and `2-6`.
 
 **The simulated player here is the wall rule's reference player, not the one who fuses.**
 FUSION ACCELERATES A WALL, IT NEVER GATES ONE: every wall must be passable with levels at the cap and
@@ -528,7 +537,9 @@ no conversion and no ascension at all. So the band is read on that player's walk
 any one sticks anywhere. The player who fuses meets every stage above its band, and that is the rule
 working rather than a failure of it.
 
-`recommendedPower` is re-derived for all 24 stages from the reference player's entry power against
+**Everything from here to Gear describes the shipped 24, which Pinoy's 72 replaced; the 72 carry
+those numbers by position as unsolved seeds** (`CAMPAIGN-SPEC.md` 10.3 and 10.8).
+`recommendedPower` was re-derived for all 24 stages from the reference player's entry power against
 the middle of each stage's own band, with `floorLevel`, `ceilingLevel` and the authored enemy
 levels following so the CEIL band still reads in range at the new number. A stage any of the twenty
 walks sticks on is aimed 5% higher per stick (`SolverStuckStep`), because that player fields its five
@@ -632,9 +643,10 @@ record. `GuildDungeonChecks.Run` is wired into the harness. Its screens are bein
 Aspect cycle. **It never draws the prologue's scripted loss**: `RecitalGenerator.ScriptedLossEnemies`
 reads the prologue's Boss step and skips whatever it fields that no campaign stage does, which is The
 Unmade. Before that every Umbra floor fielded it, twice on floors 5 and 11, and
-`CheckRecitalDrawsNoScriptedLoss` now climbs 120 floors to say none does. It draws every template of the
-floor's Aspect, fielded by a stage or not and bosses included, so Pinoy's 84 are in every floor's
-pool; `Docs/CAMPAIGN-SPEC.md` 9.6 measures what that did to the floors. Coda is the Recital's own currency and accrues on every clear. **There is no Coda sink
+`CheckRecitalDrawsNoScriptedLoss` now climbs 120 floors to say none does. It draws the templates of the
+floor's Aspect **that some campaign stage fields** (`GuildDungeonGenerator.TemplatePool`, the guild's
+rule), bosses included, so the retired shipped 12 are out of it; `Docs/CAMPAIGN-SPEC.md` 9.6 and 10.7
+measure what each change did to the floors. Coda is the Recital's own currency and accrues on every clear. **There is no Coda sink
 yet.** `ProvingGenerator` builds opponent lines. The events engine is content-driven through
 `events.json`. Shop screens are wired.
 
@@ -754,6 +766,19 @@ differs between them.
 
 ## In progress
 
+**`content/campaign-stages`** replaces the shipped 24 stages with Pinoy's 72:
+- only his 84 fielded, the shipped 12 kept as data and excluded from the guild dungeon and the Deep
+  Recital;
+- a miniboss flag on stage 6 that the power band reads as the chapter's wall;
+- `CheckCampaignLinesLegal` and `CheckPrologueStillFights`;
+- `CAMPAIGN-SPEC.md` section 10, with the placeholder list for Pinoy.
+
+It solves nothing on purpose. The build check reads **7 failures**, measured after its last commit
+regenerated the stage fingerprints (216 lines) from a fresh rebase on `main`. Three are main's (the
+two arena-matrix reds and the power band, now at 1-6, 1-9 and 2-6), and four it breaks deliberately:
+the retired 1-1 opener pin, armor's Rough slope, the CEIL band, and 16 of 20 non-fusing walks stuck.
+Each is listed with its cause in `CAMPAIGN-SPEC.md` 10.8.
+
 **`balance/wall-resolve`** carries what the fusion spine left: target A re-measured by what bought
 each Level (open decision 4), the Striker pass that lifted Velis and Kiva together and emptied
 `KnownF8Exceptions` (**The star band**), the CEIL guard at 2,000 samples and the chapter 1 line
@@ -830,8 +855,9 @@ In order.
 
 ## Blocked
 
-- **Chapters 3 to 6**, on art from Pinoy. `DESIGN-WORLD`'s contested-region proposal for chapter 3
-  is moot until they exist.
+- **Chapters 3 to 6's art**, on Pinoy. The stages exist and field his enemies as pending
+  mannequins; no enemy sheet has been delivered for any chapter. `DESIGN-WORLD`'s
+  contested-region proposal for chapter 3 is moot: his chapter 3 is City of Strangers.
 - **An APK**, on having an Android device to run it on.
 - **iOS**, on a Mac and an Apple developer account. Neither exists.
 
@@ -1156,7 +1182,7 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
 - **Guilds phase two.** A guild shop, currency, raids, rewards, guild levels and leaderboards all
   price against the economy, and the economy's shape only settled with the curve re-derivation.
 - **A marketplace.** Nothing built, nothing designed.
-- **Chapters 3 to 6**, when the art exists.
+- **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
 - **Texture compression.** The delivered art is effectively uncompressed, which is fine in a desktop
   player and will not be fine in an APK. Reported at 855 MB of 881 MB uncompressed; the tracked
   `Assets` folder measures 578 MB in this tree, so that figure is a player measurement rather than a
