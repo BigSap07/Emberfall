@@ -67,7 +67,10 @@ if (Test-Path (Join-Path $root "Assets\Editor")) {
 # purpose, so the harness can check the invariants DESIGN-SUMMON-PRESENTATION states against the
 # numbers the summon screen actually plays.
 # CloudChecks.cs rides the same way, for the save and cloud audit's checks (Docs/CLOUD-GAPS.md).
-$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") + (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs") + (Join-Path $root "Tools\DevHarness\CloudChecks.cs"))
+# ArenaMatrix.cs is a partial of Program rather than a class of its own, because the matrix is the
+# sweep's and the dark talents' own instruments generalised - it runs their arenas, their seeds and
+# their hash, and a second copy of those would drift from the first.
+$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") + (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs") + (Join-Path $root "Tools\DevHarness\CloudChecks.cs") + (Join-Path $root "Tools\DevHarness\ArenaMatrix.cs"))
 $okHarness = Compile "core+harness" $harness "exe" (Join-Path $out "DevHarness.exe")
 
 $engineSources = @($core + $shim + $runtime + $editor)
