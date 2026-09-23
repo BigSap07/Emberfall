@@ -29,11 +29,14 @@ project owner:
 9. `0009_revoke_guild_dungeon_record.sql` - takes `guild_dungeon_record` away from clients, so
    `guild_dungeon_submit` is the only way an attempt is written. Applied to the live project by
    hand first; the file is the record of it.
+10. `0010_revoke_generate_friend_code.sql` - revokes `generate_friend_code()` from `public` and
+   `anon`, the last function `0001` left callable with the anon key alone. Applied to the live
+   project by hand first; the file is the record of it.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0009` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0010` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
 after a half-finished run, is a no-op rather than a failure to unpick.
 
@@ -67,11 +70,10 @@ privilege rather than as a policy, it is:
 revoke is there so "no table is readable by the anon role" stays true even if a later policy is
 written for `public` instead of `authenticated`.
 
-Every callable **function** is revoked from `public` and `anon` the same way, with one
-exception: `generate_friend_code()` in `0001` never was, so the anon key alone can call it. It
-returns a random string and reads nothing, so it costs nothing today; it is written up in
-`Docs/CLOUD-GAPS.md`, and `CloudChecks` in the harness pins it as the only one so a second cannot
-arrive unnoticed. Trigger functions cannot be called directly and need no revoke.
+Every callable **function** is revoked from `public` and `anon` the same way. The last exception,
+`generate_friend_code()` from `0001`, is revoked by `0010` (`Docs/CLOUD-GAPS.md` S6). `CloudChecks`
+in the harness asserts that no callable function is left unrevoked, so a new one cannot arrive
+unnoticed. Trigger functions cannot be called directly and need no revoke.
 
 ## Where a rule cannot be a policy
 
@@ -116,6 +118,7 @@ is why none of these tables have anything to migrate when a player converts.
 `Tools/supabase-rules-test.py` (accounts, saves, friends) and
 `Tools/supabase-guild-rules-test.py` (guilds and the dungeon) create throwaway users and prove
 the rules above against the real project. They are the only things here that need credentials.
-See the header of each script. Both carry cases the cloud audit added that have **not yet been
-run**; `Docs/CLOUD-GAPS.md` lists them, and a case labelled STILL PRESENT asserts a defect that
-was written up and left alone, so it passes today and goes red the day that defect is fixed.
+See the header of each script. Both carry the cases the cloud audit added, and both have been run
+against the live project; `Docs/CLOUD-GAPS.md` records what each measured. A case labelled STILL
+PRESENT asserts a defect that was written up and left alone, so it passes today and goes red the
+day that defect is fixed.

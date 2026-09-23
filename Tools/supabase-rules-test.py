@@ -49,21 +49,51 @@ def looks_secret(key):
     key. The guard this replaced tested `"service_role" in key`, which never fires - a JWT's
     payload is base64url, so the word is never in the key as text (Docs/CLOUD-GAPS.md P12). A JWT
     whose payload cannot be decoded counts as secret: "could not tell" is not a reason to run."""
+    return key_kind(key) != "anon"
+
+
+def key_kind(key):
+    """What the key IS, read from the key itself, never from its text: "anon" for a publishable
+    key or a JWT whose decoded payload says role anon; "secret" for an sb_secret_ key, a JWT
+    whose role is anything else, or a JWT whose payload will not decode; "unknown" for any other
+    shape. Only "anon" may run. An unknown shape used to pass as not-secret, which is a verdict
+    reached by inspecting nothing."""
     import base64
     key = (key or "").strip()
     if key.startswith("sb_secret_"):
-        return True
+        return "secret"
     if key.startswith("sb_publishable_"):
-        return False
+        return "anon"
     parts = key.split(".")
     if len(parts) != 3:
-        return False
+        return "unknown"
     try:
         segment = parts[1] + "=" * (-len(parts[1]) % 4)
         payload = json.loads(base64.urlsafe_b64decode(segment.encode("ascii")).decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
-        return True
-    return not isinstance(payload, dict) or payload.get("role") != "anon"
+        return "secret"
+    return "anon" if isinstance(payload, dict) and payload.get("role") == "anon" else "secret"
+
+
+def guard_fires():
+    """The guard, proven on every run before it is trusted: keys built here in each shape must
+    get the verdict their shape demands. If the decoder ever stops decoding - the way the old
+    `"service_role" in key` test never matched anything - this is what goes red, not silence."""
+    import base64
+
+    def jwt(role):
+        def b64(text):
+            return base64.urlsafe_b64encode(text.encode("utf-8")).decode("ascii").rstrip("=")
+        return (b64('{"alg":"HS256","typ":"JWT"}') + "." + b64('{"iss":"supabase","role":"' + role + '"}')
+                + "." + b64("signature"))
+
+    cases = ((jwt("service_role"), "secret"), (jwt("authenticated"), "secret"), (jwt("anon"), "anon"),
+             ("sb_secret_" + "x" * 32, "secret"), ("sb_publishable_" + "x" * 32, "anon"),
+             ("a.!!!notbase64!!!.c", "secret"), ("plain-text-key", "unknown"), ("", "unknown"))
+    wrong = [(expected, key_kind(key)) for key, expected in cases if key_kind(key) != expected]
+    # The reason the old guard was decorative, asserted: the role is not in a JWT as text.
+    wrong += [("no literal role text", "found")] if "service_role" in jwt("service_role") else []
+    return wrong
 
 
 # ---------------------------------------------------------------- reporting
@@ -603,8 +633,10 @@ def check_anon_functions():
     section("THE ANON ROLE AND THE FUNCTIONS 0001 AND 0003 DEFINE")
     status, body = request("POST", "/rest/v1/rpc/is_friend", body={"other_user": "00000000-0000-0000-0000-000000000000"})
     check(status not in (200, 201), "the anon role cannot call is_friend", status)
+    # S6, closed: 0010 records the revoke from public and anon that was applied to the live project.
     status, body = request("POST", "/rest/v1/rpc/generate_friend_code", body={})
-    check(status == 200, "STILL PRESENT (S6) - the anon role CAN call generate_friend_code, which 0001 never revoked",
+    check(status not in (200, 201),
+          "the anon role cannot call generate_friend_code - S6 is closed, no function is left open to anon",
           status)
 
 
@@ -690,10 +722,17 @@ def main():
     if not URL or not ANON:
         print("Set SUPABASE_URL and SUPABASE_ANON_KEY first. See the header of this file.")
         return 2
-    if looks_secret(ANON):
-        print("That looks like the service role key. Use the ANON PUBLIC key - the service role")
-        print("bypasses RLS, so every check here would pass and none of them would mean anything.")
+    broken = guard_fires()
+    if broken:
+        print("The key guard does not work (expected, got): " + str(broken) + ". Not running with a")
+        print("guard that cannot tell an anon key from a service-role one.")
         return 2
+    if looks_secret(ANON):
+        print("That key is not an anon public key (it reads as: " + key_kind(ANON) + "). Use the ANON")
+        print("PUBLIC key - the service role bypasses RLS, so every check here would pass and none of")
+        print("them would mean anything.")
+        return 2
+    print("key: decoded as an anon public key, and the guard was shown to fire on built secret keys")
 
     print("EMBERFALL SUPABASE RULE TEST")
     print("project: " + URL)

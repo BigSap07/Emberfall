@@ -908,9 +908,10 @@ namespace Emberfall.DevHarness
                 if (!revokedFns.Contains(name) && !exposed.Contains(name)) exposed.Add(name);
             }
             exposed.Sort(StringComparer.Ordinal);
-            Check(exposed.Count == 1 && exposed[0] == "generate_friend_code",
-                  "STILL PRESENT (S6) - exactly one callable function is never revoked from anon and PUBLIC ("
-                  + string.Join(", ", exposed.ToArray()) + ")");
+            // S6, closed by 0010: generate_friend_code was the last one, and it is revoked now.
+            Check(exposed.Count == 0,
+                  "every callable function is revoked from anon and PUBLIC - S6 is closed"
+                  + (exposed.Count > 0 ? " - NOT: " + string.Join(", ", exposed.ToArray()) : ""));
         }
 
         // ---------------------------------------------------------------- plumbing
