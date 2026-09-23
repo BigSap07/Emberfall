@@ -155,6 +155,18 @@ economy.
 - **Gold stopped being the lever and shards became it.** Scaling the back half's gold by 2.5x moves
   the late-campaign ratio by 0.08; scaling gold and shards together moves it by 2.36.
 
+**Re-deriving the curve for this economy does not put B in range either; it makes walls a lottery.**
+`Tools/solve-recommended-power.ps1` was run against a throwaway copy of the content with the spine
+in place - nothing it wrote was committed - and converged in 16 iterations, raising `2-12`'s
+`recommendedPower` from 27,601 to 31,591 and its enemies eight levels. Against that curve, over the
+same eight walks, `2-12` cost 0 extra sittings in five walks and 8, 19 and 21 in the other three;
+`1-12` cost 0 or 1. None landed in 2 to 4. A walk either fused and ascended into the copies its
+line needed before the finale and walked through it, or it did not and waited days for a
+conversion to roll a duplicate of a hero it deployed. That is what F3's randomness does to a wall
+when power comes in steps: the wait is the time to the next lucky roll, not a size anyone can set.
+**So star-gated caps do not deliver target B, on either curve.** Roster share on the re-solved
+curve read 49.7% to 61.5% and levels 34.9% to 45.9%.
+
 **Target A in this split is partly definitional, and that should be said.** It grades the line at
 level 1 against the levels on top of it, and F6 makes an ascended hero's first level stand where the
 old tier's cap was. The levels a player bought below a tier are counted as roster the moment the

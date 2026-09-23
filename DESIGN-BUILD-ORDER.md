@@ -822,6 +822,11 @@ instead and is named in the coverage note under **Known bugs**.
      ascends.
    - **Why B stops short**: walls cost sittings when a player arrives under them and has to grow;
      this player arrives over them, because the curve was derived for one who could not fuse.
+   - **Re-solving does not rescue B.** Solved against a throwaway copy with the spine in place (16
+     iterations, `2-12` from 27,601 to 31,591, nothing committed), `2-12` cost 0 extra sittings in
+     five of the eight walks and 8, 19 and 21 in the other three. A wall under fusion costs the
+     time to the next lucky conversion roll, and none of the sixteen finale readings landed in 2 to
+     4. Star-gated caps do not deliver target B on either curve.
    **What is open is whether to re-solve the campaign against the fusion economy.** The solver says
    to after any economy change, and it would move `1-9`, `1-12` and `2-1` along with everything
    else, which this spine was told not to do. Until it is decided, the power-band guard reads red
