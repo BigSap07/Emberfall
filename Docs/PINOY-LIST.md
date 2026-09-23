@@ -323,7 +323,8 @@ It is no longer a trap by the numbers, and `CheckTalentsAreWorthPicking` has tak
 ### 2f. Ability text waiting on an answer
 
 Every basic, active, passive and talent now carries a player-facing sentence with no numbers in
-it, written to `Docs/ABILITY-TEXT-STYLE.md`, **except these 30**. Each still carries a drafting
+it, written to `Docs/ABILITY-TEXT-STYLE.md`, **except these 29 ids, asked as 28 questions** (Demos's
+two share one). Each still carries a drafting
 note because the sentence Pinoy wrote and the kit that ships disagree. Most repeat a row of 2a,
 2b, 2c or 2d, asked here as the one question the text needs answered.
 
@@ -332,7 +333,9 @@ the kit changes, which is balance or engine work rather than a text edit. **The 
 yes throughout**, because the built kit is what players fight. The harness pins each of these ids
 in `AbilityTextPinnedDraftingNotes` and fails if one is answered and not unpinned. Nara's Carry On
 was the third and has left the list the other way: the kit now says "the first time", as her
-sentence does, and the text says what it does.
+sentence does, and the text says what it does. **Hale's Tracking Habit has left the same way**: the
+kit now moves Quarry at the end of the round, as his sentence does, rather than at the start of his
+turn, and its card says so.
 
 1. **Arno, Rubble Resolve**: Attack Up when Arno strikes an enemy whose Ward is still standing, not when a Ward breaks? Recommend yes.
 2. **Yara, Second Bearing**: Yara can never aim at the same enemy twice running and gains Attack Up on every shot, rather than Energy for choosing to switch? Recommend yes.
@@ -358,19 +361,17 @@ sentence does, and the text says what it does.
 22. **Demos, Notice of Loss and its Arrears tick**: keep the cap on the Arrears tick that the sentence does not mention? Recommend yes.
 23. **Hale, Field Sign**: 250% and a Quarry that makes Hale hit harder, rather than 120% and Defense ignore (2d)? Recommend yes.
 24. **Hale, Closing Radius**: 570% rather than 220% (2d)? Recommend yes.
-25. **Hale, Tracking Habit**: Quarry moves at the start of each of Hale's turns, not at the end of a round it survived? Recommend yes.
-26. **Kiva, Unclaimed Victory**: the ungated first Ward of 2a, with the text saying what it pays rather than what was measured? Recommend yes.
-27. **Seraphine, Volume Closed**: everything lands in one firing, and the record is paid out as damage (2d)? Recommend yes. The draft also says the target loses turn progress, which only the No Revision talent adds, so the player text will leave that out.
-28. **Altheon, Witness Script**: the rider at 35%, resolving before the blow it rides (2d)? Recommend yes.
-29. **Altheon, Immaculate Record**: a 3-round Subject, a 50% ceiling, and only Altheon's own blows recorded (2d)? Recommend yes.
+25. **Kiva, Unclaimed Victory**: the ungated first Ward of 2a, with the text saying what it pays rather than what was measured? Recommend yes.
+26. **Seraphine, Volume Closed**: everything lands in one firing, and the record is paid out as damage (2d)? Recommend yes. The draft also says the target loses turn progress, which only the No Revision talent adds, so the player text will leave that out.
+27. **Altheon, Witness Script**: the rider at 35%, resolving before the blow it rides (2d)? Recommend yes.
+28. **Altheon, Immaculate Record**: a 3-round Subject, a 50% ceiling, and only Altheon's own blows recorded (2d)? Recommend yes.
 
-**One talent has no text at all, and it is a kit defect rather than a question.** Nysera's False
-Target answers her Link redirecting a blow, and aims its damage at the body the share came off.
-When the blow was aimed at Nysera, that body is Nysera, so the talent hits its own hero. Only its
-Energy half, taken off the attacker, does what the sentence describes. Describing it honestly
-would print a defect on the card, so it is pinned in `AbilityTextPinnedUnwritten` until the kit
-is repaired. Pinoy's sentence adds the damage to the redirected blow, which is the obvious
-repair.
+**Nysera's False Target has its text now, because its kit is repaired.** It used to aim its extra
+damage at the body the redirected share came off, which for a blow aimed at Nysera is Nysera, so the
+talent struck its own hero every time it fired. The damage now lands on the enemy her Link turns the
+blow onto, which is what Pinoy's sentence says, and the card reads: *When her Link turns an attack
+away from Nysera, the enemy it lands on takes extra damage and the attacker loses Energy.* Nothing is
+pinned as unwritten any more.
 
 ### 2g. Eleven sentences pass 3 of the engine gaps work rewrote
 
@@ -526,13 +527,17 @@ tags of that strike appear. The next action waits for the follow-through to fini
 attack clip is 2.0 to 2.4 seconds, so the beat stretches to the clip rather than the clip being cut
 to the beat.
 
-**`controlled` is wired and no shipped battle shows it yet.** Stun is the only status that takes a
-turn away, and the only Stun in content is Corin's Weight of Time, which needs the target at three
-stacks of his Settling. Settling lasts two rounds and he adds one stack per basic, so in practice it
-tops out at two: 1,400 simulated battles across six lineups built to favour it produced no Stun,
-and the highest Settling stack any of them recorded was two. That is a kit question
-rather than an art one, and the sheets are right to have been drawn; they will show the day a Stun
-can land.
+**`controlled` plays now, rarely.** Stun is the only status that takes a turn away, and the only
+Stun in content is Corin's Weight of Time, which stuns a target whose Settling is at its limit of
+three. Until defect pass 3 the limit could not be reached at any fight length: each stack of Settling
+kept its own two-round clock and he added one per basic, so the oldest expired as the newest landed,
+and 1,440 simulated battles across six lineups built to favour him produced no Stun and no stack
+above two. Settling now lasts two rounds from its latest stack, and Weight of Time settles it one
+step deeper before judging the limit, which is Pinoy's "8% each round, up to 24%" counted for the
+round Corin casts in as well. Over the same 1,440 battles a Stun lands in 41, about 3 in 100; in
+1,440 hero-against-hero duels, Corin on either side, it landed on a hero 45 times. **A hero's
+`controlled` sheet plays only when that hero is stunned, which needs Corin fighting on the other
+side**: the Proving or a friend duel. Everywhere else he stuns enemies.
 
 | hero | delivered | newly playing | still missing |
 |---|---|---|---|

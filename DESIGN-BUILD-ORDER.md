@@ -28,10 +28,11 @@ about reasoning.
 
 Two runs decide whether the tree is healthy, and they measure different things.
 
-- **`Tools/build-check.ps1`: 1 failure.** It lints the docs, compiles the core and the
-  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. The one red
-  is the talent coverage note under **Known bugs**, a standing instrument reporting a real reading
-  rather than a break. The campaign power-band guard and the geared curve's CEIL band are green. The
+- **`Tools/build-check.ps1`: 2 failures.** It lints the docs, compiles the core and the
+  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. Both reds
+  are under **Known bugs**: the talent coverage note, a standing instrument reporting a real reading
+  rather than a break, and Hale reading under the 5-star floor in the sweep arena since defect
+  pass 3 moved his Tracking Habit to round end, which is a balance call nobody has made yet. The campaign power-band guard and the geared curve's CEIL band are green. The
   balance line is Kael, Kiva, Isara, Adric and Orelle, and the pinned line the CEIL is read with is
   Kael, Aeron, Nereia, Seraphine and Isolde. ENGINE-GAPS pass 3 turned `buffsOnly` on, which took
   chapter 1's finale CEIL from 68% to 27% and four walls out of the power band, so
@@ -55,7 +56,7 @@ Two runs decide whether the tree is healthy, and they measure different things.
   (4,807 to 3,772), so the solver was run again on top of the hand move. It changed only chapter 2,
   and `2-12` reads x0.99. The solver and `build-check.ps1` compile the harness from the same file
   list now, `SummonTiming.cs`, `GuildDungeonChecks.cs` and `CloudChecks.cs` included.
-  **A 2nd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
+  **A 3rd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
 - **Doc lint is clean.** `Tools/doc-lint.ps1` scans 43 tracked markdown files and reports 122
@@ -140,6 +141,17 @@ returned before the other side's Taunt, Provoke and concealment**, which had bee
 aimed at an ally to the enemy Taunt holder. `attackCap` joined the fields `TalentMath.TryApplyDelta`
 changes. The harness sections ENGINE GAPS PASS 2 - FIDELITY and ENGINE GAPS PASS 3 prove all of it.
 
+**Defect pass 3 added, appended so no ordinal moved:** `TargetMode.RedirectDestination`, the body a
+redirected share lands on, which Nysera's False Target aims at instead of Nysera; and
+`EffectDef.RefreshStacks`, which makes a new stack refresh every stack its caster already holds on
+that body, so Corin's Settling can reach its limit of three and Weight of Time can stun. It repaired
+two rules: **a damage-shaped Ledger payout strikes the target it names** (`LedgerAutoReleaseTarget`),
+as a heal-shaped one always did, which had Darian's Hidden Strength striking Darian; and **five
+modes that name one body the engine already chose return before the Provoke and Taunt anchor on
+either side** - `BroadcastSubject`, `DefeatedUnit`, `ThresholdUnit`, `SwapAdvancedUnit` and
+`SwapDelayedUnit` - completing the own-side repair above. `CheckNoAbilityHitsItsOwnCaster` fails if
+any ability lands damage on its own caster without naming Self.
+
 ### Content
 
 Seven JSON files in `Assets/Resources/Content`. Balance and content changes go there, not into code.
@@ -181,9 +193,10 @@ passive1 with passive2 optional; 5 is the full kit including all three talents.
 
 **Every ability carries player-facing text with no number in it**, written to
 `Docs/ABILITY-TEXT-STYLE.md`: all 427 basics, actives, passives and talents on the 94 heroes, with
-31 exceptions. 30 are drafting notes whose sentence and kit still disagree, each a yes or no
-question in `Docs/PINOY-LIST.md` section 2f. One, Nysera's False Target, has no text because its
-damage half hits Nysera herself, which is a kit defect. `CheckAbilityTextIsPlayerFacing` enforces
+29 exceptions, all of them drafting notes whose sentence and kit still disagree, each a yes or no
+question in `Docs/PINOY-LIST.md` section 2f. Nothing is pinned as unwritten: Nysera's False Target,
+the last, has text since defect pass 3 repaired it to strike the enemy her Link turns a blow onto
+rather than Nysera herself. `CheckAbilityTextIsPlayerFacing` enforces
 it: a description that is empty, holds a digit or a percent sign, or reads as a drafting note fails,
 and so does a pinned exception that no longer applies. The card still does not show a description
 anywhere; the text is ready for whichever screen shows it first.
@@ -559,11 +572,13 @@ differs between them.
 
 ## In progress
 
-**`balance/rates-resolve`** carries the campaign re-solved against real summon rates, described
-under **The instruments**: `campaign.json`'s `recommendedPower` on 18 stages and the floor, ceiling
-and enemy levels under 16 of them, one hand move at `1-12`, the regenerated stage fingerprint baseline, the solver's file
-list, and this file. ENGINE-GAPS pass 3 has landed on `main` and is observable in the files;
-`Docs/ENGINE-GAPS.md` pass 3 is its record.
+**`engine/defect-pass-3`** carries four combat defects and the sweep for their shape: Nysera's False
+Target striking Nysera, Corin's Stun that could never land, Hale's Tracking Habit moving Quarry at
+the start of his turn rather than at round end, and the effects named by a broadcast or by the
+engine's own record that a Taunt holder could intercept. The engine, content, harness and
+documentation changes are described above as the files on that branch show them, and the three
+pinned baselines were regenerated as its last commit, from a fresh rebase on `main`. The campaign
+re-solve against real summon rates has landed on `main` and is described under **The instruments**.
 
 ## Next
 
@@ -752,9 +767,9 @@ instead and is named in the coverage note under **Known bugs**.
 
 ## Known bugs
 
-The one harness red first, then the rest.
+The two harness reds first, then the rest.
 
-1. **23 of 90 talents execute but are never observed doing anything** in the sweep arena. Each waits
+1. **24 of 90 talents execute but are never observed doing anything** in the sweep arena. Each waits
    on something that arena does not raise: a kill, a mark, a host passive resolving first, a
    particular matchup, a buff worth dispelling. Every one is named in the report with what it waits
    on. **20 of them are proved separately in the dark-talent arenas**, each built to raise its own
@@ -767,8 +782,29 @@ The one harness red first, then the rest.
    both hosts listen for an enemy gaining a buff; in the sweep the only "buff" either ever heard
    was their own Mark, and its enemies grant themselves none. Both are proved in their dark rooms.
    The three the dark rooms still do not reach are Aminah III, Brenna III and Caldus III.
+   **Defect pass 3 took it to 24: Hale II joined**, because Cornered rides Closing Radius's
+   missing-HP blow and, with Quarry moving at round end, Closing Radius found a Quarry on one of
+   Hale's five sweep casts rather than three. It is proved in its dark room, so 21 of the 24 are.
+2. **Hale reads x0.61 of the Marksman 5-star median in the sweep arena, under the floor of x0.78.**
+   Defect pass 3 moved his Tracking Habit to round end, as Pinoy wrote it, after measuring that at
+   the start of his turn 37% of its picks landed on an enemy that had dealt no damage yet and so
+   went to the front slot on the tie. His sweep output rests on five Closing Radius casts, and a
+   Quarry handed over at round end with a round left expires on a faster carrier's turn before two
+   of them. Over 1,440 campaign battles built around him his damage per battle is unchanged (7,869
+   against 7,838) and he wins slightly more. **Not retuned**: whether to raise his numbers, keep
+   him, or read the band over more than five casts is a balance call.
 
 Beyond the harness:
+
+- **Counterattacks still go to a Taunt holder.** Defect pass 3 swept every effect named by a
+  broadcast for the wrong-body shape and repaired the named-body modes; `LastAttacker` and
+  `LastTarget` it measured and left, because the engine documents the anchor outranking them as a
+  rule. Caldus's No Uncertain Ground still strikes the Taunt holder when the enemy that hit an ally
+  is not it (126 times in 240 campaign battles he fought in, 72 in his 20 sweep-arena runs), and
+  his Defined Duty and Jory's Worn Hinges do the same. Whether a counterattack answers to Taunt is
+  a rules decision rather than a defect.
+- **Marn's Relief After Loss healed an enemy once in 8,832 campaign battles**, because the
+  Coverguard it answers was on an enemy when it was spent. How the Guard got there was not traced.
 
 - **The Campaign chip row does not fit more than five chapters.** `CampaignScreen.BuildChipRow`
   sizes the row at 1600 units and `RefreshChips` gives every chip 300 units inside a 16-unit-spaced
