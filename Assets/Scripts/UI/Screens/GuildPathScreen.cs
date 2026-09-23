@@ -254,7 +254,9 @@ namespace Emberfall.UI.Screens
                                            owned ? Emberforge.TextGold : Emberforge.TextBody, TextAnchor.UpperLeft);
             UIBuilder.Box(name.rectTransform, 26f, -20f, NodeWidth - 236f, 36f, new Vector2(0f, 1f));
             // LINES KEEP TALENTS ran into its cost chip at full size; the name shrinks to fit instead.
+            // Best fit only shrinks text that cannot spill: wrapped, and truncated below one line.
             name.horizontalOverflow = HorizontalWrapMode.Wrap;
+            name.verticalOverflow = VerticalWrapMode.Truncate;
             name.resizeTextForBestFit = true;
             name.resizeTextMinSize = UITheme.FontTiny - 2;
             name.resizeTextMaxSize = UITheme.FontBody;
