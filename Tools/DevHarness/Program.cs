@@ -36,6 +36,8 @@ namespace Emberfall.DevHarness
             bool lineCalibration = false;
             bool tempoStudy = false;
             string tempoMode = null;
+            bool solvePrereqs = false;
+            string solvePrereqsMode = null;
             string reconcileStage = null, reconcileLevels = null;
             string only = null;
             string contentDir = null;
@@ -59,6 +61,16 @@ namespace Emberfall.DevHarness
                     if (i + 1 < args.Length && !args[i + 1].StartsWith("-") && !Directory.Exists(args[i + 1])) tempoMode = args[++i];
                     continue;
                 }
+                if (args[i] == "--solve-prereqs")
+                {
+                    solvePrereqs = true;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("-") && !Directory.Exists(args[i + 1])) solvePrereqsMode = args[++i];
+                    continue;
+                }
+                // Measurement only: every economy walk in the run fields the role-blind line it had
+                // before WantedLine, so the gate or a solve against a scratch copy of the content
+                // can be read against the old reference player.
+                if (args[i] == "--role-blind") { _walkRoleBlind = true; continue; }
                 if (args[i] == "--ceil-reconcile")
                 {
                     reconcile = true;
@@ -83,6 +95,8 @@ namespace Emberfall.DevHarness
             if (lineCalibration) return RunLineCalibration(contentDir);
             // Not a check either: the tempo study (TempoStudy.cs) measures and writes nothing.
             if (tempoStudy) return RunTempoStudy(contentDir, tempoMode);
+            // Nor this: the solve's prerequisites (SolvePrereqs.cs) measure and write nothing.
+            if (solvePrereqs) return RunSolvePrereqs(contentDir, solvePrereqsMode);
 
             Console.OutputEncoding = Encoding.UTF8;
             Line("EMBERFALL CORE HARNESS");
@@ -15636,6 +15650,8 @@ namespace Emberfall.DevHarness
             public int EntryBarePower;
             /// <summary>The deployed five at that instant, as "name tN LvL" for each.</summary>
             public string EntryLine = "";
+            /// <summary>The same five by hero id, for an instrument that rebuilds the line.</summary>
+            public string[] EntryIds = new string[0];
             /// <summary>Roster work done during this stage's sittings.</summary>
             public int Conversions, Ascensions, Swaps;
             /// <summary>Cumulative income ledger as it stood at that same instant.</summary>
@@ -15764,6 +15780,7 @@ namespace Emberfall.DevHarness
                 outcome.EntryBarePower = profile.TeamPower();
                 outcome.EntryRosterPower = DeployedRosterPowerAtLevelOne(profile, db.Balance);
                 outcome.EntryLine = DescribeLine(session);
+                outcome.EntryIds = profile.TeamHeroes().ConvertAll(h => h.DefId).ToArray();
                 outcome.EntryLedger = run.Ledger.Snapshot();
                 AttributeEntryLevels(run, outcome);
                 ProbeWallAtCap(db, session, outcome, stageIdx);

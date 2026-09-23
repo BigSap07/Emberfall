@@ -780,6 +780,21 @@ two arena-matrix reds and the power band, now at 1-6, 1-9 and 2-6), and four it 
 the retired 1-1 opener pin, armor's Rough slope, the CEIL band, and 16 of 20 non-fusing walks stuck.
 Each is listed with its cause in `CAMPAIGN-SPEC.md` 10.8.
 
+**`harness/solve-prereqs`** fixes the instruments the big solve reads, so that it is run once.
+It is based on `main` with `content/campaign-stages` merged, and holds:
+- **the reference player's line made role-sane**: `WantedLine` and `EconomyDeployLine` in
+  `Program.cs`;
+- **the three dead 1-1 pins retired** from `CheckCampaignMigrationRegression`;
+- **`--solve-prereqs`** (`Tools/DevHarness/SolvePrereqs.cs`), a measurement instrument that asserts
+  nothing;
+- **`Docs/SOLVE-PREREQS.md`**: what Speed's linear price costs each power-score consumer, with four
+  proposals for Matthias to pick from; the reference player's error per chapter; and every table
+  tuned against 24 stages, valued at stage 24 and at stage 72.
+
+It changes no content, no formula and no baseline. The build check reads **5 failures**, down from 7:
+the dead opener pin is retired, and `CheckFusionNeverGates` is green (0 of 20 walks stick). The
+power band still fails, but now reads all 72 stages, and 38 are out of band.
+
 **`balance/wall-resolve`** carries what the fusion spine left: target A re-measured by what bought
 each Level (open decision 4), the Striker pass that lifted Velis and Kiva together and emptied
 `KnownF8Exceptions` (**The star band**), the CEIL guard at 2,000 samples and the chapter 1 line

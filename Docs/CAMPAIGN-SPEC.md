@@ -1299,12 +1299,19 @@ was tuned.
 - "A normal player can clear the whole campaign". That reads the fusing walk, which runs x5 to x21
   over `recommendedPower` through chapters 3-6. Green, and meaningless until the solve.
 
+**Since, measured: 5 failures.** The reference player now fields a role-sane line
+(`SOLVE-PREREQS.md` item 2), and the retired pins are gone. Row 5 is retired. Row 9 is green: 0 of 20
+non-fusing walks stick. Row 8 is still red but now reads the whole campaign, because walk 1 no longer
+sticks at 2-12. **38 stages are out of band**: 1-6, 1-9, 2-6 (x1.227) and 2-12 (x1.202), and 34 in
+chapters 3 to 6. All 34 are **over** the band, because the reference player arrives richer than the
+carried chapter 2 seeds ask. Rows 3, 4, 6 and 7 read as before.
+
 **For the solve job, in order.**
 1. Settle the reward curve past chapter 2 (10.3) together with the fusion tension. The flat plateau
    is a placeholder, and the solver never touches a purse.
 2. Run `pwsh Tools/solve-recommended-power.ps1`. It will seed every level from the new
    `recommendedPower`.
-3. Re-pin or retire row 5.
+3. ~~Re-pin or retire row 5.~~ Retired (`SOLVE-PREREQS.md` item 3). Consider a tutorial band instead.
 4. Decide armor's slope (row 6).
 5. Regenerate the fingerprints last.
 
