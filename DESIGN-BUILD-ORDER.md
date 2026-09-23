@@ -351,7 +351,10 @@ chosen.
 `ReportPowerSources` splits the simulated player's power into roster, levels and armor at `2-1` and
 at `2-12` and counts every channel a coin arrives through, because "where does the power come from"
 had only ever been answered by reading the content files, and reading them got it wrong. At `2-12`
-idle income is 85.7% of all gold earned and 52.9% of all power.
+idle income is 86% of all gold earned and 56.3% of all power.
+
+`ReportPaceTargets` grades the shape the campaign is meant to have against the one it has, and is
+reported rather than failing because both of its targets wait on fusion. See open decision 4.
 
 ### The campaign power curve, and the walls
 
@@ -593,17 +596,17 @@ In order.
 
 ## Open decisions
 
-Three. None of them is a number to nudge, and neither the economy question nor the power-band one
+Four. None of them is a number to nudge, and neither the economy question nor the power-band one
 that used to head this list is still here. The five-star review closed four more - the three
 5-star kit questions and the low-tier Energy one - and the Dispel repair closed the Dispel one,
 which was open decision 3, all recorded below. The numbers on the three that remain were reassigned
 when it closed, so the Hub rail is number 3 now.
 
-**The economy decision is resolved.** It read "a simulated player arrives at every stage between
-1.55 and 3.2 times its `recommendedPower`, and either progression is too fast or the targets are
-too low". It was both, and both halves were answered: the economy pass slowed income and the level
-cost, and the campaign-curve pass re-derived the whole `recommendedPower` table under the shortened
-chapter 1 ladder.
+**The economy decision is resolved, and what replaced it is open decision 4.** The economy and
+curve passes, and the retune after them, put a simulated player's first attempt at x1.14 to x1.21 of
+`recommendedPower` on every ordinary stage and x0.98 to x1.02 on the four walls, with every banded
+stage inside its band. The entry ratio is no longer the question. What the player's power is made of
+is.
 
 **And so is the power-band one.** It read "the guard is red on six stages, all of them over and all
 of them marginal", and the cause was the roster rather than the tuning: the curve had been derived
@@ -707,6 +710,36 @@ instead and is named in the coverage note under **Known bugs**.
    either way; a right-hand rail is what the brief asked for, so which of the two rules wins is not
    the layout's call. The other two ways out are repainting the right 7% as landscape, or accepting
    it.
+4. **The campaign is a gold-into-levels treadmill, and the targets that say how far off it is are
+   not settled.** At the first attempt of `2-12` the POWER SOURCES block reads levels 65.5% of team
+   power, roster 20.4% and armor 14.1%, and 86% of the gold that bought those levels is idle income.
+   The intended shape is roster-led with levels as a top-up, the way an ascension-gated idle RPG
+   works, and fusion is meant to deliver it. `ReportPaceTargets` grades two targets on every run,
+   **reported and never failing**, because they will read off until fusion lands:
+   - **A, the power mix at the last stage: levels under 35%, roster over 50%.** It is graded on a
+     multiplicative split rather than on POWER SOURCES' blocks, because `StatMath.Build` multiplies
+     level growth and the star multiplier together: the additive roster share is about
+     `1 / (1 + 0.115 * (L - 1))` whatever the stars are, so fusion could never move it. The split
+     used is roster (the deployed line at Lv1 over the starting line at Lv1), levels (bare power
+     over the line at Lv1) and armor, each as its log share of the growth since `1-1`. It reads
+     levels 71.3%, roster 21.1%. Meeting both at today's levels needs the deployed line at Lv1 to
+     be x12.4 the starting line; it is x1.53.
+   - **B, wall cost: a chapter finale costs 2 to 4 sittings beyond its own ladder floor.** Both
+     finales read 0, two short. This grades the same table as open decision 1.
+
+   **What is open is whether these are the right targets.** Fusion as `DESIGN-HERO-FUSION` specifies
+   it produces a 5-star, the top tier the star multiplier has, and the line the balance pass fields
+   is three 5-stars, a 4-star and a 3-star; swapping in a better body costs its levels, so the
+   simulated player never does. Fusion to five stars can lift the Lv1 line by about 15%, not
+   by the x8 that target A asks for, so A is reachable only if fusion or an ascension track goes
+   above five stars with multipliers far past today's x1.34, or if the level cap is gated by stars
+   rather than by account rank. That is a decision for the fusion spec, not for a tuning pass. On
+   B, chapter 1's wall band was set at x1.00 to x1.05 precisely so a chapter 1 wall clears on the
+   next claim rather than two days later, which is one extra sitting; 2 to 4 contradicts it on
+   `1-12`, and a finale at x0.98 costs nothing today, so B may not be reachable inside the wall
+   band the curve check enforces. **The proposal is to keep A on the multiplicative split and let
+   the fusion spec say which of the two levers it pulls, and to grade B at 1 to 2 on chapter 1's
+   finale and 2 to 4 from chapter 2 on**, pending the playtests open decision 1 already calls for.
 
 ## Known bugs
 

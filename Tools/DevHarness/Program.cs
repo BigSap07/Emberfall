@@ -188,6 +188,7 @@ namespace Emberfall.DevHarness
             EconomyRun economy = RunCampaignBalancePass(content);
             ReportPowerSources(content, economy);
             CheckCampaignPowerCurve(content, economy);
+            ReportPaceTargets(economy);
             CheckEconomyRespondsToIncome(content);
             // After all of them, because it asserts on what they actually resolved
             // while running - the economy responsiveness probe included.
@@ -15956,10 +15957,8 @@ namespace Emberfall.DevHarness
                 if (o.Stage == null) continue;
                 if (BandKindOf(o.Stage, i).StartsWith("wall") == false) continue;
 
-                int ladder = Math.Max(1, o.Stage.WaveCount) * Math.Max(1, o.Stage.BattleCount);
-                int floorSittings = (ladder + EconomySessionBattleBudget - 1) / EconomySessionBattleBudget;
-                int extra = o.Sessions - floorSittings;
-                if (extra < 0) extra = 0;
+                int ladder, floorSittings;
+                int extra = WallExtraSittings(o, out ladder, out floorSittings);
                 float extraHours = extra * (EconomyAwaySeconds / 3600f);
 
                 Line("    " + o.Stage.DisplayCode.PadRight(6)
@@ -15975,6 +15974,144 @@ namespace Emberfall.DevHarness
             }
             Line("    extra hours counts the gap between sittings, which is where the idle income that"
                  + " resolves a wall is actually earned.");
+        }
+
+        /// <summary>What a stage cost ON TOP of its own ladder floor, in sittings. The EXTRA column
+        /// of the wall resolution table, and the number pace target B grades.</summary>
+        private static int WallExtraSittings(EconomyStageOutcome o, out int ladder, out int floorSittings)
+        {
+            ladder = Math.Max(1, o.Stage.WaveCount) * Math.Max(1, o.Stage.BattleCount);
+            floorSittings = (ladder + EconomySessionBattleBudget - 1) / EconomySessionBattleBudget;
+            int extra = o.Sessions - floorSittings;
+            return extra < 0 ? 0 : extra;
+        }
+
+        // ---------------------------------------------------------------- the pace targets
+
+        private const float PaceLevelShareMax = 0.35f;
+        private const float PaceRosterShareMin = 0.50f;
+        private const int PaceFinaleExtraMin = 2;
+        private const int PaceFinaleExtraMax = 4;
+
+        /// <summary>
+        /// THE SHAPE THE CAMPAIGN IS MEANT TO HAVE, graded against the shape it has. REPORTED, NOT
+        /// FAILING, and that is the point rather than a softening: both targets wait on fusion,
+        /// which is not built, so they will read off for months. A red that everybody expects
+        /// teaches nobody anything and hides the one that matters. No Check in here, ever; when
+        /// fusion lands and a target starts reading met, that is the time to decide whether it
+        /// becomes a guard.
+        ///
+        /// TARGET A, THE POWER MIX, at the last stage of the walk: roster-led, levels a top-up.
+        /// Levels under 35% of the growth, roster over 50%.
+        ///
+        /// IT IS GRADED ON A MULTIPLICATIVE SPLIT, NOT ON POWER SOURCES' BLOCKS, and the reason is
+        /// StatMath.Build: HP, attack and defense are base * (1 + growth * (L - 1)) * StarMultiplier.
+        /// POWER SOURCES calls the team at Lv1 "roster" and the rest of the bare power "levels", so
+        /// the roster's share of bare power is about 1 / (1 + growth * (L - 1)) WHATEVER THE STARS
+        /// ARE. A star multiplier scales both blocks together. Fusion could double every hero's
+        /// rarity and that share would not move, so a target on it could only ever be met by not
+        /// levelling. Graded there, it would be a level cap wearing a fusion target's name.
+        ///
+        /// The split used instead is three factors that multiply to exactly the growth in team
+        /// power since 1-1: roster (the deployed line at Lv1 now, over the starting line at Lv1),
+        /// levels (bare power over the line at Lv1) and armor (effective power over bare). Each
+        /// block's share is its log over the log of the whole. Fusion raises the first factor and
+        /// nothing else, which is what a target for fusion has to be able to see. The additive
+        /// reading is printed beside it so the two can be compared on every run.
+        ///
+        /// TARGET B, WALL COST: a chapter finale costs 2 to 4 sittings beyond its own ladder floor,
+        /// which is the EXTRA column of the wall resolution table. Finales only (StageDef.IsBoss);
+        /// the mid-chapter walls are not graded.
+        /// </summary>
+        private static void ReportPaceTargets(EconomyRun run)
+        {
+            Line("");
+            Line("PACE TARGETS (reported, not failing - both wait on fusion, which is not built)");
+
+            EconomyStageOutcome first = null, last = null;
+            for (int i = 0; i < run.Stages.Count; i++)
+            {
+                if (run.Stages[i].Stage == null) continue;
+                if (first == null) first = run.Stages[i];
+                last = run.Stages[i];
+            }
+            if (first == null || first.EntryRosterPower <= 0 || last.EntryRosterPower <= 0
+                || last.EntryBarePower <= 0 || last.EntryPower <= 0)
+            {
+                Line("  the walk produced no stage to grade.");
+                Line("");
+                return;
+            }
+
+            // ---- A
+            double rosterLog = Math.Log(last.EntryRosterPower / (double)first.EntryRosterPower);
+            double levelLog = Math.Log(last.EntryBarePower / (double)last.EntryRosterPower);
+            double armorLog = Math.Log(last.EntryPower / (double)last.EntryBarePower);
+            double totalLog = rosterLog + levelLog + armorLog;
+            float rosterShare = totalLog > 0 ? (float)(rosterLog / totalLog) : 0f;
+            float levelShare = totalLog > 0 ? (float)(levelLog / totalLog) : 0f;
+            float armorShare = totalLog > 0 ? (float)(armorLog / totalLog) : 0f;
+
+            Line("");
+            Line("  A. power mix at first attempt of " + last.Stage.DisplayCode + ": levels under "
+                 + Pct(PaceLevelShareMax) + ", roster over " + Pct(PaceRosterShareMin) + " of the growth since "
+                 + first.Stage.DisplayCode + ".");
+            Line("     team power x" + Fmt((float)Math.Exp(totalLog)) + " since " + first.Stage.DisplayCode
+                 + " = roster x" + Fmt(last.EntryRosterPower / (float)first.EntryRosterPower)
+                 + "  *  levels x" + Fmt(last.EntryBarePower / (float)last.EntryRosterPower)
+                 + "  *  armor x" + Fmt(last.EntryPower / (float)last.EntryBarePower)
+                 + "   (armor " + Pct(armorShare) + ", ungraded)");
+            PaceLine("levels", Pct(levelShare), "under " + Pct(PaceLevelShareMax), levelShare < PaceLevelShareMax,
+                     "must fall " + Points(levelShare - PaceLevelShareMax));
+            PaceLine("roster", Pct(rosterShare), "over " + Pct(PaceRosterShareMin), rosterShare > PaceRosterShareMin,
+                     "must rise " + Points(PaceRosterShareMin - rosterShare));
+
+            // The roster factor that would meet both at today's levels and armor. Roster over half
+            // means R > level + armor; levels under the cap means R > level / cap - level - armor.
+            double needLog = Math.Max(levelLog + armorLog, levelLog / PaceLevelShareMax - levelLog - armorLog);
+            Line("     At today's levels and armor, both are met when the deployed line at Lv1 is x"
+                 + Fmt((float)Math.Exp(needLog)) + " the starting line; it is x"
+                 + Fmt(last.EntryRosterPower / (float)first.EntryRosterPower) + ".");
+
+            float total = last.EntryPower;
+            Line("     Not graded, for comparison: POWER SOURCES' additive blocks read levels "
+                 + Pct((last.EntryBarePower - last.EntryRosterPower) / total) + ", roster "
+                 + Pct(last.EntryRosterPower / total) + ". Stars scale both of those blocks alike, so");
+            Line("     fusion cannot move that reading; see ReportPaceTargets for why A is graded as above.");
+
+            // ---- B
+            Line("");
+            Line("  B. wall cost: a chapter finale costs " + PaceFinaleExtraMin + " to " + PaceFinaleExtraMax
+                 + " sittings beyond its own ladder floor (EXTRA, above).");
+            int finales = 0, finalesMet = 0;
+            for (int i = 0; i < run.Stages.Count; i++)
+            {
+                EconomyStageOutcome o = run.Stages[i];
+                if (o.Stage == null || !o.Stage.IsBoss) continue;
+                int ladder, floorSittings;
+                int extra = WallExtraSittings(o, out ladder, out floorSittings);
+                bool met = o.Cleared && extra >= PaceFinaleExtraMin && extra <= PaceFinaleExtraMax;
+                string gap = !o.Cleared ? "never cleared"
+                           : extra < PaceFinaleExtraMin ? (PaceFinaleExtraMin - extra) + " sitting(s) short"
+                           : extra > PaceFinaleExtraMax ? (extra - PaceFinaleExtraMax) + " sitting(s) over"
+                           : "";
+                PaceLine(o.Stage.DisplayCode, extra.ToString(), PaceFinaleExtraMin + "-" + PaceFinaleExtraMax, met, gap);
+                finales++;
+                if (met) finalesMet++;
+            }
+            Line("     " + finalesMet + " of " + finales + " finale(s) inside the target.");
+            Line("");
+        }
+
+        private static void PaceLine(string what, string shown, string target, bool met, string gap)
+        {
+            Line("  [pace] " + what.PadRight(7) + " now " + shown.PadLeft(6) + "   target " + target.PadRight(10)
+                 + (met ? "   met" : "   off   " + gap));
+        }
+
+        private static string Points(float fraction)
+        {
+            return (fraction * 100f).ToString("0.0", CultureInfo.InvariantCulture) + " points";
         }
 
         // ==================================================================== the recPwr solver
