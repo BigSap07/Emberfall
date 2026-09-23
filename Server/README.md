@@ -26,11 +26,14 @@ project owner:
    `guild_dungeon_submit` (one level for every line, floors that open as the guild clears
    them), and `guild_share_attempt`, which puts an attempt into guild chat as a playable card.
    Additive to `0007`, and re-appliable the same way.
+9. `0009_revoke_guild_dungeon_record.sql` - takes `guild_dungeon_record` away from clients, so
+   `guild_dungeon_submit` is the only way an attempt is written. Applied to the live project by
+   hand first; the file is the record of it.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0008` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0009` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
 after a half-finished run, is a no-op rather than a failure to unpick.
 
