@@ -45,7 +45,9 @@ per note, and it shrinks as answers arrive. **2g** is eleven sentences the engin
 rewrote when it made the kits do what they say, each one to confirm. **2h is the newest**: the eight
 talents the arena matrix found the old talent sweep had counted on nothing but their own
 announcement, each with what it does in normal play. One of them, Aeron's Interest Owed, needs an
-answer.
+answer. **2i** is the dead-clause pass. It covers the clauses that fire and do nothing, or never do
+anything, in normal play. Each is sorted as an ordering bug (two fixed), an engine gap, or an
+authoring problem. It also holds two cards that describe something the kit does not do.
 
 ---
 
@@ -451,7 +453,98 @@ differs, its announcement excluded.
 
 **Aeron's is the only one of the eight that cannot work as written**, and it is the only one of
 the eight that needs an answer. Velis's works and is close to invisible. The other six work in
-normal play, and the sweep simply could not show it.
+normal play, and the sweep simply could not show it. The dead-clause pass (2i) confirmed it.
+
+### 2i. The dead-clause pass: what was an ordering bug, and what was not
+
+Every clause below either fired and changed nothing, or never did anything, in normal play. This
+pass sorted them into three kinds: **an ordering bug in the engine, fixed here**; **an engine gap,
+not opened here**; or **an authoring problem, which is Pinoy's**. No sentence was reworded and no
+kit was edited. `heroes.json`, `balance.json`, `campaign.json` and the enemy data are untouched.
+
+**MEASURED** means read from a run on this tree. **READ** means read from the code or the content
+and not run. "Normal play" is the arena matrix's `EMBERFALL_MATRIX_NORMAL=both` reading: the pinned
+line and the balance line, each with the hero in it, levelled and geared to every shipped stage's
+recommended power, 12 battles a stage at two seeds. That is 1,152 battles. A battle **changes** when
+the fight without the rule differs from the fight with it, the rule's own announcement excluded.
+`EMBERFALL_MATRIX_NORMAL_RULES` names the rules to read, and a tally to count beside each.
+
+#### Three ordering bugs, two fixed in the engine and one that was not an ordering bug
+
+| clause | cause | before (MEASURED) | after (MEASURED) |
+|---|---|---|---|
+| **Kora**, First Opening | The condition subject `LastTarget` was moved by every effect that landed, including the self-advance that closes Kora's basic. So First Opening always asked whether *Kora* had acted this round. **Fixed:** an effect that lands on the caster or an ally no longer moves it (`ResolveAbility` in `CombatSimulation.cs`). | fires 4,112 times, lands 0 extra blows, changes 0 battles | fires 4,060 times, lands 649 extra blows, changes 325 battles. In the matrix room `s_frail_big` it lands 19. |
+| **Brenna**, Survival of the Stubborn | Brenna's own Lasting Guard has one charge. `DealRawDamage` spends that charge and removes the Guard on the killing blow, and only then raises `OnAllyWouldDie`. So "an ally holding Lasting Guard" was never true for the Guard the sentence names. **Fixed:** inside that window, a question about the dying ally's Guard is answered as the blow found it (`SpentByLethalBlow`). The charge still cut the blow. | fires 2 times, changes 0 battles, 0 ally deaths prevented | fires 29 times, changes 27 battles, 8 fewer ally deaths |
+| **Brenna III**, What Held Once | waits on the save above | 2 Resolve banked, changes 2 battles | 26 Resolve banked, changes 26 battles |
+| **Finn**, Ringing Toll | **Not an ordering bug: an authoring problem.** Every active costs 100 Energy and every bar holds 100 (READ: `balance.json` and every `energyCost` in the content). A cast empties the bar, so a flat Energy loss at the moment of casting is erased by the spend, whether it lands before or after. | fires 2,898 times, changes 0 battles; in `s_caster_tail` all 5 firings land on an empty bar | **Experiment, not shipped:** with the toll raised *before* the spend, 0 of those 5 firings land on an empty bar. Across 1,152 battles, ally deaths, enemy deaths, rounds and enemy Energy lost are all identical. The only difference is one extra Energy event on 426 battle records. |
+
+**Finn needs an answer from Pinoy.** One option is a loss the bar carries past the cast, which the
+game's `Disrupted` already does to the next Energy gain. Another is a cast that fails when its bar
+drops below the cost. The third is to drop the toll: No Quiet Moment already takes Energy off every
+Ringing enemy.
+
+**Kora's clause works now, and it costs slightly more than it gives** (MEASURED, 1,152 battles). With
+First Opening landing, the line loses 9 more allies and kills 11 fewer enemies, and enemies gain
+2,022 more Energy. An enemy that has not acted yet is hit a second time and banks Energy from being
+hit before its turn comes. Pinoy's sentence, "10% more damage" on the blow already landing, would
+not feed that bar a second time. This is the same approximation 2b already lists for Kora, now
+measured. It also moves one guild guardrail: in guild 3 floor 4 (Attrition, `no_legends`), the line
+Kora, Tomas, Ulric, Yara, Arno used to win in 9 rounds and now loses in 10. That drops the "3 stars
+or fewer" group from 3 of 12 clears to 2 of 12, under the 25% floor. That check is red on this
+branch because of this fix, and nothing was retuned to hide it.
+
+**The fourth clause, and the rest of each trap.**
+
+- **Kora's trap had a fourth victim: Velis, Denied Return.** Its Energy and its second strike were
+  gated on "`LastTarget` below 40% HP", read after an Energy gain on Velis herself. So they asked
+  about *Velis's* HP. The same fix mends it. MEASURED: 6,777 blows before, 8,358 after, in 1,152
+  battles.
+- READ, same shape, and MEASURED unchanged in normal play:
+  - Oris's Unfinished Note: its Speed rider after the Self `RemoveStatus`.
+  - Edrin's Still Here: its Energy after the Ward on an ally.
+  - Talren's Redirecting Shot and Vaelis's Leaving Cut: they read the register after a Self rider,
+    but their later gate repeats the earlier one, so either body answers the same.
+  - Only Brenna's fingerprints moved in the hero sweep.
+- **Brenna's trap: no other clause.** READ: every other would-die save asks about a status the blow
+  does not spend. Marrow, Isara and Marrow III ask about a Mark or Resolve, Nereia asks about Covered,
+  Maren about Regen, Rusk about Guard Up. Eira's Leave No Corner reads Guard after a blow, but Mobile
+  Cover is a per-round budget, so the blow never removes it. Her dark gate is the other one, and it
+  stays UNRAISED.
+- **Finn's trap: no other clause.** READ: the only other clause on `OnEnemyActive` is Merek's
+  Priority Inversion, which advances an ally and never touches the caster's bar.
+
+#### The rest, one line each
+
+| clause | normal play (MEASURED) | verdict |
+|---|---|---|
+| **Aeron I**, Interest Owed | fires 20,018 times, lays 0 Mire, changes 0 of 1,152 | **Authoring, confirmed.** READ: `RepayTurnDebt` clears every Turn Debt as the debtor's turn *opens*, and only Aeron's basic and active bank debt, so no enemy ever ends a turn carrying it. Moving the repayment would contradict Aeron's own basic ("repays at the start of its turn") and Unpaid Action, which reads that repayment when the same turn ends. The question in 2h stands. |
+| **Mireth II**, Blank Space | changes 0 | **Authoring.** It pays only when The Missing Page spends a full set of three Pages. The Missing Page fires 81 times and banks 80 Pages in 1,152 battles, about one in each battle it fires in. |
+| **Nadine**, Proper Place | fires 0 | **Authoring, reachability.** It needs an enemy that hides itself. READ: none of the 10 enemy types the campaign fields applies Stealth. It works in `m_hider_tail`. The new enemy roster may change this. If it still has no hider, Pinoy should choose between a sentence and an enemy. |
+| **Vaelis II**, Stolen Position | changes 0 | **Authoring.** The talent only lowers how many buffs Passed Position moves, from ten to two. It is a limit, never a gain. In 1,386 casts no Departure enemy held more than two buffs, so it never applied. |
+| **Velis**, What Was Taken | fires 0 | **Authoring.** It needs three Remnants, and one Remnant comes from each heal Hollowed converts. Since 2g, Hollowed converts one heal and is spent. Velis stores 13 Remnants across 1,152 battles. It works in `s_mender` at seed 5. |
+| **Velis III**, Final Denial | changes 0 | **Authoring**: it is added to What Was Taken, so it waits on the same three Remnants. |
+| **Arno**, Rubble Resolve | fires 4,135 times, 0 Attack Up, changes 0 | **Authoring, reachability; also an engine gap not opened.** READ: no campaign enemy carries a Ward, so the gate is never true. It works in `m_warder_tail`. Against a Ward that the blow *breaks*, which is Pinoy's actual sentence, it still waits on `Docs/ENGINE-GAPS.md` group 32: a break is heard only on the side that lost the Ward. |
+| **Hale**, No Safe Distance, against an enemy that hides itself | fires 691 times, changes 0 | **Authoring, reachability.** It fires on any enemy buff, and no campaign enemy hides itself (READ, as for Nadine). Works in `m_hider_tail`. |
+| **Hale**, No Safe Distance, against an enemy that Wards itself | fires 0 | **Authoring, reachability.** Nothing in the campaign ever gains a Ward: 0 firings of `OnEnemyShielded` in 1,152 battles. Works in `m_warder_tail`. |
+| **Brenna I**, Memory of Every Blow | changes 44 of 1,152 before this pass, 45 after | **Authoring (a number).** It raises the cap on Stand Again's Memory. Memory records what one Guard charge prevented, 18% of one hit, against a cap of 8% of Max HP. So the cap binds only on a single hit worth more than about 44% of the ally's Max HP. The earlier pass's 43 in 29,016 fights is READ from `DESIGN-BUILD-ORDER.md`. |
+
+#### Two cards that say what the kit does not do
+
+These are content edits. They belong here rather than in `heroes.json`, because the card text is
+Pinoy's.
+
+- **Nadine, Hold the Line.** The card says it "holds it in place". The kit dropped that clause (2b),
+  and the active only marks the target and makes it take more damage from Nadine.
+  `Docs/DECISIONS-OPEN.md` W3 already proposes: *"Strikes the front enemy and marks it; while the
+  mark lasts, it takes more damage from Nadine."*
+- **Caldus, No Uncertain Ground.** The card says Caldus "strikes it", meaning the Declared Target
+  that hit the ally. The strike aims at `LastAttacker`, and the engine's Taunt anchor outranks that
+  mode, so while an enemy holds Provoke, the strike lands on that enemy instead. READ from
+  `DESIGN-BUILD-ORDER.md`: 126 times in 240 campaign battles. **The Taunt rule stays; the card is
+  wrong.** Proposed: *"When his Declared Target damages another ally, Caldus strikes back and gains
+  Energy, and the ally it hit gains a Ward worth a share of Caldus's Max HP. An enemy with Provoke
+  draws the strike."* READ from `DESIGN-BUILD-ORDER.md`: Caldus's Defined Duty and Jory's Worn
+  Hinges have the same Provoke behaviour. Their cards need the same answer.
 
 ---
 

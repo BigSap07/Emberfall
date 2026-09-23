@@ -1151,7 +1151,9 @@ namespace Emberfall.Core.Data
         LastAttacker,
 
         /// <summary>
-        /// The last unit that an effect in the current ability resolved against. Set after each
+        /// The last unit ON THE OTHER SIDE that an effect in the current ability resolved against:
+        /// an effect landing on the caster or an ally leaves it where it was, so a Self rider
+        /// between the blow and the gate cannot turn the question onto the caster. Set after each
         /// effect's per-target loop, cleared at the boundary of an ability a unit CHOSE - a Basic
         /// or an Active - so it cannot leak across turns. Lets a Self-targeted effect (EnergyGain,
         /// Heal, GainResolve) condition on the state of whatever the prior effect in the same
