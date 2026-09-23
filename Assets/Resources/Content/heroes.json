@@ -1231,9 +1231,14 @@
               "kind": "EnergyGain",
               "target": "BroadcastSource",
               "flat": -5
+            },
+            {
+              "kind": "Heal",
+              "target": "Self",
+              "power": 0.25
             }
           ],
-          "description": "When Marrow takes damage on an ally’s behalf, the attacker loses Energy."
+          "description": "When Marrow takes damage on an ally's behalf the attacker loses Energy, and the vow closes part of the wound it cost him."
         },
         "talentIII": {
           "id": "marrow_no_withdrawal",
@@ -1244,33 +1249,15 @@
             {
               "kind": "Damage",
               "target": "LowestHpEnemy",
-              "power": 1.05,
-              "condition": "StatusStacksAtLeast",
-              "conditionStatus": "Resolve",
-              "conditionValue": 1,
-              "conditionOn": "Caster"
+              "power": 0.7
             },
             {
               "kind": "Heal",
               "target": "LowestHpAlly",
-              "power": 0.55,
-              "condition": "StatusStacksAtLeast",
-              "conditionStatus": "Resolve",
-              "conditionValue": 1,
-              "conditionOn": "Caster"
-            },
-            {
-              "kind": "RemoveStatus",
-              "target": "Self",
-              "status": "Resolve",
-              "hits": 10,
-              "condition": "StatusStacksAtLeast",
-              "conditionStatus": "Resolve",
-              "conditionValue": 1,
-              "conditionOn": "Caster"
+              "power": 0.45
             }
           ],
-          "description": "After Promise Survives saves an ally, Marrow immediately strikes the lowest-HP enemy and heals the lowest-HP ally."
+          "description": "Whenever an ally is about to fall, Marrow strikes the enemy nearest to falling himself and mends the ally closest to going with them."
         }
       }
     },
@@ -4056,30 +4043,18 @@
               "effect": {
                 "kind": "Damage",
                 "target": "HighestAttackEnemy",
+                "power": 1.6,
                 "condition": "StatusStacksAtLeast",
+                "conditionOn": "Caster",
+                "conditionStatus": "Resolve",
+                "conditionValue": 2,
                 "condition2": "SubjectIsNotMyPreviousTarget",
-                "conditionOn": "Caster",
                 "conditionOn2": "Target",
-                "conditionStatus": "Resolve",
-                "conditionValue": 3,
-                "consumesResolve": true,
-                "power": 0.7
-              }
-            },
-            {
-              "ability": "basic",
-              "effect": {
-                "kind": "RemoveStatus",
-                "target": "Self",
-                "condition": "LacksStatus",
-                "conditionOn": "Caster",
-                "conditionStatus": "Resolve",
-                "hits": 10,
-                "status": "CritDamageUp"
+                "consumesResolve": true
               }
             }
           ],
-          "description": "When Redirecting Shot strikes a new target at full Route, it deals additional damage and spends all Route, which also clears the Crit Damage Up it built."
+          "description": "Redirecting Shot needs less Route behind it to break open, and when it does it deals a great deal more damage and spends all the Route it took to get there."
         },
         "talentII": {
           "id": "talren_dual_record",
@@ -4118,66 +4093,30 @@
           "trigger": "OnStackThreshold",
           "counterIndex": 2,
           "stackThresholdStatus": "Resolve",
-          "stackThresholdCount": 2,
+          "stackThresholdCount": 1,
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "Damage",
               "target": "AllEnemies",
-              "condition": "StatusStacksAtLeast",
-              "condition2": "HasMyMark",
-              "conditionOn": "Caster",
-              "conditionOn2": "Target",
-              "conditionStatus": "Resolve",
-              "conditionStatus2": "MarkAlt",
-              "conditionValue": 1,
-              "power": 0.35
+              "power": 1.0,
+              "condition": "HasMyMark",
+              "conditionStatus": "MarkAlt",
+              "conditionOn": "Target"
             },
             {
               "kind": "Damage",
               "target": "AllEnemies",
-              "condition": "StatusStacksAtLeast",
-              "condition2": "HasMyMark",
-              "conditionOn": "Caster",
-              "conditionOn2": "Target",
-              "conditionStatus": "Resolve",
-              "conditionStatus2": "MarkAlt",
-              "conditionValue": 2,
-              "power": 0.35
-            },
-            {
-              "kind": "Damage",
-              "target": "AllEnemies",
-              "condition": "StatusStacksAtLeast",
-              "condition2": "HasMyMark",
-              "conditionOn": "Caster",
-              "conditionOn2": "Target",
-              "conditionStatus": "Resolve",
-              "conditionStatus2": "MarkAlt",
-              "conditionValue": 3,
-              "power": 0.35
-            },
-            {
-              "kind": "RemoveStatus",
-              "target": "Self",
-              "condition": "StatusStacksAtLeast",
-              "conditionOn": "Caster",
-              "conditionStatus": "Resolve",
-              "conditionValue": 1,
-              "hits": 10,
-              "status": "Resolve"
-            },
-            {
-              "kind": "RemoveStatus",
-              "target": "Self",
-              "condition": "LacksStatus",
-              "conditionOn": "Caster",
-              "conditionStatus": "Resolve",
-              "hits": 10,
-              "status": "CritDamageUp"
+              "power": 0.6,
+              "condition": "HasMyMark",
+              "conditionStatus": "MarkAlt",
+              "conditionOn": "Target",
+              "condition2": "HpBelow",
+              "conditionValue2": 0.3,
+              "conditionOn2": "Target"
             }
           ],
-          "description": "Every second time a recorded target is struck, Talren strikes every recorded enemy once for each Route he holds, then spends all Route and the Crit Damage Up it built."
+          "description": "Each time a recorded target is struck, Talren looses an arrow at every enemy he has recorded, and a second at any of them near the end."
         }
       }
     },
@@ -9732,44 +9671,21 @@
           "id": "oris_open_ending",
           "name": "Open Ending",
           "trigger": "AfterBasicAttack",
-          "limit": "EveryNRounds",
-          "limitRounds": 2,
+          "limit": "OncePerRound",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "Damage",
               "target": "LastTarget",
-              "condition": "StatusStacksAtLeast",
-              "conditionCounterIndex": 3,
-              "conditionOn": "Caster",
-              "conditionValue": 1,
-              "consumesResolve": true,
-              "counterIndex": 3,
-              "power": 0.9
-            }
-          ],
-          "appends": [
+              "power": 0.85
+            },
             {
-              "ability": "basic",
-              "effect": {
-                "kind": "GainResolve",
-                "target": "Self",
-                "counterIndex": 3,
-                "duration": 2,
-                "maxStacks": 1,
-                "condition": "HasStatus",
-                "conditionStatus": "MarkAlt",
-                "conditionOn": "Caster",
-                "condition2": "StatusStacksAtLeast",
-                "conditionCounterIndex2": 2,
-                "conditionValue2": 2,
-                "conditionOn2": "Caster"
-              },
-              "atIndex": 8
+              "kind": "EnergyGain",
+              "target": "LastTarget",
+              "flat": -8
             }
           ],
-          "description": "After the first altered strike of No Fixed Refrain, Oris strikes the last enemy he hit again. It cannot happen again for a while.",
-          "chargeOnLanding": true
+          "description": "Once a round, Oris's basic attack runs on one beat longer: he strikes the same enemy again and takes Energy off it."
         }
       }
     },
@@ -12823,24 +12739,31 @@
         "talentII": {
           "id": "velis_starve_the_light",
           "name": "Starve the Light",
-          "trigger": "OnFunnelConvertFired",
+          "trigger": "OnEnemyHealed",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "EnergyGain",
               "target": "BroadcastSubject",
-              "flat": -10
+              "flat": -10,
+              "condition": "HpBelow",
+              "conditionValue": 0.5,
+              "conditionOn": "BroadcastSubject"
             },
             {
-              "kind": "EnergyGain",
-              "target": "Self",
-              "flat": 10,
-              "condition": "EnergyBelow",
-              "conditionValue": 0,
+              "kind": "ApplyStatus",
+              "target": "BroadcastSubject",
+              "status": "Vulnerable",
+              "magnitude": 0.3,
+              "duration": 3,
+              "chance": 1,
+              "bypassResist": true,
+              "condition": "HpBelow",
+              "conditionValue": 0.5,
               "conditionOn": "BroadcastSubject"
             }
           ],
-          "description": "When Hollowed turns healing into damage, that enemy loses Energy. If that empties its bar, Velis gains Energy."
+          "description": "Whenever an enemy below half HP is mended, the mending costs it Energy and leaves the wound open to Velis."
         },
         "talentIII": {
           "id": "velis_final_denial",
@@ -12848,6 +12771,31 @@
           "trigger": "None",
           "effects": [],
           "appends": [
+            {
+              "ability": "basic",
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.18,
+                "duration": 2,
+                "chance": 1,
+                "bypassResist": true
+              }
+            },
+            {
+              "ability": "basic",
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "status": "HealSuppression",
+                "duration": 1,
+                "chance": 1,
+                "bypassResist": true
+              }
+            },
             {
               "ability": "passive2",
               "effect": {
@@ -12862,7 +12810,7 @@
               }
             }
           ],
-          "description": "When What Was Taken strikes, the enemy with the lowest HP also gains Heal Suppression if it is at low HP."
+          "description": "Denied Return leaves its mark: the enemy Velis cuts cannot be mended for a moment, and her blows keep landing harder on it. What Was Taken shuts the mending off as well."
         }
       }
     },

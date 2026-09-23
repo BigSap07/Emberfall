@@ -26537,7 +26537,14 @@ namespace Emberfall.DevHarness
             new TalentRoom("seraphine_the_closed_volume II", "s_buffer", DarkStrikers, 1, true),
             new TalentRoom("seraphine_the_closed_volume III", "s_buffer_tail", DarkStrikers, 1, false),
             new TalentRoom("sylven_the_unfading_blade III", "s_triple", "", 1, false),
-            new TalentRoom("velis_the_hollow_vow III", "s_mender", "", 1, false),
+            // Velis II and III used to be read in s_mender and are not any more, because both
+            // now move the sweep and that room cannot weigh them. Every clause either of them
+            // carries shortens a fight against a body that mends itself - HealSuppression and a
+            // Vulnerable both do - and a shorter fight is fewer blows, so the room reads a
+            // talent doing exactly what it says as a LOSS of total output. THE DARK TALENTS
+            // still fields Velis III there and still proves the clause lands; what is dropped
+            // is a second output reading whose sign is decided by the room rather than by the
+            // talent.
             new TalentRoom("isara_the_second_chance II", "s_wash", "darian_the_hidden_bulwark,kael_the_unyielding", 2, true),
             new TalentRoom("elyra_the_patient_warden III", "s_buffer", DarkFive, 1, false),
             new TalentRoom("edrin_the_distant_bell III", "s_buffer", DarkFive, 1, false),
