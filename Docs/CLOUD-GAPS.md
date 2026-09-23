@@ -18,6 +18,8 @@ anon key was not inspected. The harness now decodes any key it finds there.
 not in this tree. Everything below covers `0001` to `0007` as they stand on main. `CloudChecks`
 reads every migration in the folder, so the day 0008 lands its grants go through the same
 allowlist, and a new client write grant turns the check red until somebody adds it on purpose.
+(Second pass: 0008 has since landed in the tree and the grant check passes with it, so it added
+no client write grant. Neither pass audited the rest of it.)
 
 ---
 
@@ -26,6 +28,12 @@ twice this week. It lists every place where the code does not do what its own co
 migrations or `DESIGN-BUILD-ORDER.md` say it does, ranked by what it would cost a player. Each
 finding says what the code does, what the design claims, how it was proven, and what the fix is
 or would be. It is a record from 2026-09-22, not a work order.
+
+**Second pass, 2026-09-23.** The first pass was forbidden to change the save format, a migration
+already applied, or what a player owns. That constraint was lifted the next day, because no player
+holds a save and a format change is free now and expensive later. The second pass fixed P7, P13
+and P14, bumped the save to version 15, and decided what to do about everything else left open.
+Its decisions are in **What the second pass chose, and why** at the end of the Proven section.
 
 **Proven and suspected are kept apart.** A finding is **proven** when an instrument in this repo
 reproduces it, or when it follows from two proven halves put together (said where that is the
@@ -38,8 +46,7 @@ suspected finding has a case written for it in those tests, marked unrun.
 - `Tools/DevHarness/CloudChecks.cs` holds the Core-only checks: the save format, the sync
   decision, the push body, the conflict card, key recognition, the one network door, a scan of
   the tree for secret keys, and a lint of every grant in the migrations. It is compiled by
-  `Tools/build-check.ps1` and **runs once Program.Main calls it**. That needs this one line,
-  beside `CheckAccounts(content)`:
+  `Tools/build-check.ps1`, and `Program.Main` runs it beside `CheckAccounts(content)`:
 
       _failures += CloudChecks.Run(content, contentDir);
 
@@ -75,14 +82,14 @@ Ranked by what each finding would cost a player once there are players.
 | P4 | an unconfirmed email unlocks Sign Out on an account nobody can sign back into | the account, its cloud save, its friends and its guild seat | **fixed** |
 | P5 | a sign-in answered by a hotel wifi page throws the account away | as P4, for an anonymous account | **fixed** |
 | P6 | a failed download leaves the device claiming the cloud's revision, so the next sync overwrites the save the player chose | the save the player picked on the conflict card | **fixed** |
-| P7 | an older build drops heroes it does not know, and its next upload deletes them from the cloud | heroes, when two devices run two builds | open |
+| P7 | an older build drops heroes it does not know, and its next upload deletes them from the cloud | heroes, when two devices run two builds | **fixed**, version 15 |
 | P8 | rotating the anon key makes every old build abandon its account | every anonymous account on an old build | open |
 | P9 | the conflict card cannot tell two saves apart except by when they were written | a week of play, lost to a coin toss | open, UI |
-| P10 | every save from versions 1 to 12 loses all its heroes and becomes a new game | nothing today: no player holds one | open |
+| P10 | every save from versions 1 to 12 loses all its heroes and becomes a new game | nothing today: no player holds one | open by decision, contained by P7 |
 | P11 | RESET PROGRESS also erases the cloud save, and the dialog does not say so | the cloud copy a player may have counted on | open |
 | P12 | nothing stopped a service-role key reaching the game, and the Python guards could not fire | every save in the project, if it ever happened | **fixed** |
-| P13 | nothing retries a 401, though the code said it did | failed syncs for the rest of a session on a slow clock | open, comment corrected |
-| P14 | a version field that is not a number reads as version 1 | only a hand-edited save | open |
+| P13 | nothing retries a 401, though the code said it did | failed syncs for the rest of a session on a slow clock | **fixed** |
+| P14 | a version field that is not a number reads as version 1 | only a hand-edited save | **fixed**, version 15 |
 
 ### P1. An unusable local save is overwritten, then uploaded over the cloud
 
@@ -239,27 +246,64 @@ of uploading.
 
 ### P7. An older build drops heroes it does not know, then deletes them from the cloud
 
-**What the code does.** `SaveSerializer.Deserialize` skips any hero whose `defId` is not in
-content, which its own header gives as the reason removing a hero "never bricks an existing
-save". `save_version` guards the save **format**. Nothing guards the **content**. A phone on the
-new build summons a hero the tablet's `heroes.json` does not have yet. The tablet loads the
-synced save without that hero, and its next save and upload remove the hero from the cloud copy.
-When the phone next syncs it is asked. If the player picks the cloud, the hero is gone.
+**What the code did.** `SaveSerializer.Deserialize` skipped any hero whose `defId` was not in
+content, which its own header gave as the reason removing a hero "never bricks an existing
+save". `save_version` guards the save **format**. Nothing guarded the **content**. A phone on the
+new build summons a hero the tablet's `heroes.json` does not have yet. The tablet loaded the
+synced save without that hero, and its next save and upload removed the hero from the cloud copy.
+When the phone next synced it was asked. If the player picked the cloud, the hero was gone.
 
-Armor has a quieter version of the same problem. `ReadArmorPiece` maps an unknown slot, aspect or
+Armor had a quieter version of the same problem. `ReadArmorPiece` maps an unknown slot, aspect or
 stat name to `Weapon`, `Ember` or `Attack` rather than refusing, so a piece from a newer build
-comes back changed and is saved that way.
+came back changed and was saved that way.
 
 **What the design claims.** Version 14's note: `save_version` is its own column "precisely so the
 refusal happens before the document is parsed", so that no silent difference reaches an older
 phone.
 
-**How it was proven.** `CloudChecks.CheckContentSkewDropsHeroes`: the save loads at the same
-version, and the hero is absent from the very next serialisation. Asserted as STILL PRESENT.
+**How it was proven.** On the first pass, a content-skew check in `CloudChecks`: the save loaded
+at the same version, and the hero was absent from the very next serialisation.
 
-**The fix, not made.** Either keep unknown heroes as opaque records that are written back
-unchanged, or carry a content version and refuse a save from newer content the way a newer format
-is refused. Both change the save format and what a player owns, so both are left alone.
+**The fix, as made (version 15).** The first of the two fixes named here: keep unknown records as
+opaque data, written back unchanged. It follows the rule an unresolvable relic id already
+followed: keep the id, and let content restore it.
+
+- A hero whose `defId` content does not name is kept as the exact JSON the save held, in
+  `PlayerProfile.UnresolvedHeroRecords`, and `Serialize` writes it back into `heroes` after the
+  known ones. Nothing in the game can see, spend or deploy it. The day content names the id again
+  it loads as an ordinary hero, with its level, copies and talent.
+- The armor it is wearing travels with it into `PlayerProfile.UnresolvedArmorRecords`, so this
+  build cannot salvage or combine a piece that hero is wearing, and the hero comes back wearing it.
+- An owned armor piece naming a slot, aspect, temper, stat or mode this build does not define is
+  kept aside the same way (`ArmorPieceIsReadable`) instead of being read as the fallback and saved
+  back changed. A name written as a number counts as unknown, because `Enum.Parse` accepts any
+  integer whether the enum defines it or not.
+- A hero record with no `defId` at all is corrupt rather than unknown, and is still skipped: no
+  content could ever restore it.
+
+The version moved to 15 although no key was added, and only for the downgrade direction. Version
+14 code reads a version 15 document happily and drops every record it cannot resolve on its next
+save, which is exactly the loss this fix ends. With the bump, a version 14 build is told the save
+is from a newer build, locally and on the cloud's `save_version` column, instead of reading and
+scrubbing it.
+
+**What it does not do.** Three narrower losses remain, each written into the code where it happens:
+
+- A team slot that pointed at an unresolved hero is cleared by `NormaliseTeam` and refilled. When
+  the hero comes back it is owned but not deployed.
+- A relic an unresolved hero had equipped stays in `ownedRelics`, where this build shows it as
+  unassigned and may equip it on somebody else. Nothing destroys it. When the hero comes back,
+  `NormaliseRelics` gives the relic to whichever hero is listed first, which is the one this build
+  equipped it on. Ownership is a profile fact, not the hero's, so it was not moved aside.
+- A KNOWN hero wearing an armor piece this build cannot read has that slot emptied by
+  `NormaliseArmor`, because the piece is not in `OwnedArmor`. The piece itself is kept and comes
+  back unequipped.
+
+**How it is proven now.** `CloudChecks.CheckContentSkewKeepsHeroes`: the record is kept byte for
+byte, including a key this build has never heard of; it and its weapon are in the next save; a
+second load and save changes nothing; and renaming the id to a real hero loads it at level 60 with
+its copies, talent and weapon, with nothing left aside. `CheckUnknownArmorIsKeptVerbatim` covers
+an unknown slot, an unknown stat and a numeric slot.
 
 ### P8. Rotating the anon key makes every old build abandon its account
 
@@ -298,6 +342,10 @@ describe as "Wayfarer - level 1, 1 stage cleared, 3 heroes". STILL PRESENT.
 **The fix, not made (it is UI, which this audit does not touch).** Add total hero levels, the
 highest hero, gold and Recital floor to `SaveSummary`. It is read without deserialising, so the
 card can still describe a save from a build it cannot fully read.
+
+**Second pass: still open, deliberately.** The finding stands. It was left because the fix is the
+conflict card, and another agent held the editor and the UI screens that day. Nothing about the
+format blocks it: every value it needs is already in the document.
 
 ### P10. Every save from versions 1 to 12 loses all its heroes
 
@@ -343,6 +391,23 @@ STILL PRESENT.
 That alters what a player owns, and no player holds one of these saves. The saves are now kept
 aside instead of overwritten (P1).
 
+**Second pass: contained by P7, and left open by decision.** Since version 15 such a save no
+longer loses its heroes from the document: `Deserialize` keeps all three records, and the armor
+the first one wore, and a re-save writes them back. What does not change is that it has no
+PLAYABLE hero, so `SaveService.Load` and `CloudCoordinator.AdoptCloudSave` still refuse it and it
+is kept aside as P1 describes. That is correct: a profile with no hero it can deploy is not a game.
+
+Before P1 and P6 the emptied document was what got written and uploaded. Now it is never written
+over and never adopted, and even if it were, it would carry its heroes with it. So nothing further
+is worth doing in code. The only remaining fix is the id map, which is a product decision about
+granting heroes, and only worth making if a player ever holds such a save, which none can: every
+one of these versions predates the cloud schema and every shipped build.
+
+`CheckEveryOldVersionLoads` now asserts both halves: no playable hero at every version from 1 to
+13 (STILL PRESENT, BY DECISION), and every hero record carried into the next save (CONTAINED BY
+P7). It stops at 13 however far the version moves, because 13 is the last version a build could
+have written with the deleted ids.
+
 ### P11. RESET PROGRESS also erases the cloud save
 
 **What the code does.** `GameApp.ResetProgress` deletes the save, saves a starter profile and
@@ -376,30 +441,79 @@ is shown firing on a planted one first. It prints the file, never the key. Git h
 searched separately, across all refs, for the JWT header prefix and for `sb_secret`: neither
 appears.
 
-### P13. Nothing retries a 401
+### P13. Nothing retried a 401
 
-**What the code does.** `EnsureFreshToken` refreshes when the device clock is within a minute of
-`expires_at`. If the device clock is slow by more than that, the client sends an expired token,
-and every request fails with "JWT expired" until a relaunch refreshes it at boot.
+**What the code did.** `EnsureFreshToken` refreshes when the device clock is within a minute of
+`expires_at`. If the device clock is slow by more than that, the client sent an expired token,
+and every request failed with "JWT expired" until a relaunch refreshed it at boot.
 
-**What the design claims.** The comment said "Callers that get a 401 anyway retry once through
-here". `SupabaseResponse.IsUnauthorised` has no reader anywhere in the project. **The comment has
-been corrected**, and the retry is written up rather than wired, because it is new request
-behaviour.
+**What the design claimed.** The comment said "Callers that get a 401 anyway retry once through
+here". `SupabaseResponse.IsUnauthorised` had no reader anywhere in the project. The first pass
+corrected the comment and wrote the retry up.
 
-### P14. A version field that is not a number reads as version 1
+**The fix, as made.** In the one place every request goes through, `SupabaseClient.Send`. A 401
+on a request that carried a user's access token renews the session once and resends once. When
+that answer is still 401, or when the renewal fails, the caller gets a sentence that says which,
+and nothing is tried again. The rule is `SessionRenewal.ShouldRenewAndRetry` in Core:
 
-**What the code does.** `Deserialize` reads `version` with `GetInt(..., 1)`. A string that is not
-a number, a null, or a number too large for an int (it overflows negative) all come back as an
-old save, and are read rather than refused. A missing field reading as 1 is by design.
+- only a 401, since a role refusal, a conflict or a transport failure is not fixed by a new token;
+- only a request that carried a user's token, since the anon key has no session to renew;
+- never the retry itself, so one request costs at most one refresh and one resend;
+- never the token or sign-up endpoints, where a refresh itself goes.
 
-**How it was proven.** `CloudChecks.CheckVersionField` shows it. The same check confirms the
-documented refusal for a newer version, including one written as a string or as a fraction that
-rounds past 14. STILL PRESENT.
+The renewal is `AccountService.RenewAfterUnauthorised`, handed to the client as
+`SupabaseClient.RenewSession`, so the refresh token is only ever spent in one class. If the
+session already moved on while the request was in flight, it resends with the new token without
+refreshing. Refreshes are single-flight (`RefreshOnce`, which `EnsureFreshToken` now uses too): a
+refresh token is rotated on every use, so two requests refreshing at once would present the same
+token twice, which is S3's reuse. A failed renewal clears nothing. Whether a refused refresh token
+means the account is gone stays Resume's question at boot, so this cannot widen P8.
 
-**Why it is left.** No build writes anything but an integer, so only a hand-edited save can reach
-it. Tightening it changes the format's reading rule, and P1's keep-aside makes a wrong refusal
-harmless anyway, but that is still a format decision.
+**How it is proven.** `CloudChecks.CheckSessionRenewal` pins the rule and holds a tripwire on the
+source that `Send` asks it and `AccountService` is the renewer. Probe P13 runs it end to end: a
+fetch that meets "JWT expired" succeeds in exactly three requests and keeps the rotated token; a
+failed refresh is reported in words, resends nothing and leaves the account alone; a resend
+refused again is reported and not retried; a request sent with the anon key is not retried.
+
+### P14. A version field that was not a number read as version 1
+
+**What the code did.** `Deserialize` read `version` with `GetInt(..., 1)`. A string that is not
+a number, a null, or a number too large for an int (it overflows negative) all came back as an
+old save, and were read rather than refused. A missing field reading as 1 is by design.
+
+**The fix, as made (version 15).** `SaveSerializer.TryReadVersion` is now the one reader of the
+field. Absent still means 1. Anything present must be a whole JSON number from 1 to
+`CurrentVersion`. Everything else is refused before the document is read, with a sentence a
+player can read: "the save's version number is damaged (it reads "fifteen"), so this build cannot
+tell which format it is in and has not opened it". That covers a string (even a valid-looking
+"15", which no build writes), a null, a fraction, zero, a negative, a boolean, an array, and a
+number too large for an int. A newer build's save is refused with the same wording as before. A
+refused save goes through P1's keep-aside like any other. `SaveSummaryReader` reads by the same
+rule but never refuses, because the conflict card still has to describe the save; a damaged
+field reports as version 0.
+
+**How it is proven.** `CloudChecks.CheckVersionField`: each of the nine damaged forms is refused
+with the sentence, a missing field and an older whole version still load, and the summary still
+describes a damaged save.
+
+### What the second pass chose, and why
+
+The brief was to fix what the format constraint had blocked, and to judge the rest of the
+left-alone list. The test applied to each: is it cheap NOW because the format is free, and can
+it be proven in this tree?
+
+| finding | chosen | why |
+|---|---|---|
+| P7 | fixed, with its armor half | the format change the first pass named, and the one that costs a player heroes |
+| P14 | fixed | a reading rule for the format, only free while no player holds a save |
+| P13 | fixed | not a format question, but the brief asked for it, and the probe can prove it without a server |
+| P10 | contained by P7, open by decision | see P10: the only remaining fix is an id map that grants heroes nobody summoned |
+| P9 | open | the fix is the conflict card, a UI screen another agent held; the format already carries every value it needs |
+| P8 | open | not a format question; narrowing `TokenWasRejected` without GoTrue's real error codes could leave a dead token retried forever. S3's live case measures them. The P13 retry does not widen it: a failed renewal clears nothing |
+| P11 | open | a product decision (should reset keep the cloud copy?) and a dialog, which is UI |
+| P3, the rest | open | atomic writes need `File.Replace` verified on an Android device, and none exists. Preferring the newer of file and mirror by `lastSaveUnix` is cheap but has nothing to do with the format being free, and it changes which copy boots, so it belongs with the atomic-write work |
+| S2 | open | the format being free makes "the document's version must equal `save_version`" easy to state, but it is a server migration, it cannot be applied or measured from here, and this client never sends a mismatch: `Push` always labels a document `Serialize` just wrote at `CurrentVersion` |
+| S6, S7, S8 | open | server migrations, unrelated to the save format, and unmeasurable without the live project |
 
 ---
 
@@ -419,8 +533,8 @@ this audit.
 
 **A save from a newer build.** Refused locally, including when the number is written as a string.
 Refused in the cloud by `SyncPlanner` on the `save_version` column, before the document is parsed.
-Not refused when the field is garbage (P14). A newer local save used to be destroyed by the
-overwrite that followed its refusal (P1).
+Since version 15, also refused when the field is garbage (P14). A newer local save used to be
+destroyed by the overwrite that followed its refusal (P1).
 
 **The push race.** On the client, the loser of a 409 is told in words and its base revision does
 not move (probe S1). On the server, see S1: expected to hold, cases written, unrun.
@@ -576,9 +690,10 @@ the team snapshot only when the line's fingerprint changes.
 
 ## What was fixed
 
-Every fix is small, keeps the save format as it is, changes no migration and changes nothing a
-player owns. Each one only turns an automatic overwrite into a refusal or a question, or adds a
-copy.
+The first pass's fixes are small, keep the save format as it is, change no migration and change
+nothing a player owns. Each one only turns an automatic overwrite into a refusal or a question, or
+adds a copy. The second pass's fixes (the last four rows) change the format to version 15 and
+change no migration.
 
 | fix | where | proven by |
 |---|---|---|
@@ -591,6 +706,10 @@ copy.
 | a cloud save is checked before it replaces the local one, and a failed adopt forgets the base | `CloudCoordinator.AdoptCloudSave`, `ForgetBaseAfterFailedAdopt` | composed; see P6 |
 | a service-role or secret key leaves the game unconfigured | `SupabaseKeys.IsSecret`, `SupabaseConfig.Load` | probe P12, `CheckSecretKeyRecognition` |
 | the Python guards decode the key | `looks_secret` in both rules tests | run against built keys; see P12 |
+| a hero content does not know is kept verbatim with the armor it wears, and restored when content names it | `SaveSerializer.Deserialize`, `Serialize`, `PlayerProfile.UnresolvedHeroRecords` | `CheckContentSkewKeepsHeroes`, `CheckEveryOldVersionLoads` |
+| an armor piece naming what this build does not define is kept verbatim | `ArmorPieceIsReadable`, `PlayerProfile.UnresolvedArmorRecords` | `CheckUnknownArmorIsKeptVerbatim` |
+| a damaged version field is refused with a sentence | `SaveSerializer.TryReadVersion` | `CheckVersionField` |
+| a 401 renews the session once and resends once | `SupabaseClient.Send`, `SessionRenewal`, `AccountService.RenewAfterUnauthorised` | probe P13, `CheckSessionRenewal` |
 
 Three comments were corrected against the code in the same commit:
 

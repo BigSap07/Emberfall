@@ -42,10 +42,19 @@ namespace Emberfall.Game.Cloud
         /// there is no token. Refreshed a minute early - see EnsureFreshToken.</summary>
         private long _expiresAtUnix;
 
+        /// <summary>True while a refresh is in flight. A refresh token is single-use: GoTrue
+        /// rotates it on every exchange, so two requests that both took a 401 and both presented
+        /// the same token would be a reuse, which the server may answer by revoking the session
+        /// (CLOUD-GAPS S3). A second caller waits for the first refresh and shares its answer.</summary>
+        private bool _refreshing;
+        private bool _lastRefreshOk;
+        private string _lastRefreshError = "";
+
         public AccountService(SupabaseClient client, CloudLocalState state)
         {
             _client = client;
             _state = state;
+            _client.RenewSession = RenewAfterUnauthorised;
         }
 
         public CloudLocalState State { get { return _state; } }
@@ -248,11 +257,9 @@ namespace Emberfall.Game.Cloud
         /// whose clock is slightly fast would otherwise send a token the server has already
         /// stopped accepting and take a 401 for no reason.
         ///
-        /// NOTHING RETRIES A 401. This comment used to say callers did, once, through here; none
-        /// does, and SupabaseResponse.IsUnauthorised has no reader. A device clock that runs more
-        /// than a minute slow therefore sends an expired token until the next launch refreshes it,
-        /// and every sync in between fails with the server's "JWT expired". Written up in
-        /// Docs/CLOUD-GAPS.md rather than wired here, because a retry is new request behaviour.
+        /// A clock that runs more than a minute SLOW is the case this cannot catch: it sends a
+        /// token the server has already expired. SupabaseClient.Send catches that one instead,
+        /// with one refresh through RenewAfterUnauthorised and one resend (CLOUD-GAPS P13).
         /// </summary>
         public IEnumerator EnsureFreshToken(Action<bool, string> done)
         {
@@ -262,7 +269,47 @@ namespace Emberfall.Game.Cloud
                 Finish(done, true, "");
                 yield break;
             }
-            yield return (RefreshSession(done));
+            yield return (RefreshOnce(done));
+        }
+
+        /// <summary>
+        /// SupabaseClient.RenewSession: called by Send when a request carrying `rejectedToken` was
+        /// answered 401. If the session has already moved on since that request left - another
+        /// request renewed it - there is nothing to refresh, and the resend simply uses the new
+        /// token. Otherwise one refresh, shared with anyone else asking at the same moment.
+        ///
+        /// A failure here clears nothing. Whether a refused refresh token means the account is
+        /// gone is Resume's question, asked at boot with its own rules; a request that happened to
+        /// meet an expired token mid-session is not the place to decide it.
+        /// </summary>
+        private IEnumerator RenewAfterUnauthorised(string rejectedToken, Action<bool, string> done)
+        {
+            if (!string.IsNullOrEmpty(_client.AccessToken) && _client.AccessToken != rejectedToken && !_refreshing)
+            {
+                Finish(done, true, "");
+                yield break;
+            }
+            yield return (RefreshOnce(done));
+        }
+
+        /// <summary>RefreshSession, with at most one in flight. See _refreshing.</summary>
+        private IEnumerator RefreshOnce(Action<bool, string> done)
+        {
+            if (_refreshing)
+            {
+                while (_refreshing) yield return null;
+                Finish(done, _lastRefreshOk, _lastRefreshError);
+                yield break;
+            }
+
+            _refreshing = true;
+            bool ok = false;
+            string error = "";
+            yield return (RefreshSession(delegate (bool success, string message) { ok = success; error = message; }));
+            _lastRefreshOk = ok;
+            _lastRefreshError = error;
+            _refreshing = false;
+            Finish(done, ok, error);
         }
 
         /// <summary>

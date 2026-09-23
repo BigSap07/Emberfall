@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Emberfall.Core.Json;
+using Emberfall.Core.Save;
 
 namespace Emberfall.Core.Cloud
 {
@@ -72,7 +73,12 @@ namespace Emberfall.Core.Cloud
                 return summary;
 
             summary.Readable = true;
-            summary.SaveVersion = root.GetInt("version", 1);
+            // Read by the same rule Deserialize refuses by, but never refused here: a card has to
+            // describe a save it cannot open. A damaged version field reports as 0.
+            int version;
+            string versionError;
+            SaveSerializer.TryReadVersion(root, out version, out versionError);
+            summary.SaveVersion = version;
             summary.PlayerName = root.GetString("playerName", "Wayfarer");
             summary.PlayerLevel = root.GetInt("playerLevel", 1);
             summary.StagesCleared = root.GetInt("stagesCleared", 0);
