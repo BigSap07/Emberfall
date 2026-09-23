@@ -8,7 +8,7 @@ remove them, and what happens when thirty devices ask the same question in the s
 The two share nothing but the transport, and merging them would have produced a file where the
 interesting section is the last fifth.
 
-    Run Server/supabase/migrations/0004, 0005, 0006 and 0007 first, in order.
+    Run Server/supabase/migrations/0004 through 0009 first, in order.
 
     $env:SUPABASE_URL      = 'https://<ref>.supabase.co'
     $env:SUPABASE_ANON_KEY = '<anon public key>'
@@ -678,18 +678,25 @@ def check_snapshots(guild, a, b, c):
 # ---------------------------------------------------------------- the guild dungeon (0007)
 
 
+# A normalised line: guild_dungeon_hero_level() is 40, and no unit carries a relic or armor.
 DUNGEON_LINE = [{"defId": "kael_the_unyielding", "level": 40, "stars": 5}]
+
+# The client's scheme is "c1-" and sixteen hex digits. The server only bounds the length.
+CONTENT_VERSION = "c1-0000000000000000"
 
 
 def record_attempt(user, cycle, floor, team=None, **overrides):
-    """One guild_dungeon_record call with a well-formed attempt, any argument overridable. The
-    values are what a client would send. The server trusts them, which is the design, so the
-    cases below are about WHO may write, HOW MANY and WHEN, not whether the fight was real."""
+    """One guild_dungeon_submit call (0008) with a well-formed attempt, any argument overridable.
+    The values are what a client would send. The server trusts the fight itself, which is the
+    design, so the cases below are about WHO may write, HOW MANY, WHEN, and WHAT SHAPE of line,
+    not whether the fight was real. 0007's guild_dungeon_record is revoked from authenticated;
+    check_record_is_closed proves it."""
     args = {"p_cycle": cycle, "p_floor": floor, "p_seed": 417005212,
             "p_team": DUNGEON_LINE if team is None else team,
-            "p_victory": True, "p_turns": 9, "p_power": 12345, "p_avg_stars": 5.0}
+            "p_victory": True, "p_turns": 9, "p_power": 12345, "p_avg_stars": 5.0,
+            "p_fallen": 0, "p_content_version": CONTENT_VERSION}
     args.update(overrides)
-    return rpc("guild_dungeon_record", token=user["token"], **args)
+    return rpc("guild_dungeon_submit", token=user["token"], **args)
 
 
 def dungeon_rows(user, guild_id):
@@ -821,6 +828,211 @@ def check_dungeon_race(guild, b, cycle):
     numbers = sorted(r[1].get("attempt") for r in accepted if isinstance(r[1], dict))
     check(numbers == [1, 2, 3], "numbered 1, 2 and 3 - no gap and no repeat", numbers)
 
+
+# ---------------------------------------------------------------- the playable dungeon (0008, 0009)
+#
+# NOT YET RUN against the live project: written from 0008's text and confirmed to parse, nothing
+# more. The first run is the first time any of these has met the real database.
+
+
+def dungeon_cycle(user):
+    status, body = rpc("guild_dungeon_status", token=user["token"])
+    row = body[0] if status == 200 and isinstance(body, list) and len(body) == 1 else None
+    return row["cycle"] if row else None
+
+
+def guild_of(user):
+    membership = my_membership(user)
+    return membership["guild_id"] if membership else "00000000-0000-0000-0000-000000000000"
+
+
+def check_record_is_closed(a, cycle):
+    section("0007's DOOR IS SHUT - guild_dungeon_record is revoked, guild_dungeon_submit is the way in")
+
+    status, body = rpc("guild_dungeon_record", token=a["token"], p_cycle=cycle, p_floor=1, p_seed=1,
+                       p_team=[{"defId": "kael_the_unyielding", "level": 1, "stars": 1,
+                                "relicId": "any", "armor": ["any"]}],
+                       p_victory=True, p_turns=1, p_power=1, p_avg_stars=1)
+    check(status not in (200, 201),
+          "A CANNOT CALL guild_dungeon_record - an un-normalised line with no content version has "
+          "no way onto a board", (status, message_of(body)))
+
+
+def check_dungeon_normalised(a, cycle):
+    """Every refusal here is a 400, and 0008 checks the line before it checks the floor or the
+    cap, so a 400 is the normalisation rule speaking and not a floor or a count."""
+    section("ONE LEVEL FOR EVERY LINE - no relic, no armor, and a loss that says what it cost")
+
+    bad_lines = (
+        ([{"defId": "kael_the_unyielding", "level": 39, "stars": 5}], "a unit one level under"),
+        ([{"defId": "kael_the_unyielding", "level": 41, "stars": 5}], "a unit one level over"),
+        ([{"defId": "kael_the_unyielding", "stars": 5}], "a unit with no level at all"),
+        ([{"defId": "kael_the_unyielding", "level": "40", "stars": 5}],
+         "a unit whose level is the STRING \"40\" - compared, not coerced"),
+        (DUNGEON_LINE + [{"defId": "kael_the_unyielding", "level": 1, "stars": 5}],
+         "a line where one unit of two is not at the level"),
+        ([{"defId": "kael_the_unyielding", "level": 40, "stars": 5, "relicId": "ember_sigil"}],
+         "a unit carrying a relic"),
+        ([{"defId": "kael_the_unyielding", "level": 40, "stars": 5, "armor": ["iron_cuirass"]}],
+         "a unit carrying armor"),
+        ([{"defId": "kael_the_unyielding", "level": 40, "stars": 5, "armor": []}],
+         "a unit carrying an EMPTY armor list - the key is the tell, not what is in it"),
+        (["kael_the_unyielding"], "a unit that is not an object"),
+    )
+    for team, why in bad_lines:
+        status, body = record_attempt(a, cycle, 3, team=team)
+        check(status == 400, "REFUSED: " + why, (status, message_of(body)))
+
+    status, body = record_attempt(a, cycle, 3, p_victory=False, p_fallen=0)
+    check(status == 400, "A LOSS WITH NO HEROES LOST IS REFUSED - a loss lost at least one",
+          (status, message_of(body)))
+    status, body = record_attempt(a, cycle, 3, p_fallen=2)
+    check(status == 400, "and so is losing two heroes from a line of one", (status, message_of(body)))
+    status, body = record_attempt(a, cycle, 3, p_fallen=-1)
+    check(status == 400, "and a negative loss count", (status, message_of(body)))
+    status, body = record_attempt(a, cycle, 3, p_fallen=None)
+    check(status == 400, "and no loss count at all", (status, message_of(body)))
+
+    status, body = record_attempt(a, cycle, 3, p_content_version=None)
+    check(status == 400, "AN ATTEMPT CARRYING NO CONTENT VERSION IS REFUSED", (status, message_of(body)))
+    status, body = record_attempt(a, cycle, 3, p_content_version="")
+    check(status == 400, "and so is an empty one", (status, message_of(body)))
+    status, body = record_attempt(a, cycle, 3, p_content_version="x" * 65)
+    check(status == 400, "and one over 64 characters", (status, message_of(body)))
+
+    rows = dungeon_rows(a, guild_of(a))
+    at_three = [r for r in rows or [] if r["user_id"] == a["id"] and r["floor"] == 3]
+    check(rows is not None and len(at_three) == 0,
+          "NONE OF THOSE SPENT AN ATTEMPT - floor 3 still holds no row of A's", len(at_three))
+
+    status, body = record_attempt(a, cycle, 3, p_victory=False, p_fallen=1)
+    stored = body if status == 200 and isinstance(body, dict) else None
+    check(stored is not None and stored.get("attempt") == 1,
+          "while a loss that lost one hero, at the level, is stored as attempt 1", (status, message_of(body)))
+    check(stored is not None and stored.get("fallen") == 1 and stored.get("content_version") == CONTENT_VERSION,
+          "carrying the loss count and the content version it was sent", stored)
+
+
+def check_dungeon_floor_gate():
+    """A fresh guild, because A's has cleared floors already. Returns what check_share_attempt
+    needs from it: the guild, its two members, and the member's clearing attempt."""
+    section("THE FLOOR GATE - floor N opens when somebody in YOUR guild has cleared floor N-1")
+
+    lead = must_sign_up("gate")
+    mate = must_sign_up("mate")
+    CAST_EXTRA.extend([lead, mate])
+
+    status, body = rpc("guild_create", token=lead["token"], p_name=guild_name("Gate"), p_description="")
+    gate = body if status == 200 and isinstance(body, dict) else None
+    check(gate is not None, "a fresh guild, with nothing cleared in it", (status, message_of(body)))
+    if gate is None:
+        return None
+    cycle = dungeon_cycle(lead)
+    check(cycle is not None, "and a current cycle", cycle)
+    if cycle is None:
+        return None
+
+    status, body = record_attempt(lead, cycle, 2)
+    check(status == 409, "FLOOR 2 IS REFUSED BEFORE ANYBODY HAS CLEARED FLOOR 1 - and A's guild "
+          "having cleared it does not count for this one", (status, message_of(body)))
+    status, body = record_attempt(lead, cycle, 5)
+    check(status == 409, "and floor 5 is refused too - floors do not open by skipping",
+          (status, message_of(body)))
+
+    status, body = record_attempt(lead, cycle, 1, p_victory=False, p_fallen=3, team=DUNGEON_LINE * 3)
+    check(status == 200, "the leader loses at floor 1, which floor 1 always allows", (status, message_of(body)))
+    status, body = record_attempt(lead, cycle, 2)
+    check(status == 409, "A LOSS DOES NOT OPEN THE NEXT FLOOR", (status, message_of(body)))
+
+    check(join_via_leader(mate, gate, lead), "a second member joins")
+    status, body = record_attempt(mate, cycle, 1)
+    cleared = body if status == 200 and isinstance(body, dict) else None
+    check(cleared is not None, "and clears floor 1", (status, message_of(body)))
+
+    status, body = record_attempt(lead, cycle, 2)
+    check(status == 200 and isinstance(body, dict) and body.get("attempt") == 1,
+          "THE LEADER NOW GETS FLOOR 2 - a guildmate's clear opens it for everybody",
+          (status, message_of(body)))
+    status, body = record_attempt(lead, cycle, 3, p_victory=False, p_fallen=1)
+    check(status == 409, "while floor 3 waits for somebody to WIN floor 2", (status, message_of(body)))
+
+    if cleared is None:
+        return None
+    return {"guild": gate, "lead": lead, "mate": mate, "attempt": cleared}
+
+
+def share_attempt(user, attempt_id, body="Floor 1: watch this."):
+    return rpc("guild_share_attempt", token=user["token"], p_attempt_id=attempt_id, p_body=body)
+
+
+def check_share_attempt(guild, a, b, gate):
+    section("SHARING A FIGHT - your own attempt, into the guild it was fought for, at chat's pace")
+
+    rows = dungeon_rows(a, guild["id"])
+    own = next((r for r in rows or [] if r["user_id"] == a["id"]), None)
+    check(own is not None, "A has an attempt of its own in this guild to share", rows and len(rows))
+    if own is None:
+        return
+
+    # The cooldown is per author and counts every message A has written, so start from a clear
+    # two seconds rather than from whatever the section before this one posted.
+    time.sleep(2.5)
+    status, body = share_attempt(a, own["id"], "  Floor 1: cleared. Watch it.  ")
+    posted = body if status == 200 and isinstance(body, dict) else None
+    check(posted is not None, "A shares its own attempt", (status, message_of(body)))
+    check(posted is not None and posted.get("attempt_id") == own["id"]
+          and posted.get("body") == "Floor 1: cleared. Watch it.",
+          "as a message carrying the attempt, its line trimmed like any other", posted)
+
+    status, body = share_attempt(a, own["id"])
+    check(status == 429, "A SECOND SHARE INSIDE TWO SECONDS IS REFUSED, with a 429",
+          (status, message_of(body)))
+    status, body = rpc("guild_post_message", token=a["token"], p_body="and a plain line")
+    check(status == 429, "and so is a plain message - one cooldown for both doors",
+          (status, message_of(body)))
+
+    time.sleep(2.5)
+    status, body = rpc("guild_post_message", token=a["token"], p_body="a plain line first")
+    check(status == 200, "two seconds later a plain message goes", (status, message_of(body)))
+    status, body = share_attempt(a, own["id"])
+    check(status == 429, "and a share straight after it is refused - the post started the clock",
+          (status, message_of(body)))
+
+    time.sleep(2.5)
+    status, body = share_attempt(b, own["id"])
+    check(status == 403, "B CANNOT SHARE A's ATTEMPT - a guildmate's fight is theirs to post",
+          (status, message_of(body)))
+    status, body = share_attempt(a, 999999999999)
+    check(status == 403, "and an attempt id nobody holds is refused the same way", (status, message_of(body)))
+
+    if gate is not None:
+        status, body = share_attempt(a, gate["attempt"]["id"])
+        check(status == 403, "A CANNOT SHARE AN ATTEMPT FROM ANOTHER GUILD", (status, message_of(body)))
+
+        # The case the second half of the rule exists for: the attempt IS the caller's, and the
+        # caller has changed guild since.
+        mate = gate["mate"]
+        status, _ = request("DELETE", "/rest/v1/guild_members?user_id=eq." + mate["id"], token=mate["token"])
+        check(status in (200, 204) and my_membership(mate) is None,
+              "the member who cleared the gate guild's floor 1 leaves it", status)
+        status, body = share_attempt(mate, gate["attempt"]["id"])
+        check(status == 403, "and, in no guild, cannot share anything", (status, message_of(body)))
+        status, body = rpc("guild_create", token=mate["token"], p_name=guild_name("Moved"), p_description="")
+        check(status == 200, "then starts a guild of its own", (status, message_of(body)))
+        status, body = share_attempt(mate, gate["attempt"]["id"])
+        check(status == 403, "AND CANNOT POST ITS OLD GUILD'S FIGHT INTO THE NEW ONE - its own attempt, "
+              "the wrong guild", (status, message_of(body)))
+
+    status, body = request("GET", "/rest/v1/guild_messages?select=id,attempt_id&guild_id=eq." + guild["id"]
+                                  + "&attempt_id=not.is.null", token=b["token"])
+    check(status == 200 and isinstance(body, list) and len(body) == 1 and body[0]["attempt_id"] == own["id"],
+          "B reads exactly one shared fight in the guild's chat, and it is A's", (status, body))
+
+    status, body = share_attempt(a, own["id"], "two\nlines")
+    check(status == 400, "a share whose line carries a newline is refused like any message",
+          (status, message_of(body)))
+
+
 # ---------------------------------------------------------------- the cloud audit (Docs/CLOUD-GAPS.md)
 #
 # Added by the save and cloud audit and NOT YET RUN against the live project: every case below was
@@ -886,9 +1098,13 @@ def check_after_leaving(guild, a, cycle):
 
 
 def check_seed_is_not_checked(a, cycle):
-    """Docs/CLOUD-GAPS.md S8. guild_dungeon_record stores whatever seed it is sent. The seed is a
-    pure function of (guild id, cycle) - GuildDungeon.SeedFor - so the server could refuse a wrong
-    one, and does not: a record can claim any fight at all, including an easier one."""
+    """Docs/CLOUD-GAPS.md S8. guild_dungeon_record stored whatever seed it was sent, and
+    guild_dungeon_submit kept the rule. The seed is a pure function of (guild id, cycle) -
+    GuildDungeon.SeedFor - so the server could refuse a wrong one, and does not: a record can
+    claim any fight at all, including an easier one.
+
+    This is also the victory at floor 3 that opens floor 4 for check_dungeon_race, so it runs
+    before the race."""
     section("THE DUNGEON SEED - trusted as sent")
     status, body = record_attempt(a, cycle, 3, p_seed=1)
     check(status == 200 and isinstance(body, dict) and body.get("seed") == 1,
@@ -903,6 +1119,7 @@ def check_anon_helpers():
                        ("has_guild_request", {"p_guild": "00000000-0000-0000-0000-000000000000"}),
                        ("guild_member_cap", {}), ("guild_normalise_code", {"p_code": "abc234"}),
                        ("guild_dungeon_attempt_cap", {}), ("guild_dungeon_floor_count", {}),
+                       ("guild_dungeon_hero_level", {}),
                        ("guild_dungeon_cycle_at", {"p_at": "2026-09-22T00:00:00Z"}),
                        ("is_friend", {"other_user": "00000000-0000-0000-0000-000000000000"})):
         status, body = rpc(name, **args)
@@ -972,7 +1189,12 @@ def check_anon_role():
                        ("guild_dungeon_status", {}),
                        ("guild_dungeon_record", {"p_cycle": 0, "p_floor": 1, "p_seed": 1,
                                                  "p_team": DUNGEON_LINE, "p_victory": True,
-                                                 "p_turns": 1, "p_power": 1, "p_avg_stars": 1})):
+                                                 "p_turns": 1, "p_power": 1, "p_avg_stars": 1}),
+                       ("guild_dungeon_submit", {"p_cycle": 0, "p_floor": 1, "p_seed": 1,
+                                                 "p_team": DUNGEON_LINE, "p_victory": True,
+                                                 "p_turns": 1, "p_power": 1, "p_avg_stars": 1,
+                                                 "p_fallen": 0, "p_content_version": CONTENT_VERSION}),
+                       ("guild_share_attempt", {"p_attempt_id": 1, "p_body": "hello"})):
         status, body = rpc(name, **args)
         check(status not in (200, 201), "and cannot call " + name, (status, message_of(body)))
 
@@ -1216,9 +1438,12 @@ def main():
             check_snapshots(guild, a, b, c)
             cycle = check_dungeon(guild, a, b, c)
             if cycle is not None:
+                check_record_is_closed(a, cycle)
+                check_dungeon_normalised(a, cycle)
+                check_seed_is_not_checked(a, cycle)
                 check_dungeon_race(guild, b, cycle)
                 check_after_leaving(guild, a, cycle)
-                check_seed_is_not_checked(a, cycle)
+                check_share_attempt(guild, a, b, check_dungeon_floor_gate())
             measure_unthrottled_loops(a)
             check_one_guild_rule(guild, d)
         check_anon_role()
