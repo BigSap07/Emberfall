@@ -67,8 +67,12 @@ namespace Emberfall.UI.Screens
         //
         // Inside a card the top block (name, cost, sentence) and the bottom block (measurement,
         // button) are fixed, and the numbers list between them takes what is left and scrolls past
-        // it. The narrowest that list ever gets is a costly talent whose figures also need a
-        // footnote, which is Marrow I, and it still shows four lines before it scrolls.
+        // it: six figures on an ordinary card at 20:9 and four on one carrying a cost banner, and
+        // more than that at every wider aspect. Measured against the roster rather than guessed:
+        // of the 90 authored talents the longest list is Talren III at six figures, ten carry a
+        // clause footnote and three a floor footnote, no card carries both, and none of the seven
+        // the audit calls costly carries either. Build below asserts the worst case anyway,
+        // because that is a fact about today's content and not about the layout.
         private const float ShortestCanvasHeight = 966f;
         private const float HeaderBottom = 252f;
         private const float StripHeight = 92f;
@@ -87,8 +91,8 @@ namespace Emberfall.UI.Screens
         private const float BlockGap = 8f;
         private const float NameTop = 18f;
         private const float NameHeight = 38f;
-        private const float CostHeight = 56f;
-        private const float ProseHeight = 76f;
+        private const float CostHeight = 64f;
+        private const float ProseHeight = 68f;
         private const float RuleGap = 6f;
         private const float HeadingHeight = 20f;
         private const float NumberRow = 24f;
@@ -153,6 +157,7 @@ namespace Emberfall.UI.Screens
             public Text Prose;
             public RectTransform Heading;
             public Image Rule;
+            public Image RuleBottom;
             public RectTransform NumbersList;
             public ScrollRect NumbersScroll;
             public Text More;
@@ -186,7 +191,8 @@ namespace Emberfall.UI.Screens
             // the worst one - a costly talent whose figures need both footnotes - and the floor is
             // two lines of numbers, below which the list is not a list.
             float card = ShortestCanvasHeight - CardsTop - BottomBlock;
-            float needed = NumbersTopCostly + NumberRow * 2f + CardBottomBase + NoteRow * 2f;
+            float needed = NumbersTopCostly + NumberRow * 2f + CardBottomBase + NoteRow * 2f
+                         + Emberforge.RuleHeight + 10f;
             if (needed > card)
                 Debug.LogError("TalentsScreen: the worst card needs " + needed + " units for two lines of"
                                + " numbers and the shortest canvas leaves " + card + ".");
@@ -265,14 +271,14 @@ namespace Emberfall.UI.Screens
             // says a cost exists; the note says what the cost buys. TalentAudit's own sentence is
             // printed exactly as it is authored, so a talent that leaves the audited list loses
             // its banner with no change here.
-            view.CostChip = EmberforgeUI.Chip("Cost", root, "COSTS OUTPUT", UITheme.Warning, UITheme.FontTiny - 6);
-            UIBuilder.Box(view.CostChip, CardPad, -(NameTop + NameHeight + BlockGap), 170f, 22f,
+            view.CostChip = EmberforgeUI.Chip("Cost", root, "COSTS OUTPUT", UITheme.Warning, UITheme.FontTiny - 5);
+            UIBuilder.Box(view.CostChip, CardPad, -(NameTop + NameHeight + BlockGap), 186f, 24f,
                           new Vector2(0f, 1f));
 
-            view.CostNote = EmberforgeUI.Body("CostNote", root, "", UITheme.FontTiny - 5, UITheme.Warning,
+            view.CostNote = EmberforgeUI.Body("CostNote", root, "", UITheme.FontTiny - 3, UITheme.Warning,
                                               TextAnchor.UpperLeft);
-            Stretch(view.CostNote.rectTransform, NameTop + NameHeight + BlockGap + 24f, CostHeight - 24f);
-            BestFit(view.CostNote, UITheme.FontTiny - 9, UITheme.FontTiny - 5);
+            Stretch(view.CostNote.rectTransform, NameTop + NameHeight + BlockGap + 26f, CostHeight - 26f);
+            BestFit(view.CostNote, UITheme.FontTiny - 8, UITheme.FontTiny - 3);
             UIBuilder.Outlined(view.CostNote, Emberforge.Outline, Emberforge.StrokeThin);
 
             view.Prose = EmberforgeUI.Body("Prose", root, "", UITheme.FontTiny, Emberforge.TextBody,
@@ -283,6 +289,12 @@ namespace Emberfall.UI.Screens
             UIBuilder.Outlined(view.Prose, Emberforge.Outline, Emberforge.StrokeThin);
 
             view.Rule = EmberforgeUI.Rule("Rule", root);
+
+            // The band the figures live in is CLOSED at the bottom as well as opened at the top.
+            // A talent that changes one thing prints one line, and an open-ended band with one
+            // line in it and a third of a card under it reads as a card that failed to finish
+            // rather than as a talent that does one thing.
+            view.RuleBottom = EmberforgeUI.Rule("RuleBottom", root);
 
             view.Heading = UIBuilder.Node("Heading", root);
             Text heading = EmberforgeUI.Label("Text", view.Heading, "WHAT IT DOES", UITheme.FontTiny - 4,
@@ -513,6 +525,15 @@ namespace Emberfall.UI.Screens
             UnitStats stats = StatMath.ForHero(def, hero.Level, relic, App.Session.Profile.EquippedArmorOf(hero),
                                                App.Session.Content.Armor);
 
+            // ONE BAND TOP FOR ALL THREE, decided by whether ANY of this hero's talents carries a
+            // cost banner. The three cards are read across, and a rule that sat lower on one of
+            // them would be the page quietly saying the cards are not the same kind of thing. A
+            // card without a banner spends the difference on its sentence, which costs nothing.
+            bool anyCostly = false;
+            for (int i = 0; i < _cards.Count; i++)
+                if (TalentAudit.For(def.Id, _cards[i].Selection) != null) anyCostly = true;
+            float bandTop = anyCostly ? NumbersTopCostly : NumbersTopPlain;
+
             for (int i = 0; i < _cards.Count; i++)
             {
                 CardView view = _cards[i];
@@ -538,13 +559,13 @@ namespace Emberfall.UI.Screens
                 }
 
                 float proseTop = NameTop + NameHeight + BlockGap + (costly ? CostHeight + BlockGap : 0f);
-                Stretch(view.Prose.rectTransform, proseTop, ProseHeight);
+                Stretch(view.Prose.rectTransform, proseTop,
+                        bandTop - HeadingHeight - RuleGap - BlockGap - proseTop);
                 view.Prose.text = TalentText.Prose(talent);
                 view.Prose.color = view.Prose.text == TalentText.NoProse ? Emberforge.TextQuiet : Emberforge.TextBody;
 
-                float numbersTop = costly ? NumbersTopCostly : NumbersTopPlain;
-                Stretch(view.Rule.rectTransform, numbersTop - HeadingHeight - RuleGap, Emberforge.RuleHeight);
-                Stretch(view.Heading, numbersTop - HeadingHeight, HeadingHeight);
+                Stretch(view.Rule.rectTransform, bandTop - HeadingHeight - RuleGap, Emberforge.RuleHeight);
+                Stretch(view.Heading, bandTop - HeadingHeight, HeadingHeight);
 
                 for (int c = view.NumbersList.childCount - 1; c >= 0; c--)
                     Destroy(view.NumbersList.GetChild(c).gameObject);
@@ -574,12 +595,15 @@ namespace Emberfall.UI.Screens
                 if (clause) Bottom(view.ClauseNote.rectTransform, CardBottomBase, NoteRow);
                 if (floor) Bottom(view.FloorNote.rectTransform, CardBottomBase + (clause ? NoteRow : 0f), NoteRow);
 
+                float bandBottom = CardBottomBase + notes + 6f;
+                Bottom(view.RuleBottom.rectTransform, bandBottom, Emberforge.RuleHeight);
+
                 RectTransform scrollRect = view.NumbersScroll.GetComponent<RectTransform>();
                 scrollRect.anchorMin = new Vector2(0f, 0f);
                 scrollRect.anchorMax = new Vector2(1f, 1f);
-                scrollRect.offsetMin = new Vector2(CardPad, CardBottomBase + notes + 6f);
-                scrollRect.offsetMax = new Vector2(-CardPad, -numbersTop);
-                Bottom(view.More.rectTransform, CardBottomBase + notes + 6f, 18f);
+                scrollRect.offsetMin = new Vector2(CardPad, bandBottom + Emberforge.RuleHeight + 4f);
+                scrollRect.offsetMax = new Vector2(-CardPad, -bandTop);
+                Bottom(view.More.rectTransform, bandBottom + Emberforge.RuleHeight + 4f, 18f);
             }
         }
 
@@ -713,11 +737,14 @@ namespace Emberfall.UI.Screens
             _noneRun.Interactable = !none;
 
             string name = _hero.Def.Name;
-            _noneBody.text = name + " fights with none of the three. An unselected talent is not a quieter"
-                           + " talent: it is not in the battle at all.";
+            // "the three" is read off the hero rather than written here: HeroDef.MaxTalents is the
+            // ceiling and not a promise, and a hero authoring two would be told it has three.
+            int count = _hero.Def.Talents.Count;
+            _noneBody.text = name + " fights with none of " + (count == 1 ? "it" : "the " + Word(count))
+                           + ". An unselected talent is not a quieter talent: it is not in the battle at all.";
 
-            _footerRule.text = _hero.Def.Talents.Count > 0
-                ? "One of the three, or none. Free to change, any time, as often as you like - nothing is"
+            _footerRule.text = count > 0
+                ? "One at a time, or none. Free to change, any time, as often as you like - nothing is"
                   + " spent, nothing is locked in, and no talent unlocks another."
                 : "";
             bool deployed = App.Session.Profile.TeamSlotOf(_hero.Uid) >= 0;
@@ -851,6 +878,12 @@ namespace Emberfall.UI.Screens
         }
 
         // ------------------------------------------------------------------ small
+
+        /// <summary>A small count in words, for a sentence. Only ever reaches three.</summary>
+        private static string Word(int n)
+        {
+            return n == 2 ? "two" : n == 3 ? "three" : n.ToString(CultureInfo.InvariantCulture);
+        }
 
         private static string Roman(int n)
         {
