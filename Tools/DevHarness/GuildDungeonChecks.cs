@@ -43,6 +43,17 @@ namespace Emberfall.DevHarness
         /// test, so it is asked for several dungeons, not one.</summary>
         private const int SampleGuilds = 6;
 
+        /// <summary>
+        /// How many dungeons CheckFloors builds to assert floor composition: 1,000 cycles of five
+        /// floors, 5,000 floors. Sized against the rate actually seen: single-Aspect floors turned up
+        /// at 1 to 2 in 1,500 when Pinoy's 84 were fielded beside the shipped 12. At 1 in 750 per
+        /// floor, 5,000 floors miss every one about 0.1% of the time (0.99867^5000); a 1-in-100
+        /// failure is missed about e^-50 of the time. The single seed this replaced built 5 floors,
+        /// which misses a 1-in-750 failure 99.3% of the time. Building a floor solves one level, so
+        /// this is cheap.
+        /// </summary>
+        private const int CompositionCycles = 1000;
+
         /// <summary>A floor must be cleared by at least this share of ALL sample rosters.</summary>
         private const float MinClearShare = 0.40f;
 
@@ -495,7 +506,7 @@ namespace Emberfall.DevHarness
             Check(floors == 5, "a cycle is five floors (" + floors + ")");
             Check(cfg.GuildDungeonAttemptsPerFloor == 3, "three attempts per floor per cycle, read from balance.json (" + cfg.GuildDungeonAttemptsPerFloor + ")");
 
-            bool allFull = true, lastIsChampion = true, rising = true, nearTarget = true, sameTwice = true, mixed = true, noScripted = true;
+            bool lastIsChampion = true, rising = true, sameTwice = true;
             HashSet<GuildDungeonTheme> early = new HashSet<GuildDungeonTheme>();
             GuildDungeonTheme[] themes = GuildDungeonGenerator.ThemesFor(floors, seed);
             int previous = 0;
@@ -503,34 +514,60 @@ namespace Emberfall.DevHarness
             {
                 StageDef a = GuildDungeonGenerator.BuildFloor(content, seed, f);
                 StageDef b = GuildDungeonGenerator.BuildFloor(content, seed, f);
-                if (a.Enemies.Count != cfg.MaxTeamSize) allFull = false;
                 if (Describe(a) != Describe(b)) sameTwice = false;
                 int power = GuildDungeonGenerator.TargetPowerForFloor(cfg, f);
                 if (power <= previous) rising = false;
                 previous = power;
-                if (EnemyPower(content, a) < power) nearTarget = false;
                 if (f < floors) early.Add(themes[f - 1]);
-
-                HashSet<Aspect> aspects = new HashSet<Aspect>();
-                for (int i = 0; i < a.Enemies.Count; i++)
-                {
-                    EnemyDef def = content.GetEnemy(a.Enemies[i].EnemyId);
-                    if (def != null) aspects.Add(def.Aspect);
-                    if (a.Enemies[i].EnemyId == "the_unmade") noScripted = false;
-                }
-                if (aspects.Count < 2) mixed = false;
                 Line("    floor " + f + "  " + themes[f - 1].ToString().PadRight(10) + Describe(a));
             }
             lastIsChampion = themes[floors - 1] == GuildDungeonTheme.Champion;
 
-            Check(allFull, "every floor fields a full line of " + cfg.MaxTeamSize);
             Check(sameTwice, "building a floor twice from the same seed builds the same floor");
             Check(lastIsChampion, "the last floor is the Champion floor");
             Check(early.Count == Math.Min(4, floors - 1), "the floors before it are four different themes");
             Check(rising, "the power target climbs every floor");
-            Check(nearTarget, "and every floor's line reaches its target - the level is solved for it, not guessed");
-            Check(mixed, "no floor is drawn from a single Aspect - an Aspect floor is a counter-pick check");
-            Check(noScripted, "the prologue's scripted boss never appears - only templates a campaign stage fields are drawn");
+
+            // COMPOSITION IS A PROBABILITY, SO IT IS ASSERTED OVER MANY DUNGEONS, NOT ONE. Nothing in
+            // the generator forbids a single-Aspect line: Fill avoids repeating a template, not an
+            // Aspect, so a mono floor is a draw that happens at some rate. Built from the seed above
+            // alone this check once passed content that made five Gale bodies on 2 floors in 1,500,
+            // because neither was in its five. CompositionCycles is sized so a failure that rare is
+            // still caught: see the constant.
+            int built = 0, shortLines = 0, missedTarget = 0, monoAspect = 0, scripted = 0;
+            string firstBad = "";
+            for (int cycle = 1; cycle <= CompositionCycles; cycle++)
+            {
+                int s = GuildDungeon.SeedFor("floors-check", cycle);
+                for (int f = 1; f <= floors; f++)
+                {
+                    StageDef a = GuildDungeonGenerator.BuildFloor(content, s, f);
+                    built++;
+                    bool bad = false;
+                    if (a.Enemies.Count != cfg.MaxTeamSize) { shortLines++; bad = true; }
+                    if (EnemyPower(content, a) < GuildDungeonGenerator.TargetPowerForFloor(cfg, f)) { missedTarget++; bad = true; }
+                    HashSet<Aspect> aspects = new HashSet<Aspect>();
+                    bool hasScripted = false;
+                    for (int i = 0; i < a.Enemies.Count; i++)
+                    {
+                        EnemyDef def = content.GetEnemy(a.Enemies[i].EnemyId);
+                        if (def != null) aspects.Add(def.Aspect);
+                        if (a.Enemies[i].EnemyId == "the_unmade") hasScripted = true;
+                    }
+                    if (aspects.Count < 2) { monoAspect++; bad = true; }
+                    if (hasScripted) { scripted++; bad = true; }
+                    if (bad && firstBad == "") firstBad = " (first: cycle " + cycle + " floor " + f + ", " + Describe(a) + ")";
+                }
+            }
+            string over = " - over " + built + " floors, " + CompositionCycles + " dungeons of " + floors;
+            Check(shortLines == 0, "every floor fields a full line of " + cfg.MaxTeamSize + over
+                  + (shortLines == 0 ? "" : " (" + shortLines + " short)" + firstBad));
+            Check(missedTarget == 0, "and every floor's line reaches its target - the level is solved for it, not guessed" + over
+                  + (missedTarget == 0 ? "" : " (" + missedTarget + " under)" + firstBad));
+            Check(monoAspect == 0, "no floor is drawn from a single Aspect - an Aspect floor is a counter-pick check" + over
+                  + (monoAspect == 0 ? "" : " (" + monoAspect + " single-Aspect)" + firstBad));
+            Check(scripted == 0, "the prologue's scripted boss never appears - only templates a campaign stage fields are drawn" + over
+                  + (scripted == 0 ? "" : " (" + scripted + " floors)" + firstBad));
 
             bool differs = false;
             int other = GuildDungeon.SeedFor("floors-check", 2);
