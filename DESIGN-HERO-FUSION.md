@@ -115,7 +115,7 @@ Six rules, each applied to numbers measured off the tree:
 
 | what | rule | today |
 |---|---|---|
-| 5-star cap at tier 0 | levels may be 35% of the campaign's growth (pace target A): the finale's entry at its band middle over the starting line is x7.611, x7.611^0.35 = x2.035, and the cap is the last level inside it | 9 |
+| 5-star cap at tier 0 | levels may be 35% of the campaign's growth (pace target A): the finale's entry at its band middle over the starting line was x7.611 when this was derived, x7.611^0.35 = x2.035, and the cap is the last level inside it. **The x7.611 is pinned now** (`CapDerivationGrowth`): under the wall rule the finale is set by what a line at these caps reaches, so reading the caps back off the finale is a loop that settles near 9,000, under chapter 1's own finale | 9 |
 | 5-star caps above | the same 35%, as if the line sat at that tier, on top of every ascension below it, so they rise because the rule holds still | 18, 39 |
 | tiers authored | up to and including the first whose level 1 out-powers the finale's per-hero demand | 3 (tier 0, 1, 2) |
 | curve multiplier | tier t's first Level is one past tier t - 1's cap; M = 1 + growth * (that Level - 1) | x1, x2.035, x6.175 (Levels 1-9, 10-45, 46-281) |

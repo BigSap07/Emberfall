@@ -37,6 +37,10 @@ namespace Emberfall.DevHarness
         /// the callers that grade the rule; the ordinary walk leaves it at 0 and pays nothing.</summary>
         private static int _wallProbeSamples = 0;
 
+        /// <summary>The solver's own wall probe: enough to tell a wall the capped line loses from
+        /// one it wins, printed each iteration and never written anywhere.</summary>
+        private const int SolverWallProbeSamples = 200;
+
         /// <summary>
         /// What the arriving line is worth, and at a wall what it can clear, with every deployed
         /// hero levelled to its own cap and nothing else changed - no conversion, no ascension, no
@@ -73,6 +77,78 @@ namespace Emberfall.DevHarness
             {
                 for (int i = 0; i < team.Count; i++) team[i].Level = was[i];
             }
+        }
+
+        /// <summary>Walks behind the rule's guard: target B's own count, so the rule and the target
+        /// are read over the same number of players.</summary>
+        private const int FusionNeverGatesWalks = PaceSeeds;
+
+        /// <summary>
+        /// FUSION ACCELERATES A WALL. IT NEVER GATES ONE. The rule as a guard: twenty walks by the
+        /// reference player - pulls, gold into levels up to the caps, armor, and no conversion and
+        /// no ascension at all - and every one of them finishes the campaign. A walk that sticks
+        /// is a wall only a conversion roll or a lucky duplicate could open, which is the thing the
+        /// rule forbids, so it FAILS rather than reports.
+        ///
+        /// Beside it, each wall's cost to that player (median, 90th percentile, worst) and the
+        /// fusing player's for comparison, because the rule says a good roll makes a wall faster
+        /// and that is only a claim until both are on one line.
+        /// </summary>
+        private static void CheckFusionNeverGates(ContentDatabase db)
+        {
+            Line("");
+            Line("FUSION NEVER GATES A WALL (" + FusionNeverGatesWalks + " walks that never convert and never ascend, against "
+                 + FusionNeverGatesWalks + " that do)");
+            List<EconomyRun> refs = new List<EconomyRun>(), fused = new List<EconomyRun>();
+            for (int k = 0; k < FusionNeverGatesWalks; k++)
+            {
+                refs.Add(SimulateEconomyUnder(db, WalkSeed(k), false, false));
+                fused.Add(SimulateEconomy(db, false, WalkSeed(k)));
+            }
+            int stuck = 0;
+            List<string> where = new List<string>();
+            for (int k = 0; k < refs.Count; k++)
+                if (refs[k].StuckAt >= 0) { stuck++; where.Add(db.AllStages[refs[k].StuckAt].DisplayCode); }
+
+            Line("  wall    reference: extra sittings med/p90/max   entry xRec med     fusing: extra med/p90/max   entry xRec med");
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef st = db.AllStages[s];
+                if (!BandKindOf(st, s).StartsWith("wall")) continue;
+                Line("  " + st.DisplayCode.PadRight(6) + WallCosts(refs, s).PadLeft(35) + WallEntry(refs, s).PadLeft(17)
+                     + WallCosts(fused, s).PadLeft(32) + WallEntry(fused, s).PadLeft(17));
+            }
+            Check(stuck == 0,
+                  stuck == 0
+                    ? "all " + refs.Count + " walks that never convert and never ascend finish the campaign: no wall waits on a roll"
+                    : stuck + " of " + refs.Count + " walks that never convert and never ascend are STUCK (at "
+                      + string.Join(", ", where.ToArray()) + "): a wall there opens only for a conversion or a lucky duplicate");
+            Line("");
+        }
+
+        private static string WallCosts(List<EconomyRun> runs, int s)
+        {
+            List<int> xs = new List<int>();
+            int missing = 0;
+            for (int k = 0; k < runs.Count; k++)
+            {
+                if (s >= runs[k].Stages.Count) { missing++; continue; }
+                EconomyStageOutcome o = runs[k].Stages[s];
+                int ladder, floor;
+                xs.Add(o.Cleared ? WallExtraSittings(o, out ladder, out floor) : int.MaxValue);
+            }
+            if (xs.Count == 0) return "never reached";
+            int p90 = Percentile(xs, 0.9), max = Percentile(xs, 1.0);
+            return PaceMedian(xs) + "/" + (p90 == int.MaxValue ? "STUCK" : p90.ToString()) + "/"
+                   + (max == int.MaxValue ? "STUCK" : max.ToString()) + (missing > 0 ? " (" + missing + " short)" : "");
+        }
+
+        private static string WallEntry(List<EconomyRun> runs, int s)
+        {
+            List<int> xs = new List<int>();
+            for (int k = 0; k < runs.Count; k++)
+                if (s < runs[k].Stages.Count) xs.Add((int)Math.Round(runs[k].Stages[s].EntryRatio * 1000));
+            return xs.Count == 0 ? "-" : "x" + Ratio3(PaceMedian(xs) / 1000f);
         }
 
         /// <summary>Target B's tail: no more than this many extra sittings at the 90th percentile of

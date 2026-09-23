@@ -221,10 +221,13 @@ namespace Emberfall.DevHarness
             CheckFusionRules(content);
             EconomyRun economy = RunCampaignBalancePass(content);
             ReportPowerSources(content, economy);
-            CheckCampaignPowerCurve(content, economy);
+            // The band is graded on the REFERENCE player's walk, the one recommendedPower is derived
+            // from: see CheckFusionNeverGates. The fusing walk above is what every other table reads.
+            CheckCampaignPowerCurve(content, SimulateEconomyUnder(content, 1, false, false));
             ReportPaceTargets(economy);
             ReportFusionWalk(content, economy);
             ReportPaceAcrossSeeds(content);
+            CheckFusionNeverGates(content);
             CheckEconomyRespondsToIncome(content);
             // After all of them, because it asserts on what they actually resolved
             // while running - the economy responsiveness probe included.
@@ -16273,6 +16276,8 @@ namespace Emberfall.DevHarness
         {
             Line("");
             Line("CAMPAIGN POWER CURVE (entry power / recommendedPower, against the authored band)");
+            Line("  Read on the REFERENCE player - never converts, never ascends - which is the player");
+            Line("  recommendedPower is derived for under the wall rule. A player who fuses arrives above it.");
             Line("  Tutorial = the first " + EconomyTutorialStages + " stages, no band."
                  + "  Ordinary = x" + Fmt(OrdinaryBandLow) + " to x" + Fmt(OrdinaryBandHigh) + ".");
             Line("  Wall = x" + Fmt(WallBandLowChapter1) + " to x" + Fmt(WallBandHighChapter1)
@@ -16546,6 +16551,22 @@ namespace Emberfall.DevHarness
             public List<string> SeedAspects = new List<string>();
         }
 
+        /// <summary>
+        /// THE GROWTH THE CAPS ARE DERIVED AT, PINNED at x7.611: the finale's entry over the starting
+        /// line when the fusion spine derived them (2-12 at recommendedPower 27,601, band middle
+        /// x0.985, starting line 3,572).
+        ///
+        /// It used to be read off the finale on every run, and the wall rule turned that into a loop
+        /// with no floor. FUSION ACCELERATES A WALL, IT NEVER GATES ONE: every wall must be passable by
+        /// a player who never converts and never ascends, so the finale is now set by what that
+        /// player's line reaches at its tier-0 caps. Read the caps off that finale and they fall with
+        /// it - x3.3 of growth gives a 5-star cap of 5 rather than 9 - which lowers what the line
+        /// reaches, which lowers the finale again, settling near 9,000, under chapter 1's own finale.
+        /// The caps are the input the campaign is solved against now, not an output of it, so the
+        /// number they came from is held where they were derived.
+        /// </summary>
+        private const double CapDerivationGrowth = 7.611;
+
         private static double MeanPowerAtLevel(ContentDatabase db, int stars, int level)
         {
             double sum = 0; int n = 0;
@@ -16576,8 +16597,9 @@ namespace Emberfall.DevHarness
             d.StartLine = fresh.TeamPower();
             d.Finale = db.AllStages[db.AllStages.Count - 1];
             d.FinaleMiddle = SolverBandMiddle(d.Finale, db.AllStages.Count - 1);
-            d.FinaleEntry = d.FinaleMiddle * d.Finale.RecommendedPower;
-            d.CampaignGrowth = d.FinaleEntry / Math.Max(1, d.StartLine);
+            // PINNED, not read off the finale: see CapDerivationGrowth.
+            d.CampaignGrowth = CapDerivationGrowth;
+            d.FinaleEntry = d.CampaignGrowth * Math.Max(1, d.StartLine);
             d.PerHeroDemand = d.FinaleEntry / Math.Max(1, db.Balance.MaxTeamSize);
             double lnG = Math.Log(d.CampaignGrowth);
 
@@ -16912,9 +16934,10 @@ namespace Emberfall.DevHarness
             Line("  inputs, all measured off the files:");
             Line("    hero growth per level " + Fmt3((float)d.Growth) + (d.GrowthUniform ? " on every 5-star" : " (the largest; 5-stars differ)")
                  + "; starting line at level 1 " + d.StartLine + " power");
-            Line("    finale " + d.Finale.DisplayCode + ": recommendedPower " + d.Finale.RecommendedPower + " at its band middle x"
-                 + Fmt3((float)d.FinaleMiddle) + " = entry " + (int)Math.Round(d.FinaleEntry) + ", so the campaign grows x"
-                 + Fmt3((float)d.CampaignGrowth) + " since 1-1; per hero " + (int)Math.Round(d.PerHeroDemand));
+            Line("    campaign growth PINNED at x" + Fmt3((float)d.CampaignGrowth) + " (CapDerivationGrowth), an entry of "
+                 + (int)Math.Round(d.FinaleEntry) + ", per hero " + (int)Math.Round(d.PerHeroDemand) + "; the finale "
+                 + d.Finale.DisplayCode + " asks " + d.Finale.RecommendedPower + " at its band middle x"
+                 + Fmt3((float)d.FinaleMiddle) + " and no longer sets the caps");
             Line("    levels may be " + Pct(PaceLevelShareMax) + " of that growth (pace target A), so a factor of x"
                  + Fmt3((float)Math.Pow(d.CampaignGrowth, PaceLevelShareMax)) + " at the finale");
             Line("");
@@ -17253,7 +17276,24 @@ namespace Emberfall.DevHarness
         /// the whole cast.</summary>
         private const float EnemyGrowthPerLevel = 0.12f;
 
-        private const int SolverMaxIterations = 25;
+        private const int SolverMaxIterations = 40;
+
+        /// <summary>
+        /// HOW MUCH HIGHER A STUCK STAGE'S ENTRY RATIO IS AIMED, each time the reference walk sticks
+        /// on it: 5%.
+        ///
+        /// The reference player is the one the rule is written for, but recommendedPower's levels
+        /// are tuned against the instrument line, and the two do not fight alike at one power. The
+        /// reference fields its five highest-ceiling heroes whatever their roles - at 2-4 on the
+        /// second walk that was Kiva, Kael, Talren, Merek and Seraphine, no Mender, all at their
+        /// caps - and it stuck there at x1.131 of a stage the instrument line clears 85% of the time
+        /// at x1.000: 161 losses over 18 sittings. Arriving at a band middle is not enough for that
+        /// player, and only the walk can say how much more is. So a stage it sticks on is aimed a
+        /// step higher, the steps are kept for the rest of the solve, and the table settles when the
+        /// walk sticks nowhere. The power band reads what that cost, stage by stage: a stage asking
+        /// x1.15 more than its band says is a stage the reference player could not pass at its band.
+        /// </summary>
+        private const float SolverStuckStep = 1.05f;
 
         /// <summary>
         /// The band middle one stage is derived against. The four tutorial stages have no band to
@@ -17640,13 +17680,15 @@ namespace Emberfall.DevHarness
         }
 
         private static RecPowerProposal ProposeRecommendedPower(EconomyStageOutcome outcome, int walkIndex,
-                                                               StageBaseline baseline)
+                                                               StageBaseline baseline, int stuckSteps)
         {
             StageDef stage = outcome.Stage;
             RecPowerProposal p = new RecPowerProposal();
             p.Stage = stage;
             p.EntryPower = outcome.EntryPower;
-            p.BandMiddle = SolverBandMiddle(stage, walkIndex);
+            // A stage the reference walk has stuck on is asked for less, one SolverStuckStep for
+            // every walk that stuck there: see SolverStuckStep.
+            p.BandMiddle = SolverBandMiddle(stage, walkIndex) * (float)Math.Pow(SolverStuckStep, stuckSteps);
             p.PriorRecommended = stage.RecommendedPower;
             p.PriorFloor = stage.FloorLevel;
             p.PriorCeiling = stage.CeilingLevel;
@@ -17998,17 +18040,56 @@ namespace Emberfall.DevHarness
 
             int iterations = 0;
             bool settled = false;
+            Dictionary<string, int> stuckSteps = new Dictionary<string, int>();
             while (iterations < SolverMaxIterations)
             {
                 iterations++;
-                EconomyRun run = SimulateEconomy(db, false);
-                if (run.StuckAt >= 0)
+                // THE REFERENCE PLAYER, not the one who fuses: FUSION ACCELERATES A WALL, IT NEVER
+                // GATES ONE, so the curve is derived for a player who never converts and never
+                // ascends, and a player who does meets it early. A stuck walk is not an abort any
+                // more: the stage it stuck on still has an entry reading, and deriving that stage
+                // from it is exactly the move that lets the next walk through. Only a walk that is
+                // stuck AND proposes nothing is a table the solver cannot move.
+                _wallProbeSamples = SolverWallProbeSamples;
+                EconomyRun run;
+                try { run = SimulateEconomyUnder(db, 1, false, false); }
+                finally { _wallProbeSamples = 0; }
+                string stuckAt = run.StuckAt >= 0 ? db.AllStages[run.StuckAt].DisplayCode : null;
+                // Proposals come from the one walk above, as they always have; STUCK is read over
+                // every walk CheckFusionNeverGates reads, because the rule is that no player who
+                // never converts or ascends waits on a roll, not that one of them does not. Seeded
+                // off seed 1 alone, 6 of the guard's 20 walks stuck at 2-6 and 2-12.
+                HashSet<string> stuckIds = new HashSet<string>();
+                if (run.StuckAt >= 0) stuckIds.Add(db.AllStages[run.StuckAt].Id);
+                for (int k = 1; k < FusionNeverGatesWalks; k++)
                 {
-                    Line("  ABORT on iteration " + iterations + ": the simulated player got STUCK at "
-                         + db.AllStages[run.StuckAt].DisplayCode + " and never reached the stages"
-                         + " after it, so there is no entry power to divide. campaign.json was not"
-                         + " written and is still the committed table.");
-                    return 1;
+                    EconomyRun other = SimulateEconomyUnder(db, WalkSeed(k), false, false);
+                    if (other.StuckAt >= 0) stuckIds.Add(db.AllStages[other.StuckAt].Id);
+                }
+                foreach (string id in stuckIds)
+                {
+                    int had;
+                    stuckSteps.TryGetValue(id, out had);
+                    stuckSteps[id] = had + 1;
+                }
+                if (stuckIds.Count > 0 && stuckAt == null)
+                {
+                    List<string> codes = new List<string>();
+                    foreach (string id in stuckIds) codes.Add(db.GetStage(id).DisplayCode);
+                    stuckAt = string.Join(", ", codes.ToArray()) + " (in other walks)";
+                }
+                // Every wall the reference walk met, as it met it: what it brought, what gold could
+                // make of that line at its caps, what the stage asked, and how often the capped line
+                // wins the ceiling battle. A wall it cannot pass is read here, not guessed at.
+                for (int i = 0; i < run.Stages.Count; i++)
+                {
+                    EconomyStageOutcome o = run.Stages[i];
+                    if (!BandKindOf(o.Stage, i).StartsWith("wall") && o.Cleared) continue;
+                    Line("    " + o.Stage.DisplayCode.PadRight(6) + " recPwr " + o.Stage.RecommendedPower
+                         + "  entry " + o.EntryPower + " (x" + Ratio3(o.EntryRatio) + ")  at cap " + o.EntryCappedPower
+                         + (o.EntryCappedCeilRate >= 0 ? "  capped CEIL " + Pct(o.EntryCappedCeilRate) : "")
+                         + "  losses " + o.Losses + "  farm " + o.FarmBattles + "  sittings " + o.Sessions
+                         + (o.Cleared ? "" : "  STUCK") + "   " + o.EntryLine);
                 }
 
                 int moved = 0;
@@ -18016,7 +18097,9 @@ namespace Emberfall.DevHarness
                 for (int i = 0; i < run.Stages.Count; i++)
                 {
                     StageBaseline was = baseline[run.Stages[i].Stage.Id];
-                    RecPowerProposal p = ProposeRecommendedPower(run.Stages[i], i, was);
+                    int steps;
+                    stuckSteps.TryGetValue(run.Stages[i].Stage.Id, out steps);
+                    RecPowerProposal p = ProposeRecommendedPower(run.Stages[i], i, was, steps);
 
                     // recommendedPower and the seeded roster go in FIRST, because both are
                     // inputs to the measurement that follows: the walk fields a line levelled to
@@ -18047,7 +18130,15 @@ namespace Emberfall.DevHarness
                 }
 
                 Line("  iteration " + iterations + ": " + moved + " stage(s) moved, " + probes
-                     + " ceiling probe(s) at " + SolverCeilSamples + " samples each");
+                     + " ceiling probe(s) at " + SolverCeilSamples + " samples each"
+                     + (stuckAt != null ? "; the reference walk stuck at " + stuckAt : ""));
+                if (moved == 0 && stuckAt != null)
+                {
+                    Line("  ABORT: the reference walk is STUCK at " + stuckAt + " and deriving from it moved"
+                         + " nothing, so this table has no fixed point the walk can finish. campaign.json was"
+                         + " not written and is still the committed table.");
+                    return 1;
+                }
                 if (moved == 0) { settled = true; break; }
 
                 string key = SolverStateKey(db);

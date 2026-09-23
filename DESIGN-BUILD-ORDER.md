@@ -452,8 +452,10 @@ tier set and account rank does not (`GameSession.HeroLevelCapOf`); see **Fusion 
   18 per body by star tier) for a random 5-star of the chosen aspect. Ember, Tide, Verdant and Gale
   take same-aspect fodder; Umbra and Lumen take one seed of their own and fodder of any aspect.
 - **Every number is derived, not declared**: `CheckFusionEconomyDerivation` rederives each one from
-  the summon weights, the hero growth rate, the starting line and the finale's `recommendedPower`,
-  prints the F6 crossover for every 5-star, and fails if `balance.json` disagrees.
+  the summon weights, the hero growth rate, the starting line and a campaign growth of x7.611,
+  prints the F6 crossover for every 5-star, and fails if `balance.json` disagrees. The growth was
+  the finale's entry over the starting line until the wall rule made the finale an output of the
+  caps; it is pinned at the value the caps were derived at (`CapDerivationGrowth`).
   `CheckFusionRules` holds `GameSession` to each rule and to save version 16.
 - **There is no fusion screen.** The hero card's level readout counts Levels, so an ascended hero
   reads its Level on the ladder over the Level its cap is at.
@@ -509,11 +511,24 @@ wall - and fails when a stage leaves its band.
   split was measured off how many extra sittings a wall at each ratio actually costs.
 - A wall is a chapter finale or one authored mid-chapter spike. The two spikes are `1-9` and `2-6`.
 
-`recommendedPower` is re-derived for all 24 stages from the simulated player's entry power against
+**The simulated player here is the wall rule's reference player, not the one who fuses.**
+FUSION ACCELERATES A WALL, IT NEVER GATES ONE: every wall must be passable with levels at the cap and
+no conversion and no ascension at all. So the band is read on that player's walk,
+`recommendedPower` is derived from it, and `CheckFusionNeverGates` walks twenty of them and fails if
+any one sticks anywhere. The player who fuses meets every stage above its band, and that is the rule
+working rather than a failure of it.
+
+`recommendedPower` is re-derived for all 24 stages from the reference player's entry power against
 the middle of each stage's own band, with `floorLevel`, `ceilingLevel` and the authored enemy
-levels following so the CEIL band still reads in range at the new number. The curve rises inside
-each chapter, jumps 25% into `1-9`, 22% into `1-12`, 31% into `2-6` and 28% into `2-12`, and takes a
-6.4% to 9.9% relief after a wall that never falls below what the previous ordinary stage demanded.
+levels following so the CEIL band still reads in range at the new number. A stage any of the twenty
+walks sticks on is aimed 5% higher per stick (`SolverStuckStep`), because that player fields its five
+highest-ceiling heroes whatever their roles and does not fight like the instrument line at one
+power. **Chapter 2 is nearly flat under the rule**: a line of 5-stars at the tier-0 cap is worth
+about 12,000, so chapter 2 runs 8,681 to 10,322 and `2-12` asks 9,984 where it asked 27,601. `2-6`
+and `2-12` settled at x1.197 of their `recommendedPower`, over their wall bands, because at the band
+some of the twenty walks stuck there; they are the band guard's two reds, and a reading rather
+than a regression. `2-12`'s roster was set by hand (see `campaign.json`) because moving it as one
+piece clamped it at level 1 reading 0.8% at its ceiling.
 
 A player's power never goes down, so once an earlier stage's band has demanded a power, no later
 stage can be asked for less than it. `recommendedPower` is not monotonic on its own, so the high end
@@ -711,8 +726,11 @@ differs between them.
 each Level (open decision 4), the Striker pass that lifted Velis and Kiva together and emptied
 `KnownF8Exceptions` (**The star band**), the CEIL guard at 2,000 samples and the chapter 1 line
 (open decision 2), a `--wall-study` and a `--line-calibration` development aid, and the re-solve of
-`campaign.json` under the wall rule. Its stage, sweep and talent fingerprints move with the Kiva lift
-and are regenerated as its last commit.
+`campaign.json` under the wall rule: `recommendedPower` derived from the player who never converts
+and never ascends, `CheckFusionNeverGates` failing if any of twenty such walks sticks, the cap
+derivation's growth pinned, and chapter 2 nearly flat as the price (**The campaign power curve**,
+open decision 4). Its stage, sweep and talent fingerprints move with the Kiva lift and the
+re-solve, and are regenerated as its last commit.
 
 ## Next
 
@@ -864,10 +882,12 @@ instead and is named in the coverage note under **Known bugs**.
    three 5-stars and two 4-stars at Levels 4 and 5, so the 3-star line is the one whose Levels look
    like a player's there, and the pinned line at its own floor was reading chapter 1 as harder than a
    player finds it. Read past its caps the 3-star line cleared every CEIL in the game at 100%, which
-   is why it is held to them. **What it shows on the committed campaign is a chapter 1 with a hole in
-   its shape**: `1-6` reads 0% at its ceiling with a blocking battle at 64 (still pinned, by 0.7%),
-   `1-7` 58.4%, `1-8` 90.9%, and `1-9` to `1-11` 99.6% to 100%, which is the CEIL guard's new red
-   until the campaign is re-solved against it.
+   is why it is held to them. **What it showed on the campaign before the wall re-solve was a chapter
+   1 with a hole in its shape**: `1-6` read 0% at its ceiling with a blocking battle at 64, `1-7`
+   58.4%, `1-8` 90.9%, and `1-9` to `1-11` 99.6% to 100%. The re-solve measured those stages against
+   it, and **chapter 1 now grades 7 of 12, `1-6` to `1-12`, every one inside its band** (`1-6` 83.8%
+   to `1-11` 88.8%, `1-12` 63.8% on the pinned line); `1-1` to `1-5` ask for less than even the
+   3-star line at level 1 and stay pinned. Chapter 2 grades 12 of 12.
    **The guard reads a graded CEIL at 2,000 samples (`GuardCeilSamples`), not 200.** At 200 it read
    `1-9` at 80% against a 4,000-sample reference of 87.8%, and `1-12` at 53% against a true 60.8%,
    which was answered with a hand move and a whole chapter 2 re-solve for a content change worth
@@ -920,11 +940,24 @@ instead and is named in the coverage note under **Known bugs**.
      five of the eight walks and 8, 19 and 21 in the other three. A wall under fusion costs the
      time to the next lucky conversion roll, and none of the sixteen finale readings landed in 2 to
      4. Star-gated caps do not deliver target B on either curve.
-   **What is open is whether to re-solve the campaign against the fusion economy.** The solver says
-   to after any economy change, and it would move `1-9`, `1-12` and `2-1` along with everything
-   else, which this spine was told not to do. Until it is decided, the power-band guard reads red
-   on this economy, and the targets are reported against a curve built for the old one. The rest of
-   this entry is the record from before the spine:
+   - **The campaign is now re-solved under the wall rule, and B is unreachable on this fusion
+     economy - measured, not argued.** The rule (fusion accelerates a wall, it never gates one) puts
+     every wall within reach of a player who never converts and never ascends, whose line tops out
+     at the tier-0 cap near 12,000 power; the player who fuses reaches `2-12` at about 33,000. Twenty
+     walks of each: the reference player finishes the campaign every time, paying 3/6/7 extra
+     sittings (median / 90th percentile / worst) at `1-9`, 0/0/1 at `2-6` and 0/0/7 at `2-12`; the
+     player who fuses pays 0 at every wall past `1-9` and meets `2-12` at x3.3. B needs fusion to be
+     an accelerant worth a few sittings of gold, and today it is a 2 to 3 times multiplier. Raising
+     the tier-0 cap does not close that gap, it widens it: on throwaway copies with a 5-star cap of
+     18 and of 27, the player who fuses met `2-12` at 48,300 and 53,900 (median of twenty), while
+     the reference player met `2-6` at 15,700 and never reached `2-12` at a cap of 18, and met
+     `2-12` at 22,900 and stuck there in all seventeen walks that reached it at a cap of 27 - on the
+     campaign as it stood before this re-solve - because every ascended tier starts one Level past
+     the tier-0 cap. **What would make B
+     reachable is a smaller fusion multiplier** - the ascension curve, the tier jump or the copies
+     in `balance.json` and their derivation - which is a change to the fusion spec, not to the
+     campaign. It was offered and not chosen; the strict rule was.
+   The rest of this entry is the record from before the spine:
    - **A, the power mix at the last stage: levels under 35%, roster over 50%.** It is graded on a
      multiplicative split rather than on POWER SOURCES' blocks, because `StatMath.Build` multiplies
      level growth and the star multiplier together: the additive roster share is about
