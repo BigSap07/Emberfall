@@ -53,7 +53,9 @@ namespace Emberfall.Core.Progression
             new AuditedTalent("rheia_the_revision_scribe", 1, false,
                 "Audited as a trade: fewer casts that each land harder."),
             new AuditedTalent("rheia_the_revision_scribe", 3, false,
-                "Audited as a trade: a harder full-Revision strike that keeps its Revision, for Energy each time.")
+                "Audited as a trade: a harder full-Revision strike that keeps its Revision, for Energy each time."),
+            new AuditedTalent("kiva_the_forsaken_oath", 3, false,
+                "Audited as a trade: a Shield on every Forsaken kill, for a little of Kiva's damage.")
         };
 
         public static AuditedTalent For(string heroId, int selection)

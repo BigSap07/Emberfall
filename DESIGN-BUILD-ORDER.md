@@ -322,7 +322,7 @@ beside `FiveStarFloor`.
 **It failed one hero on its first run: Aminah, at x0.50, under two of the three Mender 4-stars.**
 Her numbers were Pinoy's; her kit does less than Marrow's on the same stat line. Her basic, its heal
 and her active went from 105%, 55% and 155% of Attack to 170%, 115% and 230%, and she reads x0.86.
-Nearest the edges now: Kiva at x0.79, and Edrin x1.53, Darian x1.32 and Cyrra x1.37 above. **Hale
+Nearest the edges now: Kiva at x0.83 since the Striker pass below, and Edrin x1.53, Darian x1.32 and Cyrra x1.37 above. **Hale
 reads x0.84.** Defect pass 3 moved his Tracking Habit to round end and he fell to x0.61, under the
 floor. The cause was the Quarry's clock, not his numbers: a Quarry named at round end kept whatever
 it had left from the turn it was laid, so it often ran out before Hale's next turn. Tracking Habit
@@ -334,11 +334,17 @@ are the slow ones to fuse, and rarity with no payoff is a pool players learn to 
 are read off `balance.json`'s `conversionSeedAspects` rather than named in the check. Three read
 under it. **Aminah and Caldus were lifted** by the smallest uniform step on every Damage and Heal
 number in their kits - x1.12 and x1.05 - that puts each above the hero holding their role's median,
-so each is the median now and it moved by under 1%. **Velis is pinned in `KnownF8Exceptions`
-instead**, at x0.91: the Striker role has four 5-stars, so its median is the mean of the middle two,
-and his smallest clearing lift raises it about 9% and drops Kiva to x0.72, under the x0.78 floor.
-Kiva is a starting hero, so that fix is a kit decision, and it is open. The check fails if Velis
-reaches the floor, which makes the pin stale, and if any other rarer-aspect 5-star falls under it.
+so each is the median now and it moved by under 1%. **Velis and Kiva were lifted together, and
+`KnownF8Exceptions` is empty.** The Striker role has four 5-stars, so its median is the mean of the
+middle two, and a hero inside that pair drags the yardstick he is graded against: Velis's smallest
+whole-kit lift left him in the pair at x1.01 and dropped Kiva to x0.72. Each lift now carries its
+hero out of the pair, so the median is Sylven and Vaelis alone (44,942) and neither can move it:
+Kiva took x1.15 on every Damage number and reads x0.83, and Velis took x1.45 on his basic alone and
+reads x1.04, because the same step on his whole kit put three of his clauses dark in the arena
+matrix. Kiva's Unclaimed Victory crossed into a measured loss with it (-807 a battle, t -2.9, from
+-410, t -1.7) and is on `KnownCostlyTalents` and `TalentAudit.Costly` as a trade: it buys a Shield.
+The check still fails if a pinned exception reaches the floor or any rarer-aspect 5-star falls
+under it.
 **One median moved in pass 3**: the Breaker median fell from Seraphine's 90536 to Rheia's 81541
 when `buffsOnly` took the bookkeeping out of Seraphine's Contrary Evidence, which raised every graded
 Breaker below five - Siofra x0.66, Tamsin x0.57, Aster and Avera x0.34 - and left all of them in
@@ -701,13 +707,12 @@ differs between them.
 
 ## In progress
 
-**`engine/round-end-and-rooms`** carries the round-end repair described under **Combat** (Finn's
-Aftershock Clock delays at last, and `BattleSession.EndRound` raises `RoundEnd`), Brenna I's room
-rebuilt as a legal lineup with the harness now asserting every talent room is one, the Aftershock
-Clock's stated reason taken out of the matrix now that it is lit, and the `EMBERFALL_MATRIX_NORMAL`
-reading under **Tooling**. Its last commit regenerates the pinned baselines from a fresh rebase on
-`main`, and only Finn's five hero-sweep lines move. The defect pass, the Quarry clock repair, the
-fusion spine and the arena matrix have all landed on `main` and are described above.
+**`balance/wall-resolve`** carries what the fusion spine left: target A re-measured by what bought
+each Level (open decision 4), the Striker pass that lifted Velis and Kiva together and emptied
+`KnownF8Exceptions` (**The star band**), the CEIL guard at 2,000 samples and the chapter 1 line
+(open decision 2), a `--wall-study` and a `--line-calibration` development aid, and the re-solve of
+`campaign.json` under the wall rule. Its stage, sweep and talent fingerprints move with the Kiva lift
+and are regenerated as its last commit.
 
 ## Next
 
@@ -839,31 +844,35 @@ instead and is named in the coverage note under **Known bugs**.
    did not change the answer against the committed curve**: over eight walks with eight first seeds
    the four walls cost 0 extra sittings in 31 of 32 readings and 1 in the other, because the player
    who fuses meets them above their bands. See open decision 4.
-2. **The CEIL band is blind on most of chapter 1.** The geared curve is what content is tuned
-   against and its band assertion covers non-pinned stages only. The instrument's own geared level-1
-   line is worth about 6,900 to 7,400 power and chapter 1 asks for 2,977 to 8,623, so ten of its
-   twelve stages report FLOOR-PINNED: the pin cannot level down to the target, so those rows measure
-   the five-body floor rather than `recommendedPower`. Six of the ten read 100% at their ceiling and
-   the other four read 98.5%, 98%, 96.5% and 90.5%, all excluded from the ordinary band of 78% to 92%
-   rather than failing it. Only `1-9` and `1-12` are measured against what they ask for; `1-11`
-   joined the pinned rows when the re-solve against real summon rates lowered it to 7,062. **The blind
-   spot bit once in pass 3**: the solver does not measure a pinned stage, and its re-solve raised
-   `1-10`'s ceiling until that stage read 55%, the relief stage after the `1-9` wall reading as the
-   hardest finish in the chapter; the three units under the top of its line were taken two levels
-   down by hand, and it read 83%. After the re-solve against real summon rates it reads 98%. Closing the gap
-   would need chapter 1 income to roughly quadruple, which is a different game, so the alternative
-   is a second cheaper yardstick for the opening stages, or a solver that measures a pinned stage
-   whenever the instrument sits within a few percent of what it asks.
-   **What grades chapter 1 today is two stages, both walls.** Of chapter 1's twelve, only `1-9` and
-   `1-12` are CEIL-graded, so no ordinary chapter 1 stage has been held to the 78% to 92% band by
-   anything; chapter 2 grades all twelve. `1-9` sits 5.2% above the pin and `1-12` 19.6% above it
-   (`--ceil-reconcile` prints the margin), `1-10` is pinned by 4.8% and `1-11` by 2.9%. The solver's
-   only lever for an entry ratio under its band is lowering `recommendedPower`, and lowering it is
-   the same move that takes a stage under the pin and out of grading - which is how `1-11` left. So
-   the band is structurally weakest exactly where the solver works hardest: each fix of an under-band
-   chapter 1 stage risks removing the only instrument that could have said the fix was wrong. Two
-   walls with margins of 5% and 20% can say whether those two walls are the right height; they
-   cannot grade chapter 1's shape.
+2. **Chapter 1 has a yardstick of its own now, and it disagrees with the old one.** The pinned
+   geared line is five 5-stars worth about 6,900 to 7,400 power at level 1, more than most of
+   chapter 1 asks for, so ten of chapter 1's twelve stages were FLOOR-PINNED and only its two walls
+   were graded. `ChapterOneLine` is the pinned line's five roles at three stars (Petra, Bren, Elin,
+   Avera, Selka), the lowest tier with the whole kit shape, held to the caps the game gives it.
+   `InstrumentLineFor` reads every chapter 1 stage with it wherever it can stand at the stage's
+   `recommendedPower` (about 5,200 to 8,200) and falls back to the pinned line where it cannot; the
+   solver, the guard and `--ceil-reconcile` all build their line through it, so they cannot disagree
+   about which line a stage was read with. **On the committed campaign it grades 6 of chapter 1's 12
+   stages where the pinned line graded 2**: `1-7` to `1-11` on the 3-star line and `1-12`, at 8,623,
+   on the pinned line, because it asks for more than the 3-star line can reach. Chapter 2 grades all
+   twelve, as before.
+   **The two lines are not interchangeable, and that was measured before it was built on.** Power
+   does not carry across lines with different Level profiles, because combat reads Level itself for
+   Defense mitigation: at `1-9`'s power the pinned line stands at about Level 2 and the 3-star line at
+   about Level 6, and the 3-star line clears `1-9`'s ceiling 100% of the time against the pinned
+   line's 87.9% (`--line-calibration`, 2,000 samples). The economy walk's player meets `1-9` with
+   three 5-stars and two 4-stars at Levels 4 and 5, so the 3-star line is the one whose Levels look
+   like a player's there, and the pinned line at its own floor was reading chapter 1 as harder than a
+   player finds it. Read past its caps the 3-star line cleared every CEIL in the game at 100%, which
+   is why it is held to them. **What it shows on the committed campaign is a chapter 1 with a hole in
+   its shape**: `1-6` reads 0% at its ceiling with a blocking battle at 64 (still pinned, by 0.7%),
+   `1-7` 58.4%, `1-8` 90.9%, and `1-9` to `1-11` 99.6% to 100%, which is the CEIL guard's new red
+   until the campaign is re-solved against it.
+   **The guard reads a graded CEIL at 2,000 samples (`GuardCeilSamples`), not 200.** At 200 it read
+   `1-9` at 80% against a 4,000-sample reference of 87.8%, and `1-12` at 53% against a true 60.8%,
+   which was answered with a hand move and a whole chapter 2 re-solve for a content change worth
+   under a point. At 2,000 its standard error is 0.8 points at 85% and 1.1 at 65%. It costs about
+   ten seconds of `build-check`.
 3. **The Hub's right rail sits on painted architecture.** The delivered `hub.png` puts the Proving's
    gatehouse hard against the right edge, roughly x 0.82 to 0.97 of the painting, and the rail's
    discs land on its right tower at every supported aspect. No marker and no label is covered -
@@ -881,19 +890,29 @@ instead and is named in the coverage note under **Known bugs**.
    power, roster 20.1% and armor 15.5%, with 86% of the gold that bought those levels idle income.
    The intended shape is roster-led with levels as a top-up, the way an ascension-gated idle RPG
    works. `ReportPaceTargets` grades two targets on every run, **reported and never failing**, and
-   `ReportPaceAcrossSeeds` reads them over eight walks:
-   - **With the spine, on the committed campaign**: roster 49.7% to 56.9% (target over 50%, met in
-     seven walks of eight) and levels 40.0% to 45.7% (target under 35%, met in none); both finales
-     cost 0 extra sittings in all eight walks (target 2 to 4, met in none). The simulated player
+   `ReportPaceAcrossSeeds` reads them over twenty walks:
+   - **Target A was reported wrong, and the real improvement is much smaller.** The spine first
+     reported roster 49.7% to 56.9% against a pre-spine 21.0%. That split counted the line at TIER
+     level 1 as roster, and under F6 an ascended hero starts its new tier one Level past the old cap,
+     so every Level gold bought below a tier turned into roster the moment the hero ascended: the
+     measure could not tell copies from gold, and it is not like-for-like with 21.0%, which had no
+     ascension in it. `SplitPace` now attributes every Level to what bought it - a level-up is gold,
+     the Level an ascension grants is copies - and `ReportPaceTargets` grades that; the standing split
+     is printed beside it. **By what bought it, over twenty walks, with the Striker pass in: roster
+     30.1% to 37.9% and levels 58.0% to 66.3%** (targets over 50% and under 35%, met in none),
+     against the standing split's roster 50.0% to 62.5% and levels 34.0% to 45.7%, with no Level the
+     walk could not attribute. Against the pre-spine 21.0% roster and 70.7% levels, fusion raised
+     roster's share by 9 to 17 points, not the 29 to 36 the standing split claimed. An ascension grants one Level;
+     the tier's other Levels are bought with gold at the tier's price, so they count as gold.
+   - **With the spine, on the committed campaign**: both finales cost 0 extra sittings in 39 of 40
+     readings over twenty walks and 1 in the other (target 2 to 4, met in none). The simulated player
      swaps a 5-star made by a conversion into the line in every walk, and in seven of eight does it
      in the same sitting the conversion made it. It meets chapter 2 at x1.3 to x1.8 of
      `recommendedPower`, which is the power-band guard's red.
    - **Why A stops short**: the caps put levels at 35% only if the rest of the growth is roster, and
      the roster a walk builds by `2-12` is a line of tier-1 heroes, x3.1 its starting line at level 1
      against the x5.9 A needs at the levels it carries. Tier 2 costs four more copies of the same
-     hero. And the split is partly definitional under F6: an ascended hero's first level stands
-     where the old tier's cap was, so levels bought below a tier count as roster from the moment it
-     ascends.
+     hero. (The split this sentence first quoted was partly definitional; see the correction above.)
    - **Why B stops short**: walls cost sittings when a player arrives under them and has to grow;
      this player arrives over them, because the curve was derived for one who could not fuse.
    - **Re-solving does not rescue B.** Solved against a throwaway copy with the spine in place (16

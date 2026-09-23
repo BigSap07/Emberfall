@@ -31,6 +31,8 @@ namespace Emberfall.DevHarness
             bool talentValue = false;
             bool fidelity = false;
             bool reconcile = false;
+            int wallStudy = 0;
+            bool lineCalibration = false;
             string reconcileStage = null, reconcileLevels = null;
             string only = null;
             string contentDir = null;
@@ -39,6 +41,14 @@ namespace Emberfall.DevHarness
                 if (args[i] == "--solve-recommended-power") { solve = true; continue; }
                 if (args[i] == "--talents-worth-picking") { talentValue = true; continue; }
                 if (args[i] == "--fidelity") { fidelity = true; continue; }
+                if (args[i] == "--line-calibration") { lineCalibration = true; continue; }
+                if (args[i] == "--wall-study")
+                {
+                    wallStudy = 20;
+                    int n;
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out n)) { wallStudy = n; i++; }
+                    continue;
+                }
                 if (args[i] == "--ceil-reconcile")
                 {
                     reconcile = true;
@@ -59,6 +69,8 @@ namespace Emberfall.DevHarness
             if (solve) return RunRecommendedPowerSolver(contentDir);
             // Also not a check, and not run by the gate: see RunCeilReconcile.
             if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
+            if (wallStudy > 0) return RunWallStudy(contentDir, wallStudy);
+            if (lineCalibration) return RunLineCalibration(contentDir);
 
             Console.OutputEncoding = Encoding.UTF8;
             Line("EMBERFALL CORE HARNESS");
@@ -14614,6 +14626,64 @@ namespace Emberfall.DevHarness
             "isolde_the_slow_fading",          // Stalker
         };
 
+        /// <summary>
+        /// THE GEARED CURVE'S CHAPTER 1 LINE: the pinned line's five roles at three stars, one per
+        /// aspect, so the opening chapter's SHAPE is graded and not only its two walls.
+        ///
+        /// The pinned line is five 5-stars, and five 5-stars at level 1 in chapter 1's gear are
+        /// already worth about 6,900 to 7,400 power, more than most of chapter 1 asks for. A line
+        /// cannot be placed below its own level-1 value, so those stages were FLOOR-PINNED and read
+        /// the instrument rather than the stage: of chapter 1's twelve only 1-9 and 1-12 were
+        /// graded, and no ordinary chapter 1 stage had been held to the 78% to 92% band by anything.
+        /// Three stars is the lowest tier with the whole kit shape - a basic, a passive and an
+        /// active; two stars loses the active - and five of them start at three quarters of the
+        /// 5-star line's level-1 power.
+        ///
+        /// IT IS A DIFFERENT YARDSTICK, MEASURED, AND THE DIFFERENCE IS WHY IT IS THE RIGHT ONE HERE.
+        /// Power does not carry across lines with different Level profiles, because combat reads
+        /// Level itself for Defense mitigation. At the same recommendedPower this line cleared the
+        /// CEIL of 1-9 100% of the time where the pinned line cleared 87.9%, and 2-1 100% against
+        /// 83.3% (--line-calibration, 2,000 samples). At 1-9's power the pinned line stands at
+        /// about Level 2 and this one at about Level 6. The economy walk's own player meets 1-9 with
+        /// three 5-stars and two 4-stars at Levels 4 and 5, so in chapter 1 this line is the one
+        /// whose Levels look like a player's, and the pinned line at its own floor was reading
+        /// chapter 1 as harder than a player finds it.
+        ///
+        /// Held to the caps the game gives it (InstrumentStep), because read past them it cleared
+        /// every chapter 1 and 2 CEIL at 100%: a 3-star at Level 20 is a stat block nobody can own.
+        /// That also means it cannot reach every chapter 1 stage, and InstrumentLineFor falls back
+        /// to the pinned line where it cannot; the guard table names the line each stage was read
+        /// with. Every instrument that places a line at a stage's power goes through that one
+        /// function, so the solver and the guard can never disagree about which line it was.
+        /// </summary>
+        private static readonly string[] ChapterOneLine = {
+            "petra_the_unsent_letter",         // Bulwark, Umbra
+            "bren_the_extra_measure",          // Vanguard, Tide
+            "elin_the_second_stitch",          // Mender, Verdant
+            "avera_the_interrupter",           // Breaker, Gale
+            "selka_the_unheard_appeal",        // Stalker, Ember
+        };
+
+        /// <summary>The line the geared instruments field at one stage: ChapterOneLine in chapter 1
+        /// wherever it can reach the stage's recommendedPower at its own caps, PinnedLine everywhere
+        /// else. A chapter 1 stage asking for more than the 3-star line can stand at falls back to
+        /// the 5-star line rather than being read below its own power.</summary>
+        private static string[] InstrumentLineFor(ContentDatabase db, StageDef stage)
+        {
+            if (stage == null || stage.ChapterNumber != 1) return PinnedLine;
+            int max;
+            if (!_chapterOneLineMax.TryGetValue(stage.Id, out max))
+            {
+                // Gear rolls off the stage's depth and not its enemies, so the ceiling is a fact about
+                // the stage and is read once.
+                max = BuildLineAt(db, stage, true, int.MaxValue, ChapterOneLine).Profile.EffectiveTeamPower(db);
+                _chapterOneLineMax[stage.Id] = max;
+            }
+            return stage.RecommendedPower <= max ? ChapterOneLine : PinnedLine;
+        }
+
+        private static readonly Dictionary<string, int> _chapterOneLineMax = new Dictionary<string, int>();
+
         /// <summary>The roster's healer, named once. The economy pass measures what healing is
         /// worth by fielding this hero twice, once with every Heal zeroed; it has to know who that
         /// is. Wren Ilyra until the placeholder roster was deleted, Marrow now, and whoever the
@@ -15075,9 +15145,13 @@ namespace Emberfall.DevHarness
                 GameSession session = BuildPinnedLine(db, stage, true);
 
                 int seed = 6000000 + stage.GlobalIndex * 97;
+                bool floorPinned = IsFloorPinned(db, stage);
                 float floor = CurveRate(session, stage, 1, 1, ReportSamples, seed, _gearedCurveOrdinals);
+                // A graded stage's CEIL is read at GuardCeilSamples, a pinned one's at ReportSamples:
+                // only the graded reading is held to a band, so only it pays for the precision.
                 float ceil = CurveRate(session, stage, Math.Max(1, stage.WaveCount),
-                                       Math.Max(1, stage.BattleCount), ReportSamples,
+                                       Math.Max(1, stage.BattleCount),
+                                       floorPinned ? ReportSamples : GuardCeilSamples,
                                        seed + 13, _gearedCurveOrdinals);
                 int block = FirstBlockingBattle(session, stage, seed + 29, ceil, _gearedCurveOrdinals);
 
@@ -15106,7 +15180,6 @@ namespace Emberfall.DevHarness
                 // exclusion is for. It is stricter in the other direction too: a stage that reads
                 // 100% while its line SITS at its recommendedPower is now checked, where the proxy
                 // waved it through.
-                bool floorPinned = IsFloorPinned(db, stage);
                 if (!floorPinned)
                 {
                     float bandLo = CeilBandLow(db, stage);
@@ -15127,6 +15200,7 @@ namespace Emberfall.DevHarness
                      + Pct(floor).PadLeft(8)
                      + Pct(ceil).PadLeft(8)
                      + (block > 0 ? ("b" + block) : "none").PadLeft(8)
+                     + (InstrumentLineFor(db, stage) == ChapterOneLine ? "   3-star line" : "")
                      + (floorPinned ? "   FLOOR-PINNED (the level-1 geared line is already worth more"
                                       + " than this stage asks for, so CEIL reads the instrument)" : "")
                      + (floor < 0.9f ? "   FLOOR UNDER 90%" : ""));
@@ -15213,6 +15287,9 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < team.Count; i++)
             {
                 HeroInstance h = team[i];
+                // Below five stars the cap is the one the game gives, and that is measured rather
+                // than conservative: see ChapterOneLine for what a 3-star line read past its own
+                // cap did.
                 int stars = h.Def != null ? h.Def.Stars : 5;
                 if (h.Level >= StatMath.CapLevel(session.Balance, stars, StatMath.MaxAscensionTier(session.Balance))) continue;
                 int cost = StatMath.LevelUpCost(session.Balance, h.Level);
@@ -15226,6 +15303,14 @@ namespace Emberfall.DevHarness
         private static GameSession BuildPinnedLineAt(ContentDatabase db, StageDef stage, bool armored,
                                                      int targetPower)
         {
+            return BuildLineAt(db, stage, armored, targetPower, InstrumentLineFor(db, stage));
+        }
+
+        /// <summary>BuildPinnedLineAt with the line named rather than chosen by chapter. Only the
+        /// line calibration (RunLineCalibration) asks for a line a stage would not be read with.</summary>
+        private static GameSession BuildLineAt(ContentDatabase db, StageDef stage, bool armored,
+                                               int targetPower, string[] pinned)
+        {
             PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
             profile.PlayerLevel = 60;
             profile.Gold = 500000000L;
@@ -15233,7 +15318,6 @@ namespace Emberfall.DevHarness
             for (int h = 0; h < db.Heroes.Count; h++)
                 if (!profile.Owns(db.Heroes[h].Id)) session.GrantHeroDirect(db.Heroes[h], 0);
 
-            string[] pinned = PinnedLine;
             for (int i = 0; i < profile.Team.Length; i++) profile.ClearTeamSlot(i);
             int assigned = 0;
             for (int i = 0; i < pinned.Length; i++)
@@ -15246,6 +15330,11 @@ namespace Emberfall.DevHarness
                     break;
                 }
             }
+            // Loud, as the unarmored curve's own pin is: a missing body is an instrument quietly
+            // measuring a different team than the one it reports.
+            if (assigned != pinned.Length)
+                throw new InvalidOperationException("the instrument line for " + stage.DisplayCode + " deployed "
+                    + assigned + " of " + pinned.Length + " named heroes");
 
             // GEAR FIRST, then level - and this ordering is the whole fix.
             //
@@ -15363,6 +15452,18 @@ namespace Emberfall.DevHarness
             public int Conversions, Ascensions, Swaps;
             /// <summary>Cumulative income ledger as it stood at that same instant.</summary>
             public EconomyLedger EntryLedger;
+            /// <summary>The same instant split by what BOUGHT each Level rather than by where it
+            /// stands: the deployed five at Level 1 (not tier level 1), the bare power gold's Levels
+            /// add, and the bare power ascension's Levels add. Gold plus copies is bare power less
+            /// the Level-1 line. Unattributed counts Levels the walk cannot account for, and is
+            /// printed so the split cannot be wrong silently.</summary>
+            public int EntryLevelOnePower, EntryGoldLevelPower, EntryCopyLevelPower, EntryUnattributedLevels;
+            /// <summary>The line the player arrives with, every hero levelled to its own cap and
+            /// nothing converted or ascended: what gold alone can make of it. CappedCeilRate is that
+            /// line's win rate at the stage's ceiling battle, read on walls only and only when a
+            /// caller asks (WallProbeSamples), else -1.</summary>
+            public int EntryCappedPower;
+            public float EntryCappedCeilRate = -1f;
 
             public float EntryRatio
             {
@@ -15424,6 +15525,11 @@ namespace Emberfall.DevHarness
             public List<string> SwapLog = new List<string>();
             /// <summary>The sitting a conversion first produced each hero in, by def id.</summary>
             public Dictionary<string, int> FusedInSitting = new Dictionary<string, int>();
+            /// <summary>Every Level each hero has gained, by uid, split by what paid for it: gold
+            /// through a level-up, or copies through an ascension. A hero's Level is 1 plus the
+            /// two, and target A is graded on that split rather than on where the Level stands.</summary>
+            public Dictionary<string, int> GoldLevels = new Dictionary<string, int>();
+            public Dictionary<string, int> CopyLevels = new Dictionary<string, int>();
 
             private int _seed = 1;
             public int NextSeed() { return _seed++; }
@@ -15471,6 +15577,8 @@ namespace Emberfall.DevHarness
                 outcome.EntryRosterPower = DeployedRosterPowerAtLevelOne(profile, db.Balance);
                 outcome.EntryLine = DescribeLine(session);
                 outcome.EntryLedger = run.Ledger.Snapshot();
+                AttributeEntryLevels(run, outcome);
+                ProbeWallAtCap(db, session, outcome, stageIdx);
 
                 int rounds = 0;
                 int sessions = 0;
@@ -15504,8 +15612,10 @@ namespace Emberfall.DevHarness
                     bool rosterMoved = EconomyConvertAscendAndDeploy(session, run, outcome, stageIdx);
                     long goldBeforeLevels = profile.Gold;
                     int levelsBought;
+                    Dictionary<string, int> beforeGold = LevelsByUid(profile);
                     if (SpendGold(session, out levelsBought)) run.CapBlockedSessions++;
                     else run.SpendableSessions++;
+                    CreditLevels(profile, beforeGold, run.GoldLevels);
                     run.Ledger.GoldSpentOnLevels += goldBeforeLevels - profile.Gold;
                     run.Ledger.HeroLevelsBought += levelsBought;
                     if (profile.Gold > run.PeakGold) run.PeakGold = profile.Gold;
@@ -15659,6 +15769,9 @@ namespace Emberfall.DevHarness
             public string StuckAt = "";
             public float EntryRatioLast;
             public double LevelShare, RosterShare;
+            /// <summary>Target A by what bought each Level; see SplitPace.</summary>
+            public double LevelShareBought, RosterShareBought;
+            public int Unattributed;
             public Dictionary<string, int> WallExtra = new Dictionary<string, int>();
             public int Conversions, Ascensions, Swaps, FreshFusedSwaps, Sittings;
         }
@@ -15685,17 +15798,19 @@ namespace Emberfall.DevHarness
             {
                 EconomyStageOutcome first = run.Stages[0], last = run.Stages[run.Stages.Count - 1];
                 r.EntryRatioLast = last.EntryRatio;
-                double total = Math.Log(last.EntryPower / (double)Math.Max(1, first.EntryRosterPower));
-                if (total > 0)
-                {
-                    r.RosterShare = Math.Log(last.EntryRosterPower / (double)Math.Max(1, first.EntryRosterPower)) / total;
-                    r.LevelShare = Math.Log(last.EntryBarePower / (double)Math.Max(1, last.EntryRosterPower)) / total;
-                }
+                PaceSplit split = SplitPace(first, last);
+                r.RosterShare = split.RosterStands;
+                r.LevelShare = split.LevelsStands;
+                r.RosterShareBought = split.RosterBought;
+                r.LevelShareBought = split.LevelsBought;
+                r.Unattributed = split.Unattributed;
             }
             return r;
         }
 
-        private const int PaceSeeds = 8;
+        /// <summary>Twenty, not eight: target B is graded at a median and a 90th percentile, and
+        /// the 90th of eight readings is the worst one.</summary>
+        private const int PaceSeeds = 20;
 
         /// <summary>
         /// THE PACE TARGETS OVER EIGHT PLAYERS, not one. A conversion rolls which 5-star comes out
@@ -15720,9 +15835,13 @@ namespace Emberfall.DevHarness
 
             StringBuilder head = new StringBuilder("  seed      ");
             for (int w = 0; w < walls.Count; w++) head.Append(("+" + walls[w]).PadLeft(7));
-            head.Append("   last entry   levels  roster   conv  asc  swaps  fresh  sittings");
+            head.Append("   last entry   levels  roster  | bought: levels  roster   conv  asc  swaps  fresh  sittings");
             Line(head.ToString());
             int finalesInTarget = 0, finalesGraded = 0, seedsWithFreshSwap = 0;
+            Dictionary<string, List<int>> finaleCost = new Dictionary<string, List<int>>();
+            List<double> levelsBought = new List<double>(), rosterBought = new List<double>();
+            List<double> levelsStands = new List<double>(), rosterStands = new List<double>();
+            int unattributed = 0;
             for (int k = 0; k < readings.Count; k++)
             {
                 PaceReading r = readings[k];
@@ -15733,12 +15852,18 @@ namespace Emberfall.DevHarness
                     row.Append((r.WallExtra.TryGetValue(walls[w], out extra) ? extra.ToString() : "-").PadLeft(7));
                 }
                 row.Append(("x" + Ratio3(r.EntryRatioLast)).PadLeft(13) + Pct((float)r.LevelShare).PadLeft(9)
-                           + Pct((float)r.RosterShare).PadLeft(8) + r.Conversions.ToString().PadLeft(7)
+                           + Pct((float)r.RosterShare).PadLeft(8) + "  |" + Pct((float)r.LevelShareBought).PadLeft(15)
+                           + Pct((float)r.RosterShareBought).PadLeft(8) + r.Conversions.ToString().PadLeft(7)
                            + r.Ascensions.ToString().PadLeft(5) + r.Swaps.ToString().PadLeft(7)
                            + r.FreshFusedSwaps.ToString().PadLeft(7) + r.Sittings.ToString().PadLeft(10)
                            + (r.Stuck ? "   STUCK at " + r.StuckAt : ""));
                 Line(row.ToString());
                 if (r.FreshFusedSwaps > 0) seedsWithFreshSwap++;
+                levelsBought.Add(r.LevelShareBought);
+                rosterBought.Add(r.RosterShareBought);
+                levelsStands.Add(r.LevelShare);
+                rosterStands.Add(r.RosterShare);
+                unattributed += r.Unattributed;
                 for (int i = 0; i < db.AllStages.Count; i++)
                 {
                     StageDef s = db.AllStages[i];
@@ -15746,13 +15871,31 @@ namespace Emberfall.DevHarness
                     if (!s.IsBoss || !r.WallExtra.TryGetValue(s.DisplayCode, out extra)) continue;
                     finalesGraded++;
                     if (extra >= PaceFinaleExtraMin && extra <= PaceFinaleExtraMax) finalesInTarget++;
+                    if (!finaleCost.ContainsKey(s.DisplayCode)) finaleCost[s.DisplayCode] = new List<int>();
+                    finaleCost[s.DisplayCode].Add(r.Stuck && r.StuckAt == s.DisplayCode ? int.MaxValue : extra);
                 }
             }
             Line("");
-            Line("  +stage is a wall's EXTRA sittings over its ladder floor. levels and roster are target A's shares at the last stage.");
+            Line("  +stage is a wall's EXTRA sittings over its ladder floor. levels and roster are target A's shares at the last stage:");
+            Line("  first as the Levels STAND (the line at tier level 1 is roster), then as they were BOUGHT (gold's Levels are");
+            Line("  levels, the Levels an ascension granted are roster). Only the second can tell copies from gold; see SplitPace.");
             Line("  fresh counts 5-stars swapped into the line in the sitting a conversion first made them.");
+            Line("");
+            Line("  A, as bought, across " + readings.Count + " walks: levels " + PctRange(levelsBought) + " (target under "
+                 + Pct(PaceLevelShareMax) + ", met in " + CountWhere(levelsBought, v => v < PaceLevelShareMax) + "), roster "
+                 + PctRange(rosterBought) + " (target over " + Pct(PaceRosterShareMin) + ", met in "
+                 + CountWhere(rosterBought, v => v > PaceRosterShareMin) + "). As they stand: levels " + PctRange(levelsStands)
+                 + ", roster " + PctRange(rosterStands) + ". " + unattributed + " Level(s) the walk could not attribute.");
+            foreach (KeyValuePair<string, List<int>> f in finaleCost)
+            {
+                int med = PaceMedian(f.Value), p90 = Percentile(f.Value, 0.9);
+                bool met = med >= PaceFinaleExtraMin && med <= PaceFinaleExtraMax && p90 <= PaceFinaleExtraP90Max;
+                PaceLine(f.Key, "med " + med + ", p90 " + (p90 == int.MaxValue ? "STUCK" : p90.ToString()),
+                         "med " + PaceFinaleExtraMin + "-" + PaceFinaleExtraMax + ", p90 <= " + PaceFinaleExtraP90Max, met,
+                         "readings " + CostList(f.Value));
+            }
             Line("  " + finalesInTarget + " of " + finalesGraded + " finale readings cost " + PaceFinaleExtraMin + " to "
-                 + PaceFinaleExtraMax + " extra sittings (target B); " + seedsWithFreshSwap + " of " + readings.Count
+                 + PaceFinaleExtraMax + " extra sittings; " + seedsWithFreshSwap + " of " + readings.Count
                  + " walks swapped a freshly fused 5-star into the line.");
             Line("");
         }
@@ -16981,10 +17124,21 @@ namespace Emberfall.DevHarness
                  + "  *  levels x" + Fmt(last.EntryBarePower / (float)last.EntryRosterPower)
                  + "  *  armor x" + Fmt(last.EntryPower / (float)last.EntryBarePower)
                  + "   (armor " + Pct(armorShare) + ", ungraded)");
-            PaceLine("levels", Pct(levelShare), "under " + Pct(PaceLevelShareMax), levelShare < PaceLevelShareMax,
-                     "must fall " + Points(levelShare - PaceLevelShareMax));
-            PaceLine("roster", Pct(rosterShare), "over " + Pct(PaceRosterShareMin), rosterShare > PaceRosterShareMin,
-                     "must rise " + Points(PaceRosterShareMin - rosterShare));
+            // GRADED BY WHAT BOUGHT EACH LEVEL, not by where it stands (SplitPace). Under F6 an
+            // ascended hero starts its new tier one Level past the old cap, so every Level gold bought
+            // below a tier reads as roster from the moment it ascends; graded that way the split could
+            // not tell copies from gold. The standing split is printed beside it, since it is the one
+            // the fusion spine first reported.
+            PaceSplit split = SplitPace(first, last);
+            PaceLine("levels", Pct((float)split.LevelsBought), "under " + Pct(PaceLevelShareMax),
+                     split.LevelsBought < PaceLevelShareMax,
+                     "must fall " + Points((float)split.LevelsBought - PaceLevelShareMax));
+            PaceLine("roster", Pct((float)split.RosterBought), "over " + Pct(PaceRosterShareMin),
+                     split.RosterBought > PaceRosterShareMin,
+                     "must rise " + Points(PaceRosterShareMin - (float)split.RosterBought));
+            Line("     by what bought them, above. As they stand (the line at TIER level 1 counted as roster):"
+                 + " levels " + Pct(levelShare) + ", roster " + Pct(rosterShare) + ". "
+                 + split.Unattributed + " Level(s) the walk could not attribute.");
 
             // The roster factor that would meet both at today's levels and armor. Roster over half
             // means R > level + armor; levels under the cap means R > level / cap - level - armor.
@@ -17236,7 +17390,8 @@ namespace Emberfall.DevHarness
             const int referenceSamples = 4000;
 
             Line("");
-            Line("CEIL RECONCILIATION - guard (200 samples, its seed) against solver (600, its seed)"
+            Line("CEIL RECONCILIATION - guard (" + GuardCeilSamples + " samples, its seed) against solver ("
+                 + SolverCeilSamples + ", its seed)"
                  + " against a " + referenceSamples + "-sample reference at a seed neither uses");
             Line("  stage  roster              power  guard  solver  swapped   reference   guard z  solver z"
                  + "  pin margin");
@@ -17281,18 +17436,18 @@ namespace Emberfall.DevHarness
                 foreach (HeroInstance h in solverLine.Profile.TeamHeroes()) sl += h.Def.Id + ":" + h.Level + (h.Ascension > 0 ? "+" + h.Ascension : "") + " ";
                 int gp = guardLine.Profile.EffectiveTeamPower(db), sp = solverLine.Profile.EffectiveTeamPower(db);
 
-                float guard = CurveRate(guardLine, stage, w, b, ReportSamples, guardSeed, _gearedCurveOrdinals);
+                float guard = CurveRate(guardLine, stage, w, b, GuardCeilSamples, guardSeed, _gearedCurveOrdinals);
                 float solver = CurveRate(solverLine, stage, w, b, SolverCeilSamples, solverSeed, _gearedCurveOrdinals);
                 // Each line at the OTHER instrument's seed: equal to the other's reading if and only
                 // if the two lines fight identically.
                 bool swappedAgree =
-                    CurveRate(solverLine, stage, w, b, ReportSamples, guardSeed, _gearedCurveOrdinals) == guard
+                    CurveRate(solverLine, stage, w, b, GuardCeilSamples, guardSeed, _gearedCurveOrdinals) == guard
                     && CurveRate(guardLine, stage, w, b, SolverCeilSamples, solverSeed, _gearedCurveOrdinals) == solver;
                 float reference = CurveRate(guardLine, stage, w, b, referenceSamples, 31000000 + stage.GlobalIndex * 7919,
                                             _gearedCurveOrdinals);
 
                 double p = Math.Min(0.999, Math.Max(0.001, reference));
-                double gz = (guard - reference) / Math.Sqrt(p * (1 - p) / ReportSamples);
+                double gz = (guard - reference) / Math.Sqrt(p * (1 - p) / GuardCeilSamples);
                 double sz = (solver - reference) / Math.Sqrt(p * (1 - p) / SolverCeilSamples);
                 read++;
                 if (Math.Abs(gz) > 2) flagged++;
@@ -17576,14 +17731,33 @@ namespace Emberfall.DevHarness
         /// 86% and 93%. Neither was a tuning miss. Both were one number measured twice.
         ///
         /// At 600 the standard error is 1.4 points, so the candidate the search keeps is the one
-        /// whose TRUE rate is nearest the middle, and the guard's own reading of it is then a
-        /// 200-sample draw around a middle rather than around an edge.
+        /// whose TRUE rate is nearest the middle, and the guard's own reading of it is then a draw
+        /// around a middle rather than around an edge. The guard read 200 when this was written;
+        /// it reads GuardCeilSamples now, which is why it is no longer three times smaller.
         /// </summary>
         private const int SolverCeilSamples = 3 * ReportSamples;
 
+        /// <summary>
+        /// THE GUARD'S CEIL SAMPLES ON A GRADED STAGE: 2,000, ten times ReportSamples, and the
+        /// guard is now the more precise of the two instruments rather than the less.
+        ///
+        /// At 200 the guard cost real work twice. It read 80% at 1-9 against a 4,000-sample
+        /// reference of 87.8%, more than two standard errors off; and it read 53% at 1-12 against
+        /// a true 60.8%, under the finale band, which was answered with a hand move worth under a
+        /// point and then a whole chapter 2 re-solve because that move shifted the walk's armor.
+        /// Neither was the content. Both were a 200-sample draw landing in its own tail.
+        ///
+        /// At 2,000 the standard error is 0.8 points at 85% and 1.1 at 65%, so a stage the solver
+        /// lands five points inside an edge (SolverBandCushion) sits four standard errors or more
+        /// from failing, and a guard failure means the stage's true rate is within about two
+        /// points of the edge. That is a reading worth acting on. It costs about a minute of
+        /// build-check; slower and correct is the trade.
+        /// </summary>
+        private const int GuardCeilSamples = 10 * ReportSamples;
+
         /// <summary>Stop searching as soon as a candidate sits this far inside BOTH edges. Five
-        /// points leaves the guard's own 200-sample reading about two standard errors of room on
-        /// either side, which is what a landing has to survive to mean anything.</summary>
+        /// points leaves the guard's own GuardCeilSamples reading four standard errors of room on
+        /// either side, less the solver's own error on the landing.</summary>
         private const float SolverBandCushion = 0.05f;
 
         private const int SolverMaxProbesPerStage = 60;
@@ -18454,7 +18628,7 @@ namespace Emberfall.DevHarness
             bool moved = false;
             PlayerProfile profile = session.Profile;
 
-            for (int guard = 0; guard < 500; guard++)
+            for (int guard = 0; guard < 500 && _walkConverts; guard++)
             {
                 Aspect target;
                 List<HeroInstance> bodies = PlanConversion(session, out target);
@@ -18473,9 +18647,11 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < profile.Heroes.Count; i++)
             {
                 HeroInstance h = profile.Heroes[i];
-                while (session.AscensionBlocker(h) == null)
+                while (_walkAscends && session.AscensionBlocker(h) == null)
                 {
+                    int levelBefore = h.Level;
                     if (!session.Ascend(h).Success) break;
+                    Credit(run.CopyLevels, h.Uid, h.Level - levelBefore);
                     run.Ledger.Ascensions++;
                     outcome.Ascensions++;
                     moved = true;
@@ -26558,7 +26734,14 @@ namespace Emberfall.DevHarness
                 + " falls because her basic then leaves the body that was feeding Vanishing Mark"),
             new CostlyTalent("rheia_the_revision_scribe I", "TRADE",
                 "as written: 3 Energy per changed status instead of 5, for 20% of Attack more on every"
-                + " enemy each cast changes. Fewer casts that each hit harder") };
+                + " enemy each cast changes. Fewer casts that each hit harder"),
+            new CostlyTalent("kiva_the_forsaken_oath III", "TRADE",
+                "survival: a kill on a Forsaken body buys Kiva a Shield of 12% of her Max HP, which the"
+                + " output total does not count (s_soft_mid_big: 308 absorbed on Kiva, one ally death fewer)."
+                + " What it costs is measured and why is not established: the one other difference in its"
+                + " room is a HealSuppression Severance Paid no longer lands, consistent with the talent"
+                + " consuming a Broken Link that basic would have spent. It read -410, t -1.7, before the F8"
+                + " pass lifted her kit x1.15, and -807, t -2.9, after") };
 
         private static CostlyTalent CostlyTalentFor(string pair)
         {
@@ -27626,24 +27809,27 @@ namespace Emberfall.DevHarness
         private const float RareAspectFiveStarFloor = 1.00f;
 
         /// <summary>
-        /// The one rarer-aspect 5-star F8's floor is not yet enforced on, and why. The check fails
-        /// if he reaches the floor (the pin is stale) and if anybody else falls under it.
+        /// Rarer-aspect 5-stars F8's floor is not yet enforced on, each with why. The check fails if
+        /// one reaches the floor (the pin is stale) and if anybody else falls under it. EMPTY.
         ///
-        /// VELIS IS A STRIKER, AND THE STRIKER ROLE HAS FOUR 5-STARS. With an even count the median
-        /// is the mean of the middle two, so Velis at x0.91 can only reach it by passing Sylven into
-        /// the top two, and doing that lifts the median itself by about 9%: measured, his smallest
-        /// lift that clears F8 (x1.30 on his Damage, reading x1.01) takes Kiva from x0.79 to x0.72,
-        /// under the x0.78 floor every 5-star keeps. Kiva is a starting hero and the Striker in the
-        /// balance line, so the lift that closes both is a Kiva change too - it moves all 72 stage
-        /// fingerprints and the economy walk's line - and that is a kit decision, not a number to
-        /// nudge from here. Aminah (x1.12) and Caldus (x1.05) sit in roles of five and three, where
-        /// the smallest lift makes each the new median and moves it by under 1%, and both were
-        /// lifted.
+        /// It held Velis, and the reason is worth keeping because it is a property of any role with
+        /// an even count. The Striker role has four 5-stars, so its median is the mean of the middle
+        /// two, and Velis at x0.91 could only reach it by entering that pair - which moved the
+        /// median with him: his smallest clearing lift (x1.30 on his Damage) read x1.01 and took
+        /// Kiva from x0.79 to x0.72. A hero inside the middle pair drags the yardstick he is graded
+        /// against. So the two were moved together, and each lift carries its hero OUT of the
+        /// middle pair: Velis above it (46,710 against Sylven's 44,379 and Vaelis's 45,505) and Kiva
+        /// still below it. With both outside the pair the median is Sylven and Vaelis alone, 44,942,
+        /// and neither hero can move it again: Velis reads x1.04 and Kiva x0.83.
+        ///
+        /// Kiva took the uniform step on every Damage number in her kit that Aminah and Caldus had,
+        /// x1.15. Velis could not: the same step on his whole kit, x1.35, read x1.05 and put three of
+        /// his clauses dark in THE ARENA MATRIX (talent I, What Was Taken and its remnant), because a
+        /// harder Hollow the Wound kills before its Ledger reaches What Was Taken's threshold. His
+        /// basic alone, Denied Return, took x1.45 and darkened nothing. x1.40 read 45,595, ninety
+        /// power above Vaelis, which is a lift sitting on the median's edge rather than past it.
         /// </summary>
-        private static readonly Dictionary<string, string> KnownF8Exceptions = new Dictionary<string, string>
-        {
-            { "velis_the_hollow_vow", "a Striker, one of four: reaching the median lifts it past Kiva's x0.78 floor" },
-        };
+        private static readonly Dictionary<string, string> KnownF8Exceptions = new Dictionary<string, string>();
 
         private static float FiveStarFloorFor(ContentDatabase db, HeroDef def)
         {
@@ -28020,8 +28206,10 @@ namespace Emberfall.DevHarness
                       + " floor F8 gives the rarer aspects: " + string.Join(", ", rareOut.ToArray()));
             Check(rareStale.Count == 0,
                   rareStale.Count == 0
-                    ? "every pinned F8 exception is still under the floor, so each pin is still needed ("
-                      + string.Join("; ", rarePinned.ToArray()) + ")"
+                    ? (KnownF8Exceptions.Count == 0
+                        ? "no F8 exception is pinned: every seed-recipe 5-star is graded against the x1.00 floor"
+                        : "every pinned F8 exception is still under the floor, so each pin is still needed ("
+                          + string.Join("; ", rarePinned.ToArray()) + ")")
                     : "pinned F8 exception(s) now read at or above their median - remove them from KnownF8Exceptions: "
                       + string.Join(", ", rareStale.ToArray()));
 
