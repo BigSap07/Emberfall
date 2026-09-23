@@ -33,9 +33,15 @@ namespace Emberfall.Core.Progression
     /// reading in a quiet line stand in for the audit would hide a cost exactly where it was
     /// quietest.
     ///
-    /// EVERY ENTRY IS A TRADE NOW. The two traps this list carried - Kael III and Mireth I - were
-    /// rewritten rather than relabelled: both bought nothing, and both now buy something the
-    /// fight can see. Trap stays on AuditedTalent because the next one will need it.
+    /// EVERY ENTRY IS A TRADE NOW, AND THERE ARE TWO. The two traps this list carried - Kael III
+    /// and Mireth I - were rewritten rather than relabelled: both bought nothing, and both now buy
+    /// something the fight can see. Three of the seven trades went the same way, for the same
+    /// reason read one step further in: Rheia I paid two Energy off every Applied Revision for a
+    /// rider on one clause, Rheia III's own note said her casts refill the Revision it was buying
+    /// back, and Kiva III had two clauses that no rate her kit banks at could ever reach. What is
+    /// left is the two whose purchase is real and not made of output: a third ally under Promise,
+    /// and a Provoke stripped off the body aiming at the line. Trap stays on AuditedTalent because
+    /// the next one will need it.
     ///
     /// A COPY, and it can drift. The harness's KnownCostlyTalents is the list the build proves; this
     /// is what the game is allowed to see, because the harness is not compiled into it. The harness
@@ -48,13 +54,7 @@ namespace Emberfall.Core.Progression
             new AuditedTalent("marrow_the_irrevocable_vow", 1, false,
                 "Audited as a trade: a smaller Promise heal, for Marrow sharing the damage of a third ally."),
             new AuditedTalent("nysera_the_missing_arrow", 1, false,
-                "Audited as a trade: Nysera deals less, and strips a buff off whoever targets her."),
-            new AuditedTalent("rheia_the_revision_scribe", 1, false,
-                "Audited as a trade: fewer casts that each land harder."),
-            new AuditedTalent("rheia_the_revision_scribe", 3, false,
-                "Audited as a trade: a harder full-Revision strike that keeps its Revision, for Energy each time."),
-            new AuditedTalent("kiva_the_forsaken_oath", 3, false,
-                "Audited as a trade: a Shield on every Forsaken kill, for a little of Kiva's damage.")
+                "Audited as a trade: Nysera deals less, and strips a buff off whoever targets her.")
         };
 
         public static AuditedTalent For(string heroId, int selection)

@@ -27128,24 +27128,10 @@ namespace Emberfall.DevHarness
                 "as written: a third ally holds Promise, so Marrow takes a share of three allies' damage"
                 + " instead of two, which the output total does not count; the smaller Promise heal it"
                 + " pays for now also reaches the Promise he holds himself (ENGINE-GAPS pass 2)"),
-            new CostlyTalent("rheia_the_revision_scribe III", "TRADE",
-                "as written: every full-Revision Second Draft costs 10 Energy, and since ENGINE-GAPS pass 2"
-                + " her casts refill Revision, so not spending it buys less than those casts cost"),
-
             new CostlyTalent("nysera_the_missing_arrow I", "TRADE",
                 "utility: the Dispel strips a buff off the body that targets her, which in the sweep is"
                 + " the Warden's Provoke, freeing the whole line's single-target aim. Her own output"
-                + " falls because her basic then leaves the body that was feeding Vanishing Mark"),
-            new CostlyTalent("rheia_the_revision_scribe I", "TRADE",
-                "as written: 3 Energy per changed status instead of 5, for 20% of Attack more on every"
-                + " enemy each cast changes. Fewer casts that each hit harder"),
-            new CostlyTalent("kiva_the_forsaken_oath III", "TRADE",
-                "survival: a kill on a Forsaken body buys Kiva a Shield of 12% of her Max HP, which the"
-                + " output total does not count (s_soft_mid_big: 308 absorbed on Kiva, one ally death fewer)."
-                + " What it costs is measured and why is not established: the one other difference in its"
-                + " room is a HealSuppression Severance Paid no longer lands, consistent with the talent"
-                + " consuming a Broken Link that basic would have spent. It read -410, t -1.7, before the F8"
-                + " pass lifted her kit x1.15, and -807, t -2.9, after") };
+                + " falls because her basic then leaves the body that was feeding Vanishing Mark") };
 
         private static CostlyTalent CostlyTalentFor(string pair)
         {

@@ -879,49 +879,26 @@
         "talentIII": {
           "id": "kiva_unclaimed_victory",
           "name": "Unclaimed Victory",
-          "trigger": "OnKill",
+          "trigger": "OnEnemyDefeated",
           "oncePerBattle": false,
-          "description": "When Kiva defeats a Forsaken target, she gains a Shield equal to 12% of her Max HP for 2 rounds, and 12% more for each Broken Link she is holding, up to 36%. All Broken Links are consumed. Measured: every payout in every harness arena is 12%, because Abandoned Support banks at most one Broken Link a round and Severance Paid spends it on the next basic against a Forsaken body, so a kill finds none held. The two link-gated clauses are authored and inert at those rates.",
+          "description": "When an enemy falls, Kiva takes a Ward worth a share of her Max HP, and a larger one still if she is holding a Broken Link when it happens.",
           "effects": [
             {
               "kind": "Shield",
               "target": "Self",
-              "condition": "HasMyMark",
-              "conditionOn": "Defeated",
-              "duration": 2,
-              "selfHpRatio": 0.12
+              "selfHpRatio": 0.16,
+              "duration": 3
             },
             {
               "kind": "Shield",
               "target": "Self",
-              "condition": "HasMyMark",
-              "conditionOn": "Defeated",
-              "condition2": "StatusStacksAtLeast",
-              "conditionOn2": "Caster",
-              "conditionStatus2": "Resolve",
-              "conditionValue2": 1,
-              "duration": 2,
-              "selfHpRatio": 0.12
-            },
-            {
-              "kind": "Shield",
-              "target": "Self",
-              "condition": "HasMyMark",
-              "conditionOn": "Defeated",
-              "condition2": "StatusStacksAtLeast",
-              "conditionOn2": "Caster",
-              "conditionStatus2": "Resolve",
-              "conditionValue2": 2,
-              "duration": 2,
-              "selfHpRatio": 0.12
-            },
-            {
-              "kind": "RemoveStatus",
-              "target": "Self",
-              "condition": "HasMyMark",
-              "conditionOn": "Defeated",
-              "hits": 10,
-              "status": "Resolve"
+              "selfHpRatio": 0.12,
+              "duration": 3,
+              "condition": "StatusStacksAtLeast",
+              "conditionStatus": "Resolve",
+              "conditionValue": 1,
+              "conditionOn": "Caster",
+              "consumesResolve": true
             }
           ]
         }
@@ -3435,19 +3412,13 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive1",
-              "effectIndex": 1,
-              "field": "flat",
-              "delta": -2
-            },
-            {
               "ability": "active",
               "effectIndex": 3,
               "field": "power",
-              "delta": 0.2
+              "delta": 0.55
             }
           ],
-          "description": "Applied Revision pays less Energy, and Rewrite the Outcome's extra hit on a rewritten enemy lands harder."
+          "description": "Rewrite the Outcome's blow on an enemy whose Attack Down it rewrote lands far harder."
         },
         "talentII": {
           "id": "rheia_counterrevision",
@@ -3533,25 +3504,7 @@
               "delta": -10
             }
           ],
-          "appends": [
-            {
-              "ability": "passive2",
-              "atIndex": 3,
-              "effect": {
-                "kind": "EnergyGain",
-                "target": "Self",
-                "flat": -10,
-                "condition": "HasStatus",
-                "conditionStatus": "DefenseDown",
-                "conditionOn": "BroadcastSubject",
-                "condition2": "StatusStacksAtLeast",
-                "conditionStatus2": "Resolve",
-                "conditionValue2": 4,
-                "conditionOn2": "Caster"
-              }
-            }
-          ],
-          "description": "Second Draft's full-Revision strike lands harder and no longer spends Revision, but each one costs Rheia Energy."
+          "description": "Second Draft's full-Revision strike lands harder and no longer spends the Revision it was built on."
         }
       }
     },
@@ -4431,7 +4384,7 @@
             "target": "HighestHpEnemy",
             "charges": 1,
             "condition": "HasStatus",
-            "conditionOn": "Defeated",
+            "conditionOn": "Caster",
             "conditionStatus": "Linked",
             "duration": 2,
             "linkMutual": true,
@@ -4443,12 +4396,12 @@
             "kind": "TurnShift",
             "target": "Self",
             "condition": "HasStatus",
-            "conditionOn": "Defeated",
+            "conditionOn": "Caster",
             "conditionStatus": "Linked",
             "magnitude": 0.15
           }
         ],
-        "description": "Once per round, when an enemy carrying Departure is defeated, Departure passes to the highest-HP enemy and Vaelis's next turn advances.",
+        "description": "Once per round, when an enemy is defeated while Vaelis is bound by Departure, Departure passes to the highest-HP enemy and his next turn advances.",
         "chargeOnLanding": true
       },
       "talents": {
@@ -10168,21 +10121,19 @@
       "passive1": {
         "id": "eira_leave_no_corner",
         "name": "Leave No Corner",
-        "description": "When an ally with Mobile Cover is singled out, its turn advances.",
+        "description": "The first time each round an ally is singled out, that ally's turn advances.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "effects": [
           {
             "kind": "TurnShift",
             "target": "BroadcastVictim",
-            "condition": "HasStatus",
-            "conditionOn": "Target",
-            "conditionStatus": "Guard",
             "magnitude": 0.12,
-            "condition2": "IncomingHitIsSingleTarget",
-            "conditionOn2": "Target"
+            "condition": "IncomingHitIsSingleTarget",
+            "conditionOn": "Target"
           }
-        ]
+        ],
+        "limit": "OncePerRound"
       }
     },
     {
@@ -10287,16 +10238,16 @@
         {
           "id": "finn_ringing_toll",
           "name": "Ringing Slug",
-          "description": "The toll itself: a Ringing enemy loses Energy as it casts.",
+          "description": "The toll itself: when any enemy casts, every Ringing enemy loses Energy for it.",
           "trigger": "OnEnemyActive",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "EnergyGain",
-              "target": "BroadcastSubject",
+              "target": "AllEnemies",
+              "flat": -5,
               "condition": "HasMyMark",
-              "conditionOn": "BroadcastSubject",
-              "flat": -5
+              "conditionOn": "Target"
             }
           ]
         }
@@ -13735,7 +13686,7 @@
         "id": "aminah_emergency_release",
         "name": "No Wasted Recovery",
         "trigger": "OnAllyHpBelowThreshold",
-        "threshold": 0.3,
+        "threshold": 0.5,
         "oncePerBattle": true,
         "effects": [
           {
