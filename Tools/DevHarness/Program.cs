@@ -8852,7 +8852,7 @@ namespace Emberfall.DevHarness
         ///
         ///   DROP-WEIGHTED temper is what this uses. Every slot is filled, and each piece's temper
         ///     is drawn from ArmorRoller.RollTemper against the stage's own GlobalIndex - the exact
-        ///     function and the exact weights a real drop uses (Rough 55, Honed 30, deepening with
+        ///     function and the exact weights a real drop uses (Rough 72, Honed 20, tilting toward Honed with
         ///     stage index). So the set is "six slots filled with what this stage actually drops",
         ///     which is the median player rather than the lucky one or the Forge grinder.
         ///
