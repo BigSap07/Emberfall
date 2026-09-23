@@ -165,6 +165,7 @@ namespace Emberfall.DevHarness
             CheckProving(content);
             CheckSaveRoundTrip(content);
             CheckAccounts(content);
+            _failures += CloudChecks.Run(content, contentDir);
             CheckGuilds(contentDir);
             // The guild dungeon's own checks live in GuildDungeonChecks.cs so the guild branch and
             // this file never edit the same lines; this is the one line that wires them in.
@@ -1142,7 +1143,7 @@ namespace Emberfall.DevHarness
         /// targets HighestHpEnemy (Y, which has more HP than X). Each Ledger auto-releases at the
         /// end of its carrier's turn. Y's turn runs after X's (lower speed), so the global ends
         /// up holding B's stored value. In round 2, A's passive should scale off A's release, not
-        /// B's — the assertion that fails against the old global.
+        /// B's â€” the assertion that fails against the old global.
         /// </summary>
         private static void CheckPerCasterLedgerRelease()
         {
@@ -4466,7 +4467,7 @@ namespace Emberfall.DevHarness
             // Passive (= passive1 in the import format) is required at 2 stars and above.
             // passive2 and talents exist in the import schema but not in the engine model
             // (HeroDef has a Passives list), so they cannot be checked here.
-            // Reported rather than capped — the old "at most two" cap was written for 11 heroes.
+            // Reported rather than capped â€” the old "at most two" cap was written for 11 heroes.
             int passiveless = 0;
             int passiveViolations = 0;
             for (int i = 0; i < db.Heroes.Count; i++)
@@ -5453,7 +5454,7 @@ namespace Emberfall.DevHarness
         /// </summary>
         /// <summary>
         /// Two heroes and one enemy. Hero1 goes first (fastest), hits the enemy and triggers
-        /// energyOnDamaged → InterceptDisrupted fires: drains energy, delays the enemy (it is
+        /// energyOnDamaged â†’ InterceptDisrupted fires: drains energy, delays the enemy (it is
         /// in the remaining order), and advances the next ally. Hero2 is slower than the enemy
         /// but gets advanced past it.
         ///
@@ -7666,7 +7667,7 @@ namespace Emberfall.DevHarness
             ContentDatabase arena = BuildBypassResistTestContent();
             if (arena == null) { Line(""); return; }
 
-            // Battle 1: hero with bypassResist true — status must always land
+            // Battle 1: hero with bypassResist true â€” status must always land
             HeroDef bypassDef = arena.GetHero("br_bypass");
             List<HeroInstance> bypassTeam = new List<HeroInstance>();
             bypassTeam.Add(MakeInstance(bypassDef, 1));
@@ -7681,7 +7682,7 @@ namespace Emberfall.DevHarness
                     resisted1++;
             }
 
-            // Battle 2: hero WITHOUT bypassResist — status must be resisted at least once
+            // Battle 2: hero WITHOUT bypassResist â€” status must be resisted at least once
             HeroDef normalDef = arena.GetHero("br_normal");
             List<HeroInstance> normalTeam = new List<HeroInstance>();
             normalTeam.Add(MakeInstance(normalDef, 1));
@@ -9546,7 +9547,7 @@ namespace Emberfall.DevHarness
         // ================================================================ BATCH THREE
         //
         // BroadcastVictim, partial stack removal, HasAnyBeneficialStatus / HasAnyHarmfulStatus,
-        // Resolve2, Resolve→stat scaling, OnEnemyHpBelowThreshold, ShieldBrokenByCaster,
+        // Resolve2, Resolveâ†’stat scaling, OnEnemyHpBelowThreshold, ShieldBrokenByCaster,
         // TargetMaxHpRatio damage cap (MaxHpCap).
 
         private static void CheckBatchThreeMechanics(ContentDatabase live)
@@ -9944,7 +9945,7 @@ namespace Emberfall.DevHarness
   ""chapters"": [ { ""id"": ""lt_ch"", ""name"": ""LT"", ""stages"": [
     { ""id"": ""lt_arena"", ""index"": 1, ""enemies"": [ { ""id"": ""lt_foe"", ""level"": 1 } ] } ] } ]
 }";
-            // Battle 1: unmarked enemy — conditional Heal should NOT fire
+            // Battle 1: unmarked enemy â€” conditional Heal should NOT fire
             ContentDatabase db1 = LoadSyntheticContent(heroesUnmarked, enemies, campaign, ZeroVarianceBalance(5), "LastTarget-unmarked");
             BattleResult unmarked = null;
             if (db1 != null)
@@ -9955,7 +9956,7 @@ namespace Emberfall.DevHarness
                 unmarked = RunWith(db1, db1.AllStages[0], 42, team);
             }
 
-            // Battle 2: marked enemy — conditional Heal SHOULD fire
+            // Battle 2: marked enemy â€” conditional Heal SHOULD fire
             ContentDatabase db2 = LoadSyntheticContent(heroesMarked, enemies, campaign, ZeroVarianceBalance(5), "LastTarget-marked");
             BattleResult marked = null;
             if (db2 != null)
@@ -17076,7 +17077,7 @@ namespace Emberfall.DevHarness
             return false;
         }
         // =====================================================================
-        // TIER SEVEN — talent overrides, applier-side lifecycle, broadcast subject
+        // TIER SEVEN â€” talent overrides, applier-side lifecycle, broadcast subject
         // =====================================================================
 
         private static void CheckTierSevenMechanics(ContentDatabase live)
@@ -17162,7 +17163,7 @@ namespace Emberfall.DevHarness
         }
 
         // =====================================================================
-        // TIER EIGHT — all remaining authoring gaps
+        // TIER EIGHT â€” all remaining authoring gaps
         // =====================================================================
 
         private static void CheckTierEightMechanics(ContentDatabase live)
@@ -17909,7 +17910,7 @@ namespace Emberfall.DevHarness
         private static void CheckOnAllyShieldBreakArena()
         {
             // H1 (front tank) has a small shield at BattleStart. H2 has OnAllyShieldBreak passive.
-            // Enemy breaks H1's shield → H2's passive fires.
+            // Enemy breaks H1's shield â†’ H2's passive fires.
             string heroes = @"{
   ""heroes"": [
     { ""id"": ""b5_tank"", ""name"": ""Tank"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
@@ -17975,7 +17976,7 @@ namespace Emberfall.DevHarness
         private static void CheckOnAllyLedgerBankedArena()
         {
             // H1 has 50% damage reduction and a DamageMitigation Ledger. H2 reacts to OnAllyLedgerBanked.
-            // Enemy hits H1, DR mitigates, Ledger banks → H2's passive fires.
+            // Enemy hits H1, DR mitigates, Ledger banks â†’ H2's passive fires.
             string heroes = @"{
   ""heroes"": [
     { ""id"": ""b5_dr"", ""name"": ""DRTank"", ""aspect"": ""Ember"", ""role"": ""Bulwark"",
@@ -18169,7 +18170,7 @@ namespace Emberfall.DevHarness
         private static void CheckCrossUnitShieldBanking()
         {
             // H1 applies Shield to AllAllies and Ledger(ShieldAbsorb) to Self. H2 has Taunt so
-            // the enemy only hits H2. H2's shield (applied by H1) absorbs → cross-unit loop banks
+            // the enemy only hits H2. H2's shield (applied by H1) absorbs â†’ cross-unit loop banks
             // into H1's Ledger. H1 releases; payout should match the tank's absorbed amount.
             string heroes = @"{
   ""heroes"": [
@@ -18257,7 +18258,7 @@ namespace Emberfall.DevHarness
         {
             // H1 applies a large, short-duration (2) Shield to AllAllies at BattleStart.
             // H2 has OnAppliedAllyStatusExpired(TriggerStatus=Shield) passive. Enemy pokes weakly.
-            // Shield expires naturally → sameSideExpired fires → H2's passive triggers.
+            // Shield expires naturally â†’ sameSideExpired fires â†’ H2's passive triggers.
             string heroes = @"{
   ""heroes"": [
     { ""id"": ""b5_se_app"", ""name"": ""ShieldApplier"", ""aspect"": ""Ember"", ""role"": ""Warden"",
