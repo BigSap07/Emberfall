@@ -773,9 +773,11 @@ differs between them.
 - `CheckCampaignLinesLegal` and `CheckPrologueStillFights`;
 - `CAMPAIGN-SPEC.md` section 10, with the placeholder list for Pinoy.
 
-It solves nothing on purpose. The build check reads **9 failures**, main's 3 plus six it breaks
-deliberately, each listed with its cause in `CAMPAIGN-SPEC.md` 10.8. Its last commit regenerates the
-stage fingerprints (216 lines) from a fresh rebase on `main`.
+It solves nothing on purpose. The build check reads **7 failures**, measured after its last commit
+regenerated the stage fingerprints (216 lines) from a fresh rebase on `main`. Three are main's (the
+two arena-matrix reds and the power band, now at 1-6, 1-9 and 2-6), and four it breaks deliberately:
+the retired 1-1 opener pin, armor's Rough slope, the CEIL band, and 16 of 20 non-fusing walks stuck.
+Each is listed with its cause in `CAMPAIGN-SPEC.md` 10.8.
 
 **`balance/wall-resolve`** carries what the fusion spine left: target A re-measured by what bought
 each Level (open decision 4), the Striker pass that lifted Velis and Kiva together and emptied

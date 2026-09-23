@@ -1271,21 +1271,23 @@ program, and it reproduces 9.6's final column to within seed noise (512 against 
 ### 10.8 What went red, and why - what the solve job inherits
 
 `Tools/build-check.ps1` on origin/main before this job: **3 failures** (measured). They were the two
-arena-matrix coverage checks and the power band at 2-6 and 2-12. On this content: **9 failures**,
-2,106 ok (measured, two full runs; the second after the 6-10 fix, same nine). The breakage is
-intended. Nothing below was tuned.
+arena-matrix coverage checks and the power band at 2-6 and 2-12. On this content: **9 failures**
+(measured, two full runs; the second after the 6-10 fix, same nine). After a fresh rebase on main
+and the fingerprint regeneration that is this job's last commit: **7 failures** (measured). Rows 1
+and 2 are gone, and rows 4, 8 and 9 read as given below. The breakage is intended. Nothing below
+was tuned.
 
 | # | check | reading | why | whose |
 |---|---|---|---|---|
-| 1 | `CheckStageFingerprintBaseline` | 72 of 216 MOVED | Every opener in chapters 1-2 is a new line. | Regenerated in this job's last commit. |
-| 2 | `CheckStageFingerprintBaseline` | 144 not in the baseline | Chapters 3-6 are new: 48 stages × 3 seeds. | Regenerated in this job's last commit. |
+| 1 | `CheckStageFingerprintBaseline` | 72 of 216 MOVED | Every opener in chapters 1-2 is a new line. | **Regenerated** in this job's last commit (216 lines), so green. A new baseline, not evidence that behaviour held. |
+| 2 | `CheckStageFingerprintBaseline` | 144 not in the baseline | Chapters 3-6 are new: 48 stages × 3 seeds. | same |
 | 3 | `CheckArenaMatrix`, talents | 3 of 90 observed nowhere | Unchanged from main, and unrelated. | `DESIGN-BUILD-ORDER` Known bugs. |
-| 4 | `CheckArenaMatrix`, basics/actives/passives | 5 observed nowhere | Unchanged from main, and unrelated. | same |
+| 4 | `CheckArenaMatrix`, basics/actives/passives | 5 observed nowhere before the rebase, 4 after | Main's own red, and unrelated to stages. It moved with what the rebase brought in. | same |
 | 5 | `CheckCampaignMigrationRegression` | "ch1_1 wave 1 battle 1 is still two level-2 hollow husks and a level-2 grave moth" | It pins the retired opener by name. **Left red on purpose**: it pins content that no longer exists, and re-pinning it to the new opener before the solve moves its levels would only pin a seed. Its sibling "ch1_1's recommendedPower is 2977" is **green by coincidence**: 2977 is a carried seed. | Solve job: re-pin, or retire the check, once 1-1 is solved. |
 | 6 | Armor drop sweep | "Rough outnumbers Honed" fails, 537 vs 1599 | **Structural, and new.** Rough's `dropWeight` 55 falls by 1.6 per `stageGlobalIndex` (`armor.json`), which was tuned while the last index was 23. Now it is 71, so Rough's weight reaches zero at index 34 (3-11), and no stage past it drops Rough at all. | An economy decision: armor's slope, not this job's. |
 | 7 | Geared CEIL band | 66 of the 67 measurable stages out of band (5 floor-pinned); first miss 1-6 at 99.5% | Every level is a seed. Readings run from 0% (the first stage of every chapter 2-6, where a carried floor of 37 meets a new roster) to 100% (most of chapters 3-6). | The solver. |
-| 8 | `CheckCampaignPowerCurve` | 1-6 x1.182 over a wall band of x1.05; 1-9 x1.007 under x1.10; 2-6 x1.213 over x1.133 | 1-6 and 2-6 are walls now, and 1-9 no longer is, but they still carry the shipped power seeds. **It reads only 1-1 to 2-11**, because the reference walk (seed 1) sticks at 2-12. **The band has not looked at 61 stages.** "Across the board" failures are not visible here yet, only because the walk never gets there. | The solver. |
-| 9 | `CheckFusionNeverGates` | **14 of 20** reference walks STUCK: at 6-12 ×6, 2-12 ×5, 2-11 ×2, 2-1 ×1 (12 of 20 in the first run) | A reference player at the tier-0 cap cannot clear The Crossing or The Curator's line at the carried seeds. **This is the fusion tension the solve pass has to settle**: the fusing walk meets chapters 3-6 at x10 to x21 of `recommendedPower`, the reference walk sticks. The 6-12 row prints its median as 2147483647, the stuck sentinel read as a number: a display bug in the report, not in the verdict. | The solve pass, with open decision 4. |
+| 8 | `CheckCampaignPowerCurve` | 1-6 x1.182 over a wall band of x1.05; 1-9 x1.007 under x1.10; 2-6 x1.213 over x1.133 (x1.207 after the rebase) | 1-6 and 2-6 are walls now, and 1-9 no longer is, but they still carry the shipped power seeds. **It reads only 1-1 to 2-11**, because the reference walk (seed 1) sticks at 2-12. **The band has not looked at 61 stages.** "Across the board" failures are not visible here yet, only because the walk never gets there. | The solver. |
+| 9 | `CheckFusionNeverGates` | **16 of 20** reference walks STUCK after the rebase: at 2-12 ×6, 2-11 ×5, 6-12 ×4, 2-1 ×1 (12 and 14 of 20 in the two runs before it) | A reference player at the tier-0 cap cannot clear The Crossing or The Curator's line at the carried seeds. **This is the fusion tension the solve pass has to settle**: the fusing walk meets chapters 3-6 at x10 to x21 of `recommendedPower`, the reference walk sticks. The 6-12 row prints its median as 2147483647, the stuck sentinel read as a number: a display bug in the report, not in the verdict. | The solve pass, with open decision 4. |
 
 **Checks that stayed green, and should be read as structure, not balance.**
 - `CheckCampaignCurveSchema`: 72 stages, 9,360 battles.
