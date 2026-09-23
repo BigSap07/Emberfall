@@ -854,7 +854,7 @@
         "talentII": {
           "id": "kiva_cut_the_last_line",
           "name": "Cut the Last Line",
-          "trigger": "OnEnemyDefeated",
+          "trigger": "OnEnemyHpBelowThreshold",
           "oncePerBattle": false,
           "effects": [
             {
@@ -874,7 +874,9 @@
               "chance": 1
             }
           ],
-          "description": "When an enemy falls, Kiva names the largest body still standing Forsaken, and the whole line's guard breaks with the one that went down."
+          "description": "When an enemy is brought low, Kiva names the largest body still standing Forsaken, and the whole line's guard breaks with the one that is failing.",
+          "threshold": 0.5,
+          "perTargetLimit": 1
         },
         "talentIII": {
           "id": "kiva_unclaimed_victory",
@@ -9749,7 +9751,8 @@
               "flat": -5
             }
           ],
-          "description": "Once a round, Oris's basic attack runs on one beat longer: he strikes the same enemy again and takes Energy off it."
+          "description": "Once a round, Oris's basic attack runs on one beat longer: he strikes the same enemy again and takes Energy off it.",
+          "chargeOnLanding": true
         }
       }
     },
@@ -14380,7 +14383,8 @@
               "field": "perStack",
               "delta": 0.12
             }
-          ]
+          ],
+          "chargeOnLanding": true
         }
       }
     },

@@ -26564,16 +26564,30 @@ namespace Emberfall.DevHarness
 
             DarkProbe a, b;
 
-            // ---- Kiva II: a marked body dies, and the highest-HP enemy inherits the mark.
-            // The mid body keeps its own Mark going to the front-most enemy, so without the talent
-            // the big body is never marked at all and the count is a clean 0 against 1.
-            if (!DarkPair("kiva_the_forsaken_oath", 2, "s_soft_mid_big", "", 1, false, out a, out b))
+            // ---- Kiva II: a body is brought low, and the biggest one inherits the mark.
+            //
+            // IT USED TO ANSWER OnKill, AND THE KILLING BLOW IS RARELY HERS: it fired nowhere in
+            // the sweep and read an exact zero. It answers OnEnemyHpBelowThreshold now, once per
+            // enemy, which is a thing a fight reaches - and it is the roster's only listener on
+            // that trigger since Caldus III stopped waiting on a Declared Target falling under a
+            // third of its HP once a battle. She hunts what is already hurt, so the trigger fits
+            // her better than it fitted him. THE ROOM MOVED WITH THE TRIGGER, off s_soft_mid_big,
+            // where no body ever crosses half its HP and the new clause therefore read 0 against
+            // 0. s_soft_big has one that does.
+            if (!DarkPair("kiva_the_forsaken_oath", 2, "s_soft_big", "", 1, false, out a, out b))
                 Check(false, "kiva II arena built");
             else
-                Check(b.MarkOnBiggestEnemy > a.MarkOnBiggestEnemy && a.MarkOnBiggestEnemy == 0,
-                      "Kiva II puts Forsaken on the highest-HP enemy when a Forsaken body dies ("
-                      + b.MarkOnBiggestEnemy + " against " + a.MarkOnBiggestEnemy
-                      + ") - that body is out of reach of her basic, which marks the lowest-HP one");
+                Check(b.MarkOnBiggestEnemy > a.MarkOnBiggestEnemy
+                      && b.Count(StatusKind.DefenseDown) > a.Count(StatusKind.DefenseDown)
+                      && a.Count(StatusKind.DefenseDown) == 0,
+                      "Kiva II puts Forsaken on the highest-HP enemy when a body is brought low, and"
+                      + " breaks the whole line's guard with it ("
+                      + b.MarkOnBiggestEnemy + " mark(s) on the biggest body against "
+                      + a.MarkOnBiggestEnemy + ", " + b.Count(StatusKind.DefenseDown)
+                      + " guard(s) broken against " + a.Count(StatusKind.DefenseDown)
+                      + ") - the broken guard is the clean signal here: her own basic reaches the"
+                      + " biggest body in this room often enough that the mark alone is close either"
+                      + " way, and nothing else in her kit breaks a guard at all");
 
             // ---- Kiva III: the same kill, and what it pays out now that the first clause is free.
             //
