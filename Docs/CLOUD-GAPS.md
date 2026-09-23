@@ -11,15 +11,26 @@ warning. **Fixed**: see P1.
 
 **The service role key was not found anywhere**: not in the tree, not in any commit reachable
 from any ref, not in `ProjectSettings`. The two guards meant to catch it could never have fired,
-though (P12). `Assets/Resources/Config/supabase.json` is not present in this worktree, so the live
-anon key was not inspected. The harness now decodes any key it finds there.
+though (P12). `Assets/Resources/Config/supabase.json` was not present in the first two passes'
+worktree, so the live anon key was not inspected then. The third pass decoded it without printing
+it: a publishable key, the anon role, which is what the game should carry.
+
+**Third pass, 2026-09-23: the live project.** Everything the first two passes could only suspect
+has now been asked of the real database. Both rules tests ran against it (counts under **The three
+instruments**). The guild dungeon was played end to end in the editor on a scratch identity, with
+the real screens against the real backend: found a guild, lose floor 1, floor 2 refused by the
+server, clear floor 1, floor 2 opened, a third attempt, a fourth refused, share, replay from the
+share. Nothing in that path broke. S6 is closed, P8 is measured, and S3's measurement is a
+dashboard setting (see each).
 
 **Migration 0008 is unaudited.** Another agent is writing it on its own branch tonight and it is
 not in this tree. Everything below covers `0001` to `0007` as they stand on main. `CloudChecks`
 reads every migration in the folder, so the day 0008 lands its grants go through the same
 allowlist, and a new client write grant turns the check red until somebody adds it on purpose.
 (Second pass: 0008 has since landed in the tree and the grant check passes with it, so it added
-no client write grant. Neither pass audited the rest of it.)
+no client write grant. Neither pass audited the rest of it. Third pass: 0008's rules were
+exercised against the live project, by the guild test and by the editor playthrough, and held.
+Its text has still not been audited line by line.)
 
 ---
 
@@ -37,9 +48,10 @@ Its decisions are in **What the second pass chose, and why** at the end of the P
 
 **Proven and suspected are kept apart.** A finding is **proven** when an instrument in this repo
 reproduces it, or when it follows from two proven halves put together (said where that is the
-case). A finding is **suspected** when proving it needs the live Supabase project. The live rules
-tests were not run: this audit had no access to the project and was told not to try. Every
-suspected finding has a case written for it in those tests, marked unrun.
+case). A finding is **suspected** when proving it needs the live Supabase project. The first two
+passes had no access to the project and were told not to try, so every suspected finding got a
+case in the live rules tests, unrun. The third pass ran them: each S entry below now says what the
+live project answered.
 
 **The three instruments.**
 
@@ -56,7 +68,13 @@ suspected finding has a case written for it in those tests, marked unrun.
   file, and a web request that answers from a script. It needs no Unity and no network. Run it
   with `powershell -File Tools/CloudProbe/run-cloud-probe.ps1`. It is not part of build-check.
 - `Tools/supabase-rules-test.py` and `Tools/supabase-guild-rules-test.py` are the live tests.
-  They were extended with a case for every suspected finding. **Both are unrun.** Both parse.
+  They were extended with a case for every suspected finding. **Run on 2026-09-23** against the
+  live project: the rules test **71 ok, 1 failed** (the one is S3, red for the right reason), the
+  guild test **231 ok, 0 failed** (with the 30-racer cap race). Before that run's three fixes they
+  stood at 70 ok / 2 failed and 211 ok / 2 failed, and three of those four failures were the
+  tests' own fault: the floor-gate probe WON floor 2 and then asserted floor 3 was shut, and both
+  S6 checks still asserted the hole after it was closed. Both tests now prove their key guard fires
+  on built secret keys before trusting it (P12).
 
 **A defect that was written up and left alone is asserted as STILL PRESENT**, with its number,
 in whichever instrument proves it. That check passes today and goes red the day somebody fixes
@@ -83,7 +101,7 @@ Ranked by what each finding would cost a player once there are players.
 | P5 | a sign-in answered by a hotel wifi page throws the account away | as P4, for an anonymous account | **fixed** |
 | P6 | a failed download leaves the device claiming the cloud's revision, so the next sync overwrites the save the player chose | the save the player picked on the conflict card | **fixed** |
 | P7 | an older build drops heroes it does not know, and its next upload deletes them from the cloud | heroes, when two devices run two builds | **fixed**, version 15 |
-| P8 | rotating the anon key makes every old build abandon its account | every anonymous account on an old build | open |
+| P8 | rotating the anon key makes every old build abandon its account | every anonymous account on an old build | open, **measured live** |
 | P9 | the conflict card cannot tell two saves apart except by when they were written | a week of play, lost to a coin toss | **fixed**, UI pass |
 | P10 | every save from versions 1 to 12 loses all its heroes and becomes a new game | nothing today: no player holds one | open by decision, contained by P7 |
 | P11 | RESET PROGRESS also erases the cloud save, and the dialog does not say so | the cloud copy a player may have counted on | **fixed in words**, behaviour unchanged by decision |
@@ -319,14 +337,39 @@ friends and its guild seat. The local save survives and uploads into the new acc
 **How it was proven.** Probe P8: two scripted 401 "Invalid API key" answers leave `UserId` empty.
 Asserted as STILL PRESENT.
 
-**The fix, not made.** Classify by status code and GoTrue's `error_code`, not by words. The live
-codes have not been measured, and S3 writes the case that measures them. A wrong narrowing could
-leave a dead token retried forever, so no player would ever sync again, and that is worse than
-this.
+**Measured live (third pass).** Proven against the live project in two ways.
+
+- **The raw answers**, from a script holding a real refresh token. A rotated publishable key and
+  a stale legacy JWT key each get **401 `{"message":"Invalid API key"}`, with no `error_code`**,
+  on the token endpoint, on sign-up and on REST alike. That is the API gateway talking, not
+  GoTrue. GoTrue refusing a bad refresh token answers **400** with an `error_code`
+  (`validation_failed`, "Refresh token is not valid").
+- **The real client**, in the editor on a scratch identity. A signed-in anonymous account with a
+  cloud save at revision 1 had its key swapped in memory for an unknown publishable key, and
+  `AccountService.Resume` ran exactly as an old build's boot would. `RefreshSession` failed with
+  "Invalid API key". `TokenWasRejected` matched "invalid". `ClearAccount` wiped the user id and
+  the refresh token, and the anonymous sign-up that followed failed for the same reason. With the
+  real key back, as an updated build would carry it, `Resume` made a **new** anonymous account
+  with a different id.
+
+**What the player loses.** Not the save on the device: the local profile was byte for byte what
+it was before, and the next sync uploads it into the new account. What is lost is the **account**:
+its cloud copy (orphaned under the old id), its friend code and friendships, and its guild seat.
+Another device, or this one after a reinstall, has no way back to it. A player with one device
+who never looks at their friend code would notice only that friends and guild are gone.
+
+**The fix, not made, now specified.** Treat a token as dead only when the auth server says so: a
+400 from the token endpoint carrying a GoTrue `error_code` (`validation_failed`,
+`refresh_token_not_found`, `refresh_token_already_used`, `session_not_found`). A 401 with no
+`error_code` is the gateway refusing the KEY, and must defer like a transport failure, keeping
+the token. `SupabaseResponse` would need to carry the status and `error_code` through to
+`Resume`, where today it carries only the sentence. It was not made in this pass because the
+brief was to measure. The risk the earlier passes named (a dead token retried forever) does not
+arise from this narrowing: a dead token still gets GoTrue's 400 with a code.
 
 ### P9. The conflict card cannot tell two saves apart except by timestamp
 
-**What the code does.** `ConflictChooser` shows four rows per side, taken from `SaveSummaryReader`:
+**What the code did, until the UI pass.** `ConflictChooser` showed four rows per side, taken from `SaveSummaryReader`:
 name, rank, stages cleared and heroes owned. Under them sits "saved N ago", and on the cloud side
 only, which device wrote it and at what revision. Currencies, hero levels, stars, armor, relics,
 Recital floor and Proving standing are not shown.
@@ -337,15 +380,10 @@ there is nothing in the columns to compare.
 
 **How it was proven.** `CloudChecks.CheckConflictCardCannotTellApart` takes two saves a week
 apart. One has two million more gold, every hero ten levels higher and Recital floor 40. Both
-describe as "Wayfarer - level 1, 1 stage cleared, 3 heroes". STILL PRESENT.
+describe as "Wayfarer - level 1, 1 stage cleared, 3 heroes".
 
-**The fix, not made (it is UI, which this audit does not touch).** Add total hero levels, the
-highest hero, gold and Recital floor to `SaveSummary`. It is read without deserialising, so the
-card can still describe a save from a build it cannot fully read.
-
-**Second pass: still open, deliberately.** The finding stands. It was left because the fix is the
-conflict card, and another agent held the editor and the UI screens that day. Nothing about the
-format blocks it: every value it needs is already in the document.
+Both audit passes left it open because the fix is the conflict card, which is UI, and another agent
+held the UI screens. Nothing about the format blocked it.
 
 **The fix, as made (UI pass).** No format change and no server work. `SaveSummary` now also reads
 the purses, the XP, the campaign stage and wave, the Recital and Proving highs, the armor, relic,
@@ -440,15 +478,16 @@ have written with the deleted ids.
 
 **What the code does.** `GameApp.ResetProgress` deletes the save, saves a starter profile and
 leaves the base revision alone. The next sync sees cloud equal to base and uploads the starter
-profile. The Settings dialog says "starts a fresh account" and "Useful for testing the first-run
-experience". It does not say that the cloud copy goes too, or that the account is the same one.
+profile. Until the UI pass the Settings dialog said "starts a fresh account" and "Useful for
+testing the first-run experience", and did not say that the cloud copy goes too, or that the
+account is the same one.
 
 **How it was proven.** Composed from proven halves: the method body plus
 `CheckFreshStartDecision`'s first half.
 
-**The fix, not made.** This is a product decision, not a bug with one right answer. If resetting
-should keep the cloud copy, forget the base as P1 does, and the next sync will ask. The dialog is
-UI either way.
+**The behaviour, left by decision.** Whether reset should reach the cloud is a product decision,
+not a bug with one right answer. If resetting should keep the cloud copy, forget the base as P1
+does, and the next sync will ask.
 
 **The words, fixed (UI pass).** What reset does is unchanged; the product decision above is still
 open. The dialog now says it. `SettingsScreen.ShowResetConfirm` is the one door, and
@@ -479,6 +518,16 @@ file, never the key. Both Python tests use a `looks_secret` that decodes the sam
 is shown firing on a planted one first. It prints the file, never the key. Git history was
 searched separately, across all refs, for the JWT header prefix and for `sb_secret`: neither
 appears.
+
+**Third pass: the Python guards prove themselves on every run.** A decoder can stop decoding as
+quietly as the old text search never matched, so a guard that has only ever been shown to work
+once is not enough. Each rules test now builds keys of every shape before it reads its own:
+service-role, authenticated and anon JWTs, an undecodable JWT, `sb_secret_`, `sb_publishable_`,
+and two shapes that are neither. It refuses to run unless each gets the verdict its shape demands
+(`guard_fires`). It also asserts the old guard's premise: the text `service_role` is not in a
+service-role JWT. Swapping the old text search back in makes six of those cases fail, and the test
+refuses to start. A key of no recognised shape used to pass as "not secret" having been inspected
+by nothing. It is now `unknown`, and refused. Only the key's kind is ever printed, never the key.
 
 ### P13. Nothing retried a 401
 
@@ -547,16 +596,17 @@ it be proven in this tree?
 | P14 | fixed | a reading rule for the format, only free while no player holds a save |
 | P13 | fixed | not a format question, but the brief asked for it, and the probe can prove it without a server |
 | P10 | contained by P7, open by decision | see P10: the only remaining fix is an id map that grants heroes nobody summoned |
-| P9 | open | the fix is the conflict card, a UI screen another agent held; the format already carries every value it needs |
-| P8 | open | not a format question; narrowing `TokenWasRejected` without GoTrue's real error codes could leave a dead token retried forever. S3's live case measures them. The P13 retry does not widen it: a failed renewal clears nothing |
-| P11 | open | a product decision (should reset keep the cloud copy?) and a dialog, which is UI |
+| P9 | open at the time; **fixed** in the UI pass | the fix is the conflict card, a UI screen another agent held; the format already carries every value it needs |
+| P8 | open; **measured** in the third pass | not a format question; narrowing `TokenWasRejected` without GoTrue's real error codes could leave a dead token retried forever. The third pass measured them (see P8), so the narrowing can now be written against real answers. The P13 retry does not widen it: a failed renewal clears nothing |
+| P11 | open at the time; **fixed in words** in the UI pass | a product decision (should reset keep the cloud copy?) and a dialog, which is UI |
+| P3, the rest | open | atomic writes need `File.Replace` verified on an Android device, and none exists. Preferring the newer of file and mirror by `lastSaveUnix` is cheap but has nothing to do with the format being free, and it changes which copy boots, so it belongs with the atomic-write work |
+| S2 | open, **measured** in the third pass | the format being free makes "the document's version must equal `save_version`" easy to state, but it is a server migration, it cannot be applied or measured from here, and this client never sends a mismatch: `Push` always labels a document `Serialize` just wrote at `CurrentVersion` |
+| S6 | **closed**: revoked by hand on the live project, recorded as `0010` | a one-line revoke |
+| S7, S8 | open, **measured** in the third pass | server migrations, unrelated to the save format |
 
 **UI pass, afterwards.** P9 and P11's dialog were the two findings both audits had left because
 they were UI. Both are now done: P9 in full, P11 in words (the reset still reaches the cloud,
 and the dialog says so before the button). See each entry.
-| P3, the rest | open | atomic writes need `File.Replace` verified on an Android device, and none exists. Preferring the newer of file and mirror by `lastSaveUnix` is cheap but has nothing to do with the format being free, and it changes which copy boots, so it belongs with the atomic-write work |
-| S2 | open | the format being free makes "the document's version must equal `save_version`" easy to state, but it is a server migration, it cannot be applied or measured from here, and this client never sends a mismatch: `Push` always labels a document `Serialize` just wrote at `CurrentVersion` |
-| S6, S7, S8 | open | server migrations, unrelated to the save format, and unmeasurable without the live project |
 
 ---
 
@@ -606,23 +656,25 @@ retrying is safe.
    the only key;
 3. P4 (fixed);
 4. P5 (fixed);
-5. P8 (open);
-6. refresh-token reuse after a lost response (S3, suspected).
+5. P8 (open, reproduced live in the third pass);
+6. refresh-token reuse after a lost response (S3). Measured: the live project does NOT refuse a
+   reused token, so this route is closed today, for a reason that is itself a finding (S3).
 
 **Authorisation per table.** The migrations' text grants exactly what the design names. There are
 eleven client write grants, and `CheckMigrationGrants` pins them. No table carries a grant to
 anon, and every table revokes anon and authenticated first. `saves`, chat and dungeon attempts
 have no client write at all. Reading the policies, no caller can read or write another player's
 save or friendship, a guild it is not in or has left, or another guild's attempts. Attempts
-against another cycle are refused. The live measurements are S1, S9 and S10. The one exception
-to "anon is revoked everywhere" is a function, not a table: S6.
+against another cycle are refused. The live measurements are S1, S9 and S10, and all three hold.
+The one exception to "anon is revoked everywhere" was a function, not a table: S6, now closed.
 
 **Beating the attempt cap and the cycle clock.** Reading the SQL, neither can be beaten. A CHECK
 bounds the attempt number and a unique key forbids reusing one. Each submission locks the
 member's own row, so four racers queue behind each other. The cycle is computed from the
 server's `now()`. The live guild test already races six submissions and files against last and
-next cycle. This audit added the leave-and-rejoin case. Neither was run here: S9. What can be
-beaten is the seed (S8).
+next cycle. This audit added the leave-and-rejoin case. The third pass ran both live and both held
+(S9), and the editor playthrough saw the cap refuse a fourth attempt through the game's own path.
+What can be beaten is the seed (S8).
 
 **Offline.** Proven. With no `supabase.json`, `SupabaseConfig.Load` is unconfigured and
 `GameApp.StartCloud` returns before building anything, so `GameApp.Cloud` stays null. Probe
@@ -635,10 +687,40 @@ own analytics, crash reporting and performance reporting are all disabled in
 
 ---
 
-## Suspected, not measured
+## The guild dungeon, played against the live project (third pass)
 
-Each of these needs the live project. Each has a case in one of the two rules tests, written
-against the migrations' text and confirmed to parse, **and not run**.
+Everything about the dungeon had been proven against `LocalGuildDungeonBackend`, the in-memory
+guild in `GuildDungeonShots`, and nothing against the real database. The third pass played it in
+the editor on a scratch identity (the real save hashed before and after, unchanged), through the
+real screens and `SupabaseGuildDungeonBackend`, pressing each button through its own `onClick`:
+
+| step | what happened |
+|---|---|
+| sign in | a fresh anonymous account, three starter heroes |
+| create | CREATE founded the guild; code and leader row back from the server |
+| enter | `guild_dungeon_status` answered cycle 37, three attempts a floor, five floors; floor 1 INSPECT, floors 2 to 5 LOCKED |
+| floor 1, attempt 1 | a one-hero line, a loss: stored by `guild_dungeon_submit` as attempt 1 with its loss count and content version |
+| the floor gate | a floor 2 submission sent through `GuildDungeonFlow.Attempt` (the screen offers no button for it) was refused by the server: "floor 2 opens when somebody in your guild clears floor 1". Nothing was spent |
+| clear floor 1 | the full line, attempt 2, a clear; floor 2 turned to INSPECT |
+| floor 2 open | a floor 2 attempt was stored as floor 2 attempt 1 |
+| the cap | attempt 3 stored; the floor view disabled ATTEMPT at 0 left; a fourth sent through the flow was refused: "no attempts left on floor 1 this cycle (3 of 3)". Nothing was spent |
+| share | POST TO GUILD CHAT posted the clear; the live chat read returned it as a card with the attempt embedded |
+| replay | WATCH replayed it. `GuildDungeon.Replay` on the stored row was playable and matched the record: a clear in 9 turns, 417 events, the same as fighting the row again |
+| boards | built from the live rows, the clear on FOUR OR FEWER |
+| disband | DISBAND, confirmed: the same `DELETE` on `guilds` the guild test's cleanup uses |
+
+Nothing in the live path broke, and nothing needed a migration. Three things on screen are
+wrong, none of them the backend's: the notification toast's text runs past both ends of its frame
+on the long refusal sentences; after a skip to the end, the battle header keeps the round it was
+skipped from ("ROUND 2 / 30" over a 4-turn result); and a VICTORY can carry the OUTSPED diagnosis,
+"you were outsped, not outmatched". The shots are in `Docs/ui-shots/live-*.png`, which is not
+committed.
+
+## Suspected, then measured
+
+Each of these needed the live project. Each has a case in one of the two rules tests, written
+against the migrations' text. The first two passes could not run them. **The third pass ran them
+on 2026-09-23**, and each entry ends with what the live project answered.
 
 - **S1. `push_save` under a race: exactly one winner, and every loser told.** Expected to hold.
   The `UPDATE ... WHERE revision = expected` locks the row. Under READ COMMITTED, a second
@@ -646,7 +728,8 @@ against the migrations' text and confirmed to parse, **and not run**.
   moved, matches nothing, and raises PT409. Two first uploads both find no row, and the second
   insert hits the primary key. PostgREST answers that with 409 as well, which the client already
   treats as a conflict. The case races two and then four pushes at one revision, and three first
-  uploads for a fresh user (`check_push_races`).
+  uploads for a fresh user (`check_push_races`). **Measured: holds.** Two racers and four racers
+  each produced exactly one winner, every loser got a 409, and three first uploads made one row.
 - **S2. `push_save` stores anything, labelled with any version.** Read from 0002. It checks only
   that `p_data` is not null. An empty object, a bare string or an array is stored as a save, and
   `save_version` is whatever the caller claims. A push labelled 999 makes every real client
@@ -654,49 +737,76 @@ against the migrations' text and confirmed to parse, **and not run**.
   can do it, so the harm is a client bug like P2, not an attack. The fix needs a new migration:
   require an object whose `version` equals `save_version`. That is not written here, because
   0008 is in flight elsewhere and a second new file would race it for the number. The case is
-  `check_push_accepts_anything`, and it also measures what a 3 MB document gets back.
+  `check_push_accepts_anything`, and it also measures what a 3 MB document gets back. **Measured:
+  still present.** An empty object, a bare string and an array were each stored, a label of 999
+  was accepted, and a 3 MB document answered 200. `0010` is now taken by S6, so the fix is `0011`.
 - **S3. A refresh token presented twice.** A response lost after the server rotated the token
   leaves the device holding a used one. Supabase's reuse detection is expected to refuse it, and
   may revoke the whole session. P8's heuristic then reads that as "the token is dead", and an
   anonymous account is lost. Android Auto Backup restoring PlayerPrefs onto a second phone would
   put two devices on one token chain with the same result. No custom Android manifest exists in
   the tree to say whether backup is on. The case `check_refresh_reuse` records the real status
-  and `error_code`, which is what P8's fix needs.
+  and `error_code`, which is what P8's fix needs. **Measured: reuse is NOT refused.** Past the
+  reuse interval, the same token answered 200 with no `error_code`, and the token the first
+  exchange issued still answered 200 afterwards, so nothing was revoked either. Within the interval
+  a second use also answers 200, which is by design. Two consequences, and they pull opposite ways.
+  The account-loss route through reuse cannot happen on this project today. But **a stolen refresh
+  token stays valid** for as long as the session does, whoever else has used it. This is a
+  dashboard setting, not code: Authentication, Sessions, refresh token reuse detection. **Recorded,
+  not changed**: Matthias flips it. Turning it on makes the lost-response case live again, so it
+  wants P8's narrowing alongside it: a reused token then answers GoTrue's 400
+  `refresh_token_already_used`, which is a real refusal, and an anonymous account on that device is
+  lost exactly as S3 described. The rules test keeps this check red, because it is red for the
+  right reason.
 - **S4. A pending email cannot sign in.** This is the server half of P4. The case
   `check_pending_email_cannot_sign_in` links an address to an anonymous user and tries a
-  password sign-in with it.
+  password sign-in with it. **Measured: cannot occur on this project as configured.** 'Confirm
+  email' is off, so a linked address is live at once (`is_anonymous` false, no pending
+  `new_email`). P4's client fix still matters the day confirmation is turned on.
 - **S5. Attaching a taken email.** The expected answer is a 4xx, with the anonymous account's id
   and save untouched. The case is `check_email_collision`, and it skips cleanly if the project
-  refuses email sign-ups.
-- **S6. `generate_friend_code()` is callable with the anon key alone.** From 0001's text: it is
+  refuses email sign-ups. **Measured: holds.** A 422 "A user with this email address has already
+  been registered", with the anonymous account's id and save untouched.
+- **S6. `generate_friend_code()` was callable with the anon key alone. CLOSED.** From 0001's text: it is
   the one callable function never revoked from `public` and `anon`. `CloudChecks` pins it as the
   only one. It returns a random string and reads nothing, so it costs nothing. It is recorded
   because "anon is revoked everywhere" is not true of functions. The fix is a one-line revoke in
   a new migration. Cases: `check_anon_functions`, and `check_anon_helpers` in the guild test.
+  **Closed.** The revoke from `public` and `anon` was applied to the live project by hand, and
+  `0010_revoke_generate_friend_code.sql` is its record. Both live cases now assert the anon role
+  is refused, and pass. `CloudChecks` asserts that no callable function is left unrevoked.
 - **S7. Display names accept control characters and blanks.** From 0001: the only check is a
   length of 1 to 24. 0004 refuses `[[:cntrl:]]` on every guild text column because a newline
   breaks a single-line label, and display names appear in the same rosters. The client trims
   and bounds its own renames, but another client does not have to. The fix is a new migration.
-  Case: `check_profile_text`.
+  Case: `check_profile_text`. **Measured: still present.** A name with a newline and a name that is
+  only spaces were both stored.
 - **S8. The dungeon seed is trusted as sent.** From 0007: `guild_dungeon_record` stores any
   `p_seed`. The seed is a pure function of guild and cycle (`GuildDungeon.SeedFor`), so the
   server could refuse a wrong one, and a board can hold a win against an easier fight. 0007 says
   plainly that no anti-cheat is claimed and there are no rewards, so the cost is the board's
-  meaning. Case: `check_seed_is_not_checked`.
+  meaning. Case: `check_seed_is_not_checked`. **Measured: still present**, now against
+  `guild_dungeon_submit`: an attempt claiming seed 1 was stored.
 - **S9. The attempt cap and cycle under a race, and after leaving and rejoining.** Expected to
   hold, as argued above. The live test already carries the six-way race and the cycle checks,
   and `DESIGN-BUILD-ORDER.md` says it last reported clean. This audit cannot see whether that run
   came after 0007 landed. Added: `check_after_leaving`, which checks that rejoining the same guild
-  in the same cycle numbers the next attempt 2, not 1.
+  in the same cycle numbers the next attempt 2, not 1. **Measured: holds.** Six simultaneous
+  submissions stored exactly three, numbered 1 to 3; last and next cycle were refused; rejoining
+  numbered the next attempt 2. The 30-member cap held with 30 racers for 29 places.
 - **S10. A guild you have left.** Every guild policy is keyed on `my_guild()`, so a former member
   should read no roster, chat, request, attempt or guild row, and should not be able to post or
   file. The guild keeps the former member's attempts, which is by design. Case:
-  `check_after_leaving`.
+  `check_after_leaving`. **Measured: holds** on every table named, and posting and filing were
+  both refused.
 - **S11. Third parties.** A signed-in stranger should not be able to read, delete or accept
   another pair's friendship, file a friend request in somebody else's name, publish a snapshot as
   somebody else through the upsert path, or read either save. Case: `check_third_party`.
+  **Measured: holds** on all six.
 - **S12. The live project matches these files.** Everything above is read from the migrations in
   the tree. Nothing here can confirm that the project holds exactly what was pasted into it.
+  **Partly measured:** every rule the two tests ask about behaved as the files say, 0009's revoke
+  included. A rule no test asks about is still unconfirmed.
 
 ---
 
@@ -724,7 +834,7 @@ build and asks.
 | `rpc/guild_touch` | a row write | nothing | write load; measured the same way |
 | `rpc/guild_post_message` | a row | **two seconds per account** | multiplied by throwaway accounts inside an open guild |
 | `rpc/guild_dungeon_record` | a row with an unbounded `team` payload | three per floor per cycle per guild | more attempts by hopping guilds, and large payloads |
-| `rpc/generate_friend_code` | nothing | nothing | nothing (S6) |
+| `rpc/generate_friend_code` | nothing | revoked from anon (S6, closed) | nothing: a signed-in user can still call it, and it returns a random string |
 
 What the game itself does in a loop is modest. It polls the newest hundred chat lines every four
 seconds while the chat screen is open, calls `guild_touch` at most once a minute, and publishes
@@ -754,6 +864,8 @@ change no migration.
 | an armor piece naming what this build does not define is kept verbatim | `ArmorPieceIsReadable`, `PlayerProfile.UnresolvedArmorRecords` | `CheckUnknownArmorIsKeptVerbatim` |
 | a damaged version field is refused with a sentence | `SaveSerializer.TryReadVersion` | `CheckVersionField` |
 | a 401 renews the session once and resends once | `SupabaseClient.Send`, `SessionRenewal`, `AccountService.RenewAfterUnauthorised` | probe P13, `CheckSessionRenewal` |
+| `generate_friend_code` revoked from `public` and `anon` (third pass; applied by hand, recorded) | `0010_revoke_generate_friend_code.sql` | `check_anon_functions`, `check_anon_helpers`, `CloudChecks.CheckMigrationGrants` |
+| the Python key guards are proven to fire before each run, and refuse a key of unknown shape (third pass) | `key_kind`, `guard_fires` in both rules tests | the guard run against the old text search: six cases fail |
 
 Three comments were corrected against the code in the same commit:
 

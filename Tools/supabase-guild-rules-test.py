@@ -8,7 +8,7 @@ remove them, and what happens when thirty devices ask the same question in the s
 The two share nothing but the transport, and merging them would have produced a file where the
 interesting section is the last fifth.
 
-    Run Server/supabase/migrations/0004 through 0009 first, in order.
+    Run Server/supabase/migrations/0004 through 0010 first, in order.
 
     $env:SUPABASE_URL      = 'https://<ref>.supabase.co'
     $env:SUPABASE_ANON_KEY = '<anon public key>'
@@ -76,21 +76,51 @@ def looks_secret(key):
     key. The guard this replaced tested `"service_role" in key`, which never fires - a JWT's
     payload is base64url, so the word is never in the key as text (Docs/CLOUD-GAPS.md P12). A JWT
     whose payload cannot be decoded counts as secret: "could not tell" is not a reason to run."""
+    return key_kind(key) != "anon"
+
+
+def key_kind(key):
+    """What the key IS, read from the key itself, never from its text: "anon" for a publishable
+    key or a JWT whose decoded payload says role anon; "secret" for an sb_secret_ key, a JWT
+    whose role is anything else, or a JWT whose payload will not decode; "unknown" for any other
+    shape. Only "anon" may run. An unknown shape used to pass as not-secret, which is a verdict
+    reached by inspecting nothing."""
     import base64
     key = (key or "").strip()
     if key.startswith("sb_secret_"):
-        return True
+        return "secret"
     if key.startswith("sb_publishable_"):
-        return False
+        return "anon"
     parts = key.split(".")
     if len(parts) != 3:
-        return False
+        return "unknown"
     try:
         segment = parts[1] + "=" * (-len(parts[1]) % 4)
         payload = json.loads(base64.urlsafe_b64decode(segment.encode("ascii")).decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
-        return True
-    return not isinstance(payload, dict) or payload.get("role") != "anon"
+        return "secret"
+    return "anon" if isinstance(payload, dict) and payload.get("role") == "anon" else "secret"
+
+
+def guard_fires():
+    """The guard, proven on every run before it is trusted: keys built here in each shape must
+    get the verdict their shape demands. If the decoder ever stops decoding - the way the old
+    `"service_role" in key` test never matched anything - this is what goes red, not silence."""
+    import base64
+
+    def jwt(role):
+        def b64(text):
+            return base64.urlsafe_b64encode(text.encode("utf-8")).decode("ascii").rstrip("=")
+        return (b64('{"alg":"HS256","typ":"JWT"}') + "." + b64('{"iss":"supabase","role":"' + role + '"}')
+                + "." + b64("signature"))
+
+    cases = ((jwt("service_role"), "secret"), (jwt("authenticated"), "secret"), (jwt("anon"), "anon"),
+             ("sb_secret_" + "x" * 32, "secret"), ("sb_publishable_" + "x" * 32, "anon"),
+             ("a.!!!notbase64!!!.c", "secret"), ("plain-text-key", "unknown"), ("", "unknown"))
+    wrong = [(expected, key_kind(key)) for key, expected in cases if key_kind(key) != expected]
+    # The reason the old guard was decorative, asserted: the role is not in a JWT as text.
+    wrong += [("no literal role text", "found")] if "service_role" in jwt("service_role") else []
+    return wrong
 
 
 # ---------------------------------------------------------------- reporting
@@ -831,8 +861,8 @@ def check_dungeon_race(guild, b, cycle):
 
 # ---------------------------------------------------------------- the playable dungeon (0008, 0009)
 #
-# NOT YET RUN against the live project: written from 0008's text and confirmed to parse, nothing
-# more. The first run is the first time any of these has met the real database.
+# Written from 0008's text, and run against the live project since (Docs/CLOUD-GAPS.md records
+# the counts). The floor gate asserts at every floor: a loss opens nothing, a win opens the next.
 
 
 def dungeon_cycle(user):
@@ -949,12 +979,26 @@ def check_dungeon_floor_gate():
     cleared = body if status == 200 and isinstance(body, dict) else None
     check(cleared is not None, "and clears floor 1", (status, message_of(body)))
 
-    status, body = record_attempt(lead, cycle, 2)
+    # Every floor from 2 to 4 is entered with a LOSS, and the floor above is asked for while that
+    # loss is the only thing at the floor: it must be refused. Then a win at the floor, and the
+    # floor above opens. The probe that used to stand here won floor 2 and then asked for floor 3,
+    # so floor 3 was open by the rule and the check went red for the wrong reason.
+    for floor in (2, 3, 4):
+        status, body = record_attempt(lead, cycle, floor, p_victory=False, p_fallen=1)
+        opened_by = ("a guildmate's clear opens it for everybody" if floor == 2
+                     else "the leader's own win at floor " + str(floor - 1) + " opened it")
+        check(status == 200 and isinstance(body, dict) and body.get("attempt") == 1,
+              "THE LEADER NOW GETS FLOOR " + str(floor) + " - " + opened_by + " - and loses it",
+              (status, message_of(body)))
+        status, body = record_attempt(lead, cycle, floor + 1, p_victory=False, p_fallen=1)
+        check(status == 409, "while floor " + str(floor + 1) + " waits for somebody to WIN floor " + str(floor)
+              + " - a loss there opens nothing", (status, message_of(body)))
+        status, body = record_attempt(lead, cycle, floor)
+        check(status == 200 and isinstance(body, dict) and body.get("attempt") == 2 and body.get("victory") is True,
+              "then the leader wins floor " + str(floor) + " on attempt 2", (status, message_of(body)))
+    status, body = record_attempt(lead, cycle, 5, p_victory=False, p_fallen=1)
     check(status == 200 and isinstance(body, dict) and body.get("attempt") == 1,
-          "THE LEADER NOW GETS FLOOR 2 - a guildmate's clear opens it for everybody",
-          (status, message_of(body)))
-    status, body = record_attempt(lead, cycle, 3, p_victory=False, p_fallen=1)
-    check(status == 409, "while floor 3 waits for somebody to WIN floor 2", (status, message_of(body)))
+          "AND FLOOR 5, THE LAST, OPENS OFF THAT WIN AT FLOOR 4", (status, message_of(body)))
 
     if cleared is None:
         return None
@@ -1124,9 +1168,10 @@ def check_anon_helpers():
                        ("is_friend", {"other_user": "00000000-0000-0000-0000-000000000000"})):
         status, body = rpc(name, **args)
         check(status not in (200, 201), "the anon role cannot call " + name, (status, message_of(body)))
+    # S6, closed: 0010 records the revoke from public and anon that was applied to the live project.
     status, body = rpc("generate_friend_code")
-    check(status == 200,
-          "STILL PRESENT (S6) - the anon role CAN call generate_friend_code, the one function 0001 never revoked",
+    check(status not in (200, 201),
+          "the anon role cannot call generate_friend_code - S6 is closed, no function is left open to anon",
           (status, message_of(body)))
 
 
@@ -1398,10 +1443,17 @@ def main():
     args = parser.parse_args()
 
     load_credentials()
-    if looks_secret(ANON):
-        print("That looks like the service role key. Use the ANON PUBLIC key - the service role")
-        print("bypasses RLS, so every check here would pass and none of them would mean anything.")
+    broken = guard_fires()
+    if broken:
+        print("The key guard does not work (expected, got): " + str(broken) + ". Not running with a")
+        print("guard that cannot tell an anon key from a service-role one.")
         return 2
+    if looks_secret(ANON):
+        print("That key is not an anon public key (it reads as: " + key_kind(ANON) + "). Use the ANON")
+        print("PUBLIC key - the service role bypasses RLS, so every check here would pass and none of")
+        print("them would mean anything.")
+        return 2
+    print("key: decoded as an anon public key, and the guard was shown to fire on built secret keys")
 
     print("EMBERFALL SUPABASE GUILD RULE TEST")
     print("project: " + URL)
