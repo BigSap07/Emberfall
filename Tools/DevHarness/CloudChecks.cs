@@ -26,7 +26,8 @@ namespace Emberfall.DevHarness
     /// THE RULE FOR A DEFECT THAT WAS WRITTEN UP AND NOT FIXED: it is asserted as STILL PRESENT,
     /// with the finding's number in the label. The day somebody fixes it this goes red, and the fix
     /// is not done until the check is flipped and the doc's entry moves to the fixed section - the
-    /// same rule the harness's turned-around tripwires follow.
+    /// same rule the harness's turned-around tripwires follow. A flipped check says FIXED and the
+    /// number, so it still names what it guards.
     /// </summary>
     internal static class CloudChecks
     {
@@ -43,11 +44,13 @@ namespace Emberfall.DevHarness
             CheckHandEditedSaves(content);
             CheckVersionField(content);
             CheckEveryOldVersionLoads(content);
-            CheckContentSkewDropsHeroes(content);
+            CheckContentSkewKeepsHeroes(content);
+            CheckUnknownArmorIsKeptVerbatim(content);
             CheckFreshStartDecision();
             CheckUnreadableDocumentIsNotUploadable(content);
             CheckConflictCardCannotTellApart(content);
             CheckSecretKeyRecognition();
+            CheckSessionRenewal(root);
             CheckOfflineHasOneDoor(root);
             CheckNoSecretKeyInTheTree(root);
             CheckMigrationGrants(root);
@@ -111,9 +114,11 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// CLOUD-GAPS P14 and the documented refusal. A number above CurrentVersion is refused, which
-        /// is the claim. The field is read with GetInt and a fallback of 1, so anything that is not
-        /// a number - or a number too large for an int - reads as an OLD save and is let through.
+        /// CLOUD-GAPS P14, FIXED in version 15, and the documented refusal. A number above
+        /// CurrentVersion is refused, which is the claim. The field used to be read with GetInt and
+        /// a fallback of 1, so anything that was not a number, or a number too large for an int,
+        /// read as an OLD save and was let through. SaveSerializer.TryReadVersion now refuses every
+        /// one of those with a sentence, the way a newer build's save is refused.
         /// </summary>
         private static void CheckVersionField(ContentDatabase content)
         {
@@ -126,16 +131,43 @@ namespace Emberfall.DevHarness
             Check(Refused(content, whole.Replace(current, "\"version\": \"" + (SaveSerializer.CurrentVersion + 1) + "\"")),
                   "and so is the same number written as a string");
             Check(Refused(content, whole.Replace(current, "\"version\": " + SaveSerializer.CurrentVersion + ".5")),
-                  "and a fractional version that rounds past this build");
+                  "and a fractional version above this build");
 
             Check(!Refused(content, whole.Replace(current + ",", "")),
                   "a save with NO version field is read as version 1 - by design, versions were written from the start");
-            Check(!Refused(content, whole.Replace(current, "\"version\": \"fifteen\"")),
-                  "STILL PRESENT (P14) - a version that is not a number reads as version 1 and is let through");
-            Check(!Refused(content, whole.Replace(current, "\"version\": 1e10")),
-                  "STILL PRESENT (P14) - a version too large for an int overflows negative and is let through");
-            Check(!Refused(content, whole.Replace(current, "\"version\": null")),
-                  "STILL PRESENT (P14) - a null version reads as version 1");
+            Check(!Refused(content, whole.Replace(current, "\"version\": " + (SaveSerializer.CurrentVersion - 1))),
+                  "and an older whole-number version is read, as every migration needs");
+
+            // The P14 cases, each once let through as version 1 and each now refused. The guard is
+            // only worth anything if the refusal says why in words, so each is also checked for a
+            // sentence that names the damaged field.
+            string[][] damaged =
+            {
+                new[] { "\"fifteen\"", "a version that is not a number" },
+                new[] { "1e10", "a version too large for an int, which used to overflow negative" },
+                new[] { "null", "a null version" },
+                new[] { "\"" + SaveSerializer.CurrentVersion + "\"", "a current version written as a string, which no build writes" },
+                new[] { (SaveSerializer.CurrentVersion - 1) + ".5", "a fraction below this build, which used to round to a real version" },
+                new[] { "0", "version 0, which no build ever wrote" },
+                new[] { "-3", "a negative version" },
+                new[] { "true", "a boolean" },
+                new[] { "[" + SaveSerializer.CurrentVersion + "]", "an array" },
+            };
+            for (int i = 0; i < damaged.Length; i++)
+            {
+                string error;
+                PlayerProfile p = SaveSerializer.Deserialize(whole.Replace(current, "\"version\": " + damaged[i][0]), content, out error);
+                Check(p == null && error != null && error.Contains("version number is damaged"),
+                      "FIXED (P14) - " + damaged[i][1] + " is refused, not read as version 1"
+                      + (error != null ? " (\"" + error + "\")" : " (it was read)"));
+            }
+
+            // The summary a conflict card shows reads by the same rule but never refuses: a card
+            // must still describe a save it cannot open.
+            SaveSummary summary = SaveSummaryReader.From(whole.Replace(current, "\"version\": \"fifteen\""));
+            Check(summary.Readable && summary.SaveVersion == 0,
+                  "and the conflict card's summary still describes such a save, reporting its version as 0 ("
+                  + summary.SaveVersion + ")");
         }
 
         /// <summary>
@@ -195,22 +227,39 @@ namespace Emberfall.DevHarness
             // The ids each era's builds actually wrote. Every one left heroes.json on 2026-09-11:
             // the six placeholders in "delete the six placeholder heroes", the rest in "The 94-hero
             // import". A starter from each era is enough - a save held at least its starters.
+            //
+            // 13 is the last version any build could have written with those ids: version 14 arrived
+            // on 2026-09-21, ten days after both deletions, so this loop stops there however far
+            // CurrentVersion moves.
+            const int LastVersionWithDeletedIds = 13;
             string[] firstRoster = { "kalyx_emberwright", "maeve_corrin", "nyx_serrow" };
             string[] secondRoster = { "kael_the_ashbound", "marrow_the_burning_vow", "orren_the_cinder_hunter" };
-            int lost = 0;
-            for (int v = 1; v < SaveSerializer.CurrentVersion; v++)
+            int noPlayable = 0, carried = 0;
+            for (int v = 1; v <= LastVersionWithDeletedIds; v++)
             {
                 string[] era = v <= 5 ? firstRoster : secondRoster;
                 string error;
                 PlayerProfile p = SaveSerializer.Deserialize(OldSave(v, era, relic, stage), content, out error);
-                if (p != null && p.Heroes.Count == 0) lost++;
+                if (p == null) continue;
+                if (p.Heroes.Count == 0) noPlayable++;
+                // Since version 15 the records are kept. Re-saved, all three heroes are still in the
+                // document, and so is the armor the first one wore.
+                string again = SaveSerializer.Serialize(p);
+                bool all = p.UnresolvedHeroRecords.Count == 3;
+                for (int i = 0; i < era.Length; i++) all &= again.Contains("\"" + era[i] + "\"");
+                if (v >= 8) all &= again.Contains("\"Old Blade\"");
+                if (all) carried++;
             }
             for (int i = 0; i < 3; i++)
                 Check(content.GetHero(firstRoster[i]) == null && content.GetHero(secondRoster[i]) == null,
                       "the old starter " + firstRoster[i] + " / " + secondRoster[i] + " is gone from heroes.json");
-            Check(lost == SaveSerializer.CurrentVersion - 1,
-                  "STILL PRESENT (P10) - a save holding the heroes its own build shipped keeps NO hero at every version from 1 to "
-                  + (SaveSerializer.CurrentVersion - 1) + " (" + lost + "), so Load reports no save and the boot starts a new game");
+            Check(noPlayable == LastVersionWithDeletedIds,
+                  "STILL PRESENT (P10), BY DECISION - a save holding the heroes its own build shipped has NO playable hero at "
+                  + "every version from 1 to " + LastVersionWithDeletedIds + " (" + noPlayable + "), so Load still refuses it "
+                  + "and keeps it aside (P1). No old-to-new id map: it would hand players heroes they never summoned");
+            Check(carried == LastVersionWithDeletedIds,
+                  "CONTAINED BY P7 - none of those heroes is dropped from the document any more: re-saved, every version "
+                  + "carries all three records and the armor they wore (" + carried + " of " + LastVersionWithDeletedIds + ")");
         }
 
         /// <summary>
@@ -333,32 +382,139 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// CLOUD-GAPS P7. save_version guards the FORMAT, and nothing guards the CONTENT. A device on
-        /// an older build reads a save holding a hero its heroes.json does not have yet, drops the
-        /// hero without a word, and its next upload deletes that hero from the cloud copy.
+        /// CLOUD-GAPS P7, FIXED in version 15. save_version guards the FORMAT, and nothing guarded
+        /// the CONTENT: a device whose heroes.json lacked a hero dropped it on load, and its next
+        /// upload deleted the hero from the cloud copy. The record is now kept verbatim, with the
+        /// armor it wears, and loads as an ordinary hero the day content names it again - the rule
+        /// an unresolvable relic id already followed.
         /// </summary>
-        private static void CheckContentSkewDropsHeroes(ContentDatabase content)
+        private static void CheckContentSkewKeepsHeroes(ContentDatabase content)
         {
             PlayerProfile profile = Rich(content);
             string doc = SaveSerializer.Serialize(profile);
             JsonValue root;
             string error;
             JsonValue.TryParse(doc, out root, out error);
+
+            // A hero from a newer build, wearing a weapon, beside the player's own heroes.
+            const string Unknown = "a_hero_from_a_newer_build";
             JsonValue stranger = JsonValue.NewObject();
             stranger.Set("uid", "h900");
-            stranger.Set("defId", "a_hero_from_a_newer_build");
+            stranger.Set("defId", Unknown);
             stranger.Set("level", 60);
             stranger.Set("copies", 4);
             stranger.Set("acquired", 1760000000);
+            stranger.Set("selectedTalent", 2);
+            stranger.Set("aFieldANewerBuildWrites", "kept as it came");
+            JsonValue worn = JsonValue.NewArray();
+            worn.Add("g900");
+            for (int s = 1; s < ArmorInfo.AllSlots.Length; s++) worn.Add("");
+            stranger.Set("equippedArmor", worn);
             root["heroes"].Add(stranger);
+            root["ownedArmor"].Add(Piece("g900", "Newer Blade", "Weapon", "Attack"));
             string newer = root.ToJson(true);
+            string strangerJson = stranger.ToJson(false);
 
             PlayerProfile read = SaveSerializer.Deserialize(newer, content, out error);
-            string reSaved = read != null ? SaveSerializer.Serialize(read) : "";
             Check(read != null && read.Heroes.Count == profile.Heroes.Count,
-                  "a save naming a hero this build lacks still loads, at the same save version");
-            Check(read != null && !reSaved.Contains("a_hero_from_a_newer_build"),
-                  "STILL PRESENT (P7) - and the hero is gone from the very next save, which is the one the next sync uploads");
+                  "a save naming a hero this build lacks still loads, with only the heroes it can play");
+            if (read == null) return;
+            Check(read.UnresolvedHeroRecords.Count == 1 && read.UnresolvedHeroRecords[0] == strangerJson,
+                  "FIXED (P7) - the unknown hero is kept aside byte for byte, including a key this build has never heard of");
+            Check(read.FindArmor("g900") == null && read.UnresolvedArmorRecords.Count == 1,
+                  "and the weapon it wears goes aside with it, so this build cannot salvage or combine it");
+
+            string reSaved = SaveSerializer.Serialize(read);
+            Check(reSaved.Contains(Unknown) && reSaved.Contains("Newer Blade"),
+                  "FIXED (P7) - the hero and its weapon are both in the very next save, which is the one the next sync uploads");
+            string error2;
+            PlayerProfile twice = SaveSerializer.Deserialize(reSaved, content, out error2);
+            Check(twice != null && SaveSerializer.Serialize(twice) == reSaved,
+                  "and loading and saving again changes nothing, so two devices on two builds can agree about the document");
+
+            // The day content names it, simulated by renaming the id, in the document the older
+            // build wrote, to a real hero this profile does not own.
+            HeroDef restoredDef = null;
+            for (int i = 0; i < content.Heroes.Count && restoredDef == null; i++)
+            {
+                bool owned = false;
+                for (int h = 0; h < profile.Heroes.Count; h++) owned |= profile.Heroes[h].DefId == content.Heroes[i].Id;
+                if (!owned) restoredDef = content.Heroes[i];
+            }
+            if (restoredDef == null) { Check(false, "content has a hero the rich profile does not own"); return; }
+            string error3;
+            PlayerProfile restored = SaveSerializer.Deserialize(reSaved.Replace(Unknown, restoredDef.Id), content, out error3);
+            HeroInstance back = restored != null ? restored.FindHeroByUid("h900") : null;
+            Check(back != null && back.Level == 60 && back.Copies == 4 && back.SelectedTalent == 2,
+                  "when content names the hero again it loads as an ordinary hero, level, copies and talent intact");
+            Check(back != null && back.EquippedArmor[0] == "g900" && restored.FindArmor("g900") != null
+                  && restored.UnresolvedHeroRecords.Count == 0 && restored.UnresolvedArmorRecords.Count == 0,
+                  "wearing the weapon it wore, with nothing left aside");
+
+            // A record with no defId is corrupt rather than unknown: no content could ever name it.
+            string noId = newer.Replace("\"defId\": \"" + Unknown + "\"", "\"defId\": \"\"");
+            PlayerProfile corrupt = SaveSerializer.Deserialize(noId, content, out error);
+            Check(corrupt != null && corrupt.UnresolvedHeroRecords.Count == 0,
+                  "a hero record with no defId at all is still skipped, since no content could ever name it");
+        }
+
+        /// <summary>
+        /// CLOUD-GAPS P7's armor half, FIXED in version 15. ReadArmorPiece maps a slot, aspect,
+        /// temper, stat or mode it does not know to Weapon, Ember, Rough or Attack, so a piece from
+        /// a newer build came back changed and was saved that way. An owned piece this build cannot
+        /// read faithfully is now kept aside verbatim.
+        /// </summary>
+        private static void CheckUnknownArmorIsKeptVerbatim(ContentDatabase content)
+        {
+            string doc = SaveSerializer.Serialize(Rich(content));
+            string error;
+            string[][] cases =
+            {
+                new[] { "Earring", "Attack", "a slot this build does not have" },
+                new[] { "Weapon", "Haste", "a stat this build does not have" },
+                new[] { "7", "Attack", "a slot written as a number, which Enum.Parse would accept though it is undefined" },
+            };
+            for (int c = 0; c < cases.Length; c++)
+            {
+                JsonValue root;
+                JsonValue.TryParse(doc, out root, out error);
+                JsonValue piece = Piece("g901", "Strange Piece", cases[c][0], cases[c][1]);
+                root["ownedArmor"].Add(piece);
+                PlayerProfile read = SaveSerializer.Deserialize(root.ToJson(true), content, out error);
+                string again = read != null ? SaveSerializer.Serialize(read) : "";
+                JsonValue againRoot;
+                bool verbatim = false;
+                if (JsonValue.TryParse(again, out againRoot, out error) && againRoot != null)
+                {
+                    List<JsonValue> owned = againRoot.GetList("ownedArmor");
+                    for (int i = 0; i < owned.Count; i++)
+                        if (owned[i].ToJson(false) == piece.ToJson(false)) verbatim = true;
+                }
+                Check(read != null && read.FindArmor("g901") == null && verbatim,
+                      "FIXED (P7, armor) - a piece naming " + cases[c][2] + " is kept aside and written back exactly as it came");
+            }
+
+            PlayerProfile known = SaveSerializer.Deserialize(doc, content, out error);
+            Check(known != null && known.UnresolvedArmorRecords.Count == 0 && known.UnresolvedHeroRecords.Count == 0,
+                  "while a save whose every hero and piece this build knows keeps nothing aside");
+        }
+
+        /// <summary>An owned armor piece in the shape WriteArmorPiece writes, with the names given.</summary>
+        private static JsonValue Piece(string uid, string name, string slot, string stat)
+        {
+            JsonValue piece = JsonValue.NewObject();
+            piece.Set("uid", uid);
+            piece.Set("name", name);
+            piece.Set("slot", slot);
+            piece.Set("aspect", "Ember");
+            piece.Set("temper", "Rough");
+            JsonValue primary = JsonValue.NewObject();
+            primary.Set("stat", stat);
+            primary.Set("mode", "Multiply");
+            primary.Set("value", 0.05);
+            piece.Set("primary", primary);
+            piece.Set("subStats", JsonValue.NewArray());
+            return piece;
         }
 
         // ---------------------------------------------------------------- the sync decision
@@ -441,6 +597,40 @@ namespace Emberfall.DevHarness
             Check(!SupabaseKeys.IsSecret(anon), "an anon JWT is not");
             Check(!SupabaseKeys.IsSecret("sb_publishable_abc123"), "and neither is a new-format publishable key");
             Check(SupabaseKeys.IsSecret(header + ".!!!.sig"), "a JWT whose payload cannot be read is treated as secret");
+        }
+
+        /// <summary>
+        /// CLOUD-GAPS P13, FIXED. Nothing retried a 401, though a comment said callers did, so a
+        /// device clock running slow failed every request until the next launch. The rule lives in
+        /// SessionRenewal and is pinned here; that the one Send in the project actually follows it
+        /// is proven end to end by Tools/CloudProbe, and held here as a tripwire on the source.
+        /// </summary>
+        private static void CheckSessionRenewal(string root)
+        {
+            Check(SessionRenewal.ShouldRenewAndRetry(401, "rest/v1/rpc/push_save", true, false),
+                  "FIXED (P13) - a 401 on a request that carried a user's token earns one refresh and one resend");
+            Check(!SessionRenewal.ShouldRenewAndRetry(401, "rest/v1/rpc/push_save", true, true),
+                  "but never a second: the resend's own 401 goes to the caller, so nothing can loop");
+            Check(!SessionRenewal.ShouldRenewAndRetry(401, "rest/v1/profiles", false, false),
+                  "and not a request sent with the anon key, which has no session to renew");
+            Check(!SessionRenewal.ShouldRenewAndRetry(401, "auth/v1/token?grant_type=refresh_token", true, false)
+                  && !SessionRenewal.ShouldRenewAndRetry(401, "auth/v1/signup", true, false),
+                  "and not the token or sign-up endpoints, where a refresh itself goes and would recurse");
+            Check(!SessionRenewal.ShouldRenewAndRetry(403, "rest/v1/rpc/guild_touch", true, false)
+                  && !SessionRenewal.ShouldRenewAndRetry(409, "rest/v1/rpc/push_save", true, false)
+                  && !SessionRenewal.ShouldRenewAndRetry(0, "rest/v1/saves", true, false),
+                  "and not a role refusal, a conflict or a transport failure, none of which a new token changes");
+            Check(SessionRenewal.RenewFailed("x").Contains("could not be renewed")
+                  && SessionRenewal.StillRefused("x").Contains("even after"),
+                  "and both ways it can still fail are told to the player in words");
+
+            string scripts = Path.Combine(root, Path.Combine("Assets", Path.Combine("Scripts", Path.Combine("Game", "Cloud"))));
+            string client = StripComments(File.ReadAllText(Path.Combine(scripts, "SupabaseClient.cs")));
+            string account = StripComments(File.ReadAllText(Path.Combine(scripts, "AccountService.cs")));
+            Check(client.Contains("SessionRenewal.ShouldRenewAndRetry(") && client.Contains("RenewSession(sentToken"),
+                  "SupabaseClient.Send asks SessionRenewal and renews through RenewSession");
+            Check(Regex.IsMatch(account, "_client\\.RenewSession\\s*=\\s*RenewAfterUnauthorised"),
+                  "and AccountService is what renews, so a refresh token is only ever spent in one place");
         }
 
         private static string B64(string text)

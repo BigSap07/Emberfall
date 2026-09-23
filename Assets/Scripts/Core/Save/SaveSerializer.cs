@@ -8,8 +8,9 @@ using Emberfall.Core.Model;
 namespace Emberfall.Core.Save
 {
     /// <summary>
-    /// Turns a PlayerProfile into JSON and back. Unknown hero ids are dropped rather than
-    /// throwing, so removing a hero from content never bricks an existing save.
+    /// Turns a PlayerProfile into JSON and back. A hero whose id content does not know is kept
+    /// aside verbatim rather than throwing or being dropped, so removing a hero from content never
+    /// bricks an existing save and never deletes the hero from it either (version 15).
     /// </summary>
     public static class SaveSerializer
     {
@@ -197,7 +198,82 @@ namespace Emberfall.Core.Save
         /// column precisely so the refusal happens before the document is parsed. A shape change
         /// that did not move the number would walk straight through that guard onto an older
         /// phone, which is the one place in this system where "small" and "silent" compound.
-        public const int CurrentVersion = 14;
+        ///
+        /// 15: records this build cannot resolve are carried, not dropped (Docs/CLOUD-GAPS.md P7).
+        /// A hero whose defId content does not name is kept as the exact JSON the save held, in
+        /// PlayerProfile.UnresolvedHeroRecords, and written back into `heroes` unchanged. The armor
+        /// it is wearing travels with it, and so does any armor piece naming a slot, aspect, temper,
+        /// stat or mode this build does not know, which used to be read as Weapon, Ember, Rough or
+        /// Attack and saved back changed. The day content names the hero again, it loads as an
+        /// ordinary hero wearing what it wore.
+        ///
+        /// Upgrade needs no migration and gets none: the key set is the same, and a version 14
+        /// save simply has its unknown records kept from this load onward. What version 14 code
+        /// already dropped on an earlier save is not in the document to recover.
+        ///
+        /// WHY THIS IS A BUMP when no key was added. Version 14 code reads a version 15 document
+        /// happily and drops every record it cannot resolve on its next save, which is exactly the
+        /// loss this version exists to end. The bump is what turns that into a refusal: a version
+        /// 14 build is told the save is from a newer build, locally and on the cloud's
+        /// `save_version` column, instead of reading it and scrubbing it. Every bump above is for
+        /// the downgrade direction too; this one is ONLY for it.
+        ///
+        /// The version field is also read strictly from here on (P14). Absent still means 1, by
+        /// design. Anything present that is not a whole JSON number from 1 up is refused with a
+        /// sentence, the way a newer build's save is: a string, a null, a fraction, zero, a
+        /// negative, or a number too large for an int, which used to overflow negative and read as
+        /// an old save.
+        public const int CurrentVersion = 15;
+
+        /// <summary>
+        /// The save's format version, or false with a sentence a player can read. The one reader
+        /// of the field: Deserialize refuses on false, and SaveSummaryReader reports what it gets.
+        /// On false, `version` is the newer build's number when that is the reason, and 0 when the
+        /// field is damaged.
+        /// </summary>
+        public static bool TryReadVersion(JsonValue root, out int version, out string error)
+        {
+            version = 1;
+            error = null;
+            if (root == null || !root.IsObject)
+            {
+                error = "the save is not a save document";
+                return false;
+            }
+            // Saves never carried a version below 1, and version was written from the start, so a
+            // missing field means 1. The key list, not Has: Has reads an explicit null as absent,
+            // and a null version is one of the damaged fields this exists to refuse.
+            bool present = false;
+            foreach (string key in root.Keys) if (key == "version") { present = true; break; }
+            if (!present) return true;
+
+            JsonValue field = root["version"];
+            double number = field.Type == JsonType.Number ? field.AsDouble(double.NaN) : double.NaN;
+            if (double.IsNaN(number) || double.IsInfinity(number) || number != Math.Floor(number)
+                || number < 1 || number > int.MaxValue)
+            {
+                error = "the save's version number is damaged (it reads " + Describe(field)
+                      + "), so this build cannot tell which format it is in and has not opened it";
+                version = 0;
+                return false;
+            }
+            version = (int)number;
+            if (version > CurrentVersion)
+            {
+                error = "save is from a newer build (version " + version + ", this build reads up to " + CurrentVersion + ")";
+                return false;
+            }
+            return true;
+        }
+
+        /// <summary>A version field as a player would read it in the refusal: short, quoted when it
+        /// was text, never the whole document.</summary>
+        private static string Describe(JsonValue field)
+        {
+            if (field.IsNull) return "nothing";
+            string text = field.ToJson(false);
+            return text.Length > 24 ? text.Substring(0, 24) + "..." : text;
+        }
 
         /// <summary>
         /// The pre-version-5 per-hero relic key. Read on upgrade and never written again; see the
@@ -296,6 +372,52 @@ namespace Emberfall.Core.Save
         }
 
         /// <summary>
+        /// Whether ReadArmorPiece would read this owned piece back as it was written. A name this
+        /// build does not know - a slot, aspect or temper, or a stat or mode on any roll - would be
+        /// read as the enum's fallback, and the piece saved back changed. Such a piece is kept aside
+        /// verbatim instead (version 15). An absent name is not unknown: it has always read as the
+        /// default, and still does. Only the owned-armor read asks this; a snapshot or an opponent
+        /// is read total, because neither is written back as the player's property.
+        /// </summary>
+        private static bool ArmorPieceIsReadable(JsonValue aj)
+        {
+            if (aj == null || !aj.IsObject) return false;
+            if (!Known<ArmorSlot>(aj, "slot") || !Known<Aspect>(aj, "aspect") || !Known<ArmorTemper>(aj, "temper"))
+                return false;
+            if (!RollIsReadable(aj["primary"])) return false;
+            List<JsonValue> subs = aj.GetList("subStats");
+            for (int i = 0; i < subs.Count; i++) if (!RollIsReadable(subs[i])) return false;
+            return true;
+        }
+
+        private static bool RollIsReadable(JsonValue rj)
+        {
+            if (rj == null || rj.IsNull) return true;
+            return Known<ArmorStat>(rj, "stat") && Known<ArmorStatMode>(rj, "mode");
+        }
+
+        /// <summary>True when the key is absent or names a value of T this build defines. A bare
+        /// number is refused, because Enum.Parse accepts any integer whether it is defined or not.
+        /// </summary>
+        private static bool Known<T>(JsonValue obj, string key) where T : struct
+        {
+            if (!obj.Has(key)) return true;
+            string text = obj[key].AsString(null);
+            if (string.IsNullOrEmpty(text)) return true;
+            text = text.Trim();
+            if (text.Length == 0 || char.IsDigit(text[0]) || text[0] == '-' || text[0] == '+') return false;
+            try
+            {
+                object parsed = Enum.Parse(typeof(T), text, true);
+                return Enum.IsDefined(typeof(T), parsed);
+            }
+            catch (ArgumentException)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>
         /// A BattleLoadout as JSON - the opponent snapshot (DESIGN-PVP section 8). Deliberately a
         /// flat document of ids, ints and armor records with no object graph: this is the same
         /// shape a server response would carry, so the format is the wire format already.
@@ -390,6 +512,20 @@ namespace Emberfall.Core.Save
             return roll;
         }
 
+        /// <summary>Adds each kept record back into its array unchanged. A record that no longer
+        /// parses cannot have come from Deserialize, which only keeps what it parsed, so it is
+        /// skipped rather than written as something else.</summary>
+        private static void AppendVerbatim(JsonValue array, List<string> records)
+        {
+            for (int i = 0; i < records.Count; i++)
+            {
+                JsonValue record;
+                string error;
+                if (JsonValue.TryParse(records[i], out record, out error) && record != null && record.IsObject)
+                    array.Add(record);
+            }
+        }
+
         public static string Serialize(PlayerProfile profile)
         {
             JsonValue root = JsonValue.NewObject();
@@ -470,6 +606,10 @@ namespace Emberfall.Core.Save
 
                 heroes.Add(hj);
             }
+            // Version 15: the heroes this build could not resolve, written back exactly as they
+            // were read. After the known ones, so a save that round-trips through a build that
+            // knows every hero is byte for byte what it was.
+            AppendVerbatim(heroes, profile.UnresolvedHeroRecords);
             root.Set("heroes", heroes);
 
             // Written even when empty, same reasoning as ownedRelics below: absent means "predates
@@ -482,6 +622,7 @@ namespace Emberfall.Core.Save
                 if (piece == null || string.IsNullOrEmpty(piece.Uid)) continue;
                 ownedArmor.Add(WriteArmorPiece(piece));
             }
+            AppendVerbatim(ownedArmor, profile.UnresolvedArmorRecords);
             root.Set("ownedArmor", ownedArmor);
 
             // The relic collection is written even when empty, unlike the per-hero key above: an
@@ -542,16 +683,12 @@ namespace Emberfall.Core.Save
             JsonValue root;
             if (!JsonValue.TryParse(json, out root, out error)) return null;
 
-            // Saves never carried a version below 1, and version was written from the start,
-            // so a missing field just means "1". Anything above CurrentVersion comes from a
-            // newer build; reading it here would silently drop whatever the newer format added
-            // (a 5-slot team truncated to 3 was the first real casualty), so refuse instead.
-            int version = root.GetInt("version", 1);
-            if (version > CurrentVersion)
-            {
-                error = "save is from a newer build (version " + version + ", this build reads up to " + CurrentVersion + ")";
-                return null;
-            }
+            // Anything above CurrentVersion comes from a newer build; reading it here would
+            // silently drop whatever the newer format added (a 5-slot team truncated to 3 was the
+            // first real casualty), so refuse instead. A version field that is not a whole number
+            // is refused the same way since version 15: it used to read as 1 and be let through.
+            int version;
+            if (!TryReadVersion(root, out version, out error)) return null;
 
             PlayerProfile profile = new PlayerProfile();
             profile.PlayerName = root.GetString("playerName", "Wayfarer");
@@ -613,13 +750,36 @@ namespace Emberfall.Core.Save
                 if (!string.IsNullOrEmpty(id) && !profile.ClearedStageIds.Contains(id)) profile.ClearedStageIds.Add(id);
             }
 
+            // Armor uids worn by a hero this build cannot resolve. Those pieces are held back with
+            // the hero below, so this build cannot salvage or combine what that hero is wearing.
+            HashSet<string> wornByUnresolved = new HashSet<string>();
+
             List<JsonValue> heroes = root.GetList("heroes");
             for (int i = 0; i < heroes.Count; i++)
             {
                 JsonValue hj = heroes[i];
                 string defId = hj.GetString("defId", "");
                 HeroDef def = content != null ? content.GetHero(defId) : null;
-                if (def == null) continue; // content changed under the save - skip quietly
+                if (def == null)
+                {
+                    // THE VERSION 15 RULE (CLOUD-GAPS P7). Content changed under the save, or the
+                    // save came from a build with more heroes than this one. The record is kept
+                    // exactly as it was and written back unchanged, never dropped: dropping it here
+                    // meant the next save and the next sync deleted the hero from the cloud copy.
+                    // A record with no defId at all is corrupt rather than unknown, and nothing
+                    // could ever restore it, so that alone is still skipped.
+                    if (hj.IsObject && !string.IsNullOrEmpty(defId))
+                    {
+                        profile.UnresolvedHeroRecords.Add(hj.ToJson(false));
+                        List<JsonValue> keptWorn = hj.GetList("equippedArmor");
+                        for (int s = 0; s < keptWorn.Count; s++)
+                        {
+                            string uid = keptWorn[s].AsString("");
+                            if (!string.IsNullOrEmpty(uid)) wornByUnresolved.Add(uid);
+                        }
+                    }
+                    continue;
+                }
 
                 HeroInstance h = new HeroInstance();
                 // The fallback is computed ONLY when there is no stored uid, which is the whole
@@ -689,6 +849,15 @@ namespace Emberfall.Core.Save
                 JsonValue aj = ownedArmor[i];
                 string uid = aj.GetString("uid", "");
                 if (string.IsNullOrEmpty(uid) || profile.FindArmor(uid) != null) continue;
+
+                // Version 15: a piece an unresolved hero is wearing goes aside with that hero, and
+                // a piece this build cannot read faithfully goes aside on its own, verbatim. Either
+                // way it is written back exactly as it came in.
+                if (wornByUnresolved.Contains(uid) || !ArmorPieceIsReadable(aj))
+                {
+                    if (aj.IsObject) profile.UnresolvedArmorRecords.Add(aj.ToJson(false));
+                    continue;
+                }
 
                 ArmorPiece piece = ReadArmorPiece(aj);
 

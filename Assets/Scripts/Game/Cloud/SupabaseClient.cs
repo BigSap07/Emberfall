@@ -3,6 +3,7 @@ using System.Collections;
 using System.Text;
 using UnityEngine;
 using UnityEngine.Networking;
+using Emberfall.Core.Cloud;
 using Emberfall.Core.Json;
 
 namespace Emberfall.Game.Cloud
@@ -26,7 +27,8 @@ namespace Emberfall.Game.Cloud
         public bool IsConflict { get { return Status == 409; } }
 
         /// <summary>401 means the access token has expired or been revoked. The one status that is
-        /// worth one automatic retry, after a refresh.</summary>
+        /// worth one automatic retry, after a refresh, and Send does exactly that before a caller
+        /// ever sees it. A 401 that reaches a caller has already been through the retry.</summary>
         public bool IsUnauthorised { get { return Status == 401; } }
 
         /// <summary>403 is a role refusal raised by a guild RPC - "only the leader can do that" -
@@ -86,6 +88,13 @@ namespace Emberfall.Game.Cloud
         /// AccountService as sign-in state changes; nothing else writes it.</summary>
         public string AccessToken;
 
+        /// <summary>
+        /// Renews the session after a 401, given the access token the refused request carried.
+        /// Set by AccountService, which owns the refresh token; null means nothing can renew, and a
+        /// 401 then reaches the caller as it came. See SessionRenewal for when it is asked.
+        /// </summary>
+        public Func<string, Action<bool, string>, IEnumerator> RenewSession;
+
         public Coroutine Run(IEnumerator routine)
         {
             return _runner != null ? _runner.StartCoroutine(routine) : null;
@@ -114,6 +123,41 @@ namespace Emberfall.Game.Cloud
         /// into an upsert, and `return=representation` asks for the written row back.
         /// </summary>
         public IEnumerator Send(string method, string path, string body, string prefer, Action<SupabaseResponse> done)
+        {
+            // THE ONE 401 RETRY (Docs/CLOUD-GAPS.md P13). A device clock running slow sends a token
+            // the server has already expired, and every request used to fail until the next
+            // launch. Now a 401 on a request that carried a user's token renews the session once
+            // and resends once. If the renewal fails, or the resend is refused again, the caller
+            // is told so in words; it is never retried a second time.
+            string sentToken = AccessToken;
+            SupabaseResponse first = null;
+            yield return SendOnce(method, path, body, prefer, delegate (SupabaseResponse r) { first = r; });
+
+            if (RenewSession == null
+                || !SessionRenewal.ShouldRenewAndRetry(first.Status, path, !string.IsNullOrEmpty(sentToken), false))
+            {
+                if (done != null) done(first);
+                yield break;
+            }
+
+            bool renewed = false;
+            string renewError = "";
+            yield return RenewSession(sentToken, delegate (bool ok, string message) { renewed = ok; renewError = message; });
+            if (!renewed)
+            {
+                first.Error = SessionRenewal.RenewFailed(renewError);
+                if (done != null) done(first);
+                yield break;
+            }
+
+            SupabaseResponse second = null;
+            yield return SendOnce(method, path, body, prefer, delegate (SupabaseResponse r) { second = r; });
+            if (second.IsUnauthorised) second.Error = SessionRenewal.StillRefused(second.Error);
+            if (done != null) done(second);
+        }
+
+        /// <summary>One request, one answer, no retry. Only Send calls it.</summary>
+        private IEnumerator SendOnce(string method, string path, string body, string prefer, Action<SupabaseResponse> done)
         {
             SupabaseResponse response = new SupabaseResponse();
 

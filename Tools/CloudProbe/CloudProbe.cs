@@ -51,6 +51,7 @@ internal static class CloudProbe
         NonSessionAnswerKeepsTheAccount();
         InvalidApiKeyStillDropsTheAccount();
         TransportFailureKeepsTheAccount();
+        ExpiredTokenIsRenewedOnce();
         OfflineSendsNothing();
         SecretKeyIsRefused();
 
@@ -231,6 +232,71 @@ internal static class CloudProbe
         Run(account.Resume(null));
         Check(state.UserId == "" && state.RefreshToken == "",
               "STILL PRESENT - the stored account is cleared on an API-key refusal (user now '" + state.UserId + "')");
+        UnityWebRequest.Script.Clear();
+    }
+
+    /// <summary>CLOUD-GAPS P13, fixed. A device clock running slow sends a token the server has
+    /// already expired. Nothing retried the 401, so every request failed until the next launch.
+    /// SupabaseClient.Send now renews once through AccountService and resends once.</summary>
+    private static void ExpiredTokenIsRenewedOnce()
+    {
+        Section("P13  a 401 renews the session once and resends once");
+        const string Expired = "{\"code\":\"PGRST301\",\"message\":\"JWT expired\"}";
+
+        FreshDevice();
+        SignedInSaves saves = SignIn();
+        int before = UnityWebRequest.Sent.Count;
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(401, Expired));
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(200, Session("at-2", "rt-2", "u-1", "", null, "true")));
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(200, "[" + Row(3, "{}") + "]"));
+        CloudSaveRecord fetched = null;
+        string error = null;
+        Run(saves.Service.Fetch(delegate (CloudSaveRecord r, string e) { fetched = r; error = e; }));
+        int sent = UnityWebRequest.Sent.Count - before;
+        Check(fetched != null && fetched.Revision == 3 && string.IsNullOrEmpty(error),
+              "a fetch that met an expired token succeeds after one refresh" + (string.IsNullOrEmpty(error) ? "" : " (" + error + ")"));
+        Check(sent == 3 && UnityWebRequest.Sent[before + 1].Url.Contains("grant_type=refresh_token"),
+              "with exactly three requests: the refused one, the refresh, the resend (" + sent + ")");
+        Check(saves.State.RefreshToken == "rt-2", "and the rotated refresh token is kept");
+
+        FreshDevice();
+        saves = SignIn();
+        before = UnityWebRequest.Sent.Count;
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(401, Expired));
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(400, "{\"error\":\"invalid_grant\",\"error_description\":\"Invalid Refresh Token: Already Used\"}"));
+        fetched = null;
+        error = null;
+        Run(saves.Service.Fetch(delegate (CloudSaveRecord r, string e) { fetched = r; error = e; }));
+        sent = UnityWebRequest.Sent.Count - before;
+        Check(fetched == null && error != null && error.Contains("could not be renewed"),
+              "when the refresh fails the caller is told so in words (" + error + ")");
+        Check(sent == 2, "and nothing is resent (" + sent + " requests)");
+        Check(saves.State.UserId == "u-1" && saves.State.RefreshToken == "rt-1",
+              "and the account is NOT cleared: that is Resume's decision at boot, not a mid-session request's");
+
+        FreshDevice();
+        saves = SignIn();
+        before = UnityWebRequest.Sent.Count;
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(401, Expired));
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(200, Session("at-2", "rt-2", "u-1", "", null, "true")));
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(401, Expired));
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(200, Session("at-3", "rt-3", "u-1", "", null, "true")));
+        error = null;
+        Run(saves.Service.Fetch(delegate (CloudSaveRecord r, string e) { error = e; }));
+        sent = UnityWebRequest.Sent.Count - before;
+        Check(error != null && error.Contains("even after"),
+              "a resend refused again is reported as such (" + error + ")");
+        Check(sent == 3, "and is not retried a second time - one refresh, one resend, no loop (" + sent + " requests)");
+        UnityWebRequest.Script.Clear();
+
+        FreshDevice();
+        SupabaseClient anonClient = Client();
+        new AccountService(anonClient, CloudLocalState.Load());
+        before = UnityWebRequest.Sent.Count;
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(401, Expired));
+        Run(anonClient.Send("GET", "rest/v1/profiles", null, null));
+        Check(UnityWebRequest.Sent.Count - before == 1,
+              "a request sent with the anon key alone is not retried: there is no session to renew");
         UnityWebRequest.Script.Clear();
     }
 

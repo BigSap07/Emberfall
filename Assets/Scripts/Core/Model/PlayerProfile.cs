@@ -318,6 +318,27 @@ namespace Emberfall.Core.Model
         /// </summary>
         public readonly List<ArmorPiece> OwnedArmor = new List<ArmorPiece>();
 
+        /// <summary>
+        /// Hero records this build's content cannot resolve, kept as the exact JSON the save held
+        /// and written back unchanged (save version 15, Docs/CLOUD-GAPS.md P7). A hero summoned on a
+        /// newer build, or one whose def has left heroes.json, used to be dropped on load, and the
+        /// next save and sync deleted it from the cloud copy. Now nothing in the game can see or
+        /// spend it, and the day content names its defId again it loads as an ordinary hero. The
+        /// same rule an unresolvable relic id already follows, applied to the whole record.
+        ///
+        /// Deliberately strings rather than parsed values: nothing reads them but the serializer,
+        /// and a string cannot be edited by accident on the way through.
+        /// </summary>
+        public readonly List<string> UnresolvedHeroRecords = new List<string>();
+
+        /// <summary>
+        /// Armor records held back the same way: pieces worn by an unresolved hero, which travel
+        /// with it so this build cannot salvage or combine what that hero is wearing, and pieces
+        /// naming a slot, aspect, temper or stat this build does not know, which used to be read
+        /// as Weapon, Ember, Rough or Attack and saved back changed.
+        /// </summary>
+        public readonly List<string> UnresolvedArmorRecords = new List<string>();
+
         /// <summary>Per-event progress, one entry per event the player has ever earned a point or
         /// currency toward. Absent entirely on a save from before the events engine existed, or for
         /// any event the player has not touched - both read as "no progress", the correct default,
