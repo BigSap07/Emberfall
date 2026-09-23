@@ -34,6 +34,8 @@ namespace Emberfall.DevHarness
             bool reconcile = false;
             int wallStudy = 0;
             bool lineCalibration = false;
+            bool tempoStudy = false;
+            string tempoMode = null;
             string reconcileStage = null, reconcileLevels = null;
             string only = null;
             string contentDir = null;
@@ -51,6 +53,12 @@ namespace Emberfall.DevHarness
                     continue;
                 }
                 if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
+                if (args[i] == "--tempo-study")
+                {
+                    tempoStudy = true;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("-") && !Directory.Exists(args[i + 1])) tempoMode = args[++i];
+                    continue;
+                }
                 if (args[i] == "--ceil-reconcile")
                 {
                     reconcile = true;
@@ -73,6 +81,8 @@ namespace Emberfall.DevHarness
             if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
             if (wallStudy > 0) return RunWallStudy(contentDir, wallStudy);
             if (lineCalibration) return RunLineCalibration(contentDir);
+            // Not a check either: the tempo study (TempoStudy.cs) measures and writes nothing.
+            if (tempoStudy) return RunTempoStudy(contentDir, tempoMode);
 
             Console.OutputEncoding = Encoding.UTF8;
             Line("EMBERFALL CORE HARNESS");
