@@ -4065,7 +4065,38 @@ namespace Emberfall.Core.Combat
                         List<CombatUnit> dests = ResolveTargets(source, effect.SecondaryTarget);
                         if (dests.Count == 0) break;
                         CombatUnit dest = dests[0];
-                        if (!dest.Alive || dest == target) break;
+                        if (!dest.Alive) break;
+
+                        // ALREADY THERE, AND STILL ON THE CLOCK THE TRANSFER NAMES. A transfer that
+                        // finds its status already standing on the destination has nothing to move,
+                        // but an authored TransferDuration is a claim about how long the status
+                        // lasts once this effect has run, and that claim does not depend on whether
+                        // it had to travel. Without this, Hale's Tracking Habit re-clocked the Quarry
+                        // it moved and left the one it confirmed in place on whatever it had left:
+                        // over 1,440 campaign battles 416 Quarries stayed put with one round to run,
+                        // and 40 of them were gone by Hale's next turn. Re-clocked in place, never
+                        // shortened, and preferring the caster's own entry so one hero's transfer
+                        // cannot re-time another's. Zero keeps the old refusal exactly, and every
+                        // other transfer in content moves off a corpse, which is never the
+                        // destination.
+                        if (dest == target)
+                        {
+                            if (effect.TransferDuration <= 0) break;
+                            StatusInstance stay = null;
+                            for (int i = 0; i < target.Statuses.Count; i++)
+                            {
+                                StatusInstance st = target.Statuses[i];
+                                if (st.Kind != effect.Status) continue;
+                                if (stay == null || (st.SourceId == source.Id && stay.SourceId != source.Id)) stay = st;
+                            }
+                            if (stay == null || stay.NoExtend || stay.RoundsLeft >= effect.TransferDuration) break;
+                            stay.RoundsLeft = effect.TransferDuration;
+                            BattleEvent reclocked = Emit(BattleEventType.StatusApplied, source.Id, target.Id);
+                            reclocked.Status = stay.Kind;
+                            reclocked.Duration = stay.RoundsLeft;
+                            reclocked.Value = target.CountOf(stay.Kind);
+                            break;
+                        }
                         StatusInstance moving = null;
                         int movingIdx = -1;
                         for (int i = 0; i < target.Statuses.Count; i++)

@@ -203,10 +203,11 @@ tree on 2026-09-23.
   no enemy dealt damage 6 times in 3,035. Tracking Habit now fires on `RoundEnd`, and after the move
   7 of 4,800 picks (0.15%) land on such an enemy. The card is T25's first sentence. Over the same
   campaign sample Hale's damage per battle is unchanged (7,869 against 7,838) and he lands Closing
-  Radius more often (366 against 329). **In the sweep arena he reads x0.61, under the 5-star
-  floor**: his whole sweep output there rests on five casts, and a Quarry handed over at round end
-  with a round left expires on a faster carrier's own turn before two of them. That is a balance
-  call and he was not retuned; `DESIGN-BUILD-ORDER.md` carries it under Known bugs.
+  Radius more often (366 against 329). In the sweep arena he first read x0.61, under the 5-star
+  floor, because a Quarry named at round end kept the clock it was laid with at his turn. Measured
+  directly, of those whose carrier was still alive at his next turn, 8 of 34 in the sweep and 86 of
+  1,439 in the campaign had run out. The Quarry is now laid for two rounds whether it moves or
+  stays, none of them runs out, and he reads x0.84 with no number changed.
 
 ### W3. Nadine, Hold the Line: the card still promises the dropped clause
 
