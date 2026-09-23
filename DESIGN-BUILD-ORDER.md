@@ -86,16 +86,24 @@ of them needs a stated reason in the commit that moves it.
   **ENGINE-GAPS pass 3 moved all 72 again**, attributed by regenerating at each step: `buffsOnly`
   moved 69 (Kiva's Broken Links stopped banking off her own Forsaken), and the re-solve and the two
   hand moves after it moved the other 3 and 51 of the 69 again. Its nine clauses and its Taunt-anchor repair moved none.
+  **Defect pass 3 moved none**: no body it touched stands in a fresh profile's opening battles.
 - **`hero-sweep-baseline.txt`: 470 lines.** Five seeds for each of the 94 authored heroes, which is
   the whole roster. **ENGINE-GAPS pass 3 moved 55**: its clauses and two renumbers 17 (Aminah 5,
   Marrow 5, Tavia 5, Velis 2); the Taunt-anchor repair 8 (Hod 5, Wynn 2, Clara 1) and Marrow's 5
   again; `buffsOnly` 30 (Hale, Kiva, Mireth, Seraphine, Sylven and Vanno, 5 each) and Tavia's 5 again.
+  **Defect pass 3 moved 18**: Corin 5 (Settling reaching its limit), Darian 5 (Hidden Strength
+  striking the enemy it names), Hale 5 (Tracking Habit at round end) and Seraphine 3 (a named body
+  no longer answered by the sweep's Taunt holder).
 - **`talent-sweep-baseline.txt`: 450 lines.** All 90 talents at five seeds each, every one compared
   against the same hero at the same seed with nothing picked. **ENGINE-GAPS pass 3 moved 134**: its
   clauses and renumbers 59 (Aeron III, all three of Aminah's and Marrow's, Arden I, Cyrra II, Nereia
   II, and Velis I, II and III); `buffsOnly` 75 (all three talents of Hale, Kiva, Mireth, Seraphine
   and Sylven); the Taunt-anchor repair moved Marrow's 15 again. `Docs/ENGINE-GAPS.md` pass 3 has
-  every group.
+  every group. **Defect pass 3 moved 51**: Darian's and Hale's 15 each, for the reasons their sweep
+  lines moved; Nysera II's 5, False Target striking the enemy her Link turned the blow onto; and
+  the named-body repair, Seraphine's 9, Mireth III's 4 and Aeron I's 3. Defect pass 3's lines are
+  attributed by which change touches each kit, not by regenerating after each step; the
+  named-body ones are the only kits in either file that change touched alone.
 
 ## Systems
 
