@@ -8,14 +8,23 @@ namespace Emberfall.UI
     /// <summary>Short-lived message strip. Used for "not enough gold", "hero deployed" and so on.</summary>
     public sealed class Toast
     {
+        private readonly RectTransform _layer;
         private readonly RectTransform _root;
         private readonly CanvasGroup _group;
         private readonly Text _text;
 
+        /// <summary>The strip's size for a short message, and never smaller.</summary>
+        private const float MinWidth = 820f;
+        private const float MinHeight = 88f;
+
+        /// <summary>Kept clear on each side of the layer when a long message widens the strip.</summary>
+        private const float SideMargin = 160f;
+
         public Toast(RectTransform layer)
         {
+            _layer = layer;
             _root = UIBuilder.Node("Toast", layer);
-            UIBuilder.Box(_root, 0f, 300f, 820f, 88f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_root, 0f, 300f, MinWidth, MinHeight, new Vector2(0.5f, 0f));
             _group = _root.gameObject.AddComponent<CanvasGroup>();
             _group.alpha = 0f;
             _group.blocksRaycasts = false;
@@ -37,6 +46,7 @@ namespace Emberfall.UI
         public IEnumerator Play(string message)
         {
             _text.text = message;
+            FitToMessage();
             _root.gameObject.SetActive(true);
             _root.SetAsLastSibling();
 
@@ -45,6 +55,28 @@ namespace Emberfall.UI
             yield return Fade(1f, 0f, 0.28f);
 
             _root.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// The frame follows the message. The strip was a fixed 820 by 88 holding a label that
+        /// never wraps, so a sentence longer than the strip - the server's refusals are - ran out
+        /// past both edges of the frame. Now the strip widens to fit one line, up to the width of
+        /// the screen less a margin each side, and past that the text wraps and the strip grows
+        /// downward line by line. A short message keeps the old size exactly.
+        /// </summary>
+        private void FitToMessage()
+        {
+            float pad = Emberforge.Space24 * 2f;
+            _text.horizontalOverflow = HorizontalWrapMode.Overflow;
+            float oneLine = _text.preferredWidth + pad;
+            float widest = Mathf.Max(MinWidth, _layer.rect.width - SideMargin * 2f);
+            float width = Mathf.Clamp(oneLine, MinWidth, widest);
+
+            // preferredHeight lays the text out at the label's CURRENT width, which fills the strip
+            // less its padding - so the width is set first, then the height read at it.
+            _text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _root.sizeDelta = new Vector2(width, _root.sizeDelta.y);
+            _root.sizeDelta = new Vector2(width, Mathf.Max(MinHeight, _text.preferredHeight + pad));
         }
 
         private IEnumerator Fade(float from, float to, float duration)

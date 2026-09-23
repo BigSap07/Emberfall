@@ -20,8 +20,8 @@ has now been asked of the real database. Both rules tests ran against it (counts
 instruments**). The guild dungeon was played end to end in the editor on a scratch identity, with
 the real screens against the real backend: found a guild, lose floor 1, floor 2 refused by the
 server, clear floor 1, floor 2 opened, a third attempt, a fourth refused, share, replay from the
-share. Nothing in that path broke. S6 is closed, P8 is measured, and S3's measurement is a
-dashboard setting (see each).
+share. Nothing in that path broke. S6 is closed, P8 was measured and then fixed, and S3's
+measurement is a dashboard setting (see each).
 
 **Migration 0008 is unaudited.** Another agent is writing it on its own branch tonight and it is
 not in this tree. Everything below covers `0001` to `0007` as they stand on main. `CloudChecks`
@@ -101,7 +101,7 @@ Ranked by what each finding would cost a player once there are players.
 | P5 | a sign-in answered by a hotel wifi page throws the account away | as P4, for an anonymous account | **fixed** |
 | P6 | a failed download leaves the device claiming the cloud's revision, so the next sync overwrites the save the player chose | the save the player picked on the conflict card | **fixed** |
 | P7 | an older build drops heroes it does not know, and its next upload deletes them from the cloud | heroes, when two devices run two builds | **fixed**, version 15 |
-| P8 | rotating the anon key makes every old build abandon its account | every anonymous account on an old build | open, **measured live** |
+| P8 | rotating the anon key makes every old build abandon its account | every anonymous account on an old build | **fixed**, after being measured live |
 | P9 | the conflict card cannot tell two saves apart except by when they were written | a week of play, lost to a coin toss | **fixed**, UI pass |
 | P10 | every save from versions 1 to 12 loses all its heroes and becomes a new game | nothing today: no player holds one | open by decision, contained by P7 |
 | P11 | RESET PROGRESS also erases the cloud save, and the dialog does not say so | the cloud copy a player may have counted on | **fixed in words**, behaviour unchanged by decision |
@@ -325,17 +325,17 @@ an unknown slot, an unknown stat and a numeric slot.
 
 ### P8. Rotating the anon key makes every old build abandon its account
 
-**What the code does.** Rotate the anon key, and every device on an old build is answered with a
-gateway 401 "Invalid API key". The refresh fails, and `TokenWasRejected` matches "invalid", so
-each device calls `ClearAccount` and tries an anonymous sign-up, which fails for the same reason.
+**What the code did.** Rotate the anon key, and every device on an old build is answered with a
+gateway 401 "Invalid API key". The refresh fails, and `TokenWasRejected` matched "invalid", so
+each device called `ClearAccount` and tried an anonymous sign-up, which failed for the same reason.
 When the player updates, the new build finds no refresh token and creates a new anonymous
 account. Every anonymous account on an old build is lost that way, with its cloud save, its
 friends and its guild seat. The local save survives and uploads into the new account.
 
 **What the design claims.** The same `Resume` sentence as P5.
 
-**How it was proven.** Probe P8: two scripted 401 "Invalid API key" answers leave `UserId` empty.
-Asserted as STILL PRESENT.
+**How it was proven.** Probe P8: two scripted 401 "Invalid API key" answers left `UserId` empty.
+It was asserted as STILL PRESENT until the fix below turned it around.
 
 **Measured live (third pass).** Proven against the live project in two ways.
 
@@ -358,14 +358,36 @@ its cloud copy (orphaned under the old id), its friend code and friendships, and
 Another device, or this one after a reinstall, has no way back to it. A player with one device
 who never looks at their friend code would notice only that friends and guild are gone.
 
-**The fix, not made, now specified.** Treat a token as dead only when the auth server says so: a
-400 from the token endpoint carrying a GoTrue `error_code` (`validation_failed`,
-`refresh_token_not_found`, `refresh_token_already_used`, `session_not_found`). A 401 with no
-`error_code` is the gateway refusing the KEY, and must defer like a transport failure, keeping
-the token. `SupabaseResponse` would need to carry the status and `error_code` through to
-`Resume`, where today it carries only the sentence. It was not made in this pass because the
-brief was to measure. The risk the earlier passes named (a dead token retried forever) does not
-arise from this narrowing: a dead token still gets GoTrue's 400 with a code.
+**The fix, as made.** A token is dead only when the auth server says so, and who answered is
+read off the status and GoTrue's error code, never off the sentence. `TokenRefusal.TokenIsDead` in
+Core is the whole rule: a 400 that carries an error code. `TokenRefusal.ErrorCodeIn` reads GoTrue's
+`error_code`, or an older GoTrue's OAuth-style `error` ("invalid_grant") when that is all there
+is. `SupabaseClient` puts it on every failed response as `SupabaseResponse.ErrorCode`. The refresh
+hands `Resume` the verdict directly, rather than through a field another refresh could overwrite,
+and `Resume` clears the account only on it. Everything else defers the sign-in and keeps the token:
+the gateway's 401 with no code, a 5xx, a timeout, a captive portal's 200. `TokenWasRejected`, the
+word search, is gone.
+
+Any code counts, not a list of known ones, because the dangerous mistake here is the opposite one.
+A dead token kept alive is retried on every launch, and that player never syncs again, which is
+worse than P8. So a dead token must never survive for having an unfamiliar name.
+
+**How it is proven now.** Both directions, in both instruments.
+
+- Probe P8, through the real `AccountService`, with the bodies measured live. A rotated key keeps
+  the user id and refresh token, attempts no new sign-up, and still holds them on a relaunch. With
+  the key right again the same account signs in, its token rotated as usual. A 5xx keeps the
+  account too. The other direction: a 400 carrying `validation_failed` (a malformed token, measured
+  live), `refresh_token_not_found` (the token of a session signed out server-side, measured live),
+  `refresh_token_already_used`, or the legacy `invalid_grant` each drops the dead token and signs
+  in afresh.
+- `CloudChecks.CheckTokenRefusal`, which build-check runs: the same bodies through the rule, a code
+  no build has seen, the answers that are not the auth server (a codeless 400, a page, a sentence in
+  `error`, no signal, 5xx, a bare 401, 200, 429), and tripwires on the source. `SupabaseClient`
+  reads the code, `Resume` clears only on the verdict, and nothing in `AccountService` decides by
+  searching a sentence for words.
+- Both mutants fail the probe. "Every refusal is dead" (the old behaviour) fails five checks, and
+  "nothing is dead" (the over-correction) fails all four dead-token checks.
 
 ### P9. The conflict card cannot tell two saves apart except by timestamp
 
@@ -597,7 +619,7 @@ it be proven in this tree?
 | P13 | fixed | not a format question, but the brief asked for it, and the probe can prove it without a server |
 | P10 | contained by P7, open by decision | see P10: the only remaining fix is an id map that grants heroes nobody summoned |
 | P9 | open at the time; **fixed** in the UI pass | the fix is the conflict card, a UI screen another agent held; the format already carries every value it needs |
-| P8 | open; **measured** in the third pass | not a format question; narrowing `TokenWasRejected` without GoTrue's real error codes could leave a dead token retried forever. The third pass measured them (see P8), so the narrowing can now be written against real answers. The P13 retry does not widen it: a failed renewal clears nothing |
+| P8 | open at the time; measured in the third pass, **fixed** after it | not a format question; narrowing `TokenWasRejected` without GoTrue's real error codes could leave a dead token retried forever. The third pass measured them, and the fix was written against those answers (see P8). The P13 retry does not widen it: a failed renewal clears nothing |
 | P11 | open at the time; **fixed in words** in the UI pass | a product decision (should reset keep the cloud copy?) and a dialog, which is UI |
 | P3, the rest | open | atomic writes need `File.Replace` verified on an Android device, and none exists. Preferring the newer of file and mirror by `lastSaveUnix` is cheap but has nothing to do with the format being free, and it changes which copy boots, so it belongs with the atomic-write work |
 | S2 | open, **measured** in the third pass | the format being free makes "the document's version must equal `save_version`" easy to state, but it is a server migration, it cannot be applied or measured from here, and this client never sends a mismatch: `Push` always labels a document `Serialize` just wrote at `CurrentVersion` |
@@ -656,7 +678,7 @@ retrying is safe.
    the only key;
 3. P4 (fixed);
 4. P5 (fixed);
-5. P8 (open, reproduced live in the third pass);
+5. P8 (fixed: a rotated key now keeps the account);
 6. refresh-token reuse after a lost response (S3). Measured: the live project does NOT refuse a
    reused token, so this route is closed today, for a reason that is itself a finding (S3).
 
@@ -709,8 +731,10 @@ real screens and `SupabaseGuildDungeonBackend`, pressing each button through its
 | boards | built from the live rows, the clear on FOUR OR FEWER |
 | disband | DISBAND, confirmed: the same `DELETE` on `guilds` the guild test's cleanup uses |
 
-Nothing in the live path broke, and nothing needed a migration. Three things on screen are
-wrong, none of them the backend's: the notification toast's text runs past both ends of its frame
+Nothing in the live path broke, and nothing needed a migration. Three things on screen were
+wrong, none of them the backend's, and all three are fixed since (the toast sizes to its message
+in `Toast.FitToMessage`; `BattleScreen.SettleHeaderOnFinalRound` puts the last round on the header
+after a skip; `Debrief.Summarize` asks its loss clauses only on a loss): the notification toast's text runs past both ends of its frame
 on the long refusal sentences; after a skip to the end, the battle header keeps the round it was
 skipped from ("ROUND 2 / 30" over a 4-turn result); and a VICTORY can carry the OUTSPED diagnosis,
 "you were outsped, not outmatched". The shots are in `Docs/ui-shots/live-*.png`, which is not
@@ -742,7 +766,7 @@ on 2026-09-23**, and each entry ends with what the live project answered.
   was accepted, and a 3 MB document answered 200. `0010` is now taken by S6, so the fix is `0011`.
 - **S3. A refresh token presented twice.** A response lost after the server rotated the token
   leaves the device holding a used one. Supabase's reuse detection is expected to refuse it, and
-  may revoke the whole session. P8's heuristic then reads that as "the token is dead", and an
+  may revoke the whole session. `Resume` then reads that, rightly, as "the token is dead", and an
   anonymous account is lost. Android Auto Backup restoring PlayerPrefs onto a second phone would
   put two devices on one token chain with the same result. No custom Android manifest exists in
   the tree to say whether backup is on. The case `check_refresh_reuse` records the real status
@@ -753,10 +777,11 @@ on 2026-09-23**, and each entry ends with what the live project answered.
   The account-loss route through reuse cannot happen on this project today. But **a stolen refresh
   token stays valid** for as long as the session does, whoever else has used it. This is a
   dashboard setting, not code: Authentication, Sessions, refresh token reuse detection. **Recorded,
-  not changed**: Matthias flips it. Turning it on makes the lost-response case live again, so it
-  wants P8's narrowing alongside it: a reused token then answers GoTrue's 400
-  `refresh_token_already_used`, which is a real refusal, and an anonymous account on that device is
-  lost exactly as S3 described. The rules test keeps this check red, because it is red for the
+  not changed**: Matthias flips it. Turning it on makes the lost-response case live again, and
+  P8's fix does not stop it, correctly: a reused token then answers GoTrue's 400
+  `refresh_token_already_used`, which is a real refusal of a token that really is dead, and an
+  anonymous account on that device is lost exactly as S3 described. What P8's fix does guarantee is
+  that nothing short of such a refusal can do it. The rules test keeps this check red, because it is red for the
   right reason.
 - **S4. A pending email cannot sign in.** This is the server half of P4. The case
   `check_pending_email_cannot_sign_in` links an address to an anonymous user and tries a
@@ -864,6 +889,7 @@ change no migration.
 | an armor piece naming what this build does not define is kept verbatim | `ArmorPieceIsReadable`, `PlayerProfile.UnresolvedArmorRecords` | `CheckUnknownArmorIsKeptVerbatim` |
 | a damaged version field is refused with a sentence | `SaveSerializer.TryReadVersion` | `CheckVersionField` |
 | a 401 renews the session once and resends once | `SupabaseClient.Send`, `SessionRenewal`, `AccountService.RenewAfterUnauthorised` | probe P13, `CheckSessionRenewal` |
+| a token is dead only on GoTrue's 400 with an error code; a rotated key's gateway 401 keeps the account | `TokenRefusal`, `SupabaseResponse.ErrorCode`, `AccountService.Resume` | probe P8 (both directions), `CheckTokenRefusal` |
 | `generate_friend_code` revoked from `public` and `anon` (third pass; applied by hand, recorded) | `0010_revoke_generate_friend_code.sql` | `check_anon_functions`, `check_anon_helpers`, `CloudChecks.CheckMigrationGrants` |
 | the Python key guards are proven to fire before each run, and refuse a key of unknown shape (third pass) | `key_kind`, `guard_fires` in both rules tests | the guard run against the old text search: six cases fail |
 

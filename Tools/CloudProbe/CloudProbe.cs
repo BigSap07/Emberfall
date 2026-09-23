@@ -49,7 +49,8 @@ internal static class CloudProbe
         LoserOfARaceIsTold();
         PendingEmailStaysAnonymous();
         NonSessionAnswerKeepsTheAccount();
-        InvalidApiKeyStillDropsTheAccount();
+        RotatedKeyKeepsTheAccount();
+        DeadTokenStillStartsOver();
         TransportFailureKeepsTheAccount();
         ExpiredTokenIsRenewedOnce();
         OfflineSendsNothing();
@@ -198,7 +199,7 @@ internal static class CloudProbe
 
     /// <summary>CLOUD-GAPS P5. A refresh answered 2xx with something that is not a session - a
     /// captive portal, a proxy - produced the client's own sentence "refresh returned no session",
-    /// and TokenWasRejected matches on the word "refresh". The account was thrown away and a new
+    /// and the old rule matched on the word "refresh". The account was thrown away and a new
     /// anonymous one made, on a device that had simply not reached the auth server.</summary>
     private static void NonSessionAnswerKeepsTheAccount()
     {
@@ -217,22 +218,86 @@ internal static class CloudProbe
         UnityWebRequest.Script.Clear();
     }
 
-    /// <summary>CLOUD-GAPS P8, written up and not fixed. A gateway 401 "Invalid API key" - what every
-    /// device on an old build sees after the anon key is rotated - still reads as "the token is
-    /// dead", so each such device abandons its account. Asserted as still present.</summary>
-    private static void InvalidApiKeyStillDropsTheAccount()
+    /// <summary>CLOUD-GAPS P8, fixed. After the anon key is rotated, every device on an old build is
+    /// answered by the API gateway with 401 {"message":"Invalid API key"} and no error code, on the
+    /// refresh and on the sign-up alike. The old rule read "invalid" as "the token is dead", cleared
+    /// the account and made a new one on the next launch. The body below is the one measured live.
+    /// The account must survive the refusal, and come back whole once the key is right again.</summary>
+    private static void RotatedKeyKeepsTheAccount()
     {
-        Section("P8  STILL PRESENT: a rotated anon key reads as a dead refresh token");
+        Section("P8  a rotated anon key keeps the account, and it recovers");
+        const string GatewayRefusal = "{\"message\":\"Invalid API key\"}";
         FreshDevice();
         SeedStoredAccount("u-real", "rt-real", true);
         CloudLocalState state = CloudLocalState.Load();
         AccountService account = new AccountService(Client(), state);
-        UnityWebRequest.Script.Enqueue(FakeResponse.Json(401, "{\"message\":\"Invalid API key\"}"));
-        UnityWebRequest.Script.Enqueue(FakeResponse.Json(401, "{\"message\":\"Invalid API key\"}"));
-        Run(account.Resume(null));
-        Check(state.UserId == "" && state.RefreshToken == "",
-              "STILL PRESENT - the stored account is cleared on an API-key refusal (user now '" + state.UserId + "')");
+        int before = UnityWebRequest.Sent.Count;
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(401, GatewayRefusal));
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(401, GatewayRefusal));
+        bool ok = true;
+        string error = "";
+        Run(account.Resume(delegate (bool success, string m) { ok = success; error = m; }));
+        Check(state.UserId == "u-real" && state.RefreshToken == "rt-real",
+              "FIXED - the stored account and refresh token survive a gateway 401 (user '" + state.UserId + "')");
+        Check(!ok && !account.SignedIn, "and the sign-in is deferred, like no signal (" + error + ")");
+        Check(UnityWebRequest.Sent.Count - before == 1,
+              "and no anonymous sign-up is attempted: nothing replaced the account (" + (UnityWebRequest.Sent.Count - before) + " request)");
+        Check(CloudLocalState.Load().UserId == "u-real",
+              "and a relaunch still finds it: the survival was saved, not just held in memory");
         UnityWebRequest.Script.Clear();
+
+        // The updated build, carrying the new key: the same refresh token works, the same account.
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(200, Session("at-new", "rt-rotated", "u-real", "", null, "true")));
+        ok = false;
+        Run(account.Resume(delegate (bool success, string m) { ok = success; }));
+        Check(ok && account.SignedIn && state.UserId == "u-real" && state.RefreshToken == "rt-rotated",
+              "WITH THE KEY RIGHT AGAIN IT RECOVERS - the same account signs in, with its token rotated as usual");
+        UnityWebRequest.Script.Clear();
+
+        FreshDevice();
+        SeedStoredAccount("u-real", "rt-real", true);
+        state = CloudLocalState.Load();
+        account = new AccountService(Client(), state);
+        UnityWebRequest.Script.Enqueue(FakeResponse.Json(500, "{\"message\":\"upstream connect error\"}"));
+        Run(account.Resume(null));
+        Check(state.UserId == "u-real" && state.RefreshToken == "rt-real",
+              "and a 5xx from a server having a bad day keeps the account too");
+        UnityWebRequest.Script.Clear();
+    }
+
+    /// <summary>The other half of P8, and the one a careless fix breaks: a token GoTrue itself refuses
+    /// IS dead, and must still be treated as dead. Kept, it would be retried on every launch and the
+    /// player would never sync again. The first two bodies were measured live (a malformed token,
+    /// and the token of a session signed out server-side); the third is what GoTrue says for a
+    /// token presented twice with reuse detection on; the fourth is the older OAuth-style answer an
+    /// un-upgraded GoTrue gives.</summary>
+    private static void DeadTokenStillStartsOver()
+    {
+        Section("P8  a token the auth server refuses is still dead");
+        string[] dead =
+        {
+            "{\"code\":400,\"error_code\":\"validation_failed\",\"msg\":\"Refresh token is not valid\"}",
+            "{\"code\":400,\"error_code\":\"refresh_token_not_found\",\"msg\":\"Invalid Refresh Token: Refresh Token Not Found\"}",
+            "{\"code\":400,\"error_code\":\"refresh_token_already_used\",\"msg\":\"Invalid Refresh Token: Already Used\"}",
+            "{\"error\":\"invalid_grant\",\"error_description\":\"Invalid Refresh Token: Refresh Token Not Found\"}"
+        };
+        string[] names = { "validation_failed (measured live, a malformed token)",
+                           "refresh_token_not_found (measured live, a session signed out server-side)",
+                           "refresh_token_already_used", "legacy invalid_grant" };
+        for (int i = 0; i < dead.Length; i++)
+        {
+            FreshDevice();
+            SeedStoredAccount("u-gone", "rt-dead", true);
+            CloudLocalState state = CloudLocalState.Load();
+            AccountService account = new AccountService(Client(), state);
+            UnityWebRequest.Script.Enqueue(FakeResponse.Json(400, dead[i]));
+            UnityWebRequest.Script.Enqueue(FakeResponse.Json(200, Session("at-n", "rt-n", "u-new", "", null, "true")));
+            bool ok = false;
+            Run(account.Resume(delegate (bool success, string m) { ok = success; }));
+            Check(ok && state.UserId == "u-new" && state.RefreshToken == "rt-n",
+                  "a 400 " + names[i] + " drops the dead token and signs in afresh (user '" + state.UserId + "')");
+            UnityWebRequest.Script.Clear();
+        }
     }
 
     /// <summary>CLOUD-GAPS P13, fixed. A device clock running slow sends a token the server has

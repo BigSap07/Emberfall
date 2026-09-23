@@ -107,11 +107,20 @@ numbers actually support:
    one is >35% of damage taken, name it and its total.
 3. **Aspect** — share of damage taken with `AspectFactor >= 1.01`; if >35%, say the line was the
    wrong colour.
-4. **Speed** — turn order is re-rolled each round (`RoundSpeedJitter`), so one round proves
+4. **Resisted** — the share of the player's own harmful statuses the enemy shrugged off
+   (`StatusApplied` against `StatusResisted`); over half of at least four attempts names Effect Hit.
+5. **Speed** — turn order is re-rolled each round (`RoundSpeedJitter`), so one round proves
    nothing. Count enemy `TurnStart` events preceding each player unit's turn across the whole
    fight; a consistent majority makes "you were outsped" a fact, not a flourish.
-5. **Unspent active** — a unit alive at `BattleEnd` that never emitted `AbilityCast`.
-6. **Fallback** — the first player `Death` (`Round`, `TargetId`, `SourceId` as killer) and the
+6. **Unspent active** — a unit alive at `BattleEnd` that never emitted `AbilityCast`.
+7. **Fallback** — the first player `Death` (`Round`, `TargetId`, `SourceId` as killer) and the
    largest single `Damage`. Two true numbers beat a confident wrong cause.
+
+**Clauses 2 to 5 are asked only on a loss.** Each explains what went wrong for the line, and the
+numbers they read do not know who won: a line can be outsped and win anyway, and a VICTORY used to
+print "you were outsped, not outmatched". On a win, `Debrief.Summarize` goes from Timeout straight
+to Unspent active and the Fallback, which read true either way. `CheckDebriefRealVictories` in the
+harness fights real guild-dungeon wins that the numbers alone call outsped and holds that none of
+them prints a loss's reason.
 
 All fields above now exist, including `AspectFactor` and `AbilityName` on `Damage`.

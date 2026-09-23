@@ -88,21 +88,26 @@ namespace Emberfall.Game.Cloud
             if (!string.IsNullOrEmpty(_state.RefreshToken))
             {
                 bool refreshed = false;
+                bool tokenDead = false;
                 string error = "";
-                yield return (RefreshSession(delegate (bool ok, string message)
+                yield return (Refresh(delegate (bool ok, string message, bool dead)
                 {
                     refreshed = ok;
                     error = message;
+                    tokenDead = dead;
                 }));
 
                 if (refreshed) { Finish(done, true, ""); yield break; }
 
-                // A refresh token is rejected for two different reasons and they need different
-                // answers. If the server SAID no - the token was revoked, or the anonymous user
-                // was cleaned up - the token is dead and the right move is a new anonymous
-                // account. If the request never reached a server, the token is probably fine and
-                // throwing it away would strand a real account, so the sign-in is simply deferred.
-                if (!TokenWasRejected(error)) { Finish(done, false, error); yield break; }
+                // A refresh fails for two different reasons and they need different answers. If
+                // the AUTH SERVER said no - the token was revoked, or the anonymous user was
+                // cleaned up - the token is dead and the right move is a new anonymous account.
+                // Anything else - no signal, a captive portal, or the gateway refusing a rotated
+                // anon key before the token was even looked at - leaves the token as good as it
+                // was, and throwing it away would strand a real account, so the sign-in is simply
+                // deferred. Which one it was is TokenRefusal's rule, read off the status and
+                // GoTrue's error code, never off the sentence (Docs/CLOUD-GAPS.md P8).
+                if (!tokenDead) { Finish(done, false, error); yield break; }
 
                 Debug.LogWarning("Emberfall: the stored session was rejected (" + error
                     + "), starting a new anonymous account.");
@@ -227,7 +232,17 @@ namespace Emberfall.Game.Cloud
         /// </summary>
         public IEnumerator RefreshSession(Action<bool, string> done)
         {
-            if (string.IsNullOrEmpty(_state.RefreshToken)) { Finish(done, false, "no stored session"); yield break; }
+            yield return (Refresh(delegate (bool ok, string message, bool dead) { Finish(done, ok, message); }));
+        }
+
+        /// <summary>
+        /// The refresh itself. Its third answer is whether the auth server declared the token
+        /// dead (TokenRefusal.TokenIsDead), which only Resume acts on. It is handed back rather
+        /// than kept in a field so a refresh running at the same moment cannot overwrite it.
+        /// </summary>
+        private IEnumerator Refresh(Action<bool, string, bool> done)
+        {
+            if (string.IsNullOrEmpty(_state.RefreshToken)) { done(false, "no stored session", false); yield break; }
 
             JsonValue body = JsonValue.NewObject();
             body.Set("refresh_token", _state.RefreshToken);
@@ -235,18 +250,20 @@ namespace Emberfall.Game.Cloud
             yield return (_client.Send("POST", "auth/v1/token?grant_type=refresh_token", body.ToJson(false),
                 delegate (SupabaseResponse response)
                 {
-                    if (!response.Ok) { Finish(done, false, response.Error); return; }
-                    if (!AdoptSession(response.Body, _state.IsAnonymous, _state.Email))
+                    if (!response.Ok)
                     {
-                        // Worded to match NONE of TokenWasRejected's keywords, deliberately. A 2xx
-                        // that is not a session - a captive portal, a proxy - is a device that did
-                        // not reach the auth server, not a server refusing the token. The sentence
-                        // this replaced ("refresh returned no session") contained "refresh", so
-                        // Resume discarded the stored account and made a new anonymous one.
-                        Finish(done, false, "the answer to the sign-in did not carry a session");
+                        done(false, response.Error, TokenRefusal.TokenIsDead(response.Status, response.ErrorCode));
                         return;
                     }
-                    Finish(done, true, "");
+                    if (!AdoptSession(response.Body, _state.IsAnonymous, _state.Email))
+                    {
+                        // A 2xx that is not a session - a captive portal, a proxy - is a device that
+                        // did not reach the auth server, not a server refusing the token, so it is
+                        // never a dead token (Docs/CLOUD-GAPS.md P5).
+                        done(false, "the answer to the sign-in did not carry a session", false);
+                        return;
+                    }
+                    done(true, "", false);
                 }));
         }
 
@@ -454,24 +471,6 @@ namespace Emberfall.Game.Cloud
             _state.Email = !string.IsNullOrEmpty(userEmail) ? userEmail : (email == null ? "" : email.Trim());
             _state.Save();
             return true;
-        }
-
-        /// <summary>
-        /// Whether a failed refresh means "this token is dead" rather than "the server could not
-        /// be reached". Matched on the message because GoTrue answers a bad refresh token with a
-        /// 400 and a body, which is indistinguishable from several other 400s by status alone.
-        ///
-        /// KNOWN TOO WIDE, and written up rather than changed: a gateway 401 "Invalid API key",
-        /// which is what an old build sees after the anon key is rotated, contains "invalid" and
-        /// reads as a dead token, so every such device abandons its account. Narrowing this needs
-        /// GoTrue's real error codes measured against the live project first. Docs/CLOUD-GAPS.md.
-        /// </summary>
-        private static bool TokenWasRejected(string error)
-        {
-            if (string.IsNullOrEmpty(error)) return false;
-            string lower = error.ToLowerInvariant();
-            return lower.Contains("refresh") || lower.Contains("invalid") || lower.Contains("expired")
-                || lower.Contains("not found");
         }
 
         private static void Finish(Action<bool, string> done, bool ok, string message)

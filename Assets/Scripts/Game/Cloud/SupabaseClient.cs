@@ -19,6 +19,11 @@ namespace Emberfall.Game.Cloud
         /// neither is there. Callers surface this; they never re-derive it.</summary>
         public string Error = "";
 
+        /// <summary>The machine-readable code GoTrue puts in an error body (`error_code`), or empty.
+        /// The gateway's refusal of a key carries none, which is how the two are told apart:
+        /// TokenRefusal.TokenIsDead. Empty on success.</summary>
+        public string ErrorCode = "";
+
         public bool Ok { get { return Status >= 200 && Status < 300 && string.IsNullOrEmpty(Error); } }
 
         /// <summary>409 is push_save's stale-revision refusal and nothing else - see
@@ -197,6 +202,7 @@ namespace Emberfall.Game.Cloud
                 // Prefer whatever the server said about itself, because "HTTP/1.1 409" is never
                 // as useful as the sentence the database raised with it.
                 string fromBody = ErrorMessageIn(response.Body);
+                response.ErrorCode = TokenRefusal.ErrorCodeIn(response.Body);
                 response.Error = !string.IsNullOrEmpty(fromBody) ? fromBody
                     : (!string.IsNullOrEmpty(request.error) ? request.error : "request failed");
             }

@@ -162,6 +162,7 @@ namespace UnityEditor
         public static void StopAssetEditing() { }
         public static void SaveAssets() { }
         public static T LoadAssetAtPath<T>(string path) where T : UnityEngine.Object { return null; }
+        public static UnityEngine.Object[] LoadAllAssetsAtPath(string path) { return new UnityEngine.Object[0]; }
         public static string[] FindAssets(string filter) { return new string[0]; }
         public static string GUIDToAssetPath(string guid) { return ""; }
         public static bool IsValidFolder(string path) { return true; }

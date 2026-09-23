@@ -52,6 +52,7 @@ namespace Emberfall.DevHarness
             CheckResetSaysCloud(root);
             CheckSecretKeyRecognition();
             CheckSessionRenewal(root);
+            CheckTokenRefusal(root);
             CheckOfflineHasOneDoor(root);
             CheckNoSecretKeyInTheTree(root);
             CheckMigrationGrants(root);
@@ -723,6 +724,55 @@ namespace Emberfall.DevHarness
                   "SupabaseClient.Send asks SessionRenewal and renews through RenewSession");
             Check(Regex.IsMatch(account, "_client\\.RenewSession\\s*=\\s*RenewAfterUnauthorised"),
                   "and AccountService is what renews, so a refresh token is only ever spent in one place");
+        }
+
+        /// <summary>
+        /// P8. Whether a failed refresh means the token is dead is read off who answered: GoTrue's
+        /// 400 with an error code is a dead token, and the gateway's 401 with none is a key it
+        /// refused before the token was looked at. The bodies are the ones measured against the
+        /// live project. Both directions are held, because the fix that keeps a dead token alive
+        /// is worse than the bug: a device that never gives up a dead token never syncs again.
+        /// Tools/CloudProbe runs the same two paths through the real AccountService.
+        /// </summary>
+        private static void CheckTokenRefusal(string root)
+        {
+            const string Gateway = "{\"message\":\"Invalid API key\"}";
+            const string Measured = "{\"code\":400,\"error_code\":\"validation_failed\",\"msg\":\"Refresh token is not valid\"}";
+            const string Revoked = "{\"code\":400,\"error_code\":\"refresh_token_not_found\",\"msg\":\"Invalid Refresh Token: Refresh Token Not Found\"}";
+            const string Reused ="{\"code\":400,\"error_code\":\"refresh_token_already_used\",\"msg\":\"Invalid Refresh Token: Already Used\"}";
+            const string Legacy = "{\"error\":\"invalid_grant\",\"error_description\":\"Invalid Refresh Token: Already Used\"}";
+
+            Check(!TokenRefusal.TokenIsDead(401, TokenRefusal.ErrorCodeIn(Gateway)) && TokenRefusal.ErrorCodeIn(Gateway) == "",
+                  "FIXED (P8) - the gateway's 401 \"Invalid API key\" carries no error code and is NOT a dead token: a rotated key keeps the account");
+            Check(TokenRefusal.TokenIsDead(400, TokenRefusal.ErrorCodeIn(Measured))
+                  && TokenRefusal.TokenIsDead(400, TokenRefusal.ErrorCodeIn(Revoked))
+                  && TokenRefusal.TokenIsDead(400, TokenRefusal.ErrorCodeIn(Reused)),
+                  "while GoTrue's 400 with an error code IS dead - both answers measured live (a malformed token, a signed-out session's token) and the one for a reused token");
+            Check(TokenRefusal.ErrorCodeIn(Legacy) == "invalid_grant" && TokenRefusal.TokenIsDead(400, TokenRefusal.ErrorCodeIn(Legacy)),
+                  "and so is an older GoTrue's OAuth-style invalid_grant, so a server not yet upgraded still gets its dead tokens recognised");
+            Check(TokenRefusal.TokenIsDead(400, "an_error_code_no_build_has_seen"),
+                  "and a code this build has never heard of still counts: a dead token must not live on an unfamiliar name");
+            Check(!TokenRefusal.TokenIsDead(400, TokenRefusal.ErrorCodeIn("{\"message\":\"bad request\"}"))
+                  && !TokenRefusal.TokenIsDead(400, TokenRefusal.ErrorCodeIn("<html>proxy</html>"))
+                  && !TokenRefusal.TokenIsDead(400, TokenRefusal.ErrorCodeIn("{\"error\":\"A sentence, not a code\"}")),
+                  "but a 400 with no code - a proxy, a page, a sentence in the error field - is not the auth server speaking");
+            Check(!TokenRefusal.TokenIsDead(0, "") && !TokenRefusal.TokenIsDead(500, "") && !TokenRefusal.TokenIsDead(401, "")
+                  && !TokenRefusal.TokenIsDead(200, "") && !TokenRefusal.TokenIsDead(429, "over_request_rate_limit"),
+                  "and neither is no signal, a 5xx, a bare 401, a captive portal's 200 or a rate limit");
+
+            string scripts = Path.Combine(root, Path.Combine("Assets", Path.Combine("Scripts", Path.Combine("Game", "Cloud"))));
+            string client = StripComments(File.ReadAllText(Path.Combine(scripts, "SupabaseClient.cs")));
+            string account = StripComments(File.ReadAllText(Path.Combine(scripts, "AccountService.cs")));
+            Check(client.Contains("response.ErrorCode = TokenRefusal.ErrorCodeIn(response.Body)"),
+                  "SupabaseClient reads GoTrue's error code into every failed response");
+            Check(account.Contains("TokenRefusal.TokenIsDead(response.Status, response.ErrorCode)")
+                  && account.Contains("if (!tokenDead) { Finish(done, false, error); yield break; }"),
+                  "and Resume clears an account only on TokenRefusal's verdict");
+            bool searchesWords = false;
+            foreach (string word in new[] { "refresh", "invalid", "expired", "not found" })
+                if (account.Contains("Contains(\"" + word + "\")")) searchesWords = true;
+            Check(!searchesWords,
+                  "and nothing in AccountService decides by searching a sentence for words, the rule that lost accounts to a rotated key");
         }
 
         private static string B64(string text)
