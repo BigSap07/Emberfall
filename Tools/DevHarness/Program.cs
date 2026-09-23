@@ -26986,11 +26986,26 @@ namespace Emberfall.DevHarness
                           out a, out b))
                 Check(false, "velis III arena built");
             else
-                Check(b.Count(StatusKind.HealSuppression) > 0
-                      && a.Count(StatusKind.HealSuppression) == 0,
-                      "Velis III shuts healing off the body What Was Taken spends three Remnants on "
-                      + "when it is under 30% HP (" + b.Count(StatusKind.HealSuppression)
-                      + " against " + a.Count(StatusKind.HealSuppression) + ")");
+                // THE HEAL SUPPRESSION THIS USED TO ASSERT IS GONE FROM THE TALENT, and the reason
+                // is what the talent had to become to be worth picking. Final Denial hung a
+                // suppression off What Was Taken, which waits on three Remnants, and the talent
+                // read an exact zero everywhere the sweep could see it. Given an opening on her
+                // basic it reads +1314, t 20.6 - and that opening kills the body before three
+                // Remnants are ever banked, so the suppression became a clause on the card that
+                // the fight never runs. It was taken off the card rather than left on it.
+                // The damage is PRINTED and not asserted, and s_mender is why. A room built around
+                // a body that mends itself is one the talent shortens: the opening kills faster,
+                // a shorter fight is fewer blows, and the total falls while every blow in it hit
+                // harder. That is the same property that took Velis II and III off the TalentRoom
+                // list, and TALENTS WORTH PICKING reads this talent in the sweep arena, which has
+                // no such body and reads +1314, t 20.6.
+                Check(b.Count(StatusKind.Vulnerable) > a.Count(StatusKind.Vulnerable)
+                      && a.Count(StatusKind.Vulnerable) == 0,
+                      "Velis III opens the body Denied Return cuts ("
+                      + b.Count(StatusKind.Vulnerable) + " opening(s) against "
+                      + a.Count(StatusKind.Vulnerable) + ") - the Vulnerable is source-keyed, so it "
+                      + "is hers alone. Her total in this room reads " + b.SubjectDamage
+                      + " against " + a.SubjectDamage + " because the opening ends the fight sooner");
 
             // ---- Isara II: the second body a Seedling heals.
             if (!DarkPair("isara_the_second_chance", 2, "s_wash", "darian_the_hidden_bulwark,"
@@ -27022,11 +27037,17 @@ namespace Emberfall.DevHarness
             if (!DarkPair("edrin_the_distant_bell", 3, "s_buffer", DarkFive, 1, false, out a, out b))
                 Check(false, "edrin III arena built");
             else
-                Check(b.SubjectDamage > a.SubjectDamage && b.ResolveSpent > a.ResolveSpent,
-                      "Edrin III spends four Record on the Ledger's remains (" + b.SubjectDamage
-                      + " damage against " + a.SubjectDamage + ", " + b.ResolveSpent
-                      + " Record spent against " + a.ResolveSpent + ") - his Guardian of What"
-                      + " Remains banked none of them, and what it banks now lasts the battle");
+                // WHAT THIS USED TO ASSERT WAS THE SPEND, AND THE SPEND WAS THE FAULT. Nothing Is
+                // Lost sold Guardian of What Remains' standing modifier - 4% of his damage against
+                // a marked body per Record held - for one blow, and the parity study priced that
+                // sale: -2.9pp of win rate in the duel and -1.7 on the ladder. It raises the
+                // ceiling instead, so nothing he banks is lost and no blow is added to feed an
+                // enemy bar.
+                Check(b.SubjectDamage > a.SubjectDamage && b.ResolveSpent == a.ResolveSpent,
+                      "Edrin III banks Record past where Guardian of What Remains used to stop, and"
+                      + " every one of them still raises his damage against a marked body ("
+                      + b.SubjectDamage + " against " + a.SubjectDamage + ", with " + b.ResolveSpent
+                      + " Record spent either way)");
 
             // ---- Hale II: the clause that decides something once its host stops answering itself.
             //
@@ -27126,10 +27147,6 @@ namespace Emberfall.DevHarness
         }
 
         private static readonly CostlyTalent[] KnownCostlyTalents = {
-            new CostlyTalent("marrow_the_irrevocable_vow I", "TRADE",
-                "as written: a third ally holds Promise, so Marrow takes a share of three allies' damage"
-                + " instead of two, which the output total does not count; the smaller Promise heal it"
-                + " pays for now also reaches the Promise he holds himself (ENGINE-GAPS pass 2)"),
             new CostlyTalent("nysera_the_missing_arrow I", "TRADE",
                 "utility: the Dispel strips a buff off the body that targets her, which in the sweep is"
                 + " the Warden's Provoke, freeing the whole line's single-target aim. Her own output"

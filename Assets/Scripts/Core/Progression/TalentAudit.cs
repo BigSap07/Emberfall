@@ -39,9 +39,14 @@ namespace Emberfall.Core.Progression
     /// reason read one step further in: Rheia I paid two Energy off every Applied Revision for a
     /// rider on one clause, Rheia III's own note said her casts refill the Revision it was buying
     /// back, and Kiva III had two clauses that no rate her kit banks at could ever reach. What is
-    /// left is the two whose purchase is real and not made of output: a third ally under Promise,
-    /// and a Provoke stripped off the body aiming at the line. Trap stays on AuditedTalent because
-    /// the next one will need it.
+    /// left is ONE, and the parity study is why it is the one: Nysera I is the only entry whose
+    /// purchase pays when the two sides are matched. It reads -9.4% of Attack in the sweep arena
+    /// and +1.6% in a duel at parity, because the Provoke it strips off the body aiming at her
+    /// frees the whole line's aim, and the sweep arena has no line to free. Marrow I was the
+    /// other, and the same study said its purchase does not pay either - a third ally under
+    /// Promise for a smaller Promise heal read -5.6pp of win rate on the ladder - so the price
+    /// went rather than the entry staying. Trap stays on AuditedTalent because the next one will
+    /// need it.
     ///
     /// A COPY, and it can drift. The harness's KnownCostlyTalents is the list the build proves; this
     /// is what the game is allowed to see, because the harness is not compiled into it. The harness
@@ -51,8 +56,6 @@ namespace Emberfall.Core.Progression
     {
         public static readonly AuditedTalent[] Costly =
         {
-            new AuditedTalent("marrow_the_irrevocable_vow", 1, false,
-                "Audited as a trade: a smaller Promise heal, for Marrow sharing the damage of a third ally."),
             new AuditedTalent("nysera_the_missing_arrow", 1, false,
                 "Audited as a trade: Nysera deals less, and strips a buff off whoever targets her.")
         };
