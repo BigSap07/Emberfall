@@ -622,6 +622,12 @@ namespace Emberfall.DevHarness
                 // unlocked (DESIGN-TALENTS T6), and a summoned hero starts at tier 0 with only
                 // talent 1 available. CheckTalentsAreLockedByAscension is where the gate is read.
                 talented.Ascension = HeroInstance.TierUnlockingTalent(2);
+                // Standing on the tier's first Level, where Ascend would have put it. Left at
+                // Level 1 it is under its own tier, which the save clamps up on load (version 18),
+                // and the byte-for-byte round trip below would be reading that clamp, not the lines.
+                // Only a 5-star has a tier to stand under; below five stars the cap ignores it.
+                if (talented.Def.Stars >= 5)
+                    talented.Level = Emberfall.Core.Progression.StatMath.TierBaseLevel(content.Balance, talented.Ascension);
                 s.SwitchLine(0);
                 p.AssignToTeam(0, talented.Uid);
                 s.SelectTalent(talented, 1);

@@ -319,8 +319,9 @@ scrubbing it.
 
 **How it is proven now.** `CloudChecks.CheckContentSkewKeepsHeroes`: the record is kept byte for
 byte, including a key this build has never heard of; it and its weapon are in the next save; a
-second load and save changes nothing; and renaming the id to a real hero loads it at level 60 with
-its copies, talent and weapon, with nothing left aside. `CheckUnknownArmorIsKeptVerbatim` covers
+second load and save changes nothing; and renaming the id to a real hero loads it with its copies,
+talent and weapon, with nothing left aside. Its level 60 loads clamped to that hero's cap, as every
+known hero's does since save version 18: a record carried verbatim is clamped the day it resolves. `CheckUnknownArmorIsKeptVerbatim` covers
 an unknown slot, an unknown stat and a numeric slot.
 
 ### P8. Rotating the anon key makes every old build abandon its account

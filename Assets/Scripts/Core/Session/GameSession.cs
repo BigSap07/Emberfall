@@ -414,8 +414,10 @@ namespace Emberfall.Core.Session
         /// out-powers the old tier at its cap, which is what makes the reset a promotion rather than
         /// a loss.
         ///
-        /// Level never goes down, and that is the one case the reset needs a rule for: a hero
-        /// carried over from before caps can stand above its tier's cap. It lands on the first
+        /// Level never goes down, and that is the one case the reset needs a rule for: a hero can
+        /// stand above its tier's cap. A save no longer carries one (SaveSerializer clamps every
+        /// level to its cap on load, since version 18), but the debug cheat panel still sets one.
+        /// It lands on the first
         /// step of the new tier above where it stood, or stays where it is if that is past the new
         /// tier's cap too, so an ascension is a promotion for it as well.
         /// </summary>

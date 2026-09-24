@@ -507,7 +507,8 @@ tier set and account rank does not (`GameSession.HeroLevelCapOf`); see **Fusion 
   prints the F6 crossover for every 5-star, and fails if `balance.json` disagrees. The growth was
   the finale's entry over the starting line until the wall rule made the finale an output of the
   caps; it is pinned at the value the caps were derived at (`CapDerivationGrowth`).
-  `CheckFusionRules` holds `GameSession` to each rule and to save version 16.
+  `CheckFusionRules` holds `GameSession` to each rule, to save version 16 and to version 18's
+  level clamp.
 - **There is no fusion screen.** The hero card's level readout counts Levels, so an ascended hero
   reads its Level on the ladder over the Level its cap is at.
 
@@ -624,12 +625,17 @@ ships on top of that, with `RelicShopScreen` as its storefront.
 
 Summoning with a pity rule that guarantees distinct unowned heroes. Idle income accrues against a
 real clock and is capped. `SaveSerializer` writes the whole document, at
-`SaveSerializer.CurrentVersion` 17, and a save from a newer build is refused rather than read.
+`SaveSerializer.CurrentVersion` 18, and a save from a newer build is refused rather than read.
 Version 15 keeps records this build cannot resolve; version 16 adds each hero's ascension tier;
 version 17 adds the Guild Path's copy of the server's answer and the formation's saved lines, and
 later the guild tech tree's copy of it - deliberately without a further bump, because the server
 holds every part of that and a version 17 build dropping the cache loses nothing it is the only
-copy of (`SaveSerializer.CurrentVersion` says so at length).
+copy of (`SaveSerializer.CurrentVersion` says so at length). Version 18 clamps every hero's level
+into its tier on load, to its cap and, for an ascended hero, up to its tier's first Level. Saves
+from before the star-gated caps carried heroes at Level 60 against a cap of 9, and the fusion
+screen's ascension card printed it. The clamp runs on every load, not only on version 17 saves, so
+the next cap change is migrated without anyone having to remember. `CurrentVersion` records why a
+cap change is a migration even when no key moves. `CheckLevelClampOnLoad` proves it.
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
