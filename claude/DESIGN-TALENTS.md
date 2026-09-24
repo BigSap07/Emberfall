@@ -42,17 +42,27 @@ The reason the system does not currently feel like anything is T2, not T1.
 
 ## 4. Ascension unlocks talents
 
-**T6.** A five-star at tier 0 has talent 1. The first ascension unlocks talent 2, the second unlocks talent 3.
+**T6. Built.** A five-star at tier 0 has talent 1. The first ascension unlocks talent 2, the second unlocks talent 3.
 
 Only five-stars author talents and only five-stars ascend, so the two systems line up with no new concept. It answers the fusion doc's open question about whether ascension tiers grant anything beyond stats and a cap: they grant kit depth. It gives talents the progression feeling without building a tree.
 
-This is built LAST. Gating a system where half the options do nothing would only make the unlock disappointing.
+The two ceilings meet exactly, and that is worth knowing before either moves. `HeroDef.MaxTalents` is 3, and `balance.json` authors three `fiveStarLevelCaps`, so `StatMath.MaxAscensionTier` is 2: the last ascension unlocks the last talent with nothing left over on either side. `CheckAscensionGatesTalents` asserts that rather than trusting it, so a fourth tier or a fourth slot is caught where it happens.
+
+**Derived, never stored.** `HeroInstance.TalentSlotsUnlocked` is `min(MaxTalents, Ascension + 1)`, read off a tier the save format has carried since long before talents existed. No save version moved and none should: a persisted "unlocked" field could only ever disagree with the tier that produced it, and the first save that disagreed would be a hero whose card said one thing and whose fight did another. It applies retroactively to every hero already owned, because there is nothing to migrate - the tier is already there.
+
+**The gate lives on one line of the simulation.** `CombatSimulation.BuildUnits` reads `HeroInstance.LiveTalent`, which resolves the selection through both the def and the tier. That is the only line in the game that turns a selection into something the simulation can see, so a locked slot is absent from a battle in exactly the way an unselected one is - no passive, no extra draw, nothing the record can see, the whole fight byte-identical to the same fight with nothing picked.
+
+**The pick is kept, not wiped.** `GameSession.SelectTalent` refuses a locked slot, because a player cannot choose what the hero cannot run. But a selection already stored - a tier that moved under it, a hand-edited save - is kept, resolves to nothing, and comes back whole when the tier does. That is the rule an unresolvable relic id and an unauthored talent slot already follow, for the same reason: the pick is a statement of intent and the tier is a fact about the hero today.
+
+**A record is the authority on what fought.** A snapshot carries a def, a level and a pick and has never carried an ascension tier, so nothing downstream can re-derive the gate. The gate is therefore applied once, at CAPTURE: `TeamSnapshot.Capture`, `ProvingGenerator` and `GuildDungeon.LineOf` all publish `LiveTalentSelection`, so a locked pick never reaches a record and a tier-0 owner cannot hand a duelling friend a talent it cannot run. `GuildDungeon.FightUnder` then replays a record with exactly the pick it holds. Nothing about how a stored guild dungeon record or a Proving ghost replays changed.
+
+**On the page, locked is a fifth state and the card is not hidden.** A player deciding whether to ascend is deciding on the strength of what ascending buys, so a locked card keeps its name, its sentence, its figures and its reading, and says three things instead: the chip reads LOCKED, the button names the tier that opens it rather than offering to run it, and the footer says the rule once. The frame means "your pick" and the chip means "its state", which locking is the first thing to pull apart - a kept-but-locked pick stays framed and reads LOCKED, and neither half lies.
 
 ## 5. The order
 
 1. **Make them work. Done.** All forty-seven were classified and rewritten, both traps were rewritten rather than relabelled, three of the five trades stopped paying for something that was not there, and the three talents and four kit rules the arena matrix observed nowhere are observed now. `KnownCostlyTalents` and `TalentAudit.Costly` carry two entries, both trades.
 2. **Fix the screen.** Every talent does something and the costly ones are labelled, so this is now unblocked.
-3. **Build the ascension gate.** Small, self-contained, and only worth doing once there is something worth unlocking.
+3. **Build the ascension gate. Done.** The unlock is derived from the ascension tier, the simulation reads it on the one line that resolves a selection, the pick survives a tier that drops under it, published lines carry only what their hero would really fight with, and stored records replay unchanged. `CheckAscensionGatesTalents` measures the whole grid - every slot at every tier - as fights rather than as a flag.
 
 ## 6. What the harness decides
 
@@ -64,5 +74,4 @@ This is built LAST. Gating a system where half the options do nothing would only
 ## 7. Open decisions
 
 - Whether one to four star heroes ever get talents. Today only five-stars author them, which follows from the star contract, and nothing argues for changing that yet.
-- Whether the ascension gate applies retroactively to heroes a player already owns, or only to newly fused ones.
 - Whether a talent may be locked per game mode, the way the guild dungeon normalises everything else.

@@ -415,6 +415,21 @@ does not author. It resolves once in `BuildUnits` and is appended as one more pa
 selection travels into a Proving ghost and a friend duel, so a snapshot line fights with the talents
 it names.
 
+**Ascension unlocks the slots.** `HeroInstance.TalentSlotsUnlocked` is `min(MaxTalents,
+Ascension + 1)`: tier 0 runs talent 1, tier 1 adds talent 2, tier 2 adds talent 3. It is derived
+from a tier the save already carries, so no save version moved and every hero already owned is
+gated retroactively with nothing to migrate. `CombatSimulation.BuildUnits` reads
+`HeroInstance.LiveTalent`, so a locked slot is absent from a battle exactly as an unselected one
+is - the whole record byte-identical to the same fight with nothing picked. `SelectTalent` refuses
+a locked slot, but a selection already stored is KEPT and comes back whole when the tier does, the
+rule an unresolvable relic id already follows. A snapshot carries no tier and can never re-derive
+the gate, so it is applied at CAPTURE - `TeamSnapshot.Capture`, `ProvingGenerator` and
+`GuildDungeon.LineOf` publish `LiveTalentSelection` - and `GuildDungeon.FightUnder` replays a
+stored record with exactly the pick it holds. `CheckAscensionGatesTalents` measures every slot at
+every tier as nine fights, off passive firings and whole-record comparison rather than off a flag,
+and `CheckAscensionGateKeepsThePickAndTheRecord` covers the pick, the save, the publish and the
+replay.
+
 The talent sweep runs all 90 talents at five seeds each and pins 450 fingerprints in
 `talent-sweep-baseline.txt`. **The talent selection UI is built**: `TalentsScreen` shows each talent's
 sentence, what it changes in numbers through `TalentMath`, and what it did to this hero measured by
@@ -812,6 +827,14 @@ verified from the built exe rather than from the editor. **Android is still the 
 differs between them.
 
 ## In progress
+
+**`talents/ascension-gate`** builds DESIGN-TALENTS T6: ascension tier unlocks talent slots, one
+per tier. It holds the derived gate on `HeroInstance`, the single simulation line that reads it,
+the capture-side rule that keeps a locked pick out of every published record, the locked card on
+`TalentsScreen` and a `Talents` target for `PlayModeScreenshot`, which had none. No save version
+moved, and the stage-fingerprint, hero-sweep and talent-sweep baselines are all unmoved. The build
+check reads **3 failures**, the three already on `main`: armor's Rough slope, the geared CEIL and
+the campaign power band.
 
 **`content/campaign-stages`** replaces the shipped 24 stages with Pinoy's 72:
 - only his 84 fielded, the shipped 12 kept as data and excluded from the guild dungeon and the Deep

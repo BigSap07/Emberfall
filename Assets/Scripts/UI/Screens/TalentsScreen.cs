@@ -689,8 +689,16 @@ namespace Emberfall.UI.Screens
                 Text pick = _stripCells[i].Body.Find("Pick").GetComponent<Text>();
                 // The pick alone. The heroes in the line lead the strip, so "in your line" is said
                 // by position; saying it on the tag as well crowded the numeral off a 92-unit cell.
-                pick.text = hero.SelectedTalent > 0 ? Roman(hero.SelectedTalent) : "NONE";
-                pick.color = hero.SelectedTalent > 0 ? Emberforge.TextGold : Emberforge.TextQuiet;
+                //
+                // WHAT IS RUNNING, not what is stored. The strip answers one question - which of my
+                // 5-stars is still fighting with nothing - and a hero holding a pick its ascension
+                // has not unlocked is fighting with nothing, so a gold numeral here would be the
+                // strip answering a different question from the one it is for. The kept pick is not
+                // dropped, it is said on the card, where there is room to say it is locked and what
+                // opens it.
+                int live = hero.LiveTalentSelection;
+                pick.text = live > 0 ? Roman(live) : "NONE";
+                pick.color = live > 0 ? Emberforge.TextGold : Emberforge.TextQuiet;
             }
         }
 
@@ -717,6 +725,21 @@ namespace Emberfall.UI.Screens
         /// appears, and the button stops being a button. Three of those are on the card and the
         /// fourth is the strip cell above. None of the other three is dimmed - the page is a
         /// comparison, and a comparison where two of the three are faded is not one.
+        ///
+        /// AND A FIFTH STATE, LOCKED, which the four above could not express. DESIGN-TALENTS T6:
+        /// a five-star has talent 1 at tier 0, talent 2 after one ascension and talent 3 after
+        /// two. A locked card is NOT HIDDEN, because the player deciding whether to ascend is
+        /// deciding on the strength of what ascending buys, and a page that hid it would be asking
+        /// for that decision while withholding the only thing it turns on. So the card keeps its
+        /// name, its sentence, its figures and its reading, and three things say it is not
+        /// available: the chip reads LOCKED, the button names the tier that opens it instead of
+        /// offering to run it, and the footer says the rule once for the whole page.
+        ///
+        /// THE FRAME MEANS "YOUR PICK" AND THE CHIP MEANS "ITS STATE", and locking is the first
+        /// thing that pulls those apart. A pick made at tier 2 and then locked - a tier that moved
+        /// under it, a hand-edited save - is KEPT by GameSession.SelectTalent's own rule, so the
+        /// card stays framed because it is still what the player chose, while the chip says LOCKED
+        /// because it is not what is fighting. Neither half is dropped, and neither lies.
         /// </summary>
         private void RefreshState()
         {
@@ -727,15 +750,28 @@ namespace Emberfall.UI.Screens
                 return;
             }
             int running = _hero.SelectedTalent;
+            int lockedSlots = 0;
             for (int i = 0; i < _cards.Count; i++)
             {
                 CardView view = _cards[i];
+                bool authored = _hero.Def.TalentAt(view.Selection) != null;
+                bool locked = authored && !_hero.TalentSlotUnlocked(view.Selection);
                 bool on = view.Selection == running;
+                if (locked) lockedSlots++;
+
                 EmberforgeUI.SetCardSelected(view.Card, on);
-                EmberforgeUI.SetChipTint(view.Numeral, on ? Emberforge.TextGold : Emberforge.TextQuiet);
-                view.StateChip.gameObject.SetActive(on);
-                view.Run.SetText(on ? "RUNNING" : "RUN THIS TALENT");
-                view.Run.Interactable = !on;
+                EmberforgeUI.SetChipTint(view.Numeral, on ? locked ? UITheme.Warning : Emberforge.TextGold
+                                                          : Emberforge.TextQuiet);
+                view.StateChip.gameObject.SetActive(on || locked);
+                EmberforgeUI.SetChipText(view.StateChip, locked ? "LOCKED" : "RUNNING");
+                EmberforgeUI.SetChipTint(view.StateChip, locked ? UITheme.Warning : UITheme.Success);
+
+                // The button is where the card says what to DO about it, which for a locked card
+                // is not "run this" - the one action that would change anything is an ascension,
+                // and it names the tier rather than saying "locked" a second time.
+                view.Run.SetText(locked ? "ASCEND TO TIER " + HeroInstance.TierUnlockingTalent(view.Selection)
+                                        : on ? "RUNNING" : "RUN THIS TALENT");
+                view.Run.Interactable = !on && !locked;
             }
 
             bool none = running == 0;
@@ -748,13 +784,40 @@ namespace Emberfall.UI.Screens
             // "the three" is read off the hero rather than written here: HeroDef.MaxTalents is the
             // ceiling and not a promise, and a hero authoring two would be told it has three.
             int count = _hero.Def.Talents.Count;
-            _noneBody.text = name + " fights with none of " + (count == 1 ? "it" : "the " + Word(count))
-                           + ". An unselected talent is not a quieter talent: it is not in the battle at all.";
+            string which = count == 1 ? "it" : "the " + Word(count);
 
-            _footerRule.text = count > 0
+            // WHAT THE HERO IS ACTUALLY FIGHTING WITH, which is not always what the player picked.
+            // A pick that resolves to nothing - locked, or naming a slot this version of the game
+            // no longer authors - means the hero fights with none, and the NONE bar is the one
+            // block on the page that is about fighting with none, so it is where that is said.
+            // Both cases end the same way, because both follow the same rule: the pick is kept.
+            PassiveDef live = _hero.LiveTalent;
+            if (live != null || none)
+            {
+                _noneBody.text = name + " fights with none of " + which
+                               + ". An unselected talent is not a quieter talent: it is not in the battle at all.";
+            }
+            else if (_hero.Def.TalentAt(running) != null)
+            {
+                _noneBody.text = name + " fights with none of " + which + " today: talent " + Roman(running)
+                               + " is picked and still locked, so it is not in the battle at all. Ascend to tier "
+                               + HeroInstance.TierUnlockingTalent(running) + " and it comes straight back.";
+            }
+            else
+            {
+                _noneBody.text = name + " fights with none of " + which + ": the pick is talent " + Roman(running)
+                               + ", which this version of Emberfall does not have. It is kept rather than lost -"
+                               + " if that talent returns, so does the pick.";
+            }
+
+            _footerRule.text = count == 0 ? ""
+                : lockedSlots == 0
                 ? "One at a time, or none. Free to change, any time, as often as you like - nothing is"
                   + " spent, nothing is locked in, and no talent unlocks another."
-                : "";
+                : "One at a time, or none, and free to change as often as you like - nothing is spent. No talent"
+                  + " unlocks another; ascension does. Tier 1 opens the second, tier 2 the third. " + name
+                  + " is at tier " + Mathf.Max(0, _hero.Ascension) + ", so " + Word(lockedSlots)
+                  + (lockedSlots == 1 ? " is" : " are") + " still shut.";
             bool deployed = App.Session.Profile.TeamSlotOf(_hero.Uid) >= 0;
             _footerTravels.text = _hero.Def.Talents.Count == 0 ? ""
                 : deployed
@@ -890,7 +953,7 @@ namespace Emberfall.UI.Screens
         /// <summary>A small count in words, for a sentence. Only ever reaches three.</summary>
         private static string Word(int n)
         {
-            return n == 2 ? "two" : n == 3 ? "three" : n.ToString(CultureInfo.InvariantCulture);
+            return n == 1 ? "one" : n == 2 ? "two" : n == 3 ? "three" : n.ToString(CultureInfo.InvariantCulture);
         }
 
         private static string Roman(int n)

@@ -1189,9 +1189,16 @@ namespace Emberfall.UI.Screens
             HeroDef def = _hero.Def;
             bool has = def != null && def.Talents.Count > 0;
             _openTalents.SetText(has ? "TALENTS" : "5-STAR TALENTS");
-            PassiveDef running = has ? def.TalentAt(_hero.SelectedTalent) : null;
+            // LiveTalent, so this line says what the hero FIGHTS with. A pick the hero's ascension
+            // has not unlocked (DESIGN-TALENTS T6) is kept but absent from every battle, and a door
+            // that announced it as RUNNING would be the page contradicting the fight. What is
+            // locked and what opens it is said on the talent page behind this door, where there is
+            // room for it.
+            PassiveDef running = has ? _hero.LiveTalent : null;
+            int locked = has ? def.Talents.Count - Mathf.Min(def.Talents.Count, _hero.TalentSlotsUnlocked) : 0;
             _talentRunning.text = !has ? "NONE ON A " + (def != null ? def.Stars : 0) + "-STAR"
                                 : running != null ? "RUNNING  " + running.Name.ToUpperInvariant()
+                                : locked > 0 ? "NO TALENT RUNNING  -  " + locked + " LOCKED"
                                 : "NO TALENT RUNNING";
             _talentRunning.color = running != null ? Emberforge.TextGold : Emberforge.TextQuiet;
         }

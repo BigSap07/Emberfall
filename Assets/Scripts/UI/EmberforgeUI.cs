@@ -325,6 +325,22 @@ namespace Emberfall.UI
             }
         }
 
+        /// <summary>
+        /// Rewords a chip built by <see cref="Chip"/> in place, the other half of what a chip is
+        /// asked to do when it changes state. Paired with <see cref="SetChipTint"/> because a chip
+        /// that changes what it says almost always changes what colour it says it in, and a screen
+        /// doing one of those by hand and the other through the kit is a screen with two chips
+        /// that disagree.
+        /// </summary>
+        public static void SetChipText(RectTransform chip, string text)
+        {
+            if (chip == null) return;
+            Transform label = chip.Find("Text");
+            if (label == null) return;
+            Text t = label.GetComponent<Text>();
+            if (t != null) t.text = text;
+        }
+
         /// <summary>The four corner diamonds. Non-interactive, so they never eat a tap aimed at
         /// whatever is inside the panel's corner.</summary>
         public static void Ornaments(RectTransform panel)
