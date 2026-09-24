@@ -1717,22 +1717,23 @@ namespace Emberfall.Core.Session
 
         /// <summary>
         /// Claims one milestone's reward. Points are never spent - the ladder is cumulative and
-        /// permanent - so ClaimedMilestoneThresholds is the only thing standing between this and a
-        /// repeat payout: checked and updated in the same call, before the reward is applied, so
-        /// there is no window where a second call could slip through between the check and the
-        /// grant. Returns false for an unknown event or milestone, an already-claimed one, or one
-        /// whose threshold the player has not reached yet.
+        /// permanent - so ClaimedMilestoneIds is the only thing standing between this and a repeat
+        /// payout: checked and updated in the same call, before the reward is applied, so there is
+        /// no window where a second call could slip through between the check and the grant. By
+        /// id, never by threshold, so retuning a threshold cannot reopen a claim (EventMilestone).
+        /// Returns false for an unknown event or milestone, an already-claimed one, or one whose
+        /// threshold the player has not reached yet.
         /// </summary>
-        public bool ClaimEventMilestone(string eventId, long threshold)
+        public bool ClaimEventMilestone(string eventId, string milestoneId)
         {
             EventDef evt = Content.GetEvent(eventId);
             if (evt == null) return false;
-            EventMilestone milestone = evt.FindMilestone(threshold);
+            EventMilestone milestone = evt.FindMilestone(milestoneId);
             if (milestone == null) return false;
             EventProgressEntry progress = GetEventProgress(eventId);
-            if (progress.ClaimedMilestoneThresholds.Contains(threshold)) return false;
-            if (progress.Points < threshold) return false;
-            progress.ClaimedMilestoneThresholds.Add(threshold);
+            if (progress.HasClaimed(milestone.Id)) return false;
+            if (progress.Points < milestone.Threshold) return false;
+            progress.ClaimedMilestoneIds.Add(milestone.Id);
             ApplyEventReward(milestone.Reward);
             return true;
         }
@@ -1741,7 +1742,7 @@ namespace Emberfall.Core.Session
         /// Redeems one tier of an event's currency ladder: spends Cost of the event's own currency,
         /// grants Reward. Unlike a milestone this is a genuine purchase rather than an achievement -
         /// the balance is actually deducted - so redeeming the same tier twice is two purchases, not
-        /// a double-claim, and nothing tracks a "redeemed" state the way ClaimedMilestoneThresholds
+        /// a double-claim, and nothing tracks a "redeemed" state the way ClaimedMilestoneIds
         /// does. Returns false for an unknown event, an event with no currency, an unknown tier, or
         /// insufficient balance.
         /// </summary>

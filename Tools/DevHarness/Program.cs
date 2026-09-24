@@ -254,7 +254,7 @@ namespace Emberfall.DevHarness
             CheckDebrief();
             CheckDebriefRealVictories(content);
             CheckRelics(content);
-            CheckEvents(content);
+            CheckEvents(content, contentDir);
             CheckRecital(content);
             CheckCampaignStructure(content);
             CheckProving(content);
@@ -3488,11 +3488,12 @@ namespace Emberfall.DevHarness
 
             // ---- the save. No version moved, and none needed to: the gate is derived from a tier
             // the format has carried since long before talents existed. The gate landed at 17;
-            // 18 is the level clamp's (see SaveSerializer.CurrentVersion), not the gate's.
-            Check(SaveSerializer.CurrentVersion == 18,
+            // 18 is the level clamp's and 19 the milestone claims' (see
+            // SaveSerializer.CurrentVersion), not the gate's.
+            Check(SaveSerializer.CurrentVersion == 19,
                   "the ascension gate moved no save version - it is derived from Ascension, which is already "
                   + "stored, and a persisted 'unlocked' could only ever disagree with the tier (version "
-                  + SaveSerializer.CurrentVersion + ", which the level clamp moved from 17)");
+                  + SaveSerializer.CurrentVersion + ", which the level clamp and the milestone claims moved from 17)");
             hero.Ascension = 0;
             string json = SaveSerializer.Serialize(profile);
             string error;
@@ -4684,7 +4685,9 @@ namespace Emberfall.DevHarness
             }
         }
 
-        private static ContentDatabase LoadContent(string dir)
+        /// <summary>The content in dir. eventsOverride, when given, stands in for events.json's
+        /// text, so a check can load the game under a retuned event without writing the file.</summary>
+        private static ContentDatabase LoadContent(string dir, string eventsOverride = null)
         {
             try
             {
@@ -4695,7 +4698,7 @@ namespace Emberfall.DevHarness
                 string relicsPath = Path.Combine(dir, "relics.json");
                 string relics = File.Exists(relicsPath) ? File.ReadAllText(relicsPath) : null;
                 string eventsPath = Path.Combine(dir, "events.json");
-                string events = File.Exists(eventsPath) ? File.ReadAllText(eventsPath) : null;
+                string events = eventsOverride ?? (File.Exists(eventsPath) ? File.ReadAllText(eventsPath) : null);
                 string armorPath = Path.Combine(dir, "armor.json");
                 string armor = File.Exists(armorPath) ? File.ReadAllText(armorPath) : null;
                 string conditionsPath = Path.Combine(dir, "floor-conditions.json");
@@ -10723,7 +10726,7 @@ namespace Emberfall.DevHarness
             r.Events.Add(e);
         }
 
-        private static void CheckEvents(ContentDatabase db)
+        private static void CheckEvents(ContentDatabase db, string contentDir)
         {
             Line("");
             Line("EVENTS");
@@ -10732,6 +10735,7 @@ namespace Emberfall.DevHarness
             CheckEventActivityWindowGate(db);
             CheckEventMilestoneClaimNoDoublePay(db);
             CheckEventCurrencyRedeem(db);
+            CheckEventMilestoneRetuneDoesNotRepay(db, contentDir);
             CheckEventSaveRoundTrip(db);
         }
 
@@ -10870,7 +10874,7 @@ namespace Emberfall.DevHarness
             PlayerProfile profile = GameSession.CreateNewProfile(db, now);
             GameSession session = new GameSession(db, profile);
 
-            Check(!session.ClaimEventMilestone("recollection_rite", milestone.Threshold),
+            Check(!session.ClaimEventMilestone("recollection_rite", milestone.Id),
                   "a milestone cannot be claimed before its threshold is reached");
 
             EventProgressEntry progress = session.GetEventProgress("recollection_rite");
@@ -10879,7 +10883,7 @@ namespace Emberfall.DevHarness
             long goldBefore = profile.Gold;
             long shardsBefore = profile.Shards;
             long dustBefore = profile.RelicDust;
-            Check(session.ClaimEventMilestone("recollection_rite", milestone.Threshold),
+            Check(session.ClaimEventMilestone("recollection_rite", milestone.Id),
                   "the milestone claims once the threshold is reached");
             Check(profile.Gold == goldBefore + milestone.Reward.Gold
                   && profile.Shards == shardsBefore + milestone.Reward.Shards
@@ -10887,14 +10891,14 @@ namespace Emberfall.DevHarness
                   "and the reward actually reached the profile (" + milestone.Reward.Describe() + ")");
 
             long goldAfterFirstClaim = profile.Gold;
-            Check(!session.ClaimEventMilestone("recollection_rite", milestone.Threshold),
+            Check(!session.ClaimEventMilestone("recollection_rite", milestone.Id),
                   "claiming the same milestone a second time is refused");
             Check(profile.Gold == goldAfterFirstClaim,
                   "and the second attempt paid nothing - this is the double-pay guard the milestone ladder depends on");
 
-            Check(!session.ClaimEventMilestone("recollection_rite", 999999999L),
-                  "claiming a threshold that does not exist on the ladder is refused");
-            Check(!session.ClaimEventMilestone("no_such_event", milestone.Threshold),
+            Check(!session.ClaimEventMilestone("recollection_rite", "no_such_milestone"),
+                  "claiming a milestone id that does not exist on the ladder is refused");
+            Check(!session.ClaimEventMilestone("no_such_event", milestone.Id),
                   "claiming against an unknown event id is refused");
         }
 
@@ -10953,7 +10957,7 @@ namespace Emberfall.DevHarness
 
             EventProgressEntry riteProgress = session.GetEventProgress("recollection_rite");
             riteProgress.Points = rite.Milestones[0].Threshold;
-            session.ClaimEventMilestone("recollection_rite", rite.Milestones[0].Threshold);
+            session.ClaimEventMilestone("recollection_rite", rite.Milestones[0].Id);
 
             EventProgressEntry ledgerProgress = session.GetEventProgress("ledgers_week");
             ledgerProgress.Points = 42;
@@ -10969,7 +10973,7 @@ namespace Emberfall.DevHarness
             EventProgressEntry loadedRite = loaded.FindEventProgress("recollection_rite");
             Check(loadedRite != null && loadedRite.Points == riteProgress.Points,
                   "points survive the round trip (" + (loadedRite != null ? loadedRite.Points : -1) + ")");
-            Check(loadedRite != null && loadedRite.ClaimedMilestoneThresholds.Contains(rite.Milestones[0].Threshold),
+            Check(loadedRite != null && loadedRite.HasClaimed(rite.Milestones[0].Id),
                   "and the claimed milestone stays claimed after reload");
 
             EventProgressEntry loadedLedger = loaded.FindEventProgress("ledgers_week");
@@ -11014,6 +11018,162 @@ namespace Emberfall.DevHarness
                   "and refused with the same message every earlier bump uses (\"" + futureError + "\")");
 
             Line("");
+        }
+
+        /// <summary>
+        /// Save version 19's reason. A claim used to be saved as the milestone's threshold, so a
+        /// balance pass that moved a claimed milestone left the save naming a threshold no rung sat
+        /// at and the moved rung unclaimed, and ClaimEventMilestone paid it again. This retunes the
+        /// real events.json text, parsed by the real ContentDatabase, under a save with that
+        /// milestone claimed and asserts it does not pay twice. Three saves: one claimed by id, one
+        /// claimed by threshold under version 18 and opened for the first time in the retuned
+        /// build (the case the frozen PreIdMilestones table exists for), and one whose claimed
+        /// milestone the content has removed altogether.
+        /// </summary>
+        private static void CheckEventMilestoneRetuneDoesNotRepay(ContentDatabase db, string contentDir)
+        {
+            EventDef rite = db.GetEvent("recollection_rite");
+            if (rite == null || rite.Milestones.Count < 3)
+            { Check(false, "Recollection Rite needs three milestones to retune one between its neighbours"); return; }
+            EventMilestone target = rite.Milestones[1];
+            long oldThreshold = target.Threshold;
+            long newThreshold = (target.Threshold + rite.Milestones[2].Threshold) / 2;
+
+            string eventsText = File.ReadAllText(Path.Combine(contentDir, "events.json"));
+            ContentDatabase retuned = LoadContent(contentDir, RetuneMilestone(eventsText, rite.Id, target.Id, newThreshold));
+            EventDef retunedRite = retuned.GetEvent(rite.Id);
+            EventMilestone moved = retunedRite != null ? retunedRite.FindMilestone(target.Id) : null;
+            Check(moved != null && moved.Threshold == newThreshold,
+                  "the retuned events.json loads, with " + target.Id + " moved from " + oldThreshold + " to "
+                  + (moved != null ? moved.Threshold.ToString() : "nowhere") + " points");
+            bool nothingAtOld = retunedRite != null;
+            if (retunedRite != null)
+                for (int i = 0; i < retunedRite.Milestones.Count; i++)
+                    if (retunedRite.Milestones[i].Threshold == oldThreshold) nothingAtOld = false;
+            Check(nothingAtOld, "and no milestone sits at " + oldThreshold + " any more - the state a claim keyed by threshold could not survive");
+
+            // The player is past every rung, so the only thing between the moved milestone and a
+            // second payout is the claim record.
+            long now = rite.StartUnix + 60L;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, now);
+            GameSession session = new GameSession(db, profile);
+            session.GetEventProgress(rite.Id).Points = rite.HighestThreshold;
+            Check(session.ClaimEventMilestone(rite.Id, target.Id), target.Id + " claims under the shipped tuning");
+            string saved = SaveSerializer.Serialize(profile);
+
+            CheckMilestoneNotRepaid(retuned, saved, rite.Id, target.Id, "a version " + SaveSerializer.CurrentVersion + " save that claimed it by id");
+
+            string preId = WithMilestoneClaims(saved, 18, rite.Id, null, new[] { oldThreshold });
+            Check(preId.IndexOf("claimedMilestoneIds", StringComparison.Ordinal) < 0,
+                  "the hand-built version 18 save records the claim only as threshold " + oldThreshold);
+            CheckMilestoneNotRepaid(db, preId, rite.Id, target.Id, "that claim saved by threshold under version 18, opened in the shipped build");
+            CheckMilestoneNotRepaid(retuned, preId, rite.Id, target.Id,
+                                    "and opened for the first time in the retuned build, where nothing sits at " + oldThreshold);
+
+            // ---- a claim whose milestone no longer exists: removed from content, then restored.
+            ContentDatabase removed = LoadContent(contentDir, RetuneMilestone(eventsText, rite.Id, target.Id, -1));
+            EventDef removedRite = removed.GetEvent(rite.Id);
+            Check(removedRite != null && removedRite.FindMilestone(target.Id) == null,
+                  "with " + target.Id + " removed from events.json, the event still loads without it");
+            string retired = WithMilestoneClaims(saved, SaveSerializer.CurrentVersion, rite.Id,
+                                                 new[] { target.Id, "rite_retired" }, new[] { 777L });
+            string error;
+            PlayerProfile underRemoved = SaveSerializer.Deserialize(retired, removed, out error);
+            EventProgressEntry kept = underRemoved != null ? underRemoved.FindEventProgress(rite.Id) : null;
+            Check(kept != null && kept.HasClaimed(target.Id) && kept.HasClaimed("rite_retired")
+                  && kept.UnresolvedClaimedThresholds.Contains(777L),
+                  "an id content does not author and a threshold no pre-id rung sat at are both kept on load, not pruned"
+                  + (error != null ? " (" + error + ")" : ""));
+            string resaved = underRemoved != null ? SaveSerializer.Serialize(underRemoved) : "";
+            CheckMilestoneNotRepaid(db, resaved, rite.Id, target.Id,
+                                    "saved again under that content and opened where " + target.Id + " exists once more");
+            PlayerProfile back = SaveSerializer.Deserialize(resaved, db, out error);
+            EventProgressEntry backRite = back != null ? back.FindEventProgress(rite.Id) : null;
+            Check(backRite != null && backRite.HasClaimed("rite_retired") && backRite.UnresolvedClaimedThresholds.Contains(777L),
+                  "and the unresolvable claims are still in the save after that round trip");
+        }
+
+        private static void CheckMilestoneNotRepaid(ContentDatabase content, string json, string eventId, string milestoneId, string label)
+        {
+            string error;
+            PlayerProfile loaded = SaveSerializer.Deserialize(json, content, out error);
+            Check(loaded != null, label + ": loads" + (error != null ? " (" + error + ")" : ""));
+            if (loaded == null) return;
+            EventProgressEntry progress = loaded.FindEventProgress(eventId);
+            Check(progress != null && progress.HasClaimed(milestoneId), "and " + milestoneId + " reads as claimed");
+            GameSession session = new GameSession(content, loaded);
+            long gold = loaded.Gold, shards = loaded.Shards, dust = loaded.RelicDust;
+            Check(!session.ClaimEventMilestone(eventId, milestoneId)
+                  && loaded.Gold == gold && loaded.Shards == shards && loaded.RelicDust == dust,
+                  "and claiming it again is refused and pays nothing, with " + (progress != null ? progress.Points : 0)
+                  + " points banked (Gold " + gold + " -> " + loaded.Gold + ")");
+        }
+
+        /// <summary>events.json's text with one milestone's threshold set to threshold, or with
+        /// that milestone removed when threshold is negative.</summary>
+        private static string RetuneMilestone(string eventsText, string eventId, string milestoneId, long threshold)
+        {
+            JsonValue root;
+            string error;
+            if (!JsonValue.TryParse(eventsText, out root, out error)) return eventsText;
+            List<JsonValue> events = root.GetList("events");
+            for (int e = 0; e < events.Count; e++)
+            {
+                if (events[e].GetString("id", "") != eventId) continue;
+                JsonValue kept = JsonValue.NewArray();
+                List<JsonValue> milestones = events[e].GetList("milestones");
+                for (int m = 0; m < milestones.Count; m++)
+                {
+                    if (milestones[m].GetString("id", "") == milestoneId)
+                    {
+                        if (threshold < 0) continue;
+                        milestones[m].Set("threshold", threshold);
+                    }
+                    kept.Add(milestones[m]);
+                }
+                events[e].Set("milestones", kept);
+            }
+            return root.ToJson(true);
+        }
+
+        /// <summary>A save with one event's claim record replaced: `version` set, and
+        /// claimedMilestoneIds / claimedMilestones written only when given, so null reproduces a
+        /// document from before the key existed.</summary>
+        private static string WithMilestoneClaims(string json, int version, string eventId, string[] ids, long[] thresholds)
+        {
+            JsonValue root;
+            string error;
+            if (!JsonValue.TryParse(json, out root, out error)) return json;
+            JsonValue rebuilt = JsonValue.NewObject();
+            foreach (string key in root.Keys)
+            {
+                if (key == "version") { rebuilt.Set(key, version); continue; }
+                if (key != "eventProgress") { rebuilt.Set(key, root[key]); continue; }
+                JsonValue entries = JsonValue.NewArray();
+                List<JsonValue> list = root.GetList(key);
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (list[i].GetString("eventId", "") != eventId) { entries.Add(list[i]); continue; }
+                    JsonValue entry = JsonValue.NewObject();
+                    foreach (string k in list[i].Keys)
+                        if (k != "claimedMilestoneIds" && k != "claimedMilestones") entry.Set(k, list[i][k]);
+                    if (ids != null)
+                    {
+                        JsonValue a = JsonValue.NewArray();
+                        for (int c = 0; c < ids.Length; c++) a.Add(ids[c]);
+                        entry.Set("claimedMilestoneIds", a);
+                    }
+                    if (thresholds != null)
+                    {
+                        JsonValue a = JsonValue.NewArray();
+                        for (int c = 0; c < thresholds.Length; c++) a.Add(new JsonValue((double)thresholds[c]));
+                        entry.Set("claimedMilestones", a);
+                    }
+                    entries.Add(entry);
+                }
+                rebuilt.Set(key, entries);
+            }
+            return rebuilt.ToJson(true);
         }
 
         /// <summary>

@@ -318,6 +318,19 @@ namespace Emberfall.Core.Data
                     if (e.Milestones[m].Threshold <= e.Milestones[m - 1].Threshold) ascending = false;
                 if (!ascending) { Warnings.Add("events.json: event " + e.Id + " milestones are not strictly ascending by threshold"); continue; }
 
+                // A milestone's id is what a claim is recorded against (EventMilestone), so one
+                // without an id cannot be claimed safely and two sharing one would be claimed by
+                // either. Refused like any other structural fault, not patched with a derived id.
+                string idProblem = null;
+                HashSet<string> milestoneIds = new HashSet<string>();
+                for (int m = 0; m < e.Milestones.Count && idProblem == null; m++)
+                {
+                    string mid = e.Milestones[m].Id;
+                    if (string.IsNullOrEmpty(mid)) idProblem = "milestone at threshold " + e.Milestones[m].Threshold + " has no id";
+                    else if (!milestoneIds.Add(mid)) idProblem = "duplicate milestone id " + mid;
+                }
+                if (idProblem != null) { Warnings.Add("events.json: event " + e.Id + " " + idProblem); continue; }
+
                 bool costsAscending = true;
                 for (int c = 1; c < e.CurrencyRewards.Count; c++)
                     if (e.CurrencyRewards[c].Cost <= e.CurrencyRewards[c - 1].Cost) costsAscending = false;

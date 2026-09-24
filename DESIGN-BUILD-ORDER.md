@@ -641,7 +641,7 @@ ships on top of that, with `RelicShopScreen` as its storefront.
 
 Summoning with a pity rule that guarantees distinct unowned heroes. Idle income accrues against a
 real clock and is capped. `SaveSerializer` writes the whole document, at
-`SaveSerializer.CurrentVersion` 18, and a save from a newer build is refused rather than read.
+`SaveSerializer.CurrentVersion` 19, and a save from a newer build is refused rather than read.
 Version 15 keeps records this build cannot resolve; version 16 adds each hero's ascension tier;
 version 17 adds the Guild Path's copy of the server's answer and the formation's saved lines, and
 later the guild tech tree's copy of it - deliberately without a further bump, because the server
@@ -652,6 +652,12 @@ from before the star-gated caps carried heroes at Level 60 against a cap of 9, a
 screen's ascension card printed it. The clamp runs on every load, not only on version 17 saves, so
 the next cap change is migrated without anyone having to remember. `CurrentVersion` records why a
 cap change is a migration even when no key moves. `CheckLevelClampOnLoad` proves it.
+Version 19 records an event milestone claim by the milestone's authored id, not its threshold.
+A claim keyed by threshold reopened when the threshold was retuned, and the milestone paid again.
+A claim saved by threshold is migrated through a frozen table of the eight rungs that existed
+before ids (`SaveSerializer.PreIdMilestones`), never through the live `events.json`. A claim whose
+milestone cannot be resolved is kept, so it stays claimed rather than reopening.
+`CheckEventMilestoneRetuneDoesNotRepay` retunes `events.json` under a claimed save and proves it.
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -797,7 +803,8 @@ floor's Aspect **that some campaign stage fields** (`GuildDungeonGenerator.Templ
 rule), bosses included, so the retired shipped 12 are out of it; `Docs/CAMPAIGN-SPEC.md` 9.6 and 10.7
 measure what each change did to the floors. Coda is the Recital's own currency and accrues on every clear. **There is no Coda sink
 yet.** `ProvingGenerator` builds opponent lines. The events engine is content-driven through
-`events.json`. Shop screens are wired.
+`events.json`, and each milestone carries a permanent `id` that a claim is saved against, so a
+threshold can be retuned freely. Shop screens are wired.
 
 ### UI, and the Hub's four layers
 

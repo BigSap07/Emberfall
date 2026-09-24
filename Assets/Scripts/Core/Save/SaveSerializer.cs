@@ -330,7 +330,69 @@ namespace Emberfall.Core.Save
         /// version alone. One such reader exists: SaveSummaryReader takes each hero's level off the
         /// raw document for the conflict card, so a version 17 cloud copy still reads "Lv 60" there
         /// and still looks levels ahead of a clamped local save, until it is loaded once.
-        public const int CurrentVersion = 18;
+        ///
+        /// 19: an event milestone claim is recorded by the milestone's id (EventMilestone.Id), in
+        /// `claimedMilestoneIds`, and no longer by its threshold in `claimedMilestones`.
+        ///
+        /// The threshold was the claim's key, and a threshold is tuning. Retune a claimed
+        /// milestone from 15 points to 20 and the save still said "15 claimed", no milestone sat
+        /// at 15, the one at 20 read as unclaimed, and ClaimEventMilestone paid it a second time.
+        /// Nothing had to be exploited: a balance pass on events.json was enough.
+        ///
+        /// Upgrade DOES need a migration, the relic kind (version 5), because the old key holds
+        /// something the new model must not lose: each threshold becomes a milestone id. It is
+        /// resolved through PreIdMilestones, a frozen copy of the ladders as they stood while
+        /// claims were keyed by threshold, and NOT through this build's events.json. Looking the
+        /// threshold up in live content would be exact in the build that introduced the ids and
+        /// wrong after the first retune for any save not yet migrated by then - a cloud copy
+        /// nobody has opened, say - which is this bug again, one step removed. The table is exact
+        /// because those thresholds never moved while they were the key: events.json authored them
+        /// once, and the ids were authored at the same thresholds.
+        ///
+        /// Run on every load rather than only on a version 18 document, like the version 18 clamp,
+        /// so there is one read path and a current save simply has nothing to migrate.
+        ///
+        /// A CLAIM WHOSE MILESTONE CANNOT BE RESOLVED STAYS CLAIMED, never reopens. Two cases. An
+        /// id this build's content does not author (a retired milestone, a removed event) stays in
+        /// `claimedMilestoneIds`, never pruned, so it cannot reopen if content names it again. A
+        /// threshold the table does not name has no id to become, so it is carried in
+        /// `claimedMilestones`, now written only while it holds one (PlayerProfile's
+        /// UnresolvedClaimedThresholds). No shipped build could have written one, since the table
+        /// holds every rung that ever existed; it is kept rather than dropped for version 15's
+        /// reason, and it pays nothing because nothing reads it as a threshold again.
+        ///
+        /// WHY THIS IS A BUMP. Version 18 code reads `claimedMilestones` and not
+        /// `claimedMilestoneIds`, so it would see every claimed milestone as unclaimed and pay the
+        /// whole ladder again. The bump refuses that.
+        public const int CurrentVersion = 19;
+
+        /// <summary>
+        /// Every event milestone that existed while claims were saved by threshold (version 18
+        /// and earlier), with the id version 19 authored for it. FROZEN: this is how the old
+        /// format is read, not a copy of events.json, so it is never retuned with it. Add nothing:
+        /// a milestone authored from version 19 on was only ever claimed by id.
+        /// </summary>
+        private static readonly string[][] PreIdMilestones =
+        {
+            new[] { "recollection_rite", "5", "rite_1" },
+            new[] { "recollection_rite", "15", "rite_2" },
+            new[] { "recollection_rite", "30", "rite_3" },
+            new[] { "recollection_rite", "60", "rite_4" },
+            new[] { "ledgers_week", "200", "ledger_1" },
+            new[] { "ledgers_week", "500", "ledger_2" },
+            new[] { "ledgers_week", "1000", "ledger_3" },
+            new[] { "ledgers_week", "2000", "ledger_4" },
+        };
+
+        /// <summary>The id a pre-version-19 claim on (eventId, threshold) was a claim on, or null
+        /// when PreIdMilestones names no such rung.</summary>
+        public static string PreIdMilestoneId(string eventId, long threshold)
+        {
+            string t = threshold.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            for (int i = 0; i < PreIdMilestones.Length; i++)
+                if (PreIdMilestones[i][0] == eventId && PreIdMilestones[i][1] == t) return PreIdMilestones[i][2];
+            return null;
+        }
 
         /// <summary>
         /// The save's format version, or false with a sentence a player can read. The one reader
@@ -764,9 +826,17 @@ namespace Emberfall.Core.Save
                 pj.Set("points", p.Points);
                 pj.Set("currency", p.Currency);
                 JsonValue claimed = JsonValue.NewArray();
-                for (int c = 0; c < p.ClaimedMilestoneThresholds.Count; c++)
-                    claimed.Add(new JsonValue((double)p.ClaimedMilestoneThresholds[c]));
-                pj.Set("claimedMilestones", claimed);
+                for (int c = 0; c < p.ClaimedMilestoneIds.Count; c++) claimed.Add(new JsonValue(p.ClaimedMilestoneIds[c]));
+                pj.Set("claimedMilestoneIds", claimed);
+                // Version 19: the pre-id key survives only as the carrier of claims no milestone in
+                // this build sits at, and only while it holds one - see CurrentVersion.
+                if (p.UnresolvedClaimedThresholds.Count > 0)
+                {
+                    JsonValue legacy = JsonValue.NewArray();
+                    for (int c = 0; c < p.UnresolvedClaimedThresholds.Count; c++)
+                        legacy.Add(new JsonValue((double)p.UnresolvedClaimedThresholds[c]));
+                    pj.Set("claimedMilestones", legacy);
+                }
                 eventProgress.Add(pj);
             }
             root.Set("eventProgress", eventProgress);
@@ -1065,8 +1135,25 @@ namespace Emberfall.Core.Save
                 p.EventId = eventId;
                 p.Points = Math.Max(0, eventProgress[i].GetLong("points", 0));
                 p.Currency = Math.Max(0, eventProgress[i].GetLong("currency", 0));
-                List<JsonValue> claimed = eventProgress[i].GetList("claimedMilestones");
-                for (int c = 0; c < claimed.Count; c++) p.ClaimedMilestoneThresholds.Add(claimed[c].AsLong(0));
+                List<JsonValue> claimed = eventProgress[i].GetList("claimedMilestoneIds");
+                for (int c = 0; c < claimed.Count; c++)
+                {
+                    string milestoneId = claimed[c].AsString(null);
+                    if (!string.IsNullOrEmpty(milestoneId) && !p.HasClaimed(milestoneId)) p.ClaimedMilestoneIds.Add(milestoneId);
+                }
+
+                // THE VERSION 19 MIGRATION (see CurrentVersion): a claim recorded by threshold
+                // becomes the id of the milestone that stood at that threshold when it was claimed,
+                // read off PreIdMilestones and never off this build's events.json, whose thresholds
+                // are free to have moved since. One the table cannot name is carried as it was.
+                List<JsonValue> byThreshold = eventProgress[i].GetList("claimedMilestones");
+                for (int c = 0; c < byThreshold.Count; c++)
+                {
+                    long threshold = byThreshold[c].AsLong(0);
+                    string legacyId = PreIdMilestoneId(eventId, threshold);
+                    if (legacyId != null) { if (!p.HasClaimed(legacyId)) p.ClaimedMilestoneIds.Add(legacyId); }
+                    else if (!p.UnresolvedClaimedThresholds.Contains(threshold)) p.UnresolvedClaimedThresholds.Add(threshold);
+                }
                 profile.EventProgress.Add(p);
             }
 

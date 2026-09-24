@@ -2428,11 +2428,19 @@ namespace Emberfall.Core.Data
     }
 
     /// <summary>One rung of an event's points ladder: reach Threshold cumulative points, claim
-    /// Reward once. Threshold is the rung's own identity - GameSession.ClaimEventMilestone and the
-    /// save format both key off it rather than a list index, so re-ordering milestones in content
-    /// never repoints an already-claimed entry at a different reward.</summary>
+    /// Reward once. Id is the rung's identity - GameSession.ClaimEventMilestone and the save format
+    /// both key off it. Not a list index, so re-ordering milestones in content never repoints an
+    /// already-claimed entry at a different reward. And not the Threshold, which is what it used to
+    /// be: a threshold is tuning, and a claim keyed by one reopened the moment it was retuned, so
+    /// the player was paid again for a rung they had already taken (save version 19).
+    ///
+    /// Authored in events.json, never derived. An id computed from the threshold or the position
+    /// would move with it and reopen the claim exactly as before. Once a milestone has shipped its
+    /// id is permanent: change the threshold or the reward freely, but a new rung gets a new id,
+    /// and a retired id is never reused, since a save that claimed it still holds it.</summary>
     public sealed class EventMilestone
     {
+        public string Id = "";
         public long Threshold;
         public EventReward Reward = new EventReward();
     }
@@ -2497,9 +2505,10 @@ namespace Emberfall.Core.Data
         public bool HasEnded(long nowUnix) { return nowUnix >= EndUnix; }
         public bool HasNotStarted(long nowUnix) { return nowUnix < StartUnix; }
 
-        public EventMilestone FindMilestone(long threshold)
+        public EventMilestone FindMilestone(string id)
         {
-            for (int i = 0; i < Milestones.Count; i++) if (Milestones[i].Threshold == threshold) return Milestones[i];
+            if (string.IsNullOrEmpty(id)) return null;
+            for (int i = 0; i < Milestones.Count; i++) if (Milestones[i].Id == id) return Milestones[i];
             return null;
         }
 
@@ -2533,6 +2542,7 @@ namespace Emberfall.Core.Data
             {
                 JsonValue mj = milestones[i];
                 EventMilestone m = new EventMilestone();
+                m.Id = mj.GetString("id", "");
                 m.Threshold = mj.GetLong("threshold", 0);
                 m.Reward = EventReward.FromJson(mj);
                 e.Milestones.Add(m);

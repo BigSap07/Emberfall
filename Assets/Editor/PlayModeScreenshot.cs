@@ -391,7 +391,7 @@ namespace Emberfall.EditorTools
             }
 
             if (rite != null && rite.Milestones.Count > 0)
-                session.ClaimEventMilestone(rite.Id, rite.Milestones[0].Threshold);
+                session.ClaimEventMilestone(rite.Id, rite.Milestones[0].Id);
 
             if (ledger != null && ledger.CurrencyRewards.Count > 0)
                 session.RedeemEventCurrency(ledger.Id, ledger.CurrencyRewards[0].Cost);
