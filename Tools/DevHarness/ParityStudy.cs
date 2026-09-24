@@ -169,7 +169,7 @@ namespace Emberfall.DevHarness
                     bool me = subjectId != null && line[k] == subjectId;
                     HeroDef d = me && subjectDef != null ? subjectDef : db.GetHero(line[k]);
                     HeroInstance h = MakeInstance(d, 40);
-                    if (me) h.SelectedTalent = talent;
+                    if (me) h.SelectedTalent = talent;   // MakeInstance is fully ascended, so any slot is reachable
                     team.Add(h);
                 }
                 BattleRequest req = new BattleRequest();
@@ -227,6 +227,12 @@ namespace Emberfall.DevHarness
                     {
                         if (subjectDef != null) c.Def = subjectDef;
                         c.SelectedTalent = talent;
+                        // The clone is ascended far enough to run the slot being read. The gate
+                        // (DESIGN-TALENTS T6) would otherwise silence talents 2 and 3 on the
+                        // session's own tier-0 heroes, and a study that read a zero there would be
+                        // measuring the gate rather than the talent. Tier reaches the fight through
+                        // nothing else, so this authorises the reading and moves no number in it.
+                        c.Ascension = Math.Max(c.Ascension, HeroInstance.TierUnlockingTalent(talent));
                     }
                     team.Add(c);
                 }

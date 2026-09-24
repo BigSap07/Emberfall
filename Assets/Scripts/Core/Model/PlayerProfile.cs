@@ -73,6 +73,66 @@ namespace Emberfall.Core.Model
         /// </summary>
         public int SelectedTalent;
 
+        /// <summary>
+        /// THE ASCENSION GATE, DERIVED. How many of this hero's three talent slots its ascension
+        /// tier has unlocked: one at tier 0, two at tier 1, three at tier 2 (DESIGN-TALENTS T6).
+        ///
+        /// Derived, never stored. Ascension is already save state and the mapping is a rule, so a
+        /// persisted "unlocked" field could only ever disagree with the tier that produced it -
+        /// and the first save that disagreed would be a hero whose card said one thing and whose
+        /// fight did another. Nothing about the gate is written to disk, which is why it needs no
+        /// save version: every save ever written already carries the tier it derives from.
+        ///
+        /// The two ceilings meet exactly and not by accident. HeroDef.MaxTalents is 3 and
+        /// StatMath.MaxAscensionTier reads 2 off balance.json's three-entry fiveStarLevelCaps, so
+        /// the last tier unlocks the last talent with nothing left over on either side. The Min is
+        /// what keeps that true if either number moves: a fourth tier would unlock nothing new
+        /// rather than name a slot no hero authors.
+        /// </summary>
+        public int TalentSlotsUnlocked
+        {
+            get { return Math.Min(HeroDef.MaxTalents, Math.Max(0, Ascension) + 1); }
+        }
+
+        /// <summary>Whether a 1-based talent slot is unlocked for this hero. False for 0, which is
+        /// "none" and is not a slot - clearing the pick is always allowed and never asks this.</summary>
+        public bool TalentSlotUnlocked(int selection)
+        {
+            return selection >= 1 && selection <= TalentSlotsUnlocked;
+        }
+
+        /// <summary>The ascension tier that unlocks a 1-based talent slot: 0, 1, 2. The inverse of
+        /// TalentSlotsUnlocked, and the only other place the mapping is written.</summary>
+        public static int TierUnlockingTalent(int selection)
+        {
+            return Math.Max(0, selection - 1);
+        }
+
+        /// <summary>
+        /// The talent this hero ACTUALLY FIGHTS WITH: the selection resolved through both the def
+        /// and the gate, or null. CombatSimulation.BuildUnits reads this and nothing else, so a
+        /// locked slot is as absent from the battle as an unselected one - not a quieter talent, no
+        /// passive, no extra draw, nothing the record can see.
+        ///
+        /// A locked selection is KEPT rather than cleared, exactly as an unresolvable
+        /// EquippedRelicId and an unauthored talent slot already are. The selection is the player's
+        /// statement of intent; the tier is a fact about the hero today. A hero that somehow drops
+        /// below the tier it picked at gets its pick back the moment it climbs again, and nothing
+        /// in between silently rewrote what the player asked for.
+        /// </summary>
+        public PassiveDef LiveTalent
+        {
+            get { return Def != null && TalentSlotUnlocked(SelectedTalent) ? Def.TalentAt(SelectedTalent) : null; }
+        }
+
+        /// <summary>The slot LiveTalent resolved, or 0. What a snapshot records: a published line
+        /// must name the talent it will be seen fighting with, and a kept-but-locked pick is not
+        /// that.</summary>
+        public int LiveTalentSelection
+        {
+            get { return LiveTalent != null ? SelectedTalent : 0; }
+        }
+
         [NonSerialized] public HeroDef Def;
 
         public UnitStats Stats

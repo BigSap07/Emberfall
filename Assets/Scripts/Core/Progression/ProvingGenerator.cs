@@ -141,7 +141,11 @@ namespace Emberfall.Core.Progression
                 // fighting without the talents that line runs was a quiet lie in exactly the place
                 // this mode's honesty rules care about most - the fight it offers is not the line
                 // it names. Generated rosters still carry no talent; see LoadoutUnit for why.
-                unit.SelectedTalent = hero.SelectedTalent;
+                //
+                // LiveTalentSelection rather than the raw pick, for that same honesty: a slot the
+                // hero's ascension has not unlocked does nothing in the player's own fights, so a
+                // ghost running it would be the same lie pointing the other way.
+                unit.SelectedTalent = hero.LiveTalentSelection;
                 for (int s = 0; s < hero.EquippedArmor.Length; s++)
                 {
                     string uid = hero.EquippedArmor[s];

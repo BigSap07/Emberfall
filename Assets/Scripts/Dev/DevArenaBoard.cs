@@ -103,6 +103,10 @@ namespace Emberfall.Dev
                 h.Level = Ally[i].Level;
                 h.Copies = 1;
                 h.SelectedTalent = Ally[i].Talent;
+                // The board names a talent outright, so the body it builds is ascended far enough
+                // to run it. A dev arena is a statement about a fight, not about a collection, and
+                // an unascended body would silently drop the talent the board was asked for.
+                h.Ascension = HeroInstance.TierUnlockingTalent(Ally[i].Talent);
                 h.EquippedRelicId = Ally[i].RelicId ?? "";
                 req.Team.Add(h);
             }

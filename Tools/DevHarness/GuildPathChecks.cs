@@ -607,6 +607,11 @@ namespace Emberfall.DevHarness
             bool talentsHeld = true;
             if (talented != null)
             {
+                // Ascended far enough to reach slot 2, because this check's subject is the LINE
+                // node and not the ascension gate: SelectTalent refuses a slot the hero has not
+                // unlocked (DESIGN-TALENTS T6), and a summoned hero starts at tier 0 with only
+                // talent 1 available. CheckTalentsAreLockedByAscension is where the gate is read.
+                talented.Ascension = HeroInstance.TierUnlockingTalent(2);
                 s.SwitchLine(0);
                 p.AssignToTeam(0, talented.Uid);
                 s.SelectTalent(talented, 1);

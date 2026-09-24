@@ -307,7 +307,11 @@ namespace Emberfall.Core.Cloud
                 if (h == null) continue;
                 SnapshotUnit u = new SnapshotUnit();
                 u.DefId = h.DefId;
-                u.SelectedTalent = h.SelectedTalent;
+                // What the hero would actually fight with. A dungeon record carries no ascension
+                // tier - NormaliseTeam keeps the def, the level and the pick and nothing else - so
+                // the gate is applied here, at capture, and never again. Everything downstream of
+                // this line treats the recorded pick as the truth about what fought.
+                u.SelectedTalent = h.LiveTalentSelection;
                 raw.Units.Add(u);
             }
             return NormaliseTeam(content, raw);
@@ -366,6 +370,21 @@ namespace Emberfall.Core.Cloud
                 hero.Def = content.GetHero(u.DefId);
                 hero.Level = u.Level;
                 hero.SelectedTalent = u.SelectedTalent;
+                // THE RECORD IS THE AUTHORITY ON WHAT FOUGHT, so this scratch instance is given
+                // the tier that authorises the pick it carries rather than the zero a default
+                // HeroInstance has. A snapshot records a def, a level and a talent and has never
+                // recorded an ascension tier, so re-deriving the gate here could only invent one -
+                // and a record fought yesterday with talent III would then replay without it,
+                // which is precisely the silent re-fight a replay may never be.
+                //
+                // Ascension is invisible to the fight in every other way: StatMath.ForHero builds
+                // the stat line from Level alone, and this line is already normalised to the
+                // dungeon's level. So the field is doing exactly one job here and no other.
+                //
+                // The gate is not skipped, it is applied earlier: LineOf records
+                // HeroInstance.LiveTalentSelection, so a pick the owner's ascension has not
+                // unlocked never enters a record and there is nothing here for it to replay.
+                hero.Ascension = HeroInstance.TierUnlockingTalent(u.SelectedTalent);
                 request.Team.Add(hero);
             }
             request.Profile = new PlayerProfile();
