@@ -295,10 +295,23 @@ namespace Emberfall.Core.Save
         /// that is only legal relative to a constant - a level to a cap, a bank to its maximum, a
         /// position to the content it points into - is migrated by any commit that moves the
         /// constant, whether or not a single key is added. The test is not "did the format change"
-        /// but "is every value the old format holds still legal under the new rules". Clamping
-        /// loses progress, and that was accepted: there were no players, and the alternative is a
-        /// format that silently carries illegal state until the next change to the constant makes
-        /// it visible again.
+        /// but "is every value the old format holds still legal under the new rules".
+        ///
+        /// POLICY: THIS CLAMP IS A PRE-LAUNCH SIMPLIFICATION, AND IT REVERSES VERSION 16'S DECISION.
+        /// Version 16 kept over-cap levels on purpose. This version takes them away, and that is
+        /// only acceptable because there are no players yet. The reasons it was taken: an over-cap
+        /// hero breaks the recommended-power math, because every recommendedPower is solved against a
+        /// roster that respects the caps. It also breaks the ascension preview, which prints the
+        /// Level it will move. Keeping it would also leave a format that silently carries illegal
+        /// state until the next change to the constant makes it visible again. Clamping loses
+        /// progress, and before launch nobody's progress is lost.
+        ///
+        /// AFTER LAUNCH THIS DOES NOT HOLD. A cap reduction then needs grandfathering (the hero
+        /// keeps its levels, which the ascension preview and the power math must then read
+        /// correctly) or compensation (the levels taken back are refunded in what bought them).
+        /// It must never be a silent clamp. Because the clamp below runs on every load, a cap
+        /// reduction shipped after launch WOULD be silently clamped by it. So before any such
+        /// reduction ships, this clamp has to be replaced by whichever of those two is chosen.
         ///
         /// The clamp is written as an invariant and not as a version-17 step, the way the version
         /// 4 -> 5 relic migration is: every load clamps, so a current save finds nothing to do and
