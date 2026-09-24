@@ -249,6 +249,11 @@ namespace Emberfall.EditorTools
         public long Earned;
         public readonly List<string> Owned = new List<string>();
 
+        /// <summary>Waymarks spent on guild tech rungs. 0012 subtracts the same thing from
+        /// guild_path_balance, so the in-memory purse has to as well or the capture run would
+        /// photograph money a player has already spent.</summary>
+        public long Spent;
+
         public LocalGuildPathBackend(ContentDatabase content) { _content = content; }
 
         public bool Ready { get { return true; } }
@@ -264,7 +269,7 @@ namespace Emberfall.EditorTools
                     GuildPathNodeDef n = _content.GuildPath.Node(Owned[i]);
                     if (n != null) spent += n.Cost;
                 }
-                return Earned - spent;
+                return Earned - spent - Spent;
             }
         }
 
@@ -297,6 +302,83 @@ namespace Emberfall.EditorTools
             JsonValue array = JsonValue.NewArray();
             array.Add(row);
             return GuildPathState.Read(JsonValue.Parse(array.ToJson(false)));
+        }
+    }
+
+    /// <summary>
+    /// A GUILD TECH TREE IN MEMORY, for the same run: a guild level, a member count and a rung
+    /// ledger held the way 0012 holds them, with 0012's refusals on a purchase - unknown track,
+    /// every rung bought, the guild level too low, not enough Waymarks. Like the two above, not the
+    /// proof of those rules; GuildTechChecks pins the server's numbers and the harness derives them.
+    ///
+    /// It shares the Path backend's purse deliberately, because 0012 does: a rung is bought out of
+    /// the same Waymark balance a Path node was, and a capture run in which the two disagreed would
+    /// photograph a screen no player can reach.
+    /// </summary>
+    public sealed class LocalGuildTechBackend : IGuildTechBackend
+    {
+        private readonly ContentDatabase _content;
+        private readonly LocalGuildPathBackend _purse;
+        public int Level;
+        public int Members = 3;
+        public bool CanPick = true;
+        public readonly Dictionary<string, int> Rungs = new Dictionary<string, int>();
+        public readonly Dictionary<string, string> Picks = new Dictionary<string, string>();
+
+        public LocalGuildTechBackend(ContentDatabase content, LocalGuildPathBackend purse)
+        {
+            _content = content;
+            _purse = purse;
+        }
+
+        public bool Ready { get { return true; } }
+        public string NotReadyReason { get { return ""; } }
+
+        public IEnumerator State(Action<GuildTechState, string> done)
+        {
+            done(Answer(), "");
+            yield break;
+        }
+
+        public IEnumerator BuyRung(string familyId, Action<GuildTechState, string> done)
+        {
+            GuildTechConfig tree = _content.GuildTech;
+            GuildTechFamilyDef family = tree.Family(familyId);
+            if (family == null) { done(null, "there is no guild tech track called " + familyId); yield break; }
+            int have;
+            Rungs.TryGetValue(familyId, out have);
+            if (have >= tree.RungsPerFamily) { done(null, "every rung on " + familyId + " is bought"); yield break; }
+            int want = have + 1, cost = tree.RungCost(want), needs = tree.LevelForRung(familyId, want);
+            if (needs > Level) { done(null, "rung " + want + " on " + familyId + " needs guild level " + needs); yield break; }
+            if (_purse.Balance < cost) { done(null, "rung " + want + " costs " + cost + " Waymarks and you have " + _purse.Balance); yield break; }
+            Rungs[familyId] = want;
+            _purse.Spent += cost;
+            done(Answer(), "");
+        }
+
+        public IEnumerator PickTalent(string familyId, string talentId, Action<GuildTechState, string> done)
+        {
+            GuildTechConfig tree = _content.GuildTech;
+            GuildTechFamilyDef family = tree.Family(familyId);
+            if (family == null || family.Talent(talentId) == null) { done(null, talentId + " is not a talent on the " + familyId + " track"); yield break; }
+            if (!CanPick) { done(null, "only a leader or an officer sets the guild talents"); yield break; }
+            int slot = tree.LevelForTalentSlot(familyId);
+            if (slot > Level) { done(null, "the " + familyId + " talent slot opens at guild level " + slot); yield break; }
+            Picks[familyId] = talentId;
+            done(Answer(), "");
+        }
+
+        /// <summary>Through the same reader the live answer goes through.</summary>
+        private GuildTechState Answer()
+        {
+            GuildTechState s = new GuildTechState();
+            s.Level = Level;
+            s.Members = Members;
+            s.CanPick = CanPick;
+            s.Xp = _content.GuildTech.XpForLevel(Members) * Level;
+            foreach (KeyValuePair<string, int> kv in Rungs) s.Rungs[kv.Key] = kv.Value;
+            foreach (KeyValuePair<string, string> kv in Picks) s.Talents[kv.Key] = kv.Value;
+            return GuildTechState.Read(JsonValue.Parse(s.Write().ToJson(false)));
         }
     }
 
@@ -360,6 +442,7 @@ namespace Emberfall.EditorTools
         private static string _pending;
         private static LocalGuildDungeonBackend _guild;
         private static LocalGuildPathBackend _path;
+        private static LocalGuildTechBackend _tech;
         private static GuildDungeonAttempt _miraLoss;
         private static BattleResult _miraLossFight;
         private static readonly List<string> _report = new List<string>();
@@ -459,6 +542,19 @@ namespace Emberfall.EditorTools
             _path.Earned = 3 * (pay.PayAttempt + pay.PayClear) + 4 * pay.PayBoardPoint;
             _path.Owned.Add("second-line");
             GuildPathBackends.Override = _path;
+
+            // A guild partway up the tree: past the four grants and the first talent slot, so the
+            // shot shows a track with a rung to buy, one that is still level-gated, and a talent
+            // slot that is open and running.
+            _tech = new LocalGuildTechBackend(content, _path);
+            _tech.Level = 5;
+            _tech.Members = 3;
+            if (content.GuildTech.Families.Count > 0 && content.GuildTech.Families[0].Talents.Count > 0)
+                _tech.Picks[content.GuildTech.Families[0].Id] = content.GuildTech.Families[0].Talents[0].Id;
+            // Enough for one rung and not for two, so BUY is live on one card and priced out on the
+            // next - which is the state worth photographing.
+            _path.Earned += content.GuildTech.RungCost(1) + content.GuildTech.RungCost(1) / 2;
+            GuildTechBackends.Override = _tech;
 
             int seed = GuildDungeon.SeedFor(LocalGuildDungeonBackend.Guild, _guild.Cycle);
             DeterministicRng rng = new DeterministicRng(0x6D17A);
@@ -680,48 +776,52 @@ namespace Emberfall.EditorTools
                 Settle = 2
             });
 
-            // ---- the Guild Path, and the lines it sells
+            // ---- the guild tech tree, the rungs it sells and the lines its levels grant
             long before = 0;
+            string firstFamily = app.Content.GuildTech.Families.Count > 0 ? app.Content.GuildTech.Families[0].Id : "line";
             steps.Add(new Step
             {
-                Name = "guild path",
-                Do = delegate { router.Show(ScreenId.GuildPath); },
-                Ready = delegate { return router.Current == router.GuildPath && !router.GuildPath.Loading; },
+                Name = "guild tech",
+                Do = delegate { router.Show(ScreenId.GuildTech); },
+                Ready = delegate { return router.Current == router.GuildTech && !router.GuildTech.Loading; },
                 Settle = 30,
-                Shot = "guild-path"
+                Shot = "guild-tech"
             });
             steps.Add(new Step
             {
-                Name = "unlock Lines Keep Talents",
+                Name = "buy the first rung",
                 Do = delegate
                 {
                     before = app.Session.Profile.Waymarks;
-                    Check(app.Session.OwnsGuildPathNode("second-line") && app.Session.LinesAllowed == 2,
-                          "path: the server's answer is on the profile - Second Line owned, two lines");
-                    Check(Press(Child(router.GuildPath.Root, "line-talents"), "Unlock"), "path: UNLOCK on Lines Keep Talents is pressable");
+                    // G9: the early guild levels granted the lines the Path used to sell, and the
+                    // profile carries them without anything having been bought.
+                    Check(app.Session.OwnsGuildPathNode("second-line") && app.Session.LinesAllowed >= 2,
+                          "tech: the guild level has granted the saved lines - " + app.Session.LinesAllowed + " lines");
+                    Check(Press(Child(Child(router.GuildTech.Root, firstFamily), "Rung1"), "Buy"),
+                          "tech: BUY on the first rung is pressable");
                 },
                 Ready = delegate { return Find(app.OverlayLayer, "Confirm") != null; },
                 Settle = 10
             });
             steps.Add(new Step
             {
-                Name = "confirm the unlock",
-                Do = delegate { Check(Press(app.OverlayLayer, "Confirm"), "path: the confirm dialog's UNLOCK is pressable"); },
-                Ready = delegate { return app.Session.OwnsGuildPathNode("line-talents") && !router.GuildPath.Busy; },
+                Name = "confirm the rung",
+                Do = delegate { Check(Press(app.OverlayLayer, "Confirm"), "tech: the confirm dialog's BUY is pressable"); },
+                Ready = delegate { return app.Session.RungsOn(firstFamily) >= 1 && !router.GuildTech.Busy; },
                 // Long enough for the toast to fade, as the chat shot above.
                 Settle = 420,
-                Shot = "guild-path-unlocked"
+                Shot = "guild-tech-bought"
             });
             steps.Add(new Step
             {
                 Name = "the banner, with its lines",
                 Do = delegate
                 {
-                    GuildPathNodeDef bought = app.Content.GuildPath.Node("line-talents");
-                    Check(bought != null && app.Session.Profile.Waymarks == before - bought.Cost,
-                          "path: the unlock cost exactly its price (" + before + " to " + app.Session.Profile.Waymarks + ")");
-                    Check(Find(Child(router.GuildPath.Root, "third-line"), "Unlock") == null,
-                          "path: with " + app.Session.Profile.Waymarks + " left, Third Line cannot be bought");
+                    int cost = app.Content.GuildTech.RungCost(1);
+                    Check(app.Session.Profile.Waymarks == before - cost,
+                          "tech: the rung cost exactly its price (" + before + " to " + app.Session.Profile.Waymarks + ")");
+                    Check(Find(Child(Child(router.GuildTech.Root, firstFamily), "Rung2"), "Buy") != null,
+                          "tech: rung 2 is drawn, and priced out rather than hidden");
                     router.Show(ScreenId.Formation);
                 },
                 Ready = delegate { return router.Current == router.Formation; },
@@ -1025,6 +1125,7 @@ namespace Emberfall.EditorTools
                 File.WriteAllLines(ReportPath(), _report.ToArray());
                 GuildDungeonBackends.Override = null;
                 GuildPathBackends.Override = null;
+                GuildTechBackends.Override = null;
                 SessionState.SetBool(ActiveKey, false);
                 SessionState.SetBool(RestoreKey, true);
                 Debug.Log("GuildDungeonShots: done");

@@ -304,8 +304,11 @@ $$;
 --
 -- Works for a player in no guild at all. They read level 0, no picks and whatever rungs they
 -- bought before they left - which still cost what they cost and are still theirs.
+-- Dropped first: `create or replace` cannot change a function's return type, so a table-returning
+-- function that later gains a column would refuse to re-apply. This keeps 0012 runnable twice.
+drop function if exists public.guild_tech_state();
 create or replace function public.guild_tech_state()
-returns table (level integer, xp bigint, members integer, rungs jsonb, talents jsonb)
+returns table (level integer, xp bigint, members integer, can_pick boolean, rungs jsonb, talents jsonb)
 language plpgsql
 security definer
 set search_path = public, pg_temp
@@ -313,19 +316,21 @@ as $$
 declare
   uid   uuid := auth.uid();
   mine  uuid;
+  mrol  text;
   cyc   integer := public.guild_dungeon_cycle_at(now());
   lvl   integer;
 begin
   if uid is null then
     raise exception 'guild_tech_state requires a signed-in user' using errcode = 'PT401';
   end if;
-  select guild_id into mine from public.guild_members where user_id = uid;
+  select guild_id, role into mine, mrol from public.guild_members where user_id = uid;
   lvl := coalesce(public.guild_tech_settle(mine), 0);
 
   return query
     select lvl,
            coalesce(public.guild_tech_xp(mine), 0)::bigint,
            coalesce((select count(*)::integer from public.guild_members m where m.guild_id = mine), 0),
+           coalesce(mrol in ('leader', 'officer'), false),
            coalesce((select jsonb_agg(jsonb_build_object('family', r.family_id, 'rungs', r.rungs))
                        from public.guild_tech_rungs r where r.user_id = uid and r.rungs > 0), '[]'::jsonb),
            coalesce((select jsonb_agg(jsonb_build_object('family', p.family_id, 'talent', p.talent_id))
@@ -379,8 +384,9 @@ as $$
    where f.id = p_family;
 $$;
 
+drop function if exists public.guild_tech_buy_rung(text);
 create or replace function public.guild_tech_buy_rung(p_family text)
-returns table (level integer, xp bigint, members integer, rungs jsonb, talents jsonb)
+returns table (level integer, xp bigint, members integer, can_pick boolean, rungs jsonb, talents jsonb)
 language plpgsql
 security definer
 set search_path = public, pg_temp
@@ -451,8 +457,9 @@ $$;
 -- The new pick is written against the NEXT cycle, so this week's fights are fought with the talent
 -- the guild committed to last week. Re-picking before the cycle rolls replaces the pending row
 -- rather than stacking one, which is what the primary key on (guild, family, from_cycle) does.
+drop function if exists public.guild_tech_pick_talent(text, text);
 create or replace function public.guild_tech_pick_talent(p_family text, p_talent text)
-returns table (level integer, xp bigint, members integer, rungs jsonb, talents jsonb)
+returns table (level integer, xp bigint, members integer, can_pick boolean, rungs jsonb, talents jsonb)
 language plpgsql
 security definer
 set search_path = public, pg_temp

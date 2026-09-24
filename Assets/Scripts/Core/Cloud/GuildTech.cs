@@ -35,6 +35,13 @@ namespace Emberfall.Core.Cloud
         /// next level's cost with the same square root the server charged.</summary>
         public int Members;
 
+        /// <summary>
+        /// Whether THIS account may set the guild's talents: a leader or an officer (G4). The
+        /// SERVER decides it and 0012 enforces it; this is only so the screen can say "your
+        /// guild's choice" to a member instead of offering a button that will be refused.
+        /// </summary>
+        public bool CanPick;
+
         /// <summary>Rungs this member has bought, by family id. Absent reads as none.</summary>
         public readonly Dictionary<string, int> Rungs = new Dictionary<string, int>();
 
@@ -70,7 +77,7 @@ namespace Emberfall.Core.Cloud
         public GuildTechState Clone()
         {
             GuildTechState c = new GuildTechState();
-            c.Level = Level; c.Xp = Xp; c.Members = Members;
+            c.Level = Level; c.Xp = Xp; c.Members = Members; c.CanPick = CanPick;
             foreach (KeyValuePair<string, int> kv in Rungs) c.Rungs[kv.Key] = kv.Value;
             foreach (KeyValuePair<string, string> kv in Talents) c.Talents[kv.Key] = kv.Value;
             return c;
@@ -86,6 +93,7 @@ namespace Emberfall.Core.Cloud
             s.Level = Math.Max(0, row.GetInt("level", 0));
             s.Xp = Math.Max(0, row.GetLong("xp", 0));
             s.Members = Math.Max(0, row.GetInt("members", 0));
+            s.CanPick = row.GetBool("can_pick", false);
 
             List<JsonValue> rungs = row.GetList("rungs");
             for (int i = 0; i < rungs.Count; i++)
@@ -110,6 +118,7 @@ namespace Emberfall.Core.Cloud
             o.Set("level", Level);
             o.Set("xp", Xp);
             o.Set("members", Members);
+            o.Set("can_pick", CanPick);
             JsonValue rungs = JsonValue.NewArray();
             foreach (KeyValuePair<string, int> kv in Rungs)
             {

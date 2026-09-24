@@ -147,14 +147,15 @@ namespace Emberfall.UI.Screens
                           320f, 54f, new Vector2(1f, 1f));
             viewAll.OnClick(OpenCollection);
 
-            // The Guild Path sells the lines this row switches between, and it is the player's own
-            // whatever guild they are in or have left - so its door is here, on a screen every
-            // player has, rather than only inside the guild.
-            UIButton path = EmberforgeUI.Button("GuildPath", Root, "GUILD PATH", UITheme.FontTiny,
+            // The guild tech tree grants the lines this row switches between, at its early levels
+            // (G9), and the rungs on it are the player's own whatever guild they are in or have
+            // left - so its door is here, on a screen every player has, rather than only inside
+            // the guild.
+            UIButton path = EmberforgeUI.Button("GuildTech", Root, "GUILD TECH", UITheme.FontTiny,
                                                 ForgeButtonKind.Secondary);
             UIBuilder.Box(path.Root, -(UITheme.ScreenPadding + 340f), -(UITheme.TopBarHeight + RosterLabelTop - 12f),
                           260f, 54f, new Vector2(1f, 1f));
-            path.OnClick(delegate { App.Audio.Tap(); Router.Show(ScreenId.GuildPath); });
+            path.OnClick(delegate { App.Audio.Tap(); Router.Show(ScreenId.GuildTech); });
 
             ScrollRect scroll;
             _rosterList = UIBuilder.ScrollList("Roster", Root, out scroll, 10f, new RectOffset(0, 0, 4, 32));
