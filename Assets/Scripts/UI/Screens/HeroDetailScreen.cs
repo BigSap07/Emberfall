@@ -181,6 +181,7 @@ namespace Emberfall.UI.Screens
         private UIButton _levelUpTenButton;
         private UIButton _obtainButton;
         private Text _capNote;
+        private UIButton _fusionButton;
 
         /// <summary>True while this screen is showing a prologue hero. Cleared by SetHero and
         /// SetLockedHero, the same discipline BattleScreen's mode setters use, so the three ways
@@ -442,6 +443,17 @@ namespace Emberfall.UI.Screens
                                                     ForgeButtonKind.Secondary);
             UIBuilder.Box(_levelUpTenButton.Root, 320f, 14f, 340f, 88f, new Vector2(0.5f, 0f));
             _levelUpTenButton.OnClick(delegate { LevelUp(10); });
+
+            // THE DOOR THE CAP NOTE WAS ALREADY POINTING AT. The note under this bar has told a
+            // maxed hero's owner to ascend since the cap landed, and until the fusion page existed
+            // there was nowhere for that sentence to send them - GameSession.Ascend had no caller
+            // outside the harness. It sits here rather than up on the banner because this bar is
+            // where levelling is bought, and ascension is what levelling turns into at the cap.
+            _fusionButton = EmberforgeUI.Button("Fusion", bar, "ASCEND", UITheme.FontSmall,
+                                                ForgeButtonKind.Secondary);
+            UIBuilder.Box(_fusionButton.Root, -UITheme.ScreenPadding, 14f, 300f, 88f,
+                          new Vector2(1f, 0f));
+            _fusionButton.OnClick(OpenFusion);
 
             _obtainButton = EmberforgeUI.Button("Obtain", bar, "OPEN THE RIFT", UITheme.FontHeading,
                                                 ForgeButtonKind.Primary);
@@ -988,13 +1000,37 @@ namespace Emberfall.UI.Screens
 
             // A gold price under a prologue hero would be a lie twice over: the player cannot buy
             // it, and the gold quoted is an account that does not exist yet in the story.
+            // THE CAP NOTE NAMES A DOOR THAT NOW EXISTS, and names the right one for this hero.
+            // A five-star at its cap is told what ascending costs, in copies, because that is the
+            // number that decides whether the button under it does anything. A hero below five
+            // stars is told the opposite - it never ascends (F1) - and pointed at the half of the
+            // ladder it IS on: it is fodder for a conversion, and the same button goes there.
+            int copiesNeeded = StatMath.AscensionCopiesFor(session.Balance, _hero.Ascension);
             _capNote.text = _prologueView
                 ? "A thousand years of levels. None of them yours to spend."
                 : atCap
                 ? (def.Stars >= 5
-                    ? "Ascend with copies of this hero to lift the level cap."
-                    : "Below five stars, this is as far as a hero levels.")
+                    ? (copiesNeeded >= 0
+                        ? "Level cap reached. Ascend with " + copiesNeeded + " more cop"
+                          + (copiesNeeded == 1 ? "y" : "ies") + " of " + def.Name
+                          + " to lift it  -  you hold " + (_hero.Copies - 1) + " to spare."
+                        : "Level cap reached at the highest ascension this game authors.")
+                    : "Below five stars, this is as far as a hero levels. It never ascends - but it"
+                      + " is worth " + session.FodderPoints(def) + " points towards converting"
+                      + " fodder into a five-star.")
                 : "Next level costs " + cost + " gold  -  you hold " + session.Profile.Gold;
+
+            // Fusion is offered on every owned hero, not only a capped one: a five-star short of
+            // its cap is still the hero whose copies the player is counting, and a low-star is
+            // fodder whether or not it has stopped levelling. What changes is which word the
+            // button uses, because the two halves of the ladder are two different errands.
+            bool fusable = !_prologueView;
+            _fusionButton.Root.gameObject.SetActive(fusable);
+            if (fusable)
+            {
+                _fusionButton.SetText(def.Stars >= 5 ? "ASCEND" : "CONVERT");
+                _fusionButton.Interactable = true;
+            }
 
             int deployedSlot = session.Profile.TeamSlotOf(_hero.Uid);
             _slotStatus.text = deployedSlot >= 0
@@ -1117,6 +1153,8 @@ namespace Emberfall.UI.Screens
         {
             if (_lockedDef == null) return;
             RefreshTalentDoor();
+            // No HeroInstance behind a locked page, so there is nothing to ascend or to spend.
+            if (_fusionButton != null) _fusionButton.Root.gameObject.SetActive(false);
             _levelLabel.text = "";
             _powerLabel.text = "LOCKED";
             _attunementLabel.text = "";
@@ -1178,6 +1216,17 @@ namespace Emberfall.UI.Screens
             App.Audio.Tap();
             Router.Talents.SetHero(_hero);
             Router.Show(ScreenId.Talents);
+        }
+
+        /// <summary>Opens the fusion page on this hero. FusionScreen.ShowHero picks the half of
+        /// the ladder the hero is actually on - ascension for a five-star, conversion for anything
+        /// below - so this does not have to decide, and cannot decide differently from it.</summary>
+        private void OpenFusion()
+        {
+            if (_hero == null || _prologueView) return;
+            App.Audio.Tap();
+            Router.Fusion.ShowHero(_hero);
+            Router.Show(ScreenId.Fusion);
         }
 
         private void RefreshTalentDoor()

@@ -53,6 +53,42 @@ namespace Emberfall.Core.Session
         public int LevelBefore;
     }
 
+    /// <summary>
+    /// What one ascension WOULD do, read without doing it (GameSession.PreviewAscension).
+    ///
+    /// It exists so a screen can say what the step costs and what it moves BEFORE the player
+    /// commits, and so it can say it without owning a second copy of the arithmetic: Ascend and
+    /// this share AscensionLanding, so the level the preview promises is the level the ascension
+    /// lands on by construction rather than by two functions agreeing.
+    ///
+    /// TierLevelAfter is the figure the warning is about. A tier level resets to 1 (F6) while the
+    /// Level it stands at goes UP, and a page that showed only one of those two would either
+    /// hide the reset or invent a loss that does not happen.
+    /// </summary>
+    public sealed class AscensionPreview
+    {
+        /// <summary>True when the step can be taken right now. False carries Blocker.</summary>
+        public bool Possible;
+        /// <summary>Why not, or empty. GameSession.AscensionBlocker's own sentence.</summary>
+        public string Blocker = "";
+        /// <summary>False when this hero has no next tier at all - a hero below five stars, or
+        /// one already at the top. There is nothing to preview, and the numbers below repeat the
+        /// present rather than pretending at a future.</summary>
+        public bool HasNextTier;
+        public int FromTier;
+        public int ToTier;
+        /// <summary>Copies beyond the hero's own body the step spends, and how many it has to
+        /// spare. HeroInstance.Copies counts the hero itself, so the spare is Copies - 1.</summary>
+        public int CopiesNeeded;
+        public int CopiesSpare;
+        public int LevelBefore;
+        public int LevelAfter;
+        public int TierLevelBefore;
+        public int TierLevelAfter;
+        public int CapBefore;
+        public int CapAfter;
+    }
+
     /// <summary>What one conversion did (GameSession.Convert).</summary>
     public sealed class ConversionResult
     {
@@ -393,20 +429,78 @@ namespace Emberfall.Core.Session
             result.FromTier = hero.Ascension;
             result.LevelBefore = TierLevelOf(hero);
             result.CopiesSpent = cost;
-            int before = hero.Level;
+            int landing = AscensionLanding(hero, hero.Ascension + 1);
             hero.Copies -= cost;
             hero.Ascension++;
-            int landing = StatMath.TierBaseLevel(Balance, hero.Ascension);
-            if (landing <= before)
-            {
-                int tierLevel = StatMath.TierLevelOf(Balance, hero.Ascension, before) + 1;
-                landing = Math.Max(before, Math.Min(HeroLevelCapOf(hero), StatMath.LevelAt(Balance, hero.Ascension, tierLevel)));
-            }
             hero.Level = landing;
             result.ToTier = hero.Ascension;
             result.Success = true;
             result.Message = "Ascended to tier " + hero.Ascension + ".";
             return result;
+        }
+
+        /// <summary>
+        /// The Level this hero would stand at once it reached `toTier`: the first step of that
+        /// tier, and the rule for the one hero that is already past it.
+        ///
+        /// Extracted from Ascend rather than copied out of it, because PreviewAscension has to
+        /// promise this number before the step is taken and a second copy of it is a second
+        /// answer waiting to disagree. Reads the hero and writes nothing.
+        /// </summary>
+        private int AscensionLanding(HeroInstance hero, int toTier)
+        {
+            int before = hero.Level;
+            int landing = StatMath.TierBaseLevel(Balance, toTier);
+            if (landing <= before)
+            {
+                int tierLevel = StatMath.TierLevelOf(Balance, toTier, before) + 1;
+                landing = Math.Max(before, Math.Min(StatMath.CapLevel(Balance, StarsOf(hero), toTier),
+                                                    StatMath.LevelAt(Balance, toTier, tierLevel)));
+            }
+            return landing;
+        }
+
+        /// <summary>
+        /// What ascending this hero would cost and what it would move, WITHOUT moving anything.
+        ///
+        /// The fusion screen's whole job on the ascension side is to say this before the player
+        /// spends, and the tier level is why: it goes back to 1 (F6) while the Level it stands at
+        /// and the cap over it both rise. A page that announced only the reset would be reporting
+        /// a loss the game does not inflict, and one that announced only the rise would be hiding
+        /// the number the player is about to watch change.
+        ///
+        /// Nothing here decides anything. AscensionBlocker is still the rule, AscensionLanding is
+        /// still the arithmetic, and this reads both.
+        /// </summary>
+        public AscensionPreview PreviewAscension(HeroInstance hero)
+        {
+            AscensionPreview preview = new AscensionPreview();
+            if (hero == null || hero.Def == null) { preview.Blocker = "No hero selected."; return preview; }
+
+            preview.FromTier = hero.Ascension;
+            preview.ToTier = hero.Ascension;
+            preview.LevelBefore = hero.Level;
+            preview.LevelAfter = hero.Level;
+            preview.TierLevelBefore = TierLevelOf(hero);
+            preview.TierLevelAfter = preview.TierLevelBefore;
+            preview.CapBefore = HeroLevelCapOf(hero);
+            preview.CapAfter = preview.CapBefore;
+            preview.CopiesSpare = hero.Copies - 1;
+
+            string blocker = AscensionBlocker(hero);
+            preview.Blocker = blocker != null ? blocker : "";
+            preview.Possible = blocker == null;
+
+            int need = StatMath.AscensionCopiesFor(Balance, hero.Ascension);
+            if (hero.Def.Stars < 5 || need < 0) return preview;
+
+            preview.HasNextTier = true;
+            preview.CopiesNeeded = need;
+            preview.ToTier = hero.Ascension + 1;
+            preview.LevelAfter = AscensionLanding(hero, preview.ToTier);
+            preview.TierLevelAfter = StatMath.TierLevelOf(Balance, preview.ToTier, preview.LevelAfter);
+            preview.CapAfter = StatMath.CapLevel(Balance, StarsOf(hero), preview.ToTier);
+            return preview;
         }
 
         // ------------------------------------------------------------------ conversion
@@ -443,6 +537,26 @@ namespace Emberfall.Core.Session
                 if (h.Stars == 5 && h.Aspect == aspect && h.Fusable) pool.Add(h);
             }
             return pool;
+        }
+
+        /// <summary>
+        /// How many heroes below five stars this aspect authors AT ALL - the fodder pool the
+        /// roster gives it, not the bodies the player holds.
+        ///
+        /// It is the figure the seed rule is made of. F9: Umbra and Lumen author four low-star
+        /// heroes each against fourteen for the other four aspects, which is why their recipe
+        /// takes one seed of the aspect and generic fodder for the rest. A screen that states the
+        /// rule without this number is asking the player to take the rule on faith.
+        /// </summary>
+        public int ConversionFodderRoster(Aspect aspect)
+        {
+            int n = 0;
+            for (int i = 0; i < Content.Heroes.Count; i++)
+            {
+                HeroDef h = Content.Heroes[i];
+                if (h.Aspect == aspect && h.Stars >= 1 && h.Stars < 5) n++;
+            }
+            return n;
         }
 
         /// <summary>

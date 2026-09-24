@@ -34,7 +34,8 @@ namespace Emberfall.UI
         GuildFloor,
         GuildDungeonResult,
         GuildDungeonBoards,
-        GuildPath
+        GuildPath,
+        Fusion
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -125,6 +126,7 @@ namespace Emberfall.UI
         public Screens.GuildDungeonResultScreen GuildDungeonResult;
         public Screens.GuildDungeonBoardsScreen GuildDungeonBoards;
         public Screens.GuildPathScreen GuildPath;
+        public Screens.FusionScreen Fusion;
 
         public UIScreen Current { get; private set; }
 
@@ -179,6 +181,12 @@ namespace Emberfall.UI
             // The Guild Path: the player's own, so reached from the formation screen, where its
             // lines are switched, and from the dungeon that pays for it.
             GuildPath = Create<Screens.GuildPathScreen>();
+
+            // Fusion and ascension: the one page both halves of DESIGN-FUSION's ladder are spent
+            // on. Reached from the hero page - from the cap note of a maxed hero, which is the
+            // moment the player is told levelling has stopped - and from the talent page's locked
+            // cards, which is the moment they are told what would open one.
+            Fusion = Create<Screens.FusionScreen>();
         }
 
         /// <summary>

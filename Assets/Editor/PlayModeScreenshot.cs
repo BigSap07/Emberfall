@@ -168,6 +168,14 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/Talents", false, 74)]
         public static void CaptureTalentsScreen() { Begin("Screen:Talents"); }
 
+        // Two entries for one screen, because the fusion page's two tabs are two layouts that
+        // share only their header and their action bar.
+        [MenuItem("Emberfall/Capture/Fusion (ascend)", false, 75)]
+        public static void CaptureFusionScreen() { Begin("Screen:Fusion"); }
+
+        [MenuItem("Emberfall/Capture/Fusion (convert)", false, 76)]
+        public static void CaptureFusionConvertScreen() { Begin("Screen:FusionConvert"); }
+
         // The three account screens, through the same generic path. What this captures is each
         // one's OFFLINE state - the router builds them whether or not a cloud exists, and with no
         // network they render "no account service" or "offline" rather than a blank. That state is
@@ -521,6 +529,7 @@ namespace Emberfall.EditorTools
             string[] all = { "MainMenu", "Campaign", "Heroes", "HeroDetail", "Talents", "Formation", "Summon",
                              "Forge", "Inventory", "RelicShop", "Events", "Recital", "Proving",
                              "Profile", "Account", "Friends", "FriendTeam", "Settings",
+                             "Fusion", "FusionConvert",
                              "Guild", "GuildRequests", "GuildChat", "Battle", "Result",
                              "Claim", "Sheet", "Menu", "Gallery", "Dialog", "Toast", "ToastLong" };
             string[] list = which == "ALL" ? all : new string[] { which };
@@ -578,6 +587,8 @@ namespace Emberfall.EditorTools
                     case "Heroes": id = ScreenId.Heroes; break;
                     case "HeroDetail": id = ScreenId.HeroDetail; break;
                     case "Talents": id = ScreenId.Talents; break;
+                    case "Fusion": id = ScreenId.Fusion; break;
+                    case "FusionConvert": id = ScreenId.Fusion; break;
                     case "Formation": id = ScreenId.Formation; break;
                     case "Summon": id = ScreenId.Summon; break;
                     case "Forge": id = ScreenId.Forge; break;
@@ -666,6 +677,29 @@ namespace Emberfall.EditorTools
                         return;
                     }
                     app.Router.Talents.SetHero(subject);
+                }
+
+                // THE FUSION PAGE IS TWO LAYOUTS AND NEEDS TWO SUBJECTS, because its two tabs
+                // share nothing but the header and the action bar. The ascend tab wants a
+                // five-star with the copies its next tier costs, so the cost line reads as met and
+                // the before-and-after rows carry real figures rather than a blocked card. The
+                // convert tab wants a low-star of a SEED aspect, because the seed rule is the one
+                // thing on that tab a capture can disprove and only Umbra and Lumen show it.
+                //
+                // Both are seeded through GrantHeroDirect, the same door the summon's duplicate
+                // path uses, for the reason PopulateItems rolls armour through ArmorRoller: a
+                // screenshot of state no code path produces is evidence of nothing.
+                if (name == "Fusion" || name == "FusionConvert")
+                {
+                    HeroInstance subject = name == "Fusion" ? FusionAscendSubject(app)
+                                                            : FusionConvertSubject(app);
+                    if (subject == null)
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: no subject for " + name + ", skipping it.");
+                        SessionState.SetInt(StageKey, slot + 1);
+                        return;
+                    }
+                    app.Router.Fusion.ShowHero(subject);
                 }
 
                 // THE ITEM SCREENS NEED ITEMS. A fresh profile owns no armour and no relics, so
@@ -916,6 +950,68 @@ namespace Emberfall.EditorTools
             }
             app.Session.SelectTalent(subject, 1);
             return subject;
+        }
+
+        /// <summary>
+        /// A five-star holding the copies its next ascension costs, so the ascend tab photographs
+        /// a card that can actually be pressed.
+        ///
+        /// The copies are granted, the ascension is NOT taken: the frame worth having is the one
+        /// before the step, because the before-and-after rows and the level-reset warning are the
+        /// whole of what that tab exists to say and they are gone the moment it is pressed.
+        ///
+        /// Returns null when the profile owns no five-star at all, and the caller skips the shot.
+        /// </summary>
+        private static HeroInstance FusionAscendSubject(GameApp app)
+        {
+            List<HeroInstance> owned = app.Session.Profile.Heroes;
+            if (owned == null) return null;
+            HeroInstance subject = null;
+            for (int i = 0; i < owned.Count && subject == null; i++)
+                if (owned[i].Def != null && owned[i].Def.Stars >= 5) subject = owned[i];
+            if (subject == null) return null;
+
+            for (int guard = 0; guard < 8 && app.Session.AscensionBlocker(subject) != null; guard++)
+                app.Session.GrantHeroDirect(subject.Def, 0);
+            if (app.Session.AscensionBlocker(subject) != null)
+                Debug.LogWarning("PlayModeScreenshot: " + subject.Def.Name + " still cannot ascend - "
+                                 + app.Session.AscensionBlocker(subject)
+                                 + ". Shooting the ascend tab blocked, which is also a state it has.");
+            return subject;
+        }
+
+        /// <summary>
+        /// A low-star hero of a SEED aspect, with generic fodder beside it, so the convert tab
+        /// photographs the rule that only Umbra and Lumen carry.
+        ///
+        /// FusionScreen.ShowHero sends anything below five stars to the convert tab on its own
+        /// aspect, so handing it one of these is the same door a player comes through from the
+        /// hero page - not a second way in written for the camera.
+        ///
+        /// The fodder is granted rather than assumed: a fresh profile owns a handful of heroes and
+        /// an empty grid proves the empty state and nothing about the cells, the points meter or
+        /// the not-this-aspect tag, which are the whole of that tab.
+        /// </summary>
+        private static HeroInstance FusionConvertSubject(GameApp app)
+        {
+            List<HeroDef> heroes = app.Session.Content.Heroes;
+            HeroInstance seed = null;
+            for (int i = 0; i < heroes.Count; i++)
+            {
+                HeroDef def = heroes[i];
+                if (def.Stars >= 5 || def.Stars < 1) continue;
+                bool seedAspect = app.Session.IsSeedAspect(def.Aspect);
+                // Two copies of the seed and one of everything else: the seed needs a spare body
+                // to be offerable at all, and one of each of the rest fills the grid without
+                // making the shot a picture of a collection nobody has.
+                app.Session.GrantHeroDirect(def, 0);
+                if (seedAspect)
+                {
+                    app.Session.GrantHeroDirect(def, 0);
+                    if (seed == null) seed = app.Session.Profile.FindHeroByDefId(def.Id);
+                }
+            }
+            return seed;
         }
 
         /// <summary>
