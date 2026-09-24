@@ -34,10 +34,20 @@ namespace Emberfall.DevHarness
     /// </summary>
     internal static partial class Program
     {
-        /// <summary>Heroes per family the talents are read on. Deterministic and evenly spaced
-        /// through the family's roles; the study runs more of them than the gate.</summary>
-        private const int GtSubjectsPerFamilyGate = 3;
-        private const int GtSubjectsPerFamilyStudy = 6;
+        /// <summary>
+        /// Heroes per family the talents are read on. Deterministic and evenly spaced through the
+        /// family's roles.
+        ///
+        /// THE GATE AND THE STUDY READ THE SAME HEROES. The gate used to read three and the study
+        /// six, and the two then disagreed about the content in front of them: at three subjects
+        /// Grace got one Mender, that Mender's kit does not heal in the pinned line, and Steady
+        /// Hands - a clause that fires on a heal - read INERT while the study read it +13.0% duel
+        /// and +29.3% ladder on the same file. A gate that fails what its own study passes is not a
+        /// stricter gate, it is a different question. The sample sizes below the subject count
+        /// still differ, because those buy precision rather than deciding which heroes are looked
+        /// at, and a wider interval only ever makes this gate more forgiving.
+        /// </summary>
+        private const int GtSubjectsPerFamily = 6;
 
         private static readonly FieldInfo _gtTalentsField = typeof(HeroDef).GetField("Talents");
 
@@ -113,7 +123,7 @@ namespace Emberfall.DevHarness
                 return;
             }
 
-            int subjects = study ? GtSubjectsPerFamilyStudy : GtSubjectsPerFamilyGate;
+            int subjects = GtSubjectsPerFamily;
             int nDuel = study ? 500 * Math.Max(1, _parScale) : 240;
             int perStage = study ? 15 * Math.Max(1, _parScale) : 3;
 
@@ -265,38 +275,20 @@ namespace Emberfall.DevHarness
                   + "talents has not been given a choice"
                   + (twins.Count > 0 ? " - " + string.Join(", ", twins.ToArray()) : ""));
 
-            // THE OTHER WAY A CHOICE CAN BE FAKE. Three options nobody can tell apart is one
-            // failure; three options where one is plainly the best is the same failure wearing the
-            // opposite coat, and it is the more likely one, because a talent authored bigger reads
-            // as a talent authored better. A family's strongest option may be worth at most this
-            // much more than its weakest, on the ladder - the arena where a guild actually fights.
+            // THE OTHER WAY A CHOICE CAN BE FAKE - three options where one is plainly the best -
+            // IS NOT ASKED HERE ANY MORE, and the rule that used to ask it is gone.
             //
-            // Three times, not two, and the slack is deliberate: these are different SHAPES, and a
-            // reactive clause that only pays in a long fight should not have to measure the same as
-            // a battle-start one in order to be worth offering. What it may not do is make the
-            // other two pointless.
-            const double dominates = 3.0;
-            List<string> lopsided = new List<string>();
-            for (int f = 0; f < tree.Families.Count; f++)
-            {
-                List<GtTalentRow> mine = rows.FindAll(r => r.Family == tree.Families[f].Name);
-                if (mine.Count < 2) continue;
-                double best = 0, worst = double.MaxValue;
-                string bestName = "", worstName = "";
-                for (int i = 0; i < mine.Count; i++)
-                {
-                    double v = Math.Abs(mine[i].EqLadder);
-                    if (v > best) { best = v; bestName = mine[i].Name; }
-                    if (v < worst) { worst = v; worstName = mine[i].Name; }
-                }
-                if (worst > 0 && best / worst > dominates)
-                    lopsided.Add(tree.Families[f].Name + ": " + bestName + " " + GtEq(best) + " against " + worstName + " "
-                                 + GtEq(worst) + " (x" + F(best / worst, "0.0") + ")");
-            }
-            Check(lopsided.Count == 0,
-                  "G4 - no family has an option that plainly dominates its siblings: the strongest is within x" + F(dominates, "0")
-                  + " of the weakest on the ladder"
-                  + (lopsided.Count > 0 ? " - " + string.Join("; ", lopsided.ToArray()) : ""));
+            // It capped a family's strongest option at three times its weakest on this ladder. It
+            // passed every family while Line read Dig In +39.1, Hold the Wall +25.0 and Answer in
+            // Kind +17.6 - inside x3, and Dig In still the pick every time. A ratio cannot tell a
+            // real choice from a dominated one, because it is a reading of SIZE and the question is
+            // about WHEN. One arena has only one answer to give.
+            //
+            // GuildTalentThemes.cs (G10) asks it in the dimension that can answer: every talent
+            // across every floor theme and condition, in the guild dungeon, read by the dungeon's
+            // own board order. A family passes when at least two of its talents are the best pick
+            // on some theme. See that file's header for why the bar it uses is derived rather than
+            // authored.
 
             if (study)
             {

@@ -33,6 +33,7 @@ namespace Emberfall.DevHarness
             bool guildConditions = false;
             bool guildPath = false;
             bool guildTech = false;
+            bool guildTalentThemes = false;
             bool reconcile = false;
             int wallStudy = 0;
             bool lineCalibration = false;
@@ -61,6 +62,7 @@ namespace Emberfall.DevHarness
                 if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
                 if (args[i] == "--guild-path") { guildPath = true; continue; }
                 if (args[i] == "--guild-tech") { guildTech = true; continue; }
+                if (args[i] == "--guild-talent-themes") { guildTalentThemes = true; continue; }
                 if (args[i] == "--tempo-study")
                 {
                     tempoStudy = true;
@@ -157,6 +159,16 @@ namespace Emberfall.DevHarness
             // the instrument guild-tech.json's rung size, prices and level curve are derived from,
             // and where every guild talent is read at parity.
             if (guildTech) return RunGuildTechStudy(content, contentDir);
+            // Every guild talent across the floor themes and conditions (GuildTalentThemes.cs), on
+            // its own. The same reading --guild-tech ends with, split out because authoring a
+            // family's three options is an iteration and the derivation above it does not move.
+            if (guildTalentThemes)
+            {
+                Line("GUILD TALENTS ACROSS THE FLOOR THEMES - claude/DESIGN-GUILD-TECH.md G10");
+                Line("");
+                GuildTalentThemes(content, true);
+                return 0;
+            }
 
             // The fidelity pass and the star band alone, for a content pass that is moving kits
             // against their sentences and wants both readings without the rest of the harness.

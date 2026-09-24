@@ -45,7 +45,7 @@
     { "level": 4, "node": "fourth-line" }
   ],
 
-  // THE FOUR FAMILIES. Names are placeholders until Pinoy names them from the world's vocabulary.
+  // THE FOUR FAMILIES.
   //
   // A family is a set of ROLES and nothing else (G1). Every role belongs to exactly one family and
   // every family holds at least one role; the gate fails the build otherwise, because a role in
@@ -61,14 +61,34 @@
   //
   // THE TALENTS ARE PassiveDefs (G3) - the same triggers, effects, conditions, overrides and
   // appends a hero talent is authored in, read by the same parser and appended to the unit at the
-  // same place in CombatSimulation. There is no guild-talent engine. Each family offers three, and
-  // they are deliberately three DIFFERENT SHAPES rather than three sizes of one thing: a front-
-  // loaded one, a reactive one and a conditional one, so the argument about which to run is about
-  // how the guild wants its fights to go (G4) and not about which number is biggest.
+  // same place in CombatSimulation. There is no guild-talent engine.
   //
-  // Every one of them is graded by the instrument that grades hero talents, at 100% of recommended
-  // power against the 1%-of-Attack material floor (G8). Run `DevHarness.exe --guild-tech` for the
-  // reading; the gate fails the build for one that cannot be felt.
+  // EACH FAMILY'S THREE ANSWER DIFFERENT FLOORS (G10), and that is the whole of why there are
+  // three. The first cut of this file offered "a front-loaded one, a reactive one and a
+  // conditional one" - three SHAPES - and graded the three in one arena, where shape is invisible
+  // and only size reads. Every family came back with one option ahead on every floor, and a rule
+  // capping the strongest at three times the weakest passed all four of them while a guild would
+  // still have taken the biggest number every time. What is authored now is not a shape but an
+  // ANSWER: a trigger whose RATE, or a target whose WORTH, is decided by what the floor is made of.
+  //
+  //   Swarm      five minions - things die, and many small blows land
+  //   Wall       one body that holds the front - the same target, for a long time
+  //   Hunt       enemies pick their mark, and the mark is the backline
+  //   Attrition  the whole line is hit at once, round after round
+  //   Champion   one raised elite - few blows, each of them enormous
+  //
+  // So a retaliation is a Swarm answer because it fires once per blow taken; a stacking wound is a
+  // Wall and Champion answer because the stacks need a body that lives long enough to carry them;
+  // a Taunt is a Hunt answer because it is the only thing that argues with a chooser; a
+  // charge-based ward is a Champion answer because a charge is worth whatever the blow it ate was
+  // worth. None of that is visible at parity in one arena, and all of it is visible across the
+  // themes.
+  //
+  // Every one of them is still graded by the instrument that grades hero talents, at 100% of
+  // recommended power against the 1%-of-Attack material floor (G8), AND across every floor theme
+  // and condition by GuildTalentThemes.cs (G10). Run `DevHarness.exe --guild-tech` for both, or
+  // `--guild-talent-themes` for the second alone; the gate fails the build for a talent that
+  // cannot be felt and for a family whose three are not a choice.
   "families": [
     {
       "id": "line",
@@ -81,9 +101,10 @@
           "id": "line_hold_the_wall",
           "name": "Hold the Wall",
           "trigger": "BattleStart",
-          "description": "Every Bulwark and Vanguard opens the fight behind a ward worth a share of their own health.",
+          "description": "Every Bulwark and Vanguard steps in front of its line: whatever picks a target picks them, and they are built for it.",
           "effects": [
-            { "kind": "Shield", "target": "Self", "selfHpRatio": 0.17, "duration": 99 }
+            { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "magnitude": 1.0, "duration": 99 },
+            { "kind": "ApplyStatus", "target": "Self", "status": "DamageReductionUp", "magnitude": 0.18, "duration": 99 }
           ]
         },
         {
@@ -91,21 +112,22 @@
           "name": "Answer in Kind",
           "trigger": "OnDamaged",
           "oncePerBattle": false,
-          "limit": "OncePerRound",
-          "description": "The first time each round something strikes a Bulwark or a Vanguard, it is struck back.",
+          "limit": "Unlimited",
+          "description": "Anything that strikes a Bulwark or a Vanguard is struck back. Every blow, however many of them are throwing it.",
           "effects": [
-            { "kind": "Damage", "target": "LastAttacker", "power": 1.1 }
+            { "kind": "Damage", "target": "LastAttacker", "power": 0.68 }
           ]
         },
         {
           "id": "line_dig_in",
           "name": "Dig In",
           "trigger": "OnHpBelowThreshold",
-          "threshold": 0.5,
-          "description": "Brought to half, a Bulwark or a Vanguard sets its feet: harder to hurt, and harder still to move.",
+          "threshold": 0.55,
+          "description": "Brought past half, a Bulwark or a Vanguard sets its feet and stops giving ground - harder to hurt, and mending as it stands.",
           "effects": [
-            { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.45, "duration": 99 },
-            { "kind": "ApplyStatus", "target": "Self", "status": "DamageReductionUp", "magnitude": 0.2, "duration": 99 }
+            { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.9, "duration": 99 },
+            { "kind": "ApplyStatus", "target": "Self", "status": "DamageReductionUp", "magnitude": 0.3, "duration": 99 },
+            { "kind": "ApplyStatus", "target": "Self", "status": "Regen", "magnitude": 0.0, "holderHpTick": 0.05, "duration": 99 }
           ]
         }
       ]
@@ -121,9 +143,9 @@
           "id": "blade_first_blood",
           "name": "First Blood",
           "trigger": "BattleStart",
-          "description": "Strikers, Breakers and Stalkers come out swinging: more Attack while the opening holds.",
+          "description": "Strikers, Breakers and Stalkers open the fight by throwing something, and everything on the floor wears it.",
           "effects": [
-            { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.26, "duration": 4 }
+            { "kind": "Damage", "target": "AllEnemies", "power": 0.78 }
           ]
         },
         {
@@ -131,9 +153,9 @@
           "name": "Press the Wound",
           "trigger": "AfterBasicAttack",
           "oncePerBattle": false,
-          "description": "Every basic blow a Blade lands leaves the body it hit open to the next one.",
+          "description": "Every blow a Blade lands opens the same wound wider, and the whole line hits into what it opened.",
           "effects": [
-            { "kind": "ApplyStatus", "target": "LastTarget", "status": "Vulnerable", "magnitude": 0.28, "duration": 2, "bypassResist": true }
+            { "kind": "ApplyStatus", "target": "LastTarget", "status": "DamageTakenUp", "magnitude": 0.22, "duration": 5, "bypassResist": true, "stackOnReapply": true, "maxStacks": 6, "refreshStacks": true }
           ]
         },
         {
@@ -141,10 +163,11 @@
           "name": "No Survivors",
           "trigger": "OnKill",
           "oncePerBattle": false,
-          "description": "A Blade that puts a body down takes the momentum with it, and the energy to spend it.",
+          "description": "A Blade that puts a body down takes the momentum with it, and the energy to spend it on the next one.",
           "effects": [
-            { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.5, "duration": 99 },
-            { "kind": "EnergyGain", "target": "Self", "flat": 60 }
+            { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.62, "duration": 99, "stackOnReapply": true, "maxStacks": 4 },
+            { "kind": "EnergyGain", "target": "Self", "flat": 100 },
+            { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 }
           ]
         }
       ]
@@ -162,19 +185,18 @@
           "trigger": "OnHealApplied",
           "oncePerBattle": false,
           "limit": "OncePerRound",
-          "description": "The first mending a Grace hero works each round keeps working: whoever is worst off mends on, round after round.",
+          "description": "The first mending a Grace hero works each round spreads: the three worst off keep knitting, round after round.",
           "effects": [
-            { "kind": "ApplyStatus", "target": "LowestHpAlly", "status": "Regen", "magnitude": 0.0, "holderHpTick": 0.05, "duration": 3, "chance": 1 }
+            { "kind": "ApplyStatus", "target": "ThreeLowestHpAllies", "status": "Regen", "magnitude": 0.0, "holderHpTick": 0.115, "duration": 3, "chance": 1 }
           ]
         },
         {
           "id": "grace_unbroken",
           "name": "Unbroken",
           "trigger": "BattleStart",
-          "description": "A Grace hero opens the fight steadying the whole line against what would land on it.",
+          "description": "A Grace hero wards the whole line before a blow is thrown. The ward eats the next few blows to land on each of them, and a ward is worth whatever the blow it ate was worth.",
           "effects": [
-            { "kind": "ApplyStatus", "target": "AllAllies", "status": "EffectResistUp", "magnitude": 0.3, "duration": 99 },
-            { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.15, "duration": 99 }
+            { "kind": "ApplyStatus", "target": "AllAllies", "status": "Guard", "magnitude": 0.2, "charges": 3, "duration": 99 }
           ]
         },
         {
@@ -184,9 +206,9 @@
           "threshold": 0.4,
           "oncePerBattle": false,
           "limit": "OncePerRound",
-          "description": "When an ally is brought low, the nearest Grace hero answers once that round, whatever else it was doing.",
+          "description": "When an ally is brought low, the nearest Grace hero answers once that round - whatever else it was doing, and whoever it was.",
           "effects": [
-            { "kind": "Heal", "target": "LowestHpAlly", "power": 0.55 }
+            { "kind": "Heal", "target": "BroadcastVictim", "power": 0.5 }
           ]
         }
       ]
@@ -205,17 +227,17 @@
           "oncePerBattle": false,
           "description": "A Marksman or a Tinkerer never wastes the second half of a shot: whatever is weakest takes it.",
           "effects": [
-            { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.75 }
+            { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.88 }
           ]
         },
         {
           "id": "reach_steady_aim",
           "name": "Steady Aim",
-          "trigger": "BattleStart",
-          "description": "Time to set up: every Reach hero starts the fight sighted in, and hits harder when it tells.",
+          "trigger": "TurnStart",
+          "oncePerBattle": false,
+          "description": "A Marksman or a Tinkerer ranges in: every turn spent on the same fight is a turn better sighted, and none of it is there at the opening.",
           "effects": [
-            { "kind": "ApplyStatus", "target": "Self", "status": "Focus", "magnitude": 0.22, "duration": 99 },
-            { "kind": "ApplyStatus", "target": "Self", "status": "CritDamageUp", "magnitude": 0.3, "duration": 99 }
+            { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.1, "duration": 99, "stackOnReapply": true, "maxStacks": 7 }
           ]
         },
         {
@@ -223,10 +245,10 @@
           "name": "Mark the Line",
           "trigger": "OnCriticalHit",
           "oncePerBattle": false,
-          "description": "A telling shot names its body, and everything the guild fields hits that one harder.",
+          "description": "A telling shot names the biggest thing on the field, and everything the guild fields hits that one harder.",
           "effects": [
-            { "kind": "ApplyStatus", "target": "LastTarget", "status": "Vulnerable", "magnitude": 0.45, "duration": 3, "bypassResist": true },
-            { "kind": "ApplyStatus", "target": "LastTarget", "status": "DefenseDown", "magnitude": 0.35, "duration": 3, "bypassResist": true }
+            { "kind": "ApplyStatus", "target": "HighestHpEnemy", "status": "DefenseDown", "magnitude": 1.0, "duration": 5, "bypassResist": true },
+            { "kind": "ApplyStatus", "target": "HighestHpEnemy", "status": "DamageTakenUp", "magnitude": 1.45, "duration": 5, "bypassResist": true }
           ]
         }
       ]

@@ -210,6 +210,7 @@ namespace Emberfall.DevHarness
             ReportGuildTechLevelCurve(db);
             ReportGuildTechUnlocks(db);
             GuildTalentParity(db, true);
+            GuildTalentThemes(db, true);
             return 0;
         }
 
@@ -330,6 +331,7 @@ namespace Emberfall.DevHarness
             CheckGuildTechPathNodesMoved(db);
             CheckGuildTechServerAgrees(db, contentDir);
             GuildTalentParity(db, false);
+            GuildTalentThemes(db, false);
             return 0;
         }
 
@@ -662,16 +664,30 @@ namespace Emberfall.DevHarness
         /// GuildDungeon.FightUnder's request, rebuilt with the profile named by the caller. The one
         /// thing the real call does not let anybody do, and the only way to show that what the
         /// dungeon fights is the no-tech fight rather than merely A fight.
+        ///
+        /// The floor's own condition, drawn by its own seed. GuildTalentThemes.cs wants the other
+        /// overload, which names the condition and the combat seed: a guild talent is read against
+        /// every condition a theme may draw, not only the one this cycle happened to deal.
         /// </summary>
         private static BattleResult GtDungeonFightAs(ContentDatabase db, TeamSnapshot team, int dungeonSeed,
                                                      int floor, PlayerProfile profile)
+        {
+            return GtDungeonFightAs(db, team, dungeonSeed, floor, profile,
+                                    GuildDungeon.ConditionOf(db, dungeonSeed, floor),
+                                    GuildDungeon.FightSeedFor(dungeonSeed, floor));
+        }
+
+        /// <summary>The same, with the condition and the combat seed named too. Mirrors
+        /// GuildDungeon.FightUnder's own pair of overloads, and for the same reason.</summary>
+        private static BattleResult GtDungeonFightAs(ContentDatabase db, TeamSnapshot team, int dungeonSeed,
+                                                     int floor, PlayerProfile profile, FloorConditionDef condition,
+                                                     int fightSeed)
         {
             TeamSnapshot fought = GuildDungeon.NormaliseTeam(db, team);
             BattleRequest request = new BattleRequest();
             request.Content = db;
             request.Stage = GuildDungeonGenerator.BuildFloor(db, dungeonSeed, floor);
-            request.Seed = GuildDungeon.FightSeedFor(dungeonSeed, floor);
-            FloorConditionDef condition = GuildDungeon.ConditionOf(db, dungeonSeed, floor);
+            request.Seed = fightSeed;
             request.Rules = condition != null ? condition.Fight : null;
             for (int i = 0; i < fought.Units.Count; i++)
             {
