@@ -172,9 +172,33 @@ SHIPPED_CH2 = [
 #   - no dead stretch: every channel is STRICTLY increasing at every one of the 71 steps;
 #   - no spike: the per-stage growth rate falls monotonically, +25.0% at 1-2 down to +3.9% at 6-12,
 #     and never rises once - so no step is a jump against its neighbours, and no chapter boundary
-#     resets or re-bases anything. There are no finale or miniboss bumps for exactly that reason:
-#     a x1.25 finale bump has to be given back at the next chapter's opener, which is the
-#     non-monotonic step the two rejected shapes both died on.
+#     resets or re-bases anything. There are no bumps on any channel a player can earn twice, for
+#     exactly that reason: a x1.25 finale bump on the PURSE has to be given back at the next
+#     chapter's opener, which is the non-monotonic step the two rejected shapes both died on.
+#
+# THE ONE BUMP THERE IS: the finale's FIRST CLEAR, and only because it is paid once.
+# A chapter finale is authored to be the hardest stage in its chapter - the recPwr solver derives
+# it at a 65% CEIL rather than 85% - and the reward curve marked it with nothing at all: 6-12 paid
+# 3.9% more than 6-11, the same step every ordinary stage pays. Worse than nothing, in fact. A
+# finale's whole first payout was SMALLER than the ordinary stage immediately after it: 1-12 paid
+# 835 + 1,440 = 2,275 against 2-1's 950 + 1,630 = 2,580. The hardest stage in the chapter was the
+# one the curve marked least.
+#
+# FINALE_FIRST_CLEAR_BUMP fixes that on the first-clear channels alone. It cannot be given back,
+# because a first clear is paid once and there is no step at the next opener to be non-monotonic
+# about; it cannot compound, for the same reason; and it cannot spike the curve, because nothing a
+# player earns twice moves at all - the purse, the idle rates and the account XP are untouched and
+# still strictly rise at all 71 steps.
+#
+# WHY x1.50. The smallest bump that removes the defect is x1.22, set by 1-12 - the tightest of the
+# five boundaries, because the first-clear multiple is still decaying steeply there. x1.50 clears
+# every boundary with room: the finale's first payout leads the opener that follows it by 16% at
+# 1-12 and 25% by 5-12. It makes the finale's first clear worth 2.4 to 2.6 of its own purses where
+# an ordinary stage's is worth 1.62, which is unmistakable against the smallest ordinary step in
+# the table, +3.9%. And it is an event rather than an economy change: the whole bump adds 81,250
+# gold and 12,145 shards over 72 stages, about a quarter of one percent of the campaign's gold.
+# Big where a player is standing, invisible in the aggregate - which is the pair of properties a
+# moment needs, and the reason a bump this size cannot be what any economy reading turns on.
 #
 # WHY EACH CHANNEL HAS THE EXPONENT IT HAS.
 #   gold          p = 3.20. The purse is the curve; everything gold-side is a multiple of it.
@@ -192,7 +216,8 @@ SHIPPED_CH2 = [
 #                 star and ascension tier, F7) - it is a read-out of distance travelled, so it
 #                 tracks the stage index rather than the purse.
 #   firstClear*   a multiple of the same stage's purse, decaying from x2.17 gold at 1-1 to x1.62
-#                 by the back half, which is the shape the authored 24 already have.
+#                 by the back half, which is the shape the authored 24 already have; times
+#                 FINALE_FIRST_CLEAR_BUMP on a chapter finale.
 REWARD_K = 13.2          # gold, shards, firstClear*: v(i) = v(0) * (1 + i/REWARD_K)^REWARD_P
 REWARD_P = 3.20
 XP_K = 13.2
@@ -204,6 +229,7 @@ SHARDS_PER_GOLD = 20.0   # shards = gold / 20
 IDLE_CLEARS_PER_HOUR = 0.80   # idleGoldPerHour = 0.80 * gold
 XP_AT_1_1 = 26
 IDLE_SHARDS_AT_1_1 = 9
+FINALE_FIRST_CLEAR_BUMP = 1.50   # chapter finales only, first-clear channels only. See above.
 
 
 def _grain_of(v):
@@ -231,20 +257,25 @@ def _round_nice(v):
     return int(round(v / step) * step)
 
 
-def rewards_at(i):
-    """The seven reward fields at global stage index i (0-based). The whole curve, one function."""
+def rewards_at(i, finale=False):
+    """The seven reward fields at global stage index i (0-based). The whole curve, one function.
+
+    `finale` bumps the two first-clear channels and nothing else. Every channel a player can earn
+    more than once is a function of i alone, which is what keeps the curve monotone.
+    """
     u = (1.0 + i / REWARD_K) ** REWARD_P
     gold = GOLD_AT_1_1 * u
     shards = gold / SHARDS_PER_GOLD
     # The first-clear bonus is worth relatively more on the stages a player meets first, which is
     # the shape the authored 24 carry: x2.17 the purse at 1-1, settling toward x1.62.
     fc = 0.57 / (1.0 + i / 3.0)
+    bump = FINALE_FIRST_CLEAR_BUMP if finale else 1.0
     return (
         _round_nice(gold),
         max(1, _round_nice(shards)),
         _round_nice(XP_AT_1_1 * ((1.0 + i / XP_K) ** XP_P)),
-        _round_nice(gold * (1.60 + fc)),
-        max(1, _round_nice(shards * (4.85 + fc * 1.75))),
+        _round_nice(gold * (1.60 + fc) * bump),
+        max(1, _round_nice(shards * (4.85 + fc * 1.75) * bump)),
         _round_nice(gold * IDLE_CLEARS_PER_HOUR),
         max(1, _round_nice(IDLE_SHARDS_AT_1_1 * ((1.0 + i / IDLE_SHARD_K) ** IDLE_SHARD_P))),
     )
@@ -520,7 +551,7 @@ def build():
             # The purse, the first-clear bonus and the idle rates are the reward curve, computed
             # from the global stage index for all 72 stages alike - not carried by position and
             # not held flat past 2-12. See REWARD_K above.
-            gold, shards, xp, fcg, fcs, idle_g, idle_s = rewards_at((n - 1) * 12 + (i - 1))
+            gold, shards, xp, fcg, fcs, idle_g, idle_s = rewards_at((n - 1) * 12 + (i - 1), boss)
 
             marks = [p.strip() for p in parts.split(",") if p.strip()]
             if proposed:
@@ -549,12 +580,44 @@ def build():
     # to _round_nice's grid), and the growth RATE must never rise (no spike, and no chapter
     # boundary that re-bases anything).
     flat = [st for _, ss in chapters_out for st in ss]
-    for key in ("gold", "shards", "accountXp", "firstClearGold", "firstClearShards",
-                "idleGoldPerHour", "idleShardsPerHour"):
+    for key in ("gold", "shards", "accountXp", "idleGoldPerHour", "idleShardsPerHour"):
         for a in range(1, len(flat)):
             if flat[a][key] <= flat[a - 1][key]:
                 errors.append("reward curve: %s does not rise from %s to %s (%d -> %d)"
                               % (key, flat[a - 1]["id"], flat[a]["id"], flat[a - 1][key], flat[a][key]))
+    # THE FIRST-CLEAR CHANNELS CARRY THE ONE BUMP, so "rises at every step" is the wrong claim for
+    # them and would only be satisfiable by having no finale at all. The right one is in three
+    # parts, and all three are asserted:
+    #   1. across the ORDINARY stages, taken in order with the finales removed, they still rise at
+    #      every step - the underlying law is untouched and no chapter boundary re-bases it;
+    #   2. a finale pays strictly more than both of its neighbours - that is what makes it an event
+    #      rather than a number;
+    #   3. the finale's WHOLE first payout (purse plus first clear) leads the next chapter's
+    #      opener's. This is the defect the bump exists to fix: without it 1-12 paid 2,275 against
+    #      2-1's 2,580, so the hardest stage in the chapter paid less than the ordinary one after.
+    finale_ix = set(a for a in range(len(flat)) if flat[a]["boss"])
+    for key in ("firstClearGold", "firstClearShards"):
+        ordinary = [a for a in range(len(flat)) if a not in finale_ix]
+        for b in range(1, len(ordinary)):
+            hi, lo = ordinary[b], ordinary[b - 1]
+            if flat[hi][key] <= flat[lo][key]:
+                errors.append("reward curve: %s does not rise from %s to %s across the ordinary"
+                              " stages (%d -> %d)"
+                              % (key, flat[lo]["id"], flat[hi]["id"], flat[lo][key], flat[hi][key]))
+        for a in sorted(finale_ix):
+            around = [flat[b][key] for b in (a - 1, a + 1) if 0 <= b < len(flat)]
+            if any(flat[a][key] <= v for v in around):
+                errors.append("reward curve: %s's %s does not lead both its neighbours (%s against %s)"
+                              % (flat[a]["id"], key, flat[a][key], around))
+    for a in sorted(finale_ix):
+        if a + 1 >= len(flat):
+            continue
+        here = flat[a]["gold"] + flat[a]["firstClearGold"]
+        nxt = flat[a + 1]["gold"] + flat[a + 1]["firstClearGold"]
+        if here <= nxt:
+            errors.append("reward curve: %s's whole first payout %d does not lead %s's %d - the"
+                          " finale is the hardest stage in its chapter and pays less than the"
+                          " ordinary stage after it" % (flat[a]["id"], here, flat[a + 1]["id"], nxt))
     # No spike, read on the EXACT curve rather than the written one. (1 + i/k)^p has a growth rate
     # that falls at every step by construction, so this asserts the property the law is chosen for;
     # what could still break it is a typo in an exponent, and that is what this catches. It is not

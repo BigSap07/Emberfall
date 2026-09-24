@@ -25,9 +25,19 @@
   // idleGoldPerHour = 0.80 * gold, idleShardsPerHour = 9 * (1 + i/8.4)^1.60, accountXp on the purse's
   // k at exponent 2.60, first-clear a decaying multiple of the same stage's purse. Every channel
   // rises at every one of the 71 steps and the growth RATE only ever falls, +25.0% at 1-2 down to
-  // +3.9% at 6-12: no dead stretch, no spike, and no chapter boundary that re-bases anything. There
-  // are deliberately no finale bumps, because a x1.25 finale has to be given back at the next
-  // chapter's opener. Tools/_author_campaign_stages.py holds the law, the fit it came from - six of
+  // +3.9% at 6-12: no dead stretch, no spike, and no chapter boundary that re-bases anything.
+  //
+  // THE ONE BUMP IS THE FINALE'S FIRST CLEAR, x1.50, and only because a first clear is paid once.
+  // Nothing a player can earn twice is bumped: a x1.25 finale on the PURSE has to be given back at
+  // the next chapter's opener, and that step is what both shapes CAMPAIGN-SPEC 10.3 rejected died
+  // on. A first clear has no step to give back. Without it a finale - the hardest stage in its
+  // chapter, derived at a 65% CEIL against 85% - paid LESS on first clear than the ordinary stage
+  // after it: 1-12 paid 835 + 1440 = 2275 against 2-1's 950 + 1630 = 2580. It now pays 835 + 2160,
+  // and leads the next opener by 16% at 1-12 rising to 25% by 5-12. The whole bump is 81,250 gold
+  // and 12,145 shards over 72 stages, a quarter of one percent of the campaign's gold: an event
+  // where a player is standing, invisible in the aggregate.
+  //
+  // Tools/_author_campaign_stages.py holds the law, the fit it came from - six of
   // the seven channels in the shipped 24 already WERE this curve, to within 3-9% - and why each
   // channel has the exponent it has. It replaced a flat plateau that paid 2-12's numbers unchanged
   // for the 49 stages from 2-12 to 6-12, and chapter 2's idleGoldPerHour exponent, which took the
@@ -394,7 +404,7 @@
           "boss": true,
           "proposed": "+hollowed_guard (strongest), +wild_bear (strongest), +hollowed_hunter (strongest), +hollowed_mage (strongest)",
           "environment": "hollow", "gold": 835, "shards": 42, "accountXp": 125,
-          "firstClearGold": 1440, "firstClearShards": 210, "recommendedPower": 9028,
+          "firstClearGold": 2160, "firstClearShards": 315, "recommendedPower": 9028,
           "idleGoldPerHour": 670, "idleShardsPerHour": 34,
           "waveCount": 6, "battleCount": 12, "floorLevel": 13, "ceilingLevel": 16,
           "enemies": [ { "id": "the_collector", "level": 12 }, { "id": "hollowed_guard", "level": 13 }, { "id": "wild_bear", "level": 13 }, { "id": "hollowed_hunter", "level": 13 }, { "id": "hollowed_mage", "level": 13 } ]
@@ -515,7 +525,7 @@
           "boss": true,
           "proposed": "name",
           "environment": "crossing", "gold": 3030, "shards": 150, "accountXp": 360,
-          "firstClearGold": 5040, "firstClearShards": 750, "recommendedPower": 10467,
+          "firstClearGold": 7570, "firstClearShards": 1130, "recommendedPower": 10467,
           "idleGoldPerHour": 2420, "idleShardsPerHour": 74,
           "waveCount": 12, "battleCount": 12, "floorLevel": 21, "ceilingLevel": 22,
           "enemies": [ { "id": "the_shepherd", "level": 20 }, { "id": "hollowed_sentinel", "level": 21 }, { "id": "hollowed_woodsman", "level": 21 }, { "id": "drifting_pilgrim", "level": 21 }, { "id": "hollowed_apothecary", "level": 21 } ]
@@ -636,7 +646,7 @@
           "boss": true,
           "proposed": "name; +hollowed_captain ('strongest institutional enemies'), +hollowed_magistrate ('strongest institutional enemies'), +hollowed_physician ('strongest institutional enemies'), +deserted_watchman ('strongest institutional enemies')",
           "environment": "city", "gold": 7570, "shards": 380, "accountXp": 755,
-          "firstClearGold": 12500, "firstClearShards": 1870, "recommendedPower": 10267,
+          "firstClearGold": 18700, "firstClearShards": 2800, "recommendedPower": 10267,
           "idleGoldPerHour": 6060, "idleShardsPerHour": 125,
           "waveCount": 12, "battleCount": 12, "floorLevel": 22, "ceilingLevel": 23,
           "enemies": [ { "id": "the_arbiter", "level": 21 }, { "id": "hollowed_captain", "level": 22 }, { "id": "deserted_watchman", "level": 22 }, { "id": "hollowed_magistrate", "level": 22 }, { "id": "hollowed_physician", "level": 22 } ]
@@ -757,7 +767,7 @@
           "boss": true,
           "proposed": "name; +crypt_acolyte (ramp fill)",
           "environment": "old_kingdom", "gold": 15400, "shards": 770, "accountXp": 1340,
-          "firstClearGold": 25200, "firstClearShards": 3790, "recommendedPower": 11257,
+          "firstClearGold": 37800, "firstClearShards": 5680, "recommendedPower": 11257,
           "idleGoldPerHour": 12300, "idleShardsPerHour": 185,
           "waveCount": 12, "battleCount": 12, "floorLevel": 24, "ceilingLevel": 25,
           "enemies": [ { "id": "the_archivist", "level": 23 }, { "id": "graven_guardian", "level": 23 }, { "id": "forgotten_knight", "level": 23 }, { "id": "graven_watcher", "level": 24 }, { "id": "crypt_acolyte", "level": 23 } ]
@@ -878,7 +888,7 @@
           "boss": true,
           "proposed": "name; +ironshield_justicar ('Elite forces from both sides'), +freeblade_reaver ('Elite forces from both sides'), +war_chaplain ('Elite forces from both sides'), +oathbreaker ('Elite forces from both sides')",
           "environment": "divided_realm", "gold": 27600, "shards": 1380, "accountXp": 2160,
-          "firstClearGold": 44900, "firstClearShards": 6760, "recommendedPower": 10672,
+          "firstClearGold": 67300, "firstClearShards": 10100, "recommendedPower": 10672,
           "idleGoldPerHour": 22100, "idleShardsPerHour": 250,
           "waveCount": 12, "battleCount": 12, "floorLevel": 21, "ceilingLevel": 22,
           "enemies": [ { "id": "the_peacemaker", "level": 21 }, { "id": "ironshield_justicar", "level": 21 }, { "id": "war_chaplain", "level": 21 }, { "id": "freeblade_reaver", "level": 20 }, { "id": "oathbreaker", "level": 21 } ]
@@ -999,7 +1009,7 @@
           "boss": true,
           "proposed": "name; +sanctuary_champion ('Elite sanctuary defenders'), +scripture_golem ('Elite sanctuary defenders'), +veiled_custodian ('Elite sanctuary defenders'), +echo_wisp ('Elite sanctuary defenders')",
           "environment": "sanctuary", "gold": 45100, "shards": 2260, "accountXp": 3220,
-          "firstClearGold": 73200, "firstClearShards": 11000, "recommendedPower": 11105,
+          "firstClearGold": 110000, "firstClearShards": 16500, "recommendedPower": 11105,
           "idleGoldPerHour": 36100, "idleShardsPerHour": 325,
           "waveCount": 12, "battleCount": 12, "floorLevel": 22, "ceilingLevel": 23,
           "enemies": [ { "id": "the_curator", "level": 21 }, { "id": "scripture_golem", "level": 21 }, { "id": "sanctuary_champion", "level": 21 }, { "id": "echo_wisp", "level": 21 }, { "id": "veiled_custodian", "level": 22 } ]
