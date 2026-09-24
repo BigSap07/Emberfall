@@ -9095,7 +9095,7 @@ namespace Emberfall.DevHarness
         ///
         ///   DROP-WEIGHTED temper is what this uses. Every slot is filled, and each piece's temper
         ///     is drawn from ArmorRoller.RollTemper against the stage's own GlobalIndex - the exact
-        ///     function and the exact weights a real drop uses (Rough 55, Honed 30, deepening with
+        ///     function and the exact weights a real drop uses (Rough 72, Honed 20, tilting toward Honed with
         ///     stage index). So the set is "six slots filled with what this stage actually drops",
         ///     which is the median player rather than the lucky one or the Forge grinder.
         ///
@@ -17740,7 +17740,24 @@ namespace Emberfall.DevHarness
         /// the whole cast.</summary>
         private const float EnemyGrowthPerLevel = 0.12f;
 
-        private const int SolverMaxIterations = 40;
+        /// <summary>
+        /// THE GUARD AGAINST DIVERGENCE, NOT A BUDGET. The loop stops the moment a walk proposes
+        /// nothing, so a converging run never reaches this number and raising it costs such a run
+        /// exactly nothing. It exists for the case the ABORT text describes - a table that keeps
+        /// proposing bigger numbers because harder stages cost retries, retries are paid for by
+        /// farming, and farming buys the power that asks for harder stages.
+        ///
+        /// It was 40, which was the 24-stage campaign's number. On Pinoy's 72 it cut a converging
+        /// run off five passes short: the stages-moved count fell monotonically from 56 at
+        /// iteration 10 to 5 at iteration 40, about 1.7 stages a pass, and the run aborted and
+        /// wrote nothing after four hours. Three times the stages is three times the coupled
+        /// system - stage N's levels move stage N+1's entry power - so the walk to a fixed point is
+        /// longer, and the ceiling has to be read as what it is. Docs/SOLVE-PREREQS.md item 4 lists
+        /// the other constants sized against 24 stages; this was one of them.
+        ///
+        /// A run that genuinely diverges still aborts, just later, and the report says which.
+        /// </summary>
+        private const int SolverMaxIterations = 120;
 
         /// <summary>
         /// HOW MUCH HIGHER A STUCK STAGE'S ENTRY RATIO IS AIMED, each time the reference walk sticks

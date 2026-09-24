@@ -949,22 +949,31 @@ loader ignores both keys. The words `proposed` uses:
 
 ### 10.3 What is NOT solved - the seeds
 
-`recommendedPower`, `floorLevel`, `ceilingLevel` and every authored enemy level are **seeds, not
-answers**. They are carried from the shipped stage at the same position, and chapters 3-6 repeat
-chapter 2's by position. Every unit in a line stands at `floorLevel`. `Tools/solve-recommended-power.ps1`
-has **not** been run on this content, on purpose.
+`recommendedPower`, `floorLevel`, `ceilingLevel` and every authored enemy level were **seeds, not
+answers**. They were carried from the shipped stage at the same position, with chapters 3-6
+repeating chapter 2's by position and every unit in a line standing at `floorLevel`.
+**`Tools/solve-recommended-power.ps1` has since been run on this content and all four are solved**;
+re-running `Tools/_author_campaign_stages.py` writes the seeds back over them, so the solver has to
+run again after it.
 
-Rewards are also carried by position for chapters 1-2. **Chapters 3-6 pay exactly what 2-12 pays,
-flat**: purse, first-clear rewards and idle rates. This is a placeholder, not a curve. The two
-curves tried on paper were worse:
+Rewards were also carried by position for chapters 1-2, and **chapters 3-6 paid exactly what 2-12
+pays, flat** - purse, first-clear rewards and idle rates - as a placeholder rather than a curve. The
+two curves tried on paper were both worse than the placeholder:
 
 - Repeating chapter 2's rewards by position makes 3-1 pay a quarter of 2-12, and drops the idle
   rate a player has already earned by 19x the moment they clear it.
 - Growing chapter 2's shape onward has to multiply about 4x a chapter to stay monotonic across a
   chapter boundary, because 2-12's purse is 3.75x 2-1's. That is 256x by chapter 6.
 
-The reward curve past chapter 2 is an economy decision. It belongs with the fusion tension (open
-decision 4 in `DESIGN-BUILD-ORDER.md`), in the solve pass, not here.
+**Settled in the solve pass, and both of those are the same mistake.** Each one re-bases the curve
+at a chapter boundary - one down, one up - and a curve that has boundaries at all has to pay for
+them. The law that replaced the plateau has none: every reward channel is a power of the GLOBAL
+stage index, `gold = 120 * (1 + i/13.2)^3.20` with the rest hanging off it, so the twelve-stage
+chapter is a name for a stretch of the curve and not a unit the curve is built from. Six of the
+seven channels in the authored 24 already fitted that form to within 3-9%, which is where the
+exponents came from. The full law, the fit and the per-channel reasoning are in
+`Tools/_author_campaign_stages.py` (`rewards_at`) and summarised in `campaign.json`'s header;
+`DESIGN-BUILD-ORDER.md`'s economy curve section carries the short version.
 
 The generator refuses to write:
 - a line naming an undefined enemy, an enemy twice, or any of the shipped 12
@@ -1284,7 +1293,7 @@ was tuned.
 | 3 | `CheckArenaMatrix`, talents | 3 of 90 observed nowhere | Unchanged from main, and unrelated. | `DESIGN-BUILD-ORDER` Known bugs. |
 | 4 | `CheckArenaMatrix`, basics/actives/passives | 5 observed nowhere before the rebase, 4 after | Main's own red, and unrelated to stages. It moved with what the rebase brought in. | same |
 | 5 | `CheckCampaignMigrationRegression` | "ch1_1 wave 1 battle 1 is still two level-2 hollow husks and a level-2 grave moth" | It pins the retired opener by name. **Left red on purpose**: it pins content that no longer exists, and re-pinning it to the new opener before the solve moves its levels would only pin a seed. Its sibling "ch1_1's recommendedPower is 2977" is **green by coincidence**: 2977 is a carried seed. | **Retired since**, with its purse and 2977 siblings and none re-pinned (`SOLVE-PREREQS.md` item 3). |
-| 6 | Armor drop sweep | "Rough outnumbers Honed" fails, 537 vs 1599 | **Structural, and new.** Rough's `dropWeight` 55 falls by 1.6 per `stageGlobalIndex` (`armor.json`), which was tuned while the last index was 23. Now it is 71. **Corrected since:** the weight does not reach zero. `ArmorRoller.RollTemper` floors any weight under 1 at 1, so from index 34 (3-11) Rough is 1 of 24 (4.2%), and 5.9% at 6-12. Every stage still drops it, rarely. (`SOLVE-PREREQS.md` item 4.) | An economy decision: armor's slope, not this job's. |
+| 6 | Armor drop sweep | "Rough outnumbers Honed" fails, 537 vs 1599 | **Structural, and new.** Rough's `dropWeight` 55 fell by 1.6 per `stageGlobalIndex` (`armor.json`), which was tuned while the last index was 23. Now it is 71. The weight never reached zero - `ArmorRoller.RollTemper` floors any weight under 1 at 1 - so from index 34 (3-11) Rough was 1 of 24 (4.2%), and 5.9% at 6-12. Every stage still dropped it, rarely. (`SOLVE-PREREQS.md` item 4.) | **Fixed.** Rough is 72 at -0.42 a stage, Honed 20 at +0.16: depth still tilts toward Honed, 78% Rough at 1-1 down to 58% at 6-12, and the sweep reads about 2.2 Rough per Honed. Green. |
 | 7 | Geared CEIL band | 66 of the 67 measurable stages out of band (5 floor-pinned); first miss 1-6 at 99.5% | Every level is a seed. Readings run from 0% (the first stage of every chapter 2-6, where a carried floor of 37 meets a new roster) to 100% (most of chapters 3-6). | The solver. |
 | 8 | `CheckCampaignPowerCurve` | 1-6 x1.182 over a wall band of x1.05; 1-9 x1.007 under x1.10; 2-6 x1.213 over x1.133 (x1.207 after the rebase) | 1-6 and 2-6 are walls now, and 1-9 no longer is, but they still carry the shipped power seeds. **It reads only 1-1 to 2-11**, because the reference walk (seed 1) sticks at 2-12. **The band has not looked at 61 stages.** "Across the board" failures are not visible here yet, only because the walk never gets there. | The solver. |
 | 9 | `CheckFusionNeverGates` | **16 of 20** reference walks STUCK after the rebase: at 2-12 ×6, 2-11 ×5, 6-12 ×4, 2-1 ×1 (12 and 14 of 20 in the two runs before it) | A reference player at the tier-0 cap cannot clear The Crossing or The Curator's line at the carried seeds. **This is the fusion tension the solve pass has to settle**: the fusing walk meets chapters 3-6 at x10 to x21 of `recommendedPower`, the reference walk sticks. The 6-12 row prints its median as 2147483647, the stuck sentinel read as a number: a display bug in the report, not in the verdict. | The solve pass, with open decision 4. |

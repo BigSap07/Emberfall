@@ -334,13 +334,24 @@ done by hand from the numbers quoted.
 
 | # | Where | Formula | Stage 24 | Stage 72 | Where it breaks |
 |---|---|---|---|---|---|
-| 1 | `armor.json` `tempers[].dropWeight` + `dropWeightPerStageIndex`, read by `ArmorRoller.RollTemper` | `w = dropWeight + slope * index`; a `w` under 1 **is floored to 1**, never 0 | Rough 55 - 1.6 x 23 = 18.2, so 18. Honed 30 - 0.2 x 23 = 25.4, so 25. Rough is **41.9%** of drops | Rough -58.6, floored to 1. Honed 15.8, so 16. Rough is **5.9%** | Rough reaches its floor at index 34 (3-11), where it is 1 of 24 (4.2%). |
+| 1 | `armor.json` `tempers[].dropWeight` + `dropWeightPerStageIndex`, read by `ArmorRoller.RollTemper` | `w = dropWeight + slope * index`; a `w` under 1 **is floored to 1**, never 0 | Rough 72 - 0.42 x 23 = 62.3, so 62. Honed 20 + 0.16 x 23 = 23.7, so 24. Rough is **72.1%** of drops | Rough 42.2, so 42. Honed 31.4, so 31. Rough is **57.5%** | Nothing now. Rough never reaches its floor: the shallowest it gets is 42 against 31 at 6-12. |
 | 2 | `balance.json` `relicDustPerRepeatClear` 6 + `relicDustPerStageIndex` 2, read by `GameSession.RelicDustForRepeatClear` | `6 + 2 * index`, no cap | 52 a clear, 156 a day at the 3-clear cap | 148 a clear, **444** a day | `relicMythicShopPrice` 2400 was sized in its comment as "156/day at the final stage (globalIndex 23)", about 15 days. At 6-12 it is 5.4 days. `relicShopPrice` 80 goes from 1.5 clears to 0.54. |
 
-**Correction to `CAMPAIGN-SPEC.md` 10.8 row 6, and to the task that commissioned this.** Both say Rough reaches zero at
-3-11 and that no later stage drops it. The weight is floored at 1 (`ArmorRoller.RollTemper`), so
-every stage still drops Rough, at 4.2% at 3-11 and 5.9% at 6-12. The failing check reads the same
-either way: Rough 537 against Honed 1,599.
+**One more, found by the solve itself: `SolverMaxIterations`.** It was 40, the 24-stage campaign's
+number, and on 72 stages it cut a *converging* run off five passes short - stages-moved fell
+monotonically from 56 at iteration 10 to 5 at iteration 40, and the run then aborted and wrote
+nothing. It is a guard against divergence rather than a budget (the loop stops the moment a walk
+proposes nothing), so it is now 120 and a converging run pays nothing for the headroom.
+
+**Correction to `CAMPAIGN-SPEC.md` 10.8 row 6, and to the task that commissioned this.** Both said Rough reached zero at
+3-11 and that no later stage dropped it. The weight is floored at 1 (`ArmorRoller.RollTemper`), so
+every stage still dropped Rough - at 4.2% at 3-11 and 5.9% at 6-12. Either reading gave the same
+failing check: Rough 537 against Honed 1,599 over the drop sweep.
+
+**Since fixed.** The slopes were the bug, not the floor. Rough is now 72 with a slope of -0.42 and
+Honed 20 with +0.16, so depth still tilts the draw toward Honed - 78% Rough at 1-1, 58% at 6-12 -
+without ever inverting the ladder. The sweep reads about 2.2 Rough for every Honed, and
+`CheckArmorDropDiversity` passes. The row above is stated against the fixed weights.
 
 ### Per-stage tables and derivations sized to 24 stages
 

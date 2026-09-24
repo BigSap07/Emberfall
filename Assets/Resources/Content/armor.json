@@ -59,6 +59,15 @@
   // salvageSlag must stay below rerollSlag at every rung or the loop prints currency; content
   // validation enforces it.
   //
+  // dropWeight/dropWeightPerStageIndex: w = dropWeight + slope * stageGlobalIndex, floored at 1 by
+  // ArmorRoller.RollTemper, so no live rung ever becomes impossible. Depth tilts the draw TOWARD
+  // Honed, but the bottom rung stays the common one end to end - Rough is 78% of drops at 1-1 and
+  // still 58% at 6-12, about 2.2 Rough for every Honed over the whole campaign. That direction was
+  // inverted once: Rough's slope was steep enough (-1.6) to hit the floor of 1 by 3-11, which left
+  // the LOWEST rung rarer than the one above it for the back half of the game and made the drop
+  // sweep read 537 Rough against 1599 Honed. The slopes here are shallow on purpose so the tilt is
+  // a tilt and not a reversal; CheckArmorDropDiversity asserts Rough still outnumbers Honed.
+  //
   // Gilded and Radiant carry dropWeight/dropWeightPerStageIndex 0 - not omitted, ZEROED, so the
   // intent reads directly off this file rather than off ArmorRoller's defaults. That alone would
   // already stop them dropping (RollTemper's existing full-disable branch), and ArmorInfo.
@@ -71,8 +80,8 @@
   // Rough on purpose: nothing ever combines into the bottom rung. Climbs by rung the same way
   // rerollSlag already does, and content validation checks that climb.
   "tempers": [
-    { "temper": "Rough",   "primaryScale": 0.55, "salvageSlag": 4,  "rerollSlag": 12, "dropWeight": 55, "dropWeightPerStageIndex": -1.6 },
-    { "temper": "Honed",   "primaryScale": 0.75, "salvageSlag": 9,  "rerollSlag": 24, "dropWeight": 30, "dropWeightPerStageIndex": -0.2, "combineSlag": 30 },
+    { "temper": "Rough",   "primaryScale": 0.55, "salvageSlag": 4,  "rerollSlag": 12, "dropWeight": 72, "dropWeightPerStageIndex": -0.42 },
+    { "temper": "Honed",   "primaryScale": 0.75, "salvageSlag": 9,  "rerollSlag": 24, "dropWeight": 20, "dropWeightPerStageIndex": 0.16, "combineSlag": 30 },
     { "temper": "Gilded",  "primaryScale": 1.00, "salvageSlag": 20, "rerollSlag": 48, "dropWeight": 0,  "dropWeightPerStageIndex": 0,    "combineSlag": 90 },
     { "temper": "Radiant", "primaryScale": 1.30, "salvageSlag": 45, "rerollSlag": 96, "dropWeight": 0,  "dropWeightPerStageIndex": 0,    "combineSlag": 260 }
   ],
