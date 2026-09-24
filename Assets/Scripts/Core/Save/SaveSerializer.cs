@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Emberfall.Core.Cloud;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Json;
@@ -257,6 +258,18 @@ namespace Emberfall.Core.Save
         /// saved line a player built and, on its next push, write a cloud save that no longer
         /// holds them. The Waymarks and nodes would survive on the server; the lines are only
         /// ever in the save. The bump refuses that instead.
+        ///
+        /// 17, STILL, AFTER THE GUILD TECH TREE. `guildTech` was added when the tree replaced the
+        /// four-node Path (claude/DESIGN-GUILD-TECH.md), DELIBERATELY WITHOUT A BUMP, on the test
+        /// the two paragraphs above apply: a bump is owed when an older build reading the save
+        /// would lose something the save is the only copy of. It is not. The guild level, the XP,
+        /// the rungs bought and the guild's chosen talents are all minted and held by the server
+        /// (0012), exactly as the Waymarks and the node ids are, and this key is a copy of the last
+        /// answer. A version 17 build that drops it on a round trip loses a cache and nothing else,
+        /// and the next guild_tech_state puts it back. What that build DOES lose is the tech's
+        /// effect on its fights while it runs - it fights as a player with no guild, which is a
+        /// legal state of the game and not a corrupt one. Bumping for that would refuse every
+        /// older build a save it can read correctly.
         public const int CurrentVersion = 17;
 
         /// <summary>
@@ -728,6 +741,10 @@ namespace Emberfall.Core.Save
                 root.Set("lines", lines);
                 root.Set("activeLine", profile.ActiveLine);
             }
+            // The guild tech tree, written only once it holds something, so a player who has never
+            // been in a levelled guild serialises exactly as they did before it existed.
+            if (profile.GuildTech != null && (profile.GuildTech.Level > 0 || !profile.GuildTech.IsEmpty))
+                root.Set("guildTech", profile.GuildTech.Write());
 
             return root.ToJson(true);
         }
@@ -999,6 +1016,11 @@ namespace Emberfall.Core.Save
                 string id = pathNodes[i].AsString("");
                 if (id.Length > 0 && !profile.GuildPathNodes.Contains(id)) profile.GuildPathNodes.Add(id);
             }
+            // Absent reads as a guild of no level and no tech, which is true of every save
+            // written before the tree and of every player who has never joined a guild.
+            JsonValue tech = root["guildTech"];
+            if (!tech.IsNull) profile.GuildTech = GuildTechState.Read(tech);
+
             List<JsonValue> lines = root.GetList("lines");
             for (int l = 0; l < lines.Count; l++) profile.Lines.Add(ReadLine(lines[l]));
             profile.ActiveLine = Math.Max(0, root.GetInt("activeLine", 0));

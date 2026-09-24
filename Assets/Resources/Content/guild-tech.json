@@ -1,0 +1,93 @@
+{
+  // THE GUILD TECH TREE - claude/DESIGN-GUILD-TECH.md. Four family tracks, three stat rungs each,
+  // one guild talent slot per family choosing between three, all gated by guild level.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, and that took checking rather than assuming. The
+  // version exists to retire a GUILD DUNGEON replay when a number that fight reads moves, and a
+  // dungeon fight cannot read anything here: GuildDungeon.FightUnder hands CombatSimulation a
+  // fresh empty PlayerProfile, and guild tech resolves from the profile exactly as armor does, so
+  // the dungeon strips it at the door with the relics and the levels. GuildTechChecks proves it -
+  // a floor fought at maximum tech is identical, event for event, to the same floor with none.
+  //
+  // EVERY NUMBER HERE IS DERIVED except the rung STAT SHAPES, which are authored because which
+  // stats a family cares about is what the family is. `DevHarness.exe --guild-tech` prints the
+  // whole working; GuildTechChecks re-derives on every build-check and fails when this file and
+  // the derivation disagree, exactly as CheckDerivation holds guild-path.json's pay.
+  "currency": "Waymarks",
+
+  // DERIVED. A rung costs its rung number times this, so a track's three cost 6 units and the
+  // whole tree 24. Solved from the mean member cycle and how long the level ceiling takes to
+  // reach, so a member finishes paying for the tree about when the guild finishes opening it.
+  "rungUnit": 217,
+  "rungsPerFamily": 3,
+
+  "level": {
+    // DERIVED: guild XP one level costs before the member-count scaling. Flat across levels on
+    // purpose - a second invented curve on top of the square root is one more thing nobody can
+    // predict.
+    "xpPerLevel": 1028,
+    // G7, AND THE ONLY AUTHORED NUMBER IN THIS BLOCK. XP required per level scales with the square
+    // root of member count. The per-person advantage a large guild has over a small one is NOT
+    // authored anywhere - it is what this exponent produces, and the gate asserts the measured
+    // ratio against what the square root predicts rather than against a target.
+    "exponent": 0.5
+  },
+
+  // G9: the Path's existing nodes become early guild level rewards. The code is built and works,
+  // so it moves rather than being deleted. A grant is free - it costs no Waymarks and asks for no
+  // rung - and a member who already BOUGHT one under 0011 keeps it, because the two sources are
+  // read as an OR (GameSession.LinesAllowed).
+  "grants": [
+    { "level": 1, "node": "second-line" },
+    { "level": 2, "node": "line-talents" },
+    { "level": 3, "node": "third-line" },
+    { "level": 4, "node": "fourth-line" }
+  ],
+
+  // THE FOUR FAMILIES. Names are placeholders until Pinoy names them from the world's vocabulary.
+  //
+  // A family is a set of ROLES and nothing else (G1). Every role belongs to exactly one family and
+  // every family holds at least one role; the gate fails the build otherwise, because a role in
+  // two families makes "every hero of the family" ambiguous and a role in none makes a hero
+  // permanently untouchable by the tree.
+  //
+  // rungStats is the family's output profile written as numbers, and it is AUTHORED. The rung's
+  // SIZE is not: rungScale is a share of the hero's own power score, one number for every family,
+  // because a rung costs the same Waymarks on every track and so has to buy the same thing. The
+  // stats named split that worth EQUALLY by power, so Line's Max HP and Defense and Blade's Attack
+  // and Crit Damage are worth the same and neither family's second stat is a rounding error.
+  "families": [
+    {
+      "id": "line",
+      "name": "Line",
+      "roles": ["Bulwark", "Vanguard"],
+      "rungStats": ["MaxHp", "Defense"],
+      "rungScale": 0.005,
+      "talents": []
+    },
+    {
+      "id": "blade",
+      "name": "Blade",
+      "roles": ["Striker", "Breaker", "Stalker"],
+      "rungStats": ["Attack", "CritDamage"],
+      "rungScale": 0.005,
+      "talents": []
+    },
+    {
+      "id": "grace",
+      "name": "Grace",
+      "roles": ["Mender", "Binder", "Warden"],
+      "rungStats": ["Attack", "Speed"],
+      "rungScale": 0.005,
+      "talents": []
+    },
+    {
+      "id": "reach",
+      "name": "Reach",
+      "roles": ["Marksman", "Tinkerer"],
+      "rungStats": ["Attack", "CritChance"],
+      "rungScale": 0.005,
+      "talents": []
+    }
+  ]
+}

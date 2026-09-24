@@ -4683,6 +4683,8 @@ namespace Emberfall.DevHarness
                 ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor, conditions);
                 string pathPath = Path.Combine(dir, "guild-path.json");
                 db.LoadGuildPath(File.Exists(pathPath) ? File.ReadAllText(pathPath) : null);
+                string techPath = Path.Combine(dir, "guild-tech.json");
+                db.LoadGuildTech(File.Exists(techPath) ? File.ReadAllText(techPath) : null);
                 return db;
             }
             catch (Exception ex)
