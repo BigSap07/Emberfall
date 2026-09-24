@@ -43,9 +43,22 @@ namespace Emberfall.UI.Screens
     ///   THE TIER LEVEL RESETS AND THE LEVEL DOES NOT (F6). This is the one number on the page
     ///     that reads as a bug if it is met without warning, and the warning is three rows of
     ///     before and after printed above the button: the tier level falls to 1, the Level rises,
-    ///     the cap rises further. All three come from GameSession.PreviewAscension, which shares
-    ///     its arithmetic with Ascend itself, so the page cannot promise a landing the ascension
-    ///     does not make.
+    ///     the cap over the tier level rises further. All three come from
+    ///     GameSession.PreviewAscension, which shares its arithmetic with Ascend itself, so the
+    ///     page cannot promise a landing the ascension does not make.
+    ///
+    ///     ALL THREE ROWS ARE READ AGAINST THE LIST BESIDE THEM, which is what the numbers pass
+    ///     fixed. The hero list prints "TIER 0 - LEVEL 9 / 9" from TierLevelOf and HeroLevelCap,
+    ///     both counted in tier levels, so the card's cap row is counted the same way: a tier-0
+    ///     hero at the top of its tier reads 9 / 9 in the list and 9 -> 1 with a cap of 9 -> 18
+    ///     on the card, one hero in one unit. The row that used to sit there answered in Levels
+    ///     and printed 9 -> 45, which was the true absolute cap and still a second unit on a page
+    ///     that had not warned the player there was one.
+    ///
+    ///     THE ROWS CARRY THE MEANING AND THE PROSE DOES NOT REPEAT THEM. The sentence under them
+    ///     used to restate the reset, the rise and both cap figures, all four of which are rows a
+    ///     player can read. What a table cannot say is what the reset means, so that is the whole
+    ///     of what is left: the tier level starts again, the power does not.
     ///
     ///   A FIVE-STAR IS NEVER FODDER (F5) and heroes below five stars never ascend (F1, F2). Both
     ///     are structural here rather than enforced: the ascend tab's list holds five-stars only,
@@ -118,11 +131,22 @@ namespace Emberfall.UI.Screens
         // tab's blocks are: Build() adds them up against the shortest canvas, and a stack of
         // literals is a stack nothing can check.
         private const float PortraitSize = 88f;
-        private const float CostBlockHeight = 32f + 46f;
+        private const float CostBlockHeight = 32f + 30f;
         private const float MoveRowHeight = 32f;
-        private const float ResetNoteHeight = 76f;
+        private const float ResetNoteHeight = 30f;
         private const float OpensNoteHeight = 54f;
 
+        /// <summary>
+        /// The card's whole stack, and since this pass it is also the card's HEIGHT rather than
+        /// only an assertion about it. The plate used to fill the column top to bottom, so every
+        /// canvas taller than the stack drew an empty panel under the talent line - furniture
+        /// with nothing in it, which reads as a block that failed to load rather than as a card
+        /// that finished. The plate is now this tall and the column below it is simply ground.
+        ///
+        /// The trailing CardPad is the frame's own breathing room, the same pad the stack opens
+        /// with: "ends where its content ends" is the last sentence plus the border it sits in,
+        /// not the last sentence pressed against the edge.
+        /// </summary>
         private const float AscendCardHeight = CardPad + PortraitSize + BlockGap
                                              + Emberforge.RuleHeight + BlockGap
                                              + CostBlockHeight + BlockGap
@@ -131,7 +155,7 @@ namespace Emberfall.UI.Screens
                                              + MoveRowHeight * 3f + BlockGap
                                              + ResetNoteHeight + BlockGap
                                              + Emberforge.RuleHeight + UITheme.Space4
-                                             + OpensNoteHeight;
+                                             + OpensNoteHeight + CardPad;
 
         // ------------------------------------------------------------------ state
 
@@ -291,10 +315,15 @@ namespace Emberfall.UI.Screens
                                              new RectOffset(10, 10, 10, 10));
             UIBuilder.FillParent((RectTransform)scroll.transform, 4f);
 
+            // TOP-ANCHORED AND EXACTLY AS TALL AS ITS STACK. See AscendCardHeight: a plate that
+            // filled the column left an empty panel under the talent line on every canvas taller
+            // than the content, and an empty panel is not a neutral gap - it is a piece of
+            // furniture announcing that something belongs in it.
             _ascendCard = UIBuilder.Node("Card", _ascendPage);
-            _ascendCard.anchorMin = new Vector2(0f, 0f);
+            _ascendCard.anchorMin = new Vector2(0f, 1f);
             _ascendCard.anchorMax = new Vector2(1f, 1f);
-            _ascendCard.offsetMin = new Vector2(AscendListWidth + ColumnGap, 0f);
+            _ascendCard.pivot = new Vector2(0.5f, 1f);
+            _ascendCard.offsetMin = new Vector2(AscendListWidth + ColumnGap, -AscendCardHeight);
             _ascendCard.offsetMax = Vector2.zero;
             EmberforgeUI.PanelOn(_ascendCard, true).raycastTarget = false;
 
@@ -350,11 +379,11 @@ namespace Emberfall.UI.Screens
 
             _ascendCostNote = EmberforgeUI.Body("CostNote", _ascendCardBody, "", UITheme.FontTiny,
                                                 UITheme.Warning, TextAnchor.UpperLeft);
-            StretchIn(_ascendCardBody, _ascendCostNote.rectTransform, top + 32f, 46f);
+            StretchIn(_ascendCardBody, _ascendCostNote.rectTransform, top + 32f, 30f);
             UIBuilder.BestFit(_ascendCostNote, UITheme.FontTiny - 5, UITheme.FontTiny);
             UIBuilder.Outlined(_ascendCostNote, Emberforge.Outline, Emberforge.StrokeThin);
 
-            top += 32f + 46f + BlockGap;
+            top += CostBlockHeight + BlockGap;
             Divider(_ascendCardBody, top);
             top += Emberforge.RuleHeight + BlockGap;
 
@@ -798,35 +827,35 @@ namespace Emberfall.UI.Screens
             // The three figures, from the preview rather than from arithmetic done here. A hero
             // with no next tier repeats the present in all three rows, which is the honest reading:
             // nothing moves.
+            //
+            // THE CAP ROW IS IN TIER LEVELS, and that is the fix this pass exists for. It used to
+            // bind AscensionPreview.CapAfter, the cap as a LEVEL, so a tier-0 hero the list beside
+            // it called "LEVEL 9 / 9" read on the card as a cap of 9 rising to 45 - the same cap,
+            // answered in a unit the rest of the page never uses. Rows 0 and 2 are now a pair: a
+            // tier level and the cap over it, 9 / 9 becoming 1 / 18, which is what the list says.
+            // Row 1 is the one absolute figure on the card, and the one that does not reset.
             SetMoveRow(0, preview.TierLevelBefore, preview.TierLevelAfter);
             SetMoveRow(1, preview.LevelBefore, preview.LevelAfter);
-            SetMoveRow(2, preview.CapBefore, preview.CapAfter);
+            SetMoveRow(2, preview.TierCapBefore, preview.TierCapAfter);
 
             if (preview.HasNextTier)
             {
                 _ascendCostChip.gameObject.SetActive(true);
                 _ascendCostNote.text = preview.CopiesNeeded + " more cop"
                                      + (preview.CopiesNeeded == 1 ? "y" : "ies") + " of " + def.Name
-                                     + ", beyond the one you command. You hold " + preview.CopiesSpare
-                                     + " to spare. Only copies of this same hero count - no other"
-                                     + " five-star can stand in for it.";
+                                     + ". You hold " + preview.CopiesSpare + " to spare.";
                 _ascendCostNote.color = preview.CopiesSpare >= preview.CopiesNeeded
                                       ? UITheme.Success : UITheme.Warning;
                 EmberforgeUI.SetChipTint(_ascendCostChip, preview.CopiesSpare >= preview.CopiesNeeded
                                                         ? UITheme.Success : UITheme.Warning);
 
-                // THE WARNING, and it is written to be read before the button rather than after
-                // the fact. The tier level genuinely goes back to 1 (F6) and the Level genuinely
-                // does not go down, and a player who is told only the first meets a page that
-                // looks like it broke their hero. Both halves, with the reason between them.
-                _resetNote.text = def.Name + " starts tier " + preview.ToTier + " at tier level 1."
-                                + " That is a promotion, not a loss: tier " + preview.ToTier
-                                + "'s first level already out-powers tier " + preview.FromTier
-                                + " at its cap, its levels are worth more of the one stat ladder"
-                                + " each, and the cap over them rises from " + preview.CapBefore
-                                + " to " + preview.CapAfter + ". The gold already spent on levels"
-                                + " is not refunded and is not lost - it is the tier level that"
-                                + " starts again, never the power.";
+                // THE WARNING, in one sentence, because the three rows above it now carry the
+                // whole of what it used to spell out. The paragraph this replaces said the tier
+                // level resets, said the Level does not, said the cap rises and gave the two
+                // figures for it - and every one of those is a row the player can read directly.
+                // Prose that restates the table is prose the player learns to skip, and the one
+                // thing the table cannot say is what the reset MEANS. That is all this says now.
+                _resetNote.text = "The tier level starts again, the power does not.";
 
                 int slot = SlotOpenedByTier(preview.ToTier);
                 PassiveDef opened = slot > 0 ? def.TalentAt(slot) : null;
@@ -841,12 +870,8 @@ namespace Emberfall.UI.Screens
                 _ascendCostChip.gameObject.SetActive(false);
                 _ascendCostNote.text = "";
                 _resetNote.text = def.Stars < 5
-                    ? "Below five stars a hero never ascends. A star rating is a statement about how"
-                      + " much kit has been authored, so promoting one would be a request to write a"
-                      + " skill rather than a number to raise. This hero is fodder or a keeper, and"
-                      + " it stops here."
-                    : def.Name + " stands at the highest ascension tier this version of Emberfall"
-                      + " authors. There is nothing above it to spend copies on.";
+                    ? "Below five stars a hero never ascends."
+                    : "There is nothing above this tier to spend copies on.";
                 _opensNote.text = "";
             }
 
