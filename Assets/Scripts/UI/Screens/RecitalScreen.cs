@@ -38,10 +38,10 @@ namespace Emberfall.UI.Screens
         public override ScreenId Id { get { return ScreenId.Recital; } }
 
         /// <summary>
-        /// This screen carries its own CurrencyStrip, so the shared top bar's Gold/Shards/Dust
-        /// pills would state three of the same six numbers a few pixels above it. One readout, not
-        /// two. Same mechanism BattleScreen already uses, and ScreenRouter re-applies it on every
-        /// Show, so the bar returns intact on any screen that does not opt out.
+        /// This screen carries its own CurrencyStrip, so the shared top bar's pills would state
+        /// the same numbers a few pixels above it. One readout, not two. Same mechanism
+        /// BattleScreen already uses, and ScreenRouter re-applies it on every Show, so the bar
+        /// returns intact on any screen that does not opt out.
         /// </summary>
         public override bool HidesTopBar { get { return true; } }
 
