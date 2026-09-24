@@ -343,6 +343,22 @@ monotonically from 56 at iteration 10 to 5 at iteration 40, and the run then abo
 nothing. It is a guard against divergence rather than a budget (the loop stops the moment a walk
 proposes nothing), so it is now 120 and a converging run pays nothing for the headroom.
 
+**And its twin, `SolverMaxProbesPerStage`.** It was 60, and it is the same mistake one level down:
+a guard against a search that will not converge, sized as though it were a budget. The level search
+spends one probe per unit per step, so 60 buys twelve single-unit steps on a five-unit roster and
+fifteen on a four-unit one - enough when a seed lands near the band, and nothing like enough when it
+does not. On the solved table, seven of the 67 graded stages spent the whole 60 without one probe
+ever reading under the band's high edge - 3-8, 3-9, 4-3, 4-4, 4-7, 5-3, 5-7 - and because the search
+only keeps a candidate that strictly improves its margin, all seven kept the levels they started
+from and reported no movement at all. Unbounded, all 67 converge; the worst, 3-8, needs 68
+single-unit steps and 171 probes to walk 100% down to 85.8%. It is now 400. A whole pass over the
+graded stages costs 1,672 probes unbounded against 1,189 at 60, because only the truncated seven pay
+anything.
+
+`DevHarness --probe-study` is the instrument that says this: it re-runs the level search alone on
+every graded stage from the committed table and prints, per stage, the probes spent and whether the
+exit was `converged` or `BUDGET`. Re-run it before changing that constant again.
+
 **Correction to `CAMPAIGN-SPEC.md` 10.8 row 6, and to the task that commissioned this.** Both said Rough reached zero at
 3-11 and that no later stage dropped it. The weight is floored at 1 (`ArmorRoller.RollTemper`), so
 every stage still dropped Rough - at 4.2% at 3-11 and 5.9% at 6-12. Either reading gave the same
