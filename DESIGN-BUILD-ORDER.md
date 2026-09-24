@@ -919,6 +919,39 @@ It regenerates no baseline, and all three still match on it. The build check rea
 which are main's: armor's Rough slope (fixed on `engine/the-solve`, unmerged), the geared CEIL band
 and the campaign power band. Every GUILD DUNGEON, GUILD PATH and GUILD TECH check is green.
 
+**`guild/tech-choice`** sits on top of that branch and makes the twelve talents a choice.
+
+The x3 rule is retired: it capped a family's strongest option at three times its weakest
+on the parity ladder, passed all four families, and left one option in each the pick on
+every floor. `Tools/DevHarness/GuildTalentThemes.cs` reads every guild talent in the
+guild dungeon instead - every floor theme, and every condition that theme may draw, with
+the talent on the profile and on every family member in the line at once. The reading is
+the dungeon's own board order rather than the margin, because margin is hero HP kept and
+read that way every defensive talent measured three times every offensive one. The bar a
+lead must clear is derived from what chance alone moves the same floors by. `G10` in
+`DESIGN-GUILD-TECH.md` in the `claude` folder is the rule it enforces: no talent may be the best pick on
+every theme, and every family must have at least two that are the best pick somewhere.
+
+The talents are re-authored against it. Each is an ANSWER to something a floor is made
+of rather than a shape: `Answer in Kind` retaliates once per blow taken and answers Wall
+and Attrition, `Hold the Wall` Taunts and answers Hunt, `Dig In` answers the Champion,
+`No Survivors` answers the floors full of bodies, `Press the Wound` stacks on the one
+body that lives, `First Blood` opens with a volley, `Unbroken` wards, `Steady Hands`
+knits, `Ranging Shot` finishes, `Mark the Line` marks the biggest thing on the floor.
+Ten of the twelve are the best pick on some theme; `Grace/Last Word` and
+`Reach/Steady Aim` are not, and sit between their siblings everywhere.
+
+Two gates were changed to read what their own studies read. The theme gate fights the
+same arenas the study prints, because its bar falls out of how many arenas were fought.
+The parity gate reads six subject heroes rather than three - at three, Grace drew one
+Mender whose kit does not heal in the pinned line, and a clause that fires on a heal read
+INERT against a study that read it comfortably.
+
+It regenerates no baseline and moves none. The build check reads **4 failures**, which
+are main's: the stage fingerprints, the geared CEIL band, the campaign power band and the
+economy model's response to income. Every GUILD DUNGEON, GUILD PATH and GUILD TECH check
+is green.
+
 **`content/campaign-stages`** replaces the shipped 24 stages with Pinoy's 72:
 - only his 84 fielded, the shipped 12 kept as data and excluded from the guild dungeon and the Deep
   Recital;

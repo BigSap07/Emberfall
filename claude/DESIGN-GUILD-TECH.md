@@ -69,6 +69,22 @@ guild talent that cannot be felt is the failure the four-node Path already made 
 lines that keep their talents are a reasonable level 1 and 2 reward. That code is
 built and works; it moves rather than being deleted.
 
+**G10. No guild talent may be the best pick on every floor theme it can be drawn
+against.** A family's three exist to be argued about, and an argument needs a floor on
+which each side is right. So each one is authored as an ANSWER to something a floor is
+made of, not as a size: a retaliation answers the floors full of bodies because it fires
+once per blow taken, a stacking wound answers the one body that lives long enough to
+carry the stacks, a Taunt answers a chooser because nothing else argues with one, a ward
+against sweeps answers what comes at the whole line. A family passes when at least two of
+its talents are the best pick on some theme. It fails two ways, and they are the same
+failure in opposite coats: one talent never out-picked, or no theme separating the three
+at all.
+
+There is deliberately no ratio in G10. Two talents may measure a factor apart and both be
+real picks as long as each answers a floor the other does not; two a hair apart are still
+a fake choice if the same one always leads. What matters is whether a guild facing a Wall
+cycle and a guild facing a Swarm cycle would reasonably pick differently.
+
 ## What is retired
 
 The rule that owning the whole Path changes no fight. It was what kept the Path safe
@@ -77,12 +93,29 @@ and what made it pointless. G5 replaces it.
 The no-collective-gating guarantee, that a member of a guild of two earns within 10%
 of a member of a guild of thirty. G7 replaces it deliberately.
 
+**The rule that a family's strongest option may be worth at most three times its
+weakest.** It was written to catch a fake choice and could not: it passed all four
+families while one option in each was the pick on every floor. Line read Dig In +39.1
+against Hold the Wall +25.0 and Answer in Kind +17.6 on the parity ladder - comfortably
+inside three times, and eight of the twelve talents were flavour text anyway. The rule
+was measuring SIZE in one arena, and the thing that makes a choice real is WHEN, which
+one arena cannot show. G10 replaces it.
+
+**"Three different shapes" as the way a family's three are authored.** The first cut
+offered a front-loaded one, a reactive one and a conditional one, on the argument that a
+guild would pick for how a fight feels. Shape is invisible to an instrument that reads
+one arena, so what the guild actually saw was three sizes. G10 asks for three answers
+instead, and an answer is checkable.
+
 ## What the harness must prove
 
 - Guild tech never gates a wall: walks with zero guild tech all finish, no wall waits
   on it. Modelled on the fusion check.
 - Every guild talent changes a fight, from both sides of an arena, and clears the
   parity floor.
+- Every family's choice is a real one: across the floor themes and the conditions each
+  theme may draw, at least two of its talents are the best pick somewhere. The bar a lead
+  has to clear is derived from what chance alone moves the same floors by, never authored.
 - A guild of two and a guild of thirty reach the same ceiling, and the rate ratio is
   the authored one rather than an accident of the curve.
 - The stat rung ceiling per guild level is the one the tree authors, and no rung is
