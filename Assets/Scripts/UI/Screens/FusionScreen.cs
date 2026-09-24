@@ -955,7 +955,8 @@ namespace Emberfall.UI.Screens
             string blocker = session.ConversionBlocker(_target, _bodies);
             _statusNote.text = blocker != null ? blocker : "";
             _clearButton.Interactable = _bodies.Count > 0;
-            _actButton.SetText("CONVERT TO A " + _target.ToString().ToUpperInvariant() + " 5-STAR");
+            _actButton.SetText("CONVERT TO " + Article(_target).ToUpperInvariant() + " "
+                               + _target.ToString().ToUpperInvariant() + " 5-STAR");
             _actButton.Interactable = blocker == null;
         }
 
