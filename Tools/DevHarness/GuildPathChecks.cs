@@ -502,18 +502,29 @@ namespace Emberfall.DevHarness
             Check(fair >= FairnessFloor - 1e-9, "a new roster expects " + Pct(fair) + " of a deep roster's base, at least "
                   + Pct(FairnessFloor));
 
+            // WHAT EVERY SIZE EARNS, REPORTED AND NO LONGER ASSERTED.
+            //
+            // This used to be the NO COLLECTIVE GATING gate: every guild size from two to thirty
+            // had to expect the mean cycle within ten percent, or the build failed.
+            // claude/DESIGN-GUILD-TECH.md RETIRES THAT GUARANTEE DELIBERATELY - G7 makes a large
+            // guild level meaningfully faster per person than a small one, and that is now the
+            // recruitment pressure a guild is supposed to have. The check that replaces it is
+            // CheckGuildTechLevelCurve, which asserts the RATE RATIO is the one the square root
+            // predicts and that the CEILING does not move with size.
+            //
+            // The DUNGEON'S OWN PAY is still flat across sizes, and these numbers still say so;
+            // they are kept as a reading because the pay derivation above is solved against them.
+            // What is gone is the assertion, not the measurement.
             List<string> sizes = new List<string>();
-            bool flat = true;
             for (int s = 0; s < GuildSizes.Length; s++)
             {
                 int size = GuildSizes[s];
                 double total = cfg.PayAttempt + cfg.PayClear * Share(r.SizeCleared[size], r.SizeMembers[size])
                              + cfg.PayBoardPoint * r.ScoreSum[size] / Math.Max(1, r.SizeMembers[size]);
                 sizes.Add(size + ": " + F1(total));
-                if (size >= 2 && Math.Abs(total / MeanCycle - 1) > 0.10) flat = false;
             }
-            Check(flat, "NO COLLECTIVE GATING - a member of every guild size from 2 to 30 expects the mean cycle within 10% ("
-                  + string.Join(", ", sizes.ToArray()) + "; a guild of one has no board to place on)");
+            Line("    what the dungeon pays per member per cycle, by guild size (reported; the flatness GATE is retired, see "
+                 + "GUILD TECH's rate ratio): " + string.Join(", ", sizes.ToArray()));
         }
 
         /// <summary>
@@ -551,29 +562,28 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// BREADTH, NEVER POWER. Two halves. The kinds are an allowlist: a kind added to
-        /// GuildPathNodeKind fails here until somebody has written down why it is horizontal. And
-        /// the same line fights the same fight, event for event, for a profile owning every node
-        /// and one owning none.
+        /// THE FOUR NODES ARE A CLOSED SET NOW.
+        ///
+        /// This check had a second half: the same line fought the same fight, event for event, for
+        /// a profile owning every node and one owning none - "owning the whole Path changes no
+        /// fight". claude/DESIGN-GUILD-TECH.md RETIRES THAT RULE. Guild progression is real power,
+        /// the guild tech tree is where it lives, and what replaces the rule is G5 -
+        /// CheckGuildTechNeverGates, modelled on the fusion guard: guild tech accelerates a wall
+        /// and never gates one, proved by walks that carry none of it and finish anyway.
+        ///
+        /// What survives is the ALLOWLIST, and it survives for a narrower reason than it had. These
+        /// four nodes are built, are paid for, and are guild level rewards now (G9). They are not
+        /// where power goes and nothing new should be added to them - a fifth kind belongs in the
+        /// tech tree, where it is measured. So a kind added to GuildPathNodeKind fails the build
+        /// until somebody has decided which of the two systems it is part of.
         /// </summary>
         private static void CheckEveryNodeIsHorizontal(ContentDatabase content)
         {
             string[] vetted = { "Line", "LineTalents" };
             string[] kinds = Enum.GetNames(typeof(GuildPathNodeKind));
             Check(string.Join(",", kinds) == string.Join(",", vetted),
-                  "every node kind is one vetted as breadth - a saved line, a line that keeps talents (" + string.Join(", ", kinds) + ")");
-
-            PlayerProfile none = GameSession.CreateNewProfile(content, 0);
-            PlayerProfile all = GameSession.CreateNewProfile(content, 0);
-            for (int i = 0; i < content.GuildPath.Nodes.Count; i++) all.GuildPathNodes.Add(content.GuildPath.Nodes[i].Id);
-            GameSession withAll = new GameSession(content, all);
-            GameSession withNone = new GameSession(content, none);
-            StageDef stage = content.AllStages[0];
-            string a = Fingerprint(Fight(content, withAll, stage)), b = Fingerprint(Fight(content, withNone, stage));
-            Check(withAll.LinesAllowed == 1 + content.GuildPath.Nodes.FindAll(n => n.Kind == GuildPathNodeKind.Line).Count
-                  && a == b && all.EffectiveTeamPower(content) == none.EffectiveTeamPower(content),
-                  "owning the whole Path changes no fight: " + stage.Id + " fought event for event the same with every node and with none, "
-                  + "at the same team power (" + all.EffectiveTeamPower(content) + ")");
+                  "the Path's node kinds are the closed set the tech tree inherited - a saved line, a line that keeps talents ("
+                  + string.Join(", ", kinds) + "); anything new belongs in guild-tech.json, where it is measured");
         }
 
         /// <summary>Lines: what each node allows, what a switch keeps, and version 17.</summary>
@@ -653,22 +663,6 @@ namespace Emberfall.DevHarness
             st.Nodes.Clear();
             s.ApplyGuildPathState(st);
             Check(p.ActiveLine == 0 && s.LinesAllowed == 1, "a server answer owning fewer lines puts the formation back on line I");
-        }
-
-        private static BattleResult Fight(ContentDatabase content, GameSession session, StageDef stage)
-        {
-            BattleRequest request = new BattleRequest();
-            request.Content = content;
-            request.Stage = stage;
-            request.Seed = 424242;
-            request.Profile = session.Profile;
-            request.Team.AddRange(session.Profile.TeamHeroes());
-            return CombatSimulation.Run(request);
-        }
-
-        private static string Fingerprint(BattleResult r)
-        {
-            return r.Victory + "/" + r.Rounds + "/" + r.Events.Count + "/" + r.PlayerHpRatio.ToString("0.0000", CultureInfo.InvariantCulture);
         }
 
         private static GuildDungeonAttempt Row(string user, int attempt, bool victory, int turns, int fallen, TeamSnapshot team, int seed, long id)

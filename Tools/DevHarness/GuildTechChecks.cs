@@ -325,6 +325,7 @@ namespace Emberfall.DevHarness
             CheckGuildTechLevelCurve(db);
             CheckGuildTechGates(db);
             CheckReferencePlayerHasNoGuildTech(db);
+            CheckGuildTechNeverGates(db);
             CheckGuildDungeonStripsGuildTech(db);
             CheckGuildTechPathNodesMoved(db);
             CheckGuildTechServerAgrees(db, contentDir);
@@ -538,6 +539,84 @@ namespace Emberfall.DevHarness
                 int through = StatMath.PowerScore(StatMath.ForHero(sample, 40, null, null, null, db.GuildTech, fresh.GuildTech));
                 Check(bare == through, "and an empty tree is an exact no-op on a stat line (" + bare + " either way)");
             }
+        }
+
+        /// <summary>
+        /// GUILD TECH ACCELERATES A WALL. IT NEVER GATES ONE (G5). The rule as a guard, and
+        /// deliberately the same guard the fusion rule already has - CheckFusionNeverGates is the
+        /// model and this is the second reading of the same instrument.
+        ///
+        /// Walks by the reference player - pulls, gold into levels up to the caps, armor, no
+        /// conversion, no ascension AND NO GUILD TECH - and every one of them must finish the
+        /// campaign. A walk that sticks is a wall only a guild could open, which is the thing G5
+        /// forbids, so it FAILS rather than reports.
+        ///
+        /// Beside it, the same walks with the whole tree owned. That arm is a READING, not a gate:
+        /// the rule says a guild makes a wall faster and that is only a claim until both numbers
+        /// are on one line. What it must not do is finish somewhere the first arm could not reach.
+        /// </summary>
+        private static void CheckGuildTechNeverGates(ContentDatabase db)
+        {
+            int walks = GtNeverGatesWalks;
+            List<EconomyRun> bare = new List<EconomyRun>(), teched = new List<EconomyRun>();
+            for (int k = 0; k < walks; k++)
+            {
+                bare.Add(SimulateEconomyUnder(db, WalkSeed(k), false, false));
+                teched.Add(SimulateEconomyWithTech(db, WalkSeed(k), MaxGuildRungs(db.GuildTech)));
+            }
+
+            int stuck = 0;
+            List<string> where = new List<string>();
+            for (int k = 0; k < bare.Count; k++)
+                if (bare[k].StuckAt >= 0) { stuck++; where.Add(db.AllStages[bare[k].StuckAt].DisplayCode); }
+            Check(stuck == 0,
+                  stuck == 0
+                    ? "G5 - GUILD TECH NEVER GATES A WALL: all " + bare.Count + " walks that carry no guild tech at all finish the "
+                      + "campaign, so no wall waits on a guild"
+                    : stuck + " of " + bare.Count + " walks with no guild tech are STUCK (at " + string.Join(", ", where.ToArray())
+                      + "): a wall there opens only for a guild, which is the gate G5 forbids");
+
+            // And the acceleration, reported: entry power at each wall, with the tree and without.
+            double lift = 0; int lifts = 0;
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                if (!BandKindOf(db.AllStages[s], s).StartsWith("wall")) continue;
+                for (int k = 0; k < bare.Count && k < teched.Count; k++)
+                {
+                    if (s >= bare[k].Stages.Count || s >= teched[k].Stages.Count) continue;
+                    double a = bare[k].Stages[s].EntryRatio, b = teched[k].Stages[s].EntryRatio;
+                    if (a <= 0) continue;
+                    lift += b / a - 1;
+                    lifts++;
+                }
+            }
+            int techStuck = 0;
+            for (int k = 0; k < teched.Count; k++) if (teched[k].StuckAt >= 0) techStuck++;
+            Line("    a walk carrying the whole tree arrives at a wall with " + Pct3(lifts > 0 ? lift / lifts : 0)
+                 + " more power than the same walk without it, over " + lifts + " wall arrivals"
+                 + (techStuck > 0 ? "; " + techStuck + " teched walks stuck" : "; none of them stuck either"));
+            Check(techStuck == 0,
+                  "and a walk that DOES carry the whole tree finishes too - guild tech moves where a player arrives, never whether they do");
+        }
+
+        /// <summary>Walks behind G5's guard, matched to the fusion rule's own count so the two
+        /// readings are over the same number of players.</summary>
+        private const int GtNeverGatesWalks = 6;
+
+        /// <summary>
+        /// The economy walk with a guild tech state on its profile from the first stage. Uses
+        /// SimulateEconomyUnder's own static-flag idiom (WallResolve.cs) rather than threading a
+        /// parameter through the walk, because that is how the walk's other two policy switches -
+        /// converts and ascends - are already expressed.
+        /// </summary>
+        private static GuildTechState _walkGuildTech;
+
+        private static EconomyRun SimulateEconomyWithTech(ContentDatabase db, int firstSeed, GuildTechState tech)
+        {
+            GuildTechState was = _walkGuildTech;
+            _walkGuildTech = tech;
+            try { return SimulateEconomyUnder(db, firstSeed, false, false); }
+            finally { _walkGuildTech = was; }
         }
 
         /// <summary>

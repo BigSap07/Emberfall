@@ -16031,6 +16031,10 @@ namespace Emberfall.DevHarness
             EconomyRun run = new EconomyRun();
             run.SetFirstSeed(firstSeed);
             PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+            // The walk's guild tech, and it is NULL for every walk but G5's own reading: the
+            // reference player recommendedPower is derived for has none, and CheckGuildTechNeverGates
+            // asserts that rather than this arranging it. See SimulateEconomyWithTech.
+            if (_walkGuildTech != null) profile.GuildTech = _walkGuildTech.Clone();
             GameSession session = new GameSession(db, profile);
             run.Profile = profile;
             run.Session = session;
