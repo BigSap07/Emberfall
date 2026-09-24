@@ -949,22 +949,31 @@ loader ignores both keys. The words `proposed` uses:
 
 ### 10.3 What is NOT solved - the seeds
 
-`recommendedPower`, `floorLevel`, `ceilingLevel` and every authored enemy level are **seeds, not
-answers**. They are carried from the shipped stage at the same position, and chapters 3-6 repeat
-chapter 2's by position. Every unit in a line stands at `floorLevel`. `Tools/solve-recommended-power.ps1`
-has **not** been run on this content, on purpose.
+`recommendedPower`, `floorLevel`, `ceilingLevel` and every authored enemy level were **seeds, not
+answers**. They were carried from the shipped stage at the same position, with chapters 3-6
+repeating chapter 2's by position and every unit in a line standing at `floorLevel`.
+**`Tools/solve-recommended-power.ps1` has since been run on this content and all four are solved**;
+re-running `Tools/_author_campaign_stages.py` writes the seeds back over them, so the solver has to
+run again after it.
 
-Rewards are also carried by position for chapters 1-2. **Chapters 3-6 pay exactly what 2-12 pays,
-flat**: purse, first-clear rewards and idle rates. This is a placeholder, not a curve. The two
-curves tried on paper were worse:
+Rewards were also carried by position for chapters 1-2, and **chapters 3-6 paid exactly what 2-12
+pays, flat** - purse, first-clear rewards and idle rates - as a placeholder rather than a curve. The
+two curves tried on paper were both worse than the placeholder:
 
 - Repeating chapter 2's rewards by position makes 3-1 pay a quarter of 2-12, and drops the idle
   rate a player has already earned by 19x the moment they clear it.
 - Growing chapter 2's shape onward has to multiply about 4x a chapter to stay monotonic across a
   chapter boundary, because 2-12's purse is 3.75x 2-1's. That is 256x by chapter 6.
 
-The reward curve past chapter 2 is an economy decision. It belongs with the fusion tension (open
-decision 4 in `DESIGN-BUILD-ORDER.md`), in the solve pass, not here.
+**Settled in the solve pass, and both of those are the same mistake.** Each one re-bases the curve
+at a chapter boundary - one down, one up - and a curve that has boundaries at all has to pay for
+them. The law that replaced the plateau has none: every reward channel is a power of the GLOBAL
+stage index, `gold = 120 * (1 + i/13.2)^3.20` with the rest hanging off it, so the twelve-stage
+chapter is a name for a stretch of the curve and not a unit the curve is built from. Six of the
+seven channels in the authored 24 already fitted that form to within 3-9%, which is where the
+exponents came from. The full law, the fit and the per-channel reasoning are in
+`Tools/_author_campaign_stages.py` (`rewards_at`) and summarised in `campaign.json`'s header;
+`DESIGN-BUILD-ORDER.md`'s economy curve section carries the short version.
 
 The generator refuses to write:
 - a line naming an undefined enemy, an enemy twice, or any of the shipped 12

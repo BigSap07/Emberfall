@@ -504,7 +504,9 @@ chosen.
 - **`idleGoldPerHour` is derived from the stage's own purse** rather than hand-authored, which
   restores `DESIGN-IDLE-PROGRESSION`'s own rule. The hand-authored table had let the implied
   multiple slide from 1.63 at `1-1` to 0.51 at `2-12`, so the cache paid relatively less the deeper
-  a player got.
+  a player got. **The derivation is now one multiple, 0.80, at every stage in the game**: the
+  chapter 2 exponent that pass added on top of the purse rule had let the multiple slide the other
+  way, to 4.35 at `2-12`, and the 49 stages after it were flat. See the reward curve below.
 - **The hero level cost loses its quadratic term and gains a constant**, from `55+26L+3.2L^2` to
   `600+470L`, because power is linear in level and a quadratic cost makes the gold needed to hold a
   ratio grow as the cube of it.
@@ -515,6 +517,22 @@ chosen.
 at `2-12` and counts every channel a coin arrives through, because "where does the power come from"
 had only ever been answered by reading the content files, and reading them got it wrong. At `2-12`
 idle income is 86% of all gold earned and 56.3% of all power.
+
+**The reward curve is one law across all 72 stages** (`Tools/_author_campaign_stages.py`,
+`rewards_at`). Fit each of the seven reward channels over the authored 24 to
+`v(i) = v(0) * (1 + i/k)^p` in the GLOBAL stage index and six come back as clean power laws, 3 to 9%
+rms: the shipped economy was already one curve and it stopped at stage 24. The seventh,
+`idleGoldPerHour`, is the one no power law fits, which is the chapter 2 exponent read from the other
+side. The law that replaced both it and the plateau is `gold = 120 * (1 + i/13.2)^3.20`, with shards
+at `gold/20`, idle gold at `0.80 * gold`, idle shards on their own much flatter
+`9 * (1 + i/8.4)^1.60` (a level's price climbs with the level; a summon's never does), `accountXp` at
+exponent 2.60, and the first-clear bonus a decaying multiple of the same stage's purse. `(k, p)` is
+near-degenerate over 24 stages, so the exponent is set by the campaign's TOTAL instead: 3.20 holds
+the whole campaign's gold where the plateau already put it. Every channel rises at all 71 steps and
+the growth rate only ever falls, +25.0% at `1-2` to +3.9% at `6-12` - **no dead stretch and no spike,
+asserted by the generator rather than eyeballed**. There are deliberately no finale bumps: a x1.25
+finale has to be given back at the next chapter's opener, which is the non-monotonic step both
+shapes `CAMPAIGN-SPEC.md` 10.3 rejected died on.
 
 `ReportPaceTargets` grades the shape the campaign is meant to have against the one it has, and is
 reported rather than failing. `ReportFusionWalk` shows every line change the walk made and the line
