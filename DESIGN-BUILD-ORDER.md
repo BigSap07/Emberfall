@@ -554,9 +554,22 @@ exponent 2.60, and the first-clear bonus a decaying multiple of the same stage's
 near-degenerate over 24 stages, so the exponent is set by the campaign's TOTAL instead: 3.20 holds
 the whole campaign's gold where the plateau already put it. Every channel rises at all 71 steps and
 the growth rate only ever falls, +25.0% at `1-2` to +3.9% at `6-12` - **no dead stretch and no spike,
-asserted by the generator rather than eyeballed**. There are deliberately no finale bumps: a x1.25
-finale has to be given back at the next chapter's opener, which is the non-monotonic step both
-shapes `CAMPAIGN-SPEC.md` 10.3 rejected died on.
+asserted by the generator rather than eyeballed**.
+
+**The one bump is the finale's FIRST CLEAR, x1.50** (`FINALE_FIRST_CLEAR_BUMP`), and only because a
+first clear is paid once. No channel a player can earn twice is bumped: a x1.25 finale on the purse
+has to be given back at the next chapter's opener, which is the non-monotonic step both shapes
+`CAMPAIGN-SPEC.md` 10.3 rejected died on, and a first clear has no step to give back. It exists
+because the curve marked the finale - the hardest stage in its chapter, derived at a 65% CEIL rather
+than 85% - with nothing: `1-12`'s whole first payout was 835 + 1,440 = 2,275 against `2-1`'s
+950 + 1,630 = 2,580, so the hardest stage in the chapter paid LESS than the ordinary one after it.
+x1.22 is the smallest bump that clears that; x1.50 leads the next opener by 16% at `1-12` rising to
+25% by `5-12`, and puts the finale's first clear at 2.4 to 2.6 of its own purse against an ordinary
+stage's 1.62. It is an event, not an economy change: the whole bump adds 81,250 gold and 12,145
+shards over 72 stages, a quarter of one percent of the campaign's gold. The generator asserts all
+three halves of the claim - the first-clear channels still rise at every step across the ordinary
+stages, each finale leads both its neighbours, and each finale's whole first payout leads the next
+chapter's opener.
 
 `ReportPaceTargets` grades the shape the campaign is meant to have against the one it has, and is
 reported rather than failing. `ReportFusionWalk` shows every line change the walk made and the line
