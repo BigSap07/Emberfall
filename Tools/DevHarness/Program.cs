@@ -18071,6 +18071,31 @@ namespace Emberfall.DevHarness
         private const float SolverStuckStep = 1.05f;
 
         /// <summary>
+        /// HOW MANY TIMES THE SOLVE RELEASES BANKED STEPS BEFORE IT GIVES UP TRYING: 8, which is
+        /// more rounds than any stage has ever banked steps.
+        ///
+        /// SolverStuckStep is a RATCHET, and a ratchet records history rather than need. A stage
+        /// that stuck at iteration 3, when chapters 3-6 still carried chapter 2's numbers by
+        /// position, kept that step through iteration 34 against a table it would no longer stick
+        /// on. The first solve of the 72 banked between 2 and 4 steps on every wall in chapters
+        /// 2-6, and every one of those walls then read x1.086 to x1.197 where its band ends at
+        /// x1.02 - because ONE step of 5% on a middle of x0.985 is already outside the wall band.
+        /// Chapter 1's two walls were in band precisely because they banked none.
+        ///
+        /// So a solve does not finish when the ratchet settles. It settles, then RELEASES one step
+        /// from every stage that holds any, and settles again. A stage that sticks after a release
+        /// has proved it needs that step and is never asked to give it up a second time; a stage
+        /// that does not is a stage carrying a step it earned against a table that no longer
+        /// exists. The phase ends when nothing is left to release or every remaining step is
+        /// proven, so it terminates: each round either removes a step or proves one.
+        ///
+        /// What it cannot do is invent headroom. If a wall genuinely cannot be passed by a player
+        /// who never converts and never ascends at x0.985, the step comes back and the wall reads
+        /// out of band, which is the true statement about that content.
+        /// </summary>
+        private const int SolverStepReleaseRounds = 8;
+
+        /// <summary>
         /// The band middle one stage is derived against. The four tutorial stages have no band to
         /// sit in, and the curve pass put them on chapter 1's ordinary middle: the committed 2,977
         /// at 1-1 is exactly that stage's entry power over x1.20, which is where the reading comes
@@ -18912,6 +18937,16 @@ namespace Emberfall.DevHarness
             int iterations = 0;
             bool settled = false;
             Dictionary<string, int> stuckSteps = new Dictionary<string, int>();
+            // The release phase's bookkeeping. `proven` holds the stages that stuck AFTER a
+            // release, which is the only evidence that a banked step is still load-bearing.
+            HashSet<string> proven = new HashSet<string>();
+            // Only a stage that has actually been asked to give a step up can prove it needs one.
+            // Without this, a stage sticking for the first time late in the run - after some other
+            // stage's release moved the table under it - would be pinned as proven on a step it was
+            // never asked about, which is the accumulation this phase exists to undo.
+            HashSet<string> everReleased = new HashSet<string>();
+            int releases = 0;
+            List<string> releaseLog = new List<string>();
             while (iterations < SolverMaxIterations)
             {
                 iterations++;
@@ -18942,6 +18977,12 @@ namespace Emberfall.DevHarness
                     int had;
                     stuckSteps.TryGetValue(id, out had);
                     stuckSteps[id] = had + 1;
+                    // A stick at a stage that has given a step up is the proof that the step was
+                    // carrying weight on the finished table rather than on the seed one. It takes
+                    // the step back, keeps it, and is never asked for it again.
+                    if (everReleased.Contains(id) && proven.Add(id))
+                        releaseLog.Add(db.GetStage(id).DisplayCode + " stuck after a release and is"
+                                       + " back to " + stuckSteps[id] + " step(s) - proven, kept");
                 }
                 if (stuckIds.Count > 0 && stuckAt == null)
                 {
@@ -19017,7 +19058,42 @@ namespace Emberfall.DevHarness
                          + " not written and is still the committed table.");
                     return 1;
                 }
-                if (moved == 0) { settled = true; break; }
+                if (moved == 0)
+                {
+                    // THE RATCHET HAS SETTLED. Before calling that the answer, ask which of the
+                    // banked steps the finished table still needs. See SolverStepReleaseRounds.
+                    List<string> release = new List<string>();
+                    foreach (KeyValuePair<string, int> kv in stuckSteps)
+                        if (kv.Value > 0 && !proven.Contains(kv.Key)) release.Add(kv.Key);
+                    if (release.Count == 0 || releases >= SolverStepReleaseRounds)
+                    {
+                        if (release.Count > 0)
+                            Line("  The release phase is out of rounds at " + releases + " and "
+                                 + release.Count + " stage(s) still hold an unproven step.");
+                        settled = true;
+                        break;
+                    }
+                    release.Sort(StringComparer.Ordinal);
+                    releases++;
+                    List<string> codes = new List<string>();
+                    foreach (string id in release)
+                    {
+                        stuckSteps[id] = stuckSteps[id] - 1;
+                        everReleased.Add(id);
+                        codes.Add(db.GetStage(id).DisplayCode + " " + (stuckSteps[id] + 1)
+                                  + "->" + stuckSteps[id]);
+                    }
+                    Line("  RELEASE " + releases + ": the ratchet settled, so one banked step comes"
+                         + " off every stage that holds an unproven one - "
+                         + string.Join(", ", codes.ToArray())
+                         + ". A stage that sticks from here keeps what it has.");
+                    releaseLog.Add("release " + releases + ": " + string.Join(", ", codes.ToArray()));
+                    // The state key is about to be revisited legitimately: the same table with a
+                    // different step behind it is not the cycle the detector is looking for.
+                    seen.Clear();
+                    seen.Add(SolverStateKey(db));
+                    continue;
+                }
 
                 string key = SolverStateKey(db);
                 int repeat = seen.IndexOf(key);
@@ -19042,6 +19118,29 @@ namespace Emberfall.DevHarness
                      + " harder stages cost more retries, retries are paid for by farming, farming"
                      + " buys power, and power asks for harder stages.");
                 return 1;
+            }
+
+            Line("");
+            if (releaseLog.Count == 0)
+            {
+                Line("  THE STUCK-STEP RATCHET: nothing was banked, so there was nothing to release."
+                     + " Every wall is derived at its own band middle.");
+            }
+            else
+            {
+                Line("  THE STUCK-STEP RATCHET, and what the release phase did with it. A banked step"
+                     + " aims a stage 5% higher than its band middle and so puts it OUTSIDE its band;"
+                     + " a step banked against an early iteration's table is a step the finished table"
+                     + " may not need. Each line is one release round or one stage proving it does:");
+                for (int i = 0; i < releaseLog.Count; i++) Line("    " + releaseLog[i]);
+                List<string> held = new List<string>();
+                foreach (KeyValuePair<string, int> kv in stuckSteps)
+                    if (kv.Value > 0) held.Add(db.GetStage(kv.Key).DisplayCode + " x" + kv.Value);
+                held.Sort(StringComparer.Ordinal);
+                Line("    still held at the end: " + (held.Count == 0 ? "none - every wall sits at its"
+                     + " own band middle" : string.Join(", ", held.ToArray())
+                     + ". Each of these is a stage a player who never converts and never ascends"
+                     + " could not pass at its band middle, and each will read OVER its band."));
             }
 
             Line("");
@@ -19242,8 +19341,11 @@ namespace Emberfall.DevHarness
         /// It scales the loaded StageDefs in memory and puts them back afterwards. Nothing is
         /// written to campaign.json, and the restore is unconditional.
         /// </summary>
+        private const float IncomeProbeMultiplier = 2.5f;
+
         private static void CheckEconomyRespondsToIncome(ContentDatabase db)
         {
+            const float Multiplier = IncomeProbeMultiplier;
             Line("");
             Line("ECONOMY RESPONDS TO INCOME (the guard the old model would have failed)");
 
@@ -19257,7 +19359,6 @@ namespace Emberfall.DevHarness
             // happened to roll. So the guarded response is to ALL income, gold and shards together,
             // and the gold-only response is still printed beside it as a reading.
 
-            const float Multiplier = 2.5f;
 
             // Set from the measured spread, not from a wish. The broken model moved 0.03 on this
             // input; the fixed one moves about 0.16. The bar sits at 0.10 - more than three times
@@ -19350,11 +19451,77 @@ namespace Emberfall.DevHarness
                  + "   (gold buys levels; levels stop at each hero's cap, which only ascension raises)");
             Line("  The old one-session-per-attempt model responded about 0.03 to this same input,");
             Line("  which is how it was caught. Anything near that means the link is severed again.");
+            ReportIncomeAbsorption(db, poor, rich);
 
             Check(response > MinimumResponse,
                   "the economy model responds to a " + Fmt(Multiplier) + "x change in authored income"
                   + " (moved " + Fmt(response) + ", needs more than " + Fmt(MinimumResponse) + ")");
             Line("");
+        }
+
+        /// <summary>
+        /// WHERE THE EXTRA INCOME WENT, channel by channel, so a response that is small or negative
+        /// can be read rather than argued about.
+        ///
+        /// The response is a ratio, power over recommendedPower, and recommendedPower is identical
+        /// in both runs - so every point of it is the numerator, and the numerator is exactly three
+        /// multiplicative pieces: the roster the player deployed, the levels gold bought on top of
+        /// it, and the armor clears dropped. This prints all three at the last stage reached, next
+        /// to the income that was supposed to buy them and the battles that were fought for them.
+        ///
+        /// A NEGATIVE response is a real outcome, not a broken link, and this is the shape it has:
+        /// gold stops at each hero's cap, shards stop when the roster is saturated, and ARMOR IS
+        /// NOT BOUGHT AT ALL - it drops from battles. So income that arrives past both ceilings
+        /// cannot buy power, while the retries and the farming it makes unnecessary are battles
+        /// that would have dropped armor. Richer, shorter, and slightly weaker at the end.
+        ///
+        /// That is why the guard cannot be answered by paying MORE. It can only be answered by
+        /// income arriving where a ceiling is not yet binding, and this report is what says whether
+        /// a reshaping did that: the levels line moving means gold found room under the caps, the
+        /// roster line moving means shards found a hero worth summoning.
+        /// </summary>
+        private static void ReportIncomeAbsorption(ContentDatabase db, EconomyRun poor, EconomyRun rich)
+        {
+            EconomyStageOutcome a = LastReached(poor), b = LastReached(rich);
+            if (a == null || b == null) return;
+            Line("  WHERE THE EXTRA INCOME WENT - the ratio's numerator is roster x levels x armor,"
+                 + " and nothing else:");
+            Line("    at " + a.Stage.DisplayCode + "          1x          " + Fmt(IncomeProbeMultiplier)
+                 + "x        change");
+            AbsorptionRow("    roster (5 at Lv1) ", a.EntryRosterPower, b.EntryRosterPower);
+            AbsorptionRow("    levels x          ", a.EntryBarePower - a.EntryRosterPower,
+                                                   b.EntryBarePower - b.EntryRosterPower);
+            AbsorptionRow("    armor x           ", a.EntryPower - a.EntryBarePower,
+                                                   b.EntryPower - b.EntryBarePower);
+            AbsorptionRow("    entry power       ", a.EntryPower, b.EntryPower);
+            Line("");
+            AbsorptionRow("    gold earned       ", poor.Ledger.GoldTotal, rich.Ledger.GoldTotal);
+            AbsorptionRow("    gold into levels  ", poor.Ledger.GoldSpentOnLevels, rich.Ledger.GoldSpentOnLevels);
+            AbsorptionRow("    hero levels bought", poor.Ledger.HeroLevelsBought, rich.Ledger.HeroLevelsBought);
+            AbsorptionRow("    shards earned     ", poor.Ledger.ShardTotal, rich.Ledger.ShardTotal);
+            AbsorptionRow("    summons           ", poor.Ledger.Summons, rich.Ledger.Summons);
+            AbsorptionRow("    duplicate refunds ", poor.Ledger.ShardDuplicate, rich.Ledger.ShardDuplicate);
+            AbsorptionRow("    battles fought    ", poor.TotalBattles, rich.TotalBattles);
+            AbsorptionRow("    armor drops       ", poor.Ledger.ArmorDrops, rich.Ledger.ArmorDrops);
+            Line("    Read it this way: gold that cannot buy a level because the hero is at its cap,"
+                 + " and shards that");
+            Line("    refund as duplicates because the roster is saturated, are income the ratio"
+                 + " cannot see. Armor is");
+            Line("    the one channel income does not buy, so a shorter walk carries less of it.");
+        }
+
+        private static EconomyStageOutcome LastReached(EconomyRun run)
+        {
+            for (int i = run.Stages.Count - 1; i >= 0; i--)
+                if (run.Stages[i].Stage != null && run.Stages[i].Stage.RecommendedPower > 0)
+                    return run.Stages[i];
+            return null;
+        }
+
+        private static void AbsorptionRow(string label, long poor, long rich)
+        {
+            string delta = poor == 0 ? "-" : (rich >= poor ? "+" : "") + Pct((rich - poor) / (float)poor);
+            Line(label + poor.ToString().PadLeft(12) + rich.ToString().PadLeft(12) + delta.PadLeft(12));
         }
 
         private static float CapBlockedShare(EconomyRun run)
