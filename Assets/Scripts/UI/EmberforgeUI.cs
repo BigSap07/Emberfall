@@ -293,6 +293,38 @@ namespace Emberfall.UI
             return root;
         }
 
+        /// <summary>
+        /// Recolours a chip built by <see cref="Chip"/> in place, for the one thing a chip is
+        /// asked to do that its text cannot: change state.
+        ///
+        /// It touches the same three graphics Chip tints and leaves the body alone, so a chip
+        /// retinted here is indistinguishable from one built at that tint. Rebuilding instead
+        /// would mean destroying and re-creating a node inside a repaint, which is how a screen
+        /// ends up with two chips in one slot for a frame.
+        /// </summary>
+        public static void SetChipTint(RectTransform chip, Color tint)
+        {
+            if (chip == null) return;
+            Transform wash = chip.Find("Wash");
+            if (wash != null)
+            {
+                Image w = wash.GetComponent<Image>();
+                if (w != null) w.color = UITheme.WithAlpha(tint, Emberforge.ChipWashAlpha);
+            }
+            Transform line = chip.Find("Line");
+            if (line != null)
+            {
+                Image l = line.GetComponent<Image>();
+                if (l != null) l.color = UITheme.WithAlpha(tint, Emberforge.ChipLineAlpha);
+            }
+            Transform text = chip.Find("Text");
+            if (text != null)
+            {
+                Text t = text.GetComponent<Text>();
+                if (t != null) t.color = tint;
+            }
+        }
+
         /// <summary>The four corner diamonds. Non-interactive, so they never eat a tap aimed at
         /// whatever is inside the panel's corner.</summary>
         public static void Ornaments(RectTransform panel)
