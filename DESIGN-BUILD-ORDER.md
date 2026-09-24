@@ -867,6 +867,29 @@ differs between them.
 
 ## In progress
 
+**`ui/fusion-screen`** gives fusion and ascension the screen they had rules for and no door to.
+`GameSession.Ascend` and `GameSession.Convert` had no caller outside `DevHarness` and
+`PlayModeScreenshot`, there was no `ScreenId` for either, and two screens already told the player
+to use them - `HeroDetailScreen`'s cap note on a maxed five-star and `TalentsScreen`'s
+`ASCEND TO TIER N` on a locked card. It holds:
+- **`FusionScreen`**, two tabs on one page because fusion's output is ascension's input. The
+  ascend tab is a list of the player's five-stars and a card carrying the copy cost and three
+  before-and-after rows; the convert tab is the six aspects, the whole roll pool drawn face by
+  face, a two-line recipe block and a grid of bodies against a points meter.
+- **`GameSession.PreviewAscension`** and the `AscensionPreview` it returns, so the page can say
+  what a step costs and what it moves before the player commits. `AscensionLanding` is extracted
+  from `Ascend` rather than copied, so preview and result cannot disagree.
+- **`GameSession.ConversionFodderRoster`**, the per-aspect low-star count F9's seed rule is made
+  of, so the screen can print the reason next to the rule.
+- **the two doors**: an ASCEND/CONVERT button on `HeroDetailScreen`'s action bar with a cap note
+  that names the copies the step costs, and a locked talent card that is pressable at last.
+- **`Fusion` and `FusionConvert` targets** in `PlayModeScreenshot`, one per tab, seeded through
+  `GrantHeroDirect` the way the `Talents` subject already is.
+
+No save version moved, no content JSON changed and no baseline was regenerated. The build check
+reads **4 failures**, the four already on `main`: the moved stage fingerprints, the CEIL band, the
+campaign power band and the economy model's response to authored income.
+
 **`talents/ascension-gate`** builds DESIGN-TALENTS T6: ascension tier unlocks talent slots, one
 per tier. It holds the derived gate on `HeroInstance`, the single simulation line that reads it,
 the capture-side rule that keeps a locked pick out of every published record, the locked card on
