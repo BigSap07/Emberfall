@@ -337,6 +337,12 @@ done by hand from the numbers quoted.
 | 1 | `armor.json` `tempers[].dropWeight` + `dropWeightPerStageIndex`, read by `ArmorRoller.RollTemper` | `w = dropWeight + slope * index`; a `w` under 1 **is floored to 1**, never 0 | Rough 72 - 0.42 x 23 = 62.3, so 62. Honed 20 + 0.16 x 23 = 23.7, so 24. Rough is **72.1%** of drops | Rough 42.2, so 42. Honed 31.4, so 31. Rough is **57.5%** | Nothing now. Rough never reaches its floor: the shallowest it gets is 42 against 31 at 6-12. |
 | 2 | `balance.json` `relicDustPerRepeatClear` 6 + `relicDustPerStageIndex` 2, read by `GameSession.RelicDustForRepeatClear` | `6 + 2 * index`, no cap | 52 a clear, 156 a day at the 3-clear cap | 148 a clear, **444** a day | `relicMythicShopPrice` 2400 was sized in its comment as "156/day at the final stage (globalIndex 23)", about 15 days. At 6-12 it is 5.4 days. `relicShopPrice` 80 goes from 1.5 clears to 0.54. |
 
+**One more, found by the solve itself: `SolverMaxIterations`.** It was 40, the 24-stage campaign's
+number, and on 72 stages it cut a *converging* run off five passes short - stages-moved fell
+monotonically from 56 at iteration 10 to 5 at iteration 40, and the run then aborted and wrote
+nothing. It is a guard against divergence rather than a budget (the loop stops the moment a walk
+proposes nothing), so it is now 120 and a converging run pays nothing for the headroom.
+
 **Correction to `CAMPAIGN-SPEC.md` 10.8 row 6, and to the task that commissioned this.** Both said Rough reached zero at
 3-11 and that no later stage dropped it. The weight is floored at 1 (`ArmorRoller.RollTemper`), so
 every stage still dropped Rough - at 4.2% at 3-11 and 5.9% at 6-12. Either reading gave the same
