@@ -638,8 +638,11 @@ namespace Emberfall.DevHarness
             // ---- the rest of the kit rules the sweep leaves dark
             new MatrixRoom("aeron_momentum_breaker", "s_caster_tail", MxMender, 1, false, "energy.enemy-", 1,
                 "an enemy carrying Turn Debt that charges an active"),
-            new MatrixRoom("aminah_emergency_release", "m_fastbruiser", MxGuardSquad, 1, false, "removed:Ledger", 1,
-                "an ally holding Priority struck below 30% by a blow fast enough to land before it is topped up"),
+            new MatrixRoom("aminah_emergency_release", "m_fastbruiser", MxMender, 1, false, "removed:Ledger", 1,
+                "an ally holding Priority struck below 30% by a blow fast enough to land before it is topped up."
+                + " THE SQUAD IS THE ROOM, and it is the squad that broke rather than the rule: beside Eira AND"
+                + " Isara nothing holding Priority ever crossed the line, and beside Isara alone it crosses once."
+                + " Eira's Mobile Cover is what stood between them"),
             new MatrixRoom("arden_everything_has_a_limit", "m_hider_tail", "", 1, false, "damage", 1,
                 "a True Measure body alive long enough for the recorded band to be read by his active"),
             new MatrixRoom("arden_everything_has_a_limit_active", "m_hider_tail", "", 3, false, "damage", 1,
@@ -656,6 +659,14 @@ namespace Emberfall.DevHarness
                 "a Displaced enemy whose cast can be cancelled"),
             new MatrixRoom("darian_the_cost_of_knowing", "m_fastbruiser", MxPair, 1, true, "payments.subject:+10", 1,
                 "Hidden Strength filling to its cap, which needs Darian's Ward to absorb enough"),
+            new MatrixRoom("finn_ringing_toll", "s_caster_tail", MxGuardSquad, 1, false, "payments.enemy:-5", 1,
+                "an enemy that CASTS while OTHER Ringing enemies are still standing - the toll can never take"
+                + " anything off the bar the cast itself just emptied"),
+            new MatrixRoom("vaelis_opening_moves", "m_buffer_brittle", "", 1, false, "applied:Linked", 1,
+                "an enemy dying while Vaelis is bound by Departure. It used to ask for the DEFEATED body to"
+                + " carry the link, and no enemy carrying it died in 360 rooms: an ally's hit on a linked body"
+                + " spends the link before a killing blow can find it. The link is mutual, so the same binding"
+                + " read from the end that survives is reachable"),
             new MatrixRoom("dett_turn_with_it", "s_caster_tail", "", 1, false, "applied:DamageReductionUp", 1,
                 "an enemy ACTIVE aimed at Dett; the sweep's enemies have none"),
             new MatrixRoom("elin_tighten_the_thread", "m_hexer", "", 1, false, "payments.subject:+10", 1,
@@ -751,31 +762,27 @@ namespace Emberfall.DevHarness
             { Rule = rule; Kind = kind; Why = why; Evidence = evidence; }
         }
 
-        private static readonly MatrixWait[] MatrixWaits = {
-            new MatrixWait("aeron_the_unbroken_stride I", "AUTHORING",
-                "Interest Owed asks for an enemy ENDING its turn with Turn Debt, and the engine repays"
-                + " and removes every Turn Debt entry as that turn OPENS (RepayTurnDebt, before the"
-                + " TurnStart passives); only Aeron's own basic and active bank debt, and he never acts"
-                + " inside an enemy's turn", EvidenceInterestOwed),
-            new MatrixWait("finn_ringing_toll", "AUTHORING",
-                "the toll answers OnEnemyActive, which TakeTurn raises after it has set the caster's"
-                + " Energy to 0 for the cast, so its -5 always lands on an empty bar. NO ORDER MENDS IT:"
-                + " every active costs 100 against a bar capped at 100, so a cast empties the bar whatever"
-                + " was taken first. Raised ahead of the spend (measured, not shipped) the toll moves Energy"
-                + " on 0 empty bars of 5 and changes nothing across 1,152 campaign battles - deaths, rounds"
-                + " and Energy lost identical, only the extra Energy event differs", EvidenceRingingToll),
-            new MatrixWait("eira_leave_no_corner", "UNRAISED",
-                "each of its two gates lands alone and the pair never has: in the one blow of"
-                + " m_fastbruiser where an un-acted ally held Mobile Cover, IncomingHitIsSingleTarget"
-                + " answered no for a single-target basic. Cause not established; 96 rooms tried",
-                EvidenceLeaveNoCorner),
-            new MatrixWait("vaelis_opening_moves", "UNRAISED",
-                "no enemy carrying Departure died in 360 rooms (8 stages, 9 squads, 5 seeds): the link"
-                + " goes on the PREVIOUS target when his lowest-HP basic changes target, which it"
-                + " mostly does because that target died, and an ally's hit on a linked body spends"
-                + " the link before any killing blow can find it. Reachability is a question for Pinoy",
-                null),
-        };
+        // EMPTY, AND THAT IS THE READING RATHER THAN A LIST NOBODY FILLED IN. Every rule that
+        // sat here was re-authored rather than waited on, because a rule that fires and changes
+        // nothing is broken and not quiet (DESIGN-TALENTS.md, T2):
+        //
+        //   aeron_the_unbroken_stride I asked for an enemy ENDING its turn carrying Turn Debt,
+        //   and RepayTurnDebt clears every entry as that turn OPENS. It answers the repayment.
+        //
+        //   finn_ringing_toll took Energy off the bar of the enemy whose cast raised it, and
+        //   TakeTurn empties that bar for the cast first. No ordering mends that - every active
+        //   costs a full bar - so the bell is heard by the OTHER Ringing enemies instead.
+        //
+        //   eira_leave_no_corner asked for an ally holding Mobile Cover to be singled out, and
+        //   the two gates never landed together in 96 rooms although each lands alone. It keeps
+        //   the gate it is named for, being singled out, and is once a round.
+        //
+        //   vaelis_opening_moves asked for the DEFEATED body to carry Departure, and an ally's
+        //   hit spends the link before a killing blow finds it. The link is mutual; the clause
+        //   reads it from the end that survives.
+        //
+        // The kind vocabulary stays because the next dark rule will need it.
+        private static readonly MatrixWait[] MatrixWaits = new MatrixWait[0];
 
         private static MatrixWait MatrixWaitFor(string rule)
         {
@@ -822,76 +829,12 @@ namespace Emberfall.DevHarness
             return q;
         }
 
-        private static string EvidenceLeaveNoCorner()
-        {
-            ContentDatabase db = MatrixArena(false);
-            HeroDef eira = db == null ? null : db.GetHero("eira_the_rolling_barricade");
-            if (eira == null) return "Eira not found";
-            const string squad = DarkStrikers;
-            long both = MatrixLanded(eira, "eira_leave_no_corner", "m_fastbruiser", squad, 1, "shift.by.subject");
-            long guardOnly = MatrixLanded(MatrixVariant(eira, "eira_leave_no_corner",
-                delegate (PassiveDef p) { return MatrixCopyPassive(p, delegate (EffectDef e)
-                    { e.Condition2 = EffectCondition.None; return e; }); }),
-                "eira_leave_no_corner", "m_fastbruiser", squad, 1, "shift.by.subject");
-            long singleOnly = MatrixLanded(MatrixVariant(eira, "eira_leave_no_corner",
-                delegate (PassiveDef p) { return MatrixCopyPassive(p, delegate (EffectDef e)
-                    { e.Condition = e.Condition2; e.ConditionOn = e.ConditionOn2; e.Condition2 = EffectCondition.None; return e; }); }),
-                "eira_leave_no_corner", "m_fastbruiser", squad, 1, "shift.by.subject");
-            return "in m_fastbruiser beside the strikers Eira advances an ally " + both + " time(s) as shipped, "
-                   + guardOnly + " with only the Mobile Cover gate, " + singleOnly + " with only the single-target gate";
-        }
-
-        /// <summary>Walks one battle's events keeping each unit's Energy, and at every firing of
-        /// the toll reads the bar of the enemy whose cast raised it.</summary>
-        private static string EvidenceRingingToll()
-        {
-            BattleResult r = MatrixSoloBattle("finn_the_bellmaker", "s_caster_tail");
-            if (r == null) return "Finn not found";
-            Dictionary<int, int> energy = new Dictionary<int, int>();
-            foreach (UnitSnapshot u in r.Units) energy[u.Id] = u.StartEnergy;
-            int lastCaster = -1, firings = 0, atEmpty = 0, moved = 0;
-            for (int i = 0; i < r.Events.Count; i++)
-            {
-                BattleEvent e = r.Events[i];
-                if (e.Type == BattleEventType.EnergyChanged) energy[e.TargetId] = e.Value;
-                if (e.Type == BattleEventType.AbilityCast) { UnitSnapshot c = r.FindUnit(e.SourceId); lastCaster = c != null && !c.IsPlayer ? c.Id : -1; }
-                if (e.Type == BattleEventType.PassiveTrigger && e.AbilityId == "finn_ringing_toll")
-                {
-                    firings++;
-                    int bar; energy.TryGetValue(lastCaster, out bar);
-                    if (lastCaster >= 0 && bar == 0) atEmpty++;
-                    // Anything the toll moved is the next event on the caster's bar.
-                    if (i + 1 < r.Events.Count && r.Events[i + 1].Type == BattleEventType.EnergyChanged
-                        && r.Events[i + 1].TargetId == lastCaster) moved++;
-                }
-            }
-            return "in s_caster_tail it fires " + firings + " time(s), " + atEmpty + " of them on a caster whose bar"
-                   + " reads 0, and moves Energy " + moved + " time(s)";
-        }
-
-        private static string EvidenceInterestOwed()
-        {
-            ContentDatabase db = MatrixArena(false);
-            HeroDef aeron = db == null ? null : db.GetHero("aeron_the_unbroken_stride");
-            if (aeron == null) return "Aeron not found";
-            List<HeroInstance> team = new List<HeroInstance>();
-            HeroInstance me = MakeInstance(aeron, 40); me.SelectedTalent = 1; team.Add(me);
-            team.Add(MakeInstance(db.GetHero("isara_the_second_chance"), 40));
-            BattleResult r = RunWith(db, db.GetStage("s_caster_tail"), 1, team);
-            Dictionary<int, int> debt = new Dictionary<int, int>();
-            int turn = -1, firings = 0, owing = 0;
-            PassiveDef talent = aeron.TalentAt(1);
-            foreach (BattleEvent e in r.Events)
-            {
-                if (e.Type == BattleEventType.TurnStart) turn = e.SourceId;
-                if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.TurnDebt) debt[e.TargetId] = 1;
-                if (e.Type == BattleEventType.StatusExpired && e.Status == StatusKind.TurnDebt) debt.Remove(e.TargetId);
-                if (e.Type == BattleEventType.PassiveTrigger && talent != null && e.AbilityId == talent.Id)
-                { firings++; if (debt.ContainsKey(turn)) owing++; }
-            }
-            return "in s_caster_tail beside Isara it fires " + firings + " time(s) at an enemy's turn end and"
-                   + " finds Turn Debt on that enemy " + owing + " time(s)";
-        }
+        // The three Evidence functions that stood here went with the MatrixWaits list they fed:
+        // EvidenceLeaveNoCorner, EvidenceRingingToll and EvidenceInterestOwed each re-proved one
+        // dark rule's stated reason on every run, and all three rules are observed now. What they
+        // measured is written into the rooms those rules got, and into the note above MatrixWaits.
+        // MatrixVariant and MatrixCopyPassive are kept: they are how a future reason gets measured
+        // rather than remembered, and that is the property worth keeping.
 
         private static BattleResult MatrixSoloBattle(string heroId, string stage)
         {

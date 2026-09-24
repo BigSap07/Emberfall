@@ -531,9 +531,19 @@
               "duration": 2,
               "condition": "HasMyMark",
               "conditionOn": "Target"
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "LastTarget",
+              "status": "Vulnerable",
+              "magnitude": 0.2,
+              "duration": 2,
+              "bypassResist": true,
+              "condition": "HasMyMark",
+              "conditionOn": "Target"
             }
           ],
-          "description": "After Kael’s basic attack, an enemy with Fault Line also gains Effect Resist Down."
+          "description": "After Kael's basic attack the fault he opened widens: an enemy with Fault Line is easier to affect, and his own blows land harder on it."
         },
         "talentII": {
           "id": "kael_clear_the_debris",
@@ -551,36 +561,49 @@
                 "condition": "SubjectLostStatusThisFiring",
                 "conditionOn": "Target"
               }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "AllEnemies",
+                "status": "Vulnerable",
+                "magnitude": 0.25,
+                "duration": 3,
+                "bypassResist": true,
+                "condition": "SubjectLostStatusThisFiring",
+                "conditionOn": "Target"
+              }
             }
           ],
-          "description": "Take Down the Wall applies Fault Line to every enemy it stripped a buff from."
+          "description": "Take Down the Wall applies Fault Line to every enemy it stripped a buff from, and leaves each of them open to Kael."
         },
         "talentIII": {
           "id": "kael_lasting_materials",
-          "name": "Lasting Materials",
+          "name": "Salvaged Materials",
           "trigger": "None",
           "effects": [],
           "overrides": [
             {
               "ability": "active",
               "effectIndex": 2,
-              "field": "duration",
-              "delta": 97
-            },
-            {
-              "ability": "active",
-              "effectIndex": 2,
               "field": "maxStacks",
               "delta": 1
-            },
-            {
-              "ability": "active",
-              "effectIndex": 0,
-              "field": "power",
-              "delta": -0.21
             }
           ],
-          "description": "Rubble from Take Down the Wall lasts for the rest of the battle and Kael can hold more of it, but Take Down the Wall deals less damage."
+          "description": "Kael salvages a piece of Rubble from every blow he lands, and can hold more of it than before.",
+          "appends": [
+            {
+              "ability": "basic",
+              "atIndex": 0,
+              "effect": {
+                "kind": "GainResolve",
+                "target": "Self",
+                "maxStacks": 5,
+                "duration": 99
+              }
+            }
+          ]
         }
       }
     },
@@ -802,83 +825,82 @@
           "appends": [
             {
               "ability": "basic",
+              "atIndex": 0,
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "LowestHpEnemy",
-                "bypassResist": true,
-                "chance": 1,
+                "status": "Vulnerable",
+                "magnitude": 0.16,
                 "duration": 2,
+                "chance": 1,
+                "bypassResist": true
+              }
+            },
+            {
+              "ability": "basic",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "status": "BlockDown",
                 "magnitude": 1.0,
-                "status": "BlockDown"
+                "duration": 2,
+                "chance": 1,
+                "bypassResist": true
               }
             }
           ],
-          "description": "Cut the Escort also applies Block Down to its target."
+          "description": "Cut the Escort strips its target's Block and leaves it open, so every blow Kiva lands on it afterwards hits harder."
         },
         "talentII": {
           "id": "kiva_cut_the_last_line",
           "name": "Cut the Last Line",
-          "trigger": "OnKill",
+          "trigger": "OnEnemyHpBelowThreshold",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "ApplyStatus",
               "target": "HighestHpEnemy",
-              "chance": 1,
-              "condition": "HasMyMark",
-              "conditionOn": "Defeated",
-              "duration": 2,
-              "status": "Mark"
+              "status": "Mark",
+              "duration": 99,
+              "chance": 1
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "AllEnemies",
+              "status": "DefenseDown",
+              "magnitude": 0.2,
+              "duration": 99,
+              "bypassResist": true,
+              "chance": 1
             }
           ],
-          "description": "When Kiva defeats a Forsaken enemy, she applies Forsaken to the enemy with the highest HP."
+          "description": "When an enemy is brought low, Kiva names the largest body still standing Forsaken, and the whole line's guard breaks with the one that is failing.",
+          "threshold": 0.5,
+          "perTargetLimit": 1
         },
         "talentIII": {
           "id": "kiva_unclaimed_victory",
           "name": "Unclaimed Victory",
-          "trigger": "OnKill",
+          "trigger": "OnEnemyDefeated",
           "oncePerBattle": false,
-          "description": "When Kiva defeats a Forsaken target, she gains a Shield equal to 12% of her Max HP for 2 rounds, and 12% more for each Broken Link she is holding, up to 36%. All Broken Links are consumed. Measured: every payout in every harness arena is 12%, because Abandoned Support banks at most one Broken Link a round and Severance Paid spends it on the next basic against a Forsaken body, so a kill finds none held. The two link-gated clauses are authored and inert at those rates.",
+          "description": "When an enemy falls, Kiva takes a Ward worth a share of her Max HP, and a larger one still if she is holding a Broken Link when it happens.",
           "effects": [
             {
               "kind": "Shield",
               "target": "Self",
-              "condition": "HasMyMark",
-              "conditionOn": "Defeated",
-              "duration": 2,
-              "selfHpRatio": 0.12
+              "selfHpRatio": 0.16,
+              "duration": 3
             },
             {
               "kind": "Shield",
               "target": "Self",
-              "condition": "HasMyMark",
-              "conditionOn": "Defeated",
-              "condition2": "StatusStacksAtLeast",
-              "conditionOn2": "Caster",
-              "conditionStatus2": "Resolve",
-              "conditionValue2": 1,
-              "duration": 2,
-              "selfHpRatio": 0.12
-            },
-            {
-              "kind": "Shield",
-              "target": "Self",
-              "condition": "HasMyMark",
-              "conditionOn": "Defeated",
-              "condition2": "StatusStacksAtLeast",
-              "conditionOn2": "Caster",
-              "conditionStatus2": "Resolve",
-              "conditionValue2": 2,
-              "duration": 2,
-              "selfHpRatio": 0.12
-            },
-            {
-              "kind": "RemoveStatus",
-              "target": "Self",
-              "condition": "HasMyMark",
-              "conditionOn": "Defeated",
-              "hits": 10,
-              "status": "Resolve"
+              "selfHpRatio": 0.12,
+              "duration": 3,
+              "condition": "StatusStacksAtLeast",
+              "conditionStatus": "Resolve",
+              "conditionValue": 1,
+              "conditionOn": "Caster",
+              "consumesResolve": true
             }
           ]
         }
@@ -1141,20 +1163,6 @@
           "name": "Shared Oath",
           "trigger": "None",
           "effects": [],
-          "overrides": [
-            {
-              "ability": "passive1",
-              "effectIndex": 0,
-              "field": "targetMaxHpRatio",
-              "delta": -0.02
-            },
-            {
-              "ability": "skills.passive1",
-              "effectIndex": 0,
-              "field": "targetMaxHpRatio",
-              "delta": -0.02
-            }
-          ],
           "appends": [
             {
               "ability": "active",
@@ -1176,7 +1184,21 @@
               }
             }
           ],
-          "description": "Vow Kept gives Promise to the three lowest-HP allies instead of two, but the Promise heal is smaller."
+          "description": "Vow Kept gives Promise to the three lowest-HP allies instead of two, and the Promise heal is larger for all of them.",
+          "overrides": [
+            {
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "targetMaxHpRatio",
+              "delta": 0.015
+            },
+            {
+              "ability": "skills.passive1",
+              "effectIndex": 0,
+              "field": "targetMaxHpRatio",
+              "delta": 0.015
+            }
+          ]
         },
         "talentII": {
           "id": "marrow_visible_cost",
@@ -1188,9 +1210,14 @@
               "kind": "EnergyGain",
               "target": "BroadcastSource",
               "flat": -5
+            },
+            {
+              "kind": "Heal",
+              "target": "Self",
+              "power": 0.12
             }
           ],
-          "description": "When Marrow takes damage on an ally’s behalf, the attacker loses Energy."
+          "description": "When Marrow takes damage on an ally's behalf the attacker loses Energy, and the vow closes part of the wound it cost him."
         },
         "talentIII": {
           "id": "marrow_no_withdrawal",
@@ -1201,33 +1228,15 @@
             {
               "kind": "Damage",
               "target": "LowestHpEnemy",
-              "power": 1.05,
-              "condition": "StatusStacksAtLeast",
-              "conditionStatus": "Resolve",
-              "conditionValue": 1,
-              "conditionOn": "Caster"
+              "power": 0.4
             },
             {
               "kind": "Heal",
               "target": "LowestHpAlly",
-              "power": 0.55,
-              "condition": "StatusStacksAtLeast",
-              "conditionStatus": "Resolve",
-              "conditionValue": 1,
-              "conditionOn": "Caster"
-            },
-            {
-              "kind": "RemoveStatus",
-              "target": "Self",
-              "status": "Resolve",
-              "hits": 10,
-              "condition": "StatusStacksAtLeast",
-              "conditionStatus": "Resolve",
-              "conditionValue": 1,
-              "conditionOn": "Caster"
+              "power": 0.25
             }
           ],
-          "description": "After Promise Survives saves an ally, Marrow immediately strikes the lowest-HP enemy and heals the lowest-HP ally."
+          "description": "Whenever an ally is about to fall, Marrow strikes the enemy nearest to falling himself and mends the ally closest to going with them."
         }
       }
     },
@@ -1508,9 +1517,15 @@
               "effectIndex": 1,
               "field": "magnitude",
               "delta": -0.1
+            },
+            {
+              "ability": "passive2",
+              "effectIndex": 3,
+              "field": "power",
+              "delta": 0.9
             }
           ],
-          "description": "When Volume Closed fires, the enemy also loses turn progress."
+          "description": "When Volume Closed fires, the enemy loses turn progress and the record it pays out lands far harder."
         }
       }
     },
@@ -3110,14 +3125,23 @@
           "trigger": "None",
           "oncePerBattle": false,
           "effects": [],
-          "description": "When Change of Course saves an ally, Nereia also strikes the enemy with the highest Attack for part of the damage she took in their place.",
+          "description": "Whenever damage is turned onto Nereia she sends part of it back at the enemy with the highest Attack, and far more of it when Change of Course catches an ally outright.",
           "appends": [
+            {
+              "ability": "passive1",
+              "effect": {
+                "kind": "Damage",
+                "target": "HighestAttackEnemy",
+                "power": 2.2,
+                "scaleByLastRedirect": true
+              }
+            },
             {
               "ability": "passive2",
               "effect": {
                 "kind": "Damage",
                 "target": "HighestAttackEnemy",
-                "power": 0.8,
+                "power": 1.5,
                 "scaleByLastRedirect": true,
                 "condition": "MyStatusStacksAtLeast",
                 "conditionStatus": "Covered",
@@ -3390,19 +3414,13 @@
           "effects": [],
           "overrides": [
             {
-              "ability": "passive1",
-              "effectIndex": 1,
-              "field": "flat",
-              "delta": -2
-            },
-            {
               "ability": "active",
               "effectIndex": 3,
               "field": "power",
-              "delta": 0.2
+              "delta": 0.55
             }
           ],
-          "description": "Applied Revision pays less Energy, and Rewrite the Outcome's extra hit on a rewritten enemy lands harder."
+          "description": "Rewrite the Outcome's blow on an enemy whose Attack Down it rewrote lands far harder."
         },
         "talentII": {
           "id": "rheia_counterrevision",
@@ -3410,6 +3428,26 @@
           "trigger": "None",
           "effects": [],
           "appends": [
+            {
+              "ability": "passive2",
+              "atIndex": 2,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "status": "Vulnerable",
+                "magnitude": 0.4,
+                "duration": 3,
+                "chance": 1,
+                "bypassResist": true,
+                "condition": "HasStatus",
+                "conditionStatus": "DefenseDown",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve",
+                "conditionValue2": 4,
+                "conditionOn2": "Caster"
+              }
+            },
             {
               "ability": "passive2",
               "atIndex": 3,
@@ -3447,7 +3485,7 @@
               }
             }
           ],
-          "description": "When Second Draft fires at full Revision, the target also gains Attack Down if it holds Attack Up, and Rheia gains Guard Up."
+          "description": "When Second Draft fires at full Revision the target is left open to Rheia, gains Attack Down if it holds Attack Up, and Rheia gains Guard Up."
         },
         "talentIII": {
           "id": "rheia_perfect_reversal",
@@ -3468,25 +3506,7 @@
               "delta": -10
             }
           ],
-          "appends": [
-            {
-              "ability": "passive2",
-              "atIndex": 3,
-              "effect": {
-                "kind": "EnergyGain",
-                "target": "Self",
-                "flat": -10,
-                "condition": "HasStatus",
-                "conditionStatus": "DefenseDown",
-                "conditionOn": "BroadcastSubject",
-                "condition2": "StatusStacksAtLeast",
-                "conditionStatus2": "Resolve",
-                "conditionValue2": 4,
-                "conditionOn2": "Caster"
-              }
-            }
-          ],
-          "description": "Second Draft's full-Revision strike lands harder and no longer spends Revision, but each one costs Rheia Energy."
+          "description": "Second Draft's full-Revision strike lands harder and no longer spends the Revision it was built on."
         }
       }
     },
@@ -3707,14 +3727,23 @@
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "LowestHpAlly",
-                "chance": 1,
-                "duration": 2,
+                "status": "EffectResistUp",
                 "magnitude": 0.1,
-                "status": "EffectResistUp"
+                "duration": 2,
+                "chance": 1
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "Shield",
+                "target": "LowestHpAlly",
+                "selfHpRatio": 0.07,
+                "duration": 3
               }
             }
           ],
-          "description": "Pass the Guard also gives the lowest-HP ally Effect Resist Up."
+          "description": "Pass the Guard gives the ally it covers Effect Resist Up and a second Ward of its own, worth a share of Rovan's Max HP."
         },
         "talentII": {
           "id": "rovan_no_wasted_guard",
@@ -3727,9 +3756,9 @@
               "effect": {
                 "kind": "EnergyGain",
                 "target": "LowestHpAlly",
+                "flat": 8,
                 "condition": "LastMovedAboveHpFraction",
-                "conditionValue": 0.1,
-                "flat": 8
+                "conditionValue": 0.1
               }
             },
             {
@@ -3737,13 +3766,24 @@
               "effect": {
                 "kind": "EnergyGain",
                 "target": "LowestHpAlly",
+                "flat": 8,
                 "condition": "LastMovedAboveHpFraction",
-                "conditionValue": 0.2,
-                "flat": 8
+                "conditionValue": 0.2
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "Shield",
+                "target": "Self",
+                "selfHpRatio": 0.09,
+                "duration": 3,
+                "condition": "LastMovedAboveHpFraction",
+                "conditionValue": 0.1
               }
             }
           ],
-          "description": "When Pass the Guard moves a large Ward, the ally who receives it gains Energy, and more Energy if the Ward was larger still."
+          "description": "When Pass the Guard moves a large Ward, the ally who receives it gains Energy, more Energy if the Ward was larger still, and Rovan keeps a share of the guard he gave away."
         },
         "talentIII": {
           "id": "rovan_guard_in_motion",
@@ -3993,30 +4033,18 @@
               "effect": {
                 "kind": "Damage",
                 "target": "HighestAttackEnemy",
+                "power": 1.6,
                 "condition": "StatusStacksAtLeast",
+                "conditionOn": "Caster",
+                "conditionStatus": "Resolve",
+                "conditionValue": 2,
                 "condition2": "SubjectIsNotMyPreviousTarget",
-                "conditionOn": "Caster",
                 "conditionOn2": "Target",
-                "conditionStatus": "Resolve",
-                "conditionValue": 3,
-                "consumesResolve": true,
-                "power": 0.7
-              }
-            },
-            {
-              "ability": "basic",
-              "effect": {
-                "kind": "RemoveStatus",
-                "target": "Self",
-                "condition": "LacksStatus",
-                "conditionOn": "Caster",
-                "conditionStatus": "Resolve",
-                "hits": 10,
-                "status": "CritDamageUp"
+                "consumesResolve": true
               }
             }
           ],
-          "description": "When Redirecting Shot strikes a new target at full Route, it deals additional damage and spends all Route, which also clears the Crit Damage Up it built."
+          "description": "Redirecting Shot needs less Route behind it to break open, and when it does it deals a great deal more damage and spends all the Route it took to get there."
         },
         "talentII": {
           "id": "talren_dual_record",
@@ -4055,66 +4083,30 @@
           "trigger": "OnStackThreshold",
           "counterIndex": 2,
           "stackThresholdStatus": "Resolve",
-          "stackThresholdCount": 2,
+          "stackThresholdCount": 1,
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "Damage",
               "target": "AllEnemies",
-              "condition": "StatusStacksAtLeast",
-              "condition2": "HasMyMark",
-              "conditionOn": "Caster",
-              "conditionOn2": "Target",
-              "conditionStatus": "Resolve",
-              "conditionStatus2": "MarkAlt",
-              "conditionValue": 1,
-              "power": 0.35
+              "power": 1.0,
+              "condition": "HasMyMark",
+              "conditionStatus": "MarkAlt",
+              "conditionOn": "Target"
             },
             {
               "kind": "Damage",
               "target": "AllEnemies",
-              "condition": "StatusStacksAtLeast",
-              "condition2": "HasMyMark",
-              "conditionOn": "Caster",
-              "conditionOn2": "Target",
-              "conditionStatus": "Resolve",
-              "conditionStatus2": "MarkAlt",
-              "conditionValue": 2,
-              "power": 0.35
-            },
-            {
-              "kind": "Damage",
-              "target": "AllEnemies",
-              "condition": "StatusStacksAtLeast",
-              "condition2": "HasMyMark",
-              "conditionOn": "Caster",
-              "conditionOn2": "Target",
-              "conditionStatus": "Resolve",
-              "conditionStatus2": "MarkAlt",
-              "conditionValue": 3,
-              "power": 0.35
-            },
-            {
-              "kind": "RemoveStatus",
-              "target": "Self",
-              "condition": "StatusStacksAtLeast",
-              "conditionOn": "Caster",
-              "conditionStatus": "Resolve",
-              "conditionValue": 1,
-              "hits": 10,
-              "status": "Resolve"
-            },
-            {
-              "kind": "RemoveStatus",
-              "target": "Self",
-              "condition": "LacksStatus",
-              "conditionOn": "Caster",
-              "conditionStatus": "Resolve",
-              "hits": 10,
-              "status": "CritDamageUp"
+              "power": 0.6,
+              "condition": "HasMyMark",
+              "conditionStatus": "MarkAlt",
+              "conditionOn": "Target",
+              "condition2": "HpBelow",
+              "conditionValue2": 0.3,
+              "conditionOn2": "Target"
             }
           ],
-          "description": "Every second time a recorded target is struck, Talren strikes every recorded enemy once for each Route he holds, then spends all Route and the Crit Damage Up it built."
+          "description": "Each time a recorded target is struck, Talren looses an arrow at every enemy he has recorded, and a second at any of them near the end."
         }
       }
     },
@@ -4394,7 +4386,7 @@
             "target": "HighestHpEnemy",
             "charges": 1,
             "condition": "HasStatus",
-            "conditionOn": "Defeated",
+            "conditionOn": "Caster",
             "conditionStatus": "Linked",
             "duration": 2,
             "linkMutual": true,
@@ -4406,12 +4398,12 @@
             "kind": "TurnShift",
             "target": "Self",
             "condition": "HasStatus",
-            "conditionOn": "Defeated",
+            "conditionOn": "Caster",
             "conditionStatus": "Linked",
             "magnitude": 0.15
           }
         ],
-        "description": "Once per round, when an enemy carrying Departure is defeated, Departure passes to the highest-HP enemy and Vaelis's next turn advances.",
+        "description": "Once per round, when an enemy is defeated while Vaelis is bound by Departure, Departure passes to the highest-HP enemy and his next turn advances.",
         "chargeOnLanding": true
       },
       "talents": {
@@ -4445,28 +4437,50 @@
               }
             }
           ],
-          "description": "Leaving Cut also lowers the Departure target's Effect Resist, until an ally's strike sets Departure off."
+          "description": "Leaving Cut lowers the Departure target's Effect Resist until an ally's strike sets Departure off, and the cut Vaelis answers with lands far harder.",
+          "overrides": [
+            {
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "power",
+              "delta": 0.9
+            }
+          ]
         },
         "talentII": {
           "id": "vaelis_stolen_position",
           "name": "Stolen Position",
           "trigger": "None",
           "effects": [],
-          "overrides": [
+          "description": "Passed Position leaves both bodies it moves between open to Vaelis before it strikes either of them.",
+          "appends": [
             {
               "ability": "active",
-              "effectIndex": 2,
-              "field": "hits",
-              "delta": -8
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "HighestAttackEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.3,
+                "duration": 2,
+                "chance": 1,
+                "bypassResist": true
+              }
             },
             {
               "ability": "active",
-              "effectIndex": 3,
-              "field": "hits",
-              "delta": -8
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.3,
+                "duration": 2,
+                "chance": 1,
+                "bypassResist": true
+              }
             }
-          ],
-          "description": "Passed Position moves buffs only up to a limit, rather than all of them."
+          ]
         },
         "talentIII": {
           "id": "vaelis_no_place_to_hold",
@@ -5978,13 +5992,19 @@
           "effects": [],
           "overrides": [
             {
+              "ability": "basic",
+              "effectIndex": 1,
+              "field": "magnitude",
+              "delta": 0.15
+            },
+            {
               "ability": "active",
               "effectIndex": 2,
               "field": "storedCap",
-              "delta": 0.04
+              "delta": 0.06
             }
           ],
-          "description": "Memory from Stand Again can record more before it reaches its limit."
+          "description": "Brenna's own Lasting Guard turns away far more of the blow it meets, and the Memory Stand Again writes on the line can hold more before it reaches its limit."
         },
         "talentII": {
           "id": "brenna_shared_wall",
@@ -6004,7 +6024,15 @@
               }
             }
           ],
-          "description": "When Deep Resolve grants its Ward, the lowest-HP ally also gains Guard against the next hit they take."
+          "description": "The Ward Deep Resolve grants is far larger, and the lowest-HP ally also gains Guard against the next hit they take.",
+          "overrides": [
+            {
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "power",
+              "delta": 0.5
+            }
+          ]
         },
         "talentIII": {
           "id": "brenna_what_held_once",
@@ -6026,9 +6054,19 @@
             {
               "ability": "active",
               "effect": {
-                "kind": "LedgerDeposit",
-                "target": "Self",
-                "selfHpRatio": 0.04,
+                "kind": "Shield",
+                "target": "AllAllies",
+                "selfHpRatio": 0.035,
+                "duration": 2
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "Shield",
+                "target": "AllAllies",
+                "selfHpRatio": 0.06,
+                "duration": 2,
                 "condition": "StatusStacksAtLeast",
                 "conditionStatus": "Resolve",
                 "conditionValue": 1,
@@ -6037,7 +6075,7 @@
               }
             }
           ],
-          "description": "When Survival of the Stubborn saves an ally, Brenna gains Resolve. Her next Stand Again spends it to add a share of her Max HP to her own Memory."
+          "description": "Stand Again puts a Ward of Brenna's own Max HP on every ally, and a far larger one once Survival of the Stubborn has already caught someone."
         }
       }
     },
@@ -6225,23 +6263,29 @@
               "effectIndex": 1,
               "field": "duration",
               "delta": 1
+            },
+            {
+              "ability": "basic",
+              "effectIndex": 1,
+              "field": "maxStacks",
+              "delta": 2
             }
           ],
           "appends": [
             {
               "ability": "basic",
               "effect": {
-                "kind": "Heal",
-                "target": "Self",
-                "selfHpRatio": 0.04,
-                "condition": "MyStatusStacksAtLeast",
-                "conditionStatus": "Mark",
-                "conditionValue": 3,
-                "conditionOn": "LastTarget"
+                "kind": "ApplyStatus",
+                "target": "LowestHpEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.15,
+                "duration": 2,
+                "chance": 1,
+                "bypassResist": true
               }
             }
           ],
-          "description": "Observed Mark lasts longer, and whenever Mark of Survival strikes an enemy whose Mark is at full depth, Edrin heals a share of his Max HP."
+          "description": "Observed Mark lasts longer and can be driven deeper, and every blow Mark of Survival lands leaves the enemy it struck open to Edrin."
         },
         "talentII": {
           "id": "edrin_watchfires",
@@ -6266,23 +6310,15 @@
           "name": "Nothing Is Lost",
           "trigger": "None",
           "effects": [],
-          "appends": [
+          "description": "Edrin banks Resolve far past where he used to stop, and every one of them keeps making his blows against a marked enemy land harder.",
+          "overrides": [
             {
               "ability": "passive1",
-              "effect": {
-                "kind": "Damage",
-                "target": "LowestHpEnemy",
-                "power": 0.5,
-                "scaleByLastRelease": true,
-                "condition": "StatusStacksAtLeast",
-                "conditionStatus": "Resolve",
-                "conditionValue": 4,
-                "conditionOn": "Caster",
-                "consumesResolve": true
-              }
+              "effectIndex": 0,
+              "field": "maxStacks",
+              "delta": 3
             }
-          ],
-          "description": "After Edrin's basic attack, if his Resolve is full, he spends it all to strike the enemy with the lowest HP for a share of what his Watcher's Ledger last paid out."
+          ]
         }
       }
     },
@@ -6526,9 +6562,9 @@
           "oncePerBattle": false,
           "effects": [
             {
-              "kind": "EnergyGain",
-              "target": "Self",
-              "flat": 5
+              "kind": "Heal",
+              "target": "LowestHpAlly",
+              "power": 0.6
             }
           ],
           "overrides": [
@@ -6545,7 +6581,7 @@
               "delta": 1
             }
           ],
-          "description": "Mire from Patient Measure and Sanctuary Unbroken lasts longer, and whenever a Mire Elyra applied expires, she gains Energy."
+          "description": "Mire from Patient Measure and Sanctuary Unbroken lasts longer, and whenever a Mire Elyra set fades she mends the ally with the lowest HP."
         },
         "talentII": {
           "id": "elyra_sanctuary_spreads",
@@ -7137,16 +7173,24 @@
               "ability": "active",
               "effectIndex": 1,
               "field": "duration",
-              "delta": 1
-            },
-            {
-              "ability": "active",
-              "effectIndex": 1,
-              "field": "storedCap",
-              "delta": 1.2
+              "delta": 2
             }
           ],
-          "description": "Scar Record lasts longer and can store more before it reaches its limit."
+          "description": "The Scar Record lasts longer, and the body that carries it stays open to Sylven's blade while it does.",
+          "appends": [
+            {
+              "ability": "active",
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "HighestPendingDoTEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.22,
+                "duration": 5,
+                "bypassResist": true
+              }
+            }
+          ]
         },
         "talentII": {
           "id": "sylven_inherited_injury",
@@ -7161,15 +7205,27 @@
                 "target": "HighestHpEnemy",
                 "flat": -10
               }
+            },
+            {
+              "ability": "passive1",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "AllEnemies",
+                "status": "Vulnerable",
+                "magnitude": 0.16,
+                "duration": 99,
+                "bypassResist": true
+              }
             }
           ],
-          "description": "Whenever an enemy is defeated, the highest-HP enemy also loses Energy."
+          "description": "When an enemy is defeated the highest-HP enemy loses Energy, and every enemy still standing carries the wound: Sylven's blows land harder on all of them."
         },
         "talentIII": {
           "id": "sylven_nothing_heals_cleanly",
           "name": "Nothing Heals Cleanly",
           "trigger": "None",
           "effects": [],
+          "description": "When Wounds Remember answers the buff it was waiting for, the enemy's mending is shut down and the wound reopens: Sylven cuts it deeper from then on.",
           "appends": [
             {
               "ability": "passive2",
@@ -7177,18 +7233,33 @@
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "BroadcastSubject",
-                "bypassResist": true,
+                "status": "HealingReduction",
+                "magnitude": 0.2,
+                "duration": 2,
                 "chance": 1,
+                "bypassResist": true,
                 "condition": "StoredStatusMatches",
                 "conditionOn": "BroadcastSubject",
-                "conditionStatus": "Ledger",
-                "duration": 2,
-                "magnitude": 0.2,
-                "status": "HealingReduction"
+                "conditionStatus": "Ledger"
+              }
+            },
+            {
+              "ability": "passive2",
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "status": "Vulnerable",
+                "magnitude": 0.3,
+                "duration": 3,
+                "chance": 1,
+                "bypassResist": true,
+                "condition": "StoredStatusMatches",
+                "conditionOn": "BroadcastSubject",
+                "conditionStatus": "Ledger"
               }
             }
-          ],
-          "description": "When Wounds Remember strikes, it first applies Healing Reduction to that enemy."
+          ]
         }
       }
     },
@@ -8617,21 +8688,29 @@
         "talentI": {
           "id": "aeron_interest_owed",
           "name": "Interest Owed",
-          "trigger": "OnEnemyTurnEnd",
+          "trigger": "OnTurnDebtRepaid",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "ApplyStatus",
               "target": "BroadcastSubject",
               "status": "Slow",
-              "magnitude": 0.05,
-              "duration": 1,
-              "condition": "HasStatus",
-              "conditionStatus": "TurnDebt",
-              "conditionOn": "Target"
+              "magnitude": 0.08,
+              "duration": 2,
+              "chance": 1,
+              "bypassResist": true
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "BroadcastSubject",
+              "status": "Vulnerable",
+              "magnitude": 0.22,
+              "duration": 2,
+              "chance": 1,
+              "bypassResist": true
             }
           ],
-          "description": "When an enemy ends its turn still carrying Turn Debt, it gains Mire."
+          "description": "An enemy that repays Turn Debt pays interest with it: it is Mired, and Aeron's blows land harder on it."
         },
         "talentII": {
           "id": "aeron_shared_tempo",
@@ -8647,9 +8726,21 @@
                 "target": "LowestEnergyAlly",
                 "magnitude": 0.1
               }
+            },
+            {
+              "ability": "passive2",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "ThresholdUnit",
+                "status": "Vulnerable",
+                "magnitude": 0.3,
+                "duration": 3,
+                "chance": 1,
+                "bypassResist": true
+              }
             }
           ],
-          "description": "When Momentum Breaker calls in a debt, the lowest-Energy ally also advances its turn."
+          "description": "When Momentum Breaker calls in a debt, the lowest-Energy ally also advances its turn, and the enemy that owed is left open to Aeron."
         },
         "talentIII": {
           "id": "aeron_unpaid_action",
@@ -8667,9 +8758,21 @@
               "condition": "SubjectRepaidDebtAtLeast",
               "conditionValue": 0.2,
               "conditionOn": "BroadcastSubject"
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "BroadcastSubject",
+              "status": "Vulnerable",
+              "magnitude": 0.28,
+              "duration": 2,
+              "chance": 1,
+              "bypassResist": true,
+              "condition": "SubjectRepaidDebtAtLeast",
+              "conditionValue": 0.2,
+              "conditionOn": "BroadcastSubject"
             }
           ],
-          "description": "The first enemy each round to repay a heavy Turn Debt is Silenced once its turn ends."
+          "description": "The first enemy each round to repay a heavy Turn Debt is Silenced once its turn ends, and Aeron's blows land harder on it while it recovers."
         }
       }
     },
@@ -9243,71 +9346,76 @@
                 "conditionOn": "BroadcastSubject",
                 "magnitude": -0.08
               }
+            },
+            {
+              "ability": "passive1",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "status": "Vulnerable",
+                "magnitude": 0.3,
+                "duration": 3,
+                "bypassResist": true,
+                "condition": "HasMyMark",
+                "conditionOn": "BroadcastSubject"
+              }
             }
           ],
-          "description": "When Anticipated delays an enemy, Merek gains Energy and that enemy is delayed further."
+          "description": "When Anticipated delays an enemy, Merek gains Energy, that enemy is delayed further, and his blows land harder on it."
         },
         "talentII": {
           "id": "merek_reordered_agenda",
-          "name": "Reordered Agenda",
+          "name": "Overturned Agenda",
           "trigger": "None",
           "effects": [],
           "appends": [
             {
               "ability": "active",
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "AllEnemies",
+                "status": "DefenseDown",
+                "magnitude": 0.2,
+                "duration": 2,
+                "bypassResist": true
+              }
+            },
+            {
+              "ability": "active",
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "SwapAdvancedUnit",
-                "bypassResist": true,
-                "chance": 1,
-                "duration": 2,
+                "status": "DefenseDown",
                 "magnitude": 0.1,
-                "status": "DefenseDown"
+                "duration": 2,
+                "bypassResist": true
               }
             }
           ],
-          "description": "Stolen Interval also gives the enemy moved forward Guard Down."
+          "description": "Stolen Interval breaks every enemy's guard before it strikes, and the enemy moved forward keeps it broken longer."
         },
         "talentIII": {
           "id": "merek_no_first_move",
           "name": "No First Move",
-          "trigger": "OnEnemyDefeated",
+          "trigger": "RoundStart",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "EnergyGain",
               "target": "AllEnemies",
-              "condition": "HasMyMark",
-              "condition2": "SubjectHasNotActedThisRound",
-              "conditionOn": "Defeated",
-              "conditionOn2": "Defeated",
-              "conditionStatus": "MarkAlt",
-              "flat": -12
-            },
-            {
-              "kind": "Damage",
-              "target": "HighestEnergyEnemy",
-              "condition": "HasMyMark",
-              "condition2": "SubjectHasNotActedThisRound",
-              "conditionOn": "Defeated",
-              "conditionOn2": "Defeated",
-              "conditionStatus": "MarkAlt",
-              "power": 1.15
+              "flat": -5
             },
             {
               "kind": "ApplyStatus",
               "target": "HighestEnergyEnemy",
-              "chance": 1,
-              "condition": "HasMyMark",
-              "condition2": "SubjectHasNotActedThisRound",
-              "conditionOn": "Defeated",
-              "conditionOn2": "Defeated",
-              "conditionStatus": "MarkAlt",
+              "status": "Vulnerable",
+              "magnitude": 0.2,
               "duration": 2,
-              "status": "Mark"
+              "bypassResist": true
             }
           ],
-          "description": "When First Claim is defeated before acting that round, every enemy loses Energy and Merek strikes the enemy with the highest Energy and applies Anticipated."
+          "description": "At the start of each round every enemy loses Energy, and the one nearest to acting is left open to Merek."
         }
       }
     },
@@ -9629,43 +9737,21 @@
           "id": "oris_open_ending",
           "name": "Open Ending",
           "trigger": "AfterBasicAttack",
-          "limit": "EveryNRounds",
-          "limitRounds": 2,
+          "limit": "OncePerRound",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "Damage",
               "target": "LastTarget",
-              "condition": "StatusStacksAtLeast",
-              "conditionCounterIndex": 3,
-              "conditionOn": "Caster",
-              "conditionValue": 1,
-              "consumesResolve": true,
-              "counterIndex": 3,
-              "power": 0.9
-            }
-          ],
-          "appends": [
+              "power": 0.75
+            },
             {
-              "ability": "basic",
-              "effect": {
-                "kind": "GainResolve",
-                "target": "Self",
-                "counterIndex": 3,
-                "duration": 2,
-                "maxStacks": 1,
-                "condition": "HasStatus",
-                "conditionStatus": "MarkAlt",
-                "conditionOn": "Caster",
-                "condition2": "StatusStacksAtLeast",
-                "conditionCounterIndex2": 2,
-                "conditionValue2": 2,
-                "conditionOn2": "Caster"
-              },
-              "atIndex": 8
+              "kind": "EnergyGain",
+              "target": "LastTarget",
+              "flat": -5
             }
           ],
-          "description": "After the first altered strike of No Fixed Refrain, Oris strikes the last enemy he hit again. It cannot happen again for a while.",
+          "description": "Once a round, Oris's basic attack runs on one beat longer: he strikes the same enemy again and takes Energy off it.",
           "chargeOnLanding": true
         }
       }
@@ -9874,9 +9960,22 @@
                 "conditionOn": "Target",
                 "bypassResist": true
               }
+            },
+            {
+              "ability": "basic",
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "FrontEnemy",
+                "status": "Vulnerable",
+                "magnitude": 0.14,
+                "duration": 2,
+                "condition": "SubjectRepeatedActionType",
+                "conditionOn": "Target",
+                "bypassResist": true
+              }
             }
           ],
-          "description": "Quiet Dose also applies Effect Resist Down to an enemy that used the same kind of action on its last two turns."
+          "description": "Quiet Dose leaves an enemy that used the same kind of action on its last two turns easier to affect, and Zella's own blows land harder on it."
         },
         "talentII": {
           "id": "zella_forced_conclusion",
@@ -9891,24 +9990,49 @@
               "delta": 1
             }
           ],
-          "description": "The Silence from Counterargument lasts longer."
+          "description": "Counterargument breaks the guard of an enemy that repeated itself before it strikes, and the Silence it lands lasts longer.",
+          "appends": [
+            {
+              "ability": "active",
+              "atIndex": 0,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "EnemyWithMyMark",
+                "status": "DefenseDown",
+                "magnitude": 0.25,
+                "duration": 2,
+                "condition": "SubjectRepeatedActionType",
+                "conditionOn": "Target",
+                "bypassResist": true
+              }
+            }
+          ]
         },
         "talentIII": {
           "id": "zella_changing_testimony",
-          "name": "Changing Testimony",
+          "name": "Settled Testimony",
           "trigger": "OnAppliedDoTTick",
           "effects": [
             {
               "kind": "ApplyStatus",
               "target": "Self",
               "status": "Focus",
-              "magnitude": 0.85,
-              "duration": 1,
-              "condition": "SubjectChangedActionType",
+              "magnitude": 0.35,
+              "duration": 2,
+              "condition": "SubjectRepeatedActionType",
+              "conditionOn": "BroadcastSubject"
+            },
+            {
+              "kind": "ApplyStatus",
+              "target": "Self",
+              "status": "CritDamageUp",
+              "magnitude": 0.2,
+              "duration": 2,
+              "condition": "SubjectRepeatedActionType",
               "conditionOn": "BroadcastSubject"
             }
           ],
-          "description": "When Residue ticks on an enemy that has changed its kind of action, Zella gains Focus."
+          "description": "When Residue ticks on an enemy that has kept to the same kind of action, Zella reads it: she strikes more surely and her critical blows hit harder."
         }
       }
     },
@@ -9992,21 +10116,19 @@
       "passive1": {
         "id": "eira_leave_no_corner",
         "name": "Leave No Corner",
-        "description": "When an ally with Mobile Cover is singled out, its turn advances.",
+        "description": "The first time each round an ally is singled out, that ally's turn advances.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "effects": [
           {
             "kind": "TurnShift",
             "target": "BroadcastVictim",
-            "condition": "HasStatus",
-            "conditionOn": "Target",
-            "conditionStatus": "Guard",
             "magnitude": 0.12,
-            "condition2": "IncomingHitIsSingleTarget",
-            "conditionOn2": "Target"
+            "condition": "IncomingHitIsSingleTarget",
+            "conditionOn": "Target"
           }
-        ]
+        ],
+        "limit": "OncePerRound"
       }
     },
     {
@@ -10111,16 +10233,16 @@
         {
           "id": "finn_ringing_toll",
           "name": "Ringing Slug",
-          "description": "The toll itself: a Ringing enemy loses Energy as it casts.",
+          "description": "The toll itself: when any enemy casts, every Ringing enemy loses Energy for it.",
           "trigger": "OnEnemyActive",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "EnergyGain",
-              "target": "BroadcastSubject",
+              "target": "AllEnemies",
+              "flat": -5,
               "condition": "HasMyMark",
-              "conditionOn": "BroadcastSubject",
-              "flat": -5
+              "conditionOn": "Target"
             }
           ]
         }
@@ -11776,15 +11898,27 @@
             },
             {
               "ability": "active",
+              "effectIndex": 1,
+              "field": "selfHpRatio",
+              "delta": 0.05
+            },
+            {
+              "ability": "active",
               "effectIndex": 2,
               "field": "duration",
               "delta": 1
             },
             {
               "ability": "active",
+              "effectIndex": 2,
+              "field": "selfHpRatio",
+              "delta": 0.05
+            },
+            {
+              "ability": "active",
               "effectIndex": 3,
               "field": "storedCap",
-              "delta": 0.05
+              "delta": 0.15
             },
             {
               "ability": "active",
@@ -11793,7 +11927,7 @@
               "delta": 1
             }
           ],
-          "description": "Bastion of Secrecy's Wards and Hidden Strength last longer, and Hidden Strength can hold more."
+          "description": "Bastion of Secrecy's Wards are larger and last longer, and Hidden Strength holds far more of what they turn away before it breaks."
         },
         "talentII": {
           "id": "darian_shared_burden",
@@ -11809,12 +11943,12 @@
             {
               "kind": "Shield",
               "target": "BroadcastSubject",
-              "power": 0.5,
+              "power": 1.4,
               "scaleByLastRelease": true,
               "duration": 1
             }
           ],
-          "description": "When an ally's Ward breaks, Darian empties his Hidden Strength and gives that ally a brief Ward worth a share of what it held."
+          "description": "When an ally's Ward breaks, Darian empties his Hidden Strength and gives that ally a Ward worth far more than what it held."
         },
         "talentIII": {
           "id": "darian_false_opening",
@@ -11828,9 +11962,7 @@
               "target": "Self",
               "status": "Resolve2",
               "maxStacks": 2,
-              "duration": 99,
-              "condition": "HasShield",
-              "conditionOn": "Caster"
+              "duration": 99
             }
           ],
           "appends": [
@@ -11839,18 +11971,18 @@
               "effect": {
                 "kind": "Damage",
                 "target": "FrontEnemy",
-                "power": 1.2,
+                "power": 2.2,
                 "consumesResolve": true,
-                "consumeStacks": 2,
+                "consumeStacks": 1,
                 "status": "Resolve2",
                 "condition": "StatusStacksAtLeast",
                 "conditionStatus": "Resolve2",
-                "conditionValue": 2,
+                "conditionValue": 1,
                 "conditionOn": "Caster"
               }
             }
           ],
-          "description": "When a Ward Darian gave runs out while he holds a Ward himself, he gains an Opening, up to a limit. With a full set, Hidden Counter spends them for an extra blow."
+          "description": "When a Ward Darian gave runs out unbroken he finds an Opening, up to a limit, and his next Hidden Counter spends one for a heavy extra blow."
         }
       }
     },
@@ -12066,37 +12198,18 @@
           "overrides": [
             {
               "ability": "passive2",
-              "field": "limitOff",
+              "effectIndex": 0,
+              "field": "hits",
               "delta": 1
             },
             {
-              "ability": "passive2",
-              "field": "firesPerSubject",
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "maxStacks",
               "delta": 2
-            },
-            {
-              "ability": "passive2",
-              "effectIndex": 1,
-              "field": "power",
-              "delta": -0.21
             }
           ],
-          "appends": [
-            {
-              "ability": "passive2",
-              "effect": {
-                "kind": "Damage",
-                "target": "BroadcastSubject",
-                "power": 0.21,
-                "condition": "HasMyMark",
-                "conditionOn": "BroadcastSubject",
-                "condition2": "PassiveFiredOnSubjectBelow",
-                "conditionValue2": 1,
-                "conditionOn2": "BroadcastSubject"
-              }
-            }
-          ],
-          "description": "The Missing Page is no longer limited to once per round, but can fire only a limited number of times against each enemy. Its first strike on an enemy lands at full strength and later strikes land softer."
+          "description": "The Missing Page erases two marks from the page instead of one, and Mireth can carry more Absence for what she takes away."
         },
         "talentII": {
           "id": "mireth_blank_space",
@@ -12104,6 +12217,25 @@
           "trigger": "None",
           "effects": [],
           "appends": [
+            {
+              "ability": "passive2",
+              "atIndex": 5,
+              "effect": {
+                "kind": "ApplyStatus",
+                "target": "BroadcastSubject",
+                "status": "Vulnerable",
+                "magnitude": 0.35,
+                "duration": 3,
+                "chance": 1,
+                "bypassResist": true,
+                "condition": "HasMyMark",
+                "conditionOn": "BroadcastSubject",
+                "condition2": "StatusStacksAtLeast",
+                "conditionStatus2": "Resolve2",
+                "conditionValue2": 3,
+                "conditionOn2": "Caster"
+              }
+            },
             {
               "ability": "passive2",
               "atIndex": 5,
@@ -12133,7 +12265,7 @@
               }
             }
           ],
-          "description": "When The Missing Page spends a full set of Pages, Mireth also gains Energy and the marked enemy loses Energy."
+          "description": "When The Missing Page spends a full set of Pages, Mireth gains Energy, the marked enemy loses Energy, and the blank it leaves stays open to her."
         },
         "talentIII": {
           "id": "mireth_no_record_remains",
@@ -12682,46 +12814,53 @@
         "talentII": {
           "id": "velis_starve_the_light",
           "name": "Starve the Light",
-          "trigger": "OnFunnelConvertFired",
+          "trigger": "OnEnemyHealed",
           "oncePerBattle": false,
           "effects": [
             {
               "kind": "EnergyGain",
               "target": "BroadcastSubject",
-              "flat": -10
+              "flat": -10,
+              "condition": "HpBelow",
+              "conditionValue": 0.5,
+              "conditionOn": "BroadcastSubject"
             },
             {
-              "kind": "EnergyGain",
-              "target": "Self",
-              "flat": 10,
-              "condition": "EnergyBelow",
-              "conditionValue": 0,
+              "kind": "ApplyStatus",
+              "target": "BroadcastSubject",
+              "status": "Vulnerable",
+              "magnitude": 0.3,
+              "duration": 3,
+              "chance": 1,
+              "bypassResist": true,
+              "condition": "HpBelow",
+              "conditionValue": 0.5,
               "conditionOn": "BroadcastSubject"
             }
           ],
-          "description": "When Hollowed turns healing into damage, that enemy loses Energy. If that empties its bar, Velis gains Energy."
+          "description": "Whenever an enemy below half HP is mended, the mending costs it Energy and leaves the wound open to Velis."
         },
         "talentIII": {
           "id": "velis_final_denial",
-          "name": "Final Denial",
+          "name": "The Cut Stays Open",
           "trigger": "None",
           "effects": [],
           "appends": [
             {
-              "ability": "passive2",
+              "ability": "basic",
+              "atIndex": 0,
               "effect": {
                 "kind": "ApplyStatus",
                 "target": "LowestHpEnemy",
-                "status": "HealSuppression",
-                "duration": 1,
-                "bypassResist": true,
-                "condition": "HpBelow",
-                "conditionValue": 0.3,
-                "conditionOn": "Target"
+                "status": "Vulnerable",
+                "magnitude": 0.18,
+                "duration": 2,
+                "chance": 1,
+                "bypassResist": true
               }
             }
           ],
-          "description": "When What Was Taken strikes, the enemy with the lowest HP also gains Heal Suppression if it is at low HP."
+          "description": "Denied Return leaves its mark: every blow Velis lands on the enemy she is cutting makes the next one land harder."
         }
       }
     },
@@ -13370,11 +13509,11 @@
             {
               "kind": "Damage",
               "target": "LowestHpEnemy",
-              "power": 0.5,
+              "power": 4.0,
               "scaleByLastRelease": true
             }
           ],
-          "description": "When the Subject's record expires, Altheon also strikes the enemy with the lowest HP for a share of what the record paid out."
+          "description": "When the Subject's record expires, Altheon also strikes the enemy with the lowest HP for a large share of what the record paid out."
         },
         "talentIII": {
           "id": "altheon_final_record",
@@ -13626,17 +13765,17 @@
             {
               "ability": "active",
               "effectIndex": 1,
-              "field": "duration",
-              "delta": 1
+              "field": "magnitude",
+              "delta": 0.35
             },
             {
-              "ability": "active",
-              "effectIndex": 1,
-              "field": "magnitude",
-              "delta": 0.1
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "power",
+              "delta": 0.9
             }
           ],
-          "description": "Priority from Restore the Balance lasts longer and stores a larger share of the healing."
+          "description": "Priority stores a far larger share of the healing, and the blow Aminah lands when it releases is much heavier for it."
         },
         "talentII": {
           "id": "aminah_shared_measure",
@@ -13649,7 +13788,7 @@
               "effect": {
                 "kind": "Heal",
                 "target": "SecondLowestHpAlly",
-                "power": 0.35,
+                "power": 0.6,
                 "scaleByLastRelease": true,
                 "condition": "MyStatusStacksAtLeast",
                 "conditionStatus": "Ledger",
@@ -13663,12 +13802,20 @@
               "effect": {
                 "kind": "Heal",
                 "target": "SecondLowestHpAlly",
-                "power": 0.35,
+                "power": 0.6,
                 "scaleByLastRelease": true
+              }
+            },
+            {
+              "ability": "active",
+              "effect": {
+                "kind": "Heal",
+                "target": "SecondLowestHpAlly",
+                "power": 1.1
               }
             }
           ],
-          "description": "Whenever No Wasted Recovery releases stored healing, the ally with the second-lowest HP is also healed for a share of the amount released."
+          "description": "Restore the Balance mends the ally with the second-lowest HP as well, and whenever No Wasted Recovery releases stored healing that ally is healed again for a share of what was released."
         },
         "talentIII": {
           "id": "aminah_perfect_timing",
@@ -13677,36 +13824,28 @@
           "effects": [],
           "appends": [
             {
-              "ability": "passive",
+              "ability": "passive1",
+              "atIndex": 0,
               "effect": {
                 "kind": "Heal",
                 "target": "BroadcastSubject",
-                "power": 0.04,
+                "power": 0.5,
                 "perStack": 1.0,
-                "perStackStatus": "Resolve",
-                "condition": "MyStatusStacksAtLeast",
-                "conditionStatus": "Ledger",
-                "conditionValue": 1,
-                "conditionOn": "BroadcastSubject"
-              },
-              "atIndex": 2
+                "perStackStatus": "Resolve"
+              }
             },
             {
-              "ability": "passive",
+              "ability": "passive1",
+              "atIndex": 1,
               "effect": {
                 "kind": "Cleanse",
                 "target": "BroadcastSubject",
                 "hits": 3,
-                "consumesResolve": true,
-                "condition": "MyStatusStacksAtLeast",
-                "conditionStatus": "Ledger",
-                "conditionValue": 1,
-                "conditionOn": "BroadcastSubject"
-              },
-              "atIndex": 3
+                "consumesResolve": true
+              }
             }
           ],
-          "description": "When No Wasted Recovery releases Priority early because its holder fell to low HP, that ally is healed again, more for each Measure Aminah holds, and cleansed of debuffs. Every Measure is spent."
+          "description": "When a Priority Aminah gave an ally ends, that ally is healed again - more for each Measure she is holding - and cleansed of what was on them. Every Measure is spent."
         }
       }
     },
@@ -14219,22 +14358,32 @@
         },
         "talentIII": {
           "id": "caldus_final_verdict",
-          "name": "Final Verdict",
-          "trigger": "OnEnemyHpBelowThreshold",
-          "oncePerBattle": true,
-          "threshold": 0.3,
+          "name": "The Verdict Stands",
+          "trigger": "AfterBasicAttack",
+          "oncePerBattle": false,
           "effects": [
             {
               "kind": "GainResolve",
               "target": "Self",
-              "maxStacks": 3,
-              "hits": 2,
-              "duration": 99,
-              "condition": "HasMyMark",
-              "conditionOn": "BroadcastSubject"
+              "maxStacks": 5,
+              "duration": 99
             }
           ],
-          "description": "Once per battle, when Caldus's Declared Target falls to low HP, he gains Resolve for his counterattacks.",
+          "description": "Caldus banks Resolve on his own turn as well as when he answers a blow, holds more of it, and each one he holds makes his counterattack land far harder.",
+          "overrides": [
+            {
+              "ability": "passive1",
+              "effectIndex": 1,
+              "field": "maxStacks",
+              "delta": 2
+            },
+            {
+              "ability": "passive1",
+              "effectIndex": 0,
+              "field": "perStack",
+              "delta": 0.12
+            }
+          ],
           "chargeOnLanding": true
         }
       }

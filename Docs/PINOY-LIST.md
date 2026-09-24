@@ -345,7 +345,7 @@ It is no longer a trap by the numbers, and `CheckTalentsAreWorthPicking` has tak
 ### 2f. Ability text waiting on an answer
 
 Every basic, active, passive and talent now carries a player-facing sentence with no numbers in
-it, written to `Docs/ABILITY-TEXT-STYLE.md`, **except these 29 ids, asked as 28 questions** (Demos's
+it, written to `Docs/ABILITY-TEXT-STYLE.md`, **except these 28 ids, asked as 27 questions** (Demos's
 two share one). Each still carries a drafting
 note because the sentence Pinoy wrote and the kit that ships disagree. Most repeat a row of 2a,
 2b, 2c or 2d, asked here as the one question the text needs answered.
@@ -357,7 +357,13 @@ in `AbilityTextPinnedDraftingNotes` and fails if one is answered and not unpinne
 was the third and has left the list the other way: the kit now says "the first time", as her
 sentence does, and the text says what it does. **Hale's Tracking Habit has left the same way**: the
 kit now moves Quarry at the end of the round, as his sentence does, rather than at the start of his
-turn, and its card says so.
+turn, and its card says so. **Kiva's Unclaimed Victory has left it too**, and the other way
+again: the talent-value pass rewrote the clause rather than the sentence. Two of its four
+effects were authored against a rate her own kit never reaches - Abandoned Support banks at
+most one Broken Link a round and Severance Paid spends it on the next basic, so a kill found
+none held and every payout in every arena was the base twelve percent - and it answered OnKill,
+which is rarely hers. It answers a body falling now, pays a Ward and pays a larger one if she
+is holding a Link, and the card says exactly that with no number in it.
 
 1. **Arno, Rubble Resolve**: Attack Up when Arno strikes an enemy whose Ward is still standing, not when a Ward breaks? Recommend yes.
 2. **Yara, Second Bearing**: Yara can never aim at the same enemy twice running and gains Attack Up on every shot, rather than Energy for choosing to switch? Recommend yes.
@@ -383,10 +389,9 @@ turn, and its card says so.
 22. **Demos, Notice of Loss and its Arrears tick**: keep the cap on the Arrears tick that the sentence does not mention? Recommend yes.
 23. **Hale, Field Sign**: 250% and a Quarry that makes Hale hit harder, rather than 120% and Defense ignore (2d)? Recommend yes.
 24. **Hale, Closing Radius**: 570% rather than 220% (2d)? Recommend yes.
-25. **Kiva, Unclaimed Victory**: the ungated first Ward of 2a, with the text saying what it pays rather than what was measured? Recommend yes.
-26. **Seraphine, Volume Closed**: everything lands in one firing, and the record is paid out as damage (2d)? Recommend yes. The draft also says the target loses turn progress, which only the No Revision talent adds, so the player text will leave that out.
-27. **Altheon, Witness Script**: the rider at 35%, resolving before the blow it rides (2d)? Recommend yes.
-28. **Altheon, Immaculate Record**: a 3-round Subject, a 50% ceiling, and only Altheon's own blows recorded (2d)? Recommend yes.
+25. **Seraphine, Volume Closed**: everything lands in one firing, and the record is paid out as damage (2d)? Recommend yes. The draft also says the target loses turn progress, which only the No Revision talent adds, so the player text will leave that out.
+26. **Altheon, Witness Script**: the rider at 35%, resolving before the blow it rides (2d)? Recommend yes.
+27. **Altheon, Immaculate Record**: a 3-round Subject, a 50% ceiling, and only Altheon's own blows recorded (2d)? Recommend yes.
 
 **Nysera's False Target has its text now, because its kit is repaired.** It used to aim its extra
 damage at the body the redirected share came off, which for a blow aimed at Nysera is Nysera, so the

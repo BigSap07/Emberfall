@@ -24250,7 +24250,7 @@ namespace Emberfall.DevHarness
             "clara_known_condition",
             "demos_notice_of_loss", "demos_arrears_tick",
             "hale_field_sign", "hale_closing_radius",
-            "kiva_unclaimed_victory", "seraphine_volume_closed", "altheon_witness_script",
+            "seraphine_volume_closed", "altheon_witness_script",
             "altheon_immaculate_record"
         };
 
@@ -26537,7 +26537,14 @@ namespace Emberfall.DevHarness
             new TalentRoom("seraphine_the_closed_volume II", "s_buffer", DarkStrikers, 1, true),
             new TalentRoom("seraphine_the_closed_volume III", "s_buffer_tail", DarkStrikers, 1, false),
             new TalentRoom("sylven_the_unfading_blade III", "s_triple", "", 1, false),
-            new TalentRoom("velis_the_hollow_vow III", "s_mender", "", 1, false),
+            // Velis II and III used to be read in s_mender and are not any more, because both
+            // now move the sweep and that room cannot weigh them. Every clause either of them
+            // carries shortens a fight against a body that mends itself - HealSuppression and a
+            // Vulnerable both do - and a shorter fight is fewer blows, so the room reads a
+            // talent doing exactly what it says as a LOSS of total output. THE DARK TALENTS
+            // still fields Velis III there and still proves the clause lands; what is dropped
+            // is a second output reading whose sign is decided by the room rather than by the
+            // talent.
             new TalentRoom("isara_the_second_chance II", "s_wash", "darian_the_hidden_bulwark,kael_the_unyielding", 2, true),
             new TalentRoom("elyra_the_patient_warden III", "s_buffer", DarkFive, 1, false),
             new TalentRoom("edrin_the_distant_bell III", "s_buffer", DarkFive, 1, false),
@@ -26557,16 +26564,30 @@ namespace Emberfall.DevHarness
 
             DarkProbe a, b;
 
-            // ---- Kiva II: a marked body dies, and the highest-HP enemy inherits the mark.
-            // The mid body keeps its own Mark going to the front-most enemy, so without the talent
-            // the big body is never marked at all and the count is a clean 0 against 1.
-            if (!DarkPair("kiva_the_forsaken_oath", 2, "s_soft_mid_big", "", 1, false, out a, out b))
+            // ---- Kiva II: a body is brought low, and the biggest one inherits the mark.
+            //
+            // IT USED TO ANSWER OnKill, AND THE KILLING BLOW IS RARELY HERS: it fired nowhere in
+            // the sweep and read an exact zero. It answers OnEnemyHpBelowThreshold now, once per
+            // enemy, which is a thing a fight reaches - and it is the roster's only listener on
+            // that trigger since Caldus III stopped waiting on a Declared Target falling under a
+            // third of its HP once a battle. She hunts what is already hurt, so the trigger fits
+            // her better than it fitted him. THE ROOM MOVED WITH THE TRIGGER, off s_soft_mid_big,
+            // where no body ever crosses half its HP and the new clause therefore read 0 against
+            // 0. s_soft_big has one that does.
+            if (!DarkPair("kiva_the_forsaken_oath", 2, "s_soft_big", "", 1, false, out a, out b))
                 Check(false, "kiva II arena built");
             else
-                Check(b.MarkOnBiggestEnemy > a.MarkOnBiggestEnemy && a.MarkOnBiggestEnemy == 0,
-                      "Kiva II puts Forsaken on the highest-HP enemy when a Forsaken body dies ("
-                      + b.MarkOnBiggestEnemy + " against " + a.MarkOnBiggestEnemy
-                      + ") - that body is out of reach of her basic, which marks the lowest-HP one");
+                Check(b.MarkOnBiggestEnemy > a.MarkOnBiggestEnemy
+                      && b.Count(StatusKind.DefenseDown) > a.Count(StatusKind.DefenseDown)
+                      && a.Count(StatusKind.DefenseDown) == 0,
+                      "Kiva II puts Forsaken on the highest-HP enemy when a body is brought low, and"
+                      + " breaks the whole line's guard with it ("
+                      + b.MarkOnBiggestEnemy + " mark(s) on the biggest body against "
+                      + a.MarkOnBiggestEnemy + ", " + b.Count(StatusKind.DefenseDown)
+                      + " guard(s) broken against " + a.Count(StatusKind.DefenseDown)
+                      + ") - the broken guard is the clean signal here: her own basic reaches the"
+                      + " biggest body in this room often enough that the mark alone is close either"
+                      + " way, and nothing else in her kit breaks a guard at all");
 
             // ---- Kiva III: the same kill, and what it pays out now that the first clause is free.
             //
@@ -26660,14 +26681,23 @@ namespace Emberfall.DevHarness
                       + a.Count(StatusKind.EffectResistDown) + ") and takes it off again when "
                       + "Departure triggers");
 
-            // ---- Vaelis II: two positive effects move instead of all of them.
+            // ---- Vaelis II: both bodies the swap touches are opened before it strikes them.
+            //
+            // WHAT THIS CHECK USED TO ASSERT WAS THE TALENT BEING A RESTRICTION. Stolen Position
+            // capped Passed Position at two positive effects moved each way instead of every one,
+            // and moving fewer buffs is strictly less than moving all of them - the card said so in
+            // as many words, and the reading was an exact zero in every room. The talent buys the
+            // opening the swap creates now, and this reads that.
             if (!DarkPair("vaelis_the_unfixed_blade", 2, "s_soft4_triple", "", 4, false, out a, out b))
                 Check(false, "vaelis II arena built");
             else
-                Check(b.Spreads > 0 && b.Spreads < a.Spreads,
-                      "Vaelis II moves 2 positive effects each way instead of every one ("
-                      + b.Spreads + " crossings against " + a.Spreads
-                      + ") - the bound body has to be carrying more than two for the number to matter");
+                Check(b.Count(StatusKind.Vulnerable) > a.Count(StatusKind.Vulnerable)
+                      && b.SubjectDamage > a.SubjectDamage,
+                      "Vaelis II opens both bodies Passed Position moves between before either is "
+                      + "struck (" + b.Count(StatusKind.Vulnerable) + " opening(s) against "
+                      + a.Count(StatusKind.Vulnerable) + ", " + b.SubjectDamage + " damage against "
+                      + a.SubjectDamage + ") - the Vulnerable is source-keyed, so it is his own "
+                      + "blows it moves and nobody else's");
 
             // ---- Vaelis III: twelve Energy when the ally that triggered Departure is a Mender.
             if (!DarkPair("vaelis_the_unfixed_blade", 3, "s_soft_soft_big", "isara_the_second_chance",
@@ -26716,7 +26746,7 @@ namespace Emberfall.DevHarness
                       "Brenna I lets one ally's Lasting Guard release " + b.BiggestHealToOther
                       + " where the 8% ceiling stopped it at " + a.BiggestHealToOther
                       + " - the Guard prevented more than 8% of Max HP, so the cap was what was "
-                      + "binding and raising it to 12% let the rest through");
+                      + "binding and the talent raising it let the rest through");
 
             // ---- Altheon III: LIT, and it is now a check rather than a note.
             //
@@ -26768,7 +26798,17 @@ namespace Emberfall.DevHarness
                       + (b.ResolveSpent - a.ResolveSpent) + " extra Traces spent, "
                       + b.SubjectDamage + " damage against " + a.SubjectDamage + ")");
 
-            // ---- Mireth I: two landings per enemy, against one every round.
+            // ---- Mireth I: the same landings, each one erasing twice as much.
+            //
+            // THE TRAP THIS CHECK USED TO PIN IS GONE, and it was pinned exactly right:
+            // firesPerSubject is a WHOLE-BATTLE budget where the sentence meant one Focus's
+            // duration, so buying two landings per enemy bought FEWER than the once-a-round limit
+            // it replaced, and the talent paid a fifth of the strike's damage for the privilege.
+            // Turning the limit off instead was measured and buys nothing at all - against one body
+            // that buffs every turn the passive already lands once a round, so an unlimited version
+            // lands the same fourteen times and the reading was an exact zero. What the talent
+            // deepens now is the erasure itself: the Dispel takes two entries instead of one, so
+            // Absence banks twice as fast, and Absence is what makes her hit a marked body harder.
             if (!DarkPair("mireth_the_erased_name", 1, "s_buffer", "", 1, false, out a, out b))
                 Check(false, "mireth I arena built");
             else
@@ -26776,10 +26816,11 @@ namespace Emberfall.DevHarness
                 int fa, fb;
                 a.Fired.TryGetValue("mireth_the_missing_page", out fa);
                 b.Fired.TryGetValue("mireth_the_missing_page", out fb);
-                Check(fb > 0 && fb <= 2 && fb < fa,
-                      "Mireth I trades The Missing Page's once-a-round limit for two landings on each enemy, and against "
-                      + "one enemy that buffs every turn that is " + fb + " landing(s) against " + fa + " - the trap "
-                      + "KnownCostlyTalents names");
+                Check(fb > 0 && fb == fa && b.SubjectDamage > a.SubjectDamage,
+                      "Mireth I takes two entries off the page per landing instead of one, on the "
+                      + "same " + fb + " landing(s) as without it (" + fa + " without), and the "
+                      + "Absence that banks is worth " + b.SubjectDamage + " damage against "
+                      + a.SubjectDamage);
             }
 
             // ---- Mireth II: the Energy either side of the third Page.
@@ -26804,23 +26845,25 @@ namespace Emberfall.DevHarness
                       "Mireth III adds damage when The Missing Page lands on a wounded Focused "
                       + "enemy (" + b.SubjectDamage + " against " + a.SubjectDamage + ")");
 
-            // ---- Rheia I: three Energy per Revision instead of five, and a bigger blow for it.
+            // ---- Rheia I: the rewrite's own blow, far heavier.
+            //
+            // WHAT THIS USED TO ASSERT WAS THE PRICE, AND THE PRICE WAS THE FAULT. Endless
+            // Revision took two Energy off EVERY Applied Revision - her whole cast rate - and
+            // bought twenty percent of Attack on one conditional clause of one cast. It read
+            // -7961, t -22.9, and its KnownCostlyTalents entry called that "fewer casts that
+            // each hit harder", which is true and is not a purchase. The Energy is gone and the
+            // rider is the whole talent, so what is asserted is the rider.
             if (!DarkPair("rheia_the_revision_scribe", 1, "s_selfdown", DarkStrikers, 1, false,
                           out a, out b))
                 Check(false, "rheia I arena built");
             else
-                Check(a.SubjectPlus(5) > 0 && b.SubjectPlus(5) == 0 && b.SubjectPlus(3) > 0,
-                      "Rheia I pays 3 Energy per Revision where she paid 5 (" + b.SubjectPlus(3)
-                      + " payment(s) of 3 and " + b.SubjectPlus(5) + " of 5, against "
-                      + a.SubjectPlus(3) + " and " + a.SubjectPlus(5)
-                      + ") - she needs a body that buffs AND debuffs itself to have a status to "
-                      + "flip at all");
-                Check(b.SubjectCasts > 0 && a.SubjectCasts > 0
+                Check(b.SubjectCasts > 0 && a.SubjectCasts > 0 && b.SubjectDamage > a.SubjectDamage
                       && b.SubjectDamage / b.SubjectCasts > a.SubjectDamage / a.SubjectCasts,
-                      "and buys 20% of Attack per affected enemy with it: " + (b.SubjectDamage / b.SubjectCasts)
-                      + " damage per cast against " + (a.SubjectDamage / a.SubjectCasts)
-                      + ", while her TOTAL falls from " + a.SubjectDamage + " to " + b.SubjectDamage
-                      + " because the Energy she gives up costs her casts");
+                      "Rheia I makes Rewrite the Outcome's blow on a rewritten enemy far heavier ("
+                      + (b.SubjectDamage / b.SubjectCasts) + " damage per cast against "
+                      + (a.SubjectDamage / a.SubjectCasts) + ", " + b.SubjectDamage + " in total"
+                      + " against " + a.SubjectDamage + ") - she needs a body that buffs AND"
+                      + " debuffs itself for the rewrite to have an Attack Down to rewrite at all");
 
             // ---- Rheia II: the rider Second Draft carries at four Revision.
             if (!DarkPair("rheia_the_revision_scribe", 2, "s_selfdown", DarkStrikers, 1, false,
@@ -26957,11 +27000,26 @@ namespace Emberfall.DevHarness
                           out a, out b))
                 Check(false, "velis III arena built");
             else
-                Check(b.Count(StatusKind.HealSuppression) > 0
-                      && a.Count(StatusKind.HealSuppression) == 0,
-                      "Velis III shuts healing off the body What Was Taken spends three Remnants on "
-                      + "when it is under 30% HP (" + b.Count(StatusKind.HealSuppression)
-                      + " against " + a.Count(StatusKind.HealSuppression) + ")");
+                // THE HEAL SUPPRESSION THIS USED TO ASSERT IS GONE FROM THE TALENT, and the reason
+                // is what the talent had to become to be worth picking. Final Denial hung a
+                // suppression off What Was Taken, which waits on three Remnants, and the talent
+                // read an exact zero everywhere the sweep could see it. Given an opening on her
+                // basic it reads +1314, t 20.6 - and that opening kills the body before three
+                // Remnants are ever banked, so the suppression became a clause on the card that
+                // the fight never runs. It was taken off the card rather than left on it.
+                // The damage is PRINTED and not asserted, and s_mender is why. A room built around
+                // a body that mends itself is one the talent shortens: the opening kills faster,
+                // a shorter fight is fewer blows, and the total falls while every blow in it hit
+                // harder. That is the same property that took Velis II and III off the TalentRoom
+                // list, and TALENTS WORTH PICKING reads this talent in the sweep arena, which has
+                // no such body and reads +1314, t 20.6.
+                Check(b.Count(StatusKind.Vulnerable) > a.Count(StatusKind.Vulnerable)
+                      && a.Count(StatusKind.Vulnerable) == 0,
+                      "Velis III opens the body Denied Return cuts ("
+                      + b.Count(StatusKind.Vulnerable) + " opening(s) against "
+                      + a.Count(StatusKind.Vulnerable) + ") - the Vulnerable is source-keyed, so it "
+                      + "is hers alone. Her total in this room reads " + b.SubjectDamage
+                      + " against " + a.SubjectDamage + " because the opening ends the fight sooner");
 
             // ---- Isara II: the second body a Seedling heals.
             if (!DarkPair("isara_the_second_chance", 2, "s_wash", "darian_the_hidden_bulwark,"
@@ -26993,11 +27051,17 @@ namespace Emberfall.DevHarness
             if (!DarkPair("edrin_the_distant_bell", 3, "s_buffer", DarkFive, 1, false, out a, out b))
                 Check(false, "edrin III arena built");
             else
-                Check(b.SubjectDamage > a.SubjectDamage && b.ResolveSpent > a.ResolveSpent,
-                      "Edrin III spends four Record on the Ledger's remains (" + b.SubjectDamage
-                      + " damage against " + a.SubjectDamage + ", " + b.ResolveSpent
-                      + " Record spent against " + a.ResolveSpent + ") - his Guardian of What"
-                      + " Remains banked none of them, and what it banks now lasts the battle");
+                // WHAT THIS USED TO ASSERT WAS THE SPEND, AND THE SPEND WAS THE FAULT. Nothing Is
+                // Lost sold Guardian of What Remains' standing modifier - 4% of his damage against
+                // a marked body per Record held - for one blow, and the parity study priced that
+                // sale: -2.9pp of win rate in the duel and -1.7 on the ladder. It raises the
+                // ceiling instead, so nothing he banks is lost and no blow is added to feed an
+                // enemy bar.
+                Check(b.SubjectDamage > a.SubjectDamage && b.ResolveSpent == a.ResolveSpent,
+                      "Edrin III banks Record past where Guardian of What Remains used to stop, and"
+                      + " every one of them still raises his damage against a marked body ("
+                      + b.SubjectDamage + " against " + a.SubjectDamage + ", with " + b.ResolveSpent
+                      + " Record spent either way)");
 
             // ---- Hale II: the clause that decides something once its host stops answering itself.
             //
@@ -27097,41 +27161,10 @@ namespace Emberfall.DevHarness
         }
 
         private static readonly CostlyTalent[] KnownCostlyTalents = {
-            new CostlyTalent("kael_the_unyielding III", "TRAP",
-                "Lasting Materials buys Rubble that never expires and a cap of 5 for 10% of Take Down the"
-                + " Wall's damage, and the purchase is empty: the active banks one Rubble a cast and What"
-                + " Breaks Forward consumes all of it on the very next basic, so Rubble never lives long"
-                + " enough to expire or to pass one stack. It loses in every room it was tried in,"
-                + " including against a body holding four long buffs. A kit conflict, waiting on Pinoy"),
-            new CostlyTalent("mireth_the_erased_name I", "TRAP",
-                "Deeper Erasure trades The Missing Page's once-a-round limit for two landings per enemy,"
-                + " and since ENGINE-GAPS pass 2 (chargeOnLanding, C11) the base passive lands once in"
-                + " every round it is raised, so the trade is fewer landings. firesPerSubject counts the"
-                + " whole battle where the sentence counts one Focus's duration, and nothing can reset a"
-                + " budget when Focus is reapplied. A kit conflict, waiting on Pinoy. Read in s_buffer since"
-                + " C13, where a marked enemy buffs every turn: the sweep no longer raises the passive"),
-            new CostlyTalent("marrow_the_irrevocable_vow I", "TRADE",
-                "as written: a third ally holds Promise, so Marrow takes a share of three allies' damage"
-                + " instead of two, which the output total does not count; the smaller Promise heal it"
-                + " pays for now also reaches the Promise he holds himself (ENGINE-GAPS pass 2)"),
-            new CostlyTalent("rheia_the_revision_scribe III", "TRADE",
-                "as written: every full-Revision Second Draft costs 10 Energy, and since ENGINE-GAPS pass 2"
-                + " her casts refill Revision, so not spending it buys less than those casts cost"),
-
             new CostlyTalent("nysera_the_missing_arrow I", "TRADE",
                 "utility: the Dispel strips a buff off the body that targets her, which in the sweep is"
                 + " the Warden's Provoke, freeing the whole line's single-target aim. Her own output"
-                + " falls because her basic then leaves the body that was feeding Vanishing Mark"),
-            new CostlyTalent("rheia_the_revision_scribe I", "TRADE",
-                "as written: 3 Energy per changed status instead of 5, for 20% of Attack more on every"
-                + " enemy each cast changes. Fewer casts that each hit harder"),
-            new CostlyTalent("kiva_the_forsaken_oath III", "TRADE",
-                "survival: a kill on a Forsaken body buys Kiva a Shield of 12% of her Max HP, which the"
-                + " output total does not count (s_soft_mid_big: 308 absorbed on Kiva, one ally death fewer)."
-                + " What it costs is measured and why is not established: the one other difference in its"
-                + " room is a HealSuppression Severance Paid no longer lands, consistent with the talent"
-                + " consuming a Broken Link that basic would have spent. It read -410, t -1.7, before the F8"
-                + " pass lifted her kit x1.15, and -807, t -2.9, after") };
+                + " falls because her basic then leaves the body that was feeding Vanishing Mark") };
 
         private static CostlyTalent CostlyTalentFor(string pair)
         {
