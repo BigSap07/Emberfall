@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -17985,11 +17985,19 @@ namespace Emberfall.DevHarness
             if (db == null) return 1;
             Line("");
             Line("PROBE STUDY - the level search alone, re-run on every graded stage from the COMMITTED");
-            Line("  table at a budget of " + SolverMaxProbesPerStage + " probe(s) a stage, " + SolverCeilSamples + " samples a probe. Floor-pinned stages");
-            Line("  are skipped: the instrument cannot be placed on them, so there is nothing to search for.");
-            Line("  stage  roster                probes  steps   was      landed   band    exit");
+            Line("  table at " + SolverCeilSamples + " samples a probe, under BOTH probe schemes:");
+            Line("    LADDER  each stage is granted " + SolverProbeGrants[0] + " probes, and a stage that spends them");
+            Line("            without reaching the band is granted double, up to " + SolverMaxProbesPerStage + ". A retry restarts.");
+            Line("    FLAT    every stage is granted " + SolverMaxProbesPerStage + " from the start and exits on convergence.");
+            Line("  Floor-pinned stages are skipped: the instrument cannot be placed on them, so there is");
+            Line("  nothing to search for. The FIRST RUNG of the ladder is a flat " + SolverProbeGrants[0] + " for free, so the");
+            Line("  old scheme is read off the ladder run rather than paid for a third time.");
+            Line("");
+            Line("  stage  roster                ladder   flat  rungs            steps   was      landed   band    exit");
             int worstProbes = 0, worstSteps = 0; string worstStage = null;
-            int truncated = 0, graded = 0, landedIn = 0;
+            int graded = 0, landedIn = 0;
+            int ladderTotal = 0, flatTotal = 0, floorTotal = 0;
+            int ladderTruncated = 0, flatTruncated = 0, floorTruncated = 0, escalated = 0;
             for (int i = 0; i < db.AllStages.Count; i++)
             {
                 StageDef stage = db.AllStages[i];
@@ -17998,29 +18006,75 @@ namespace Emberfall.DevHarness
                 int ramp = stage.CeilingLevel - stage.FloorLevel;
                 int[] roster = new int[stage.Enemies.Count];
                 for (int e = 0; e < roster.Length; e++) roster[e] = stage.Enemies[e].Level;
+                int[] seeded = new int[roster.Length];
+                for (int e = 0; e < roster.Length; e++) seeded[e] = roster[e] + ramp;
                 string wasText = SolverRosterText(stage);
                 int guardSeed = 6000000 + stage.GlobalIndex * 97 + 13;
                 float wasRate = CurveRate(BuildPinnedLine(db, stage, true), stage,
                                           Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount),
                                           SolverCeilSamples, guardSeed, _gearedCurveOrdinals);
-                int probes = 0;
-                LevelConfig landed = SolveStageLevels(db, stage, roster, ramp, ref probes);
+
+                // THE LADDER, which is what the solver runs. Its rung list carries the old flat 60
+                // inside it: rung one IS a flat 60, and a stage with more than one rung is a stage
+                // that a flat 60 was truncating.
+                int ladder = 0;
+                LevelConfig landed = SolveStageLevels(db, stage, roster, ramp, ref ladder);
+                string rungText = "";
+                for (int r = 0; r < landed.Rungs.Count; r++)
+                    rungText += (r > 0 ? "+" : "") + landed.Rungs[r];
+                floorTotal += landed.Rungs[0];
+                if (landed.Rungs.Count > 1) { escalated++; floorTruncated++; }
+                if (landed.Truncated) ladderTruncated++;
                 bool inBand = CeilBandMargin(db, stage, landed.Rate) >= 0f;
                 if (inBand) landedIn++;
-                bool hitBudget = probes >= SolverMaxProbesPerStage;
-                if (hitBudget) truncated++;
-                if (probes > worstProbes) { worstProbes = probes; worstSteps = landed.UnitsMoved; worstStage = stage.DisplayCode; }
-                Line("  " + stage.DisplayCode.PadRight(6) + " " + (wasText + " -> " + SolverRosterText(stage)).PadRight(22)
-                     + probes.ToString().PadLeft(6) + landed.UnitsMoved.ToString().PadLeft(7)
+                string landedText = SolverRosterText(stage);
+
+                // THE FLAT CEILING, over the same stage from the same seeded roster. Restored first
+                // so the second search starts where the first one did rather than where it landed.
+                SolverApplyCeiling(stage, seeded, ramp);
+                int flat = 0;
+                LevelConfig flatLanded = SolveStageLevelsAt(db, stage, roster, ramp,
+                                                            SolverMaxProbesPerStage, ref flat);
+                if (flatLanded.Truncated) flatTruncated++;
+                // Same walk, same seed, same landing - the schemes differ in what they spend, not
+                // in where they arrive, and a divergence here would mean the restart is not clean.
+                if (Math.Abs(flatLanded.Rate - landed.Rate) > 0.0001f)
+                    Line("    !! " + stage.DisplayCode + " landed differently under the two schemes: "
+                         + Pct(landed.Rate) + " ladder against " + Pct(flatLanded.Rate) + " flat");
+                SolverApplyCeiling(stage, landed.Ceiling, ramp);
+
+                ladderTotal += ladder;
+                flatTotal += flat;
+                if (ladder > worstProbes) { worstProbes = ladder; worstSteps = landed.UnitsMoved; worstStage = stage.DisplayCode; }
+                Line("  " + stage.DisplayCode.PadRight(6) + " " + (wasText + " -> " + landedText).PadRight(22)
+                     + ladder.ToString().PadLeft(6) + flat.ToString().PadLeft(7) + "  " + rungText.PadRight(16)
+                     + landed.UnitsMoved.ToString().PadLeft(5)
                      + Pct(wasRate).PadLeft(9) + Pct(landed.Rate).PadLeft(9)
                      + (inBand ? "  in " : "  OUT").PadLeft(8)
-                     + (hitBudget ? "   BUDGET" : "   converged"));
+                     + (landed.Truncated ? "   BUDGET" : "   converged"));
             }
             Line("");
-            Line("  " + graded + " graded stage(s); " + landedIn + " landed in band; " + truncated
-                 + " hit the probe budget of " + SolverMaxProbesPerStage + ".");
+            Line("  " + graded + " graded stage(s); " + landedIn + " landed in band.");
+            Line("  " + escalated + " stage(s) spent a first rung of " + SolverProbeGrants[0]
+                 + " without reaching the band and were escalated.");
+            Line("");
+            Line("  TOTAL PROBES OVER ONE PASS, the three schemes on the same table:");
+            Line("    flat " + SolverProbeGrants[0].ToString().PadLeft(3) + "   " + floorTotal.ToString().PadLeft(6)
+                 + "   " + floorTruncated + " stage(s) interrupted - what those wrote is not an answer");
+            Line("    flat " + SolverMaxProbesPerStage.ToString().PadLeft(3) + "   " + flatTotal.ToString().PadLeft(6)
+                 + "   " + flatTruncated + " stage(s) interrupted");
+            Line("    ladder  " + ladderTotal.ToString().PadLeft(6)
+                 + "   " + ladderTruncated + " stage(s) interrupted");
+            Line("");
+            Line("  The ladder costs " + (ladderTotal - flatTotal) + " probe(s) MORE than the flat ceiling"
+                 + (flatTotal > 0 ? " (x" + Ratio3((float)ladderTotal / flatTotal) + ")" : "")
+                 + ", for the same landings.");
+            Line("  A grant can only be found too small by spending it, so every escalated stage re-fights");
+            Line("  its earlier rungs from the seed. And the flat ceiling is not a quota - the search exits");
+            Line("  on convergence - so the stages that converge inside " + SolverProbeGrants[0] + " pay the same under either");
+            Line("  scheme, and the stages that do not are exactly the ones the ladder charges twice.");
             Line("  worst: " + worstStage + " at " + worstProbes + " probe(s), " + worstSteps + " single-unit step(s).");
-            Line("  A stage reading BUDGET was interrupted rather than measured. If any does, the budget is");
+            Line("  A stage reading BUDGET was interrupted rather than measured. If any does, the ceiling is");
             Line("  under what this content asks for and the out-of-band readings downstream are its doing.");
             return 0;
         }
@@ -18432,6 +18486,19 @@ namespace Emberfall.DevHarness
         /// </summary>
         private const int SolverMaxProbesPerStage = 400;
 
+        /// <summary>
+        /// THE GRANT LADDER. A stage is handed 60 probes; a stage that spends them without reaching
+        /// the band is handed double, and doubled again, up to SolverMaxProbesPerStage. Only a
+        /// stage that fails pays for the headroom, and a stage that converges never sees past the
+        /// first rung.
+        ///
+        /// That is the intent. What it actually costs is measured by --probe-study, which runs the
+        /// ladder and a flat SolverMaxProbesPerStage over the same table and prints both totals,
+        /// because the saving here is arithmetic rather than obvious and the arithmetic does not
+        /// go the way the shape of the idea suggests. See SolveStageLevels.
+        /// </summary>
+        private static readonly int[] SolverProbeGrants = { 60, 120, 240, SolverMaxProbesPerStage };
+
         private static float CeilBandLow(ContentDatabase db, StageDef stage)
         {
             return IsChapterFinale(db, stage) ? GearedCeilBandLowFinale : GearedCeilBandLowOrdinary;
@@ -18456,11 +18523,15 @@ namespace Emberfall.DevHarness
             public int[] Ceiling;    // the ceiling battle's level per unit
             public float Rate = -1f; // its measured CEIL win rate at recommendedPower
             public int UnitsMoved;   // how far the search walked from the inversion's seed
-            // True when the search stopped because it had spent SolverMaxProbesPerStage rather
-            // than because it crossed the target or reached the cushion. A stage that exits this
-            // way was not measured, it was interrupted, and its levels are wherever the walk
-            // happened to be standing. Counted per iteration so the report says so out loud.
+            // True when the search stopped because it had spent its grant rather than because it
+            // crossed the target or reached the cushion. A stage that exits this way was not
+            // measured, it was interrupted, and its levels are wherever the walk happened to be
+            // standing. Counted per iteration so the report says so out loud.
             public bool Truncated;
+            // What each rung of the grant ladder spent, in order, on the walk that produced this
+            // landing. One entry means the stage converged inside its first 60. Set by
+            // SolveStageLevels; left null by a single-grant search.
+            public List<int> Rungs;
         }
 
         /// <summary>
@@ -18480,8 +18551,54 @@ namespace Emberfall.DevHarness
             stage.CeilingLevel = top + Math.Max(0, ramp);
         }
 
+        /// <summary>
+        /// THE ESCALATING GRANT. Runs the level search at the first rung of SolverProbeGrants and,
+        /// only if that rung was spent without reaching the band, runs it again at the next one.
+        ///
+        /// A RETRY IS A RESTART, and that is the whole cost. The walk is deterministic in the
+        /// stage's own seed and starts from `roster` every time, so a stage re-solved at 120 spends
+        /// its first 60 probes re-fighting the identical battles it already fought at 60 and only
+        /// then sees new ground. A stage that needs 171 probes therefore pays 60 + 120 + 171 = 351
+        /// under the ladder against 171 flat - the ladder cannot skip to the rung that would have
+        /// worked, because the only way to learn a rung is too small is to spend it.
+        ///
+        /// Resuming instead of restarting would remove that waste, and removes the ladder with it:
+        /// the grant is only ever read by the `while` in SolveStageLevelsAt, so a walk resumed with
+        /// a raised ceiling visits exactly the probes, in exactly the order, that one flat search at
+        /// the final rung would have visited. Escalate-by-resume is not cheaper than a flat ceiling;
+        /// it IS a flat ceiling, spelled across four calls.
+        ///
+        /// Which leaves the ladder's real question: what does a flat ceiling cost a stage that does
+        /// not need it? Nothing. The grant is a stopping condition, never a quota - SolveStageLevelsAt
+        /// exits the instant a candidate crosses the target or reaches the cushion, and 60 of the 67
+        /// graded stages do that inside 55 probes and would do it inside 55 at any ceiling above 55.
+        /// The number to beat is not 67 x 400. Measured, it is 1,672 probes a pass flat against 2,572
+        /// under this ladder, for identical landings: see Docs/SOLVE-PREREQS.md item 4.
+        ///
+        /// SO THE SOLVER DOES NOT CALL THIS. RunRecommendedPowerSolver goes straight to
+        /// SolveStageLevelsAt at SolverMaxProbesPerStage; the ladder is kept because --probe-study
+        /// is what measures the flat ceiling against it, and a constant this expensive should be
+        /// re-derivable by the next session rather than taken on trust.
+        /// </summary>
         private static LevelConfig SolveStageLevels(ContentDatabase db, StageDef stage, int[] roster,
                                                    int ramp, ref int probes)
+        {
+            LevelConfig landed = null;
+            List<int> rungs = new List<int>();
+            for (int g = 0; g < SolverProbeGrants.Length; g++)
+            {
+                int spent = 0;
+                landed = SolveStageLevelsAt(db, stage, roster, ramp, SolverProbeGrants[g], ref spent);
+                rungs.Add(spent);
+                probes += spent;
+                if (!landed.Truncated) break;
+            }
+            landed.Rungs = rungs;
+            return landed;
+        }
+
+        private static LevelConfig SolveStageLevelsAt(ContentDatabase db, StageDef stage, int[] roster,
+                                                     int ramp, int budget, ref int probes)
         {
             float target = TargetCeilRate(db, stage);
             // Fixed per stage, so the search fights identical battles every time it runs and
@@ -18504,7 +18621,7 @@ namespace Emberfall.DevHarness
             int movedCount = 0;
             int walked = 0;
 
-            while (probes < SolverMaxProbesPerStage)
+            while (probes < budget)
             {
                 if (movedCount == n) { movedThisRound = new bool[n]; movedCount = 0; }
 
@@ -18517,7 +18634,7 @@ namespace Emberfall.DevHarness
                     // fall below 1. The second is the binding one on a stage with a long ramp.
                     if (ceiling[u] + direction < 1) continue;
                     if (ceiling[u] + direction - ramp < 1) continue;
-                    if (probes >= SolverMaxProbesPerStage) break;
+                    if (probes >= budget) break;
 
                     ceiling[u] += direction;
                     LevelConfig probe = SolverProbe(db, stage, ceiling, ramp, walked + 1, seed, ref probes);
@@ -18549,7 +18666,7 @@ namespace Emberfall.DevHarness
                 walked++;
             }
 
-            best.Truncated = probes >= SolverMaxProbesPerStage
+            best.Truncated = probes >= budget
                              && CeilBandMargin(db, stage, best.Rate) < SolverBandCushion;
             SolverApplyCeiling(stage, best.Ceiling, ramp);
             return best;
@@ -18769,7 +18886,13 @@ namespace Emberfall.DevHarness
                     if (!p.FloorPinned)
                     {
                         int stageProbes = 0;
-                        LevelConfig landed = SolveStageLevels(db, p.Stage, shifted, ramp, ref stageProbes);
+                        // THE FLAT CEILING, not the grant ladder, and the choice is measured rather
+                        // than preferred: --probe-study runs both over the same table and prints the
+                        // two totals. The ladder loses, and it loses for a reason that is structural
+                        // rather than incidental - see SolveStageLevels. It is kept because the
+                        // instrument needs something to measure the ceiling against.
+                        LevelConfig landed = SolveStageLevelsAt(db, p.Stage, shifted, ramp,
+                                                                SolverMaxProbesPerStage, ref stageProbes);
                         p.LandedCeilRate = landed.Rate;
                         p.UnitsMoved = landed.UnitsMoved;
                         probes += stageProbes;
@@ -18785,9 +18908,9 @@ namespace Emberfall.DevHarness
                 Line("  iteration " + iterations + ": " + moved + " stage(s) moved, " + probes
                      + " ceiling probe(s) at " + SolverCeilSamples + " samples each"
                      + (truncated > 0
-                        ? "; " + truncated + " stage(s) SPENT THE PROBE BUDGET without reaching the"
-                          + " band, so their levels are where the walk stopped rather than where it"
-                          + " was going - raise SolverMaxProbesPerStage"
+                        ? "; " + truncated + " stage(s) SPENT THE WHOLE GRANT LADDER without reaching"
+                          + " the band, so their levels are where the walk stopped rather than where"
+                          + " it was going - raise SolverMaxProbesPerStage"
                         : "")
                      + (stuckAt != null ? "; the reference walk stuck at " + stuckAt : ""));
                 if (moved == 0 && stuckAt != null)
