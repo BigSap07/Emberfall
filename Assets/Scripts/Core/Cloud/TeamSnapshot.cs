@@ -133,7 +133,13 @@ namespace Emberfall.Core.Cloud
                 // a def's rarity is content and content moves, and a snapshot records what was.
                 unit.Stars = def.Stars;
                 unit.RelicId = hero.EquippedRelicId;
-                unit.SelectedTalent = hero.SelectedTalent;
+                // The talent this hero WOULD FIGHT WITH, not the slot the save happens to name:
+                // a pick the hero's ascension has not unlocked is absent from its owner's battles
+                // (HeroInstance.LiveTalent), so publishing it would hand a duelling friend a line
+                // stronger than the one it is a snapshot of. A snapshot carries no ascension tier
+                // and cannot re-derive the gate later, which is exactly why it is applied here,
+                // once, at the moment the record is taken.
+                unit.SelectedTalent = hero.LiveTalentSelection;
                 for (int s = 0; s < hero.EquippedArmor.Length; s++)
                 {
                     string uid = hero.EquippedArmor[s];

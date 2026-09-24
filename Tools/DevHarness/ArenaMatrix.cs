@@ -1021,6 +1021,12 @@ namespace Emberfall.DevHarness
                 {
                     c.Def = ablated ? MatrixAblate(rule) : rule.Hero;
                     c.SelectedTalent = rule.Kind == MatrixRuleKind.Talent && !ablated ? rule.Index : 0;
+                    // The clone is ascended far enough to run the slot being read. The gate
+                    // (DESIGN-TALENTS T6) would otherwise silence talents 2 and 3 on the session's
+                    // own tier-0 heroes, and a study that read a zero there would be measuring the
+                    // gate rather than the talent. Tier reaches the fight through nothing else, so
+                    // this authorises the reading and moves no number in it.
+                    c.Ascension = Math.Max(c.Ascension, HeroInstance.TierUnlockingTalent(c.SelectedTalent));
                 }
                 team.Add(c);
             }

@@ -349,8 +349,17 @@ namespace Emberfall.Core.Progression
             return total;
         }
 
-        /// <summary>The hero as it would fight with this selection. Everything the simulation
-        /// reads off an instance is carried, and the owner's instance is never touched.</summary>
+        /// <summary>
+        /// The hero as it would fight with this selection. Everything the simulation reads off an
+        /// instance is carried, and the owner's instance is never touched.
+        ///
+        /// The copy is given the ascension tier that authorises the selection being read, which is
+        /// at least the hero's own. A trial answers "what would this talent do", and that question
+        /// is at its most useful about a talent the hero has NOT unlocked yet - it is what the
+        /// locked card on the talent screen is for. Tier is invisible to the fight in every other
+        /// way (StatMath.ForHero builds the line from Level), so this authorises the reading and
+        /// changes nothing else about it.
+        /// </summary>
         private static HeroInstance CopyWithTalent(HeroInstance h, int selection)
         {
             HeroInstance c = new HeroInstance();
@@ -364,6 +373,7 @@ namespace Emberfall.Core.Progression
                 c.EquippedArmor[i] = h.EquippedArmor[i];
             c.Def = h.Def;
             c.SelectedTalent = selection;
+            c.Ascension = Math.Max(h.Ascension, HeroInstance.TierUnlockingTalent(selection));
             return c;
         }
 

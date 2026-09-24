@@ -1351,7 +1351,20 @@ namespace Emberfall.Core.Combat
                     // this, and the default for every hero summoned after it - resolves to null and
                     // adds nothing, which is what makes the talent path unreachable until a player
                     // picks one.
-                    PassiveDef talent = hero.Def.TalentAt(hero.SelectedTalent);
+                    //
+                    // HeroInstance.LiveTalent, not TalentAt(SelectedTalent), because the ASCENSION
+                    // GATE lives on the hero: tier 0 authorises slot 1, tier 1 slot 2, tier 2 slot
+                    // 3 (DESIGN-TALENTS T6). A locked slot resolves to null here and is therefore
+                    // absent from the fight in exactly the way an unselected one is - which is the
+                    // whole of the gate, and the only place it can be enforced, since this is the
+                    // only line that turns a selection into something the simulation can see.
+                    //
+                    // The far side below does NOT ask this, and must not: a snapshot records a
+                    // talent and carries no ascension tier, so a stored record replays with the
+                    // pick it was fought with. The gate is applied where a line is PUBLISHED
+                    // (TeamSnapshot.Capture, ProvingGenerator, GuildDungeon.LineOf), so a locked
+                    // pick never reaches a record in the first place.
+                    PassiveDef talent = hero.LiveTalent;
                     if (talent != null)
                     {
                         unit.AddPassive(talent);

@@ -165,6 +165,9 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/Hero detail", false, 72)]
         public static void CaptureHeroDetailScreen() { Begin("Screen:HeroDetail"); }
 
+        [MenuItem("Emberfall/Capture/Talents", false, 74)]
+        public static void CaptureTalentsScreen() { Begin("Screen:Talents"); }
+
         // The three account screens, through the same generic path. What this captures is each
         // one's OFFLINE state - the router builds them whether or not a cloud exists, and with no
         // network they render "no account service" or "offline" rather than a blank. That state is
@@ -515,7 +518,7 @@ namespace Emberfall.EditorTools
             // here - Campaign, Forge, Settings, Profile, Guild and its two sub-pages, Proving -
             // are pages a player reaches by tapping, and a page with no capture target is a page
             // whose layout nothing in this repository has ever looked at.
-            string[] all = { "MainMenu", "Campaign", "Heroes", "HeroDetail", "Formation", "Summon",
+            string[] all = { "MainMenu", "Campaign", "Heroes", "HeroDetail", "Talents", "Formation", "Summon",
                              "Forge", "Inventory", "RelicShop", "Events", "Recital", "Proving",
                              "Profile", "Account", "Friends", "FriendTeam", "Settings",
                              "Guild", "GuildRequests", "GuildChat", "Battle", "Result",
@@ -574,6 +577,7 @@ namespace Emberfall.EditorTools
                     case "Campaign": id = ScreenId.Campaign; break;
                     case "Heroes": id = ScreenId.Heroes; break;
                     case "HeroDetail": id = ScreenId.HeroDetail; break;
+                    case "Talents": id = ScreenId.Talents; break;
                     case "Formation": id = ScreenId.Formation; break;
                     case "Summon": id = ScreenId.Summon; break;
                     case "Forge": id = ScreenId.Forge; break;
@@ -642,6 +646,26 @@ namespace Emberfall.EditorTools
                     // ScreenRouter.Show closes every open layer before it changes screens, so a
                     // dialog opened in this call would be opened and closed again.
                     if (name == "AbilityNumbers") SessionState.SetString(AbilityKey, "1");
+                }
+
+                // THE TALENT PAGE NEEDS A HERO WITH SOMETHING STILL LOCKED, which is the one
+                // state the page was rebuilt around and the one a fresh profile cannot show. A
+                // starter is a five-star at ascension tier 0, so it reaches talent 1 and the other
+                // two cards read LOCKED - which photographs the gate but not the page, because
+                // the interesting frame is the one where some are open and one is not. So the
+                // subject is ascended ONCE, through the same GameSession.Ascend the forge calls
+                // and with the copy it charges granted first: two cards live, one shut, which is
+                // every state the page has in one frame.
+                if (name == "Talents")
+                {
+                    HeroInstance subject = TalentSubject(app);
+                    if (subject == null)
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: no owned hero authors talents, skipping Talents.");
+                        SessionState.SetInt(StageKey, slot + 1);
+                        return;
+                    }
+                    app.Router.Talents.SetHero(subject);
                 }
 
                 // THE ITEM SCREENS NEED ITEMS. A fresh profile owns no armour and no relics, so
@@ -855,6 +879,44 @@ namespace Emberfall.EditorTools
 
         private const string HubLayerKey = "PlayModeScreenshot.HubLayer";
         private const string AbilityKey = "PlayModeScreenshot.AbilityBreakdown";
+
+        /// <summary>
+        /// A hero to photograph the talent page on, ascended exactly one tier so the page shows
+        /// both of the states the ascension gate has: two cards the player can run and one that
+        /// reads LOCKED with the tier that opens it (DESIGN-TALENTS T6).
+        ///
+        /// The ascension is real. GameSession.Ascend is the only way a tier moves in the game, it
+        /// charges copies, and the copy is granted through GrantHeroDirect first - the same reason
+        /// PopulateItems rolls armour through ArmorRoller instead of poking the profile. A
+        /// screenshot of a tier no code path produces would be evidence of nothing.
+        ///
+        /// Returns null when the profile owns no hero that authors talents, and the caller skips
+        /// the shot rather than faking one.
+        /// </summary>
+        private static HeroInstance TalentSubject(GameApp app)
+        {
+            List<HeroInstance> owned = app.Session.Profile.Heroes;
+            if (owned == null) return null;
+            HeroInstance subject = null;
+            for (int i = 0; i < owned.Count && subject == null; i++)
+                if (owned[i].Def != null && owned[i].Def.Talents.Count >= HeroDef.MaxTalents) subject = owned[i];
+            if (subject == null) return null;
+
+            // One tier, no more: at tier 1 the third card is still shut, which is the frame worth
+            // taking. A fully ascended subject would photograph a page with nothing locked on it.
+            if (subject.Ascension == 0)
+            {
+                for (int guard = 0; guard < 8 && app.Session.AscensionBlocker(subject) != null; guard++)
+                    app.Session.GrantHeroDirect(subject.Def, 0);
+                AscensionResult result = app.Session.Ascend(subject);
+                if (!result.Success)
+                    Debug.LogWarning("PlayModeScreenshot: could not ascend " + subject.Def.Name
+                                     + " for the talent page - " + result.Message
+                                     + ". Shooting it at tier 0, where all three cards read LOCKED but the first.");
+            }
+            app.Session.SelectTalent(subject, 1);
+            return subject;
+        }
 
         /// <summary>
         /// The owned hero whose busiest single ability carries the most printable numbers.

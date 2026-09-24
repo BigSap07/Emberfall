@@ -1255,6 +1255,17 @@ namespace Emberfall.Core.Session
         /// storing an index that silently does nothing. Clearing to 0 always succeeds, including
         /// for a hero with no talents at all, because "none" is always a reachable state.
         ///
+        /// Also returns false for a slot the hero's ASCENSION has not unlocked (DESIGN-TALENTS T6,
+        /// HeroInstance.TalentSlotsUnlocked): tier 0 may pick talent 1, tier 1 talents 1-2, tier 2
+        /// all three. Refusing here is the same promise as refusing an unauthored slot - a player
+        /// cannot choose what the hero cannot run.
+        ///
+        /// Refusing a pick is NOT the same as clearing one already stored. A selection that was
+        /// legal when it was made and is locked now - a tier that moved under it, a hand-edited
+        /// save - is kept, resolves to nothing in the fight, and comes back whole when the tier
+        /// does. That rule lives on HeroInstance.LiveTalent, where an unauthored slot's already
+        /// does.
+        ///
         /// Deliberately no "only out of battle" guard. A battle resolves from a BattleRequest built
         /// at the moment it starts (BuildBattleRequest), and CombatSimulation.BuildUnits reads the
         /// selection once during setup, so a change made mid-replay cannot reach a fight already
@@ -1268,6 +1279,7 @@ namespace Emberfall.Core.Session
             if (selection == 0) { hero.SelectedTalent = 0; return true; }
             if (selection < 0 || selection > HeroDef.MaxTalents) return false;
             if (hero.Def == null || hero.Def.TalentAt(selection) == null) return false;
+            if (!hero.TalentSlotUnlocked(selection)) return false;
 
             hero.SelectedTalent = selection;
             return true;

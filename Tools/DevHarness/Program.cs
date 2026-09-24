@@ -2922,6 +2922,8 @@ namespace Emberfall.DevHarness
             CheckPassiveDepthStillBoundedWithTwo();
             CheckTalentSelection();
             CheckUnselectedTalentIsInert();
+            CheckAscensionGatesTalents();
+            CheckAscensionGateKeepsThePickAndTheRecord(live);
             CheckTalentOnTheOpponentSide();
             CheckTalentSavesAndLoads(live);
             CheckOpponentTalentSavesAndLoads(live);
@@ -3299,6 +3301,225 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
+        /// THE ASCENSION GATE, MEASURED IN A FIGHT. DESIGN-TALENTS T6: a five-star at tier 0 has
+        /// talent 1, the first ascension unlocks talent 2, the second unlocks talent 3.
+        ///
+        /// Read off the event stream and the record, never off a flag. A check that asserted
+        /// TalentSlotsUnlocked == 2 would prove that arithmetic works and nothing about whether a
+        /// locked talent reaches a battle - which is the only thing the gate is for. So every claim
+        /// below is one of two shapes: how many times the talent's own passive fired, and whether
+        /// the whole record is byte-identical to the same fight with nothing selected.
+        ///
+        /// THE STRONG FORM OF "LOCKED" is the second of those. A locked talent is not a quieter
+        /// talent and not a talent that fires into nothing: the battle it is in must resolve
+        /// exactly as the battle it is not in, event for event, because HeroInstance.LiveTalent
+        /// returns null and BuildUnits appends nothing - the same absence an unselected talent has
+        /// and the same one CheckUnselectedTalentIsInert measures.
+        /// </summary>
+        private static void CheckAscensionGatesTalents()
+        {
+            ContentDatabase db = BuildPassiveTestContent();
+            if (db == null) return;
+
+            HeroDef talented = db.GetHero("test_talented");
+            if (talented == null || talented.Talents.Count != HeroDef.MaxTalents)
+            {
+                Check(false, "the synthetic three-talent hero is available to gate");
+                return;
+            }
+
+            // The two ceilings meet, and the check says so rather than the comment: balance.json's
+            // three fiveStarLevelCaps make tier 2 the last tier, HeroDef.MaxTalents makes 3 the last
+            // slot, and the mapping is only complete while those agree. A fourth tier or a fourth
+            // slot breaks the "last ascension unlocks the last talent" claim, and this is where it
+            // would be caught.
+            Check(StatMath.MaxAscensionTier(db.Balance) == HeroDef.MaxTalents - 1,
+                  "the last ascension tier unlocks the last talent exactly - " + HeroDef.MaxTalents
+                  + " slots against a top tier of " + StatMath.MaxAscensionTier(db.Balance)
+                  + ", with nothing left over on either side");
+
+            string none = FingerprintOf(RunWithTalentAtTier(db, talented, 0, 0));
+            Check(!string.IsNullOrEmpty(none) && none != "NULL",
+                  "a tier-0 hero with nothing selected resolves a real fight to measure the gate against");
+
+            // The grid: every slot at every tier, each one a whole battle. Two facts per cell -
+            // whether the talent's passive fired, and whether the record moved at all.
+            string grid = "";
+            bool gateHolds = true, unlockedWorks = true;
+            for (int tier = 0; tier <= HeroDef.MaxTalents - 1; tier++)
+            {
+                for (int selection = 1; selection <= HeroDef.MaxTalents; selection++)
+                {
+                    BattleResult r = RunWithTalentAtTier(db, talented, selection, tier);
+                    int fired = CountPassiveFires(r, TalentIdFor(selection));
+                    bool moved = FingerprintOf(r) != none;
+                    bool shouldRun = selection <= tier + 1;
+
+                    grid += (grid.Length > 0 ? " " : "") + "t" + tier + "." + selection + ":"
+                          + (moved ? fired + "x" : "-");
+                    if (shouldRun) { if (fired <= 0 || !moved) unlockedWorks = false; }
+                    else if (fired != 0 || moved) gateHolds = false;
+                }
+            }
+
+            Check(gateHolds,
+                  "a talent the hero's ascension has NOT unlocked is absent from the battle - it does not fire, and "
+                  + "the whole record is byte-identical to the same fight with nothing selected (" + grid + ")");
+            Check(unlockedWorks,
+                  "and every talent the tier HAS unlocked fires and moves that record, so the grid above is reading "
+                  + "the gate rather than a talent layer that stopped working (" + grid + ")");
+
+            // The headline case the design states, said on its own so a failure names it: a
+            // five-star at tier 0 cannot bring talent 3 into a fight, and the same five-star two
+            // ascensions later can.
+            BattleResult lockedThird = RunWithTalentAtTier(db, talented, 3, 0);
+            BattleResult unlockedThird = RunWithTalentAtTier(db, talented, 3, 2);
+            Check(CountPassiveFires(lockedThird, "talent_three") == 0 && FingerprintOf(lockedThird) == none,
+                  "a five-star at tier 0 cannot bring talent 3 into a real fight ("
+                  + CountPassiveFires(lockedThird, "talent_three") + " fire(s))");
+            Check(CountPassiveFires(unlockedThird, "talent_three") > 0 && FingerprintOf(unlockedThird) != none,
+                  "and the same hero at tier 2 can (" + CountPassiveFires(unlockedThird, "talent_three")
+                  + " fire(s))");
+
+            // THE TIER ONLY AUTHORISES. Nothing else about a hero's ascension reaches a battle -
+            // StatMath.ForHero builds the stat line from Level alone - so the same talent at a
+            // higher tier than it needs must resolve the same battle to the byte. If this fails,
+            // the gate has become a buff and every reading the studies take through an ascended
+            // body is measuring two things at once.
+            bool tierIsInert = true;
+            for (int selection = 1; selection <= HeroDef.MaxTalents; selection++)
+            {
+                string atNeed = FingerprintOf(RunWithTalentAtTier(db, talented, selection, selection - 1));
+                string atTop = FingerprintOf(RunWithTalentAtTier(db, talented, selection, HeroDef.MaxTalents - 1));
+                if (atNeed != atTop) tierIsInert = false;
+            }
+            Check(tierIsInert,
+                  "and a tier above the one a talent needs changes nothing - the gate authorises and does not also "
+                  + "buff, so an ascended study body reads the talent and not the tier");
+        }
+
+        /// <summary>
+        /// WHAT THE GATE MAY NOT DO to a pick, to a save, or to a record somebody already fought.
+        ///
+        /// A locked slot follows the shape an unresolvable relic id and an unauthored talent slot
+        /// already follow: the selection is KEPT, resolves to nothing, and comes back whole. The
+        /// player's pick is a statement of intent and the tier is a fact about the hero today, so a
+        /// tier that moves under a pick may not rewrite it.
+        ///
+        /// And nothing here needs a save version. The gate is derived from Ascension, which every
+        /// save ever written already carries, so there is no new field, no migration, and no stored
+        /// "unlocked" that could ever disagree with the tier that produced it.
+        /// </summary>
+        private static void CheckAscensionGateKeepsThePickAndTheRecord(ContentDatabase live)
+        {
+            PlayerProfile profile = GameSession.CreateNewProfile(live, 0);
+            GameSession session = new GameSession(live, profile);
+            HeroInstance hero = profile.Heroes.Find(delegate (HeroInstance h)
+            {
+                return h.Def != null && h.Def.Talents.Count == HeroDef.MaxTalents;
+            });
+            // Resolved to one battle, because BuildBattleRequest refuses an authored campaign
+            // stage - an authored stage expands to dozens of battles and fighting it unresolved
+            // would silently mean wave 1 battle 1.
+            StageDef arena = live.AllStages.Count > 0
+                ? CampaignWaveGenerator.BuildBattle(live.AllStages[0], 1, 1) : null;
+            if (hero == null || arena == null)
+            {
+                Check(false, "the fresh profile owns a hero authoring three talents, and a stage to fight in");
+                return;
+            }
+
+            // ---- the selection rule. Tier 0 may pick the first and nothing else.
+            hero.Ascension = 0;
+            Check(session.SelectTalent(hero, 1) && !session.SelectTalent(hero, 2) && !session.SelectTalent(hero, 3),
+                  "at tier 0 SelectTalent accepts talent 1 and refuses talents 2 and 3 - a player cannot choose "
+                  + "what the hero cannot run");
+            Check(session.SelectTalent(hero, 0) && hero.SelectedTalent == 0,
+                  "and clearing to none still always succeeds, at every tier");
+            hero.Ascension = 1;
+            Check(session.SelectTalent(hero, 2) && !session.SelectTalent(hero, 3),
+                  "the first ascension unlocks talent 2 and no more");
+            hero.Ascension = 2;
+            Check(session.SelectTalent(hero, 3) && hero.SelectedTalent == 3,
+                  "and the second unlocks talent 3");
+
+            // ---- the pick is kept when the tier drops out from under it, and comes back whole.
+            // Measured as a fight, not as a field: what matters is that the hero fights as though
+            // nothing were selected while the slot is locked, and fights the ORIGINAL battle again
+            // the moment the tier returns.
+            profile.AssignToTeam(0, hero.Uid);
+            string withIt = FingerprintOf(CombatSimulation.Run(session.BuildBattleRequest(arena, 4242)));
+            hero.Ascension = 0;
+            string locked = FingerprintOf(CombatSimulation.Run(session.BuildBattleRequest(arena, 4242)));
+            Check(hero.SelectedTalent == 3,
+                  "a pick made at tier 2 is KEPT when the hero is no longer at tier 2 - the same rule an "
+                  + "unresolvable relic id follows, and not a silent wipe (got " + hero.SelectedTalent + ")");
+            Check(hero.LiveTalent == null && locked != withIt,
+                  "and it is genuinely absent from the fight while it is locked, not merely marked");
+            hero.SelectedTalent = 0;
+            string bare = FingerprintOf(CombatSimulation.Run(session.BuildBattleRequest(arena, 4242)));
+            Check(locked == bare,
+                  "a locked pick fights exactly as no pick at all does, byte for byte - locked is absent and not "
+                  + "quiet, on live content and not only in the synthetic arena");
+            hero.SelectedTalent = 3;
+            hero.Ascension = 2;
+            Check(FingerprintOf(CombatSimulation.Run(session.BuildBattleRequest(arena, 4242))) == withIt,
+                  "and the pick comes back WHOLE when the tier does - the same battle it resolved before, so "
+                  + "nothing in between rewrote what the player asked for");
+
+            // ---- the save. No version moved, and none needed to: the gate is derived from a tier
+            // the format has carried since long before talents existed.
+            Check(SaveSerializer.CurrentVersion == 17,
+                  "the ascension gate moved no save version - it is derived from Ascension, which is already "
+                  + "stored, and a persisted 'unlocked' could only ever disagree with the tier (version "
+                  + SaveSerializer.CurrentVersion + ")");
+            hero.Ascension = 0;
+            string json = SaveSerializer.Serialize(profile);
+            string error;
+            PlayerProfile reloaded = SaveSerializer.Deserialize(json, live, out error);
+            HeroInstance back = reloaded == null ? null : reloaded.FindHeroByUid(hero.Uid);
+            Check(back != null && error == null && back.SelectedTalent == 3 && back.Ascension == 0
+                  && back.LiveTalent == null,
+                  "a save carrying a locked pick round-trips it untouched, and it still reads as locked on the way "
+                  + "back in (" + (back == null ? "hero lost" : "talent " + back.SelectedTalent + " at tier "
+                  + back.Ascension) + ")");
+
+            // ---- what a PUBLISHED line carries. A snapshot records no ascension tier and can
+            // never re-derive the gate, so the gate is applied once, at capture: a line published
+            // by a tier-0 hero must not hand a duelling friend a talent its owner cannot run.
+            hero.Ascension = 0;
+            TeamSnapshot lockedLine = TeamSnapshotBuilder.From(live, profile, "Locked");
+            SnapshotUnit lockedUnit = lockedLine.Units.Find(delegate (SnapshotUnit u) { return u.DefId == hero.DefId; });
+            hero.Ascension = 2;
+            TeamSnapshot openLine = TeamSnapshotBuilder.From(live, profile, "Open");
+            SnapshotUnit openUnit = openLine.Units.Find(delegate (SnapshotUnit u) { return u.DefId == hero.DefId; });
+            Check(lockedUnit != null && lockedUnit.SelectedTalent == 0 && openUnit != null && openUnit.SelectedTalent == 3,
+                  "a published line carries the talent its hero would actually fight with: nothing from a tier-0 "
+                  + "owner holding a locked pick, and talent 3 from the same hero at tier 2");
+            Check(lockedUnit != null && TeamSnapshotCodec.WriteUnits(lockedLine).ToJson(false)
+                      .IndexOf("selectedTalent", StringComparison.Ordinal) < 0,
+                  "and writes no selectedTalent key at all for it - the same absence a generated roster has, so a "
+                  + "locked pick is invisible to everything downstream rather than carried as a zero");
+
+            // ---- what a STORED RECORD does. A guild dungeon record is fought from a snapshot that
+            // carries a def, a level and a pick and has never carried a tier. Locking may not
+            // change how one replays, so the pick in the record is still what decides the fight.
+            List<HeroInstance> lineHeroes = new List<HeroInstance>();
+            lineHeroes.Add(hero);
+            TeamSnapshot record = GuildDungeon.LineOf(live, lineHeroes, "Record");
+            SnapshotUnit recorded = record.Units.Count > 0 ? record.Units[0] : null;
+            Check(recorded != null && recorded.SelectedTalent == 3,
+                  "a dungeon line captured from a tier-2 hero records the talent it ran");
+            if (recorded == null) return;
+            string replayed = FingerprintOf(GuildDungeon.Fight(live, record, 77, 1));
+            recorded.SelectedTalent = 0;
+            string withoutIt = FingerprintOf(GuildDungeon.Fight(live, record, 77, 1));
+            Check(replayed != withoutIt,
+                  "and replaying that record still fights WITH it - a stored record carries no tier, so the pick in "
+                  + "the record is the authority on what fought and the gate does not re-decide it");
+        }
+
+        /// <summary>
         /// The selection is save state: it survives a round trip, an upgrading save reads as none,
         /// and the downgrade guard still refuses a save from a newer build.
         ///
@@ -3519,11 +3740,20 @@ namespace Emberfall.DevHarness
             return "";
         }
 
-        /// <summary>One battle with exactly one hero, carrying exactly one talent selection.</summary>
+        /// <summary>One battle with exactly one hero, carrying exactly one talent selection, on a
+        /// body ascended far enough to run any of them.</summary>
         private static BattleResult RunWithTalent(ContentDatabase db, HeroDef def, int selection)
+        {
+            return RunWithTalentAtTier(db, def, selection, HeroDef.MaxTalents - 1);
+        }
+
+        /// <summary>The same battle at a NAMED ascension tier, which is the only way to put the
+        /// gate (DESIGN-TALENTS T6) inside a real fight rather than beside one.</summary>
+        private static BattleResult RunWithTalentAtTier(ContentDatabase db, HeroDef def, int selection, int tier)
         {
             HeroInstance hero = MakeInstance(def, 10);
             hero.SelectedTalent = selection;
+            hero.Ascension = tier;
             List<HeroInstance> team = new List<HeroInstance>();
             team.Add(hero);
             return RunWith(db, db.GetStage("test_passive_arena"), 31, team);
@@ -7382,6 +7612,18 @@ namespace Emberfall.DevHarness
             return CombatSimulation.Run(request);
         }
 
+        /// <summary>
+        /// A fabricated owned hero for a study. FULLY ASCENDED, because every talent slot has to be
+        /// reachable on it: the ascension gate (DESIGN-TALENTS T6, HeroInstance.TalentSlotsUnlocked)
+        /// means a tier-0 body can only run talent 1, and an instrument that could only read the
+        /// first of three would be measuring the gate instead of the talent.
+        ///
+        /// It is also the honest tier for these bodies. balance.json caps a 5-star at level 9 at
+        /// tier 0 and at 27 at tier 1, so the level-10, level-40 and level-60 subjects the studies
+        /// fabricate are heroes no tier below the top could be. Nothing else in the fight reads the
+        /// field - StatMath.ForHero builds the stat line from Level alone - so setting it moves no
+        /// number and no fingerprint anywhere; it only makes the talent reachable.
+        /// </summary>
         private static HeroInstance MakeInstance(HeroDef def, int level)
         {
             HeroInstance h = new HeroInstance();
@@ -7389,6 +7631,7 @@ namespace Emberfall.DevHarness
             h.DefId = def.Id;
             h.Level = level;
             h.Copies = 1;
+            h.Ascension = HeroDef.MaxTalents - 1;
             h.Def = def;
             return h;
         }
@@ -37268,7 +37511,13 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < team.Count; i++)
             {
                 team[i].SelectedTalent = (i % HeroDef.MaxTalents) + 1;
-                if (team[i].Def != null && team[i].Def.TalentAt(team[i].SelectedTalent) != null) running++;
+                // Ascended far enough to run the slot it was handed, because a snapshot publishes
+                // HeroInstance.LiveTalentSelection and a tier-0 body would publish a zero for
+                // slots 2 and 3. The count below is of what ACTUALLY publishes, not of what the
+                // def happens to author, so the gate cannot quietly empty this line and leave the
+                // round trip agreeing about nothing again.
+                team[i].Ascension = HeroInstance.TierUnlockingTalent(team[i].SelectedTalent);
+                if (team[i].LiveTalentSelection != 0) running++;
             }
             Check(running > 0,
                   "at least one hero in the published line is running a talent that RESOLVES, so the round trip "

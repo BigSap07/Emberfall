@@ -466,6 +466,11 @@ namespace Emberfall.DevHarness
                         hero.Def = db.GetHero(hero.DefId);
                         hero.Level = Math.Max(1, line.Units[u].Level - levelDrop);
                         hero.SelectedTalent = line.Units[u].SelectedTalent;
+                        // The same rule GuildDungeon.FightUnder applies when it replays a record:
+                        // a snapshot carries no ascension tier, so the scratch body is given the
+                        // one that authorises the pick it was recorded with. Without it this study
+                        // would fight a line the dungeon itself would not.
+                        hero.Ascension = HeroInstance.TierUnlockingTalent(line.Units[u].SelectedTalent);
                         req.Team.Add(hero);
                     }
                     obs[r] = TempoRead(CombatSimulation.Run(req), null);
