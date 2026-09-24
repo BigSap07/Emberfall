@@ -3487,11 +3487,12 @@ namespace Emberfall.DevHarness
                   + "nothing in between rewrote what the player asked for");
 
             // ---- the save. No version moved, and none needed to: the gate is derived from a tier
-            // the format has carried since long before talents existed.
-            Check(SaveSerializer.CurrentVersion == 17,
+            // the format has carried since long before talents existed. The gate landed at 17;
+            // 18 is the level clamp's (see SaveSerializer.CurrentVersion), not the gate's.
+            Check(SaveSerializer.CurrentVersion == 18,
                   "the ascension gate moved no save version - it is derived from Ascension, which is already "
                   + "stored, and a persisted 'unlocked' could only ever disagree with the tier (version "
-                  + SaveSerializer.CurrentVersion + ")");
+                  + SaveSerializer.CurrentVersion + ", which the level clamp moved from 17)");
             hero.Ascension = 0;
             string json = SaveSerializer.Serialize(profile);
             string error;
@@ -17384,10 +17385,110 @@ namespace Emberfall.DevHarness
             v15 = System.Text.RegularExpressions.Regex.Replace(v15, @"""version""(\s*):(\s*)" + SaveSerializer.CurrentVersion, @"""version""$1:${2}15");
             PlayerProfile upgraded = SaveSerializer.Deserialize(v15, db, out err);
             HeroInstance up15 = upgraded != null ? upgraded.FindHeroByDefId(five.Id) : null;
-            Check(up15 != null && up15.Ascension == 0 && up15.Level == asc.Level,
-                  "a version 15 save (no ascension key) loads every hero at tier 0 with the level it had ("
-                  + (up15 != null ? up15.Level.ToString() : "none") + ")");
+            // Version 16 kept the level here and version 18 does not: a hero with no ascension key
+            // is at tier 0, and tier 0's cap is what its level is read against.
+            int capTier0 = StatMath.CapLevel(b, 5, 0);
+            Check(up15 != null && up15.Ascension == 0 && asc.Level > capTier0 && up15.Level == capTier0,
+                  "a version 15 save (no ascension key) loads every hero at tier 0, a Level " + asc.Level
+                  + " clamped to tier 0's cap of " + capTier0 + " (" + (up15 != null ? up15.Level.ToString() : "none") + ")");
+
+            CheckLevelClampOnLoad(db, five, four, one);
             Line("");
+        }
+
+        /// <summary>
+        /// Save version 18: every hero's level is clamped to its cap on load, whatever version
+        /// wrote it (SaveSerializer.CurrentVersion says why a cap change is a migration). Built from
+        /// the shape the dev capture save actually had - every hero at Level 60, written under the
+        /// caps of 12 + 4 per rank - rather than from a level chosen to sit just past a cap.
+        /// </summary>
+        private static void CheckLevelClampOnLoad(ContentDatabase db, HeroDef five, HeroDef four, HeroDef one)
+        {
+            BalanceConfig b = db.Balance;
+            int top = StatMath.MaxAscensionTier(b);
+            GameSession s = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            HeroInstance fiveAt0 = s.GrantHeroDirect(five, 0);
+            HeroInstance fourAt0 = s.GrantHeroDirect(four, 0);
+            HeroInstance oneAt0 = s.GrantHeroDirect(one, 0);
+            fiveAt0.Level = 60;
+            fourAt0.Level = 60;
+            oneAt0.Level = 2;
+            string json = SaveSerializer.Serialize(s.Profile);
+            // Written as version 17 wrote it: the same keys, the old number.
+            string v17 = System.Text.RegularExpressions.Regex.Replace(json,
+                @"""version""(\s*):(\s*)" + SaveSerializer.CurrentVersion, @"""version""$1:${2}17");
+            string err;
+            PlayerProfile back = SaveSerializer.Deserialize(v17, db, out err);
+            HeroInstance f = back != null ? back.FindHeroByDefId(five.Id) : null;
+            HeroInstance r = back != null ? back.FindHeroByDefId(four.Id) : null;
+            HeroInstance o = back != null ? back.FindHeroByDefId(one.Id) : null;
+            int capFive = StatMath.CapLevel(b, 5, 0), capFour = StatMath.CapLevel(b, 4, 0);
+            Check(SaveSerializer.CurrentVersion >= 18 && f != null && r != null && o != null
+                  && f.Level == capFive && r.Level == capFour && o.Level == 2,
+                  "a version 17 save with heroes at Level 60 loads each at its cap - a 5-star at tier 0 at "
+                  + capFive + " (" + (f != null ? f.Level : -1) + "), a 4-star at " + capFour + " ("
+                  + (r != null ? r.Level : -1) + ") - and a level inside its cap is left alone ("
+                  + (o != null ? o.Level : -1) + ")");
+
+            // Every tier this build authors, each at a Level far past it.
+            List<string> wrong = new List<string>();
+            for (int t = 0; t <= top; t++)
+            {
+                GameSession ts = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+                HeroInstance h = ts.GrantHeroDirect(five, 0);
+                h.Ascension = t;
+                h.Level = 100000;
+                PlayerProfile p = SaveSerializer.Deserialize(SaveSerializer.Serialize(ts.Profile), db, out err);
+                HeroInstance hb = p != null ? p.FindHeroByDefId(five.Id) : null;
+                int cap = StatMath.CapLevel(b, 5, t);
+                if (hb == null || hb.Level != cap || new GameSession(db, p).HeroLevelCapOf(hb) != cap)
+                    wrong.Add("tier " + t + " read " + (hb != null ? hb.Level : -1) + " against a cap of " + cap);
+            }
+            Check(wrong.Count == 0, "at every authored tier (0 to " + top + ") a level past the cap loads AT the cap GameSession "
+                  + "reads, the one the fusion screen's ascension card prints" + (wrong.Count > 0 ? " - " + string.Join("; ", wrong.ToArray()) : ""));
+
+            // Not conditioned on the version: a current save is clamped the same way, and a legal
+            // one is untouched byte for byte.
+            PlayerProfile current = SaveSerializer.Deserialize(json, db, out err);
+            HeroInstance fc = current != null ? current.FindHeroByDefId(five.Id) : null;
+            Check(fc != null && fc.Level == capFive,
+                  "the clamp is an invariant and not a version-17 step: a version " + SaveSerializer.CurrentVersion
+                  + " document holding Level 60 loads at " + (fc != null ? fc.Level : -1));
+            string clamped = current != null ? SaveSerializer.Serialize(current) : "";
+            PlayerProfile again = SaveSerializer.Deserialize(clamped, db, out err);
+            Check(again != null && SaveSerializer.Serialize(again) == clamped,
+                  "a clamped profile round-trips byte for byte - the clamp finds nothing to do the second time");
+
+            // The floor: an ascended hero under its own tier's first Level, which a raised cap on a
+            // lower tier would leave behind. It stands on that first Level, where Ascend put it.
+            List<string> under = new List<string>();
+            for (int t = 1; t <= top; t++)
+            {
+                GameSession us = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+                HeroInstance h = us.GrantHeroDirect(five, 0);
+                h.Ascension = t;
+                h.Level = 1;
+                PlayerProfile p = SaveSerializer.Deserialize(SaveSerializer.Serialize(us.Profile), db, out err);
+                HeroInstance hb = p != null ? p.FindHeroByDefId(five.Id) : null;
+                int floor = StatMath.TierBaseLevel(b, t);
+                if (hb == null || hb.Level != floor || new GameSession(db, p).TierLevelOf(hb) != 1)
+                    under.Add("tier " + t + " read " + (hb != null ? hb.Level : -1) + " against a first Level of " + floor);
+            }
+            Check(top < 1 || under.Count == 0,
+                  "an ascended hero below its tier's first Level loads ON it, at tier level 1, so no level-up can skip "
+                  + "a stride for a tier level 1 price" + (under.Count > 0 ? " - " + string.Join("; ", under.ToArray()) : ""));
+
+            // A tier this build does not author: no cap here is that tier's cap, so the level is
+            // kept exactly as the tier itself is.
+            GameSession beyond = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            HeroInstance past = beyond.GrantHeroDirect(five, 0);
+            past.Ascension = top + 1;
+            past.Level = 100000;
+            PlayerProfile pb = SaveSerializer.Deserialize(SaveSerializer.Serialize(beyond.Profile), db, out err);
+            HeroInstance pastBack = pb != null ? pb.FindHeroByDefId(five.Id) : null;
+            Check(pastBack != null && pastBack.Ascension == top + 1 && pastBack.Level == 100000,
+                  "a hero at tier " + (top + 1) + ", which this build does not author, keeps its tier and its Level ("
+                  + (pastBack != null ? pastBack.Level : -1) + "), as a build that authors the tier would need");
         }
 
         /// <summary>Spare bodies from the list, highest points first, until they are worth `need`;

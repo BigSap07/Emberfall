@@ -5,6 +5,7 @@ using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Json;
 using Emberfall.Core.Model;
+using Emberfall.Core.Progression;
 
 namespace Emberfall.Core.Save
 {
@@ -236,7 +237,9 @@ namespace Emberfall.Core.Save
         /// upgraded save is the
         /// cap it is read against: caps are now a function of star and ascension tier rather than
         /// of account rank (F7), so a hero above its new cap keeps the levels it bought and simply
-        /// cannot buy another until it ascends. Nothing is taken away on load.
+        /// cannot buy another until it ascends. Nothing is taken away on load. (Version 18
+        /// reversed that last sentence and says why: the new cap was the migration this note
+        /// missed.)
         ///
         /// WHY THIS IS A BUMP. Version 15 code reads no ascension key, so it would hand an ascended
         /// hero back to tier 0 at a level far past tier 0's cap, where it could never level again -
@@ -270,7 +273,64 @@ namespace Emberfall.Core.Save
         /// effect on its fights while it runs - it fights as a player with no guild, which is a
         /// legal state of the game and not a corrupt one. Bumping for that would refuse every
         /// older build a save it can read correctly.
-        public const int CurrentVersion = 17;
+        ///
+        /// 18: every hero's level is clamped to its cap on load (StatMath.CapLevel, from its star
+        /// tier and its ascension tier), and an ascended hero's up to its tier's first Level
+        /// (StatMath.TierBaseLevel) - the read says why the floor is there too.
+        ///
+        /// No key moved. What moved, in the commit that made version 16, was the cap a stored
+        /// level is read against: 12 + 4 per account rank, up to 80 levels for everyone, became
+        /// 9 / 45 / 281 for a 5-star by tier and 5 to 8 below five stars. Every
+        /// save written before that carried levels the new caps call illegal - the dev capture save
+        /// had 94 heroes at Level 60 with a cap of 9 - and version 16's note above chose to keep
+        /// them. That choice leaked: TierLevelOf clamps, so most screens hid it, but the fusion
+        /// screen's ascension card reads PreviewAscension's LevelBefore, which is the raw Level, and
+        /// showed Level 60 on a hero whose cap is 9. A hero that far over its cap also out-fought
+        /// the one the campaign's recommendedPower was solved against.
+        ///
+        /// WHY A CAP CHANGE IS A MIGRATION, so the next one is not skipped for the reason this one
+        /// was. Version 16 was judged on its keys: the ascension key was new, absent read as tier
+        /// 0, and tier 0 was true, so "no migration" was right for that key. It was wrong for the
+        /// level key beside it, which did not change shape and did change meaning. A stored value
+        /// that is only legal relative to a constant - a level to a cap, a bank to its maximum, a
+        /// position to the content it points into - is migrated by any commit that moves the
+        /// constant, whether or not a single key is added. The test is not "did the format change"
+        /// but "is every value the old format holds still legal under the new rules".
+        ///
+        /// POLICY: THIS CLAMP IS A PRE-LAUNCH SIMPLIFICATION, AND IT REVERSES VERSION 16'S DECISION.
+        /// Version 16 kept over-cap levels on purpose. This version takes them away, and that is
+        /// only acceptable because there are no players yet. The reasons it was taken: an over-cap
+        /// hero breaks the recommended-power math, because every recommendedPower is solved against a
+        /// roster that respects the caps. It also breaks the ascension preview, which prints the
+        /// Level it will move. Keeping it would also leave a format that silently carries illegal
+        /// state until the next change to the constant makes it visible again. Clamping loses
+        /// progress, and before launch nobody's progress is lost.
+        ///
+        /// AFTER LAUNCH THIS DOES NOT HOLD. A cap reduction then needs grandfathering (the hero
+        /// keeps its levels, which the ascension preview and the power math must then read
+        /// correctly) or compensation (the levels taken back are refunded in what bought them).
+        /// It must never be a silent clamp. Because the clamp below runs on every load, a cap
+        /// reduction shipped after launch WOULD be silently clamped by it. So before any such
+        /// reduction ships, this clamp has to be replaced by whichever of those two is chosen.
+        ///
+        /// The clamp is written as an invariant and not as a version-17 step, the way the version
+        /// 4 -> 5 relic migration is: every load clamps, so a current save finds nothing to do and
+        /// the NEXT cap change is migrated by this code without anyone having to remember. Two
+        /// things are deliberately left alone. A hero at an ascension tier this build does not
+        /// author keeps its level, because the cap here is not the cap of the build that wrote it
+        /// (the ascension read says why that tier is kept at all). And a hero this build cannot
+        /// resolve is carried verbatim (version 15), so it is clamped the day content names it
+        /// again - which a version-conditioned step would never have done, since it is written back
+        /// under the new version number unread.
+        ///
+        /// WHY THIS IS A BUMP, when the test the version 17 note applies says none is owed: a
+        /// version 17 build reading a version 18 save loses nothing, since every level in it is
+        /// one version 17 also calls legal. The number marks the document, not the reader. From 18 up a save's levels
+        /// have been through the clamp, and a reader holding no content can tell that from the
+        /// version alone. One such reader exists: SaveSummaryReader takes each hero's level off the
+        /// raw document for the conflict card, so a version 17 cloud copy still reads "Lv 60" there
+        /// and still looks levels ahead of a clamped local save, until it is loaded once.
+        public const int CurrentVersion = 18;
 
         /// <summary>
         /// The save's format version, or false with a sentence a player can read. The one reader
@@ -913,6 +973,26 @@ namespace Emberfall.Core.Save
                 // the ladder read it as the highest tier here, and a build that authors it again
                 // gets it back.
                 h.Ascension = Math.Max(0, hj.GetInt("ascension", 0));
+
+                // THE VERSION 18 CLAMP (see CurrentVersion): a level outside this hero's tier is
+                // illegal state, whatever version wrote it. Not conditioned on the version, so the
+                // next cap change is migrated here too. A tier this build does not author has no
+                // cap this build knows, so that hero keeps its level as it keeps its tier.
+                //
+                // Both ends. Above the cap is the case that happened. Below the tier's first Level
+                // is the same case the other way round, and it is only latent: raise a lower tier's
+                // cap and an ascended hero is left standing under its own tier, where TierLevelOf
+                // reads 1 and the next level-up jumps it to tier level 2 for the tier level 1 price.
+                // Ascension already promises that first Level (F6), so the floor takes nothing and
+                // gives only what the step bought. Below five stars a hero never ascends (F1), and
+                // its floor is 1.
+                if (content != null && content.Balance != null
+                    && h.Ascension <= StatMath.MaxAscensionTier(content.Balance))
+                {
+                    int floor = def.Stars >= 5 ? StatMath.TierBaseLevel(content.Balance, h.Ascension) : 1;
+                    int cap = StatMath.CapLevel(content.Balance, def.Stars, h.Ascension);
+                    h.Level = Math.Max(floor, Math.Min(h.Level, cap));
+                }
 
                 profile.Heroes.Add(h);
             }

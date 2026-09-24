@@ -447,8 +447,12 @@ namespace Emberfall.DevHarness
             string error3;
             PlayerProfile restored = SaveSerializer.Deserialize(reSaved.Replace(Unknown, restoredDef.Id), content, out error3);
             HeroInstance back = restored != null ? restored.FindHeroByUid("h900") : null;
-            Check(back != null && back.Level == 60 && back.Copies == 4 && back.SelectedTalent == 2,
-                  "when content names the hero again it loads as an ordinary hero, level, copies and talent intact");
+            // Its level is read against THIS build's cap the day it resolves, like every other
+            // hero's (save version 18): carried verbatim is not carried past the clamp.
+            int restoredCap = Emberfall.Core.Progression.StatMath.CapLevel(content.Balance, restoredDef.Stars, 0);
+            Check(back != null && back.Level == Math.Min(60, restoredCap) && back.Copies == 4 && back.SelectedTalent == 2,
+                  "when content names the hero again it loads as an ordinary hero, copies and talent intact, and its "
+                  + "Level 60 read against this build's cap (" + (back != null ? back.Level : -1) + " of " + restoredCap + ")");
             Check(back != null && back.EquippedArmor[0] == "g900" && restored.FindArmor("g900") != null
                   && restored.UnresolvedHeroRecords.Count == 0 && restored.UnresolvedArmorRecords.Count == 0,
                   "wearing the weapon it wore, with nothing left aside");
