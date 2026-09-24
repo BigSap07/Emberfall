@@ -30,6 +30,7 @@ namespace Emberfall.Game
             // After Load, and outside ContentVersion: nothing in the Guild Path is read by a
             // fight, so its prices must not retire a guild dungeon replay (ContentDatabase.GuildPath).
             db.LoadGuildPath(ReadTextOptional("guild-path"));
+            db.LoadGuildTech(ReadTextOptional("guild-tech"));
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

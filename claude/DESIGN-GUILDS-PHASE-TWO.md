@@ -1,5 +1,21 @@
 # Emberfall - guilds phase two
 
+> **SUPERSEDED IN TWO PLACES, 2026-09-24.** `DESIGN-GUILD-TECH.md` in the `claude` folder retires two rules this
+> record is built on, and it wins where they disagree:
+>
+> - **"No collective performance gating"** and the flatness it implied - that a member of a guild
+>   of two earns within 10% of a member of a guild of thirty - are **gone**. Guild level XP scales
+>   with the square root of member count, so a large guild levels meaningfully faster per person,
+>   and that is now the recruitment pressure a guild is meant to have. The harness assertion that
+>   enforced flatness is deleted. What survives is that the CEILING does not move with size.
+> - **"Horizontal, not vertical"**, and the rule that owning the whole Path changes no fight, are
+>   **gone**. Guild progression is real power now. What replaces it is G5: guild tech accelerates a
+>   wall and never gates one, the fusion rule extended, checked the same way.
+>
+> Everything else in this record still holds, including the three failure modes it names, the
+> shape of the dungeon, the boards, and the Waymark pay - which is unchanged and still derived the
+> same way. The section "The Guild Path, as built" is rewritten at the bottom.
+
 **Design record, 2026-09-22.** Phase one is built and in the tree: founding, codes, join
 requests, promote, demote, hand over, kick, leave, disband, guild chat with a rate limit, a
 30-member cap, and fighting any guildmate's line. `GuildScreen`, `GuildChatScreen`,
@@ -114,12 +130,17 @@ The honest cost: a small guild sees less variety. There is no way around that on
    guild-lock-in. Keep it mostly breadth: extra loadouts, talent respecs, roster slots, summon
    options, rather than flat stat gains. (This record first called it a personal talent tree. It
    is the Guild Path everywhere now, because hero talents are a separate system and two things
-   called talents would be confused forever.) **Built; see "The Guild Path, as built" below,
-   which also says why only one item of that list survived contact with the game as it stands.**
+   called talents would be confused forever.) **Built, then replaced.** Its four nodes were bought
+   with Waymarks; they are granted by guild level now, and what spends Waymarks is system 3. The
+   "mostly breadth" instruction is retired - see the note at the top.
 
 3. **Guild levels and upgrades, decided by leaders.** Upgrades **unlock content**, they do not
    grant power. "Guild level 5 unlocks hard mode" is fine; "+8% attack to all members" is the
-   compounding trap. This gives a leader something to actually lead.
+   compounding trap. This gives a leader something to actually lead. **Built, and the second
+   sentence is the part that changed**: `DESIGN-GUILD-TECH.md` in the `claude` folder is a tech tree that does
+   grant power, held by G5 rather than by a ban. What survived intact is the leader's job - the
+   guild picks one talent per family, changeable at cycle roll, and that is the decision a leader
+   actually leads.
 
 4. **Fodder exchange, not a marketplace.** Open player trading in a gacha creates real-money
    trading, makes the richest guild the best guild, and is a moderation burden. Fusion is built
@@ -175,11 +196,20 @@ The dungeon loop itself needed rewards to ship, not to be built.
 - Open player-to-player trading.
 - Guild versus guild ranking.
 
-## The Guild Path, as built
+## The Guild Path, as built - and what replaced it
 
-**Added 2026-09-23, when system 2 was built.** The rest of this record is the design from
-2026-09-22; this section says what was built from it, what the numbers are, and where the design
-met the game as it stands and had to be read again.
+**Added 2026-09-23, when system 2 was built. Rewritten 2026-09-24, when the tech tree replaced
+it.** The rest of this record is the design from 2026-09-22; this section says what was built from
+it, what the numbers are, and where the design met the game as it stands and had to be read again.
+
+**WHAT IS STILL TRUE:** the Waymark pay, its whole derivation, the three rules it is built on, the
+boards, and who can mint. Those are unchanged and `GuildPathChecks` still holds them.
+
+**WHAT IS NOT:** the Path as a storefront. Four nodes at 800 Waymarks was eight weeks of play, and
+after that the currency bought nothing - which is the wall `DESIGN-GUILD-TECH.md` in the `claude` folder was
+written against. The four nodes are guild level rewards now (G9); an account that bought one keeps
+it, because `GameSession.OwnsGuildPathNode` reads bought-or-granted as an OR. What spends Waymarks
+is the tech tree's stat rungs.
 
 ### What it buys, and the four items that did not survive
 
@@ -329,5 +359,8 @@ the migration and `guild-path.json` disagree on any number.
   comment.
 - **Nothing in the rules test covers 0011.** The live test needs the live project, which this job
   did not touch.
-- **After the Path, Waymarks have no sink.** They keep accruing, like Coda and Valor, until the
-  next node family (identity is the candidate above) gives them one.
+- ~~**After the Path, Waymarks have no sink.**~~ **Closed.** This was the whole reason the Path
+  was replaced. The tech tree's twelve stat rungs cost 5,208 Waymarks against the Path's 800, and
+  the guild level curve that opens them takes a mid-sized guild about a year - so a member finishes
+  paying for the tree at about the moment their guild finishes opening it, which is one clock
+  rather than two. See `DESIGN-GUILD-TECH.md` in the `claude` folder and `DevHarness.exe --guild-tech`.

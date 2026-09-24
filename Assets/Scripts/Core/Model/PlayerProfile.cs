@@ -550,6 +550,18 @@ namespace Emberfall.Core.Model
         public readonly List<string> GuildPathNodes = new List<string>();
 
         /// <summary>
+        /// THE GUILD TECH TREE, as the server last reported it (claude/DESIGN-GUILD-TECH.md): the
+        /// guild's level and XP, the rungs this account bought, and the talent the guild picked on
+        /// each family. Copied here for the reason the Waymarks are - an offline session still
+        /// fights with the tech it paid for.
+        ///
+        /// NEVER NULL, and an empty one is an exact no-op everywhere: no rung, no talent, no change
+        /// to any stat line. That is what makes the reference player's "no guild tech" (G5) the
+        /// default rather than a special case somebody has to remember to arrange.
+        /// </summary>
+        public Cloud.GuildTechState GuildTech = new Cloud.GuildTechState();
+
+        /// <summary>
         /// Saved formation lines, index 0 upward. The ACTIVE one lives in Team, not here: Lines
         /// holds what each line was when it was last left, and GameSession.SwitchLine writes Team
         /// back into its slot before loading another. Empty until a player first switches.
@@ -725,8 +737,13 @@ namespace Emberfall.Core.Model
                 if (hero.Def == null) continue;
                 RelicDef relic = content != null && !string.IsNullOrEmpty(hero.EquippedRelicId)
                     ? content.GetRelic(hero.EquippedRelicId) : null;
+                // Guild tech is IN the power score now. DESIGN-GUILD-TECH retires the rule that
+                // guild progression changes no fight, so a line that fights harder has to read as
+                // stronger - a power score that ignored the tree would understate every member of
+                // a levelled guild against the campaign's own recommendedPower.
                 total += StatMath.PowerScore(StatMath.ForHero(hero.Def, hero.Level, relic,
-                                                              EquippedArmorOf(hero), armorConfig));
+                                                              EquippedArmorOf(hero), armorConfig,
+                                                              content != null ? content.GuildTech : null, GuildTech));
             }
             return total;
         }

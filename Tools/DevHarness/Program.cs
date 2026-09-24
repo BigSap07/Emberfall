@@ -32,6 +32,8 @@ namespace Emberfall.DevHarness
             bool fidelity = false;
             bool guildConditions = false;
             bool guildPath = false;
+            bool guildTech = false;
+            bool guildTalentThemes = false;
             bool reconcile = false;
             int wallStudy = 0;
             bool lineCalibration = false;
@@ -59,6 +61,8 @@ namespace Emberfall.DevHarness
                 }
                 if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
                 if (args[i] == "--guild-path") { guildPath = true; continue; }
+                if (args[i] == "--guild-tech") { guildTech = true; continue; }
+                if (args[i] == "--guild-talent-themes") { guildTalentThemes = true; continue; }
                 if (args[i] == "--tempo-study")
                 {
                     tempoStudy = true;
@@ -151,6 +155,20 @@ namespace Emberfall.DevHarness
             // The Guild Path's study (GuildPathChecks.RunStudy). Not a check: the instrument
             // guild-path.json's pay and prices are derived from.
             if (guildPath) return GuildPathChecks.RunStudy(content);
+            // The guild tech tree's study (GuildTechChecks.RunGuildTechStudy). Not a check either:
+            // the instrument guild-tech.json's rung size, prices and level curve are derived from,
+            // and where every guild talent is read at parity.
+            if (guildTech) return RunGuildTechStudy(content, contentDir);
+            // Every guild talent across the floor themes and conditions (GuildTalentThemes.cs), on
+            // its own. The same reading --guild-tech ends with, split out because authoring a
+            // family's three options is an iteration and the derivation above it does not move.
+            if (guildTalentThemes)
+            {
+                Line("GUILD TALENTS ACROSS THE FLOOR THEMES - claude/DESIGN-GUILD-TECH.md G10");
+                Line("");
+                GuildTalentThemes(content, true);
+                return 0;
+            }
 
             // The fidelity pass and the star band alone, for a content pass that is moving kits
             // against their sentences and wants both readings without the rest of the harness.
@@ -250,6 +268,7 @@ namespace Emberfall.DevHarness
             // The Guild Path (GuildPathChecks.cs): its numbers re-derived, the server's copy of
             // them, and the property it exists for - breadth, never power.
             _failures += GuildPathChecks.Run(content, contentDir);
+            GuildTechGate(content, contentDir);
             CheckSummonPity(content);
             CheckRepeatCap(content);
             CheckRelicDust(content);
@@ -4683,6 +4702,8 @@ namespace Emberfall.DevHarness
                 ContentDatabase db = ContentDatabase.Load(heroes, enemies, campaign, balance, relics, events, armor, conditions);
                 string pathPath = Path.Combine(dir, "guild-path.json");
                 db.LoadGuildPath(File.Exists(pathPath) ? File.ReadAllText(pathPath) : null);
+                string techPath = Path.Combine(dir, "guild-tech.json");
+                db.LoadGuildTech(File.Exists(techPath) ? File.ReadAllText(techPath) : null);
                 return db;
             }
             catch (Exception ex)
@@ -16022,6 +16043,10 @@ namespace Emberfall.DevHarness
             EconomyRun run = new EconomyRun();
             run.SetFirstSeed(firstSeed);
             PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+            // The walk's guild tech, and it is NULL for every walk but G5's own reading: the
+            // reference player recommendedPower is derived for has none, and CheckGuildTechNeverGates
+            // asserts that rather than this arranging it. See SimulateEconomyWithTech.
+            if (_walkGuildTech != null) profile.GuildTech = _walkGuildTech.Clone();
             GameSession session = new GameSession(db, profile);
             run.Profile = profile;
             run.Session = session;

@@ -626,7 +626,10 @@ Summoning with a pity rule that guarantees distinct unowned heroes. Idle income 
 real clock and is capped. `SaveSerializer` writes the whole document, at
 `SaveSerializer.CurrentVersion` 17, and a save from a newer build is refused rather than read.
 Version 15 keeps records this build cannot resolve; version 16 adds each hero's ascension tier;
-version 17 adds the Guild Path's copy of the server's answer and the formation's saved lines.
+version 17 adds the Guild Path's copy of the server's answer and the formation's saved lines, and
+later the guild tech tree's copy of it - deliberately without a further bump, because the server
+holds every part of that and a version 17 build dropping the cache loses nothing it is the only
+copy of (`SaveSerializer.CurrentVersion` says so at length).
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -702,20 +705,64 @@ the full working; this is what the files show.
   guilds of 1 to 30 and rosters built by `GameSession.Summon`, and `GuildPathChecks` re-derives
   them on every build-check. Guilds of 2 to 30 expect 96 to 102 Waymarks a cycle against the
   100-Waymark unit; a guild of one expects 80.
-- **The Path.** Second, Third and Fourth Line (saved formation lines, `GameSession.SwitchLine`, tabs
-  on `FormationScreen`) and Lines Keep Talents, at 100, 200, 300 and 200: each node costs its depth
-  in mean cycles. `GuildPathScreen` is the storefront, reached from the formation screen and the
-  dungeon. Every node is breadth: `CheckEveryNodeIsHorizontal` allowlists the node kinds and fights
-  the same stage identically with every node owned and with none.
-- **Server.** `Server/supabase/migrations/0011_guild_path.sql` - **written, not applied.** It adds the
-  ledger, the unlocks and the node table, `guild_dungeon_attempt` (submit, board bits, base pay),
-  `guild_path_state` (settles closed cycles' board bonus, answers) and `guild_path_unlock`. Keyed by
-  account, not guild. Until it is applied the client files attempts through
-  `guild_dungeon_submit` and pays nothing.
-- **Content.** `guild-path.json` is a ninth content file and the one that is **not** hashed into
-  `ContentVersion`, because nothing in it is read by a fight.
+- **The four nodes.** Second, Third and Fourth Line (saved formation lines,
+  `GameSession.SwitchLine`, tabs on `FormationScreen`) and Lines Keep Talents. They were sold for
+  100, 200, 300 and 200 Waymarks under 0011 and are **granted by guild level now** - see the tech
+  tree below. An account that bought one keeps it; `GameSession.OwnsGuildPathNode` reads the two
+  sources as an OR, so nothing was migrated and nothing taken away.
+- **Server.** `Server/supabase/migrations/0011_guild_path.sql` - **applied.** It adds the ledger,
+  the unlocks and the node table, `guild_dungeon_attempt` (submit, board bits, base pay),
+  `guild_path_state` (settles closed cycles' board bonus, answers) and `guild_path_unlock`. Keyed
+  by account, not guild.
+- **Content.** `guild-path.json` is a ninth content file and one of the two that are **not** hashed
+  into `ContentVersion`, because nothing in it is read by a fight.
 - **Not done:** the live guild rules test does not cover 0011; `guild_dungeon_submit` is still
-  callable; Waymarks have no sink once the four nodes are bought.
+  callable.
+
+**The guild tech tree (phase two, system 3; it replaced the Path's storefront).**
+`DESIGN-GUILD-TECH.md` in the `claude` folder is the design and holds rules G1 to G9; `DevHarness.exe --guild-tech`
+prints every number's derivation and reads every guild talent at parity. Two rules the Path was
+built under are **retired** by it and their checks are deleted rather than softened: that owning
+the whole Path changes no fight, and that a member of a guild of 2 earns within 10% of a member of
+a guild of 30.
+
+- **The shape.** Four family tracks - Line (Bulwark, Vanguard; 28 heroes), Blade (Striker, Breaker,
+  Stalker; 20), Grace (Mender, Binder, Warden; 21), Reach (Marksman, Tinkerer; 25). A hero belongs
+  by **role and nothing else** (G1). Each track carries three stat rungs the member buys and one
+  guild talent slot the guild fills from three. Names are placeholders until Pinoy names them.
+- **Derived, not authored.** Three inputs are chosen and named as chosen: a whole track is worth one
+  hero level, a guild of 10 opens the tree in 52 cycles, and G7's square root. Everything else is
+  read - one level at level 40 measures 1.954% of a hero's power over 94 heroes, so a track is
+  1.954% and a rung 0.651%; the ceiling is the tree's own shape, 4 x (3 + 1) = 16; the rung unit is
+  217 Waymarks and a level costs 1028 XP before the member-count scaling. `GuildTechChecks`
+  re-derives all of it on every build-check.
+- **One rung is worth the same on every track**, because a rung costs the same everywhere. What
+  differs is which stats carry it, split equally by power through `StatMath`'s own weights.
+- **The twelve talents** are `PassiveDef`s in the hero talents' own vocabulary and resolve where a
+  hero's selected talent does, so there is no guild-talent code path. All twelve clear the parity
+  study's 1%-of-Attack material floor, measured by the instrument that grades hero talents, and no
+  family has an option worth more than three times its siblings.
+- **Guild level** raises ceilings and opens slots and nothing else reads it (G6). XP required per
+  level scales with the **square root of member count** (G7): a guild of 30 levels x3.77 as fast
+  per person as a guild of 2, which is what the square root predicts (x3.87) rather than a target
+  anybody typed, and **every size reaches the same ceiling** - 31 cycles for a guild of 30, 117 for
+  a guild of 2, 165 for a guild of one.
+- **It accelerates a wall and never gates one** (G5). `CheckGuildTechNeverGates` is
+  `CheckFusionNeverGates` read a second time: walks carrying no guild tech all finish, and walks
+  carrying the whole tree arrive at a wall with about 3% more power and also finish. The reference
+  player `recommendedPower` is derived for has none, and the gate **asserts** that rather than
+  arranging it.
+- **Server.** `Server/supabase/migrations/0012_guild_tech.sql` - **written, not applied.** Runs
+  after 0011 and stays after it. Guild XP is not stored and not minted: it is summed out of
+  `guild_path_ledger` joined to the guild each member fought for that cycle, so applying it needs
+  no backfill. It replaces `guild_path_balance` so a rung's spend is subtracted. It carries
+  `guild_tech_dev_set`, granted to no client role.
+- **Content.** `guild-tech.json` is the tenth content file and the second that is not hashed into
+  `ContentVersion` - a guild dungeon fight cannot read it, because `GuildDungeon.FightUnder` hands
+  the simulation an empty profile, and `CheckGuildDungeonStripsGuildTech` proves that rather than
+  asserting it.
+- **Not done:** the live guild rules test does not cover 0012, and no screen has been captured with
+  `PlayModeScreenshot` since the tree replaced the Path screen.
 
 ### The Deep Recital, The Proving, events, shop
 
@@ -874,6 +921,57 @@ the capture-side rule that keeps a locked pick out of every published record, th
 moved, and the stage-fingerprint, hero-sweep and talent-sweep baselines are all unmoved. The build
 check reads **3 failures**, the three already on `main`: armor's Rough slope, the geared CEIL and
 the campaign power band.
+
+**`guild/tech-tree`** builds the guild tech tree `DESIGN-GUILD-TECH.md` in the `claude` folder describes, replacing
+the four-node Guild Path's storefront. Four family tracks by role, three derived stat rungs each,
+twelve guild talents in the hero talents' own vocabulary, and guild level on a square-root curve.
+It holds:
+- `guild-tech.json`, `GuildTechConfig`, `Core/Cloud/GuildTech.cs`, the `StatMath` power weights a
+  rung converts through, and the two lines in `CombatSimulation` that resolve a guild talent where
+  a hero's selected talent already resolves;
+- `Tools/DevHarness/GuildTechChecks.cs` (the derivation and the gate) and `GuildTalentParity.cs`
+  (every guild talent read by the instrument that reads hero talents), plus `--guild-tech`;
+- `GuildTechScreen`, which replaces `GuildPathScreen`, and `GuildTechService`;
+- `Server/supabase/migrations/0012_guild_tech.sql`, **written and not applied**;
+- the two retired checks deleted: the identical-fight proof and the no-collective-gating flatness
+  assertion.
+
+It regenerates no baseline, and all three still match on it. The build check reads **3 failures**,
+which are main's: armor's Rough slope (fixed on `engine/the-solve`, unmerged), the geared CEIL band
+and the campaign power band. Every GUILD DUNGEON, GUILD PATH and GUILD TECH check is green.
+
+**`guild/tech-choice`** sits on top of that branch and makes the twelve talents a choice.
+
+The x3 rule is retired: it capped a family's strongest option at three times its weakest
+on the parity ladder, passed all four families, and left one option in each the pick on
+every floor. `Tools/DevHarness/GuildTalentThemes.cs` reads every guild talent in the
+guild dungeon instead - every floor theme, and every condition that theme may draw, with
+the talent on the profile and on every family member in the line at once. The reading is
+the dungeon's own board order rather than the margin, because margin is hero HP kept and
+read that way every defensive talent measured three times every offensive one. The bar a
+lead must clear is derived from what chance alone moves the same floors by. `G10` in
+`DESIGN-GUILD-TECH.md` in the `claude` folder is the rule it enforces: no talent may be the best pick on
+every theme, and every family must have at least two that are the best pick somewhere.
+
+The talents are re-authored against it. Each is an ANSWER to something a floor is made
+of rather than a shape: `Answer in Kind` retaliates once per blow taken and answers Wall
+and Attrition, `Hold the Wall` Taunts and answers Hunt, `Dig In` answers the Champion,
+`No Survivors` answers the floors full of bodies, `Press the Wound` stacks on the one
+body that lives, `First Blood` opens with a volley, `Unbroken` wards, `Steady Hands`
+knits, `Ranging Shot` finishes, `Mark the Line` marks the biggest thing on the floor.
+Ten of the twelve are the best pick on some theme; `Grace/Last Word` and
+`Reach/Steady Aim` are not, and sit between their siblings everywhere.
+
+Two gates were changed to read what their own studies read. The theme gate fights the
+same arenas the study prints, because its bar falls out of how many arenas were fought.
+The parity gate reads six subject heroes rather than three - at three, Grace drew one
+Mender whose kit does not heal in the pinned line, and a clause that fires on a heal read
+INERT against a study that read it comfortably.
+
+It regenerates no baseline and moves none. The build check reads **4 failures**, which
+are main's: the stage fingerprints, the geared CEIL band, the campaign power band and the
+economy model's response to income. Every GUILD DUNGEON, GUILD PATH and GUILD TECH check
+is green.
 
 **`content/campaign-stages`** replaces the shipped 24 stages with Pinoy's 72:
 - only his 84 fielded, the shipped 12 kept as data and excluded from the guild dungeon and the Deep
@@ -1299,9 +1397,12 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   nowhere. They now hold player text, so putting them on the ability breakdown is a UI decision
   rather than a content one. Durations, thresholds, Energy amounts and status sizes are printed
   nowhere either, and the text no longer carries them.
-- **Guilds phase two, systems 3 to 5.** Systems 1 and 2, the dungeon and the Guild Path, are built
-  (see **Guilds, phase one**). Guild levels, the fodder exchange and (parked) guild wars remain,
-  as sequenced in `DESIGN-GUILDS-PHASE-TWO.md`.
+- **Guilds phase two, systems 4 and 5.** Systems 1 to 3 - the dungeon, the Waymark economy and the
+  guild tech tree that replaced the four-node Path - are built (see **Guilds, phase one**). The
+  fodder exchange and (parked) guild wars remain, as sequenced in `DESIGN-GUILDS-PHASE-TWO.md`.
+  Guild level exists now and gates the tree; `DESIGN-GUILD-TECH.md` in the `claude` folder G6 lists what could read
+  it later (a marketplace, a sixth floor, a fourth attempt, a guild hall) and says that none of
+  them is designed today.
 - **A marketplace.** Nothing built, nothing designed.
 - **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
 - **Texture compression.** The delivered art is effectively uncompressed, which is fine in a desktop

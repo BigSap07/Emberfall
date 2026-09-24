@@ -1,0 +1,257 @@
+{
+  // THE GUILD TECH TREE - claude/DESIGN-GUILD-TECH.md. Four family tracks, three stat rungs each,
+  // one guild talent slot per family choosing between three, all gated by guild level.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, and that took checking rather than assuming. The
+  // version exists to retire a GUILD DUNGEON replay when a number that fight reads moves, and a
+  // dungeon fight cannot read anything here: GuildDungeon.FightUnder hands CombatSimulation a
+  // fresh empty PlayerProfile, and guild tech resolves from the profile exactly as armor does, so
+  // the dungeon strips it at the door with the relics and the levels. The gate proves it rather
+  // than asserting it - CheckGuildDungeonStripsGuildTech fights the same floor three ways and
+  // shows the dungeon's own path IS the no-tech fight and that maximum tech would read differently.
+  //
+  // EVERY NUMBER HERE IS DERIVED except the rung STAT SHAPES and the talents' own magnitudes.
+  // `DevHarness.exe --guild-tech` prints the whole working; GuildTechChecks re-derives on every
+  // build-check and fails when this file and the derivation disagree, exactly as CheckDerivation
+  // holds guild-path.json's pay.
+  "currency": "Waymarks",
+
+  // DERIVED. A rung costs its rung number times this, so a track's three cost 6 units and the
+  // whole tree 24. Solved so a member finishes PAYING for the tree at about the moment a guild of
+  // the reference size finishes OPENING it - one clock, not two.
+  "rungUnit": 217,
+  "rungsPerFamily": 3,
+
+  "level": {
+    // DERIVED: guild XP one level costs before the member-count scaling. Flat across levels on
+    // purpose - a second invented curve on top of the square root is one more thing nobody can
+    // predict.
+    "xpPerLevel": 1028,
+    // G7, AND THE ONLY AUTHORED NUMBER IN THIS BLOCK. XP required per level scales with the square
+    // root of member count. The per-person advantage a large guild has over a small one is NOT
+    // authored anywhere - it is what this exponent produces, and the gate asserts the measured
+    // ratio against what the square root predicts rather than against a target.
+    "exponent": 0.5
+  },
+
+  // G9: the Path's existing nodes become early guild level rewards. The code is built and works,
+  // so it moves rather than being deleted. A grant is free - it costs no Waymarks and asks for no
+  // rung - and a member who already BOUGHT one under 0011 keeps it, because the two sources are
+  // read as an OR (GameSession.OwnsGuildPathNode).
+  "grants": [
+    { "level": 1, "node": "second-line" },
+    { "level": 2, "node": "line-talents" },
+    { "level": 3, "node": "third-line" },
+    { "level": 4, "node": "fourth-line" }
+  ],
+
+  // THE FOUR FAMILIES.
+  //
+  // A family is a set of ROLES and nothing else (G1). Every role belongs to exactly one family and
+  // every family holds at least one role; the gate fails the build otherwise, because a role in
+  // two families makes "every hero of the family" ambiguous and a role in none makes a hero
+  // permanently untouchable by the tree.
+  //
+  // rungStats is the family's output profile written as numbers, and it IS authored: which stats a
+  // family cares about is what the family is. The rung's SIZE is not. rungScale is a share of the
+  // hero's own power score, THE SAME NUMBER ON EVERY FAMILY, because a rung costs the same Waymarks
+  // on every track and so has to buy the same thing. The stats named split that worth EQUALLY by
+  // power, so Line's Max HP and Defense and Blade's Attack and Crit Damage are worth exactly the
+  // same and neither family's second stat is a rounding error.
+  //
+  // THE TALENTS ARE PassiveDefs (G3) - the same triggers, effects, conditions, overrides and
+  // appends a hero talent is authored in, read by the same parser and appended to the unit at the
+  // same place in CombatSimulation. There is no guild-talent engine.
+  //
+  // EACH FAMILY'S THREE ANSWER DIFFERENT FLOORS (G10), and that is the whole of why there are
+  // three. The first cut of this file offered "a front-loaded one, a reactive one and a
+  // conditional one" - three SHAPES - and graded the three in one arena, where shape is invisible
+  // and only size reads. Every family came back with one option ahead on every floor, and a rule
+  // capping the strongest at three times the weakest passed all four of them while a guild would
+  // still have taken the biggest number every time. What is authored now is not a shape but an
+  // ANSWER: a trigger whose RATE, or a target whose WORTH, is decided by what the floor is made of.
+  //
+  //   Swarm      five minions - things die, and many small blows land
+  //   Wall       one body that holds the front - the same target, for a long time
+  //   Hunt       enemies pick their mark, and the mark is the backline
+  //   Attrition  the whole line is hit at once, round after round
+  //   Champion   one raised elite - few blows, each of them enormous
+  //
+  // So a retaliation is a Swarm answer because it fires once per blow taken; a stacking wound is a
+  // Wall and Champion answer because the stacks need a body that lives long enough to carry them;
+  // a Taunt is a Hunt answer because it is the only thing that argues with a chooser; a
+  // charge-based ward is a Champion answer because a charge is worth whatever the blow it ate was
+  // worth. None of that is visible at parity in one arena, and all of it is visible across the
+  // themes.
+  //
+  // Every one of them is still graded by the instrument that grades hero talents, at 100% of
+  // recommended power against the 1%-of-Attack material floor (G8), AND across every floor theme
+  // and condition by GuildTalentThemes.cs (G10). Run `DevHarness.exe --guild-tech` for both, or
+  // `--guild-talent-themes` for the second alone; the gate fails the build for a talent that
+  // cannot be felt and for a family whose three are not a choice.
+  "families": [
+    {
+      "id": "line",
+      "name": "Line",
+      "roles": ["Bulwark", "Vanguard"],
+      "rungStats": ["MaxHp", "Defense"],
+      "rungScale": 0.00651,
+      "talents": [
+        {
+          "id": "line_hold_the_wall",
+          "name": "Hold the Wall",
+          "trigger": "BattleStart",
+          "description": "Every Bulwark and Vanguard steps in front of its line: whatever picks a target picks them, and they are built for it.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "Self", "status": "Taunt", "magnitude": 1.0, "duration": 99 },
+            { "kind": "ApplyStatus", "target": "Self", "status": "DamageReductionUp", "magnitude": 0.18, "duration": 99 }
+          ]
+        },
+        {
+          "id": "line_answer_in_kind",
+          "name": "Answer in Kind",
+          "trigger": "OnDamaged",
+          "oncePerBattle": false,
+          "limit": "Unlimited",
+          "description": "Anything that strikes a Bulwark or a Vanguard is struck back. Every blow, however many of them are throwing it.",
+          "effects": [
+            { "kind": "Damage", "target": "LastAttacker", "power": 0.68 }
+          ]
+        },
+        {
+          "id": "line_dig_in",
+          "name": "Dig In",
+          "trigger": "OnHpBelowThreshold",
+          "threshold": 0.55,
+          "description": "Brought past half, a Bulwark or a Vanguard sets its feet and stops giving ground - harder to hurt, and mending as it stands.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.9, "duration": 99 },
+            { "kind": "ApplyStatus", "target": "Self", "status": "DamageReductionUp", "magnitude": 0.3, "duration": 99 },
+            { "kind": "ApplyStatus", "target": "Self", "status": "Regen", "magnitude": 0.0, "holderHpTick": 0.05, "duration": 99 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "blade",
+      "name": "Blade",
+      "roles": ["Striker", "Breaker", "Stalker"],
+      "rungStats": ["Attack", "CritDamage"],
+      "rungScale": 0.00651,
+      "talents": [
+        {
+          "id": "blade_first_blood",
+          "name": "First Blood",
+          "trigger": "BattleStart",
+          "description": "Strikers, Breakers and Stalkers open the fight by throwing something, and everything on the floor wears it.",
+          "effects": [
+            { "kind": "Damage", "target": "AllEnemies", "power": 0.78 }
+          ]
+        },
+        {
+          "id": "blade_press_the_wound",
+          "name": "Press the Wound",
+          "trigger": "AfterBasicAttack",
+          "oncePerBattle": false,
+          "description": "Every blow a Blade lands opens the same wound wider, and the whole line hits into what it opened.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "LastTarget", "status": "DamageTakenUp", "magnitude": 0.22, "duration": 5, "bypassResist": true, "stackOnReapply": true, "maxStacks": 6, "refreshStacks": true }
+          ]
+        },
+        {
+          "id": "blade_no_survivors",
+          "name": "No Survivors",
+          "trigger": "OnKill",
+          "oncePerBattle": false,
+          "description": "A Blade that puts a body down takes the momentum with it, and the energy to spend it on the next one.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.62, "duration": 99, "stackOnReapply": true, "maxStacks": 4 },
+            { "kind": "EnergyGain", "target": "Self", "flat": 100 },
+            { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.55 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "grace",
+      "name": "Grace",
+      "roles": ["Mender", "Binder", "Warden"],
+      "rungStats": ["Attack", "Speed"],
+      "rungScale": 0.00651,
+      "talents": [
+        {
+          "id": "grace_steady_hands",
+          "name": "Steady Hands",
+          "trigger": "OnHealApplied",
+          "oncePerBattle": false,
+          "limit": "OncePerRound",
+          "description": "The first mending a Grace hero works each round spreads: the three worst off keep knitting, round after round.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "ThreeLowestHpAllies", "status": "Regen", "magnitude": 0.0, "holderHpTick": 0.115, "duration": 3, "chance": 1 }
+          ]
+        },
+        {
+          "id": "grace_unbroken",
+          "name": "Unbroken",
+          "trigger": "BattleStart",
+          "description": "A Grace hero wards the whole line before a blow is thrown. The ward eats the next few blows to land on each of them, and a ward is worth whatever the blow it ate was worth.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "AllAllies", "status": "Guard", "magnitude": 0.2, "charges": 3, "duration": 99 }
+          ]
+        },
+        {
+          "id": "grace_last_word",
+          "name": "Last Word",
+          "trigger": "OnAllyHpBelowThreshold",
+          "threshold": 0.4,
+          "oncePerBattle": false,
+          "limit": "OncePerRound",
+          "description": "When an ally is brought low, the nearest Grace hero answers once that round - whatever else it was doing, and whoever it was.",
+          "effects": [
+            { "kind": "Heal", "target": "BroadcastVictim", "power": 0.5 }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reach",
+      "name": "Reach",
+      "roles": ["Marksman", "Tinkerer"],
+      "rungStats": ["Attack", "CritChance"],
+      "rungScale": 0.00651,
+      "talents": [
+        {
+          "id": "reach_ranging_shot",
+          "name": "Ranging Shot",
+          "trigger": "AfterBasicAttack",
+          "oncePerBattle": false,
+          "description": "A Marksman or a Tinkerer never wastes the second half of a shot: whatever is weakest takes it.",
+          "effects": [
+            { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.88 }
+          ]
+        },
+        {
+          "id": "reach_steady_aim",
+          "name": "Steady Aim",
+          "trigger": "TurnStart",
+          "oncePerBattle": false,
+          "description": "A Marksman or a Tinkerer ranges in: every turn spent on the same fight is a turn better sighted, and none of it is there at the opening.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.1, "duration": 99, "stackOnReapply": true, "maxStacks": 7 }
+          ]
+        },
+        {
+          "id": "reach_mark_the_line",
+          "name": "Mark the Line",
+          "trigger": "OnCriticalHit",
+          "oncePerBattle": false,
+          "description": "A telling shot names the biggest thing on the field, and everything the guild fields hits that one harder.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "HighestHpEnemy", "status": "DefenseDown", "magnitude": 1.0, "duration": 5, "bypassResist": true },
+            { "kind": "ApplyStatus", "target": "HighestHpEnemy", "status": "DamageTakenUp", "magnitude": 1.45, "duration": 5, "bypassResist": true }
+          ]
+        }
+      ]
+    }
+  ]
+}

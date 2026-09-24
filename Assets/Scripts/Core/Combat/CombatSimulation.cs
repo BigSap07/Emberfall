@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Emberfall.Core.Cloud;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Progression;
@@ -1336,7 +1337,22 @@ namespace Emberfall.Core.Combat
                     List<ArmorPiece> armor = _request.Profile != null ? _request.Profile.EquippedArmorOf(hero) : null;
                     ArmorConfig armorConfig = _request.Content != null ? _request.Content.Armor : null;
 
-                    UnitStats stats = StatMath.ForHero(hero.Def, hero.Level, relic, armor, armorConfig);
+                    // GUILD TECH, resolved here and then forgotten, exactly the way the relic and
+                    // the armor one block up are. The rungs are stats and reach the unit through
+                    // StatMath alone; the guild talent is one more entry in CombatUnit.Passives a
+                    // few lines down. Nothing below this point knows guild tech exists - there is
+                    // no guild branch in the effect pipeline and no guild field on CombatUnit.
+                    //
+                    // From the PROFILE, like the armor list and for the same reason: a null profile
+                    // is every synthetic harness request and every guild dungeon fight, and it must
+                    // be an exact no-op rather than something each caller remembers to switch off.
+                    // That is also what makes the reference player's "no guild tech" (G5) true by
+                    // construction rather than by arrangement.
+                    GuildTechConfig techTree = _request.Content != null ? _request.Content.GuildTech : null;
+                    GuildTechState guildTech = _request.Profile != null ? _request.Profile.GuildTech : null;
+
+                    UnitStats stats = StatMath.ForHero(hero.Def, hero.Level, relic, armor, armorConfig,
+                                                       techTree, guildTech);
                     CombatUnit unit = CombatUnit.FromDef(hero.Def, stats, hero.Level, true, i, id++, _cfg.EnergyMax);
                     if (relic != null && relic.Grade == RelicGrade.Mythic) unit.Relic = relic;
 
@@ -1370,6 +1386,27 @@ namespace Emberfall.Core.Combat
                         unit.AddPassive(talent);
                         ApplyTalentOverrides(unit, talent);
                         ApplyTalentAppends(unit, talent);
+                    }
+
+                    // THE GUILD TALENT, after the hero's own (claude/DESIGN-GUILD-TECH, G3). Three
+                    // lines, the same three, because a guild talent IS a PassiveDef: one the guild
+                    // picked for a family rather than one the player picked for a hero. There is no
+                    // guild-talent code path - this appends to the same list, applies the same
+                    // overrides and the same appends, and everything downstream reads a passive.
+                    //
+                    // AFTER the hero's talent, so on a shared trigger the guild's clause resolves
+                    // last. That ordering is the same one the hero's talent already has against the
+                    // def's own passives, and it is the one that keeps a duel symmetrical: both
+                    // sides build in this order, so two identical lines cannot beat each other.
+                    //
+                    // Null unless the family's slot is open, the guild has picked, and this build
+                    // still names the pick - the same three-way tolerance TalentAt gives a hero's.
+                    PassiveDef guildTalent = GuildTech.TalentFor(techTree, guildTech, hero.Def.Role);
+                    if (guildTalent != null)
+                    {
+                        unit.AddPassive(guildTalent);
+                        ApplyTalentOverrides(unit, guildTalent);
+                        ApplyTalentAppends(unit, guildTalent);
                     }
 
                     _units.Add(unit);

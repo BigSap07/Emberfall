@@ -1294,7 +1294,30 @@ namespace Emberfall.Core.Session
         /// </summary>
         public bool OwnsGuildPathNode(string id)
         {
-            return Content.GuildPath.Node(id) != null && Profile.GuildPathNodes.Contains(id);
+            if (Content.GuildPath.Node(id) == null) return false;
+            // BOUGHT OR GRANTED, and the OR is G9 in one line. These nodes were sold for Waymarks
+            // under 0011 and are handed out by early guild levels under the tech tree that replaced
+            // it (claude/DESIGN-GUILD-TECH.md). An account that already paid keeps what it paid
+            // for, and one that never did gets it from its guild's level - so the tree could
+            // replace the Path with no migration of anybody's purchases and nothing taken away.
+            if (Profile.GuildPathNodes.Contains(id)) return true;
+            return Content.GuildTech.NodesGrantedAt(GuildLevel).Contains(id);
+        }
+
+        /// <summary>
+        /// The guild's tech level, 0 for a player in no guild or a guild that has not levelled.
+        /// Read off the server's last answer and held down to what this build's tree can express,
+        /// for the reason OwnsGuildPathNode clamps: a level past the ceiling this build knows would
+        /// open steps it cannot draw.
+        /// </summary>
+        public int GuildLevel
+        {
+            get
+            {
+                if (Profile.GuildTech == null) return 0;
+                int ceiling = Content.GuildTech.IsUsable ? Content.GuildTech.LevelCeiling : 0;
+                return Math.Max(0, Math.Min(Profile.GuildTech.Level, ceiling));
+            }
         }
 
         private bool OwnsGuildPathKind(GuildPathNodeKind kind)
@@ -1302,7 +1325,7 @@ namespace Emberfall.Core.Session
             for (int i = 0; i < Content.GuildPath.Nodes.Count; i++)
             {
                 GuildPathNodeDef n = Content.GuildPath.Nodes[i];
-                if (n.Kind == kind && Profile.GuildPathNodes.Contains(n.Id)) return true;
+                if (n.Kind == kind && OwnsGuildPathNode(n.Id)) return true;
             }
             return false;
         }
@@ -1317,7 +1340,7 @@ namespace Emberfall.Core.Session
                 for (int i = 0; i < Content.GuildPath.Nodes.Count; i++)
                 {
                     GuildPathNodeDef n = Content.GuildPath.Nodes[i];
-                    if (n.Kind == GuildPathNodeKind.Line && Profile.GuildPathNodes.Contains(n.Id)) lines++;
+                    if (n.Kind == GuildPathNodeKind.Line && OwnsGuildPathNode(n.Id)) lines++;
                 }
                 return lines;
             }
@@ -1341,6 +1364,54 @@ namespace Emberfall.Core.Session
             Profile.GuildPathNodes.Clear();
             for (int i = 0; i < state.Nodes.Count; i++) Profile.GuildPathNodes.Add(state.Nodes[i]);
             if (Profile.ActiveLine >= LinesAllowed) SwitchLine(0);
+        }
+
+        // ------------------------------------------------------------------ the guild tech tree
+
+        /// <summary>
+        /// Takes the server's answer as the truth about the tree (claude/DESIGN-GUILD-TECH.md): the
+        /// guild's level and XP, the rungs this account bought, and the talent the guild picked on
+        /// each family. ApplyGuildPathState's sibling and the same contract - the server is the only
+        /// place any of it can change, so a save that disagrees is behind or edited and the answer
+        /// wins.
+        ///
+        /// Clamps the active line afterwards for the same reason ApplyGuildPathState does, and it
+        /// matters more here: a guild level grants Line nodes (G9), so an answer reporting a LOWER
+        /// level than the save held takes lines away, and the formation must not be left standing
+        /// on one that is gone.
+        /// </summary>
+        public void ApplyGuildTechState(GuildTechState state)
+        {
+            if (state == null) return;
+            Profile.GuildTech = state.Clone();
+            if (Profile.ActiveLine >= LinesAllowed) SwitchLine(0);
+        }
+
+        /// <summary>Rungs this account has bought on a family that actually count: what was bought,
+        /// held down to what the guild level has opened (GuildTech.RungsOn).</summary>
+        public int RungsOn(string familyId)
+        {
+            return GuildTech.RungsOn(Content.GuildTech, Profile.GuildTech, familyId);
+        }
+
+        /// <summary>
+        /// Whether this account may buy the next rung on a family right now, and why not when it
+        /// may not. The screen prints the reason; the server decides (0012) and this only predicts.
+        /// </summary>
+        public bool CanBuyRung(string familyId, out int rung, out int cost, out string why)
+        {
+            rung = 0; cost = 0; why = "";
+            GuildTechConfig tree = Content.GuildTech;
+            GuildTechFamilyDef family = tree.Family(familyId);
+            if (family == null) { why = "no such track"; return false; }
+            int have = Profile.GuildTech != null ? Math.Max(0, Profile.GuildTech.RungsIn(familyId)) : 0;
+            if (have >= tree.RungsPerFamily) { why = "every rung bought"; return false; }
+            rung = have + 1;
+            cost = tree.RungCost(rung);
+            int needs = tree.LevelForRung(familyId, rung);
+            if (needs > GuildLevel) { why = "guild level " + needs; return false; }
+            if (Profile.Waymarks < cost) { why = (cost - Profile.Waymarks) + " more " + tree.Currency; return false; }
+            return true;
         }
 
         /// <summary>

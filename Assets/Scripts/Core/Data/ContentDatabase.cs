@@ -52,6 +52,26 @@ namespace Emberfall.Core.Data
         }
 
         /// <summary>
+        /// The guild tech tree (guild-tech.json): four family tracks, their stat rungs and their
+        /// guild talents (claude/DESIGN-GUILD-TECH.md). Loaded after Load for guild-path.json's
+        /// reason and NOT part of ContentVersion - a guild dungeon fight cannot read it, because
+        /// GuildDungeon.FightUnder hands the simulation an empty profile and guild tech resolves
+        /// from the profile. GuildTechChecks proves that rather than asserting it in a comment.
+        ///
+        /// Empty (IsUsable false) on a build that never loaded it, which every screen reads as
+        /// "no tree" and every fight reads as no bonus at all.
+        /// </summary>
+        public GuildTechConfig GuildTech = new GuildTechConfig();
+
+        /// <summary>Parses guild-tech.json into GuildTech. Does not touch ContentVersion; see
+        /// GuildTech.</summary>
+        public void LoadGuildTech(string guildTechJson)
+        {
+            GuildTech = GuildTechConfig.FromJson(guildTechJson);
+            for (int i = 0; i < GuildTech.Warnings.Count; i++) Warnings.Add(GuildTech.Warnings[i]);
+        }
+
+        /// <summary>
         /// Which content this database was built from, as one short string: a hash of the text of
         /// every file handed to Load, in a fixed order.
         ///

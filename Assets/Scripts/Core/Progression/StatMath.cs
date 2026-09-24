@@ -156,6 +156,28 @@ namespace Emberfall.Core.Progression
         }
 
         /// <summary>
+        /// The same, with the account's guild tech rungs folded in LAST (claude/DESIGN-GUILD-TECH,
+        /// G5). Fourth and final in the fixed order relic, armor, guild tech - fixed for the reason
+        /// the first two are, that the three do not commute and a stat line whose value depended on
+        /// which system happened to resolve first is a stat line nobody could reproduce.
+        ///
+        /// Last on purpose rather than by accident: a rung is worth a share of the hero's POWER,
+        /// and the power a player actually fields is the geared, levelled one. Resolving the tree
+        /// first would price a rung off a bare hero and then hand it to a geared one.
+        ///
+        /// A null tree or a null state is an exact no-op, which is every synthetic harness request,
+        /// every enemy, every Proving opponent - and the reference player the campaign's
+        /// recommendedPower is derived for.
+        /// </summary>
+        public static UnitStats ForHero(HeroDef def, int level, RelicDef relic, List<ArmorPiece> armor,
+                                        ArmorConfig config, GuildTechConfig tech, Cloud.GuildTechState guild)
+        {
+            UnitStats s = ForHero(def, level, relic, armor, config);
+            if (def != null) Cloud.GuildTech.ApplyRungs(s, tech, guild, def.Role);
+            return s;
+        }
+
+        /// <summary>
         /// A hero standing on the OPPONENT side, from a BattleLoadout snapshot (DESIGN-PVP section
         /// 3). ForHero's sibling, and deliberately a sibling rather than a fourth ForHero overload,
         /// because it differs in exactly two ways and both are properties of being a snapshot:
@@ -345,16 +367,69 @@ namespace Emberfall.Core.Progression
             return (float)Math.Round(v, MidpointRounding.AwayFromZero);
         }
 
+        /// <summary>
+        /// What one point of each stat is worth in power. Named rather than written inline in
+        /// PowerScore because guild tech buys power and has to convert back: a rung is worth a
+        /// share of a hero's power score, and GuildTech.ApplyRungs divides by these to work out how
+        /// much of each stat that is. Two copies of these six numbers would let a retune of what
+        /// power means quietly disagree with what a rung buys.
+        /// </summary>
+        public const float PowerWeightMaxHp = 0.11f;
+        public const float PowerWeightAttack = 2.4f;
+        public const float PowerWeightDefense = 1.35f;
+        public const float PowerWeightSpeed = 1.9f;
+        public const float PowerWeightCritChance = 260f;
+        public const float PowerWeightCritDamage = 120f;
+
         public static int PowerScore(UnitStats s)
         {
             if (s == null) return 0;
-            float p = s.MaxHp * 0.11f
-                    + s.Attack * 2.4f
-                    + s.Defense * 1.35f
-                    + s.Speed * 1.9f
-                    + s.CritChance * 260f
-                    + (s.CritDamage - 1f) * 120f;
+            float p = s.MaxHp * PowerWeightMaxHp
+                    + s.Attack * PowerWeightAttack
+                    + s.Defense * PowerWeightDefense
+                    + s.Speed * PowerWeightSpeed
+                    + s.CritChance * PowerWeightCritChance
+                    + (s.CritDamage - 1f) * PowerWeightCritDamage;
             return (int)Math.Round(p, MidpointRounding.AwayFromZero);
+        }
+
+        /// <summary>The weight above that one guild tech rung stat carries. One switch, so a stat
+        /// added to GuildTechStat without a weight here is a compile-time hole rather than a
+        /// silently weightless rung.</summary>
+        public static float PowerWeightOf(GuildTechStat stat)
+        {
+            switch (stat)
+            {
+                case GuildTechStat.MaxHp: return PowerWeightMaxHp;
+                case GuildTechStat.Attack: return PowerWeightAttack;
+                case GuildTechStat.Defense: return PowerWeightDefense;
+                case GuildTechStat.Speed: return PowerWeightSpeed;
+                case GuildTechStat.CritChance: return PowerWeightCritChance;
+                case GuildTechStat.CritDamage: return PowerWeightCritDamage;
+            }
+            return 0f;
+        }
+
+        /// <summary>
+        /// Adds `power` worth of one stat to a stat line, in place, through the weight above.
+        /// GuildTech.ApplyShare is the only caller; it lives here so the conversion and the score
+        /// it inverts sit in one file.
+        /// </summary>
+        public static void AddPower(UnitStats stats, GuildTechStat stat, float power)
+        {
+            if (stats == null) return;
+            float weight = PowerWeightOf(stat);
+            if (weight <= 0f) return;
+            float amount = power / weight;
+            switch (stat)
+            {
+                case GuildTechStat.MaxHp: stats.MaxHp += amount; break;
+                case GuildTechStat.Attack: stats.Attack += amount; break;
+                case GuildTechStat.Defense: stats.Defense += amount; break;
+                case GuildTechStat.Speed: stats.Speed += amount; break;
+                case GuildTechStat.CritChance: stats.CritChance += amount; break;
+                case GuildTechStat.CritDamage: stats.CritDamage += amount; break;
+            }
         }
 
         // ---------- hero levelling ----------

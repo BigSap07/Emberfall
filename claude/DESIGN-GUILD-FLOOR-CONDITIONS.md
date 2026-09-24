@@ -125,6 +125,8 @@ Each condition is compared with three things:
 
 **C5 passes when SHIFT is at least 1.5 times the largest of those three.** The 1.5 is a chosen bar, not a measured one. The control, "enemies +75% HP", reads x0.79 to x1.00 against it: the design's own example of a knob, measured failing. Win or loss alone could not be used as the reading, because 86 to 99 percent of random lines clear these floors without any condition, which leaves too few losers to compare.
 
+A SECOND RULE NOW LEANS ON THIS POOL, and it is worth saying so here because it changes what a cut condition costs. The guild tech tree's G10 asks that no guild talent be the best pick on every floor theme it can be drawn against, and it reads each talent across every theme AND every condition that theme may draw. The pool is therefore load-bearing twice over: it is what makes a floor ask for a different line, and it is part of what makes a family's three talents a choice. A condition leaving the pool narrows both.
+
 C6's three guardrails are asserted on the same populations: 40% of all rosters clear, 25% of every group missing an obvious answer clear, and no hero appears in more than 35% of clears. A theme joins a condition's `floors` list only if C5 passed and the guardrails held on all 12 of that theme's floors. `GuildDungeonChecks.CheckConditionShape` re-runs exactly this on every `build-check`, so a change that turns a pooled condition into a knob fails the build.
 
 ### The pool: six conditions, three families (MEASURED)
