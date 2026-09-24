@@ -292,9 +292,21 @@ namespace Emberfall.Core.Model
         public long Points;
         public long Currency;
 
-        /// <summary>Milestone thresholds already claimed, keyed by the threshold itself rather than
-        /// a list index - see EventMilestone. The only guard against double-paying a milestone.</summary>
-        public readonly List<long> ClaimedMilestoneThresholds = new List<long>();
+        /// <summary>Ids of the milestones already claimed - see EventMilestone. The only guard
+        /// against double-paying a milestone. An id this build's content does not author is kept,
+        /// not pruned: the milestone stays claimed, so it cannot reopen if content names it again.</summary>
+        public readonly List<string> ClaimedMilestoneIds = new List<string>();
+
+        /// <summary>Claims recorded by threshold, before milestones had ids (save version 18 and
+        /// earlier), that the version 19 migration could not name - see
+        /// SaveSerializer.CurrentVersion. Carried so the save still says they were claimed. Read by
+        /// nothing else, and never matched against a threshold again, since that was the bug.</summary>
+        public readonly List<long> UnresolvedClaimedThresholds = new List<long>();
+
+        public bool HasClaimed(string milestoneId)
+        {
+            return !string.IsNullOrEmpty(milestoneId) && ClaimedMilestoneIds.Contains(milestoneId);
+        }
     }
 
     /// <summary>

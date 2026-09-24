@@ -1,5 +1,5 @@
 {
-  "_comment": "Limited-time events, content only - see the Events engine in Assets/Scripts/Core/Data (EventDef/Enums.EventActivityKind) and Assets/Scripts/Core/Session/GameSession.cs (RecordEventActivity/ClaimEventMilestone/RedeemEventCurrency). startUnix/endUnix are UTC Unix seconds, same style as balance.json's dailyResetHourUtc but an absolute window rather than an hour-of-day. 'activity' is one Enums.EventActivityKind member - today SummonPerformed or RelicDustSpent. 'pointsPerActivity' converts one unit of that activity into points on the milestone ladder every event has; 'currencyName' non-empty adds a second, optional ladder paid for in the event's own currency, earned from the same activity at 'currencyPerActivity'. Every number in this file - both windows, every threshold, every reward, both conversion rates - is a first-pass placeholder, not tuned content; nothing here has been through a balance pass.",
+  "_comment": "Limited-time events, content only - see the Events engine in Assets/Scripts/Core/Data (EventDef/Enums.EventActivityKind) and Assets/Scripts/Core/Session/GameSession.cs (RecordEventActivity/ClaimEventMilestone/RedeemEventCurrency). startUnix/endUnix are UTC Unix seconds, same style as balance.json's dailyResetHourUtc but an absolute window rather than an hour-of-day. 'activity' is one Enums.EventActivityKind member - today SummonPerformed or RelicDustSpent. 'pointsPerActivity' converts one unit of that activity into points on the milestone ladder every event has. Each milestone's 'id' is what a claim is saved against: permanent once shipped, never derived from its threshold or position, and never reused - retune a threshold freely, but a new rung takes a new id (see EventMilestone); 'currencyName' non-empty adds a second, optional ladder paid for in the event's own currency, earned from the same activity at 'currencyPerActivity'. Every number in this file - both windows, every threshold, every reward, both conversion rates - is a first-pass placeholder, not tuned content; nothing here has been through a balance pass.",
 
   "events": [
     {
@@ -11,10 +11,10 @@
       "pointsLabel": "Memory Fragments",
       "pointsPerActivity": 1,
       "milestones": [
-        { "threshold": 5,  "gold": 200 },
-        { "threshold": 15, "gold": 400,  "shards": 50 },
-        { "threshold": 30, "gold": 800,  "relicDust": 40 },
-        { "threshold": 60, "gold": 1500, "shards": 300 }
+        { "id": "rite_1", "threshold": 5,  "gold": 200 },
+        { "id": "rite_2", "threshold": 15, "gold": 400,  "shards": 50 },
+        { "id": "rite_3", "threshold": 30, "gold": 800,  "relicDust": 40 },
+        { "id": "rite_4", "threshold": 60, "gold": 1500, "shards": 300 }
       ],
       "currencyName": "",
       "currencyPerActivity": 0,
@@ -29,10 +29,10 @@
       "pointsLabel": "Dust Spent",
       "pointsPerActivity": 1,
       "milestones": [
-        { "threshold": 200,  "gold": 150 },
-        { "threshold": 500,  "gold": 400,  "shards": 60 },
-        { "threshold": 1000, "gold": 900,  "shards": 120 },
-        { "threshold": 2000, "gold": 1800, "relicDust": 100 }
+        { "id": "ledger_1", "threshold": 200,  "gold": 150 },
+        { "id": "ledger_2", "threshold": 500,  "gold": 400,  "shards": 60 },
+        { "id": "ledger_3", "threshold": 1000, "gold": 900,  "shards": 120 },
+        { "id": "ledger_4", "threshold": 2000, "gold": 1800, "relicDust": 100 }
       ],
       "currencyName": "Ledger Marks",
       "currencyPerActivity": 0.1,

@@ -252,13 +252,13 @@ namespace Emberfall.UI.Screens
         private void BuildNode(RectTransform track, EventDef evt, EventMilestone milestone,
                                EventProgressEntry progress, long points, float centre, bool isLast)
         {
-            bool claimed = progress != null && progress.ClaimedMilestoneThresholds.Contains(milestone.Threshold);
+            bool claimed = progress != null && progress.HasClaimed(milestone.Id);
             bool reached = points >= milestone.Threshold;
             bool claimable = reached && !claimed;
 
             Color tint = claimed ? UITheme.Success : (reached ? UITheme.Gold : Emberforge.TextQuiet);
 
-            RectTransform column = UIBuilder.Node("Node_" + milestone.Threshold, track);
+            RectTransform column = UIBuilder.Node("Node_" + milestone.Id, track);
             column.anchorMin = new Vector2(centre, 0f);
             column.anchorMax = new Vector2(centre, 1f);
             column.pivot = new Vector2(0.5f, 0.5f);
@@ -310,8 +310,8 @@ namespace Emberfall.UI.Screens
                 Button press = tile.gameObject.AddComponent<Button>();
                 press.transition = Selectable.Transition.None;
                 EventDef capturedEvt = evt;
-                long capturedThreshold = milestone.Threshold;
-                press.onClick.AddListener(delegate { OnClaimMilestone(capturedEvt, capturedThreshold); });
+                EventMilestone capturedMilestone = milestone;
+                press.onClick.AddListener(delegate { OnClaimMilestone(capturedEvt, capturedMilestone); });
             }
 
             top += TileSize + UITheme.Space4;
@@ -435,9 +435,8 @@ namespace Emberfall.UI.Screens
         {
             for (int i = 0; i < evt.Milestones.Count; i++)
             {
-                long threshold = evt.Milestones[i].Threshold;
-                bool claimed = progress != null && progress.ClaimedMilestoneThresholds.Contains(threshold);
-                if (!claimed) return threshold;
+                bool claimed = progress != null && progress.HasClaimed(evt.Milestones[i].Id);
+                if (!claimed) return evt.Milestones[i].Threshold;
             }
             return 0;
         }
@@ -459,17 +458,16 @@ namespace Emberfall.UI.Screens
 
         // ------------------------------------------------------------------ actions
 
-        private void OnClaimMilestone(EventDef evt, long threshold)
+        private void OnClaimMilestone(EventDef evt, EventMilestone milestone)
         {
-            bool success = App.Session.ClaimEventMilestone(evt.Id, threshold);
+            bool success = App.Session.ClaimEventMilestone(evt.Id, milestone.Id);
             if (!success)
             {
                 App.Notify("Not ready to claim yet.");
                 return;
             }
             App.Audio.Reward();
-            EventMilestone milestone = evt.FindMilestone(threshold);
-            App.Notify("Claimed " + (milestone != null ? milestone.Reward.Describe() : "the reward") + ".");
+            App.Notify("Claimed " + milestone.Reward.Describe() + ".");
             App.RefreshHud();
             App.RequestSave();
             Rebuild();
