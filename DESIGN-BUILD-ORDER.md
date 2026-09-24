@@ -737,6 +737,27 @@ twenty-one screens under `Assets/Scripts/UI/Screens`. `UITheme` owns the referen
 the palette; `UIBuilder`, `Widgets`, `ScreenChrome` and `CurrencyStrip` are the shared furniture.
 Landscape, touch-first, everything hung off `Screen.safeArea`.
 
+**What is on the currency strip is a rule, not a list.** A currency on the strip is one you spend
+ANYWHERE; a currency off the strip LIVES WHERE IT IS SPENT. So `CurrencyStrip` carries Gold and
+Shards and nothing else, on the four screens that hide the top bar, and `BagPanel` - opened from
+the strip, and from anywhere on it - is the one place that shows every purse at once with the
+sentence that says where each one goes. This replaced a six-cell strip that was already full: the
+seventh currency (Coda) did not fit, and an eighth (Waymarks) arrived while that was being
+recorded. Four of the six that came off were already obeying the rule before it was written down -
+`ForgeScreen` draws Slag, `ProvingScreen` draws Valor, `GuildPathScreen` draws Waymarks,
+`RecitalScreen` draws Coda and Echoes, `EventsScreen` names each event's purse in its own heading.
+The Relic Shop was the one screen with nowhere to read its own currency and now has a Dust plate.
+**Valor and Coda both say, in the bag, that nothing spends them yet**, because a currency banked
+towards nothing should say so where a player goes to look for it.
+
+**The Campaign chip row sizes itself from the chapter count.** `CampaignScreen.RefreshChips` shares
+the row's 1780 units out between however many chapters `campaign.json` holds, clamped to [200, 300]
+per chip, and boxes each chip's labels at the chip's real width with best-fit rather than at a
+literal 280 with Overflow. Eight chapters stand still; past that the row scrolls, on
+`UIBuilder.ScrollStrip`. The old row was 1600 with every chip a flat 300, which fits five - and the
+failure at six was not a row spilling over its edges but a `HorizontalLayoutGroup` dividing the
+width it had, squeezing the plates while their labels stayed 280 wide and printed across the seams.
+
 **The Hub is four layers, with one rule each.** It had grown by bolting controls onto the map:
 three slabs over the top left with the HEROES marker behind them, GUILD twice a thumb apart, DEV
 overlapping both the PROVING marker and the button it was stacked under, an idle panel holding a
@@ -1235,12 +1256,6 @@ Beyond the harness:
 - **Marn's Relief After Loss healed an enemy once in 8,832 campaign battles**, because the
   Coverguard it answers was on an enemy when it was spent. How the Guard got there was not traced.
 
-- **The Campaign chip row does not fit more than five chapters.** `CampaignScreen.BuildChipRow`
-  sizes the row at 1600 units and `RefreshChips` gives every chip 300 units inside a 16-unit-spaced
-  stack, so five chapters fit exactly and six overflow. Harmless with two chapters shipped. Fixing
-  it needs a scrolling row or narrower chips, which is a design call rather than a number to nudge.
-- **`CurrencyStrip` has no Coda cell.** Coda is shown on the Recital screen only. A seventh cell
-  exceeds the strip's width and needs layout work.
 - **Rheia has no skill clip.** Her delivery included an `idle2` where `skill` should be, so her
   active plays with no animation and the idle continues. Silent, not an error.
 - **Six orphaned sprite PNGs** remain under `Assets/Resources/Sprites/Units` for heroes deleted in

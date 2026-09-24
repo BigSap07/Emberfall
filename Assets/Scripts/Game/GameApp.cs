@@ -50,6 +50,10 @@ namespace Emberfall.Game
         /// <summary>The panel layer's host: the player panel and the guild panel are both this.</summary>
         public PanelHost Panels { get; private set; }
 
+        /// <summary>Every currency the account holds, in one list. Opened from CurrencyStrip -
+        /// see BagPanel for why it has to exist at all.</summary>
+        public BagPanel Bag { get; private set; }
+
         /// <summary>
         /// Accounts, cloud save, friends and guilds - or null, on a build with no Supabase config.
         ///
@@ -208,6 +212,10 @@ namespace Emberfall.Game
             _toast = new Toast(OverlayLayer);
             _modal = new ModalPopup(OverlayLayer);
             Conflict = new ConflictChooser(OverlayLayer);
+            // One bag for the whole app, not one per screen. Four screens open it and they open
+            // the same object, which is why it is built here beside the other overlays rather
+            // than by whichever page happens to be showing.
+            Bag = new BagPanel(OverlayLayer);
 
             _topBar.Root.SetAsLastSibling();
             PanelLayer.SetAsLastSibling();

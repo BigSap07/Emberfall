@@ -68,22 +68,22 @@ namespace Emberfall.UI
         public static readonly Color Echo = Hex("9B7FE8");
 
         /// <summary>
-        /// The stand-in accent for an event's own currency.
-        ///
-        /// EventDef carries a CurrencyName but no colour, and events.json is content this pass was
-        /// told not to touch, so every event's token renders in this one tone rather than in a
-        /// per-event accent. That is a real limitation, not a design choice: two simultaneous
-        /// events with currencies would be indistinguishable by colour alone in the strip. It is
-        /// survivable today because the currency cell is labelled and only one event carries a
-        /// currency at a time; the fix is a colour field on EventDef, which is a content change.
-        /// </summary>
-        /// <summary>
         /// The Deep Recital's own currency. Warm amber-gold, distinct from Echo (violet, the
         /// attempt gate) by hue, from Gold (the campaign currency) by saturation, and from
         /// Warning (EAA640) by lightness. Coda is the reward, Echo is the cost.
         /// </summary>
         public static readonly Color Coda = Hex("D4A843");
 
+        /// <summary>
+        /// The stand-in accent for an event's own currency.
+        ///
+        /// EventDef carries a CurrencyName but no colour, so every event's token renders in this
+        /// one tone rather than in a per-event accent. That is a real limitation, not a design
+        /// choice, and the bag is where it now bites: the bag lists EVERY running event with a
+        /// purse, so two at once are two rows in the same red. Survivable because each row is
+        /// labelled with its own currency name and says which event spends it; the fix is a colour
+        /// field on EventDef, which is a content change.
+        /// </summary>
         public static readonly Color EventToken = Hex("D6455E");
 
         /// <summary>
