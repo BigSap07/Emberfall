@@ -343,7 +343,7 @@ namespace Emberfall.UI.Screens
             run.offsetMin = new Vector2(Emberforge.OrnamentClearance + 8f, CardPad * 0.5f);
             run.offsetMax = new Vector2(-(Emberforge.OrnamentClearance + 8f), CardPad * 0.5f + ButtonHeight);
             int selection = view.Selection;
-            view.Run.OnClick(delegate { Pick(selection); });
+            view.Run.OnClick(delegate { Press(selection); });
             return view;
         }
 
@@ -704,6 +704,32 @@ namespace Emberfall.UI.Screens
 
         // ------------------------------------------------------------------ state
 
+        /// <summary>
+        /// What the card's button does, which depends on what the card is saying.
+        ///
+        /// An unlocked card offers to run its talent and pressing it does that. A LOCKED card has
+        /// read ASCEND TO TIER N since the gate landed, and until the fusion page existed that was
+        /// a caption on a dead control - the one action that would change anything had no screen
+        /// to happen on. It now opens that screen on this hero. The caption did not change; what
+        /// changed is that it is true.
+        /// </summary>
+        private void Press(int selection)
+        {
+            if (_hero == null || _hero.Def == null) return;
+            bool locked = _hero.Def.TalentAt(selection) != null && !_hero.TalentSlotUnlocked(selection);
+            if (locked) { OpenFusion(); return; }
+            Pick(selection);
+        }
+
+        /// <summary>Opens the fusion page on this hero, which is where the tier a locked card
+        /// names is actually bought.</summary>
+        private void OpenFusion()
+        {
+            App.Audio.Tap();
+            Router.Fusion.ShowHero(_hero);
+            Router.Show(ScreenId.Fusion);
+        }
+
         private void Pick(int selection)
         {
             if (_hero == null) return;
@@ -769,9 +795,14 @@ namespace Emberfall.UI.Screens
                 // The button is where the card says what to DO about it, which for a locked card
                 // is not "run this" - the one action that would change anything is an ascension,
                 // and it names the tier rather than saying "locked" a second time.
+                //
+                // AND IT IS PRESSABLE NOW. This caption was written before there was a fusion
+                // page, so the button that carried it was deliberately dead: it named the move and
+                // could not make it. The page exists, so the button goes there, and a locked card
+                // stops being the one card on the screen that cannot be acted on.
                 view.Run.SetText(locked ? "ASCEND TO TIER " + HeroInstance.TierUnlockingTalent(view.Selection)
                                         : on ? "RUNNING" : "RUN THIS TALENT");
-                view.Run.Interactable = !on && !locked;
+                view.Run.Interactable = locked || !on;
             }
 
             bool none = running == 0;
@@ -817,7 +848,8 @@ namespace Emberfall.UI.Screens
                 : "One at a time, or none, and free to change as often as you like - nothing is spent. No talent"
                   + " unlocks another; ascension does. Tier 1 opens the second, tier 2 the third. " + name
                   + " is at tier " + Mathf.Max(0, _hero.Ascension) + ", so " + Word(lockedSlots)
-                  + (lockedSlots == 1 ? " is" : " are") + " still shut.";
+                  + (lockedSlots == 1 ? " is" : " are") + " still shut. Tap a shut card to go where"
+                  + " that tier is bought.";
             bool deployed = App.Session.Profile.TeamSlotOf(_hero.Uid) >= 0;
             _footerTravels.text = _hero.Def.Talents.Count == 0 ? ""
                 : deployed

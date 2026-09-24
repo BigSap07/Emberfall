@@ -34,7 +34,8 @@ namespace Emberfall.UI
         GuildFloor,
         GuildDungeonResult,
         GuildDungeonBoards,
-        GuildTech
+        GuildTech,
+        Fusion
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -125,6 +126,7 @@ namespace Emberfall.UI
         public Screens.GuildDungeonResultScreen GuildDungeonResult;
         public Screens.GuildDungeonBoardsScreen GuildDungeonBoards;
         public Screens.GuildTechScreen GuildTech;
+        public Screens.FusionScreen Fusion;
 
         public UIScreen Current { get; private set; }
 
@@ -180,6 +182,12 @@ namespace Emberfall.UI
             // Guild Path. Reached from the formation screen, where the lines its early levels
             // grant are switched, and from the dungeon whose Waymarks buy its rungs.
             GuildTech = Create<Screens.GuildTechScreen>();
+
+            // Fusion and ascension: the one page both halves of DESIGN-FUSION's ladder are spent
+            // on. Reached from the hero page - from the cap note of a maxed hero, which is the
+            // moment the player is told levelling has stopped - and from the talent page's locked
+            // cards, which is the moment they are told what would open one.
+            Fusion = Create<Screens.FusionScreen>();
         }
 
         /// <summary>
