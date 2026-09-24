@@ -85,8 +85,16 @@ namespace Emberfall.Core.Session
         public int LevelAfter;
         public int TierLevelBefore;
         public int TierLevelAfter;
-        public int CapBefore;
-        public int CapAfter;
+        /// <summary>The cap over TierLevelBefore/After, counted IN TIER LEVELS
+        /// (StatMath.HeroLevelCap) rather than as a Level (StatMath.CapLevel).
+        ///
+        /// It is that unit and not the other because the page it feeds already counts in it: the
+        /// hero list beside the card reads "LEVEL 9 / 9" from TierLevelOf and HeroLevelCap, so a
+        /// card that answered the same question in Levels would print a cap of 45 next to a list
+        /// that had just said 9 - two true numbers that cannot both be the same cap. A screen
+        /// showing one hero in two units is a screen the player has to be told how to read.</summary>
+        public int TierCapBefore;
+        public int TierCapAfter;
     }
 
     /// <summary>What one conversion did (GameSession.Convert).</summary>
@@ -469,6 +477,16 @@ namespace Emberfall.Core.Session
         /// a loss the game does not inflict, and one that announced only the rise would be hiding
         /// the number the player is about to watch change.
         ///
+        /// TWO OF THE THREE FIGURES ARE TIER LEVELS AND ONE IS A LEVEL, and which is which is not
+        /// a detail a caller can be left to work out. TierLevelBefore/After and TierCapBefore/After
+        /// are a matched pair in tier levels - the same pair GameSession.TierLevelOf and
+        /// StatMath.HeroLevelCap give the hero list. LevelBefore/After are Levels on the one stat
+        /// ladder. A tier-0 five-star at the top of its tier previews as tier level 9 -> 1 of a cap
+        /// 9 -> 18, standing at Level 9 -> 10. The absolute Level cap over that hero (9 -> 45,
+        /// StatMath.CapLevel) is a true number this deliberately does not carry: nothing on the
+        /// page counts in it, and it was here once and was printed next to a tier level, which is
+        /// the whole of what the numbers pass had to undo.
+        ///
         /// Nothing here decides anything. AscensionBlocker is still the rule, AscensionLanding is
         /// still the arithmetic, and this reads both.
         /// </summary>
@@ -483,8 +501,8 @@ namespace Emberfall.Core.Session
             preview.LevelAfter = hero.Level;
             preview.TierLevelBefore = TierLevelOf(hero);
             preview.TierLevelAfter = preview.TierLevelBefore;
-            preview.CapBefore = HeroLevelCapOf(hero);
-            preview.CapAfter = preview.CapBefore;
+            preview.TierCapBefore = StatMath.HeroLevelCap(Balance, StarsOf(hero), hero.Ascension);
+            preview.TierCapAfter = preview.TierCapBefore;
             preview.CopiesSpare = hero.Copies - 1;
 
             string blocker = AscensionBlocker(hero);
@@ -499,7 +517,7 @@ namespace Emberfall.Core.Session
             preview.ToTier = hero.Ascension + 1;
             preview.LevelAfter = AscensionLanding(hero, preview.ToTier);
             preview.TierLevelAfter = StatMath.TierLevelOf(Balance, preview.ToTier, preview.LevelAfter);
-            preview.CapAfter = StatMath.CapLevel(Balance, StarsOf(hero), preview.ToTier);
+            preview.TierCapAfter = StatMath.HeroLevelCap(Balance, StarsOf(hero), preview.ToTier);
             return preview;
         }
 

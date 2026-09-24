@@ -508,8 +508,24 @@ tier set and account rank does not (`GameSession.HeroLevelCapOf`); see **Fusion 
   the finale's entry over the starting line until the wall rule made the finale an output of the
   caps; it is pinned at the value the caps were derived at (`CapDerivationGrowth`).
   `CheckFusionRules` holds `GameSession` to each rule and to save version 16.
-- **There is no fusion screen.** The hero card's level readout counts Levels, so an ascended hero
-  reads its Level on the ladder over the Level its cap is at.
+- **The fusion screen is built.** `FusionScreen` is two tabs on one page, because fusion's output
+  is ascension's input: the ascend tab is the player's five-stars beside a card carrying the copy
+  cost and three before-and-after rows, the convert tab is the six aspects, the whole roll pool
+  face by face, a two-line recipe and a grid of bodies against a points meter. `GameSession` owns
+  every number and every refusal on it - `PreviewAscension`, `ConversionPool`,
+  `ConversionFodderRoster`, `AscensionBlocker`, `ConversionBlocker` - and the page draws what they
+  return. `AscensionLanding` is extracted from `Ascend` rather than copied, so the landing the
+  preview promises is the landing the ascension makes. Two doors reach it: `HeroDetailScreen`'s
+  action bar and a pressable locked talent card on `TalentsScreen`.
+- **The ascend card counts in TIER LEVELS, except for its one Level row.** `TierLevelBefore/After`
+  and `TierCapBefore/After` on `AscensionPreview` are the pair the hero list beside the card
+  already prints from `GameSession.TierLevelOf` and `StatMath.HeroLevelCap`, so a tier-0 five-star
+  at the top of its tier reads `LEVEL 9 / 9` in the list and `9 -> 1` over a cap of `9 -> 18` on
+  the card. `LevelBefore/After` are Levels on the one stat ladder, `9 -> 10` for the same hero, and
+  they are the row that does not reset. The preview deliberately does not carry the absolute Level
+  cap (`StatMath.CapLevel`, `9 -> 45` there): nothing on the page counts in it, and the card used
+  to print it next to a tier level, which is two units for one cap and the bug the numbers pass
+  removed.
 
 **The chapter 1 ladder is shorter than chapter 2's, deliberately.** It was 12 waves everywhere,
 which is 144 battles, which at a 40-battle sitting costs four sittings before difficulty has been
@@ -927,28 +943,27 @@ differs between them.
 
 ## In progress
 
-**`ui/fusion-screen`** gives fusion and ascension the screen they had rules for and no door to.
-`GameSession.Ascend` and `GameSession.Convert` had no caller outside `DevHarness` and
-`PlayModeScreenshot`, there was no `ScreenId` for either, and two screens already told the player
-to use them - `HeroDetailScreen`'s cap note on a maxed five-star and `TalentsScreen`'s
-`ASCEND TO TIER N` on a locked card. It holds:
-- **`FusionScreen`**, two tabs on one page because fusion's output is ascension's input. The
-  ascend tab is a list of the player's five-stars and a card carrying the copy cost and three
-  before-and-after rows; the convert tab is the six aspects, the whole roll pool drawn face by
-  face, a two-line recipe block and a grid of bodies against a points meter.
-- **`GameSession.PreviewAscension`** and the `AscensionPreview` it returns, so the page can say
-  what a step costs and what it moves before the player commits. `AscensionLanding` is extracted
-  from `Ascend` rather than copied, so preview and result cannot disagree.
-- **`GameSession.ConversionFodderRoster`**, the per-aspect low-star count F9's seed rule is made
-  of, so the screen can print the reason next to the rule.
-- **the two doors**: an ASCEND/CONVERT button on `HeroDetailScreen`'s action bar with a cap note
-  that names the copies the step costs, and a locked talent card that is pressable at last.
-- **`Fusion` and `FusionConvert` targets** in `PlayModeScreenshot`, one per tab, seeded through
-  `GrantHeroDirect` the way the `Talents` subject already is.
+**`ui/fusion-numbers`** makes the ascend card's three rows readable against the list beside them,
+and cuts the page down to them. It holds:
+- **the cap row in tier levels.** It bound the absolute Level cap, so a hero the list called
+  `LEVEL 18 / 18` read on the card as a cap of 18 rising to 45 - the same cap in a unit the page
+  never uses anywhere else. `AscensionPreview` carries `TierCapBefore/After` now and the absolute
+  pair is gone, because it had no other reader. See **Fusion and ascension** for what each of the
+  three rows counts in.
+- **the copy, cut to the rows.** The cost banner is one line and the paragraph under the rows is
+  one sentence - *the tier level starts again, the power does not*. What it replaced restated the
+  reset, the rise and both cap figures, every one of which is a row a player can read; what a
+  table cannot say is what the reset means, and that is all that is left.
+- **the card ends where its content ends.** The plate filled the column top to bottom, so every
+  canvas taller than the stack drew an empty panel under the talent line. It is `AscendCardHeight`
+  tall and top-anchored, and `Build`'s shortest-canvas assertion measures the same constant.
 
-No save version moved, no content JSON changed and no baseline was regenerated. The build check
-reads **4 failures**, the four already on `main`: the moved stage fingerprints, the CEIL band, the
-campaign power band and the economy model's response to authored income.
+The preview's arithmetic was not touched and was not wrong: for a tier-0 five-star at the top of
+its tier it already returned tier level `9 -> 1` and Level `9 -> 10`, which is what the rows now
+print. Both tabs were re-captured at 16:9 and 20:9. No save version moved, no content JSON changed
+and no baseline was regenerated. The build check reads **4 failures**, the four already on `main`:
+the moved stage fingerprints, the CEIL band, the campaign power band and the economy model's
+response to authored income.
 
 **`talents/ascension-gate`** builds DESIGN-TALENTS T6: ascension tier unlocks talent slots, one
 per tier. It holds the derived gate on `HeroInstance`, the single simulation line that reads it,
@@ -1394,6 +1409,20 @@ Beyond the harness:
   active plays with no animation and the idle continues. Silent, not an error.
 - **Six orphaned sprite PNGs** remain under `Assets/Resources/Sprites/Units` for heroes deleted in
   the roster swap, referenced by nothing.
+
+- **A save written before the star-gated caps loads heroes above their own cap, and nothing
+  clamps them.** The caps used to be `heroLevelCapBase` 12 plus 4 per account rank, so a rank-30
+  profile capped every hero at 132; they are `fiveStarLevelCaps` now, 9, 18 and 39 tier levels,
+  which is Levels 9, 45 and 281. `SaveSerializer` reads `level` back as written and the version
+  15 to 16 step is documented as needing no migration, which was true of the ascension KEY and not
+  of the cap that moved in the same commit. Measured, not inferred: the live capture profile holds
+  every hero at Level 60, two of them at tier 1 (cap 45) and the rest at tier 0 (cap 9).
+  It is invisible on most of the game, because `GameSession.TierLevelOf` clamps: the fusion hero
+  list prints such a tier-0 hero as `LEVEL 9 / 9` and the hero page reads the same way. The ascend
+  card is where the two meet, since `LevelBefore` is the true Level - a tier-0 hero at Level 60
+  photographs as tier level `9 -> 18` over Level `60 -> 60`, all four figures correct for a hero
+  that should not exist. Whether the fix is a clamp on load, a regrant, or leaving old saves alone
+  is a decision about player progress and has not been taken.
 
 ## Waiting on Pinoy
 
