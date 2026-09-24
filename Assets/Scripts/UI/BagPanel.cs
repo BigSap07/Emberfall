@@ -38,6 +38,12 @@ namespace Emberfall.UI
         private const float RowHeight = 92f;
         private const float JewelSize = 44f;
 
+        /// <summary>How much narrower than the panel the scrolling well is, and the padding inside
+        /// it. Named because Row() measures its columns from the same two numbers the well is
+        /// built with, and two copies of that arithmetic is one copy too many.</summary>
+        private const float WellInset = 96f;
+        private const float ListPad = 12f;
+
         private readonly RectTransform _root;
         private readonly RectTransform _panel;
         private readonly RectTransform _list;
@@ -82,13 +88,14 @@ namespace Emberfall.UI
             UIBuilder.Box(note.rectTransform, 0f, -96f, PanelWidth - 140f, 44f, new Vector2(0.5f, 1f));
 
             RectTransform well = UIBuilder.Node("Well", _panel);
-            UIBuilder.Box(well, 0f, -148f, PanelWidth - 96f, PanelHeight - 148f - 132f,
+            UIBuilder.Box(well, 0f, -148f, PanelWidth - WellInset, PanelHeight - 148f - 132f,
                           new Vector2(0.5f, 1f));
             EmberforgeUI.SunkenOn(well).raycastTarget = true;
 
             ScrollRect scroll;
             _list = UIBuilder.ScrollList("List", well, out scroll, UITheme.Space8,
-                                         new RectOffset(12, 12, 12, 12));
+                                         new RectOffset((int)ListPad, (int)ListPad,
+                                                        (int)ListPad, (int)ListPad));
             UIBuilder.FillParent((RectTransform)scroll.transform, 0f);
 
             UIButton close = EmberforgeUI.Button("Close", _panel, "CLOSE", UITheme.FontBody,
@@ -204,7 +211,10 @@ namespace Emberfall.UI
         private void Row(string name, string balance, Color tint, Sprite icon, string spentWhere)
         {
             RectTransform row = UIBuilder.Node(name, _list);
-            float width = PanelWidth - 96f - 24f - 24f;
+            // The well, less the list's own 12-per-side padding. The VStack force-expands width,
+            // so this is what the row will actually BE and not merely what it asks for - which
+            // matters because the columns below are measured off it.
+            float width = PanelWidth - WellInset - ListPad * 2f;
             UIBuilder.Sized(row, width, RowHeight);
             EmberforgeUI.PlainPanelOn(row).raycastTarget = false;
 

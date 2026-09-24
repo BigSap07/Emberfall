@@ -47,9 +47,15 @@ namespace Emberfall.UI
         private const float IconSize = 34f;
         private const float Pad = 12f;
 
-        // Two cells, a bag and the row's padding, written as that sum rather than as a literal:
-        // the only thing that decides this strip's width is what is actually standing in it.
-        private const float Width = Pad + CellWidth + CellGap + CellWidth + CellGap + BagWidth + Pad;
+        // Two cells, a bag, the row's padding - and SLACK, which is not decoration. The six-cell
+        // strip this replaced carried a note earned the hard way: a row whose contents come to
+        // exactly the width inside it is a row where any rounding in the layout pass clips the
+        // last child's plate. 676 of content inside 676 of row is that exact fit again. 48 is the
+        // slack the old strip settled on for the same reason, and it is what makes this "fits
+        // reliably" rather than "fits".
+        private const float Slack = 48f;
+        private const float Width = Pad + CellWidth + CellGap + CellWidth + CellGap + BagWidth + Pad
+                                  + Slack;
 
         public RectTransform Root;
 
