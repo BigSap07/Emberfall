@@ -39,10 +39,10 @@ namespace Emberfall.UI.Screens
         public override ScreenId Id { get { return ScreenId.RelicShop; } }
 
         /// <summary>
-        /// This screen carries its own CurrencyStrip, so the shared top bar's Gold/Shards/Dust
-        /// pills would state three of the same six numbers a few pixels above it. One readout, not
-        /// two. Same mechanism BattleScreen already uses, and ScreenRouter re-applies it on every
-        /// Show, so the bar returns intact on any screen that does not opt out.
+        /// This screen carries its own CurrencyStrip, so the shared top bar's pills would state
+        /// the same numbers a few pixels above it. One readout, not two. Same mechanism
+        /// BattleScreen already uses, and ScreenRouter re-applies it on every Show, so the bar
+        /// returns intact on any screen that does not opt out.
         /// </summary>
         public override bool HidesTopBar { get { return true; } }
 
@@ -62,6 +62,7 @@ namespace Emberfall.UI.Screens
         private UIButton _nextPage;
         private Text _pageLabel;
         private Text _priceHint;
+        private Text _dustValue;
 
         private int _page;
 
@@ -72,6 +73,7 @@ namespace Emberfall.UI.Screens
             EmberforgeUI.Ground(Root);
             ScreenChrome.ForgedHeader(Root, "RELIC SHOP", Router, out _headerSubtitle);
             _currencies.Build(Root);
+            BuildDustPlate();
 
             float top = CurrencyStrip.BottomOf(CurrencyStrip.DefaultTop);
 
@@ -91,6 +93,44 @@ namespace Emberfall.UI.Screens
 
             _priceHint = EmberforgeUI.Label("Prices", Root, "", UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(_priceHint.rectTransform, 0f, -(below + 34f), 900f, 28f, new Vector2(0.5f, 1f));
+        }
+
+        /// <summary>
+        /// THE DUST PURSE, which is this screen's own and not the strip's.
+        ///
+        /// Relic Dust buys exactly one thing in the game and this is the counter it buys it over,
+        /// so it belongs here rather than on a bar that follows the player around - the rule
+        /// CurrencyStrip states, and the one the Forge's Slag plate, the Proving's Valor purse and
+        /// the Guild Path's Waymark pill were each already following. Before this, the shop was
+        /// the only one of the four with nowhere to read its own currency: it took the number off
+        /// the strip, and when the strip stopped carrying Dust the price tags would have been the
+        /// only mention of it left.
+        ///
+        /// SEATED BESIDE THE STRIP, at the same Y, deliberately. A price and the purse that pays
+        /// it should be one glance apart, and the strip is 700 wide on a 1920 canvas, so the room
+        /// to its right is exactly the room this needs.
+        /// </summary>
+        private void BuildDustPlate()
+        {
+            RectTransform plate = UIBuilder.Node("DustPlate", Root);
+            UIBuilder.Box(plate, -UITheme.ScreenPadding, -CurrencyStrip.DefaultTop, 380f,
+                          CurrencyStrip.Height, new Vector2(1f, 1f));
+
+            // The kit's recess, the same surface the strip's own cells and the Forge's Slag plate
+            // use, so a purse reads as a purse wherever the game shows one.
+            Image bg = EmberforgeUI.SunkenOn(plate);
+            bg.raycastTarget = false;
+
+            Image icon = UIBuilder.Img("Icon", plate, TextureLab.SpiralIcon(64), UITheme.Dust);
+            UIBuilder.Box(icon.rectTransform, UITheme.Space16, 0f, 32f, 32f, new Vector2(0f, 0.5f));
+            icon.raycastTarget = false;
+
+            _dustValue = EmberforgeUI.Label("Dust", plate, "", UITheme.FontSmall,
+                                            Emberforge.TextGold, TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(_dustValue.rectTransform,
+                                 UITheme.Space16 + 32f + UITheme.Space12, 0f, UITheme.Space16, 0f);
+            UIBuilder.Outlined(_dustValue, Emberforge.Outline, Emberforge.StrokeThin);
+            _dustValue.raycastTarget = false;
         }
 
         /// <summary>
@@ -144,6 +184,8 @@ namespace Emberfall.UI.Screens
             _currencies.Refresh(App.Session, TimeUtil.NowUnix());
 
             int dust = (int)App.Session.Profile.RelicDust;
+            _dustValue.text = "RELIC DUST   " + HudTopBar.Format(App.Session.Profile.RelicDust);
+
             List<RelicDef> relics = App.Session.Content.Relics;
             int pages = PageCount();
             _page = Mathf.Clamp(_page, 0, pages - 1);

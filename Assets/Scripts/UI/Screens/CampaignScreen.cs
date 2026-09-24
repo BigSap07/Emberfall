@@ -32,8 +32,25 @@ namespace Emberfall.UI.Screens
         private const float PortraitSize = 132f;
         private const float PortraitGap = 28f;
 
+        /// <summary>
+        /// The chip row's metrics. NONE of these is a chapter count, and that is the point: the
+        /// row used to be 1600 wide with every chip a flat 300, which fit exactly five chapters
+        /// and silently squeezed at six. Six shipped. See RefreshChips for what is derived from
+        /// them.
+        ///
+        /// 1780 is the TRAY's width, taken deliberately rather than invented - the tray is the
+        /// widest thing on this screen and the row now matches its shoulders instead of sitting
+        /// 180 units narrower for no reason.
+        /// </summary>
+        private const float ChipRowWidth = 1780f;
+        private const float ChipHeight = 84f;
+        private const float ChipGap = 16f;
+        private const float ChipWidthMax = 300f;
+        private const float ChipWidthMin = 200f;
+
         private Text _headerSubtitle;
         private RectTransform _chipRow;
+        private ScrollRect _chipScroll;
         private RectTransform _diorama;
         private RectTransform _stepper;
         private Text _stageCode;
@@ -113,12 +130,24 @@ namespace Emberfall.UI.Screens
         /// One chip per chapter. Count comes from chapter.Stages.Count, never from a constant -
         /// there is no stages-per-chapter number written anywhere in this file, so a chapter of a
         /// different length renders correctly without being told.
+        ///
+        /// A SCROLLING STRIP RATHER THAN A PLAIN HSTACK, for the reason UIBuilder.ScrollStrip is
+        /// written down at: an HorizontalLayoutGroup in a fixed rect does not overflow, it runs
+        /// with childControlWidth and DIVIDES the width it has between whatever it is handed. At
+        /// six chapters that is not a row that spills past its edges - it is six plates quietly
+        /// squeezed to 253 units each with their names still hard-boxed at 280 and set to
+        /// Overflow, printing across the seams between them. The strip lets the row be as long as
+        /// the roster is, and RefreshChips decides whether it has to be.
         /// </summary>
         private void BuildChipRow()
         {
-            _chipRow = UIBuilder.Node("Chapters", Root);
-            UIBuilder.Box(_chipRow, 0f, -(ScreenChrome.HeaderTop + 104f), 1600f, 84f, new Vector2(0.5f, 1f));
-            UIBuilder.HStack(_chipRow, 16f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+            RectTransform frame = UIBuilder.Node("Chapters", Root);
+            UIBuilder.Box(frame, 0f, -(ScreenChrome.HeaderTop + 104f), ChipRowWidth, ChipHeight,
+                          new Vector2(0.5f, 1f));
+
+            _chipRow = UIBuilder.ScrollStrip("Row", frame, out _chipScroll, ChipGap,
+                                             new RectOffset(0, 0, 0, 0));
+            UIBuilder.FillParent((RectTransform)_chipScroll.transform, 0f);
         }
 
         private void BuildStageLabel()
@@ -258,11 +287,48 @@ namespace Emberfall.UI.Screens
             }
         }
 
+        /// <summary>
+        /// Rebuilds the chapter tabs, with the chip WIDTH derived from how many there are.
+        ///
+        /// The rule, in one line: share the row out evenly, never stretch a chip past
+        /// ChipWidthMax, never squeeze one below ChipWidthMin, and scroll if the roster will not
+        /// fit even at the minimum. At 1780 that is eight chapters standing still and any number
+        /// of them scrolling - six today, a seventh whenever it is written, and no third visit to
+        /// this method for the eighth.
+        ///
+        /// SCROLLING IS THE LAST RESORT rather than the shape, because this is the first screen
+        /// after the prologue and a chapter parked off the right edge behind an undiscoverable
+        /// drag is a chapter a new player does not know exists. Everything the roster can hold
+        /// today is on screen at once.
+        /// </summary>
         private void RefreshChips()
         {
             for (int i = _chipRow.childCount - 1; i >= 0; i--) Destroy(_chipRow.GetChild(i).gameObject);
 
             List<ChapterDef> chapters = App.Session.Content.Chapters;
+
+            float chipWidth = ChipWidthMax;
+            if (chapters.Count > 1)
+            {
+                float share = (ChipRowWidth - ChipGap * (chapters.Count - 1)) / chapters.Count;
+                chipWidth = Mathf.Clamp(share, ChipWidthMin, ChipWidthMax);
+            }
+
+            // Measured, not read back off the layout: ContentSizeFitter has not run yet at this
+            // point in the frame, so asking the content rect how wide it is would answer with
+            // whatever the LAST roster made it.
+            float contentWidth = chapters.Count * chipWidth
+                               + ChipGap * Mathf.Max(0, chapters.Count - 1);
+            bool scrolls = contentWidth > ChipRowWidth + 0.5f;
+
+            // Centred when it fits, flush left when it scrolls. The strip's content anchors to
+            // its left edge, so centring is an offset rather than an alignment - and with the
+            // horizontal axis off, the ScrollRect leaves that offset alone instead of clamping
+            // the content back against the edge every frame.
+            _chipScroll.horizontal = scrolls;
+            _chipRow.anchoredPosition =
+                new Vector2(scrolls ? 0f : (ChipRowWidth - contentWidth) * 0.5f, 0f);
+
             for (int c = 0; c < chapters.Count; c++)
             {
                 ChapterDef chapter = chapters[c];
@@ -273,20 +339,28 @@ namespace Emberfall.UI.Screens
                 // alpha on one - which matters on a screen whose background is a PAINTING, where
                 // a translucent plate reads as whatever happens to be behind it.
                 int captured = c;
-                ForgeTab tab = EmberforgeUI.Tab(chapter.Name, _chipRow, 300f, 84f,
+                ForgeTab tab = EmberforgeUI.Tab(chapter.Name, _chipRow, chipWidth, ChipHeight,
                                                 delegate { SelectChapter(captured); });
-                UIBuilder.Sized(tab.Root, 300f, 84f);
+                UIBuilder.Sized(tab.Root, chipWidth, ChipHeight);
                 tab.Caption.gameObject.SetActive(false);
                 EmberforgeUI.SetTabSelected(tab, active);
+
+                // The label's box is the CHIP's width less its frame, not a literal 280. That
+                // literal was the second half of the overflow: it stayed 280 while the plate
+                // under it shrank, so the name was already being printed over the neighbouring
+                // tab before the row itself ran out of room.
+                float textWidth = chipWidth - 24f;
 
                 Text name = EmberforgeUI.Title("Name", tab.Root, chapter.Name.ToUpperInvariant(),
                                                UITheme.FontSmall,
                                                active ? Emberforge.TextGold : Emberforge.TextQuiet,
                                                TextAnchor.UpperCenter);
-                // -20, not -14. The tab plate spends its top five pixels on an outline and a
-                // gold frame, and Cinzel's capitals reach the top of their box, so at -14 the
-                // heads of the letters were printed into the frame.
-                UIBuilder.Box(name.rectTransform, 0f, -20f, 280f, 32f, new Vector2(0.5f, 1f));
+                // -14 over two lines' worth of box, and best-fit inside it. Chapter names are
+                // authored content - "BENEATH THE OLD KINGDOM" is twenty-three characters, which
+                // does not fit one line of Cinzel at FontSmall in any chip width this row will
+                // ever hand out. It wraps first and shrinks only if wrapping was not enough.
+                UIBuilder.Box(name.rectTransform, 0f, -14f, textWidth, 44f, new Vector2(0.5f, 1f));
+                UIBuilder.BestFit(name, UITheme.FontTiny - 4, UITheme.FontSmall);
                 UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
 
                 int cleared = 0;
@@ -298,7 +372,8 @@ namespace Emberfall.UI.Screens
                                                 UITheme.FontTiny,
                                                 active ? Emberforge.TextBody : Emberforge.TextQuiet,
                                                 TextAnchor.UpperCenter);
-                UIBuilder.Box(count.rectTransform, 0f, -52f, 280f, 24f, new Vector2(0.5f, 1f));
+                UIBuilder.Box(count.rectTransform, 0f, -58f, textWidth, 22f, new Vector2(0.5f, 1f));
+                UIBuilder.BestFit(count, UITheme.FontTiny - 6, UITheme.FontTiny);
                 UIBuilder.Outlined(count, Emberforge.Outline, Emberforge.StrokeThin);
             }
         }

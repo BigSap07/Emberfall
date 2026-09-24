@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
-using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Session;
 
@@ -9,7 +7,8 @@ namespace Emberfall.UI
 {
     /// <summary>
     /// The one currency readout, built once and reused verbatim by the Relic Shop, the Rift, the
-    /// Deep Recital and Events.
+    /// Deep Recital and Events - the four screens that hide the shared top bar and so have no
+    /// other purse on them.
     ///
     /// ONE COMPONENT, NOT FOUR. The four screens it serves each used to state their own purse in
     /// their own way - the shop wrote "RELIC DUST 240 (legendary 150 - mythic 600)" into a banner,
@@ -17,42 +16,45 @@ namespace Emberfall.UI
     /// beside two unrelated numbers, and Events buried each event's currency in a section heading.
     /// Four spellings of the same sentence, drifting independently. This is the sentence.
     ///
-    /// WHY IT DOES NOT REPLACE HudTopBar. The persistent top bar carries three currencies as part
-    /// of the global chrome and is shared with screens outside this pass's scope, so it stays
-    /// exactly as it is. This strip sits below the page header, carries all six, and is the
-    /// screen's own readout rather than the app's. The overlap between them is real and worth a
-    /// look in a later pass that owns both; it is called out in the report rather than papered over
-    /// by quietly restyling a bar six other screens depend on.
+    /// WHAT IT CARRIES, AND THE RULE THAT DECIDES IT.
     ///
-    /// WHAT "WHERE RELEVANT" MEANS FOR THE EVENT SLOT. The sixth cell appears when content says an
-    /// event with a currency is running, not when a screen asks for it. Driving it off data rather
-    /// than off a per-screen flag is what lets the strip be genuinely identical in all four places:
-    /// there is no configuration to get wrong, and no screen can end up showing a different set of
-    /// currencies than its neighbour on the same day.
+    ///     A currency on the strip is one you spend ANYWHERE.
+    ///     A currency off the strip LIVES WHERE IT IS SPENT.
+    ///
+    /// So: Gold and Shards, always, and nothing else - including whatever is added next. Relic
+    /// Dust, Slag, Valor, Waymarks, Coda, Echoes and any event currency are each shown on the one
+    /// screen that spends them, and all of them together in the BAG.
+    ///
+    /// WHY A RULE RATHER THAN A WIDER STRIP. This component carried six cells and was already at
+    /// its limit: the build order recorded that a seventh - Coda - would not fit, and while that
+    /// note sat there an eighth arrived in Waymarks. A strip sized to hold every currency has to
+    /// be resized every time the economy grows, and it spends the top of four screens naming five
+    /// purses the player cannot spend from where they are standing. Two cells and a door is a
+    /// shape that has no next size.
+    ///
+    /// THE BAG IS THE OTHER HALF OF THE RULE and is not optional. Taking a currency off the strip
+    /// is only honest while one place still shows all of them at once; otherwise a balance nobody
+    /// is currently looking at quietly stops existing. See BagPanel.
     /// </summary>
     public sealed class CurrencyStrip
     {
         /// <summary>Strip height. Screens lay their content out from <see cref="BottomOf"/>.</summary>
         public const float Height = 60f;
 
-        private const float Width = 1500f;
-        // 228, not 236. Six cells at 236 plus five 12px gaps is 1476, and the row inside a
-        // 1500-wide strip with 12px padding each side is exactly 1476 - a perfect fit with zero
-        // slack, where any rounding in the layout pass clips the last cell's plate. 228 leaves 48px
-        // of slack, which is the difference between "fits" and "fits reliably".
         private const float CellWidth = 228f;
         private const float CellGap = 12f;
+        private const float BagWidth = 196f;
         private const float IconSize = 34f;
+        private const float Pad = 12f;
+
+        // Two cells, a bag and the row's padding, written as that sum rather than as a literal:
+        // the only thing that decides this strip's width is what is actually standing in it.
+        private const float Width = Pad + CellWidth + CellGap + CellWidth + CellGap + BagWidth + Pad;
 
         public RectTransform Root;
 
         private Text _gold;
         private Text _shards;
-        private Text _dust;
-        private Text _slag;
-        private Text _echo;
-        private Text _event;
-        private RectTransform _eventCell;
 
         /// <summary>
         /// Y of the first pixel below the strip, given the Y it was built at. Screens position
@@ -74,35 +76,51 @@ namespace Emberfall.UI
             UIBuilder.Box(Root, 0f, -top, Width, Height, new Vector2(0.5f, 1f));
 
             // A FRAMED PANEL, not a chamfered plate. The chamfer was the shop/Rift/Recital/Events
-            // dialect, which is the thing this pass is retiring: those four screens now draw the
-            // same panel every other screen does, and a strip that kept its own corner treatment
-            // would be the one element on four pages still speaking the old language.
+            // dialect, which is the thing that pass retired: those four screens draw the same
+            // panel every other screen does, and a strip that kept its own corner treatment would
+            // be the one element on four pages still speaking the old language.
             Image plate = EmberforgeUI.PanelOn(Root, false);
-            plate.raycastTarget = false;
+
+            // THE WHOLE STRIP OPENS THE BAG, not only the 196-unit button in it. This is a
+            // touch-first build and HubStyle.TouchMin is 108, which nothing 60 units tall can
+            // satisfy on its own; a purse the width of the whole readout can. The button stays
+            // because a target nobody can see is not an affordance - it says where to press and
+            // gives the press its art back. Two ways in, one door.
+            plate.raycastTarget = true;
+            Button open = Root.gameObject.AddComponent<Button>();
+            open.targetGraphic = plate;
+            open.transition = Selectable.Transition.None;
+            open.onClick.AddListener(OpenBag);
 
             RectTransform row = UIBuilder.Node("Row", Root);
-            UIBuilder.FillParent(row, UITheme.Space12, 0f, UITheme.Space12, 0f);
+            UIBuilder.FillParent(row, Pad, 0f, Pad, 0f);
             UIBuilder.HStack(row, CellGap, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
-            _gold   = Cell(row, "Gold",   TextureLab.CoinIcon(64),      UITheme.Gold);
-            _shards = Cell(row, "Shards", TextureLab.CrystalIcon(64),   UITheme.Shard);
-            _dust   = Cell(row, "Dust",   TextureLab.SpiralIcon(64),    UITheme.Dust);
-            _slag   = Cell(row, "Slag",   TextureLab.IngotIcon(64),     UITheme.Slag);
-            _echo   = Cell(row, "Echoes", TextureLab.HourglassIcon(64), UITheme.Echo);
+            _gold   = Cell(row, "Gold",   TextureLab.CoinIcon(64),    UITheme.Gold);
+            _shards = Cell(row, "Shards", TextureLab.CrystalIcon(64), UITheme.Shard);
 
-            _event  = Cell(row, "Event",  TextureLab.GemIcon(64),       UITheme.EventToken);
-            _eventCell = _event.rectTransform.parent.parent as RectTransform;
-            _eventCell.gameObject.SetActive(false);
+            UIButton bag = EmberforgeUI.Button("Bag", row, "BAG", UITheme.FontTiny,
+                                               ForgeButtonKind.Secondary);
+            UIBuilder.Sized(bag.Root, BagWidth, Height);
+            bag.OnClick(OpenBag);
+        }
+
+        private static void OpenBag()
+        {
+            Game.GameApp app = Game.GameApp.Instance;
+            if (app == null || app.Bag == null) return;
+            app.Audio.Tap();
+            app.Bag.Open();
         }
 
         /// <summary>
         /// One currency: a flat tinted icon, then the value in its own recess.
         ///
-        /// The value sits on a plate rather than free on the strip because six numbers in a row at
-        /// six different lengths need a common left edge to scan down, and because a four-digit
-        /// balance and a single digit otherwise read as different-sized UI. A RECESS rather than a
-        /// raised plate now: the strip is already a panel, and a second raised surface on top of
-        /// one is two objects where the design has one object with six wells cut into it.
+        /// The value sits on a plate rather than free on the strip because numbers of different
+        /// lengths need a common left edge to scan down, and because a four-digit balance and a
+        /// single digit otherwise read as different-sized UI. A RECESS rather than a raised plate:
+        /// the strip is already a panel, and a second raised surface on top of one is two objects
+        /// where the design has one object with wells cut into it.
         /// </summary>
         private static Text Cell(RectTransform parent, string name, Sprite icon, Color tint)
         {
@@ -132,8 +150,13 @@ namespace Emberfall.UI
         }
 
         /// <summary>
-        /// Repaints all six from the session. Every screen calls exactly this, with no arguments of
-        /// its own to get wrong - which is the point of the component.
+        /// Repaints the strip from the session. Every screen calls exactly this, with no arguments
+        /// of its own to get wrong - which is the point of the component.
+        ///
+        /// It still takes the clock although neither figure on the strip is time-dependent any
+        /// more. The four callers pass the same `now` they already computed for their own page,
+        /// the BAG behind this strip genuinely needs one for the Echo bank, and changing four call
+        /// sites to drop an argument is churn that buys nothing.
         /// </summary>
         public void Refresh(GameSession session, long nowUnix)
         {
@@ -142,42 +165,6 @@ namespace Emberfall.UI
 
             _gold.text   = HudTopBar.Format(profile.Gold);
             _shards.text = HudTopBar.Format(profile.Shards);
-            _dust.text   = HudTopBar.Format(profile.RelicDust);
-            _slag.text   = HudTopBar.Format(profile.Slag);
-
-            // Echoes are capped, so they are shown against their cap here as well as on the
-            // Recital's own meter. A bare "3" would be the one number in the strip whose meaning
-            // depends on a maximum the player cannot see from this screen.
-            RecitalEchoesStatus echoes = session.PeekRecitalEchoes(nowUnix);
-            _echo.text = echoes.Banked + " / " + echoes.Max;
-
-            EventDef currencyEvent = ActiveCurrencyEvent(session, nowUnix);
-            if (currencyEvent == null)
-            {
-                _eventCell.gameObject.SetActive(false);
-                return;
-            }
-
-            EventProgressEntry entry = profile.FindEventProgress(currencyEvent.Id);
-            _eventCell.gameObject.SetActive(true);
-            _event.text = HudTopBar.Format(entry != null ? entry.Currency : 0L);
-        }
-
-        /// <summary>
-        /// The running event whose currency the strip should show, or null.
-        ///
-        /// Deliberately the first ACTIVE event carrying a currency, not merely the first that has a
-        /// balance: an ended event's leftover balance is still spendable on the Events screen, but
-        /// it is not what the top of a shop screen should be advertising. If two currency events
-        /// ever run at once this shows the first, which is a real limitation - see UITheme.EventToken,
-        /// where the same content gap (no per-event colour) is written up.
-        /// </summary>
-        private static EventDef ActiveCurrencyEvent(GameSession session, long nowUnix)
-        {
-            List<EventDef> events = session.Content.Events;
-            for (int i = 0; i < events.Count; i++)
-                if (events[i].HasCurrency && events[i].IsActive(nowUnix)) return events[i];
-            return null;
         }
     }
 }

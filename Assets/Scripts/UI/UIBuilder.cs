@@ -269,6 +269,26 @@ namespace Emberfall.UI
             return layout;
         }
 
+        /// <summary>
+        /// Lets a label shrink to fit its own box instead of printing past it.
+        ///
+        /// Label() ships with Overflow on both axes, which is right for a figure whose box was
+        /// sized around it and wrong for any label whose TEXT comes from content: an authored
+        /// name is whatever length the author wrote, and Overflow prints the excess straight
+        /// across whatever is next to it rather than clipping. Best-fit is the uGUI answer, and
+        /// it needs the wrap modes set with it - Unity fits to the rect on both axes, so a
+        /// two-word name uses the second line before it uses the smaller size.
+        /// </summary>
+        public static Text BestFit(Text label, int minSize, int maxSize)
+        {
+            label.horizontalOverflow = HorizontalWrapMode.Wrap;
+            label.verticalOverflow = VerticalWrapMode.Truncate;
+            label.resizeTextForBestFit = true;
+            label.resizeTextMinSize = minSize;
+            label.resizeTextMaxSize = maxSize;
+            return label;
+        }
+
         public static LayoutElement Sized(RectTransform rt, float preferredWidth, float preferredHeight)
         {
             LayoutElement element = rt.gameObject.AddComponent<LayoutElement>();
