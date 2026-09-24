@@ -6,18 +6,19 @@
   // version exists to retire a GUILD DUNGEON replay when a number that fight reads moves, and a
   // dungeon fight cannot read anything here: GuildDungeon.FightUnder hands CombatSimulation a
   // fresh empty PlayerProfile, and guild tech resolves from the profile exactly as armor does, so
-  // the dungeon strips it at the door with the relics and the levels. GuildTechChecks proves it -
-  // a floor fought at maximum tech is identical, event for event, to the same floor with none.
+  // the dungeon strips it at the door with the relics and the levels. The gate proves it rather
+  // than asserting it - CheckGuildDungeonStripsGuildTech fights the same floor three ways and
+  // shows the dungeon's own path IS the no-tech fight and that maximum tech would read differently.
   //
-  // EVERY NUMBER HERE IS DERIVED except the rung STAT SHAPES, which are authored because which
-  // stats a family cares about is what the family is. `DevHarness.exe --guild-tech` prints the
-  // whole working; GuildTechChecks re-derives on every build-check and fails when this file and
-  // the derivation disagree, exactly as CheckDerivation holds guild-path.json's pay.
+  // EVERY NUMBER HERE IS DERIVED except the rung STAT SHAPES and the talents' own magnitudes.
+  // `DevHarness.exe --guild-tech` prints the whole working; GuildTechChecks re-derives on every
+  // build-check and fails when this file and the derivation disagree, exactly as CheckDerivation
+  // holds guild-path.json's pay.
   "currency": "Waymarks",
 
   // DERIVED. A rung costs its rung number times this, so a track's three cost 6 units and the
-  // whole tree 24. Solved from the mean member cycle and how long the level ceiling takes to
-  // reach, so a member finishes paying for the tree about when the guild finishes opening it.
+  // whole tree 24. Solved so a member finishes PAYING for the tree at about the moment a guild of
+  // the reference size finishes OPENING it - one clock, not two.
   "rungUnit": 217,
   "rungsPerFamily": 3,
 
@@ -36,7 +37,7 @@
   // G9: the Path's existing nodes become early guild level rewards. The code is built and works,
   // so it moves rather than being deleted. A grant is free - it costs no Waymarks and asks for no
   // rung - and a member who already BOUGHT one under 0011 keeps it, because the two sources are
-  // read as an OR (GameSession.LinesAllowed).
+  // read as an OR (GameSession.OwnsGuildPathNode).
   "grants": [
     { "level": 1, "node": "second-line" },
     { "level": 2, "node": "line-talents" },
@@ -51,43 +52,184 @@
   // two families makes "every hero of the family" ambiguous and a role in none makes a hero
   // permanently untouchable by the tree.
   //
-  // rungStats is the family's output profile written as numbers, and it is AUTHORED. The rung's
-  // SIZE is not: rungScale is a share of the hero's own power score, one number for every family,
-  // because a rung costs the same Waymarks on every track and so has to buy the same thing. The
-  // stats named split that worth EQUALLY by power, so Line's Max HP and Defense and Blade's Attack
-  // and Crit Damage are worth the same and neither family's second stat is a rounding error.
+  // rungStats is the family's output profile written as numbers, and it IS authored: which stats a
+  // family cares about is what the family is. The rung's SIZE is not. rungScale is a share of the
+  // hero's own power score, THE SAME NUMBER ON EVERY FAMILY, because a rung costs the same Waymarks
+  // on every track and so has to buy the same thing. The stats named split that worth EQUALLY by
+  // power, so Line's Max HP and Defense and Blade's Attack and Crit Damage are worth exactly the
+  // same and neither family's second stat is a rounding error.
+  //
+  // THE TALENTS ARE PassiveDefs (G3) - the same triggers, effects, conditions, overrides and
+  // appends a hero talent is authored in, read by the same parser and appended to the unit at the
+  // same place in CombatSimulation. There is no guild-talent engine. Each family offers three, and
+  // they are deliberately three DIFFERENT SHAPES rather than three sizes of one thing: a front-
+  // loaded one, a reactive one and a conditional one, so the argument about which to run is about
+  // how the guild wants its fights to go (G4) and not about which number is biggest.
+  //
+  // Every one of them is graded by the instrument that grades hero talents, at 100% of recommended
+  // power against the 1%-of-Attack material floor (G8). Run `DevHarness.exe --guild-tech` for the
+  // reading; the gate fails the build for one that cannot be felt.
   "families": [
     {
       "id": "line",
       "name": "Line",
       "roles": ["Bulwark", "Vanguard"],
       "rungStats": ["MaxHp", "Defense"],
-      "rungScale": 0.005,
-      "talents": []
+      "rungScale": 0.00651,
+      "talents": [
+        {
+          "id": "line_hold_the_wall",
+          "name": "Hold the Wall",
+          "trigger": "BattleStart",
+          "description": "Every Bulwark and Vanguard opens the fight behind a ward worth a share of their own health.",
+          "effects": [
+            { "kind": "Shield", "target": "Self", "selfHpRatio": 0.17, "duration": 99 }
+          ]
+        },
+        {
+          "id": "line_answer_in_kind",
+          "name": "Answer in Kind",
+          "trigger": "OnDamaged",
+          "oncePerBattle": false,
+          "limit": "OncePerRound",
+          "description": "The first time each round something strikes a Bulwark or a Vanguard, it is struck back.",
+          "effects": [
+            { "kind": "Damage", "target": "LastAttacker", "power": 1.1 }
+          ]
+        },
+        {
+          "id": "line_dig_in",
+          "name": "Dig In",
+          "trigger": "OnHpBelowThreshold",
+          "threshold": 0.5,
+          "description": "Brought to half, a Bulwark or a Vanguard sets its feet: harder to hurt, and harder still to move.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "Self", "status": "DefenseUp", "magnitude": 0.45, "duration": 99 },
+            { "kind": "ApplyStatus", "target": "Self", "status": "DamageReductionUp", "magnitude": 0.2, "duration": 99 }
+          ]
+        }
+      ]
     },
     {
       "id": "blade",
       "name": "Blade",
       "roles": ["Striker", "Breaker", "Stalker"],
       "rungStats": ["Attack", "CritDamage"],
-      "rungScale": 0.005,
-      "talents": []
+      "rungScale": 0.00651,
+      "talents": [
+        {
+          "id": "blade_first_blood",
+          "name": "First Blood",
+          "trigger": "BattleStart",
+          "description": "Strikers, Breakers and Stalkers come out swinging: more Attack while the opening holds.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.26, "duration": 4 }
+          ]
+        },
+        {
+          "id": "blade_press_the_wound",
+          "name": "Press the Wound",
+          "trigger": "AfterBasicAttack",
+          "oncePerBattle": false,
+          "description": "Every basic blow a Blade lands leaves the body it hit open to the next one.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "LastTarget", "status": "Vulnerable", "magnitude": 0.28, "duration": 2, "bypassResist": true }
+          ]
+        },
+        {
+          "id": "blade_no_survivors",
+          "name": "No Survivors",
+          "trigger": "OnKill",
+          "oncePerBattle": false,
+          "description": "A Blade that puts a body down takes the momentum with it, and the energy to spend it.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "Self", "status": "AttackUp", "magnitude": 0.5, "duration": 99 },
+            { "kind": "EnergyGain", "target": "Self", "flat": 60 }
+          ]
+        }
+      ]
     },
     {
       "id": "grace",
       "name": "Grace",
       "roles": ["Mender", "Binder", "Warden"],
       "rungStats": ["Attack", "Speed"],
-      "rungScale": 0.005,
-      "talents": []
+      "rungScale": 0.00651,
+      "talents": [
+        {
+          "id": "grace_steady_hands",
+          "name": "Steady Hands",
+          "trigger": "OnHealApplied",
+          "oncePerBattle": false,
+          "limit": "OncePerRound",
+          "description": "The first mending a Grace hero works each round keeps working: whoever is worst off mends on, round after round.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "LowestHpAlly", "status": "Regen", "magnitude": 0.0, "holderHpTick": 0.05, "duration": 3, "chance": 1 }
+          ]
+        },
+        {
+          "id": "grace_unbroken",
+          "name": "Unbroken",
+          "trigger": "BattleStart",
+          "description": "A Grace hero opens the fight steadying the whole line against what would land on it.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "AllAllies", "status": "EffectResistUp", "magnitude": 0.3, "duration": 99 },
+            { "kind": "ApplyStatus", "target": "AllAllies", "status": "DefenseUp", "magnitude": 0.15, "duration": 99 }
+          ]
+        },
+        {
+          "id": "grace_last_word",
+          "name": "Last Word",
+          "trigger": "OnAllyHpBelowThreshold",
+          "threshold": 0.4,
+          "oncePerBattle": false,
+          "limit": "OncePerRound",
+          "description": "When an ally is brought low, the nearest Grace hero answers once that round, whatever else it was doing.",
+          "effects": [
+            { "kind": "Heal", "target": "LowestHpAlly", "power": 0.55 }
+          ]
+        }
+      ]
     },
     {
       "id": "reach",
       "name": "Reach",
       "roles": ["Marksman", "Tinkerer"],
       "rungStats": ["Attack", "CritChance"],
-      "rungScale": 0.005,
-      "talents": []
+      "rungScale": 0.00651,
+      "talents": [
+        {
+          "id": "reach_ranging_shot",
+          "name": "Ranging Shot",
+          "trigger": "AfterBasicAttack",
+          "oncePerBattle": false,
+          "description": "A Marksman or a Tinkerer never wastes the second half of a shot: whatever is weakest takes it.",
+          "effects": [
+            { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.75 }
+          ]
+        },
+        {
+          "id": "reach_steady_aim",
+          "name": "Steady Aim",
+          "trigger": "BattleStart",
+          "description": "Time to set up: every Reach hero starts the fight sighted in, and hits harder when it tells.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "Self", "status": "Focus", "magnitude": 0.22, "duration": 99 },
+            { "kind": "ApplyStatus", "target": "Self", "status": "CritDamageUp", "magnitude": 0.3, "duration": 99 }
+          ]
+        },
+        {
+          "id": "reach_mark_the_line",
+          "name": "Mark the Line",
+          "trigger": "OnCriticalHit",
+          "oncePerBattle": false,
+          "description": "A telling shot names its body, and everything the guild fields hits that one harder.",
+          "effects": [
+            { "kind": "ApplyStatus", "target": "LastTarget", "status": "Vulnerable", "magnitude": 0.45, "duration": 3, "bypassResist": true },
+            { "kind": "ApplyStatus", "target": "LastTarget", "status": "DefenseDown", "magnitude": 0.35, "duration": 3, "bypassResist": true }
+          ]
+        }
+      ]
     }
   ]
 }

@@ -32,6 +32,7 @@ namespace Emberfall.DevHarness
             bool fidelity = false;
             bool guildConditions = false;
             bool guildPath = false;
+            bool guildTech = false;
             bool reconcile = false;
             int wallStudy = 0;
             bool lineCalibration = false;
@@ -59,6 +60,7 @@ namespace Emberfall.DevHarness
                 }
                 if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
                 if (args[i] == "--guild-path") { guildPath = true; continue; }
+                if (args[i] == "--guild-tech") { guildTech = true; continue; }
                 if (args[i] == "--tempo-study")
                 {
                     tempoStudy = true;
@@ -151,6 +153,10 @@ namespace Emberfall.DevHarness
             // The Guild Path's study (GuildPathChecks.RunStudy). Not a check: the instrument
             // guild-path.json's pay and prices are derived from.
             if (guildPath) return GuildPathChecks.RunStudy(content);
+            // The guild tech tree's study (GuildTechChecks.RunGuildTechStudy). Not a check either:
+            // the instrument guild-tech.json's rung size, prices and level curve are derived from,
+            // and where every guild talent is read at parity.
+            if (guildTech) return RunGuildTechStudy(content, contentDir);
 
             // The fidelity pass and the star band alone, for a content pass that is moving kits
             // against their sentences and wants both readings without the rest of the harness.
@@ -250,6 +256,7 @@ namespace Emberfall.DevHarness
             // The Guild Path (GuildPathChecks.cs): its numbers re-derived, the server's copy of
             // them, and the property it exists for - breadth, never power.
             _failures += GuildPathChecks.Run(content, contentDir);
+            GuildTechGate(content, contentDir);
             CheckSummonPity(content);
             CheckRepeatCap(content);
             CheckRelicDust(content);
