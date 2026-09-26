@@ -483,6 +483,21 @@ namespace UnityEditor.Build.Reporting
     public sealed class BuildReport : UnityEngine.Object
     {
         public BuildSummary summary { get { return null; } }
+        /// <summary>Every serialized file the build wrote, with what went into it. EmberfallBuild
+        /// reads it for the size report beside each Windows player.</summary>
+        public PackedAssets[] packedAssets { get { return new PackedAssets[0]; } }
+    }
+    public sealed class PackedAssets : UnityEngine.Object
+    {
+        public string shortPath { get { return ""; } }
+        public ulong overhead { get { return 0; } }
+        public PackedAssetInfo[] contents { get { return new PackedAssetInfo[0]; } }
+    }
+    public struct PackedAssetInfo
+    {
+        public Type type { get { return null; } }
+        public ulong packedSize { get { return 0; } }
+        public string sourceAssetPath { get { return ""; } }
     }
 }
 

@@ -942,15 +942,24 @@ Alt+Enter to full screen, one instance at a time; quitting is the window's own c
 there is no quit control in the game. **Android is still the target**; no layout differs between
 them.
 
-**The playtest player is `Tools/build-windows.ps1`**, which drives `BuildWindowsPlaytest`: the same
-path with Development off, so `ScenesFor` leaves the Dev Arena out and the compiler guard leaves
-its classes out. The script refuses a dirty tree (tracked changes anywhere, untracked files under
-`Assets`, `Packages` or `ProjectSettings`, and any gitignored file inside a `Resources` folder other
-than the cloud config), checks the tree is still clean after Unity exits, and reads the player back:
-no `level1`, no development-only class name in `Assembly-CSharp.dll`, and the commit packed into
-`resources.assets`. It writes outside the working tree, to `Emberfall-VERSION-HASH-win` beside a zip
-of it, with `Docs/PLAYTEST-README.md` inside as `READ-ME-FIRST.txt`. It reports whether
-`supabase.json` is present, because that ignored file decides whether the player has accounts.
+**The playtest players are `Tools/build-windows.ps1`**, which drives `BuildWindowsPlaytest` in
+one of four variants: release or `-Development`, offline or `-Cloud`. The variant is the first line
+of output and part of the folder name, `Emberfall-VERSION-HASH-VARIANT-win`, and nothing else
+differs between them. **Offline is the default and the script owns the cloud config**:
+`supabase.json` is gitignored, so it is moved out of the project for an offline build and put back
+afterwards, on failure and on Ctrl+C too, and a run that was killed outright is put right by the
+next run before it reads anything. `BuildWindowsPlaytest` refuses a variant that disagrees with the
+file on disk. With no config, `GameApp` builds no cloud and every cloud page - Account, Friends,
+Guild, guild dungeon, guild chat, guild tech - says LOCAL ONLY with its buttons off. The script
+refuses a dirty tree (tracked changes anywhere, untracked files under `Assets`, `Packages` or
+`ProjectSettings`, any other gitignored file inside a `Resources` folder), checks the tree is still
+clean after Unity exits, and reads the player back: `level1` and the development-only class names
+in `Assembly-CSharp.dll` present exactly when the variant is a development one, the commit packed
+into `resources.assets`, and the cloud project's host packed in exactly when the variant is a cloud
+one. It writes outside the working tree, zips the player with `Docs/PLAYTEST-README.md` inside as
+`READ-ME-FIRST.txt`, moves Burst's DoNotShip symbols beside it, and prints the folder size, the zip
+size and `EmberfallBuild`'s size report, which reads the build report for what each texture group
+packed to against the same pixels as raw RGBA.
 
 **Every player names its build.** `Game.BuildStamp` prints `BUILD <version> (<commit>)` in the Hub's
 bottom-left corner and at the foot of Settings, with DEV after it on a development player. The

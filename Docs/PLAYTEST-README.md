@@ -5,6 +5,20 @@ heroes, put five of them in a line, and they fight on their own while you decide
 how they grow. It is made for phones and is being tested on Windows for now, so it is laid out
 for a wide screen and is played with the mouse. A click is a tap.
 
+## Which build is which
+
+There are two builds, and the folder name says which one you have:
+
+- **`...-release-offline-win`** is the game as a player gets it. Play this one.
+- **`...-development-offline-win`** is the same game plus a workshop for looking at the art: the
+  **Dev Arena**, which can put any hero on the field and play any of their animations. It is for
+  Pinoy (see the last section). Its build line on screen ends in **DEV**.
+
+**Both builds are offline.** Nothing you do is sent anywhere or synced anywhere: there are no
+accounts, and your progress lives on this computer and nowhere else. The Account, Friends and
+Guild pages are still there, and each one says **LOCAL ONLY** and that this build has no cloud,
+rather than offering buttons that cannot work. The rest of the game plays as normal.
+
 ## Starting the game
 
 1. **Unzip it first.** Right-click the zip file and choose **Extract All...**, then open the
@@ -48,10 +62,13 @@ Your progress is saved on this computer, in:
 You can paste that line into the address bar of any File Explorer window. The save is the file
 called `emberfall_save.json`.
 
-**To start over, use the game's own button.** Open **Settings** from the main screen: click the
-**...** button on the left edge and choose **SETTINGS**, or click your name in the top-left
-corner and open the **SETTINGS** tab. Near the bottom is **START OVER**, and **RESET PROGRESS**
-asks you once more before it wipes anything.
+**To start over, use Reset Progress in Settings. That is the way to do it.** Open **Settings**
+from the main screen: click the **...** button on the left edge and choose **SETTINGS**, or click
+your name in the top-left corner and open the **SETTINGS** tab. Near the bottom is **START
+OVER**, and **RESET PROGRESS** asks you once more before it wipes anything. Because both builds
+are offline, it wipes this computer's progress and nothing else.
+
+Both builds share one save on the same computer, so resetting in one resets the other too.
 
 Deleting the save file by hand is **not** enough on its own: the game keeps a second copy and
 will quietly bring your progress back from it. If you ever cannot open the game to reset it,
@@ -93,26 +110,45 @@ but a long list is far better than nothing.
 - **Idle income stops growing after a while** (ten hours) until you collect it. Deliberate.
 - **Deep Recital attempts are capped** and refill slowly over time. Deliberate.
 
-## For Pinoy
+## For Pinoy: use the development build
 
 Three things only you can settle, because they are about how the art looks in motion, and no
 check can see that. Please report on them even if everything looks fine: "looks right" is an
 answer too.
 
-1. **Nereia may be wearing Celen's body.** Nereia is in the squad that fights the opening battle
-   the first time the game starts, so you will see her straight away. Four of her seven
-   animation sheets are byte-for-byte the same file as Celen's: idle, basic attack, hit reaction
-   and controlled. Her second basic attack, her skill and her death are different files. Does
-   the figure on screen read as Nereia or as Celen?
+**Use the `development-offline` build for all three.** In the ordinary build you would only see
+these heroes if you happened to pull them, and five-star pulls are rare. The development build
+has the **Dev Arena**, which puts any hero on the field whether you own them or not.
+
+### Getting into the Dev Arena
+
+1. On the main screen, click the **...** button on the left edge, then **DEV ARENA**.
+2. Click **SETUP** at the edge of the screen. It lists five slots for your side and five for the
+   enemy's. Click a slot, then click a hero in the list beside it (type in the search box to find
+   one by name), then click **RESTART**. Put a hero on the enemy side too, so an attack has
+   somebody to hit.
+3. Click a hero on the field, then open **UNIT** and its **ANIMATION** tab. There is one button
+   per animation: idle, basic, basic2, skill, hit reaction, death and controlled. **LOOP** repeats
+   it, **PAUSE** holds it, and **STEP** moves one frame at a time. A slider sets the speed.
+4. To see an attack land on a target the way it does in a real fight, click the hero, then
+   **BASIC** or **ACTIVE**, then click an enemy.
+
+The **?** button in the Dev Arena explains the rest. **BACK** returns to the game.
+
+### The three questions
+
+1. **Nereia may be wearing Celen's body.** Four of her seven animation sheets are byte-for-byte
+   the same file as Celen's: idle, basic attack, hit reaction and controlled. Her second basic
+   attack, her skill and her death are different files. Put Nereia and Celen on the field side by
+   side: does Nereia read as Nereia or as Celen? (She also fights in the opening battle the first
+   time the game starts, in either build.)
 2. **Rheia's skill has no animation.** Her delivery had a second idle clip (`idle2`) where the
-   skill clip should be, so when she uses her active the game keeps playing her idle. Is that
-   `idle2` actually her skill with the wrong name, or is her skill clip still to come?
+   skill clip should be, so when she uses her active the game keeps playing her idle. Play her
+   **skill** button and her idle: is that `idle2` actually her skill with the wrong name, or is her
+   skill clip still to come?
 3. **Five heroes' hits may land at the wrong moment: Mireth, Hale, Rheia, Oris and Arden.** Their
    attack clips did not come with a strike frame, so the frame where the blow lands was worked
-   out by measuring the drawing rather than set by hand. Watch their attacks: does the damage
-   number and the hit on the target arrive when the weapon actually connects? If not, a note
-   like "Oris, basic attack, lands a few frames early" is all that is needed.
-
-Hale fights in the same opening battle as Nereia. Rheia, Mireth, Oris and Arden only appear if
-you pull them from a summon, and five-star pulls are rare. If you have not got them, say so, and
-you will be sent a version of the game that can put any hero on the field.
+   out by measuring the drawing rather than set by hand. Give each of them a **BASIC** and an
+   **ACTIVE** against an enemy: do the damage number and the hit arrive when the weapon actually
+   connects? **PAUSE** and **STEP** will find the frame where it should. A note like "Oris, basic
+   attack, should land on frame 9, lands a few frames early" is all that is needed.

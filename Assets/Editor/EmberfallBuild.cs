@@ -88,40 +88,77 @@ namespace Emberfall.EditorTools
         }
 
         /// <summary>
-        /// THE PLAYTEST BUILD, for a person who is not a developer: the same Windows path as the
-        /// two entry points above, with Development OFF. So no Dev Arena scene (ScenesFor), no
-        /// Dev Arena or Design Gallery classes (the compiler guard on Assets/Scripts/Dev and on
-        /// the overflow menu's rows), no telemetry lines, and no development console.
+        /// THE PLAYTEST BUILDS, for people who are not developers: the same Windows path as the
+        /// two entry points above, in one of four variants, and nothing else differs between them.
+        ///
+        ///   release      Development OFF. No Dev Arena scene (ScenesFor), no Dev Arena or Design
+        ///                Gallery classes (the compiler guard on Assets/Scripts/Dev and on the
+        ///                overflow menu's rows), no telemetry lines, no development console.
+        ///   development  Development ON, which is exactly what brings all of those in. The Dev
+        ///                Arena is a row of the Hub's overflow menu, and it fields any hero in the
+        ///                content and plays any of its clips, owned or not.
+        ///
+        ///   offline      Assets/Resources/Config/supabase.json is NOT in the project, so the
+        ///                player has no account service and says so on every cloud screen.
+        ///   cloud        It is, so the player signs in to that project.
         ///
         /// Tools/build-windows.ps1 is the only caller, and it is the one that makes the build
-        /// honest: it refuses a dirty tree, passes the commit it checked, and checks the tree is
-        /// still clean afterwards. This method does not repeat those checks. It takes both
-        /// values from the command line and refuses to run without either:
+        /// honest: it refuses a dirty tree, passes the commit it checked, moves the cloud config
+        /// out for an offline build and back afterwards, and checks the tree is still clean. This
+        /// method does not repeat those checks, with one exception: the variant has to agree with
+        /// the file on disk, because a player named "offline" that signs in somewhere is the one
+        /// mistake here nobody would find by looking. It refuses to run without all three values:
         ///
-        ///   -emberfallOutput "<a folder outside every working tree>"
-        ///   -emberfallCommit "<short hash>"
+        ///   -emberfallOutput  "<a folder outside every working tree>"
+        ///   -emberfallCommit  "<short hash>"
+        ///   -emberfallVariant release-offline | release-cloud | development-offline | development-cloud
         ///
-        /// The player lands in Emberfall-VERSION-HASH-win under the output folder, so two
-        /// players on a desk can be told apart without opening either.
+        /// The player lands in Emberfall-VERSION-HASH-VARIANT-win under the output folder, so no
+        /// two of them can be mistaken for each other without opening either.
         /// </summary>
         public static void BuildWindowsPlaytest()
         {
             string outputRoot = CommandLineValue("-emberfallOutput");
             string commit = CommandLineValue("-emberfallCommit");
-            if (string.IsNullOrEmpty(outputRoot) || string.IsNullOrEmpty(commit))
+            string variant = CommandLineValue("-emberfallVariant");
+            if (string.IsNullOrEmpty(outputRoot) || string.IsNullOrEmpty(commit) || string.IsNullOrEmpty(variant))
             {
-                throw new Exception("Emberfall: BuildWindowsPlaytest needs -emberfallOutput <folder> and " +
-                                    "-emberfallCommit <hash>. Run it through Tools/build-windows.ps1.");
+                throw new Exception("Emberfall: BuildWindowsPlaytest needs -emberfallOutput <folder>, " +
+                                    "-emberfallCommit <hash> and -emberfallVariant <variant>. " +
+                                    "Run it through Tools/build-windows.ps1.");
             }
 
-            string path = BuildWindows(outputRoot, false, commit, PlaytestFolderName(commit));
+            string[] parts = variant.Split('-');
+            if (parts.Length != 2 || (parts[0] != "release" && parts[0] != "development")
+                || (parts[1] != "offline" && parts[1] != "cloud"))
+            {
+                throw new Exception("Emberfall: '" + variant + "' is not a playtest variant. It is " +
+                                    "release or development, then offline or cloud: release-offline.");
+            }
+            bool development = parts[0] == "development";
+            bool cloud = parts[1] == "cloud";
+
+            string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            bool configPresent = File.Exists(Path.Combine(projectRoot, CloudConfigPath));
+            if (configPresent != cloud)
+            {
+                throw new Exception("Emberfall: a " + variant + " build with " + CloudConfigPath +
+                                    (configPresent ? " present" : " absent") + ". The script moves it " +
+                                    "for an offline build and needs it for a cloud one.");
+            }
+
+            string path = BuildWindows(outputRoot, development, commit, PlaytestFolderName(commit, variant));
             if (path == null) throw new Exception("Emberfall: Windows playtest build failed.");
         }
 
-        /// <summary>Emberfall-VERSION-HASH-win. Tools/build-windows.ps1 looks for exactly this.</summary>
-        public static string PlaytestFolderName(string commit)
+        /// <summary>The ignored file that decides whether a player has accounts at all.</summary>
+        public const string CloudConfigPath = "Assets/Resources/Config/supabase.json";
+
+        /// <summary>Emberfall-VERSION-HASH-VARIANT-win. Tools/build-windows.ps1 looks for exactly
+        /// this.</summary>
+        public static string PlaytestFolderName(string commit, string variant)
         {
-            return "Emberfall-" + Version + "-" + commit + "-win";
+            return "Emberfall-" + Version + "-" + commit + "-" + variant + "-win";
         }
 
         /// <summary>The value following <paramref name="flag"/> on Unity's own command line, or
@@ -281,7 +318,114 @@ namespace Emberfall.EditorTools
             Debug.Log("Emberfall: Windows build succeeded in " +
                       Math.Round(summary.totalTime.TotalSeconds) + "s, " +
                       Math.Round(megabytes, 1) + " MB -> " + outputPath);
+            WriteSizeReport(report, Path.Combine(outputRoot, folderName + ".sizes.txt"));
             return outputPath;
+        }
+
+        // ------------------------------------------------------------------ what the player weighs
+
+        /// <summary>
+        /// WHERE THE PLAYER'S BYTES WENT, read from the build report rather than guessed from the
+        /// folder, and written beside the player as FOLDER.sizes.txt (outside the zip).
+        ///
+        /// It exists to answer one question the folder size cannot: whether a small player is
+        /// small because the art is compressed or because art is missing. So each texture group
+        /// says how many PNGs are on disk, how many were packed, what they packed to, what the
+        /// same pixels would weigh as raw RGBA, and which formats they were packed in. Packed at
+        /// about raw RGBA means uncompressed; well under it means compressed; fewer packed than
+        /// on disk means missing. Everything else in the player is one line.
+        /// </summary>
+        private static void WriteSizeReport(BuildReport report, string path)
+        {
+            try
+            {
+                string[] groups = { "Assets/Resources/Sprites/Units/", "Assets/Resources/Sprites/",
+                                    "Assets/Resources/Backgrounds/", "Assets/Resources/Art/" };
+                string[] names = { "battle sprite sheets", "other sprites (portraits, badges, HUD)",
+                                   "backgrounds", "other Resources art" };
+                ulong[] packed = new ulong[groups.Length];
+                ulong[] raw = new ulong[groups.Length];
+                HashSet<string>[] sources = new HashSet<string>[groups.Length];
+                Dictionary<string, int>[] formats = new Dictionary<string, int>[groups.Length];
+                for (int g = 0; g < groups.Length; g++)
+                {
+                    sources[g] = new HashSet<string>();
+                    formats[g] = new Dictionary<string, int>();
+                }
+                ulong total = 0, otherTextures = 0, rest = 0;
+
+                foreach (PackedAssets file in report.packedAssets)
+                {
+                    total += file.overhead;
+                    foreach (PackedAssetInfo info in file.contents)
+                    {
+                        total += info.packedSize;
+                        string source = info.sourceAssetPath ?? "";
+                        bool texture = info.type == typeof(Texture2D);
+                        int group = -1;
+                        for (int g = 0; g < groups.Length && texture; g++)
+                        {
+                            if (source.StartsWith(groups[g], StringComparison.Ordinal)) { group = g; break; }
+                        }
+                        if (group < 0)
+                        {
+                            if (texture) otherTextures += info.packedSize; else rest += info.packedSize;
+                            continue;
+                        }
+
+                        packed[group] += info.packedSize;
+                        if (!sources[group].Add(source)) continue;
+                        Texture2D tex = AssetDatabase.LoadAssetAtPath<Texture2D>(source);
+                        if (tex == null) continue;
+                        raw[group] += (ulong)tex.width * (ulong)tex.height * 4UL;
+                        string format = tex.format.ToString();
+                        int seen;
+                        formats[group][format] = formats[group].TryGetValue(format, out seen) ? seen + 1 : 1;
+                    }
+                }
+
+                string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+                List<string> lines = new List<string>();
+                lines.Add("packed into the player (build report): " + Mb(total));
+                for (int g = 0; g < groups.Length; g++)
+                {
+                    string folder = Path.Combine(projectRoot, groups[g].TrimEnd('/'));
+                    int onDisk = 0;
+                    if (Directory.Exists(folder))
+                    {
+                        // The groups nest (Units is inside Sprites), so the outer group counts
+                        // only what no inner group already claims.
+                        foreach (string png in Directory.GetFiles(folder, "*.png", SearchOption.AllDirectories))
+                        {
+                            string rel = png.Substring(projectRoot.Length + 1).Replace('\\', '/');
+                            int owner = -1;
+                            for (int h = 0; h < groups.Length && owner < 0; h++)
+                                if (rel.StartsWith(groups[h], StringComparison.Ordinal)) owner = h;
+                            if (owner == g) onDisk++;
+                        }
+                    }
+                    List<string> formatList = new List<string>();
+                    foreach (KeyValuePair<string, int> pair in formats[g]) formatList.Add(pair.Key + " x" + pair.Value);
+                    lines.Add(names[g] + " (" + groups[g] + "): " + sources[g].Count + " of " + onDisk +
+                              " PNGs packed, " + Mb(packed[g]) + " packed, " + Mb(raw[g]) +
+                              " as raw RGBA, formats " + (formatList.Count > 0 ? string.Join(", ", formatList.ToArray()) : "none"));
+                }
+                lines.Add("other textures: " + Mb(otherTextures));
+                lines.Add("everything else (meshes, shaders, fonts, audio, text, scenes): " + Mb(rest));
+                File.WriteAllLines(path, lines.ToArray());
+                Debug.Log("Emberfall: size report -> " + path + "\n" + string.Join("\n", lines.ToArray()));
+            }
+            catch (Exception ex)
+            {
+                // A report that failed to write must not fail a build that succeeded; the script
+                // says the report is missing, which is the truth.
+                Debug.LogWarning("Emberfall: could not write the size report: " + ex);
+            }
+        }
+
+        private static string Mb(ulong bytes)
+        {
+            return (bytes / (1024.0 * 1024.0)).ToString("0.0", System.Globalization.CultureInfo.InvariantCulture) + " MB";
         }
 
         // ------------------------------------------------------------------ the build stamp
