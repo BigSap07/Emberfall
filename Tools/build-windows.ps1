@@ -252,6 +252,16 @@ if ($after.Count -gt 0) {
           "stay (it usually is a setting Unity rewrote), then build again.")
 }
 
+# Unity writes Burst's debug symbols beside the player and names the folder DoNotShip itself. It is
+# for a developer reading a native crash, not for the person unzipping the game, so it is moved out
+# of the folder being zipped and kept beside it rather than deleted.
+$burst = Join-Path $folder "Emberfall_BurstDebugInformation_DoNotShip"
+if (Test-Path $burst) {
+    $kept = "$folder-BurstDebugInformation"
+    if (Test-Path $kept) { Remove-Item $kept -Recurse -Force }
+    Move-Item $burst $kept
+}
+
 $readme = Join-Path $root "Docs\PLAYTEST-README.md"
 if (Test-Path $readme) { Copy-Item $readme (Join-Path $folder "READ-ME-FIRST.txt") -Force }
 
