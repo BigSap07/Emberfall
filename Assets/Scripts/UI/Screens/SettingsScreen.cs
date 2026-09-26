@@ -50,6 +50,7 @@ namespace Emberfall.UI.Screens
             BuildSummonCard(content);
             BuildSaveCard(content);
             BuildResetCard(content);
+            BuildStampLine(content);
         }
 
         // ------------------------------------------------------------------ embedding
@@ -152,6 +153,23 @@ namespace Emberfall.UI.Screens
                                                  ForgeButtonKind.Secondary);
             UIBuilder.Box(reset.Root, 30f, 24f, 420f, HubStyle.TouchMin, new Vector2(0f, 0f));
             reset.OnClick(ConfirmReset);
+        }
+
+        /// <summary>
+        /// Which build this is, as the last line of the page rather than a card: the same words
+        /// Game.BuildStamp puts in the Hub's corner, here because the settings page is where a
+        /// person looks for them when a report asks. A row of the scroll list like the cards above
+        /// it, so it can never sit on top of one, and set in the page's quietest text because
+        /// nothing on it can be changed.
+        /// </summary>
+        private static void BuildStampLine(RectTransform parent)
+        {
+            RectTransform row = UIBuilder.Node("BuildStamp", parent);
+            UIBuilder.Sized(row, CardWidth, 32f);
+            Text stamp = EmberforgeUI.Label("Label", row, Game.BuildStamp.Label, UITheme.FontTiny - 2,
+                                            Emberforge.TextQuiet, TextAnchor.MiddleLeft);
+            UIBuilder.FillParent(stamp.rectTransform, 30f, 0f, 30f, 0f);
+            stamp.raycastTarget = false;
         }
 
         private void ConfirmReset()

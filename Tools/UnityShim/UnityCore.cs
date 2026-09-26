@@ -513,6 +513,7 @@ namespace UnityEngine
     {
         public Texture2D(int width, int height) { }
         public Texture2D(int width, int height, TextureFormat format, bool mipChain) { }
+        public TextureFormat format { get { return TextureFormat.RGBA32; } }
         public void SetPixel(int x, int y, Color color) { }
         public void SetPixels(Color[] colors) { }
         public void SetPixels32(Color32[] colors) { }

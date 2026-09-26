@@ -938,8 +938,36 @@ A room proves a rule can work; this says whether a playtester will ever see it. 
 
 A Windows desktop player builds today through `EmberfallBuild.BuildWindows`, Mono rather than
 IL2CPP because this editor install has no Windows IL2CPP module. Windowed 1600x900, resizable,
-verified from the built exe rather than from the editor. **Android is still the target**; no layout
-differs between them.
+Alt+Enter to full screen, one instance at a time; quitting is the window's own close button, as
+there is no quit control in the game. **Android is still the target**; no layout differs between
+them.
+
+**The playtest players are `Tools/build-windows.ps1`**, which drives `BuildWindowsPlaytest` in
+one of four variants: release or `-Development`, offline or `-Cloud`. The variant is the first line
+of output and part of the folder name, `Emberfall-VERSION-HASH-VARIANT-win`, and nothing else
+differs between them. **Offline is the default and the script owns the cloud config**:
+`supabase.json` is gitignored, so it is moved out of the project for an offline build and put back
+afterwards, on failure and on Ctrl+C too, and a run that was killed outright is put right by the
+next run before it reads anything. `BuildWindowsPlaytest` refuses a variant that disagrees with the
+file on disk. With no config, `GameApp` builds no cloud and every cloud page - Account, Friends,
+Guild, guild dungeon, guild chat, guild tech - says LOCAL ONLY with its buttons off. The script
+refuses a dirty tree (tracked changes anywhere, untracked files under `Assets`, `Packages` or
+`ProjectSettings`, any other gitignored file inside a `Resources` folder), checks the tree is still
+clean after Unity exits, and reads the player back: `level1` and the development-only class names
+in `Assembly-CSharp.dll` present exactly when the variant is a development one, the commit packed
+into `resources.assets`, and the cloud project's host packed in exactly when the variant is a cloud
+one. It writes outside the working tree, zips the player with `Docs/PLAYTEST-README.md` inside as
+`READ-ME-FIRST.txt`, moves Burst's DoNotShip symbols beside it, and prints the folder size, the zip
+size and `EmberfallBuild`'s size report, which reads the build report for what each texture group
+packed to against the same pixels as raw RGBA.
+
+**Every player names its build.** `Game.BuildStamp` prints `BUILD <version> (<commit>)` in the Hub's
+bottom-left corner and at the foot of Settings, with DEV after it on a development player. The
+commit comes from `Resources/BuildStamp.txt`, which `EmberfallBuild` writes for the length of one
+`BuildPlayer` call and deletes afterwards, gitignored so writing it cannot dirty the tree. The
+editor prints `editor` and a player built through a door that did not stamp it prints `unstamped`.
+**`EmberfallBuild.Version` is the one version** - the Windows and Android settings and the folder
+names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, which is `0.3.0`.
 
 ## In progress
 
@@ -1470,10 +1498,16 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   them is designed today.
 - **A marketplace.** Nothing built, nothing designed.
 - **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
-- **Texture compression.** The delivered art is effectively uncompressed, which is fine in a desktop
-  player and will not be fine in an APK. Reported at 855 MB of 881 MB uncompressed; the tracked
-  `Assets` folder measures 578 MB in this tree, so that figure is a player measurement rather than a
-  repository one and wants re-taking against a real build before anybody sizes the work.
+- **Texture compression, on Android only.** The 855 MB figure this entry used to carry was re-taken
+  against a real Windows player and **does not describe it**. The release-offline player is 318 MB
+  unzipped and 188.5 MB zipped, and its build report packs 213.6 MB, of which 139.4 MB is the battle
+  sheets. All 214 sheet PNGs are packed - none is missing - 208 of them as DXT5 Crunched and 6 as
+  RGBA32, against 3,198.6 MB as raw RGBA. Portraits, badges and HUD pack 126 of 126 PNGs to
+  24.8 MB (94 BC7, 32 RGBA32) and the backgrounds 5 of 5 to 19.6 MB. So the art is compressed on
+  the Standalone target and the small zip is the importer's doing, not the zip's. `EmberfallBuild`
+  writes this report beside every Windows player, and `Tools/build-windows.ps1` prints it. The APK
+  has not been measured: Android reads its own importer overrides, and the 855 MB may still be
+  true there. Measure an APK the same way before sizing the work.
 - **An APK**, once there is a device.
 - **iOS**, once there is a Mac and a developer account.
 
