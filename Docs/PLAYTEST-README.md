@@ -123,13 +123,15 @@ has the **Dev Arena**, which puts any hero on the field whether you own them or 
 ### Getting into the Dev Arena
 
 1. On the main screen, click the **...** button on the left edge, then **DEV ARENA**.
-2. Click **SETUP** at the edge of the screen. It lists five slots for your side and five for the
-   enemy's. Click a slot, then click a hero in the list beside it (type in the search box to find
-   one by name), then click **RESTART**. Put a hero on the enemy side too, so an attack has
-   somebody to hit.
-3. Click a hero on the field, then open **UNIT** and its **ANIMATION** tab. There is one button
-   per animation: idle, basic, basic2, skill, hit reaction, death and controlled. **LOOP** repeats
-   it, **PAUSE** holds it, and **STEP** moves one frame at a time. A slider sets the speed.
+2. Click **SETUP** in the bottom-left corner. It lists five slots for your side and five for the
+   enemy's. Click a slot, then click a hero in the list below the slots (click the empty box above
+   the list and type part of a name to find one), then click **RESTART**. The enemy side starts
+   with heroes on it, so an attack always has somebody to hit. **CLOSE** puts the panel away.
+3. Click a hero on the field, then **UNIT** in the bottom-right corner, then the **ANIMATION** tab.
+   There is one button per animation: idle, basic, basic2, skill, hit_reaction, death and
+   controlled. **LOOP** repeats it, **PAUSE** holds it, and **STEP** moves one frame at a time.
+   The slider sets the speed, **SOLO** hides everybody else, and **DETAILS** lists each
+   animation's frame count and the point in it where the game lands the hit.
 4. To see an attack land on a target the way it does in a real fight, click the hero, then
    **BASIC** or **ACTIVE**, then click an enemy.
 

@@ -1498,10 +1498,16 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   them is designed today.
 - **A marketplace.** Nothing built, nothing designed.
 - **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
-- **Texture compression.** The delivered art is effectively uncompressed, which is fine in a desktop
-  player and will not be fine in an APK. Reported at 855 MB of 881 MB uncompressed; the tracked
-  `Assets` folder measures 578 MB in this tree, so that figure is a player measurement rather than a
-  repository one and wants re-taking against a real build before anybody sizes the work.
+- **Texture compression, on Android only.** The 855 MB figure this entry used to carry was re-taken
+  against a real Windows player and **does not describe it**. The release-offline player is 318 MB
+  unzipped and 188.5 MB zipped, and its build report packs 213.6 MB, of which 139.4 MB is the battle
+  sheets. All 214 sheet PNGs are packed - none is missing - 208 of them as DXT5 Crunched and 6 as
+  RGBA32, against 3,198.6 MB as raw RGBA. Portraits, badges and HUD pack 126 of 126 PNGs to
+  24.8 MB (94 BC7, 32 RGBA32) and the backgrounds 5 of 5 to 19.6 MB. So the art is compressed on
+  the Standalone target and the small zip is the importer's doing, not the zip's. `EmberfallBuild`
+  writes this report beside every Windows player, and `Tools/build-windows.ps1` prints it. The APK
+  has not been measured: Android reads its own importer overrides, and the 855 MB may still be
+  true there. Measure an APK the same way before sizing the work.
 - **An APK**, once there is a device.
 - **iOS**, once there is a Mac and a developer account.
 
