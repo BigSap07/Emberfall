@@ -1,0 +1,118 @@
+# Emberfall - playtest build
+
+Thank you for playing. This is an early build of Emberfall, a fantasy idle RPG: you collect
+heroes, put five of them in a line, and they fight on their own while you decide who fights and
+how they grow. It is made for phones and is being tested on Windows for now, so it is laid out
+for a wide screen and is played with the mouse. A click is a tap.
+
+## Starting the game
+
+1. **Unzip it first.** Right-click the zip file and choose **Extract All...**, then open the
+   folder that appears. Windows lets you look inside a zip without extracting it, but the game
+   will not run from there.
+2. Double-click **Emberfall.exe**.
+
+### "Windows protected your PC"
+
+The first time, Windows will probably show a blue box saying **Windows protected your PC**. It
+says that because the game is not signed: signing costs money and paperwork that a test build
+does not have yet. It does not mean Windows found anything wrong with it.
+
+- Click **More info**, then click **Run anyway**.
+
+You only have to do that once per build. If you would rather not see the box at all, right-click
+the zip **before** extracting it, choose **Properties**, tick **Unblock** at the bottom, click
+**OK**, and then extract it.
+
+If your antivirus asks about the game, it is for the same reason, and you can allow it.
+
+### The window
+
+The game opens in a window. Drag its edges to resize it, or press **Alt+Enter** to switch
+between the window and full screen. To quit, close the window. In full screen, press
+**Alt+Enter** to get the window back first, or press **Alt+F4**. The game saves on its own
+while you play and again when you quit, so there is no save button and nothing to lose by
+closing it.
+
+**Esc** works like a phone's back button: it closes whatever is open on top, or goes back one
+screen. On the main screen and during a battle it does nothing, on purpose.
+
+## Your save, and starting over
+
+Your progress is saved on this computer, in:
+
+```
+%USERPROFILE%\AppData\LocalLow\Emberfall Studio\Emberfall\
+```
+
+You can paste that line into the address bar of any File Explorer window. The save is the file
+called `emberfall_save.json`.
+
+**To start over, use the game's own button.** Open **Settings** from the main screen: click the
+**...** button on the left edge and choose **SETTINGS**, or click your name in the top-left
+corner and open the **SETTINGS** tab. Near the bottom is **START OVER**, and **RESET PROGRESS**
+asks you once more before it wipes anything.
+
+Deleting the save file by hand is **not** enough on its own: the game keeps a second copy and
+will quietly bring your progress back from it. If you ever cannot open the game to reset it,
+tell whoever sent you this build and they will walk you through removing both copies.
+
+## Reporting something
+
+Every report needs to say **which build** it is about. The build is printed in small letters in
+the **bottom-left corner of the main screen**, and again at the **bottom of Settings**. It looks
+like `BUILD 0.3.0 (` followed by seven letters and numbers and `)`. The same words are in the
+file **BUILD.txt** in the game's folder. Copy them exactly: two people testing two different
+builds will otherwise look like one person who cannot reproduce anything.
+
+Then, in whatever words come naturally:
+
+- **What you did**, step by step, as far back as you can remember.
+- **What you expected** to happen.
+- **What happened instead.**
+- **A screenshot** if you can. **Windows+Shift+S** lets you drag a box around the part of the
+  screen you want, and then you can paste it straight into a message.
+- **The log file**, if something crashed, froze or looked broken. It is `Player.log`, in the
+  same folder as the save (above). The game starts a new one every time it opens, and keeps the
+  one before it as `Player-prev.log`, so copy the log **before** you open the game again, or
+  send `Player-prev.log` if you already have.
+
+Send it all to the person who sent you the build. One problem per report is easiest to follow,
+but a long list is far better than nothing.
+
+## Already known - please do not report these
+
+- **Most heroes look like a plain coloured figure with their name under its feet.** That is a
+  stand-in: those heroes' battle art has not been drawn yet. The colour is the hero's aspect.
+  About a third of the roster has real art so far.
+- **Coda and Valor pile up and buy nothing.** Both say so in the bag. What they will buy has
+  not been built yet.
+- **Mail is greyed out and says it is not open yet.** There is no mail yet.
+- **Replaying a stage only pays in full three times per stage per day.** After that, a replay
+  still counts as a win and pays nothing. That is deliberate. The day resets at 04:00 UTC.
+- **Idle income stops growing after a while** (ten hours) until you collect it. Deliberate.
+- **Deep Recital attempts are capped** and refill slowly over time. Deliberate.
+
+## For Pinoy
+
+Three things only you can settle, because they are about how the art looks in motion, and no
+check can see that. Please report on them even if everything looks fine: "looks right" is an
+answer too.
+
+1. **Nereia may be wearing Celen's body.** Nereia is in the squad that fights the opening battle
+   the first time the game starts, so you will see her straight away. Four of her seven
+   animation sheets are byte-for-byte the same file as Celen's: idle, basic attack, hit reaction
+   and controlled. Her second basic attack, her skill and her death are different files. Does
+   the figure on screen read as Nereia or as Celen?
+2. **Rheia's skill has no animation.** Her delivery had a second idle clip (`idle2`) where the
+   skill clip should be, so when she uses her active the game keeps playing her idle. Is that
+   `idle2` actually her skill with the wrong name, or is her skill clip still to come?
+3. **Five heroes' hits may land at the wrong moment: Mireth, Hale, Rheia, Oris and Arden.** Their
+   attack clips did not come with a strike frame, so the frame where the blow lands was worked
+   out by measuring the drawing rather than set by hand. Watch their attacks: does the damage
+   number and the hit on the target arrive when the weapon actually connects? If not, a note
+   like "Oris, basic attack, lands a few frames early" is all that is needed.
+
+Hale fights in the same opening battle as Nereia. Rheia, Mireth, Oris and Arden only appear if
+you pull them from a summon, and five-star pulls are rare. If you have not got them, say so, and
+you will be sent a version of the game that can put any hero on the field.

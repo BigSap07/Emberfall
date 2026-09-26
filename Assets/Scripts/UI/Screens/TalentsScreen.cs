@@ -890,9 +890,9 @@ namespace Emberfall.UI.Screens
         {
             if (_trial == null)
             {
-                _footerMeasure.text = _hero != null && _hero.Def != null && _hero.Def.Talents.Count > 0
+                SetFooterMeasure(_hero != null && _hero.Def != null && _hero.Def.Talents.Count > 0
                     ? "No reading: there is no line to measure this hero in."
-                    : "";
+                    : "");
                 for (int i = 0; i < _cards.Count; i++) _cards[i].Measured.text = "";
                 return;
             }
@@ -910,14 +910,14 @@ namespace Emberfall.UI.Screens
                 : "your line as it stands";
             if (!_trial.Finished)
             {
-                _footerMeasure.text = "Measuring: " + where + ", against a mirror of itself with nothing picked. "
-                                    + _trial.FightsRun + " of " + _trial.FightsTotal + " fights.";
+                SetFooterMeasure("Measuring: " + where + ", against a mirror of itself with nothing picked. "
+                                 + _trial.FightsRun + " of " + _trial.FightsTotal + " fights.");
                 return;
             }
 
-            _footerMeasure.text = "Measured: " + where + ", " + _trial.Seeds + " fights per talent against a mirror"
-                                + " of itself with nothing picked, " + Seconds(_trial.SimulationMs) + " on this device."
-                                + (_trial.Failures > 0 ? " " + _trial.Failures + " fights failed." : "");
+            SetFooterMeasure("Measured: " + where + ", " + _trial.Seeds + " fights per talent against a mirror"
+                             + " of itself with nothing picked, " + Seconds(_trial.SimulationMs) + " on this device."
+                             + (_trial.Failures > 0 ? " " + _trial.Failures + " fights failed." : ""));
             if (!_trialLogged)
             {
                 _trialLogged = true;
@@ -928,6 +928,23 @@ namespace Emberfall.UI.Screens
                 if (_trial.Failures > 0)
                     Debug.LogError("TalentsScreen: " + _trial.Failures + " trial fights threw. Last: " + _trial.LastError);
             }
+        }
+
+        /// <summary>
+        /// The footer's measurement line: how the trial was taken, how many fights it has run and
+        /// how many milliseconds of simulation this device spent on it. That is telemetry for
+        /// whoever is building the page, not something a player acts on, so a release player
+        /// leaves the line empty. The label is still built and still holds its row, so the
+        /// footer measures the same in every build. The per-card readings above it are the part
+        /// a player reads, and they are not affected.
+        /// </summary>
+        private void SetFooterMeasure(string text)
+        {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            _footerMeasure.text = text;
+#else
+            _footerMeasure.text = "";
+#endif
         }
 
         /// <summary>

@@ -938,8 +938,27 @@ A room proves a rule can work; this says whether a playtester will ever see it. 
 
 A Windows desktop player builds today through `EmberfallBuild.BuildWindows`, Mono rather than
 IL2CPP because this editor install has no Windows IL2CPP module. Windowed 1600x900, resizable,
-verified from the built exe rather than from the editor. **Android is still the target**; no layout
-differs between them.
+Alt+Enter to full screen, one instance at a time; quitting is the window's own close button, as
+there is no quit control in the game. **Android is still the target**; no layout differs between
+them.
+
+**The playtest player is `Tools/build-windows.ps1`**, which drives `BuildWindowsPlaytest`: the same
+path with Development off, so `ScenesFor` leaves the Dev Arena out and the compiler guard leaves
+its classes out. The script refuses a dirty tree (tracked changes anywhere, untracked files under
+`Assets`, `Packages` or `ProjectSettings`, and any gitignored file inside a `Resources` folder other
+than the cloud config), checks the tree is still clean after Unity exits, and reads the player back:
+no `level1`, no development-only class name in `Assembly-CSharp.dll`, and the commit packed into
+`resources.assets`. It writes outside the working tree, to `Emberfall-VERSION-HASH-win` beside a zip
+of it, with `Docs/PLAYTEST-README.md` inside as `READ-ME-FIRST.txt`. It reports whether
+`supabase.json` is present, because that ignored file decides whether the player has accounts.
+
+**Every player names its build.** `Game.BuildStamp` prints `BUILD <version> (<commit>)` in the Hub's
+bottom-left corner and at the foot of Settings, with DEV after it on a development player. The
+commit comes from `Resources/BuildStamp.txt`, which `EmberfallBuild` writes for the length of one
+`BuildPlayer` call and deletes afterwards, gitignored so writing it cannot dirty the tree. The
+editor prints `editor` and a player built through a door that did not stamp it prints `unstamped`.
+**`EmberfallBuild.Version` is the one version** - the Windows and Android settings and the folder
+names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, which is `0.3.0`.
 
 ## In progress
 

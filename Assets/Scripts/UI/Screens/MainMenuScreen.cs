@@ -169,6 +169,7 @@ namespace Emberfall.UI.Screens
             BuildIdleChest();
             BuildRail();
             BuildNavBar();
+            BuildStampLabel();
 
             _claimPopup = new IdleClaimPopup(App, App.OverlayLayer);
             _claimPopup.Claimed += RefreshIdle;
@@ -517,6 +518,28 @@ namespace Emberfall.UI.Screens
                                  TextureLab.Sigil(2, 64), UITheme.ChromeBrass, OpenGuild);
             HudWidgets.NavButton("Campaign", nav, "CAMPAIGN", HudSkin.IconCampaign,
                                  TextureLab.Swords(64), UITheme.Ember, OpenCampaign);
+        }
+
+        /// <summary>
+        /// Which build this is, in the bottom-left corner: version and commit, from
+        /// Game.BuildStamp. Every report from a tester has to name a build, and this is where they
+        /// read it off.
+        ///
+        /// The bottom-left is the one corner of the frame nothing else claims. The rail hangs from
+        /// the top of the left edge and ends well above it on the shortest canvas, the nav bar is
+        /// centred, and the campaign card and chest sit bottom right. It stands on the nav bar's
+        /// own bottom margin so it shares a baseline with the row beside it, and it is the
+        /// quietest text on the screen - outlined only so it stays readable over the painting.
+        /// Not a button and not a raycast target: it must never eat a tap meant for the map.
+        /// </summary>
+        private void BuildStampLabel()
+        {
+            Text stamp = EmberforgeUI.Label("BuildStamp", _hud, Game.BuildStamp.Label, UITheme.FontTiny - 2,
+                                            Emberforge.TextQuiet, TextAnchor.LowerLeft);
+            UIBuilder.Box(stamp.rectTransform, HubStyle.HudEdge, HubStyle.NavBottomMargin, 340f, 26f,
+                          new Vector2(0f, 0f));
+            UIBuilder.Outlined(stamp, Emberforge.Outline, Emberforge.StrokeThin);
+            stamp.raycastTarget = false;
         }
 
         /// <summary>
