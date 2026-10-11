@@ -381,8 +381,7 @@ def process_hero(hero_cfg, meta_template):
 def main():
     meta_template = find_meta_template()
     if meta_template is None:
-        print("WARNING: no *.png.meta in Sprites/Units to template from - sheets will import at
-"
+        print("WARNING: no *.png.meta in Sprites/Units to template from - sheets will import at\n"
               "         Unity's 2048 default and be sheared. Import one hero by hand first.")
 
     for hero_cfg in HEROES:
