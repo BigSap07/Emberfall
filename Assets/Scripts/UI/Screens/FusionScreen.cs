@@ -24,21 +24,25 @@ namespace Emberfall.UI.Screens
     ///
     /// WHAT THIS PAGE HAS TO EXPRESS, over and above what it has to do:
     ///
+    ///   EVERY CARD SAYS THREE THINGS AND NOTHING ELSE: what the player has, what this costs,
+    ///     and what they get, with what they get in the largest type on it. The legibility pass
+    ///     took every rule this page used to explain in prose - the subtitles, the sentence under
+    ///     the roll, the second half of each recipe line, the reset sentence - behind the
+    ///     header's "?", one tap away. Nothing explaining a rule is printed on a card.
+    ///
     ///   THE ROLL IS A ROLL (F3), and it is said BEFORE the spend, not after. Conversion's output
     ///     is random within the aspect and never chosen, because that randomness is what
-    ///     manufactures the duplicates ascension eats. So the whole pool is drawn - every five-star
-    ///     the conversion could produce, face by face, at the top of the tab, above the fodder and
-    ///     above the button - with the count said in words next to it. A player who reads one line
-    ///     of this page reads that one. It is not a confirmation dialog, because a warning shown
-    ///     at the moment of committing is a warning shown to somebody who has already decided.
+    ///     manufactures the duplicates ascension eats. So the outcome line says RANDOM in that
+    ///     word, in the tab's largest type, and the whole pool is drawn under it face by face,
+    ///     above the fodder and above the button. It is not a confirmation dialog, because a
+    ///     warning shown at the moment of committing is a warning shown to somebody who has
+    ///     already decided.
     ///
     ///   THE SEED RULE IS A RULE, NOT AN ERROR (F9). Umbra and Lumen take one hero of their own
-    ///     aspect plus generic fodder; the other four take fodder of their aspect throughout. Both
-    ///     shapes are printed in the same RECIPE block in the same two lines whichever aspect is
-    ///     chosen, so the difference reads as two recipes rather than as one recipe and a
-    ///     complaint. The block also prints the roster count the rule is made of - four low-star
-    ///     heroes against fourteen - because a rule with its reason next to it is a rule and a
-    ///     rule without one is an obstacle.
+    ///     aspect plus fodder of any aspect; the other four take fodder of their aspect
+    ///     throughout. Both shapes are printed in the same COST block in the same two lines
+    ///     whichever aspect is chosen, so the difference reads as two prices rather than as one
+    ///     price and a complaint. The roster count the rule is made of is behind the "?".
     ///
     ///   THE TIER LEVEL RESETS AND THE LEVEL DOES NOT (F6). This is the one number on the page
     ///     that reads as a bug if it is met without warning, and the warning is three rows of
@@ -47,18 +51,13 @@ namespace Emberfall.UI.Screens
     ///     GameSession.PreviewAscension, which shares its arithmetic with Ascend itself, so the
     ///     page cannot promise a landing the ascension does not make.
     ///
-    ///     ALL THREE ROWS ARE READ AGAINST THE LIST BESIDE THEM, which is what the numbers pass
-    ///     fixed. The hero list prints "TIER 0 - LEVEL 9 / 9" from TierLevelOf and HeroLevelCap,
-    ///     both counted in tier levels, so the card's cap row is counted the same way: a tier-0
-    ///     hero at the top of its tier reads 9 / 9 in the list and 9 -> 1 with a cap of 9 -> 18
-    ///     on the card, one hero in one unit. The row that used to sit there answered in Levels
-    ///     and printed 9 -> 45, which was the true absolute cap and still a second unit on a page
-    ///     that had not warned the player there was one.
-    ///
-    ///     THE ROWS CARRY THE MEANING AND THE PROSE DOES NOT REPEAT THEM. The sentence under them
-    ///     used to restate the reset, the rise and both cap figures, all four of which are rows a
-    ///     player can read. What a table cannot say is what the reset means, so that is the whole
-    ///     of what is left: the tier level starts again, the power does not.
+    ///     ALL THREE ROWS ARE READ AGAINST THE LIST BESIDE THEM. The hero list prints
+    ///     "TIER 0 - LEVEL 9 / 9" from TierLevelOf and HeroLevelCap, both counted in tier levels,
+    ///     so the card's cap row is counted the same way: a tier-0 hero at the top of its tier
+    ///     reads 9 / 9 in the list and 9 » 1 with a cap of 9 » 18 on the card, one hero in one
+    ///     unit. The LEVEL row between them, 9 » 10, is the one absolute figure on the card and
+    ///     the one that does not reset. The before-and-after mark is "»" and not a hyphen, because
+    ///     "9 - 18" reads as a range.
     ///
     ///   A FIVE-STAR IS NEVER FODDER (F5) and heroes below five stars never ascend (F1, F2). Both
     ///     are structural here rather than enforced: the ascend tab's list holds five-stars only,
@@ -104,11 +103,11 @@ namespace Emberfall.UI.Screens
         private const float HeadingHeight = 22f;
 
         // The convert tab's fixed blocks, each the sum of what it draws rather than a round
-        // number: the roll is a heading, a row of faces and its sentence; the recipe is a heading
-        // and its two lines. Build() adds them up against the shortest canvas and says so if the
+        // number: the roll is its outcome line and a row of faces; the recipe is a heading and
+        // its two lines. Build() adds them up against the shortest canvas and says so if the
         // grid underneath has been squeezed below a row.
-        private const float RollBlockHeight = HeadingHeight + UITheme.Space4 + RollPortrait + 16f
-                                            + UITheme.Space4 + 40f;
+        private const float RollOutcomeHeight = 50f;
+        private const float RollBlockHeight = RollOutcomeHeight + UITheme.Space4 + RollPortrait + 16f;
         private const float RecipeBlockHeight = HeadingHeight + UITheme.Space4 + 30f + 32f;
 
         /// <summary>Everything above the fodder grid on the convert tab: the roll, the recipe,
@@ -130,32 +129,33 @@ namespace Emberfall.UI.Screens
         // The ascend card, top to bottom. Named rather than inlined for the reason the convert
         // tab's blocks are: Build() adds them up against the shortest canvas, and a stack of
         // literals is a stack nothing can check.
+        //
+        // The head block is the portrait beside three lines: the hero's name, the OUTCOME in the
+        // card's largest type, and the talent slot the step opens.
         private const float PortraitSize = 88f;
-        private const float CostBlockHeight = 32f + 30f;
+        private const float NameLineHeight = 36f;
+        private const float OutcomeHeight = 50f;
+        private const float OpensLineHeight = 26f;
+        private const float HeadBlockHeight = NameLineHeight + OutcomeHeight + OpensLineHeight;
+        private const float CostRowHeight = 34f;
         private const float MoveRowHeight = 32f;
-        private const float ResetNoteHeight = 30f;
-        private const float OpensNoteHeight = 54f;
 
         /// <summary>
-        /// The card's whole stack, and since this pass it is also the card's HEIGHT rather than
-        /// only an assertion about it. The plate used to fill the column top to bottom, so every
-        /// canvas taller than the stack drew an empty panel under the talent line - furniture
-        /// with nothing in it, which reads as a block that failed to load rather than as a card
-        /// that finished. The plate is now this tall and the column below it is simply ground.
-        ///
+        /// The card's whole stack, and also the card's HEIGHT rather than only an assertion about
+        /// it: the plate ends where its content ends and the column below it is simply ground.
         /// The trailing CardPad is the frame's own breathing room, the same pad the stack opens
-        /// with: "ends where its content ends" is the last sentence plus the border it sits in,
-        /// not the last sentence pressed against the edge.
+        /// with.
+        ///
+        /// The legibility pass took two prose blocks off the bottom of this stack - the reset
+        /// sentence and the talent-slot sentence - and a heading off the rows. The first is behind
+        /// the page's "?"; the second is the head block's third line, because a talent slot is
+        /// something the player GETS; the rows name themselves.
         /// </summary>
-        private const float AscendCardHeight = CardPad + PortraitSize + BlockGap
+        private const float AscendCardHeight = CardPad + HeadBlockHeight + BlockGap
                                              + Emberforge.RuleHeight + BlockGap
-                                             + CostBlockHeight + BlockGap
+                                             + CostRowHeight + BlockGap
                                              + Emberforge.RuleHeight + BlockGap
-                                             + HeadingHeight + UITheme.Space4
-                                             + MoveRowHeight * 3f + BlockGap
-                                             + ResetNoteHeight + BlockGap
-                                             + Emberforge.RuleHeight + UITheme.Space4
-                                             + OpensNoteHeight + CardPad;
+                                             + MoveRowHeight * 3f + CardPad;
 
         // ------------------------------------------------------------------ state
 
@@ -185,21 +185,24 @@ namespace Emberfall.UI.Screens
         private RectTransform _ascendCardBody;
         private RectTransform _ascendPortrait;
         private Text _ascendName;
-        private RectTransform _ascendTierChip;
-        private Text _ascendStep;
+        private Text _ascendOutcome;
+        private Text _opensLine;
         private RectTransform _ascendCostChip;
         private Text _ascendCostNote;
+        private Text _ascendHave;
         private readonly List<Text[]> _moveRows = new List<Text[]>();
-        private Text _resetNote;
-        private Text _opensNote;
         private Text _ascendEmpty;
+
+        /// <summary>What the page's "?" says on the tab now showing: the rules the two tabs used
+        /// to print in prose, rewritten on every repaint because they name the aspect.</summary>
+        private string _help = "";
 
         // convert side
         private RectTransform _convertPage;
         private RectTransform _aspectList;
         private readonly List<ForgeCard> _aspectCards = new List<ForgeCard>();
         private RectTransform _rollRow;
-        private Text _rollNote;
+        private Text _rollOutcome;
         private Text _recipeSeed;
         private Text _recipeFodder;
         private RectTransform _fodderGrid;
@@ -244,7 +247,11 @@ namespace Emberfall.UI.Screens
         protected override void Build()
         {
             EmberforgeUI.Ground(Root);
-            ScreenChrome.ForgedHeader(Root, "FUSION", Router, out _headerSubtitle);
+            RectTransform header = ScreenChrome.ForgedHeader(Root, "FUSION", Router, out _headerSubtitle);
+            ScreenChrome.HeaderHelp(header, delegate
+            {
+                App.Modal.ShowNotice(_convertTab ? "CONVERT" : "ASCEND", _help, "OK", null);
+            });
             BuildTabs();
             BuildAscendPage();
             BuildConvertPage();
@@ -347,53 +354,58 @@ namespace Emberfall.UI.Screens
             _ascendPortrait = UIBuilder.Node("PortraitHost", _ascendCardBody);
             UIBuilder.Box(_ascendPortrait, CardPad, -top, PortraitSize, PortraitSize, new Vector2(0f, 1f));
 
-            _ascendName = EmberforgeUI.Title("Name", _ascendCardBody, "", UITheme.FontTitle,
+            // THE HEAD: who, what they become, and what that opens. The outcome line is the
+            // largest text on the card - the name used to be, at title size, which made the card
+            // a nameplate with a price under it rather than an answer to "what do I get".
+            float left = CardPad + PortraitSize + UITheme.Space16;
+            _ascendName = EmberforgeUI.Title("Name", _ascendCardBody, "", UITheme.FontBody,
                                              Emberforge.TextGold, TextAnchor.UpperLeft);
-            UIBuilder.Box(_ascendName.rectTransform, CardPad + PortraitSize + UITheme.Space16, -top, 640f, 46f,
-                          new Vector2(0f, 1f));
-            UIBuilder.BestFit(_ascendName, UITheme.FontBody, UITheme.FontTitle);
+            UIBuilder.Box(_ascendName.rectTransform, left, -top, 640f, NameLineHeight, new Vector2(0f, 1f));
+            UIBuilder.BestFit(_ascendName, UITheme.FontTiny, UITheme.FontBody);
             UIBuilder.Outlined(_ascendName, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _ascendTierChip = EmberforgeUI.Chip("Tier", _ascendCardBody, "TIER 0", Emberforge.TextGold,
-                                                UITheme.FontTiny - 2);
-            UIBuilder.Box(_ascendTierChip, CardPad + PortraitSize + UITheme.Space16, -(top + 50f), 150f, 32f,
+            _ascendOutcome = EmberforgeUI.Title("Outcome", _ascendCardBody, "", UITheme.FontTitle,
+                                                Emberforge.TextGold, TextAnchor.MiddleLeft);
+            UIBuilder.Box(_ascendOutcome.rectTransform, left, -(top + NameLineHeight), 760f, OutcomeHeight,
                           new Vector2(0f, 1f));
+            UIBuilder.BestFit(_ascendOutcome, UITheme.FontHeading, UITheme.FontTitle);
+            UIBuilder.Outlined(_ascendOutcome, Emberforge.Outline, Emberforge.StrokeThick);
 
-            _ascendStep = EmberforgeUI.Label("Step", _ascendCardBody, "", UITheme.FontSmall,
-                                             Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(_ascendStep.rectTransform, CardPad + PortraitSize + UITheme.Space16 + 162f,
-                          -(top + 52f), 520f, 30f, new Vector2(0f, 1f));
-            UIBuilder.Outlined(_ascendStep, Emberforge.Outline, Emberforge.StrokeThin);
+            _opensLine = EmberforgeUI.Label("Opens", _ascendCardBody, "", UITheme.FontSmall,
+                                            Emberforge.TextGold, TextAnchor.MiddleLeft);
+            UIBuilder.Box(_opensLine.rectTransform, left, -(top + NameLineHeight + OutcomeHeight), 760f,
+                          OpensLineHeight, new Vector2(0f, 1f));
+            UIBuilder.BestFit(_opensLine, UITheme.FontTiny - 2, UITheme.FontSmall);
+            UIBuilder.Outlined(_opensLine, Emberforge.Outline, Emberforge.StrokeThin);
 
-            top += PortraitSize + BlockGap;
+            top += HeadBlockHeight + BlockGap;
             Divider(_ascendCardBody, top);
             top += Emberforge.RuleHeight + BlockGap;
 
-            // WHAT IT COSTS, in the talent page's grammar: a chip that says a cost exists and a
-            // sentence under it that says what the cost is and whether it is met. Copies of the
-            // hero itself and nothing else (F5), which is the rule the whole conversion tab
-            // exists to feed.
-            _ascendCostChip = EmberforgeUI.Chip("CostChip", _ascendCardBody, "COSTS COPIES",
+            // WHAT IT COSTS AND WHAT YOU HAVE, on one line: a chip naming the price's currency,
+            // the price, and the player's own stock of it. Copies of the hero itself and nothing
+            // else (F5), which is the rule the whole conversion tab exists to feed.
+            _ascendCostChip = EmberforgeUI.Chip("CostChip", _ascendCardBody, "COST",
                                                 UITheme.Warning, UITheme.FontTiny - 4);
-            UIBuilder.Box(_ascendCostChip, CardPad, -top, 210f, 28f, new Vector2(0f, 1f));
+            UIBuilder.Box(_ascendCostChip, CardPad, -(top + 3f), 96f, 28f, new Vector2(0f, 1f));
 
-            _ascendCostNote = EmberforgeUI.Body("CostNote", _ascendCardBody, "", UITheme.FontTiny,
-                                                UITheme.Warning, TextAnchor.UpperLeft);
-            StretchIn(_ascendCardBody, _ascendCostNote.rectTransform, top + 32f, 30f);
-            UIBuilder.BestFit(_ascendCostNote, UITheme.FontTiny - 5, UITheme.FontTiny);
+            _ascendCostNote = EmberforgeUI.Label("CostNote", _ascendCardBody, "", UITheme.FontSmall,
+                                                 Emberforge.TextBody, TextAnchor.MiddleLeft);
+            UIBuilder.Box(_ascendCostNote.rectTransform, CardPad + 110f, -top, 420f, CostRowHeight,
+                          new Vector2(0f, 1f));
+            UIBuilder.BestFit(_ascendCostNote, UITheme.FontTiny - 2, UITheme.FontSmall);
             UIBuilder.Outlined(_ascendCostNote, Emberforge.Outline, Emberforge.StrokeThin);
 
-            top += CostBlockHeight + BlockGap;
+            _ascendHave = EmberforgeUI.Label("Have", _ascendCardBody, "", UITheme.FontSmall,
+                                             UITheme.Warning, TextAnchor.MiddleLeft);
+            UIBuilder.Box(_ascendHave.rectTransform, CardPad + 540f, -top, 360f, CostRowHeight,
+                          new Vector2(0f, 1f));
+            UIBuilder.BestFit(_ascendHave, UITheme.FontTiny - 2, UITheme.FontSmall);
+            UIBuilder.Outlined(_ascendHave, Emberforge.Outline, Emberforge.StrokeThin);
+
+            top += CostRowHeight + BlockGap;
             Divider(_ascendCardBody, top);
             top += Emberforge.RuleHeight + BlockGap;
-
-            Text heading = EmberforgeUI.Label("MovesHeading", _ascendCardBody, "WHAT ASCENDING MOVES",
-                                              UITheme.FontTiny - 2, Emberforge.TextGold,
-                                              TextAnchor.UpperLeft);
-            UIBuilder.Box(heading.rectTransform, CardPad, -top, 520f, HeadingHeight,
-                          new Vector2(0f, 1f));
-            UIBuilder.Outlined(heading, Emberforge.Outline, Emberforge.StrokeThin);
-            top += HeadingHeight + UITheme.Space4;
 
             // THREE ROWS, BEFORE AND AFTER, and the tier level is deliberately the first of them.
             // It is the only one of the three that goes DOWN, it is the number a player is about
@@ -404,23 +416,6 @@ namespace Emberfall.UI.Screens
             _moveRows.Add(MoveRow("Level", "LEVEL", top));
             top += MoveRowHeight;
             _moveRows.Add(MoveRow("Cap", "LEVEL CAP", top));
-            top += MoveRowHeight + BlockGap;
-
-            _resetNote = EmberforgeUI.Body("ResetNote", _ascendCardBody, "", UITheme.FontTiny - 1,
-                                           Emberforge.TextBody, TextAnchor.UpperLeft);
-            StretchIn(_ascendCardBody, _resetNote.rectTransform, top, ResetNoteHeight);
-            UIBuilder.BestFit(_resetNote, UITheme.FontTiny - 6, UITheme.FontTiny - 1);
-            UIBuilder.Outlined(_resetNote, Emberforge.Outline, Emberforge.StrokeThin);
-            top += ResetNoteHeight + BlockGap;
-
-            Divider(_ascendCardBody, top);
-            top += Emberforge.RuleHeight + UITheme.Space4;
-
-            _opensNote = EmberforgeUI.Body("Opens", _ascendCardBody, "", UITheme.FontTiny - 1,
-                                           Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            StretchIn(_ascendCardBody, _opensNote.rectTransform, top, OpensNoteHeight);
-            UIBuilder.BestFit(_opensNote, UITheme.FontTiny - 6, UITheme.FontTiny - 1);
-            UIBuilder.Outlined(_opensNote, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         /// <summary>One before-and-after row: what moves, where it stands, and where it lands.
@@ -437,7 +432,9 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(before.rectTransform, CardPad + 220f, -top, 110f, 30f, new Vector2(0f, 1f));
             UIBuilder.Outlined(before, Emberforge.Outline, Emberforge.StrokeThin);
 
-            Text arrow = EmberforgeUI.Label(name + "Arrow", _ascendCardBody, "-", UITheme.FontTiny,
+            // "»", the talent page's before-and-after mark. A hyphen between two numbers reads
+            // as a range, and "LEVEL CAP 9 - 18" is a cap of nine to eighteen.
+            Text arrow = EmberforgeUI.Label(name + "Arrow", _ascendCardBody, "»", UITheme.FontSmall,
                                             Emberforge.TextQuiet, TextAnchor.MiddleCenter);
             UIBuilder.Box(arrow.rectTransform, CardPad + 336f, -top, 40f, 30f, new Vector2(0f, 1f));
 
@@ -531,64 +528,62 @@ namespace Emberfall.UI.Screens
         ///
         /// This block is the reason the page is laid out the way it is. F3 makes the output random
         /// within the aspect and never chosen, and the only honest way to show a random outcome
-        /// before it happens is to show the whole set it is drawn from. Five faces and "one of
-        /// these five, rolled" says it in a form nobody has to read a sentence to understand - and
-        /// it sits at the TOP of the tab, above the fodder and above the button, because a player
+        /// before it happens is to show the whole set it is drawn from. Five faces under "1 random
+        /// Umbra 5-star" says it in a form nobody has to read a sentence to understand - and it
+        /// sits at the TOP of the tab, above the fodder and above the button, because a player
         /// who scrolls past everything else still meets it first.
         /// </summary>
         private void BuildRollBlock(RectTransform parent, float top)
         {
-            Text heading = EmberforgeUI.Label("RollHeading", parent, "WHAT A CONVERSION HANDS BACK",
-                                              UITheme.FontTiny - 2, Emberforge.TextGold,
-                                              TextAnchor.UpperLeft);
-            UIBuilder.Box(heading.rectTransform, 0f, -top, 700f, HeadingHeight, new Vector2(0f, 1f));
-            UIBuilder.Outlined(heading, Emberforge.Outline, Emberforge.StrokeThin);
+            // THE OUTCOME, in the tab's largest type: "a random Umbra 5-star" says both what the
+            // player gets and that they do not choose it. Why the roll is a roll is behind the
+            // page's "?"; the sentence that said it under the faces was the tab explaining itself.
+            _rollOutcome = EmberforgeUI.Title("RollOutcome", parent, "", UITheme.FontTitle,
+                                              Emberforge.TextGold, TextAnchor.MiddleLeft);
+            UIBuilder.Box(_rollOutcome.rectTransform, 0f, -top, 1100f, RollOutcomeHeight, new Vector2(0f, 1f));
+            UIBuilder.BestFit(_rollOutcome, UITheme.FontHeading, UITheme.FontTitle);
+            UIBuilder.Outlined(_rollOutcome, Emberforge.Outline, Emberforge.StrokeThick);
 
-            float facesTop = top + HeadingHeight + UITheme.Space4;
+            float facesTop = top + RollOutcomeHeight + UITheme.Space4;
             _rollRow = UIBuilder.Node("Roll", parent);
             _rollRow.anchorMin = new Vector2(0f, 1f);
             _rollRow.anchorMax = new Vector2(1f, 1f);
             _rollRow.pivot = new Vector2(0.5f, 1f);
             _rollRow.offsetMin = new Vector2(0f, -(facesTop + RollPortrait + 16f));
             _rollRow.offsetMax = new Vector2(0f, -facesTop);
-
-            _rollNote = EmberforgeUI.Body("RollNote", parent, "", UITheme.FontTiny - 1,
-                                          Emberforge.TextBody, TextAnchor.UpperLeft);
-            StretchIn(parent, _rollNote.rectTransform,
-                      facesTop + RollPortrait + 16f + UITheme.Space4, 40f);
-            UIBuilder.BestFit(_rollNote, UITheme.FontTiny - 6, UITheme.FontTiny - 1);
-            UIBuilder.Outlined(_rollNote, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         /// <summary>
-        /// THE RECIPE: two lines, always both, saying what the seed must be and what the fodder
+        /// THE COST: two lines, always both, saying what the seed must be and what the fodder
         /// must be.
         ///
         /// Two lines whichever aspect is chosen, and that shape is the point (F9). An Umbra
         /// conversion needs one Umbra hero and then takes anything; an Ember conversion takes
         /// Ember throughout. Printing both halves for every aspect makes that a difference between
-        /// two recipes. Printing only the one the player broke would make it a complaint, which is
+        /// two prices. Printing only the one the player broke would make it a complaint, which is
         /// what a rule discovered by failing always becomes.
         /// </summary>
         private void BuildRecipeBlock(RectTransform parent, float top)
         {
-            Text heading = EmberforgeUI.Label("RecipeHeading", parent, "THE RECIPE",
+            Text heading = EmberforgeUI.Label("RecipeHeading", parent, "COST",
                                               UITheme.FontTiny - 2, Emberforge.TextGold,
                                               TextAnchor.UpperLeft);
             UIBuilder.Box(heading.rectTransform, 0f, -top, 700f, HeadingHeight, new Vector2(0f, 1f));
             UIBuilder.Outlined(heading, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _recipeSeed = EmberforgeUI.Body("Seed", parent, "", UITheme.FontTiny - 1,
-                                            Emberforge.TextBody, TextAnchor.UpperLeft);
-            StretchIn(parent, _recipeSeed.rectTransform, top + HeadingHeight + UITheme.Space4, 32f);
-            UIBuilder.BestFit(_recipeSeed, UITheme.FontTiny - 6, UITheme.FontTiny - 1);
+            // Two short lines of WHAT IT COSTS, both always present. Why a seed aspect takes a
+            // seed is the roster count behind it, and that is behind the page's "?".
+            _recipeSeed = EmberforgeUI.Body("Seed", parent, "", UITheme.FontSmall,
+                                            Emberforge.TextBody, TextAnchor.MiddleLeft);
+            StretchIn(parent, _recipeSeed.rectTransform, top + HeadingHeight + UITheme.Space4, 30f);
+            UIBuilder.BestFit(_recipeSeed, UITheme.FontTiny - 4, UITheme.FontSmall);
             UIBuilder.Outlined(_recipeSeed, Emberforge.Outline, Emberforge.StrokeThin);
 
-            _recipeFodder = EmberforgeUI.Body("Fodder", parent, "", UITheme.FontTiny - 1,
-                                              Emberforge.TextQuiet, TextAnchor.UpperLeft);
+            _recipeFodder = EmberforgeUI.Body("Fodder", parent, "", UITheme.FontSmall,
+                                              Emberforge.TextBody, TextAnchor.MiddleLeft);
             StretchIn(parent, _recipeFodder.rectTransform,
-                      top + HeadingHeight + UITheme.Space4 + 32f, 34f);
-            UIBuilder.BestFit(_recipeFodder, UITheme.FontTiny - 6, UITheme.FontTiny - 1);
+                      top + HeadingHeight + UITheme.Space4 + 30f, 32f);
+            UIBuilder.BestFit(_recipeFodder, UITheme.FontTiny - 4, UITheme.FontSmall);
             UIBuilder.Outlined(_recipeFodder, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
@@ -798,7 +793,10 @@ namespace Emberfall.UI.Screens
             GameSession session = App.Session;
             RebuildHeroList();
 
-            _headerSubtitle.text = "Five-stars go past five. Copies of the hero itself are the price.";
+            // The subtitle used to state the rule; the rule is behind the "?" with the reset.
+            _headerSubtitle.text = "";
+            _help = "Five-stars go past five. Copies of the hero itself are the price."
+                  + "\n\nThe tier level starts again, the power does not.";
 
             bool has = _subject != null && _subject.Def != null;
             _ascendEmpty.gameObject.SetActive(!has);
@@ -819,10 +817,9 @@ namespace Emberfall.UI.Screens
 
             RebuildPortrait(_ascendPortrait, def, def.Stars, PortraitSize);
             _ascendName.text = def.Name;
-            EmberforgeUI.SetChipText(_ascendTierChip, "TIER " + preview.FromTier);
-            _ascendStep.text = preview.HasNextTier
-                ? "to tier " + preview.ToTier
-                : "the highest tier this game authors";
+            _ascendOutcome.text = preview.HasNextTier
+                ? "TIER " + preview.FromTier + "  »  TIER " + preview.ToTier
+                : "TIER " + preview.FromTier + "  -  HIGHEST";
 
             // The three figures, from the preview rather than from arithmetic done here. A hero
             // with no next tier repeats the present in all three rows, which is the honest reading:
@@ -840,39 +837,31 @@ namespace Emberfall.UI.Screens
 
             if (preview.HasNextTier)
             {
+                // The price in its own currency, named, and the player's stock of it beside it,
+                // green when it covers the price.
+                bool met = preview.CopiesSpare >= preview.CopiesNeeded;
                 _ascendCostChip.gameObject.SetActive(true);
-                _ascendCostNote.text = preview.CopiesNeeded + " more cop"
-                                     + (preview.CopiesNeeded == 1 ? "y" : "ies") + " of " + def.Name
-                                     + ". You hold " + preview.CopiesSpare + " to spare.";
-                _ascendCostNote.color = preview.CopiesSpare >= preview.CopiesNeeded
-                                      ? UITheme.Success : UITheme.Warning;
-                EmberforgeUI.SetChipTint(_ascendCostChip, preview.CopiesSpare >= preview.CopiesNeeded
-                                                        ? UITheme.Success : UITheme.Warning);
+                EmberforgeUI.SetChipTint(_ascendCostChip, met ? UITheme.Success : UITheme.Warning);
+                _ascendCostNote.text = preview.CopiesNeeded + (preview.CopiesNeeded == 1 ? " COPY" : " COPIES")
+                                     + " OF " + def.Name.ToUpperInvariant();
+                _ascendHave.text = "YOU HAVE " + preview.CopiesSpare + " SPARE";
+                _ascendHave.color = met ? UITheme.Success : UITheme.Warning;
 
-                // THE WARNING, in one sentence, because the three rows above it now carry the
-                // whole of what it used to spell out. The paragraph this replaces said the tier
-                // level resets, said the Level does not, said the cap rises and gave the two
-                // figures for it - and every one of those is a row the player can read directly.
-                // Prose that restates the table is prose the player learns to skip, and the one
-                // thing the table cannot say is what the reset MEANS. That is all this says now.
-                _resetNote.text = "The tier level starts again, the power does not.";
-
+                // The talent slot the step opens is part of what the player GETS, so it sits
+                // under the outcome rather than in a sentence at the foot of the card. A step
+                // that opens none says nothing, rather than saying so.
                 int slot = SlotOpenedByTier(preview.ToTier);
                 PassiveDef opened = slot > 0 ? def.TalentAt(slot) : null;
-                _opensNote.text = opened != null
-                    ? "Tier " + preview.ToTier + " also unlocks talent slot " + Roman(slot) + ", "
-                      + opened.Name + ", on the talent page."
-                    : "Tier " + preview.ToTier + " raises the cap and the stat line. It opens no"
-                      + " further talent slot on this hero.";
+                _opensLine.text = opened != null
+                    ? "UNLOCKS TALENT " + Roman(slot) + ":  " + opened.Name.ToUpperInvariant()
+                    : "";
             }
             else
             {
                 _ascendCostChip.gameObject.SetActive(false);
                 _ascendCostNote.text = "";
-                _resetNote.text = def.Stars < 5
-                    ? "Below five stars a hero never ascends."
-                    : "There is nothing above this tier to spend copies on.";
-                _opensNote.text = "";
+                _ascendHave.text = "";
+                _opensLine.text = "";
             }
 
             _statusNote.text = preview.Possible ? "" : preview.Blocker;
@@ -962,7 +951,7 @@ namespace Emberfall.UI.Screens
         {
             GameSession session = App.Session;
 
-            _headerSubtitle.text = "Lower heroes become a five-star of their aspect. Which one is rolled.";
+            _headerSubtitle.text = "";
 
             RefreshAspectCards();
             RebuildRollRow();
@@ -973,8 +962,8 @@ namespace Emberfall.UI.Screens
             for (int i = 0; i < _bodies.Count; i++) points += session.FodderPoints(_bodies[i].Def);
             int required = session.Balance.ConversionPointsRequired;
             UIBuilder.SetBar(_pointsFill, required > 0 ? points / (float)required : 0f);
-            _pointsLabel.text = points + " / " + required + " from " + _bodies.Count
-                              + (_bodies.Count == 1 ? " body" : " bodies");
+            _pointsLabel.text = points + " / " + required + " POINTS  (" + _bodies.Count
+                              + (_bodies.Count == 1 ? " hero)" : " heroes)");
             _pointsLabel.color = points >= required ? UITheme.Success : Emberforge.TextGold;
 
             string blocker = session.ConversionBlocker(_target, _bodies);
@@ -1026,14 +1015,12 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
             }
 
-            // THE SENTENCE UNDER THE FACES, and it says "you do not choose" in those words. The
-            // faces alone could be read as a menu; the whole point of F3 is that they are not one.
-            _rollNote.text = pool.Count == 0
-                ? "No five-star of this aspect can be converted into."
-                : "One of these " + Word(pool.Count) + ", rolled. You do not choose which - the roll"
-                  + " is what manufactures the duplicate five-stars ascension eats, so a conversion"
-                  + " that let you pick would have nothing to feed.";
-            _rollNote.color = pool.Count == 0 ? UITheme.Warning : Emberforge.TextBody;
+            // THE OUTCOME OVER THE FACES, and it says RANDOM in that word. The faces alone could be
+            // read as a menu; the whole point of F3 is that they are not one.
+            _rollOutcome.text = pool.Count == 0
+                ? "NO " + _target.ToString().ToUpperInvariant() + " 5-STAR TO ROLL"
+                : "1 RANDOM " + _target.ToString().ToUpperInvariant() + " 5-STAR";
+            _rollOutcome.color = pool.Count == 0 ? UITheme.Warning : Emberforge.TextGold;
         }
 
         private void RefreshRecipe()
@@ -1043,20 +1030,26 @@ namespace Emberfall.UI.Screens
             int roster = session.ConversionFodderRoster(_target);
             bool seeded = session.IsSeedAspect(_target);
 
+            int required = session.Balance.ConversionPointsRequired;
             _recipeSeed.text = seeded
-                ? "SEED: one " + aspect + " hero below five stars. Mandatory, and it is what makes"
-                  + " this aspect slow."
-                : "SEED: none. Every body in " + Article(_target) + " " + aspect
-                  + " conversion is itself " + aspect + ".";
-
+                ? "SEED:  1 " + aspect + " hero below 5 stars"
+                : "SEED:  none";
             _recipeFodder.text = seeded
-                ? "FODDER: any aspect, to " + session.Balance.ConversionPointsRequired
-                  + " points. The roster authors only " + roster + " " + aspect + " heroes below five"
-                  + " stars, so a recipe that asked for " + aspect + " throughout would be a wall"
-                  + " rather than a rarity - the seed gates the rate instead."
-                : "FODDER: " + aspect + " throughout, to " + session.Balance.ConversionPointsRequired
-                  + " points. The roster authors " + roster + " " + aspect + " heroes below five"
-                  + " stars to draw them from. A five-star is never fodder.";
+                ? "FODDER:  any aspect below 5 stars, to " + required + " points"
+                : "FODDER:  " + aspect + " heroes below 5 stars, to " + required + " points";
+
+            // THE REASONS, behind the "?": what the subtitle, the sentence under the faces and the
+            // second half of each recipe line used to print.
+            _help = "Lower heroes become a five-star of their aspect. Which one is rolled."
+                  + "\n\nYou do not choose which - the roll is what manufactures the duplicate five-stars"
+                  + " ascension eats, so a conversion that let you pick would have nothing to feed."
+                  + "\n\n" + (seeded
+                      ? "The seed is mandatory, and it is what makes this aspect slow. The roster authors only "
+                        + roster + " " + aspect + " heroes below five stars, so a recipe that asked for " + aspect
+                        + " throughout would be a wall rather than a rarity - the seed gates the rate instead."
+                      : "Every body in " + Article(_target) + " " + aspect + " conversion is itself " + aspect
+                        + ". The roster authors " + roster + " " + aspect + " heroes below five stars to draw"
+                        + " them from. A five-star is never fodder.");
         }
 
         private void RebuildFodderGrid()
@@ -1280,20 +1273,6 @@ namespace Emberfall.UI.Screens
                 case 1: return "I";
                 case 2: return "II";
                 case 3: return "III";
-            }
-            return n.ToString();
-        }
-
-        private static string Word(int n)
-        {
-            switch (n)
-            {
-                case 1: return "one";
-                case 2: return "two";
-                case 3: return "three";
-                case 4: return "four";
-                case 5: return "five";
-                case 6: return "six";
             }
             return n.ToString();
         }
