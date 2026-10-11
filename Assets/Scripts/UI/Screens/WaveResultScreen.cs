@@ -98,6 +98,10 @@ namespace Emberfall.UI.Screens
         /// player build does not contain it.
         /// </summary>
         public static int CaptureSeed;
+
+        /// <summary>Presses WATCH from outside, so a capture can photograph the replay. Drives the
+        /// same private handler the button drives, as SkipToEndForCapture does on the battle screen.</summary>
+        public void WatchForCapture() { OnWatch(); }
 #endif
 
         protected override void Build()

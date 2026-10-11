@@ -204,6 +204,10 @@ namespace Emberfall.UI.Screens
         /// and never does the thing itself.
         /// </summary>
         public void SkipToEndForCapture() { SkipToEnd(); }
+
+        /// <summary>True while the event last played is a blow rather than a tick, so a capture
+        /// can freeze on a hit effect and not on a status ring. Read only; set in Handle.</summary>
+        public bool HitJustPlayed { get; private set; }
 #endif
 
         /// <summary>Index of the strip icon whose turn is being played. See AdvanceTurnStrip.</summary>
@@ -1096,6 +1100,9 @@ namespace Emberfall.UI.Screens
             // It plays what the record says and decides nothing, so a skip that never reaches
             // this line leaves the fight and its result exactly as they were.
             _world.Director.Play(e);
+#if UNITY_EDITOR
+            HitJustPlayed = e.Type == BattleEventType.Damage && e.Status == StatusKind.None;
+#endif
 
             switch (e.Type)
             {

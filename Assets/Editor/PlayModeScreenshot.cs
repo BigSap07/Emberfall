@@ -5,6 +5,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using Emberfall.Battle;
 using Emberfall.Game;
 using Emberfall.UI;
 using Emberfall.UI.Screens;
@@ -163,6 +164,11 @@ namespace Emberfall.EditorTools
 
         [MenuItem("Emberfall/Capture/Wave result (lost)", false, 84)]
         public static void CaptureWaveResultLost() { Begin("Screen:WaveResultLost"); }
+
+        // The same won wave as the first of the three, then WATCH pressed: one frame of the replay
+        // on the battle screen, frozen while a hit effect is alive. See PumpWaveReplay.
+        [MenuItem("Emberfall/Capture/Wave replay (mid-fight)", false, 85)]
+        public static void CaptureWaveReplay() { Begin("Screen:WaveReplay"); }
 
         // Formation and Hero detail are the two portrait-dense screens that had no target here,
         // which is how a portrait delivery could have been called verified without either being
@@ -338,6 +344,8 @@ namespace Emberfall.EditorTools
 
         private static void Stop()
         {
+            Time.timeScale = 1f;
+            SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetBool(ActiveKey, false);
             EditorApplication.isPlaying = false;
         }
@@ -621,7 +629,8 @@ namespace Emberfall.EditorTools
                     case "Result": id = ScreenId.Battle; break;
                     case "WaveResult":
                     case "WaveResultCleared":
-                    case "WaveResultLost": id = ScreenId.WaveResult; break;
+                    case "WaveResultLost":
+                    case "WaveReplay": id = ScreenId.WaveResult; break;
                     // The ability breakdown is a DIALOG over the hero page rather than a screen,
                     // so it routes to the page and opens the dialog a frame later, exactly as the
                     // Hub's layers do below.
@@ -744,7 +753,8 @@ namespace Emberfall.EditorTools
                     // Not Router.Show: the screen resolves a wave as it opens, so it has to be
                     // started the way the Campaign screen starts it, with a stage and a seeded
                     // profile behind it.
-                    StageDef waveStage = SeedWaveResult(app, name);
+                    // A replay is watched from a won mid-stage wave, so it seeds as one.
+                    StageDef waveStage = SeedWaveResult(app, name == "WaveReplay" ? "WaveResult" : name);
                     if (waveStage == null)
                     {
                         SessionState.SetInt(StageKey, slot + 1);
@@ -767,6 +777,7 @@ namespace Emberfall.EditorTools
             if (IsWaveResultTarget(name))
             {
                 if (frame <= showAt) return;
+                if (name == "WaveReplay") { PumpWaveReplay(app, frame, showAt, slot, BattleWaitCeiling, BattlePaintDelay); return; }
 
                 int armed = SessionState.GetInt(BattleArmKey, 0);
                 if (armed == 0)
@@ -1147,7 +1158,84 @@ namespace Emberfall.EditorTools
 
         private static bool IsWaveResultTarget(string name)
         {
-            return name == "WaveResult" || name == "WaveResultCleared" || name == "WaveResultLost";
+            return name == "WaveResult" || name == "WaveResultCleared" || name == "WaveResultLost"
+                   || name == "WaveReplay";
+        }
+
+        private const string ReplayStageKey = "PlayModeScreenshot.ReplayStage";
+
+        /// <summary>
+        /// WaveReplay: waits for the won wave to paint, presses WATCH through the screen's own
+        /// handler, waits for the replay to be underway with a hit effect alive, freezes time, and
+        /// shoots. Time is frozen rather than the shot timed because an effect lives a fraction of
+        /// a second and a frame count cannot land on one; a frozen particle system still renders.
+        /// Stage 0 waits on the result, 1 on the effect, 2 is frozen and counting down to the shot.
+        /// </summary>
+        private static void PumpWaveReplay(GameApp app, int frame, int showAt, int slot, int waitCeiling, int paintDelay)
+        {
+            int stage = SessionState.GetInt(ReplayStageKey, 0);
+            int armed = SessionState.GetInt(BattleArmKey, 0);
+
+            if (stage == 0)
+            {
+                WaveResultScreen waveScreen = app.Router.WaveResult;
+                if (waveScreen != null && waveScreen.Painted)
+                {
+                    ReportWaveOutcome("WaveResult", waveScreen.Result);
+                    if (waveScreen.Result == null || waveScreen.Result.Replay == null)
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: the wave kept no replay to watch. Skipping WaveReplay.");
+                        SessionState.SetInt(StageKey, slot + 1);
+                        return;
+                    }
+                    waveScreen.WatchForCapture();
+                    Debug.Log("PlayModeScreenshot: WATCH pressed on wave " + waveScreen.Result.Replay.Wave
+                              + ", battle " + waveScreen.Result.Replay.Battle + ", seed " + waveScreen.Result.Replay.Seed + ".");
+                    SessionState.SetInt(ReplayStageKey, 1);
+                    SessionState.SetInt(BattleArmKey, frame);
+                }
+                else if (frame > showAt + waitCeiling)
+                {
+                    Debug.LogWarning("PlayModeScreenshot: the wave result never painted. Skipping WaveReplay.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                }
+                return;
+            }
+
+            if (stage == 1)
+            {
+                BattleScreen battle = app.Router.Battle;
+                VfxDirector director = UnityEngine.Object.FindFirstObjectByType<VfxDirector>();
+                int live = 0;
+                if (director != null)
+                {
+                    ParticleSystem[] systems = director.GetComponentsInChildren<ParticleSystem>();
+                    for (int i = 0; i < systems.Length; i++) live += systems[i].particleCount;
+                }
+                if (battle != null && battle.RoundUnderway && battle.HitJustPlayed && live >= 8)
+                {
+                    Time.timeScale = 0f;
+                    SessionState.SetInt(ReplayStageKey, 2);
+                    SessionState.SetInt(BattleArmKey, frame);
+                    Debug.Log("PlayModeScreenshot: froze the replay with " + live + " live particles at frame " + frame + ".");
+                }
+                else if (frame > armed + waitCeiling)
+                {
+                    Debug.LogWarning("PlayModeScreenshot: no hit effect appeared in the replay within " + waitCeiling
+                                     + " frames. Shooting whatever is on screen - do not file it as a hit.");
+                    SessionState.SetInt(ReplayStageKey, 2);
+                    SessionState.SetInt(BattleArmKey, frame);
+                }
+                return;
+            }
+
+            if (frame == armed + paintDelay - 5) Canvas.ForceUpdateCanvases();
+            if (frame == armed + paintDelay)
+            {
+                Shoot("WaveReplay", frame, slot);
+                Time.timeScale = 1f;
+                SessionState.SetInt(ReplayStageKey, 0);
+            }
         }
 
         /// <summary>
