@@ -1084,7 +1084,13 @@ names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, whi
 
 ## In progress
 
-Nothing on a pushed branch. A branch is named here when it holds work worth naming, and only while it is unmerged.
+- **`server/rule-gaps`**: `0014_guild_rule_gaps.sql`, written and not applied. The guild dungeon
+  seed is derived and checked by the server, `guild_touch` writes at most once per 30 seconds, and
+  `guild_by_code` refuses an account after ten misses in ten minutes, with `guild_request_send`
+  taking only a found code. The guild rules test asserts all three. Operator steps are in
+  `Docs/CLOUD-GAPS.md`, **Fixed, pending apply: 0014**.
+
+A branch is named here when it holds work worth naming, and only while it is unmerged.
 
 ## Next
 

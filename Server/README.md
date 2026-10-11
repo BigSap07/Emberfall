@@ -39,11 +39,17 @@ project owner:
    held in the one-row `save_limits` table; `display_name` takes the guild tables' text rule
    (`Docs/CLOUD-GAPS.md` S2 and S7). **Raise `save_limits.max_save_version` before shipping a
    build that bumps `SaveSerializer.CurrentVersion`**, or that build cannot sync.
+14. `0014_guild_rule_gaps.sql` - the guild rule gaps `Docs/CLOUD-GAPS.md` recorded: the guild
+   dungeon seed is derived by the server (`guild_dungeon_seed_for`) and any other is refused;
+   `guild_touch` writes at most once per window; `guild_by_code` refuses an account that has
+   missed too many codes, and `guild_request_send` takes only a code the caller has found. The
+   limits are the one-row `guild_rate_limits` table. Written, not applied: the operator steps
+   are in `Docs/CLOUD-GAPS.md`, under **Fixed, pending apply: 0014**.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0013` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0014` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
 after a half-finished run, is a no-op rather than a failure to unpick.
 

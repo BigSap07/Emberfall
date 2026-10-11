@@ -698,7 +698,8 @@ member's own row, so four racers queue behind each other. The cycle is computed 
 server's `now()`. The live guild test already races six submissions and files against last and
 next cycle. This audit added the leave-and-rejoin case. The third pass ran both live and both held
 (S9), and the editor playthrough saw the cap refuse a fourth attempt through the game's own path.
-What can be beaten is the seed (S8).
+What can be beaten is the seed (S8). **Fixed, pending apply:** `0014_guild_rule_gaps.sql` derives it on
+the server and refuses any other.
 
 **Offline.** Proven. With no `supabase.json`, `SupabaseConfig.Load` is unconfigured and
 `GameApp.StartCloud` returns before building anything, so `GameApp.Cloud` stays null. Probe
@@ -826,7 +827,13 @@ on 2026-09-23**, and each entry ends with what the live project answered.
   server could refuse a wrong one, and a board can hold a win against an easier fight. 0007 says
   plainly that no anti-cheat is claimed and there are no rewards, so the cost is the board's
   meaning. Case: `check_seed_is_not_checked`. **Measured: still present**, now against
-  `guild_dungeon_submit`: an attempt claiming seed 1 was stored.
+  `guild_dungeon_submit`: an attempt claiming seed 1 was stored. **Fixed, pending apply:**
+  `0014_guild_rule_gaps.sql` adds `guild_dungeon_seed_for`, the same FNV-1a in SQL, and
+  `guild_dungeon_submit` refuses any seed but the one it derives for the caller's guild and the
+  current cycle, with 400 and before anything is spent. 0011's `guild_dungeon_attempt` calls it, so
+  both doors the client uses are covered. A CHECK constraint states the same rule on the column.
+  The case is now `check_seed_is_derived` and asserts the refusals, so it is red until 0014 is
+  applied. See **Fixed, pending apply: 0014** below.
 - **S9. The attempt cap and cycle under a race, and after leaving and rejoining.** Expected to
   hold, as argued above. The live test already carries the six-way race and the cycle checks,
   and `DESIGN-BUILD-ORDER.md` says it last reported clean. This audit cannot see whether that run
@@ -852,8 +859,10 @@ on 2026-09-23**, and each entry ends with what the live project answered.
 
 ## What a client can call in a loop (the A-list)
 
-Chat is the only call with a rate limit, at one message per two seconds per account. Everything
-else is unthrottled per account, bounded at most by Supabase's per-IP auth limits. The guild test
+Chat is the only call with a rate limit, at one message per two seconds per account.
+**`0014_guild_rule_gaps.sql`, written and not applied, adds two more**: `guild_touch` and
+`guild_by_code`, with `guild_request_send` bound to the second (see **Fixed, pending apply: 0014**
+below). Until it is applied, everything else is unthrottled per account, bounded at most by Supabase's per-IP auth limits. The guild test
 has 30 anonymous sign-ins per hour and 30 sign-ups per 5 minutes as the defaults. The anon key
 ships inside the build, and anonymous sign-up is on. So "signed in" means anyone who unpacks the
 build and asks.
@@ -869,9 +878,9 @@ build and asks.
 | `friendships` insert and delete | a row | the pair's unique index, only while the row exists | a friend request to every player in the profile table, and after a decline, again |
 | `team_snapshots` upsert | a row with unbounded `label` and `units`; `power_score` is claimed | nothing | storage, and a fake line for friends and guildmates to fight |
 | `rpc/guild_create`, then disband | two rows and a code | one guild at a time per account | guild names squatted, one per throwaway account |
-| `rpc/guild_by_code` | one indexed read | nothing | walking the code space for open guilds; the guild case measures twenty calls in a row |
-| `rpc/guild_request_send`, withdraw | a row | one per guild while it exists | a spammed request queue for officers |
-| `rpc/guild_touch` | a row write | nothing | write load; measured the same way |
+| `rpc/guild_by_code` | one indexed read | nothing; **fixed, pending apply** in 0014: ten misses per ten minutes per account, then 429 | walking the code space for open guilds; the guild case now asserts the 429 |
+| `rpc/guild_request_send`, withdraw | a row | one per guild while it exists; in 0014, only a code the caller last found | a spammed request queue for officers; before 0014, a second way to test codes |
+| `rpc/guild_touch` | a row write | nothing; **fixed, pending apply** in 0014: at most one write per 30 seconds per member | write load; the guild case now asserts twenty calls write at most once |
 | `rpc/guild_post_message` | a row | **two seconds per account** | multiplied by throwaway accounts inside an open guild |
 | `rpc/guild_dungeon_record` | a row with an unbounded `team` payload | three per floor per cycle per guild | more attempts by hopping guilds, and large payloads |
 | `rpc/generate_friend_code` | nothing | revoked from anon (S6, closed) | nothing: a signed-in user can still call it, and it returns a random string |
@@ -879,6 +888,103 @@ build and asks.
 What the game itself does in a loop is modest. It polls the newest hundred chat lines every four
 seconds while the chat screen is open, calls `guild_touch` at most once a minute, and publishes
 the team snapshot only when the line's fingerprint changes.
+
+---
+
+## Fixed, pending apply: 0014
+
+`Server/supabase/migrations/0014_guild_rule_gaps.sql` closes S8 and the A-list's `guild_touch` and
+`guild_by_code` rows. **Written 2026-10-11, not applied, and not run against the live project in
+any form**: no SQL was applied and neither rules test was run. What was run is the migration
+itself, on an in-memory Postgres (PGlite) with 0001 to 0014 applied over stand-ins for Supabase's
+`auth.users`, `auth.uid()` and roles: it applied, re-applied with the same answers, and 42 checks of
+the refusals and the paths kept all held. The rules test's new cases were written from the
+migration's text and only checked to parse.
+
+The limits are one row in `guild_rate_limits`, in `save_limits`' shape, so raising one is an
+UPDATE. No client role can read it or the per-account tally, `guild_code_lookups`.
+
+**S8, the dungeon seed.**
+
+- **Abuse:** a modified client submits an attempt claiming a seed whose floors are easier than its
+  guild's, and the row ranks on the guild's boards (which pay, since 0011) and replays a fight
+  nobody else in the guild faced.
+- **Fix:** `guild_dungeon_seed_for(guild, cycle)` is `GuildDungeon.SeedFor` in SQL. The migration
+  checks it against three vectors the C# function produces and stops before replacing anything if
+  they disagree. `guild_dungeon_submit` refuses any other seed with 400, after the shape checks and
+  before the floor gate and the cap, so a refusal spends nothing. The constraint
+  `guild_dungeon_attempts_seed_derived` states it again on the column, added NOT VALID and
+  validated only when no stored row breaks it.
+- **Kept:** `GuildDungeonService.Record` through 0011's `guild_dungeon_attempt`, and its fallback
+  straight to `guild_dungeon_submit`, both send `GuildDungeonStatus.Seed`, which is `SeedFor` of the
+  guild id and cycle `guild_dungeon_status` returned. Replays read the stored seed and are not
+  affected. The one honest way to send a wrong seed is to change guild between asking for the status
+  and submitting, and that fight was the other guild's.
+- **Not covered:** every other field of an attempt is still the client's word, as 0007 says. What
+  changes is that every stored row now replays against the guild's real dungeon, so a lie about the
+  result is checkable by replaying it. `LocalGuildDungeonBackend`, the editor's in-memory stand-in,
+  does not check seeds; it has no server to agree with.
+
+**`guild_touch`.**
+
+- **Abuse:** a script calls it in a loop. Every call rewrites the caller's membership row (a new
+  tuple and a WAL record), the same row chat and the dungeon lock FOR UPDATE, from as many
+  throwaway accounts as anonymous sign-up allows.
+- **Fix:** the stamp moves only when the stored one is at least 30 seconds old. Inside the window
+  the call writes nothing and answers the stamp already there. Not a 429: the client ignores the
+  answer, and a no-op keeps 0005's contract (a stamp for a member, NULL for anyone else).
+- **Kept:** `GuildService.Touch` (from `GuildScreen` and `GuildChatScreen`) stamps at most once a
+  minute, so it is never inside the window. `guild_post_message` and `guild_share_attempt` still
+  stamp on every post, under their own two-second limit.
+
+**`guild_by_code`, and `guild_request_send` beside it.**
+
+- **Abuse:** a script asks for random six-character codes forever, each miss one indexed read and
+  each hit a guild's name, description, size and whether it is open; an open one can be walked
+  into. `guild_request_send` answered the same question another way (404 against 'joined' or
+  'requested'), so throttling the lookup alone would only have moved the walk.
+- **Fix:** an account that misses 10 codes inside 10 minutes is refused every lookup with 429,
+  real codes included, until the window ends. Hits are never counted, and a malformed code costs
+  nothing. `guild_by_code` became VOLATILE so PostgREST runs it read-write. `guild_request_send`
+  accepts only the code the caller last found through `guild_by_code`, and refuses anything else
+  with 428 before reading the guild table, so its answer no longer depends on whether the code
+  exists.
+- **Kept:** `GuildScreen.FindRoutine` looks a code up, and `GuildScreen.JoinRoutine` sends the code
+  of the guild it found, so the game always looks first. Asking twice still answers the same.
+  Accepting, declining and withdrawing are untouched. The throttled sentence reaches the player in
+  the find box, through `GuildService.LookupByCode`'s error path. `Tools/accounts-live-drive.py
+  guild-ask` now looks the code up before asking, as the game does.
+
+**Operator steps.** In this order, in the Supabase SQL editor, as the project owner:
+
+1. **0013 first, if it is not applied yet, then raise its row.** 0013 seeds
+   `save_limits.max_save_version` at 19 and `SaveSerializer.CurrentVersion` is 20, so straight
+   after pasting 0013 run
+   `update public.save_limits set max_save_version = 20, updated_at = now();`.
+   0014 reads nothing 0013 creates; the order only keeps the numbers in sequence.
+2. **Paste 0014.** Expect these NOTICE lines, in this order:
+   - `0014: guild_dungeon_seed_for agrees with GuildDungeon.SeedFor on all three vectors`
+   - either `0014: guild_dungeon_attempts_seed_derived: validated against every stored attempt`,
+     or `0014: guild_dungeon_attempts_seed_derived: enforced on new writes, NOT validated - N stored
+     attempt(s) carry a seed their guild and cycle do not derive`. The second is expected while
+     rows filed by earlier rules-test runs survive (S8's seed 1, and the test's old fixed seed).
+   - `0014: guild_rate_limits: guild_touch writes at most once every 30 s; guild_by_code allows 10
+     miss(es) per 600 s`
+   - `0014: guild_by_code is volatile, so PostgREST runs it read-write`
+
+   A re-paste adds `relation ... already exists, skipping` lines and changes nothing. An ERROR
+   starting `0014: guild_dungeon_seed_for disagrees with GuildDungeon.SeedFor` means stop: it is
+   raised before `guild_dungeon_submit` is replaced.
+3. **Run the read-only queries at the bottom of 0014.** `guild_dungeon_seed_for` of the test vector
+   answers 35606394, `guild_by_code` shows `provolatile` `v`, and every row the bad-seed query lists
+   should belong to a `gt-` tagged rules-test user.
+4. **Run the guild rules test:** `python Tools/supabase-guild-rules-test.py` (or `--no-race` for the
+   six-account run). It expects 0014: the seed, presence and lookup cases are red without it. It
+   waits about 31 seconds for the presence window and creates one more throwaway account than
+   before. Paste the CLEANUP statement it prints. If 0013 went in at step 1, also run
+   `python Tools/supabase-rules-test.py`, whose S2 and S7 cases expect it.
+5. **Optional:** once the cleanup has deleted the rules-test users, paste 0014 again. With no row
+   left breaking the seed rule it validates the constraint and prints the validated line.
 
 ---
 

@@ -323,6 +323,13 @@ def cmd_guild_ask(args):
     """
     session = refresh(read_token_file(args.token_file))
 
+    # Look first, as GuildScreen does: since 0014 guild_request_send takes only the code this
+    # account last found through guild_by_code.
+    status, found = request("POST", "/rest/v1/rpc/guild_by_code", token=session["token"],
+                            body={"p_code": args.code})
+    if status != 200 or not found:
+        die("guild_by_code found no guild", str(status) + " " + str(found))
+
     status, response = request("POST", "/rest/v1/rpc/guild_request_send", token=session["token"],
                                body={"p_code": args.code})
     if status != 200:
