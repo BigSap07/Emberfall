@@ -47,6 +47,8 @@ campaign progression, summoning, idle income, local saving. Landscape, touch-fir
   `ContentDatabase.ContentVersion`, so any edit retires every recorded guild dungeon replay. A
   ninth, `guild-path.json` (the Guild Path's pay and prices), is deliberately NOT hashed: nothing
   in it is read by a fight, so it loads through `ContentDatabase.LoadGuildPath` after `Load`.
+  `vfx.json` (hit feedback) is NOT part of `ContentVersion` either: `ContentDatabase` never reads
+  it, `VfxDirector` loads it through `VfxConfig`, and it is presentation only.
 - **Code goes on branches, never on `main`.** Branch first, commit there, leave `main` alone.
 - **Design docs commit straight to `main`.** They touch no code, and every agent needs to read
   them.

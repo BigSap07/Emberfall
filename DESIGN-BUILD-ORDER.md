@@ -487,6 +487,22 @@ harness fights, not by reading the room lists.
 reason a player can act on. Gold buys levels up to a cap that the hero's star tier and ascension
 tier set and account rank does not (`GameSession.HeroLevelCapOf`); see **Fusion and ascension**.
 
+**A wave resolves in one tap.** `GameSession.ResolveWave` fights the rest of the current wave
+through `ResolveLadderBattle`, the helper `SweepClearedStage` shares, so every campaign battle has
+one resolution path, and returns a `WaveResolution` that `WaveResultScreen` only reads: the
+outcome, the wave track or the stage-clear spoils, the twelve battles with the HP the line kept,
+and on a loss the lost battle with its `Debrief` cause. A loss stops at the lost battle and the
+next resolve starts there; a won mid-stage wave pays nothing and the wave that finishes the stage
+calls `GrantBattleResult` once, so battle count and economy are unchanged. `CampaignFlow.Launch`
+is the one door into a stage for `CampaignScreen`, `FirstRun` and `BattleScreen`'s CONTINUE: a
+cleared stage is swept, a stage with a wave curve opens `WaveResultScreen`, and only a stage with
+no ladder reaches `BattleScreen`. `ReportResolvesPerFirstClear` prints what a first clear costs;
+`DESIGN-CAMPAIGN-STRUCTURE.md`'s 2026-10-11 amendment is the reasoning. **Cleared stages are
+recorded by id** (`PlayerProfile.ClearedStageIds`): `CampaignProgress` derives the frontier, the
+furthest stage, unlocks, idle income and the count from them, and `stagesCleared` is a derived
+count kept for the summary readers. `CheckWaveResolve`, `CheckClearedStagesById` and
+`CheckStageResumeAfterWaveResolve` prove it.
+
 ### Fusion and ascension
 
 `DESIGN-HERO-FUSION.md` holds the rules, F1 to F9, and the reasoning; this is what the files show.
@@ -511,22 +527,22 @@ tier set and account rank does not (`GameSession.HeroLevelCapOf`); see **Fusion 
   level clamp.
 - **The fusion screen is built.** `FusionScreen` is two tabs on one page, because fusion's output
   is ascension's input: the ascend tab is the player's five-stars beside a card carrying the copy
-  cost and three before-and-after rows, the convert tab is the six aspects, the whole roll pool
+  cost and two before-and-after rows, the convert tab is the six aspects, the whole roll pool
   face by face, a two-line recipe and a grid of bodies against a points meter. `GameSession` owns
   every number and every refusal on it - `PreviewAscension`, `ConversionPool`,
   `ConversionFodderRoster`, `AscensionBlocker`, `ConversionBlocker` - and the page draws what they
   return. `AscensionLanding` is extracted from `Ascend` rather than copied, so the landing the
   preview promises is the landing the ascension makes. Two doors reach it: `HeroDetailScreen`'s
   action bar and a pressable locked talent card on `TalentsScreen`.
-- **The ascend card counts in TIER LEVELS, except for its one Level row.** `TierLevelBefore/After`
-  and `TierCapBefore/After` on `AscensionPreview` are the pair the hero list beside the card
-  already prints from `GameSession.TierLevelOf` and `StatMath.HeroLevelCap`, so a tier-0 five-star
-  at the top of its tier reads `LEVEL 9 / 9` in the list and `9 -> 1` over a cap of `9 -> 18` on
-  the card. `LevelBefore/After` are Levels on the one stat ladder, `9 -> 10` for the same hero, and
-  they are the row that does not reset. The preview deliberately does not carry the absolute Level
-  cap (`StatMath.CapLevel`, `9 -> 45` there): nothing on the page counts in it, and the card used
-  to print it next to a tier level, which is two units for one cap and the bug the numbers pass
-  removed.
+- **The fusion screen counts in tier levels only; the absolute Level appears nowhere on that
+  screen.** The ascend card has two rows, TIER LEVEL and TIER CAP, bound to `TierLevelBefore/After`
+  and `TierCapBefore/After` on `AscensionPreview`, and the hero list beside it prints the same pair
+  by name from `GameSession.TierLevelOf` and `StatMath.HeroLevelCap`. A tier-0 five-star at the top
+  of its tier reads `TIER LEVEL 9` and `TIER CAP 9` in the list and `9 -> 1` over a cap of
+  `9 -> 18` on the card. `AscensionPreview` still carries `LevelBefore/After`, Levels on the one
+  stat ladder, for callers that are not this screen, and `FusionScreen` leaves them unread: printed
+  beside the cap, Level `9 -> 10` read as "10 of 18". The preview does not carry the absolute Level
+  cap (`StatMath.CapLevel`) at all.
 
 **The chapter 1 ladder is shorter than chapter 2's, deliberately.** It was 12 waves everywhere,
 which is 144 battles, which at a 40-battle sitting costs four sittings before difficulty has been
@@ -654,7 +670,7 @@ ships on top of that, with `RelicShopScreen` as its storefront.
 
 Summoning with a pity rule that guarantees distinct unowned heroes. Idle income accrues against a
 real clock and is capped. `SaveSerializer` writes the whole document, at
-`SaveSerializer.CurrentVersion` 19, and a save from a newer build is refused rather than read.
+`SaveSerializer.CurrentVersion` 20, and a save from a newer build is refused rather than read.
 Version 15 keeps records this build cannot resolve; version 16 adds each hero's ascension tier;
 version 17 adds the Guild Path's copy of the server's answer and the formation's saved lines, and
 later the guild tech tree's copy of it - deliberately without a further bump, because the server
@@ -671,6 +687,13 @@ A claim saved by threshold is migrated through a frozen table of the eight rungs
 before ids (`SaveSerializer.PreIdMilestones`), never through the live `events.json`. A claim whose
 milestone cannot be resolved is kept, so it stays claimed rather than reopening.
 `CheckEventMilestoneRetuneDoesNotRepay` retunes `events.json` under a claimed save and proves it.
+Version 20 records cleared stages by id (`clearedStages`) and makes `stagesCleared` a derived
+count. It is the first migration step conditioned on the version: a pre-20 position becomes the
+first N ids of the frozen `SaveSerializer.PreIdStageOrder`, never of the live `campaign.json`, and
+an id the loaded content does not name is kept and not counted. The Echo and Brand banks are
+clamped to their caps on every load. `CheckClearedStagesById` and `CheckRegenClampOnLoad` prove
+it. **The server must accept it before a cloud player ships**: 0013 inserts its `save_limits` row
+at `max_save_version` 19, and `push_save` refuses a version 20 save until that row is raised to 20.
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -692,6 +715,18 @@ online code rather than a path through it.
 
 A friendly duel costs nothing and pays nothing: no Brand, no Valor, no standing, no attempt, no
 write to the save.
+
+**A display name is asked for on demand, never at first launch.** `NamePrompt` opens once, the
+first time a player without a chosen name (`CloudLocalState.ChosenNameFor`) opens Friends or
+founds or joins a guild; skipping changes nothing on Friends and drops the guild action.
+`DisplayNameRules.Validate` checks the name with the guild name's constants and helpers - trimmed,
+3 to 20 characters counted as `char_length` counts them (`GuildRules.CharacterCount`), no control
+character and no Unicode line or paragraph separator - which is stricter than the column's 1 to 24
+and 0013's text rule, so the client never sends a name the server refuses. `AccountService` sends
+the cleaned name through the existing profile update, and a refused name no longer reads as a
+failed sync. `FriendsScreen` opens with the player's own friend code and a copy button. With no
+cloud config neither the prompt nor the code card exists. `CheckDisplayNameRules` proves the rule;
+`NameOnDemandShots` captures it on a scratch identity with no network.
 
 ### Guilds, phase one
 
@@ -894,6 +929,24 @@ Damage event to the strike; per-clip `footFraction` stops a clip floating or sin
 `BattleAssets` loads unit sprites and backdrops by id, and logs an error naming the hero and the
 path it looked in when a unit declares art it does not have.
 
+**Hit feedback is fed from the event list.** `VfxDirector` (flash, hit stop, knockback, shake, a
+particle burst, and a flipbook path that waits for a sheet) receives every event from
+`BattleScreen.Handle` through `Play`, with `ExactFeed` set when the stage is built, so it sees a
+`StatusApplied` that `UnitActor`'s taps never could; nothing uses the taps now. It reads
+`vfx.json`, which is not part of `ContentVersion`. Presentation only: nothing in
+`CombatSimulation`, `GameSession` or the save reads it.
+
+**WATCH replays the hardest battle of a resolved wave.** `GameSession.ResolveWave` keeps a
+`WaveReplay` on the `WaveResolution`, in memory only: the lost battle, else the win that left the
+least HP, with its seed from `BattleSeed` and copies of the line that fought it
+(`HeroInstance.Copy`, taken before a stage clear pays). `GameSession.ReplayBattle` runs it through
+`CombatSimulation.Run` again, so the replay is the resolved fight and not a second roll, and
+`BattleScreen` plays it as a `GuildBattleRun` flagged `IsReplay`, which reaches no grant and asks
+for no save. `CheckWaveReplay` proves the replay matches the recorded outcome, that the copy
+carries every `HeroInstance` field, and that replaying leaves the serialized save byte for byte as
+it was. `PlayModeScreenshot`'s `WaveReplay` target presses WATCH and freezes a frame while a hit
+effect is alive.
+
 **31 of 94 heroes have drawn battle art**, and they are the thirty 5-stars plus Celen. The other 63
 carry `visual.spriteStatus: "pending"` and render as an aspect-tinted placeholder mannequin with
 their name under its feet, which makes "not drawn yet" a thing the game can say separately from
@@ -983,30 +1036,6 @@ editor prints `editor` and a player built through a door that did not stamp it p
 names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, which is `0.3.0`.
 
 ## In progress
-
-**`feature/battle-feel`** is based on `engine/wave-resolve` with `feature/hit-vfx` merged, and does
-two things. It holds:
-- **the hit feedback wired.** `VfxDirector` (flash, hit stop, knockback, shake, a particle burst, and a
-  flipbook path that waits for a sheet) is fed every event by `BattleScreen.Handle` through `Play`,
-  with `ExactFeed` set when the stage is built, as the director's own contract says. Before this the
-  screen reached it only through `UnitActor`'s taps, which cannot see a `StatusApplied`; nothing uses
-  the taps now. Presentation only: nothing in `CombatSimulation`, `GameSession` or the save reads it.
-- **WATCH on `WaveResultScreen`.** `GameSession.ResolveWave` keeps a `WaveReplay` on the
-  `WaveResolution`, in memory only: the lost battle, else the win that left the least HP, its stage
-  position, the seed `BattleSeed` gave it and copies of the line that fought it (`HeroInstance.Copy`,
-  taken before the fights and so before a stage clear pays). `GameSession.ReplayBattle` runs it through
-  `CombatSimulation.Run` again, so the replay is the resolved fight and not a second roll. The button
-  hands the result to `BattleScreen` as a `GuildBattleRun` flagged `IsReplay`, the handed-in-result
-  shape the guild dungeon already uses; that mode reaches no grant and, for a replay, asks for no
-  save. BACK redraws the wave result as it stood, without resolving again. The save did not change
-  and no version moved. `CheckWaveReplay` proves the replay matches the recorded outcome, that the
-  copy carries every `HeroInstance` field (by reflection), and that replaying leaves the serialized
-  save byte for byte as it was, including after a stage clear and after a loss.
-
-The build check reads **4 failures**, the four already on `main`: the moved stage fingerprints, the
-geared CEIL band, the campaign power band and the economy model's response to authored income. No
-baseline moved and no content JSON changed. `PlayModeScreenshot` has a `WaveReplay` target that
-presses WATCH and freezes a replay frame while a hit effect is alive.
 
 **`ui/fusion-numbers`** makes the ascend card's three rows readable against the list beside them,
 and cuts the page down to them. It holds:
