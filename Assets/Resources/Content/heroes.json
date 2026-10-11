@@ -883,7 +883,7 @@
           "name": "Unclaimed Victory",
           "trigger": "OnEnemyDefeated",
           "oncePerBattle": false,
-          "description": "When an enemy falls, Kiva takes a Ward worth a share of her Max HP, and a larger one still if she is holding a Broken Link when it happens.",
+          "description": "When an enemy falls, Kiva takes a Ward worth a share of her Max HP. If she is holding a Broken Link, the Ward is larger and every Broken Link she holds is spent.",
           "effects": [
             {
               "kind": "Shield",

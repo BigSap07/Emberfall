@@ -155,18 +155,20 @@ tree on 2026-09-23.
 
 - **Written:** "When Kiva defeats a Forsaken target, consume all Broken Links. Each one gives her a
   12% Max HP Shield for 2 rounds."
-- **Built:** the kill always pays one Ward, and each Broken Link held adds another, up to a limit.
+- **Built:** any enemy falling, whoever lands the blow, pays Kiva an ungated Ward from her Max HP,
+  and a further one if she holds a Broken Link, which spends every link she holds. No Forsaken
+  gate, and one link clause rather than a ladder up to a limit.
 - **Proposed: keep.** As written it paid exactly zero: Severance Paid spends every Broken Link on the
-  next basic, so a kill never finds one. The ungated Ward pays on the kill the talent names.
-- **The wording, owed since the five-star review.** The card currently carries a measurement, which
-  the style rules forbid. Replacement:
+  next basic, so a kill never finds one. Ungating the first Ward fixed that, and the talent-value
+  pass then widened the trigger to any enemy falling, because the killing blow is rarely Kiva's.
+  `Docs/PINOY-LIST.md` 2a has the numbers and what it pays.
+- **The wording, pending the designer's confirmation.** The card no longer carries a measurement.
+  It reads:
 
-  > *When Kiva defeats a Forsaken enemy, she gains a Ward drawn from her Max HP, larger for each
-  > Broken Link she holds, up to a limit. Every Broken Link is spent.*
+  > *When an enemy falls, Kiva takes a Ward worth a share of her Max HP. If she is holding a Broken
+  > Link, the Ward is larger and every Broken Link she holds is spent.*
 
-  It says what the kit does and stops. The link-gated part is real and reachable, just rare, so it
-  stays on the card without a number and without a caveat. The same sentence should replace the
-  measurement note carried in `import/Heroes.json`.
+  It says what the kit does and stops. `import/Heroes.json` carries the same mechanics in numbers.
 
 ---
 
@@ -382,7 +384,7 @@ follows `Docs/ABILITY-TEXT-STYLE.md`: no numbers, in-battle status names, forty 
 | T23 | Hale, Field Sign | Yes | Strikes the enemy with the lowest HP and marks it as Quarry. Hale hits a Quarry harder. |
 | T24 | Hale, Closing Radius | Yes | Strikes the Quarry. If an ally has struck it since Hale's last turn, a second blow lands, harder the more wounded it is, up to a limit. |
 | T25 | Hale, Tracking Habit | **Done with W2** | At the end of each round, if Quarry still stands, it moves to the enemy that dealt the most damage that round, and Hale hits it harder. |
-| T26 | Kiva, Unclaimed Victory | Yes | When Kiva defeats a Forsaken enemy, she gains a Ward drawn from her Max HP, larger for each Broken Link she holds, up to a limit. Every Broken Link is spent. |
+| T26 | Kiva, Unclaimed Victory | **Done, pending the designer** | When an enemy falls, Kiva takes a Ward worth a share of her Max HP. If she is holding a Broken Link, the Ward is larger and every Broken Link she holds is spent. |
 | T27 | Seraphine, Volume Closed | Yes | When a Footnote record reaches its limit, the enemy takes the whole record as damage, loses Footnote and is Nullified, and Seraphine gains Energy. A Nullified enemy cannot gain buffs. |
 | T28 | Altheon, Witness Script | Yes | Strikes the enemy with the highest Attack, harder if Altheon has already damaged it this round. If it is the Subject and holds more HP than when he last noted it, he strikes it again. |
 | T29 | Altheon, Immaculate Record | Yes | Strikes every enemy and marks the enemy with the highest Attack as the Subject. The first time each round Altheon damages the Subject, a share of it is recorded, up to a limit. When the Subject expires, it takes the whole record as damage. |
