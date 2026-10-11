@@ -55,6 +55,21 @@ campaign progression, summoning, idle income, local saving. Landscape, touch-fir
 - Verify with `Tools/build-check.ps1` before calling work done.
 - Editor captures are forced offline by the capture tooling (`EditorCaptureGuard`); agents no longer need to move `supabase.json`.
 
+## Nightly run
+
+A scheduled task runs `Tools/nightly.ps1` at 03:30 so the owner gets a health report without
+starting an agent. It runs build-check, the hero validator and a capture sweep of every
+`PlayModeScreenshot` target at 1920x1080, and diffs the result against the previous night.
+
+- **Reports land in `D:\Emberfall\nightly\<date>\`.** Read `REPORT.md` first; `results.json` is
+  what the next night diffs against. The last 14 nights are kept.
+- **`D:\Emberfall\Game-nightly` belongs to that run.** It is reset to `origin/main` and cleaned
+  every night, and the run refuses to start if an editor has it open. **Agents must never open it
+  in Unity, build in it, edit in it or check a branch out in it.** Use your own worktree.
+- The run never posts to Discord, never reads `supabase.json`, and makes no network call other
+  than `git fetch`. Its captures are forced offline on the scratch identity, and it hashes the
+  real save before and after and flags any change at the top of the report.
+
 ## Update posts (Discord)
 
 **ON HOLD until the roster is authored: agents never post, to either webhook, even when
