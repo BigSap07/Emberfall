@@ -211,6 +211,7 @@ namespace Emberfall.Game
             BootStage = "overlays";
             _toast = new Toast(OverlayLayer);
             _modal = new ModalPopup(OverlayLayer);
+            NamePrompt = new NamePrompt(OverlayLayer);
             Conflict = new ConflictChooser(OverlayLayer);
             // One bag for the whole app, not one per screen. Four screens open it and they open
             // the same object, which is why it is built here beside the other overlays rather
@@ -516,6 +517,11 @@ namespace Emberfall.Game
         {
             get { return _modal; }
         }
+
+        /// <summary>The one field that asks a player for a display name, when a screen that shows
+        /// them to other people is first entered. Built with the other overlays; it never opens
+        /// by itself.</summary>
+        public NamePrompt NamePrompt { get; private set; }
 
         /// <summary>Queues a save a moment from now so bursts of changes collapse into one write.</summary>
         public void RequestSave()

@@ -38,6 +38,11 @@ namespace Emberfall.UI.Screens
         private Image _ground;
         private RectTransform _content;
 
+        private RectTransform _myCodeCard;
+        private Text _myCode;
+        private Text _myCodeNote;
+        private UIButton _copyButton;
+
         private InputField _codeField;
         private UIButton _addButton;
         private Text _addNote;
@@ -57,6 +62,7 @@ namespace Emberfall.UI.Screens
                                             new RectOffset(0, 0, 8, 48));
             ApplyContentInset();
 
+            BuildMyCodeCard(_content);
             BuildAddCard(_content);
 
             _listHost = UIBuilder.Node("List", _content);
@@ -96,6 +102,39 @@ namespace Emberfall.UI.Screens
                                  Embedded ? UITheme.Space16 : UITheme.TopBarHeight + 118f,
                                  UITheme.ScreenPadding, 20f);
         }
+
+        /// <summary>
+        /// The player's OWN code, first on the page. A friend list is useless to somebody nobody
+        /// can find, and the code used to live only on the Account screen, where a player adding
+        /// friends never goes. Set at title size and in gold because it is read out loud and typed
+        /// into somebody else's phone - the same treatment the Account screen gives it.
+        ///
+        /// Absent entirely in a build with no cloud: there is no code to have.
+        /// </summary>
+        private void BuildMyCodeCard(RectTransform parent)
+        {
+            _myCodeCard = UIBuilder.Node("MyCodeCard", parent);
+            UIBuilder.Sized(_myCodeCard, CardWidth, 200f);
+            EmberforgeUI.PanelOn(_myCodeCard, false);
+
+            Text heading = EmberforgeUI.Title("Heading", _myCodeCard, "YOUR FRIEND CODE", UITheme.FontSmall,
+                                           Emberforge.TextQuiet, TextAnchor.UpperLeft);
+            UIBuilder.Box(heading.rectTransform, 30f, -22f, 700f, 26f, new Vector2(0f, 1f));
+
+            _myCode = EmberforgeUI.Title("Code", _myCodeCard, "------", UITheme.FontTitle, Emberforge.TextGold,
+                                      TextAnchor.UpperLeft);
+            UIBuilder.Box(_myCode.rectTransform, 30f, -54f, 520f, 64f, new Vector2(0f, 1f));
+
+            _copyButton = EmberforgeUI.Button("Copy", _myCodeCard, "COPY", UITheme.FontBody, ForgeButtonKind.Primary);
+            UIBuilder.Box(_copyButton.Root, 580f, -50f, 260f, 76f, new Vector2(0f, 1f));
+            _copyButton.OnClick(OnCopyCode);
+
+            _myCodeNote = EmberforgeUI.Body("Note", _myCodeCard,
+                "Give this to a friend. They type it into Add by friend code, and you can type theirs below.",
+                UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+            UIBuilder.Box(_myCodeNote.rectTransform, 30f, -136f, CardWidth - 120f, 56f, new Vector2(0f, 1f));
+        }
+
         private void BuildAddCard(RectTransform parent)
         {
             RectTransform card = UIBuilder.Node("AddCard", parent);
@@ -117,7 +156,7 @@ namespace Emberfall.UI.Screens
             _addButton.OnClick(OnAdd);
 
             _addNote = EmberforgeUI.Body("Note", card,
-                "Six characters, from the code on their Account screen. O, I, L, U, 0 and 1 are not "
+                "Six characters, from the code at the top of their Friends screen. O, I, L, U, 0 and 1 are not "
                 + "in the alphabet, so a code never contains one.",
                 UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(_addNote.rectTransform, 30f, -152f, CardWidth - 120f, 56f, new Vector2(0f, 1f));
@@ -128,7 +167,62 @@ namespace Emberfall.UI.Screens
         public override void OnShow()
         {
             App.RefreshHud();
+
+            CloudCoordinator cloud = App.Cloud;
+            if (cloud != null)
+            {
+                cloud.Changed -= RefreshMyCode;
+                cloud.Changed += RefreshMyCode;
+            }
+            RefreshMyCode();
             Reload();
+
+            // Asked here, and only of a player who has not chosen a name: this is the first place
+            // anyone else will see one. It also fetches the profile when boot has not, which is
+            // what fills the code card. Declining changes nothing on this screen - the code on it
+            // is how a friend finds them, and a name is not a toll on that - and the question
+            // comes back the next time they open it.
+            StartCoroutine(App.NamePrompt.Ensure(delegate (bool carryOn) { }));
+        }
+
+        public override void OnHide()
+        {
+            if (App != null && App.Cloud != null) App.Cloud.Changed -= RefreshMyCode;
+        }
+
+        /// <summary>Draws the player's own code from the profile, or hides the card when there is
+        /// no cloud to have one in.</summary>
+        private void RefreshMyCode()
+        {
+            CloudCoordinator cloud = App.Cloud;
+            _myCodeCard.gameObject.SetActive(cloud != null);
+            if (cloud == null) return;
+
+            AccountProfile profile = cloud.Profile;
+            bool have = cloud.SignedIn && profile != null && !string.IsNullOrEmpty(profile.FriendCode);
+            _myCode.text = have ? FriendCode.Format(profile.FriendCode) : "------";
+            _copyButton.Interactable = have;
+            if (!cloud.SignedIn)
+                _myCodeNote.text = "You are offline, so your code is not available. It appears here once you are back online.";
+            else if (!have)
+                _myCodeNote.text = "Fetching your code.";
+            else
+                _myCodeNote.text = "Give this to a friend. They type it into Add by friend code, and you can type theirs below.";
+        }
+
+        /// <summary>
+        /// The code to the system clipboard, unformatted - no dash. What is copied is what gets
+        /// pasted into somebody else's box, and FriendCode.Normalise strips the dash anyway; the
+        /// plain six characters are right even where a paste target does not.
+        /// </summary>
+        private void OnCopyCode()
+        {
+            if (App.Cloud == null || App.Cloud.Profile == null) return;
+            string code = App.Cloud.Profile.FriendCode;
+            if (string.IsNullOrEmpty(code)) return;
+            App.Audio.Tap();
+            GUIUtility.systemCopyBuffer = code;
+            App.Notify("Friend code copied.");
         }
 
         private void Reload()

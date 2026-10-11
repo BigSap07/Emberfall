@@ -29,7 +29,7 @@ namespace Emberfall.UI.Screens
     {
         public override ScreenId Id { get { return ScreenId.Account; } }
 
-        private const int NameLimit = 24;
+        private const int NameLimit = DisplayNameRules.Max;
         private const float CardWidth = 1180f;
 
         private Text _headerSubtitle;

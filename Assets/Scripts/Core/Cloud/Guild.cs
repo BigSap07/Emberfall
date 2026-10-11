@@ -201,11 +201,16 @@ namespace Emberfall.Core.Cloud
         /// A guild name, checked the way the column checks it: trimmed, 3 to 20 characters, and
         /// no control characters. Returns the trimmed name through `cleaned` so the caller sends
         /// what was validated rather than what was typed.
+        ///
+        /// The length is counted in CHARACTERS, as `char_length` counts them, not in UTF-16 units:
+        /// two emoji are four units here and two characters there, so counting units let a name
+        /// the column refuses as too short through to the server.
         /// </summary>
         public static bool ValidateName(string typed, out string cleaned, out string problem)
         {
             cleaned = (typed == null ? "" : typed).Trim();
-            if (cleaned.Length < NameMin || cleaned.Length > NameMax)
+            int length = CharacterCount(cleaned);
+            if (length < NameMin || length > NameMax)
             {
                 problem = "a guild name is " + NameMin + " to " + NameMax + " characters";
                 return false;
@@ -272,12 +277,38 @@ namespace Emberfall.Core.Cloud
         /// answers the same for everything a phone keyboard can produce. A newline in a name or a
         /// chat line is a layout bug in a UI built out of single-line labels, and the honest place
         /// to stop it is before it is sent rather than in the error that comes back.
+        ///
+        /// The two Unicode line and paragraph separators are refused as well. They are not
+        /// control characters to .NET, but glibc's `cntrl` class - which is what the column's
+        /// pattern asks when the database runs a glibc locale - lists them, and a client that is
+        /// stricter than the column costs a player nothing, where one that is looser sends a name
+        /// the column refuses.
         /// </summary>
         public static bool HasControlCharacter(string text)
         {
             if (string.IsNullOrEmpty(text)) return false;
-            for (int i = 0; i < text.Length; i++) if (char.IsControl(text[i])) return true;
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (char.IsControl(c) || c == '\u2028' || c == '\u2029') return true;
+            }
             return false;
+        }
+
+        /// <summary>
+        /// Characters as the database counts them (`char_length`): one per code point, so a
+        /// surrogate pair is one. Never more than <c>text.Length</c>.
+        /// </summary>
+        public static int CharacterCount(string text)
+        {
+            if (string.IsNullOrEmpty(text)) return 0;
+            int count = 0;
+            for (int i = 0; i < text.Length; i++)
+            {
+                if (char.IsHighSurrogate(text[i]) && i + 1 < text.Length && char.IsLowSurrogate(text[i + 1])) i++;
+                count++;
+            }
+            return count;
         }
 
         // ------------------------------------------------------------------ saying when

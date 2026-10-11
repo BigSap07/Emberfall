@@ -398,20 +398,24 @@ namespace Emberfall.Game.Cloud
         }
 
         /// <summary>Renames the account. display_name is the only column a client holds an UPDATE
-        /// grant on, so this is the whole of what this call can possibly do.</summary>
+        /// grant on, so this is the whole of what this call can possibly do.
+        ///
+        /// Checked by DisplayNameRules first, which is the guild-name rule the server applies to
+        /// display names: what is sent is the cleaned string, and a name that rule refuses is
+        /// never sent at all.</summary>
         public IEnumerator SetDisplayName(string name, Action<bool, string> done)
         {
             if (!SignedIn) { Finish(done, false, "not signed in"); yield break; }
 
-            string trimmed = (name == null ? "" : name).Trim();
-            if (trimmed.Length < 1 || trimmed.Length > 24)
+            string cleaned, problem;
+            if (!DisplayNameRules.Validate(name, out cleaned, out problem))
             {
-                Finish(done, false, "a display name is 1 to 24 characters");
+                Finish(done, false, problem);
                 yield break;
             }
 
             JsonValue body = JsonValue.NewObject();
-            body.Set("display_name", trimmed);
+            body.Set("display_name", cleaned);
             string path = "rest/v1/profiles?user_id=eq." + _state.UserId;
             yield return (_client.Send("PATCH", path, body.ToJson(false),
                 delegate (SupabaseResponse response)

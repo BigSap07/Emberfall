@@ -38327,6 +38327,7 @@ namespace Emberfall.DevHarness
             CheckGuildCodeFormat();
             CheckGuildRoleMatrix();
             CheckGuildTypedInput();
+            CheckDisplayNameRules();
             CheckGuildChatWindow();
             CheckGuildRowReading();
             CheckGuildConstantsMatchTheMigrations(contentDir);
@@ -38493,6 +38494,100 @@ namespace Emberfall.DevHarness
                   "a message carrying a newline is refused before it is sent");
             Check(GuildRules.HasControlCharacter("a\tb") && !GuildRules.HasControlCharacter("a b"),
                   "a tab counts as a control character and a space does not");
+        }
+
+        /// <summary>
+        /// A player's display name, which the server holds to the guild-name rule.
+        ///
+        /// The property that matters is that the client NEVER SENDS a name the server will refuse,
+        /// so the checks below are about the sent string (`cleaned`), not just the verdict: it
+        /// must carry no leading or trailing space, no control character and a character count the
+        /// column accepts. And the verdict must be the guild name's verdict, input for input -
+        /// the two share their constants and helpers, and this is what fails if one of them is
+        /// ever given a private copy.
+        /// </summary>
+        private static void CheckDisplayNameRules()
+        {
+            string cleaned, problem;
+
+            Check(DisplayNameRules.Min == GuildRules.NameMin && DisplayNameRules.Max == GuildRules.NameMax,
+                  "a display name has the guild name's bounds (" + DisplayNameRules.Min + " to "
+                  + DisplayNameRules.Max + ")");
+
+            Check(DisplayNameRules.Validate("  Ash  ", out cleaned, out problem) && cleaned == "Ash",
+                  "a name is trimmed before it is measured, and the trimmed one is what is sent (\""
+                  + cleaned + "\")");
+            Check(!DisplayNameRules.Validate("ab", out cleaned, out problem) && problem.Length > 0,
+                  "two characters is refused, with a sentence to show");
+            Check(!DisplayNameRules.Validate("   ab   ", out cleaned, out problem),
+                  "and padding it with spaces does not make it three");
+            Check(!DisplayNameRules.Validate("", out cleaned, out problem)
+                  && !DisplayNameRules.Validate(null, out cleaned, out problem)
+                  && cleaned == "",
+                  "nothing, and null, are refused");
+            Check(DisplayNameRules.Validate(new string('x', DisplayNameRules.Max), out cleaned, out problem),
+                  DisplayNameRules.Max + " characters is the longest name there is");
+            Check(!DisplayNameRules.Validate(new string('x', DisplayNameRules.Max + 1), out cleaned, out problem),
+                  "and one more is refused");
+            Check(!DisplayNameRules.Validate("two\nlines", out cleaned, out problem)
+                  && !DisplayNameRules.Validate("tab\there", out cleaned, out problem),
+                  "a newline or a tab inside a name is refused");
+            Check(!DisplayNameRules.Validate("one\u2028two", out cleaned, out problem)
+                  && !DisplayNameRules.Validate("one\u2029two", out cleaned, out problem),
+                  "and so are the Unicode line and paragraph separators, which glibc's cntrl class "
+                  + "counts and char.IsControl does not");
+
+            // Two emoji are four UTF-16 units and two characters. char_length says two, so the
+            // column refuses it as too short; counting units would have sent it.
+            string twoEmoji = "\U0001F525\U0001F525";
+            Check(twoEmoji.Length == 4 && !DisplayNameRules.Validate(twoEmoji, out cleaned, out problem),
+                  "two emoji are two characters, not four, so they are too short - length is "
+                  + "counted the way char_length counts it");
+            Check(DisplayNameRules.Validate("\U0001F525\U0001F525\U0001F525", out cleaned, out problem),
+                  "and three are enough");
+            string twentyOneEmoji = "";
+            for (int i = 0; i < DisplayNameRules.Max + 1; i++) twentyOneEmoji += "\U0001F525";
+            Check(!DisplayNameRules.Validate(twentyOneEmoji, out cleaned, out problem),
+                  "and twenty-one are too many");
+
+            // The differential: one table of inputs, run through both rules. They must agree on
+            // every row, because the server applies one rule to both columns.
+            string[] table =
+            {
+                "", " ", "a", "ab", "abc", "  abc  ", "a b", " a b ", new string('z', 20), new string('z', 21),
+                "ok\n", "\tok", "ok\u2028", "\u00A0abc\u00A0", "\u00A0\u00A0\u00A0", "\U0001F525\U0001F525",
+                "\U0001F525\U0001F525\U0001F525", "caf\u00E9s", "Wayfarer"
+            };
+            int disagreements = 0;
+            string firstDisagreement = "";
+            for (int i = 0; i < table.Length; i++)
+            {
+                string guildCleaned, guildProblem, nameCleaned, nameProblem;
+                bool guild = GuildRules.ValidateName(table[i], out guildCleaned, out guildProblem);
+                bool name = DisplayNameRules.Validate(table[i], out nameCleaned, out nameProblem);
+                if (guild != name || guildCleaned != nameCleaned)
+                {
+                    disagreements++;
+                    if (firstDisagreement.Length == 0) firstDisagreement = "\"" + table[i] + "\"";
+                }
+            }
+            Check(disagreements == 0,
+                  "a display name and a guild name give the same verdict and the same cleaned string "
+                  + "for all " + table.Length + " inputs in the table"
+                  + (disagreements == 0 ? "" : " - first to differ: " + firstDisagreement));
+
+            // What is SENT, over everything that passes: nothing the column's CHECK would refuse.
+            int unsafeSends = 0;
+            for (int i = 0; i < table.Length; i++)
+            {
+                if (!DisplayNameRules.Validate(table[i], out cleaned, out problem)) continue;
+                int characters = GuildRules.CharacterCount(cleaned);
+                if (cleaned != cleaned.Trim(' ') || GuildRules.HasControlCharacter(cleaned)
+                    || characters < 3 || characters > 20) unsafeSends++;
+            }
+            Check(unsafeSends == 0,
+                  "every input that is accepted is sent as a string with no edge spaces, no control "
+                  + "character and 3 to 20 characters - the column's three conditions");
         }
 
         /// <summary>
@@ -38699,6 +38794,14 @@ namespace Emberfall.DevHarness
             Check(sql.Contains("'^[2-9A-HJKMNP-TV-Z]{6}$'"),
                   "and the guild code's CHECK restates the friend-code alphabet, so a stored code "
                   + "is always one FriendCode can read");
+
+            string profiles = Path.Combine(migrations, "0001_profiles.sql");
+            if (File.Exists(profiles))
+                Check(File.ReadAllText(profiles).Contains("display_name text not null default '"
+                                                          + DisplayNameRules.Default + "'"),
+                      "a profile's display_name defaults to '" + DisplayNameRules.Default
+                      + "' in the SQL, which is the value DisplayNameRules.Default treats as \"not "
+                      + "chosen yet\"");
         }
 
         /// <summary>Where two documents first disagree, with enough either side to see what
