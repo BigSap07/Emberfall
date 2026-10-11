@@ -10,6 +10,13 @@
 # disk at checkout. Only the stored form is pinned.
 * text=auto
 
+# Unity writes ProjectSettings/*.asset with LF whatever the platform, while core.autocrlf=true
+# checks them out as CRLF. Each write then left the file differing from what git last put on disk,
+# so it reported modified with an empty diff after every build and every editor open, and
+# Tools/build-windows.ps1 refused or quarantined a player over it. eol=lf makes LF the checked-out
+# form too, so what Unity writes and what git expects are the same bytes.
+ProjectSettings/*.asset text eol=lf
+
 # The roster design source is captured verbatim: no line-ending or encoding
 # translation, so a future diff of it shows only what somebody actually edited.
 # Last, because the last matching pattern wins.
