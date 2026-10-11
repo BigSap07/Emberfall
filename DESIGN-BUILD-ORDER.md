@@ -30,19 +30,16 @@ about reasoning.
 
 Two runs decide whether the tree is healthy, and they measure different things.
 
-- **`Tools/build-check.ps1`: 5 failures on `main` as merged, 3 on the wall-resolve branch under In
-  progress, both measured from a clean run.** It lints the docs, compiles the core and the
-  Unity-facing code against the shim in `Tools/UnityShim`, and runs `Tools/DevHarness`. Two of the
-  five were the arena matrix's coverage checks, one for talents and one for basics, actives and
-  passives; the talent pass on `talents/make-them-work` turned both green (**Known bugs**). The
-  third is the campaign power-band guard. On
-  `main` it is twelve stages over their band, because the table there was derived for a player who
-  could not fuse; on the branch the table is re-solved under the wall rule and it is two, `2-6` and
-  `2-12` at x1.197, a reading rather than a regression (**The campaign power curve**). `main`'s last
-  two are a merge seam the branch closes: `CheckSolverAndGateCompileOneList` found
-  `Tools/DevHarness/ArenaMatrix.cs` in `build-check.ps1`'s file list and not in
-  `solve-recommended-power.ps1`'s.  The geared curve's CEIL band is green. The
-  balance line is Kael, Kiva, Isara, Adric and Orelle, and the pinned line the CEIL is read with is
+- **`Tools/build-check.ps1`: 2 failures on `main`, measured from a clean run.** It lints the docs,
+  compiles the core and the Unity-facing code against the shim in `Tools/UnityShim`, checks that
+  nothing of the Dev Arena reaches a release build, checks that editor automation cannot reach the
+  real cloud (the offline-switch stage, under **Tooling**), and runs `Tools/DevHarness`. Both
+  failures are harness checks, and both read the 72-stage campaign against numbers carried by
+  position from the shipped 24 (**The campaign power curve**). **The geared CEIL band** fails
+  first at `1-7`, 62.7% against the ordinary band's [78%, 92%]. **The campaign power-band guard**
+  has ten stages over their band, both walls of every chapter from 2 to 6: `2-6`, `2-12`, `3-6`,
+  `3-12`, `4-6`, `4-12`, `5-6`, `5-12`, `6-6` and `6-12`, from x1.097 over x1.091 at `4-12` to
+  x1.189 over x1.135 at `3-12`. The balance line is Kael, Kiva, Isara, Adric and Orelle, and the pinned line the CEIL is read with is
   Kael, Aeron, Nereia, Seraphine and Isolde. ENGINE-GAPS pass 3 turned `buffsOnly` on, which took
   chapter 1's finale CEIL from 68% to 27% and four walls out of the power band, so
   `Tools/solve-recommended-power.ps1` was re-run once, after every other change had landed: 22 of 24
@@ -77,10 +74,10 @@ Two runs decide whether the tree is healthy, and they measure different things.
   file directly under `Tools/DevHarness` is missing from either.
   **The power-band guard allows 0.005 past either edge** (`BandTolerance`) **and prints ratios to
   three decimals.** `2-1` once failed the build by 0.09% and printed as "x1.1 under x1.1".
-  **A 6th failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
+  **A 3rd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
-- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 43 tracked markdown files and reports 122
+- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 60 tracked markdown files and reports 123
   baselined violations and **0 new**. The baseline is the known debt in
   `Tools/doc-lint-baseline.txt`; the zero is the number that has to stay zero.
 - **`Tools/HeroValidator/validate_heroes.py Assets/Resources/Content/heroes.json`: 0 failures.**
@@ -883,6 +880,18 @@ literal 280 with Overflow. Eight chapters stand still; past that the row scrolls
 failure at six was not a row spilling over its edges but a `HorizontalLayoutGroup` dividing the
 width it had, squeezing the plates while their labels stayed 280 wide and printed across the seams.
 
+**The campaign flow has a HOME disc, and back steps one screen.** `ScreenChrome.HomeDisc` and
+`ForgedHeader`'s `home` overload draw the disc the back control uses, with HOME in the glyph slot.
+`CampaignScreen` takes it in place of its chevron; `WaveResultScreen` and `BattleScreen` draw it in
+the corner for a campaign fight or a campaign wave's replay, marked by `GuildBattleRun.Home`.
+`ScreenRouter.GoHome` clears the history and shows the main menu, and resolves, pays and saves
+nothing. `GameApp.HandleBack` asks `UIScreen.TryStepBack` before the history, so the wave result
+steps back to the campaign map and a campaign replay takes its BACK button's step to the wave
+result: both are shown without being remembered, so the history cannot name them. Leaving
+mid-stage keeps what the save already holds (`CampaignCurrentStageId`, wave and battle); no save
+field was added. `PlayModeScreenshot`'s `WaveReplayResult` target photographs the replay's result
+panel.
+
 **The Hub is four layers, with one rule each.** It had grown by bolting controls onto the map:
 three slabs over the top left with the HEROES marker behind them, GUILD twice a thumb apart, DEV
 overlapping both the PROVING marker and the button it was stacked under, an idle panel holding a
@@ -931,7 +940,7 @@ Damage event to the strike; per-clip `footFraction` stops a clip floating or sin
 path it looked in when a unit declares art it does not have.
 
 **Hit feedback is fed from the event list.** `VfxDirector` (flash, hit stop, knockback, shake, a
-particle burst, and a flipbook path) receives every event from
+particle burst, and `Flipbook`, which plays a sheet on a billboard quad) receives every event from
 `BattleScreen.Handle` through `Play`, with `ExactFeed` set when the stage is built, so it sees a
 `StatusApplied` that `UnitActor`'s taps never could; nothing uses the taps now. It reads
 `vfx.json`, which is not part of `ContentVersion`. Presentation only: nothing in
@@ -958,6 +967,15 @@ their name under its feet, which makes "not drawn yet" a thing the game can say 
 "this hero's art is broken". All 94 profile badges are drawn and wired, so the battle sheets are
 the only art the roster is still missing, and with every kit authored they are **the last thing
 between the roster and being finished**. `Docs/PINOY-LIST.md` section 5 is the list.
+
+**A hero sheet keeps the proportions it was drawn at.** `fit_frame` in `Tools/rewire_sprites.py`,
+which `process_hero` runs on every frame, scales a delivered frame uniformly to 260 tall and
+centres it in a transparent 220 by 260 cell, fitting by width instead only when that would still
+be wider than the cell. It replaced a plain resize to 220 by 260 that stretched the five Ember
+5-stars (Kael, Kiva, Seraphine, Hale and Marrow), delivered at 720 by 1280, to between 1.3 and
+1.65 times their width. Their 35 sheets are re-exported from the original deliveries; the sidecars,
+`.meta` files and `heroes.json` are unchanged, and an 880 by 1040 frame, the usual delivery,
+comes out exactly as the plain resize made it.
 
 **Enemies draw from the same sheets, and 26 of Pinoy's 84 have them**: 12 of chapter 1's 14 and all
 14 of chapter 2's, in the five clips the battle plays (idle, basic, skill, hit reaction, death) at
@@ -998,6 +1016,22 @@ the sweep does not. CI runs `build-check.ps1` on every push and pull request.
 `DevHarness.exe --ceil-reconcile [stage [levels]]` is a second development aid: it reads the solver's
 and the guard's CEIL side by side against a 4,000-sample reference, and it is how the `1-12`
 disagreement under **The instruments** was settled.
+
+**Editor captures are offline by construction.** The working tree holds a gitignored
+`supabase.json`, so a Play session that did nothing about it signed in as the real account; a
+capture once came back covered by the save-conflict chooser. `SupabaseConfig.ForcedOffline`, a
+`SessionState` switch that belongs to one editor process, makes the loader behave as if the file
+were absent, so `GameApp.StartCloud` returns at its `Configured` check before any `SupabaseClient`
+is built. Every Play-mode entry under `Assets/Editor` goes through
+`EditorCaptureGuard.EnterPlayMode`, which arms it, and the switch is cleared when Play mode ends.
+`EditorScratchIdentity` puts `PlayModeScreenshot` on a scratch company name, so a photograph does
+not write the real local save either. All of it sits inside `UNITY_EDITOR`. `build-check.ps1`'s
+offline-switch stage asserts four things: `Tools/OfflineSwitchCheck` runs the real
+`SupabaseConfig`, `GameApp.StartCloud` and `EditorCaptureGuard` against the shim with a stand-in
+file and shows the file is never read and no client is built; no Play-mode entry under
+`Assets/Editor` bypasses the guard; nothing about the switch exists outside `UNITY_EDITOR` in
+`Assets/Scripts`; and `GameApp.StartCloud`, after its `Configured` return, is the only place
+shipped code builds a `SupabaseClient`.
 
 **The arena matrix** (`Tools/DevHarness/ArenaMatrix.cs`) measures every basic, active, passive
 and talent in the roster, 428 rules, by ablation. It fights the same hero in the same room at the
@@ -1050,172 +1084,7 @@ names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, whi
 
 ## In progress
 
-**`ui/campaign-nav`** puts a HOME disc top left on every campaign-flow screen and makes the back key
-step back one screen. It holds:
-- **HOME.** `ScreenChrome.HomeDisc` and `ForgedHeader`'s `home` overload, the same disc the back
-  control uses with HOME in the glyph slot. `CampaignScreen` takes it in place of its chevron;
-  `WaveResultScreen` and `BattleScreen` (a campaign fight or a campaign wave's replay, marked by
-  `GuildBattleRun.Home`) draw it in the corner. `ScreenRouter.GoHome` clears the history and shows
-  the main menu; it resolves, pays and saves nothing.
-- **Back.** `UIScreen.TryStepBack`, asked by `GameApp.HandleBack` before the history: the wave result
-  steps to the campaign map and a campaign replay takes its BACK button's step to the wave result.
-  Both were shown without being remembered, so the history could not name them. A leave mid-stage
-  keeps what the save already holds (`CampaignCurrentStageId`, wave and battle); no field was added.
-- **`WaveReplayResult`**, a `PlayModeScreenshot` target for the replay's result panel.
-
-**`ui/fusion-numbers`** makes the ascend card's three rows readable against the list beside them,
-and cuts the page down to them. It holds:
-- **the cap row in tier levels.** It bound the absolute Level cap, so a hero the list called
-  `LEVEL 18 / 18` read on the card as a cap of 18 rising to 45 - the same cap in a unit the page
-  never uses anywhere else. `AscensionPreview` carries `TierCapBefore/After` now and the absolute
-  pair is gone, because it had no other reader. See **Fusion and ascension** for what each of the
-  three rows counts in.
-- **the copy, cut to the rows.** The cost banner is one line and the paragraph under the rows is
-  one sentence - *the tier level starts again, the power does not*. What it replaced restated the
-  reset, the rise and both cap figures, every one of which is a row a player can read; what a
-  table cannot say is what the reset means, and that is all that is left.
-- **the card ends where its content ends.** The plate filled the column top to bottom, so every
-  canvas taller than the stack drew an empty panel under the talent line. It is `AscendCardHeight`
-  tall and top-anchored, and `Build`'s shortest-canvas assertion measures the same constant.
-
-The preview's arithmetic was not touched and was not wrong: for a tier-0 five-star at the top of
-its tier it already returned tier level `9 -> 1` and Level `9 -> 10`, which is what the rows now
-print. Both tabs were re-captured at 16:9 and 20:9. No save version moved, no content JSON changed
-and no baseline was regenerated. The build check reads **4 failures**, the four already on `main`:
-the moved stage fingerprints, the CEIL band, the campaign power band and the economy model's
-response to authored income.
-
-**`talents/ascension-gate`** builds DESIGN-TALENTS T6: ascension tier unlocks talent slots, one
-per tier. It holds the derived gate on `HeroInstance`, the single simulation line that reads it,
-the capture-side rule that keeps a locked pick out of every published record, the locked card on
-`TalentsScreen` and a `Talents` target for `PlayModeScreenshot`, which had none. No save version
-moved, and the stage-fingerprint, hero-sweep and talent-sweep baselines are all unmoved. The build
-check reads **3 failures**, the three already on `main`: armor's Rough slope, the geared CEIL and
-the campaign power band.
-
-**`guild/tech-tree`** builds the guild tech tree `DESIGN-GUILD-TECH.md` in the `claude` folder describes, replacing
-the four-node Guild Path's storefront. Four family tracks by role, three derived stat rungs each,
-twelve guild talents in the hero talents' own vocabulary, and guild level on a square-root curve.
-It holds:
-- `guild-tech.json`, `GuildTechConfig`, `Core/Cloud/GuildTech.cs`, the `StatMath` power weights a
-  rung converts through, and the two lines in `CombatSimulation` that resolve a guild talent where
-  a hero's selected talent already resolves;
-- `Tools/DevHarness/GuildTechChecks.cs` (the derivation and the gate) and `GuildTalentParity.cs`
-  (every guild talent read by the instrument that reads hero talents), plus `--guild-tech`;
-- `GuildTechScreen`, which replaces `GuildPathScreen`, and `GuildTechService`;
-- `Server/supabase/migrations/0012_guild_tech.sql`, **written and not applied**;
-- the two retired checks deleted: the identical-fight proof and the no-collective-gating flatness
-  assertion.
-
-It regenerates no baseline, and all three still match on it. The build check reads **3 failures**,
-which are main's: armor's Rough slope (fixed on `engine/the-solve`, unmerged), the geared CEIL band
-and the campaign power band. Every GUILD DUNGEON, GUILD PATH and GUILD TECH check is green.
-
-**`guild/tech-choice`** sits on top of that branch and makes the twelve talents a choice.
-
-The x3 rule is retired: it capped a family's strongest option at three times its weakest
-on the parity ladder, passed all four families, and left one option in each the pick on
-every floor. `Tools/DevHarness/GuildTalentThemes.cs` reads every guild talent in the
-guild dungeon instead - every floor theme, and every condition that theme may draw, with
-the talent on the profile and on every family member in the line at once. The reading is
-the dungeon's own board order rather than the margin, because margin is hero HP kept and
-read that way every defensive talent measured three times every offensive one. The bar a
-lead must clear is derived from what chance alone moves the same floors by. `G10` in
-`DESIGN-GUILD-TECH.md` in the `claude` folder is the rule it enforces: no talent may be the best pick on
-every theme, and every family must have at least two that are the best pick somewhere.
-
-The talents are re-authored against it. Each is an ANSWER to something a floor is made
-of rather than a shape: `Answer in Kind` retaliates once per blow taken and answers Wall
-and Attrition, `Hold the Wall` Taunts and answers Hunt, `Dig In` answers the Champion,
-`No Survivors` answers the floors full of bodies, `Press the Wound` stacks on the one
-body that lives, `First Blood` opens with a volley, `Unbroken` wards, `Steady Hands`
-knits, `Ranging Shot` finishes, `Mark the Line` marks the biggest thing on the floor.
-Ten of the twelve are the best pick on some theme; `Grace/Last Word` and
-`Reach/Steady Aim` are not, and sit between their siblings everywhere.
-
-Two gates were changed to read what their own studies read. The theme gate fights the
-same arenas the study prints, because its bar falls out of how many arenas were fought.
-The parity gate reads six subject heroes rather than three - at three, Grace drew one
-Mender whose kit does not heal in the pinned line, and a clause that fires on a heal read
-INERT against a study that read it comfortably.
-
-It regenerates no baseline and moves none. The build check reads **4 failures**, which
-are main's: the stage fingerprints, the geared CEIL band, the campaign power band and the
-economy model's response to income. Every GUILD DUNGEON, GUILD PATH and GUILD TECH check
-is green.
-
-**`content/campaign-stages`** replaces the shipped 24 stages with Pinoy's 72:
-- only his 84 fielded, the shipped 12 kept as data and excluded from the guild dungeon and the Deep
-  Recital;
-- a miniboss flag on stage 6 that the power band reads as the chapter's wall;
-- `CheckCampaignLinesLegal` and `CheckPrologueStillFights`;
-- `CAMPAIGN-SPEC.md` section 10, with the placeholder list for Pinoy.
-
-It solves nothing on purpose. The build check reads **7 failures**, measured after its last commit
-regenerated the stage fingerprints (216 lines) from a fresh rebase on `main`. Three are main's (the
-two arena-matrix reds and the power band, now at 1-6, 1-9 and 2-6), and four it breaks deliberately:
-the retired 1-1 opener pin, armor's Rough slope, the CEIL band, and 16 of 20 non-fusing walks stuck.
-Each is listed with its cause in `CAMPAIGN-SPEC.md` 10.8.
-
-**`harness/solve-prereqs`** fixes the instruments the big solve reads, so that it is run once.
-It is based on `main` with `content/campaign-stages` merged, and holds:
-- **the reference player's line made role-sane**: `WantedLine` and `EconomyDeployLine` in
-  `Program.cs`;
-- **the three dead 1-1 pins retired** from `CheckCampaignMigrationRegression`;
-- **`--solve-prereqs`** (`Tools/DevHarness/SolvePrereqs.cs`), a measurement instrument that asserts
-  nothing;
-- **`Docs/SOLVE-PREREQS.md`**: what Speed's linear price costs each power-score consumer, with four
-  proposals for Matthias to pick from; the reference player's error per chapter; and every table
-  tuned against 24 stages, valued at stage 24 and at stage 72.
-
-It changes no content, no formula and no baseline. The build check reads **5 failures**, down from 7:
-the dead opener pin is retired, and `CheckFusionNeverGates` is green (0 of 20 walks stick). The
-power band still fails, but now reads all 72 stages, and 38 are out of band.
-
-**`balance/wall-resolve`** carries what the fusion spine left: target A re-measured by what bought
-each Level (open decision 4), the Striker pass that lifted Velis and Kiva together and emptied
-`KnownF8Exceptions` (**The star band**), the CEIL guard at 2,000 samples and the chapter 1 line
-(open decision 2), a `--wall-study` and a `--line-calibration` development aid, and the re-solve of
-`campaign.json` under the wall rule: `recommendedPower` derived from the player who never converts
-and never ascends, `CheckFusionNeverGates` failing if any of twenty such walks sticks, the cap
-derivation's growth pinned, and chapter 2 nearly flat as the price (**The campaign power curve**,
-open decision 4). Its stage, sweep and talent fingerprints move with the Kiva lift and the
-re-solve, and are regenerated as its last commit.
-**`guild/floor-conditions`** carries the guild dungeon's floor conditions described under **Guilds,
-phase one**:
-
-- `BattleRules`, `floor-conditions.json` and the seeded draw;
-- the C7 suspension rule and line legality;
-- the condition band and board tiles on the floor view, and the condition on the dungeon row;
-- the `--guild-conditions` study and the gate checks that re-assert it;
-- this file's and the design record's edits.
-
-It moves no pinned baseline, and it adds no harness failure to the five `main` already has.
-
-**`engine/round-end-and-rooms`** carries the round-end repair described under **Combat** (Finn's
-Aftershock Clock delays at last, and `BattleSession.EndRound` raises `RoundEnd`), Brenna I's room
-rebuilt as a legal lineup with the harness now asserting every talent room is one, the Aftershock
-Clock's stated reason taken out of the matrix now that it is lit, and the `EMBERFALL_MATRIX_NORMAL`
-reading under **Tooling**. Its last commit regenerates the pinned baselines from a fresh rebase on
-`main`, and only Finn's five hero-sweep lines move. The defect pass, the Quarry clock repair, the
-fusion spine and the arena matrix have all landed on `main` and are described above.
-
-**`engine/dead-clauses`** carries the dead-clause pass (`Docs/PINOY-LIST.md` section 2i). It makes
-two ordering repairs in `CombatSimulation.cs`:
-
-- **The `LastTarget` condition subject is moved only by an effect that lands on the other side.**
-  Kora's First Opening lands 649 blows across 1,152 campaign battles where it landed 0, and Velis's
-  Denied Return, the fourth clause in the same trap, now reads the enemy's HP rather than her own.
-- **In an `OnAllyWouldDie` window, a Guard the killing blow spent is still counted as held**
-  (`SpentByLethalBlow`). Brenna's Survival of the Stubborn saves where it saved nobody, and Brenna
-  III banks Resolve 26 times where it banked 2.
-
-The same branch reads named rules in normal play through `EMBERFALL_MATRIX_NORMAL_RULES`. It
-registers a room for Kora, moves Velis's What Was Taken room to seed 5, and puts the Finn
-experiment into his stated reason. It adds one harness failure: guild 3 floor 4's "3 stars or
-fewer" rosters clear 2 of 12 where they cleared 3, because the one roster that flipped fields Kora.
-Its last commit regenerates the pinned baselines from a fresh rebase on `main`, and only Brenna's
-lines move.
+Nothing on a pushed branch. A branch is named here when it holds work worth naming, and only while it is unmerged.
 
 ## Next
 
