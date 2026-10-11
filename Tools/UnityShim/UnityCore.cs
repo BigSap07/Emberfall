@@ -166,6 +166,10 @@ namespace UnityEngine
         public float xMax { get { return x + width; } }
         public float yMax { get { return y + height; } }
         public Vector2 center { get { return new Vector2(x + width * 0.5f, y + height * 0.5f); } }
+        public static bool operator ==(Rect a, Rect b) { return a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height; }
+        public static bool operator !=(Rect a, Rect b) { return !(a == b); }
+        public override bool Equals(object other) { return other is Rect && this == (Rect)other; }
+        public override int GetHashCode() { return x.GetHashCode() ^ y.GetHashCode() ^ width.GetHashCode() ^ height.GetHashCode(); }
     }
 
     public struct Color
@@ -743,6 +747,7 @@ namespace UnityEngine
         public float farClipPlane { get; set; }
         public float depth { get; set; }
         public float aspect { get { return 0.5625f; } }
+        public Rect rect { get; set; }
         public CameraClearFlags clearFlags { get; set; }
         public Color backgroundColor { get; set; }
         public int cullingMask { get; set; }
