@@ -23,6 +23,13 @@
 #                Note the 7-character floor also keeps six-digit colour values (F2C14E, 0xE2571E)
 #                out of the match by construction rather than by a special case.
 #
+#   conflict     a merge conflict marker: a line starting with seven '<' or seven '>' followed by
+#                a space or nothing, or a '|||||||' or '=======' line between an opening and a
+#                closing marker. ALWAYS NEW: never baselined, never written to the baseline,
+#                so -WriteBaseline cannot turn an unresolved merge into known debt. A bare
+#                '=======' outside a marker pair is a setext heading underline and is left alone.
+#                Added because a file full of markers was scanned twice and reported nothing.
+#
 #   dead-branch  a token carrying a known branch prefix that has no matching ref on origin.
 #                A live branch passes. This is why DESIGN-BUILD-ORDER.md's Now / Next needs no
 #                exception here: CLAUDE.md permits a branch name there only while the branch is
@@ -162,8 +169,23 @@ $found = New-Object System.Collections.Generic.List[object]
 foreach ($file in $mdFiles) {
     $rel = $file.FullName.Substring($Root.Length + 1) -replace '\\', '/'
     $lineNo = 0
+    $inConflict = $false
     foreach ($line in (Get-Content -LiteralPath $file.FullName)) {
         $lineNo++
+
+        # Conflict markers. The opening and closing markers are unambiguous anywhere; the two inner
+        # ones only count inside a pair, because '=======' alone is a markdown heading underline.
+        # The token carries the line number on purpose: two markers in one file are two problems,
+        # and the dedupe below is by file and token.
+        if ($line -match '^(<{7}|>{7})( |$)') {
+            $inConflict = ($line[0] -eq '<')
+            $found.Add([pscustomobject]@{ File = $rel; Line = $lineNo; Class = 'conflict'; Token = ($line.Substring(0, 7) + '@' + $lineNo) })
+            continue
+        }
+        if ($inConflict -and $line -match '^(={7}|\|{7})( |$)') {
+            $found.Add([pscustomobject]@{ File = $rel; Line = $lineNo; Class = 'conflict'; Token = ($line.Substring(0, 7) + '@' + $lineNo) })
+            continue
+        }
 
         foreach ($m in [regex]::Matches($line, $ReLineNumber)) {
             $found.Add([pscustomobject]@{ File = $rel; Line = $lineNo; Class = 'line-number'; Token = $m.Groups[1].Value })
@@ -195,7 +217,7 @@ foreach ($file in $mdFiles) {
 # piece of debt rather than several, and the baseline does not churn when a paragraph is reflowed.
 function Get-Entry($v) { return ($v.File + '|' + $v.Token) }
 
-$entries = @($found | ForEach-Object { Get-Entry $_ } | Sort-Object -Unique)
+$entries = @($found | Where-Object { $_.Class -ne 'conflict' } | ForEach-Object { Get-Entry $_ } | Sort-Object -Unique)
 
 if ($WriteBaseline) {
     # WriteAllLines with an explicit BOM-less UTF8Encoding, not Set-Content -Encoding UTF8.
@@ -225,7 +247,7 @@ foreach ($v in $found) {
     $entry = Get-Entry $v
     if ($seen.ContainsKey($entry)) { continue }
     $seen[$entry] = $true
-    if ($baselineSet.ContainsKey($entry)) { $old.Add($v) } else { $new.Add($v) }
+    if ($v.Class -ne 'conflict' -and $baselineSet.ContainsKey($entry)) { $old.Add($v) } else { $new.Add($v) }
 }
 
 Write-Host ""
