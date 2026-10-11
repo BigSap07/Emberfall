@@ -96,17 +96,30 @@ namespace Emberfall.Core.Session
         /// <summary>The plain-language reason for the loss. Null when nothing was lost.</summary>
         public DebriefResult LostDebrief;
 
-        /// <summary>The stage-clear payout. Set only when StageCleared; a won mid-stage wave pays
-        /// nothing, per DESIGN-CAMPAIGN-STRUCTURE.md.</summary>
+        /// <summary>The stage-clear payout. Set only when StageCleared. On a first clear its gold
+        /// and Wayfarer XP are what the stage still owed after its waves' drip shares, so the
+        /// stage's whole payout is unchanged (GameSession.WaveDripPercent).</summary>
         public BattleRewards Rewards;
+
+        /// <summary>What this wave paid on its own when it was won without finishing the stage: an
+        /// equal share of WaveDripPercent of the stage's gold and Wayfarer XP, on a first clear
+        /// only. Zero on a loss, on a stage clear (Rewards carries that) and on any wave whose share
+        /// rounds to nothing.</summary>
+        public int WaveGold;
+        public int WaveAccountXp;
+        /// <summary>Account ranks the wave's XP share crossed. Zero when it crossed none.</summary>
+        public int WavePlayerLevelsGained;
 
         /// <summary>Where the cursor stands after the resolve; (1, 1) once the stage is cleared.</summary>
         public int NextWave;
         public int NextBattle;
 
-        /// <summary>PlayerHpRatio of the last battle WON, how much headroom the line had at the
-        /// end of the run; -1 when no battle was won.</summary>
-        public float Margin = -1f;
+        /// <summary>
+        /// The player's side of the last battle fought, as the simulation snapshotted it: who
+        /// stands on the field behind the result. Presentation reads it to stand the squad up; it
+        /// is copied off the fight, so nothing is built twice. Empty on a refusal. Never saved.
+        /// </summary>
+        public readonly List<UnitSnapshot> Squad = new List<UnitSnapshot>();
 
         /// <summary>
         /// The battle worth watching: the lost one after a loss, otherwise the win that left the

@@ -488,10 +488,17 @@ tier set and account rank does not (`GameSession.HeroLevelCapOf`); see **Fusion 
 **A wave resolves in one tap.** `GameSession.ResolveWave` fights the rest of the current wave
 through `ResolveLadderBattle`, the helper `SweepClearedStage` shares, so every campaign battle has
 one resolution path, and returns a `WaveResolution` that `WaveResultScreen` only reads: the
-outcome, the wave track or the stage-clear spoils, the twelve battles with the HP the line kept,
+outcome, what the wave paid or the stage-clear spoils, the line that fought as `Squad` snapshots,
 and on a loss the lost battle with its `Debrief` cause. A loss stops at the lost battle and the
-next resolve starts there; a won mid-stage wave pays nothing and the wave that finishes the stage
-calls `GrantBattleResult` once, so battle count and economy are unchanged. `CampaignFlow.Launch`
+next resolve starts there. **Every campaign win goes through `GameSession.RecordLadderWin`**, which
+`ResolveWave` and the harness's economy walk both call: on a first clear a won mid-stage wave pays
+an equal share of `GameSession.WaveDripPercent` (40, a named constant rather than a `balance.json`
+key because that file is hashed into `ContentVersion` and no fight reads it) percent of the
+stage's gold and Wayfarer XP, and the stage clear pays the rest through `GrantBattleResult`, with
+the rounding remainder, the first-clear bonus, shards, drop and unlock. A stage's whole payout is
+unchanged to the unit; repeat clears and sweeps drip nothing. Paid waves are read off the existing
+cursor (`WavesPaidBefore`), so the save gained no field. `CheckWaveDrip` proves the totals for all
+72 stages, no double pay across save reloads, and no pay on a replay, a repeat or a sweep. `CampaignFlow.Launch`
 is the one door into a stage for `CampaignScreen`, `FirstRun` and `BattleScreen`'s CONTINUE: a
 cleared stage is swept, a stage with a wave curve opens `WaveResultScreen`, and only a stage with
 no ladder reaches `BattleScreen`. `ReportResolvesPerFirstClear` prints what a first clear costs;
@@ -609,8 +616,8 @@ eight first seeds, because a conversion's roll makes one walk's roster one draw.
 decision 4.
 
 **The economy responds to shards now, not gold.** `CheckEconomyRespondsToIncome` scales gold and
-shards together on the back half of the campaign; the late-campaign ratio moves 2.36. Gold alone,
-still printed, moves it 0.08, because gold stops at each hero's cap.
+shards together on the back half of the campaign; the late-campaign ratio responds 0.6. Gold alone,
+still printed, responds 0.22, because gold stops at each hero's cap.
 
 ### The campaign power curve, and the walls
 
@@ -632,6 +639,23 @@ no conversion and no ascension at all. So the band is read on that player's walk
 `recommendedPower` is derived from it, and `CheckFusionNeverGates` walks twenty of them and fails if
 any one sticks anywhere. The player who fuses meets every stage above its band, and that is the rule
 working rather than a failure of it.
+
+**A walk that stalls takes the stage's swaps back once before it is called STUCK.** The per-wave
+drip (see **Campaign and progression**) pays first-clear gold sooner, so one non-fusing walk bought
+a level a sitting early at `1-7`; its fights ended sooner, the walk's clock moved, and
+`RollArmorDrop` seeds from that clock, so the drops, the battles and the summon stream all landed
+differently. That walk pulled Zella at `3-4` instead of `4-1`, and the line policy
+(`EconomyDeployLine`, which ranks by `CeilingPower` and never reads a fight) swapped her in for
+Isolde. With the roster the walk held, the Isolde line wins 98% of `3-4`'s 144 battles and 97% of
+battle 11.3; the Zella line wins 0% of 11.3, and the walk was called STUCK there after fourteen
+sittings while holding over a million gold it could not spend. So `SimulateEconomy` now calls
+`UndoStageSwaps`: the line returns to the one the stage was first attempted with, and the heroes
+that came in since are benched for the rest of the walk (`EconomyRun.Benched`). A bench that ended
+at the next stage only let the ceiling rule field Zella again at `3-5`. Only the branch that used
+to end a walk changed, so every walk that already finished walks as before: 39 of 40 readings at
+0 and 40 percent drip are identical, and the one that stuck now finishes and pays for the swap
+where the table can see it (15 extra sittings at `3-4`, 5 at `3-6`). `CheckFusionNeverGates` is
+green with the drip at 40.
 
 **Everything from here to Gear describes the shipped 24, which Pinoy's 72 replaced; the 72 carry
 those numbers by position as unsolved seeds** (`CAMPAIGN-SPEC.md` 10.3 and 10.8).
@@ -897,6 +921,28 @@ result: both are shown without being remembered, so the history cannot name them
 mid-stage keeps what the save already holds (`CampaignCurrentStageId`, wave and battle); no save
 field was added. `PlayModeScreenshot`'s `WaveReplayResult` target photographs the replay's result
 panel.
+
+**The campaign result follows a locked design**, `Docs/ui-specs/WAVE-RESULTS.md`, and
+`WaveResultScreen` only reads the `WaveResolution` it is handed.
+
+- **Wave cleared** stands the line that fought in idle on the stage's battlefield (`BattleStage`,
+  fed the record's `Squad` snapshots, no enemies), with the field camera's viewport stopping at the
+  band so no hero stands behind it. The band carries the stage line, the title, a 12-pip track with
+  the count, a chip per currency the wave paid, and NEXT WAVE, WATCH and an AUTO checkbox. AUTO
+  fires NEXT WAVE after 2 seconds, any tap on the band cancels it for that wave, and it is a
+  PlayerPrefs setting, not a save field.
+- **Stage cleared** darkens the field under VICTORY, with a FIRST CLEAR tag, one tile per reward
+  (gold, Ember Shards, Wayfarer XP, the armor drop through `ItemCard`), the unlock line, CONTINUE
+  and WATCH.
+- **Wave lost** is the same band in red with the real battle and wave numbers, RETRY, ADJUST LINE
+  and WATCH. A loss in wave 1 leaves out the "progress up to wave N is kept" sentence, because no
+  wave is kept.
+- **The HP chart and HP KEPT are gone**, and `WaveResolution.Margin` with them; the Dev Arena never
+  read it.
+
+`PlayModeScreenshot` photographs `WaveResultAuto`, and a stage clear that is a first clear with an
+armor drop, found by pinning the clock and the armor count the probe and the photograph share. No
+save version moved and no content JSON changed.
 
 **The Hub is four layers, with one rule each.** It had grown by bolting controls onto the map:
 three slabs over the top left with the HEROES marker behind them, GUILD twice a thumb apart, DEV

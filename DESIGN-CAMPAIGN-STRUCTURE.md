@@ -170,7 +170,7 @@ What it leaves alone:
 - Defeat retries the single lost battle. The resolve stops at it, `RecordBattleLost` leaves
   the cursor on it, and the next resolve starts there, not at the wave.
 - Rewards stay at stage granularity. A won mid-stage wave pays nothing and the wave that
-  finishes the stage calls `GrantBattleResult` once.
+  finishes the stage calls `GrantBattleResult` once. (Superseded by the per-wave drip below.)
 
 What a first clear costs the player is now one resolve per wave plus one for every lost
 battle: 3 on stages 1-1 to 1-4, 6 on 1-5 to 1-12, and 12 from chapter 2 on.
@@ -180,3 +180,19 @@ Cleared stages are recorded by id from save version 20: `CampaignProgress` deriv
 frontier, the furthest stage and the count from `ClearedStageIds`, and a save older than that
 migrates its position through the frozen `SaveSerializer.PreIdStageOrder`, never through the
 live `campaign.json`.
+
+## Amended 2026-10-11: the per-wave drip
+
+A first clear's waves now pay as they fall: each won mid-stage wave pays an equal share of
+`GameSession.WaveDripPercent` (40) percent of the stage's gold and Wayfarer XP, and the stage
+clear pays the rest, plus the first-clear bonus, the shards, the armor drop and the unlock as
+before. Each share is rounded down and the remainder stays on the stage clear, so a stage's
+whole payout is the same integer it was. `Docs/ui-specs/WAVE-RESULTS.md` section E is the
+approved rule.
+
+What it leaves alone: the repeat cap and idle income are still per stage, a repeat clear and a
+sweep drip nothing, and the save gained no field. Which waves have paid is read off the existing
+cursor (`GameSession.WavesPaidBefore`): a wave pays at the moment the cursor leaves it, and the
+cursor never goes back, so a resume cannot pay a wave twice and an abandoned stage keeps what its
+waves paid. Every campaign win goes through `GameSession.RecordLadderWin`, which `ResolveWave`
+and the harness's economy walk both call. `CheckWaveDrip` proves the totals for every stage.

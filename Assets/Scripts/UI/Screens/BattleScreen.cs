@@ -2193,6 +2193,7 @@ namespace Emberfall.UI.Screens
             // A LOST battle deliberately changes nothing: RecordBattleLost is a documented no-op,
             // so the cursor still points at the battle that was just lost and the next attempt
             // re-fights exactly that one. Not the wave, not the stage.
+            BattleRewards rewards = null;
             if (_stage != null && _stage.HasWaveCurve)
             {
                 if (!_result.Victory)
@@ -2211,7 +2212,14 @@ namespace Emberfall.UI.Screens
                         App.Notify("Auto stopped - wave " + _campaignWave + ", battle " + _campaignBattle + " was lost.");
                     }
                 }
-                else if (!App.Session.RecordBattleWon(_stage, _campaignWave, _campaignBattle))
+                else
+                {
+                    // Through RecordLadderWin, the win the wave resolve takes, so a wave's drip
+                    // share and the stage clear net of it are paid here exactly as they are there.
+                    LadderWin win = App.Session.RecordLadderWin(_stage, _campaignWave, _campaignBattle, TimeUtil.NowUnix());
+                    if (win.StageCleared) rewards = win.Rewards;
+                }
+                if (_result.Victory && rewards == null)
                 {
                     _midStageAdvance = true;
                     ShowWaveProgressResult();
@@ -2229,7 +2237,7 @@ namespace Emberfall.UI.Screens
                 }
             }
 
-            BattleRewards rewards = App.Session.GrantBattleResult(_stage, _result.Victory, TimeUtil.NowUnix());
+            if (rewards == null) rewards = App.Session.GrantBattleResult(_stage, _result.Victory, TimeUtil.NowUnix());
 
             if (_result.Victory)
             {

@@ -265,6 +265,7 @@ namespace Emberfall.DevHarness
             CheckCampaignStructure(content);
             CheckWaveResolve(content);
             CheckWaveReplay(content);
+            CheckWaveDrip(content);
             CheckClearedStagesById(content, contentDir);
             CheckStageResumeAfterWaveResolve(content);
             CheckRegenClampOnLoad(content);
@@ -11801,22 +11802,31 @@ namespace Emberfall.DevHarness
                   "every stage keeps BattleCount 12 and its ExpectedWaveCount, TotalBattles unchanged"
                   + (shapeMiss == 0 ? "" : " (first miss " + firstShape + ")"));
 
-            // ---- a won mid-stage wave: pays nothing, moves the cursor, and re-runs identically
+            // ---- a won mid-stage wave: pays its drip share and nothing else, moves the cursor, and re-runs identically
             GameSession a = BuildPinnedLineAt(db, ch11, false, int.MaxValue);
             string before = SaveSerializer.Serialize(a.Profile);
-            string purseBefore = PurseSignature(a.Profile);
+            long goldBefore1 = a.Profile.Gold;
             WaveResolution r1 = a.ResolveWave(ch11, Base, Now);
             Check(r1.Refused == WaveRefusal.None && r1.Battles.Count == 12 && r1.LostBattle == 0 && r1.WaveCleared
                   && !r1.StageCleared && r1.Rewards == null,
                   "an over-powered line wins wave 1 of ch1_1 in one resolve of 12 battles, no loss, no stage clear ("
                   + r1.Battles.Count + " battles)");
-            Check(PurseSignature(a.Profile) == purseBefore,
-                  "a won mid-stage wave pays nothing: gold, shards, dust, account XP, battles won, cleared ids all unchanged");
+            int dripGold = GameSession.WaveDripGold(ch11), dripXp = GameSession.WaveDripAccountXp(ch11);
+            Check(dripGold > 0 && dripXp > 0 && r1.WaveGold == dripGold && r1.WaveAccountXp == dripXp
+                  && a.Profile.Gold == goldBefore1 + dripGold,
+                  "a won mid-stage wave of a first clear pays its drip share and the record says so (+"
+                  + r1.WaveGold + " gold, +" + r1.WaveAccountXp + " XP)");
+            GameSession aTwin = new GameSession(db, SaveSerializer.Deserialize(before, db, out _waveErr));
+            aTwin.Profile.Gold += dripGold;
+            aTwin.GrantAccountXp(dripXp);
+            Check(PurseSignature(a.Profile) == PurseSignature(aTwin.Profile),
+                  "and nothing else: shards, dust, battles won and cleared ids unchanged, gold and account XP up by the share only");
+            Check(r1.Squad.Count == a.Profile.TeamHeroes().Count && r1.Squad.TrueForAll(u => u.IsPlayer),
+                  "the record carries the line that fought as its squad (" + r1.Squad.Count + " units, players only)");
             int cw, cb;
             a.ResumePointFor(ch11, out cw, out cb);
             Check(cw == 2 && cb == 1 && r1.NextWave == 2 && r1.NextBattle == 1 && r1.Wave == 1 && r1.FirstBattle == 1,
                   "and the cursor moved to (wave 2, battle 1) (now " + cw + "," + cb + ")");
-            Check(r1.Margin >= 0f, "Margin carries the last won battle's HP ratio (" + r1.Margin.ToString("0.00", CultureInfo.InvariantCulture) + ")");
 
             GameSession twin = new GameSession(db, SaveSerializer.Deserialize(before, db, out _waveErr));
             bool same = true; string firstDiff = "";
@@ -12066,6 +12076,197 @@ namespace Emberfall.DevHarness
             GameSession fresh = new GameSession(db, GameSession.CreateNewProfile(db, Now));
             Check(fresh.ResolveWave(db.GetStage("ch2_1"), Base, Now).Replay == null,
                   "a refused resolve (stage locked) keeps no replay");
+        }
+
+        /// <summary>
+        /// The per-wave drip (GameSession.WaveDripPercent, Docs/ui-specs/WAVE-RESULTS.md section E).
+        /// Each wave of a first clear pays an equal share of the stage's gold and Wayfarer XP and
+        /// the stage clear pays the rest; this proves the three things that rule promises: the
+        /// whole stage pays what one grant paid before it, to the unit, for every stage in
+        /// campaign.json; a resumed stage never pays a wave twice; and a replay, a WATCH, a repeat
+        /// clear and a sweep pay no drip at all.
+        /// </summary>
+        private static void CheckWaveDrip(ContentDatabase db)
+        {
+            Line("");
+            Line("WAVE DRIP (a first clear's waves pay equal shares of " + GameSession.WaveDripPercent
+                 + "% of its gold and Wayfarer XP; the stage clear pays the rest)");
+            const long Now = 1700000000L;
+            const int Base = 31337;
+
+            // ---- every stage: the dripped walk pays exactly what one grant paid before the drip
+            GameSession dripped = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            GameSession whole = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            int goldMiss = 0, xpMiss = 0, shapeMiss = 0, authoredMiss = 0;
+            string firstGold = "", firstXp = "", firstShape = "", firstAuthored = "";
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef st = db.AllStages[i];
+                int waves = Math.Max(1, st.WaveCount), battles = Math.Max(1, st.BattleCount);
+                long goldBefore = dripped.Profile.Gold;
+                long dripGold = 0, dripXp = 0; int paidWaves = 0;
+                BattleRewards clear = null;
+                for (int w = 1; w <= waves && clear == null; w++)
+                    for (int bt = 1; bt <= battles && clear == null; bt++)
+                    {
+                        LadderWin win = dripped.RecordLadderWin(st, w, bt, Now);
+                        dripGold += win.Gold;
+                        dripXp += win.AccountXp;
+                        if (win.Gold > 0 || win.AccountXp > 0) paidWaves++;
+                        if (win.StageCleared) clear = win.Rewards;
+                    }
+                long wholeBefore = whole.Profile.Gold;
+                BattleRewards one = whole.GrantBattleResult(st, true, Now);
+
+                if (one.Gold != st.RewardGold + st.FirstClearGold || one.AccountXp != st.RewardAccountXp || !one.FirstClear)
+                {
+                    authoredMiss++;
+                    if (firstAuthored.Length == 0) firstAuthored = st.DisplayCode;
+                }
+                long dGold = clear != null ? dripGold + clear.Gold : -1;
+                long dXp = clear != null ? dripXp + clear.AccountXp : -1;
+                if (dGold != one.Gold || dripped.Profile.Gold - goldBefore != whole.Profile.Gold - wholeBefore)
+                {
+                    goldMiss++;
+                    if (firstGold.Length == 0) firstGold = st.DisplayCode + " (" + dGold + " vs " + one.Gold + ")";
+                }
+                if (dXp != one.AccountXp)
+                {
+                    xpMiss++;
+                    if (firstXp.Length == 0) firstXp = st.DisplayCode + " (" + dXp + " vs " + one.AccountXp + ")";
+                }
+                // The shape: waves-1 shares paid on the way, each the share the rule names, and the
+                // purse left on the clear at least the share of it the rule keeps there.
+                int share = GameSession.WaveDripGold(st);
+                long purseAtClear = clear != null ? clear.Gold - st.FirstClearGold : -1;
+                bool shape = clear != null && paidWaves == (share > 0 ? waves - 1 : 0)
+                             && dripGold == (long)share * (waves - 1)
+                             && purseAtClear * 100 >= (long)st.RewardGold * (100 - GameSession.WaveDripPercent)
+                             && clear.Shards == one.Shards && clear.FirstClear && clear.UnlockedNextStage == one.UnlockedNextStage;
+                if (!shape)
+                {
+                    shapeMiss++;
+                    if (firstShape.Length == 0) firstShape = st.DisplayCode;
+                }
+            }
+            Check(authoredMiss == 0,
+                  "before the drip, a first clear of every stage paid its authored gold + firstClearGold and accountXp in one grant"
+                  + (authoredMiss == 0 ? "" : " (first miss " + firstAuthored + ")"));
+            Check(goldMiss == 0,
+                  "every stage in campaign.json pays the same gold over its waves and its clear as one grant did, to the unit ("
+                  + db.AllStages.Count + " stages" + (goldMiss == 0 ? ")" : ", first miss " + firstGold + ")"));
+            Check(xpMiss == 0,
+                  "and the same Wayfarer XP, to the unit" + (xpMiss == 0 ? "" : " (first miss " + firstXp + ")"));
+            Check(shapeMiss == 0,
+                  "each wave but the last pays one equal share, the clear keeps at least " + (100 - GameSession.WaveDripPercent)
+                  + "% of the purse plus the remainder, and shards, first clear and unlock are untouched"
+                  + (shapeMiss == 0 ? "" : " (first miss " + firstShape + ")"));
+            Check(dripped.Profile.Gold == whole.Profile.Gold && dripped.Profile.PlayerLevel == whole.Profile.PlayerLevel
+                  && dripped.Profile.PlayerXp == whole.Profile.PlayerXp && dripped.Profile.Shards == whole.Profile.Shards,
+                  "after all " + db.AllStages.Count + " stages both walks hold the same gold, shards, rank and XP ("
+                  + dripped.Profile.Gold + " gold, rank " + dripped.Profile.PlayerLevel + ")");
+
+            // Three stages printed, for the record of what the split is.
+            string[] samples = { "ch1_1", "ch2_1", db.AllStages[db.AllStages.Count - 1].Id };
+            for (int i = 0; i < samples.Length; i++)
+            {
+                StageDef st = db.GetStage(samples[i]);
+                if (st == null) continue;
+                int waves = Math.Max(1, st.WaveCount);
+                int g = GameSession.WaveDripGold(st), x = GameSession.WaveDripAccountXp(st);
+                long clearGold = st.RewardGold + st.FirstClearGold - (long)g * (waves - 1);
+                long clearXp = st.RewardAccountXp - (long)x * (waves - 1);
+                Line("  " + st.DisplayCode + " (" + waves + " waves): before, the clear paid "
+                     + (st.RewardGold + st.FirstClearGold) + " gold and " + st.RewardAccountXp + " XP; now "
+                     + (waves - 1) + " waves pay " + g + " gold and " + x + " XP each, the clear pays "
+                     + clearGold + " gold and " + clearXp + " XP; total "
+                     + ((long)g * (waves - 1) + clearGold) + " gold and " + ((long)x * (waves - 1) + clearXp) + " XP");
+            }
+
+            // ---- resume: a save reloaded after every wave, and once mid-wave, never pays a wave twice
+            StageDef ch21 = db.GetStage("ch2_1");
+            if (ch21 == null) { Check(false, "content has ch2_1 to test the drip's resume with"); return; }
+            GameSession r = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            ClearThrough(r, db, ch21.GlobalIndex, Now);
+            GameSession rWhole = new GameSession(db, SaveSerializer.Deserialize(SaveSerializer.Serialize(r.Profile), db, out _waveErr));
+            long rGold0 = r.Profile.Gold;
+            int stale = 0;
+            bool rCleared = false;
+            for (int w = 1; w <= ch21.WaveCount && !rCleared; w++)
+            {
+                for (int bt = 1; bt <= ch21.BattleCount && !rCleared; bt++)
+                {
+                    int cw, cb;
+                    r.ResumePointFor(ch21, out cw, out cb);
+                    LadderWin win = r.RecordLadderWin(ch21, cw, cb, Now);
+                    rCleared = win.StageCleared;
+                    // Reload the save at the end of every wave and once in the middle of wave 3.
+                    if (win.WaveCleared || (w == 3 && bt == 7))
+                        r = new GameSession(db, SaveSerializer.Deserialize(SaveSerializer.Serialize(r.Profile), db, out _waveErr));
+                    // A caller handing in the wave the cursor has just left is paid nothing.
+                    if (win.WaveCleared && !rCleared)
+                    {
+                        long g0 = r.Profile.Gold;
+                        int keepW, keepB;
+                        r.ResumePointFor(ch21, out keepW, out keepB);
+                        LadderWin again = r.RecordLadderWin(ch21, w, ch21.BattleCount, Now);
+                        if (again.Gold != 0 || again.AccountXp != 0 || r.Profile.Gold != g0) stale++;
+                        r.Profile.CampaignCurrentWave = keepW;
+                        r.Profile.CampaignCurrentBattle = keepB;
+                    }
+                }
+            }
+            rWhole.GrantBattleResult(ch21, true, Now);
+            Check(rCleared && r.Profile.Gold == rWhole.Profile.Gold && r.Profile.PlayerLevel == rWhole.Profile.PlayerLevel
+                  && r.Profile.PlayerXp == rWhole.Profile.PlayerXp,
+                  "ch2_1 cleared across " + ch21.WaveCount + " reloads of the save pays what one grant pays (+"
+                  + (r.Profile.Gold - rGold0) + " gold): no wave was paid twice");
+            Check(stale == 0,
+                  "a win handed in for a wave the cursor has already left pays nothing (" + stale + " paid)");
+
+            // ---- a loss pays nothing, and the retry that finishes the wave pays exactly one share
+            StageDef ch4 = db.GetStage("ch4_6");
+            if (ch4 != null)
+            {
+                GameSession weak = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+                ClearThrough(weak, db, ch4.GlobalIndex, Now);
+                weak.Profile.CampaignCurrentStageId = ch4.Id;
+                weak.Profile.CampaignCurrentWave = 2;
+                weak.Profile.CampaignCurrentBattle = ch4.BattleCount;
+                long wg = weak.Profile.Gold;
+                WaveResolution lost = weak.ResolveWave(ch4, Base, Now);
+                Check(lost.LostBattle == ch4.BattleCount && lost.WaveGold == 0 && lost.WaveAccountXp == 0 && weak.Profile.Gold == wg,
+                      "a level 1 line losing the last battle of ch4_6's wave 2 is paid nothing");
+                LadderWin retry = weak.RecordLadderWin(ch4, 2, ch4.BattleCount, Now);
+                Check(retry.WaveCleared && retry.Gold == GameSession.WaveDripGold(ch4) && weak.Profile.Gold == wg + retry.Gold,
+                      "and the win that finally finishes the wave pays one share (+" + retry.Gold + " gold)");
+            }
+
+            // ---- no pay on a replay or WATCH, nor on a repeat clear or a sweep
+            StageDef ch11 = db.GetStage("ch1_1");
+            if (ch11 == null) { Check(false, "content has ch1_1 to test the replay with"); return; }
+            GameSession a = BuildPinnedLineAt(db, ch11, false, int.MaxValue);
+            WaveResolution r1 = a.ResolveWave(ch11, Base, Now);
+            Check(r1.WaveCleared && !r1.StageCleared && r1.WaveGold == GameSession.WaveDripGold(ch11) && r1.Replay != null,
+                  "ch1_1 wave 1 pays its share (+" + r1.WaveGold + " gold) and keeps a replay");
+            if (r1.Replay != null)
+            {
+                string paid = SaveSerializer.Serialize(a.Profile);
+                a.ReplayBattle(r1.Replay);
+                a.ReplayBattle(r1.Replay);
+                Check(SaveSerializer.Serialize(a.Profile) == paid,
+                      "watching the paid wave twice pays nothing more: the save is byte for byte as the drip left it");
+            }
+            GameSession rep = BuildPinnedLineAt(db, ch11, false, int.MaxValue);
+            rep.GrantBattleResult(ch11, true, Now);
+            long repGold = rep.Profile.Gold;
+            LadderWin repWave = rep.RecordLadderWin(ch11, 1, ch11.BattleCount, Now);
+            Check(repWave.WaveCleared && repWave.Gold == 0 && repWave.AccountXp == 0 && rep.Profile.Gold == repGold,
+                  "a wave won on a stage already cleared drips nothing");
+            rep.ClearStageProgress(ch11);
+            BattleRewards swept = rep.SweepClearedStage(ch11, 777, Now + 5);
+            Check(swept.Victory && !swept.FirstClear && swept.Gold == ch11.RewardGold && swept.AccountXp == ch11.RewardAccountXp,
+                  "and a sweep pays the stage's whole repeat purse, unchanged (+" + swept.Gold + " gold, +" + swept.AccountXp + " XP)");
         }
 
         private static string _waveErr;
@@ -16783,6 +16984,9 @@ namespace Emberfall.DevHarness
             /// two, and target A is graded on that split rather than on where the Level stands.</summary>
             public Dictionary<string, int> GoldLevels = new Dictionary<string, int>();
             public Dictionary<string, int> CopyLevels = new Dictionary<string, int>();
+            /// <summary>Heroes a stall took back out of the line, by uid; the line policy passes
+            /// them over for the rest of the walk. See UndoStageSwaps.</summary>
+            public HashSet<string> Benched = new HashSet<string>();
 
             private int _seed = 1;
             public int NextSeed() { return _seed++; }
@@ -16837,6 +17041,8 @@ namespace Emberfall.DevHarness
                 outcome.EntryLedger = run.Ledger.Snapshot();
                 AttributeEntryLevels(run, outcome);
                 ProbeWallAtCap(db, session, outcome, stageIdx);
+                string[] entryTeam = (string[])profile.Team.Clone();
+                bool swapsUndone = false;
 
                 int rounds = 0;
                 int sessions = 0;
@@ -16908,9 +17114,14 @@ namespace Emberfall.DevHarness
                         if (r.Victory)
                         {
                             consecutiveLosses = 0;
-                            if (session.RecordBattleWon(stage, wave, battle))
+                            // RecordLadderWin is the game's own win: a finished wave of a first
+                            // clear pays its drip share, and the stage clear pays the rest. Both
+                            // halves are first-clear money, so both land in that channel.
+                            LadderWin win = session.RecordLadderWin(stage, wave, battle, run.Now);
+                            run.Ledger.GoldFirstClear += win.Gold;
+                            if (win.StageCleared)
                             {
-                                BattleRewards cr = session.GrantBattleResult(stage, true, run.Now);
+                                BattleRewards cr = win.Rewards;
                                 run.Ledger.GoldFirstClear += cr.Gold;
                                 run.Ledger.ShardFirstClear += cr.Shards;
                                 if (cr.ArmorDrop != null) run.Ledger.ArmorDrops++;
@@ -16962,7 +17173,22 @@ namespace Emberfall.DevHarness
                     if (power > bestPower) { bestPower = power; stalled = 0; }
                     else if (rosterMoved) stalled = 0;
                     else stalled++;
-                    if (!cleared && stalled >= EconomyStallSessions) break;
+                    if (!cleared && stalled >= EconomyStallSessions)
+                    {
+                        // Before STUCK, the walk takes back once the swaps it made at this stage.
+                        // The swap rule reads a ceiling, never a fight, so a like-for-like swap
+                        // can field a line that wins no battle the line it replaced was winning;
+                        // STUCK says no line this player owns can pass, and that line is one it
+                        // owns. Only this branch changes, so every walk that finished before
+                        // walks exactly as it did. The sittings it took are counted.
+                        if (!swapsUndone && UndoStageSwaps(session, run, outcome, entryTeam))
+                        {
+                            swapsUndone = true;
+                            stalled = 0;
+                            continue;
+                        }
+                        break;
+                    }
                 }
 
                 outcome.Cleared = cleared;
@@ -20679,6 +20905,7 @@ namespace Emberfall.DevHarness
         {
             PlayerProfile p = session.Profile;
             List<HeroInstance> ranked = new List<HeroInstance>(p.Heroes);
+            ranked.RemoveAll(h => run.Benched.Contains(h.Uid));
             ranked.Sort(delegate(HeroInstance a, HeroInstance b)
             {
                 int c = CeilingPower(session, b).CompareTo(CeilingPower(session, a));
@@ -20763,6 +20990,42 @@ namespace Emberfall.DevHarness
                     + StatMath.HeroLevelCap(session.Balance, outt.Def.Stars, outt.Ascension) + ")");
             }
             return filled || entering.Count > 0;
+        }
+
+        /// <summary>
+        /// A stalled stage's one retreat: the line goes back to the one the stage was first
+        /// attempted with, and each hero that came in since is benched for the rest of the walk.
+        /// What a player does after a new hero loses them the same battle for a fortnight; benched
+        /// only to the next stage, the ceiling rule fielded the same hero straight back and paid
+        /// the same fortnight again. The bench can only take strength from the walk, so it cannot
+        /// open a wall the walk could not otherwise pass. False, and nothing changed, when the line
+        /// is the one the stage began with; the stall is then STUCK as before.
+        /// </summary>
+        private static bool UndoStageSwaps(GameSession session, EconomyRun run,
+                                           EconomyStageOutcome outcome, string[] entryTeam)
+        {
+            PlayerProfile p = session.Profile;
+            List<string> benched = new List<string>();
+            for (int s = 0; s < p.Team.Length; s++)
+                if (!string.IsNullOrEmpty(p.Team[s]) && Array.IndexOf(entryTeam, p.Team[s]) < 0) benched.Add(p.Team[s]);
+            if (benched.Count == 0) return false;
+
+            List<string> names = new List<string>();
+            for (int i = 0; i < benched.Count; i++)
+            {
+                HeroInstance h = p.FindHeroByUid(benched[i]);
+                if (h != null) names.Add(h.DisplayName);
+                run.Benched.Add(benched[i]);
+            }
+            for (int s = 0; s < p.Team.Length; s++) p.ClearTeamSlot(s);
+            // A hero the stage began with that is gone since (spent as fodder) leaves its slot
+            // empty, and the next sitting's deploy fills it.
+            for (int s = 0; s < entryTeam.Length && s < p.Team.Length; s++)
+                if (!string.IsNullOrEmpty(entryTeam[s]) && p.FindHeroByUid(entryTeam[s]) != null) p.AssignToTeam(s, entryTeam[s]);
+            run.SwapLog.Add(outcome.Stage.DisplayCode + " sitting " + run.TotalSessions + ": stalled, so "
+                + string.Join(", ", names.ToArray()) + " benched and the line the stage began with restored ("
+                + DescribeLine(session) + ")");
+            return true;
         }
 
         private static string DescribeLine(GameSession session)

@@ -1,32 +1,33 @@
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using Emberfall.Battle;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
+using Emberfall.Core.Model;
 using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
 {
     /// <summary>
-    /// One screen per resolved wave: a stage is up to 12 of these, not 144 battle results.
+    /// What one resolved wave came to, drawn the way Docs/ui-specs/WAVE-RESULTS.md locks it.
     ///
-    /// It answers two things, outcome largest: WHAT DID I JUST WIN, and AM I STILL WINNING. The
-    /// outcome title is the biggest thing on the page; the left panel is what was won (the wave
-    /// track, or the stage-clear spoils); the right panel is the wave's twelve battles, each cell
-    /// filled to the share of the line's HP that fight left, with the margin beside it. On a loss
-    /// one line below names the battle and the Debrief cause. There is no prose about how any of
-    /// it works: labels and numbers only.
+    /// THREE SHAPES, one screen. A won mid-stage wave is an OVERLAY: the stage's battlefield with
+    /// the line standing in idle behind a band along the bottom that carries the wave track, what
+    /// the wave paid and the way on. A lost wave is the same band in a red tone. A stage clear is
+    /// the one full screen: the battlefield darkened under VICTORY and a row of reward tiles.
     ///
     /// PRESENTATION ONLY. GameSession.ResolveWave does the fighting, the recording and the
-    /// paying; this reads the WaveResolution it returns and never computes an outcome, a reward
-    /// or a margin of its own.
+    /// paying; this reads the WaveResolution it returns and never computes an outcome or a
+    /// reward. The squad on the field is the record's own snapshot of the line that fought.
     ///
     /// The wave is resolved AFTER a bare frame has been shown, not inside the tap: a wave runs up
     /// to twelve simulations back to back, and doing it in the click handler would freeze the
     /// screen the player tapped on with no sign anything had happened.
     ///
-    /// LAYOUT is centre-anchored and sized to fit a 1920 x 966 canvas, which is what the canvas
-    /// scaler (match 0.5) gives a 20:9 phone, so it does not clip there or at 16:9.
+    /// AUTO is a device preference in PlayerPrefs, like the battle screen's own auto and the
+    /// summon's Fast setting: it changes nothing about the account, so the save does not carry it.
     /// </summary>
     public sealed class WaveResultScreen : UIScreen
     {
@@ -36,48 +37,65 @@ namespace Emberfall.UI.Screens
         private static readonly Vector2 TopCentre = new Vector2(0.5f, 1f);
         private static readonly Vector2 BottomCentre = new Vector2(0.5f, 0f);
         private static readonly Vector2 Middle = new Vector2(0.5f, 0.5f);
+        private static readonly Vector2 LeftMiddle = new Vector2(0f, 0.5f);
 
-        private const float PanelTop = 212f;
-        private const float PanelHeight = 520f;
-        private const float PanelWidth = 860f;
-        private const float PanelX = 440f;
-        private const float Inner = 28f;
-        private const float HeadingX = 36f;
-        private const float HeadingY = -20f;
+        private const string AutoPrefKey = "Emberfall.WaveResult.Auto";
+        private const float AutoSeconds = 2f;
 
-        private const float CellWidth = 58f;
-        private const float CellGap = 8f;
-        private const float CellHeight = 200f;
+        // The band: about 330 of 1080, everything centred inside it, top to bottom.
+        private const float BandHeight = 330f;
+        private const float BandRule = 2f;
+        private const float StageLineY = -14f;
+        private const float TitleY = -42f;
+        private const float TitleHeight = 76f;
+        private const float RowY = -122f;
+        private const float RowHeight = 44f;
+        private const float LossLineY = -170f;
+        private const float ButtonBottom = 24f;
+        private const float ButtonHeight = 92f;
+        private const float ButtonGap = 24f;
 
-        private RectTransform _content;
+        private const float PipWidth = 28f;
+        private const float PipCurrentWidth = 56f;
+        private const float PipHeight = 14f;
+        private const float PipGap = 6f;
+        private const float ChipHeight = 40f;
+        private const float ChipIcon = 26f;
+
+        private const float TileSize = 180f;
+        private const float TileGap = 20f;
+
+        private Image _ground;
+        private Image _dim;
+        private BattleStage _world;
+        private StageDef _fieldStage;
+        private bool _fieldBuilt;
+
+        private RectTransform _band;
+        private Image _bandFill;
         private Text _stageLine;
         private Text _title;
-
-        private RectTransform _leftPanel;
-        private Text _leftHeading;
-        private Text _leftFigure;
-        private RectTransform _pipHost;
-        private RectTransform _rewardHost;
-        private RectTransform _rewardList;
-
-        private RectTransform _rightPanel;
-        private RectTransform _cellHost;
-        private Text _marginFigure;
-        private Text _marginLabel;
-
-        private RectTransform _lossBox;
+        private RectTransform _rowHost;
         private Text _lossLine;
 
         private UIButton _nextWave;
+        private RectTransform _countdownPlate;
+        private Text _countdown;
         private UIButton _retry;
-        private UIButton _continue;
         private UIButton _adjust;
-        private UIButton _campaign;
         private UIButton _watch;
+        private RectTransform _autoToggle;
+        private Image _autoCheck;
+
+        private RectTransform _cleared;
+        private RectTransform _column;
+        private UIButton _continue;
+        private UIButton _watchCleared;
 
         private StageDef _pending;
         private StageDef _stage;
         private WaveResolution _result;
+        private Coroutine _autoRoutine;
 
         /// <summary>Set when WATCH sends the player to the battle screen, so coming back paints the
         /// wave they left instead of resolving another or showing a blank page.</summary>
@@ -90,6 +108,18 @@ namespace Emberfall.UI.Screens
         /// <summary>The last wave this screen resolved, or null before the first. Read only.</summary>
         public WaveResolution Result { get { return _result; } }
 
+        /// <summary>The player's AUTO setting: NEXT WAVE fires by itself AutoSeconds after a won
+        /// mid-stage wave is shown. A device preference, never the save.</summary>
+        public static bool AutoAdvance
+        {
+            get { return PlayerPrefs.GetInt(AutoPrefKey, 0) == 1; }
+            set
+            {
+                PlayerPrefs.SetInt(AutoPrefKey, value ? 1 : 0);
+                PlayerPrefs.Save();
+            }
+        }
+
 #if UNITY_EDITOR
         /// <summary>
         /// EDITOR ONLY: a seed the capture tool hands the next resolve, spent on use. Without it
@@ -99,6 +129,14 @@ namespace Emberfall.UI.Screens
         /// </summary>
         public static int CaptureSeed;
 
+        /// <summary>EDITOR ONLY: the clock the capture tool hands the next resolve, spent on use,
+        /// so a stage clear's armor roll is the one its probe found.</summary>
+        public static long CaptureNow;
+
+        /// <summary>EDITOR ONLY: holds the AUTO countdown on its first digit, so a capture of it
+        /// is not raced by NEXT WAVE firing in a slow editor.</summary>
+        public static bool CaptureHoldCountdown;
+
         /// <summary>Presses WATCH from outside, so a capture can photograph the replay. Drives the
         /// same private handler the button drives, as SkipToEndForCapture does on the battle screen.</summary>
         public void WatchForCapture() { OnWatch(); }
@@ -106,105 +144,131 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            EmberforgeUI.Ground(Root);
+            // Shown only when there is no battlefield to stand on: a refusal, or nothing to resolve.
+            _ground = EmberforgeUI.Ground(Root);
 
-            _content = UIBuilder.Node("Content", Root);
-            UIBuilder.FillParent(_content, 0f);
+            _dim = UIBuilder.Img("Dim", Root, TextureLab.White, new Color(0f, 0f, 0f, 0.74f));
+            UIBuilder.FillParent(_dim.rectTransform, 0f);
+            _dim.raycastTarget = false;
 
-            _stageLine = EmberforgeUI.Label("StageLine", _content, "", UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_stageLine.rectTransform, 0f, -24f, 1700f, 34f, TopCentre);
-            UIBuilder.Outlined(_stageLine, Emberforge.Outline, Emberforge.StrokeThin);
+            BuildBand();
+            BuildCleared();
 
-            // THE LARGEST THING ON SCREEN, by a wide margin: 112 against the kit's biggest named
-            // size of 62. Best-fit so "STAGE 12-12 CLEARED" shrinks rather than runs off a narrow
-            // canvas, and never below a size that still dwarfs every other element.
-            _title = EmberforgeUI.Title("Outcome", _content, "", 112, Emberforge.TextGold, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_title.rectTransform, 0f, -62f, 1700f, 134f, TopCentre);
-            UIBuilder.BestFit(_title, 64, 112);
-            UIBuilder.Outlined(_title, Emberforge.Outline, 4f);
-
-            BuildLeft();
-            BuildRight();
-
-            _lossBox = UIBuilder.Node("LossLine", _content);
-            UIBuilder.Box(_lossBox, 0f, -(PanelTop + PanelHeight + 14f), PanelWidth * 2f + 20f, 56f, TopCentre);
-            EmberforgeUI.SunkenOn(_lossBox);
-            _lossLine = EmberforgeUI.Body("Text", _lossBox, "", UITheme.FontSmall, Emberforge.TextBody, TextAnchor.MiddleCenter);
-            UIBuilder.FillParent(_lossLine.rectTransform, 20f, 4f, 20f, 4f);
-            UIBuilder.BestFit(_lossLine, 14, UITheme.FontSmall);
-
-            // All six are built once and shown or hidden per result, so a listener is wired once
-            // (UIButton.OnClick appends) and the names stay stable for the capture tool.
-            _nextWave = EmberforgeUI.Button("NextWave", _content, "NEXT WAVE", UITheme.FontHeading, ForgeButtonKind.Primary);
-            _nextWave.OnClick(OnResolveAgain);
-            _retry = EmberforgeUI.Button("Retry", _content, "RETRY", UITheme.FontHeading, ForgeButtonKind.Primary);
-            _retry.OnClick(OnResolveAgain);
-            _continue = EmberforgeUI.Button("Continue", _content, "CONTINUE", UITheme.FontHeading, ForgeButtonKind.Primary);
-            _continue.OnClick(OnContinue);
-            _adjust = EmberforgeUI.Button("AdjustLine", _content, "ADJUST LINE", UITheme.FontBody, ForgeButtonKind.Secondary);
-            _adjust.OnClick(OnAdjust);
-            _campaign = EmberforgeUI.Button("Campaign", _content, "CAMPAIGN", UITheme.FontBody, ForgeButtonKind.Secondary);
-            _campaign.OnClick(OnCampaign);
-            _watch = EmberforgeUI.Button("Watch", _content, "WATCH", UITheme.FontBody, ForgeButtonKind.Secondary);
-            _watch.OnClick(OnWatch);
-
-            // On Root rather than in _content, which is hidden while the wave resolves: the way
-            // home is there from the first frame. Built last so it draws over everything.
+            // On Root, built last so it draws over everything, and there from the first frame.
             ScreenChrome.HomeDisc(Root, Router);
         }
 
+        private void BuildBand()
+        {
+            _band = UIBuilder.Node("Band", Root);
+            _band.anchorMin = new Vector2(0f, 0f);
+            _band.anchorMax = new Vector2(1f, 0f);
+            _band.pivot = BottomCentre;
+            _band.sizeDelta = new Vector2(0f, BandHeight);
+            _band.anchoredPosition = Vector2.zero;
+
+            // The band's own face catches any tap that is not on one of its controls, which is
+            // what cancels the AUTO countdown for this wave.
+            _bandFill = _band.gameObject.AddComponent<Image>();
+            _bandFill.sprite = TextureLab.White;
+            Button tap = _band.gameObject.AddComponent<Button>();
+            tap.targetGraphic = _bandFill;
+            tap.transition = Selectable.Transition.None;
+            tap.onClick.AddListener(CancelCountdown);
+
+            Image rule = UIBuilder.Img("Rule", _band, TextureLab.White, Emberforge.GoldLow);
+            rule.rectTransform.anchorMin = new Vector2(0f, 1f);
+            rule.rectTransform.anchorMax = new Vector2(1f, 1f);
+            rule.rectTransform.pivot = TopCentre;
+            rule.rectTransform.sizeDelta = new Vector2(0f, BandRule);
+            rule.rectTransform.anchoredPosition = Vector2.zero;
+            rule.raycastTarget = false;
+
+            _stageLine = EmberforgeUI.Label("StageLine", _band, "", UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
+            UIBuilder.Box(_stageLine.rectTransform, 0f, StageLineY, 1600f, 30f, TopCentre);
+            UIBuilder.Outlined(_stageLine, Emberforge.Outline, Emberforge.StrokeThin);
+
+            _title = EmberforgeUI.Title("Title", _band, "", 64, Emberforge.TextGold, TextAnchor.MiddleCenter);
+            UIBuilder.Box(_title.rectTransform, 0f, TitleY, 1600f, TitleHeight, TopCentre);
+            UIBuilder.BestFit(_title, 44, 64);
+            UIBuilder.Outlined(_title, Emberforge.Outline, Emberforge.StrokeThick);
+
+            _rowHost = UIBuilder.Node("Row", _band);
+            UIBuilder.Box(_rowHost, 0f, RowY, 1600f, RowHeight, TopCentre);
+
+            _lossLine = EmberforgeUI.Label("LossLine", _band, "", UITheme.FontBody, Emberforge.TextBody, TextAnchor.MiddleCenter);
+            UIBuilder.Box(_lossLine.rectTransform, 0f, LossLineY, 1600f, 32f, TopCentre);
+            UIBuilder.Outlined(_lossLine, Emberforge.Outline, Emberforge.StrokeThin);
+
+            // Built once and shown or hidden per result, so a listener is wired once
+            // (UIButton.OnClick appends) and the names stay stable for the capture tool.
+            _nextWave = EmberforgeUI.Button("NextWave", _band, "NEXT WAVE", UITheme.FontHeading, ForgeButtonKind.Primary);
+            _nextWave.OnClick(OnResolveAgain);
+            _countdownPlate = UIBuilder.Panel("Countdown", _nextWave.Root, UITheme.WithAlpha(Emberforge.Outline, 0.55f), 10).rectTransform;
+            UIBuilder.Box(_countdownPlate, -18f, Emberforge.ButtonLip * 0.5f, 44f, 44f, new Vector2(1f, 0.5f));
+            _countdownPlate.GetComponent<Image>().raycastTarget = false;
+            _countdown = EmberforgeUI.Title("Digit", _countdownPlate, "", UITheme.FontBody, Emberforge.TextOnColor, TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(_countdown.rectTransform, 0f);
+            _countdown.raycastTarget = false;
+
+            _retry = EmberforgeUI.Button("Retry", _band, "RETRY", UITheme.FontHeading, ForgeButtonKind.Primary);
+            _retry.OnClick(OnResolveAgain);
+            _adjust = EmberforgeUI.Button("AdjustLine", _band, "ADJUST LINE", UITheme.FontBody, ForgeButtonKind.Secondary);
+            _adjust.OnClick(OnAdjust);
+            _watch = EmberforgeUI.Button("Watch", _band, "WATCH", UITheme.FontBody, ForgeButtonKind.Secondary);
+            _watch.OnClick(OnWatch);
+
+            BuildAutoToggle();
+        }
+
+        /// <summary>The AUTO checkbox: a sunken box with the kit's gold edge and a check in it,
+        /// and the word beside it. The whole of it is the hit target.</summary>
+        private void BuildAutoToggle()
+        {
+            _autoToggle = UIBuilder.Node("Auto", _band);
+            Image hit = _autoToggle.gameObject.AddComponent<Image>();
+            hit.sprite = TextureLab.White;
+            hit.color = Color.clear;
+            Button press = _autoToggle.gameObject.AddComponent<Button>();
+            press.targetGraphic = hit;
+            press.transition = Selectable.Transition.None;
+            press.onClick.AddListener(OnAutoToggle);
+
+            Image box = EmberforgeUI.Sunken("Box", _autoToggle);
+            UIBuilder.Box(box.rectTransform, 8f, 0f, 46f, 46f, LeftMiddle);
+            box.raycastTarget = false;
+            Image edge = UIBuilder.Frame("Edge", box.rectTransform, Emberforge.GoldLow, 8, 3);
+            edge.raycastTarget = false;
+            _autoCheck = UIBuilder.Img("Check", box.rectTransform, TextureLab.Check(64), Emberforge.GoldLit);
+            UIBuilder.FillParent(_autoCheck.rectTransform, 7f);
+            _autoCheck.raycastTarget = false;
+
+            Text label = EmberforgeUI.Label("Label", _autoToggle, "AUTO", UITheme.FontBody, Emberforge.TextGold, TextAnchor.MiddleLeft);
+            UIBuilder.Box(label.rectTransform, 66f, 0f, 110f, 46f, LeftMiddle);
+            UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
+            label.raycastTarget = false;
+        }
+
+        private void BuildCleared()
+        {
+            _cleared = UIBuilder.Node("Cleared", Root);
+            UIBuilder.FillParent(_cleared, 0f);
+
+            _column = UIBuilder.Node("Column", _cleared);
+            UIBuilder.Box(_column, 0f, 0f, 1400f, 600f, Middle);
+
+            _continue = EmberforgeUI.Button("Continue", _column, "CONTINUE", UITheme.FontHeading, ForgeButtonKind.Primary);
+            _continue.OnClick(OnContinue);
+            _watchCleared = EmberforgeUI.Button("Watch", _column, "WATCH", UITheme.FontBody, ForgeButtonKind.Secondary);
+            _watchCleared.OnClick(OnWatch);
+        }
+
         /// <summary>One screen back is the campaign map, which this screen was never remembered
-        /// from. Resolves and pays nothing, as CAMPAIGN does.</summary>
+        /// from. Resolves and pays nothing.</summary>
         public override bool TryStepBack()
         {
             Router.Show(ScreenId.Campaign, false);
             return true;
-        }
-
-        private void BuildLeft()
-        {
-            _leftPanel = UIBuilder.Node("Won", _content);
-            UIBuilder.Box(_leftPanel, -PanelX, -PanelTop, PanelWidth, PanelHeight, TopCentre);
-            EmberforgeUI.PanelOn(_leftPanel, true);
-
-            // (36, -20) is where the kit's other framed panels put their heading
-            // (GuildDungeonResultScreen, GuildFloorScreen): clear of the corner ornament, which
-            // the panel inset alone collided with.
-            _leftHeading = EmberforgeUI.Heading("Heading", _leftPanel, "WAVES", HeadingX, HeadingY);
-
-            _leftFigure = EmberforgeUI.Title("Figure", _leftPanel, "", 96, Emberforge.TextGold, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_leftFigure.rectTransform, 0f, -80f, PanelWidth - Inner * 2f, 120f, TopCentre);
-            UIBuilder.Outlined(_leftFigure, Emberforge.Outline, Emberforge.StrokeThick);
-
-            _pipHost = UIBuilder.Node("Pips", _leftPanel);
-            UIBuilder.Box(_pipHost, 0f, -250f, PanelWidth - Inner * 2f, 64f, TopCentre);
-
-            _rewardHost = UIBuilder.Node("Spoils", _leftPanel);
-            UIBuilder.Box(_rewardHost, 0f, -66f, PanelWidth - Inner * 2f, PanelHeight - 90f, TopCentre);
-            ScrollRect rewardScroll;
-            _rewardList = UIBuilder.ScrollList("List", _rewardHost, out rewardScroll, 2f, new RectOffset(0, 0, 0, 0));
-            UIBuilder.FillParent(rewardScroll.GetComponent<RectTransform>(), 0f);
-        }
-
-        private void BuildRight()
-        {
-            _rightPanel = UIBuilder.Node("Battles", _content);
-            UIBuilder.Box(_rightPanel, PanelX, -PanelTop, PanelWidth, PanelHeight, TopCentre);
-            EmberforgeUI.PanelOn(_rightPanel, true);
-
-            EmberforgeUI.Heading("Heading", _rightPanel, "BATTLES", HeadingX, HeadingY);
-
-            float stripWidth = 12f * CellWidth + 11f * CellGap;
-            _cellHost = UIBuilder.Node("Cells", _rightPanel);
-            UIBuilder.Box(_cellHost, 0f, -72f, stripWidth + 8f, CellHeight + 36f, TopCentre);
-
-            _marginFigure = EmberforgeUI.Title("Margin", _rightPanel, "", 96, Emberforge.TextGold, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_marginFigure.rectTransform, 0f, -326f, PanelWidth - Inner * 2f, 112f, TopCentre);
-            UIBuilder.Outlined(_marginFigure, Emberforge.Outline, Emberforge.StrokeThick);
-
-            _marginLabel = EmberforgeUI.Label("MarginLabel", _rightPanel, "", UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
-            UIBuilder.Box(_marginLabel.rectTransform, 0f, -440f, PanelWidth - Inner * 2f, 34f, TopCentre);
-            UIBuilder.Outlined(_marginLabel, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         // ================================================================== entry
@@ -224,14 +288,17 @@ namespace Emberfall.UI.Screens
         public override void OnShow()
         {
             StopAllCoroutines();
+            _autoRoutine = null;
             Painted = false;
-            _content.gameObject.SetActive(false);
-            if (_pending == null && _returning && _result != null && _result.Refused == WaveRefusal.None)
+            HideAll();
+            if (_pending == null && _returning && _result != null && _result.Refused == WaveRefusal.None && _stage != null)
             {
                 // Back from watching a replay: the wave is already resolved and already paid, so
-                // draw it again as it stood. Nothing is resolved, granted or saved on this path.
+                // draw it again as it stood. Nothing is resolved, granted or saved on this path,
+                // and the countdown does not start again.
                 _returning = false;
-                Paint();
+                ShowField(_stage);
+                Paint(false);
                 return;
             }
             _returning = false;
@@ -244,20 +311,36 @@ namespace Emberfall.UI.Screens
             }
             StageDef stage = _pending;
             _pending = null;
+            ShowField(stage);
             StartCoroutine(ResolveRoutine(stage));
+        }
+
+        public override void OnHide()
+        {
+            StopAllCoroutines();
+            _autoRoutine = null;
+            if (_world != null)
+            {
+                _world.Teardown();
+                Destroy(_world.gameObject);
+                _world = null;
+            }
+            App.SetBackgroundVisible(true);
         }
 
         private IEnumerator ResolveRoutine(StageDef stage)
         {
-            // The bare frame: the ground and nothing else, drawn before the blocking resolve.
+            // The bare frame: the battlefield and nothing else, drawn before the blocking resolve.
             yield return null;
 
             _stage = stage;
             int seed = CampaignFlow.NewSeed(App, stage);
+            long now = TimeUtil.NowUnix();
 #if UNITY_EDITOR
             if (CaptureSeed != 0) { seed = CaptureSeed; CaptureSeed = 0; }
+            if (CaptureNow != 0) { now = CaptureNow; CaptureNow = 0; }
 #endif
-            _result = App.Session.ResolveWave(stage, seed, TimeUtil.NowUnix());
+            _result = App.Session.ResolveWave(stage, seed, now);
             App.RefreshHud();
             App.RequestSave();
 
@@ -271,251 +354,422 @@ namespace Emberfall.UI.Screens
 
             if (_result.WaveCleared || _result.StageCleared) App.Audio.Victory();
             else App.Audio.Defeat();
-            Paint();
+            Paint(true);
+        }
+
+        // ================================================================== the field
+
+        /// <summary>The stage's battlefield behind the screen, through the battle's own rig. Built
+        /// before the resolve so the bare frame is the place, not a blank.</summary>
+        private void ShowField(StageDef stage)
+        {
+            _fieldBuilt = false;
+            if (_world == null)
+            {
+                GameObject host = new GameObject("WaveResultWorld");
+                _world = host.AddComponent<BattleStage>();
+                _world.Initialise();
+            }
+            _fieldStage = stage;
+            _world.Camera.rect = new Rect(0f, 0f, 1f, 1f);
+            FrameField(true);
+            App.SetBackgroundVisible(false);
+            _ground.gameObject.SetActive(false);
+        }
+
+        /// <summary>
+        /// Gives the field the screen above the band, or the whole screen. Above the band the line
+        /// stands clear of it rather than behind it: the camera's viewport stops at the band's top
+        /// edge and the battle's own framing fits the squad into what is left. The backdrop is
+        /// built again whenever the viewport changes, because it is sized off the camera's aspect.
+        /// </summary>
+        private void FrameField(bool aboveBand)
+        {
+            if (_world == null || _fieldStage == null) return;
+            float height = Root.rect.height;
+            float band = aboveBand && height > 0f ? Mathf.Clamp01(BandHeight / height) : 0f;
+            Rect want = new Rect(0f, band, 1f, 1f - band);
+            if (_world.Camera.rect == want && _fieldBuilt) return;
+            _world.Camera.rect = want;
+            _world.BuildWorld(_fieldStage.Environment);
+            _fieldBuilt = true;
+        }
+
+        /// <summary>Stands the line that fought on its side of the field, idle. No enemies: the
+        /// record's squad is the player's side only.</summary>
+        private void StandSquad(WaveResolution r)
+        {
+            if (_world == null) return;
+            BattleResult field = new BattleResult();
+            field.Units.AddRange(r.Squad);
+            _world.Populate(field);
         }
 
         // ================================================================== paint
 
-        /// <summary>A refusal changes nothing and has nothing to show: the way back, and no more.</summary>
+        private void HideAll()
+        {
+            _dim.gameObject.SetActive(false);
+            _band.gameObject.SetActive(false);
+            _cleared.gameObject.SetActive(false);
+        }
+
+        /// <summary>A refusal changes nothing and has nothing to show: HOME, and no more.</summary>
         private void PaintRefused()
         {
-            _content.gameObject.SetActive(true);
-            _stageLine.text = "";
-            _title.text = "";
-            _leftPanel.gameObject.SetActive(false);
-            _rightPanel.gameObject.SetActive(false);
-            _lossBox.gameObject.SetActive(false);
-            HideButtons();
-            Place(_campaign);
+            HideAll();
+            if (_world != null) _world.ClearActors();
+            if (_world == null) _ground.gameObject.SetActive(true);
             Painted = true;
         }
 
-        private void Paint()
+        /// <summary>Draws the result. startAuto is false when coming back from a replay, which
+        /// must not start a countdown the player has already sat through.</summary>
+        private void Paint(bool startAuto)
         {
-            _content.gameObject.SetActive(true);
-            _leftPanel.gameObject.SetActive(true);
-            _rightPanel.gameObject.SetActive(true);
-
             WaveResolution r = _result;
-            bool lost = r.LostBattle > 0;
-
-            _stageLine.text = "STAGE " + _stage.DisplayCode + "   " + _stage.Name.ToUpperInvariant()
-                              + "   -   WAVE " + r.Wave + " / " + r.WaveCount;
-
-            if (lost)
+            if (r.StageCleared)
             {
-                _title.text = "BATTLE " + r.LostBattle + " LOST";
-                _title.color = UITheme.Danger;
-            }
-            else if (r.StageCleared)
-            {
-                _title.text = "STAGE " + _stage.DisplayCode + " CLEARED";
-                _title.color = Emberforge.GoldLit;
+                FrameField(false);
+                if (_world != null) _world.ClearActors();
+                PaintCleared(r);
             }
             else
             {
-                _title.text = "WAVE " + r.Wave + " CLEARED";
-                _title.color = Emberforge.TextGold;
+                FrameField(true);
+                StandSquad(r);
+                PaintBand(r, startAuto);
             }
-
-            PaintLeft(r, lost);
-            PaintBattles(r, lost);
-            PaintLossLine(r, lost);
-            PaintButtons(r, lost);
             Painted = true;
         }
 
-        private void PaintLeft(WaveResolution r, bool lost)
+        private string StageName()
         {
-            Clear(_pipHost);
-            Clear(_rewardList);
+            return "STAGE " + _stage.DisplayCode + " · " + _stage.Name.ToUpperInvariant();
+        }
 
-            if (r.StageCleared)
+        private void PaintBand(WaveResolution r, bool startAuto)
+        {
+            bool lost = r.LostBattle > 0;
+            _band.gameObject.SetActive(true);
+            _bandFill.color = lost ? Color.Lerp(Emberforge.SunkenTop, UITheme.Danger, 0.16f)
+                                   : UITheme.WithAlpha(Emberforge.SunkenTop, 0.94f);
+            if (lost) _bandFill.color = UITheme.WithAlpha(_bandFill.color, 0.94f);
+
+            _stageLine.text = StageName();
+            _title.text = "WAVE " + r.Wave + (lost ? " LOST" : " CLEARED");
+            _title.color = lost ? UITheme.Danger : Emberforge.TextGold;
+
+            PaintRow(r, lost);
+
+            _lossLine.gameObject.SetActive(lost);
+            // A loss in wave 1 keeps no wave, so it says nothing about what is kept.
+            if (lost)
+                _lossLine.text = "Fell in battle " + r.LostBattle + " of " + r.BattleCount + "."
+                                 + (r.Wave > 1 ? " Progress up to wave " + (r.Wave - 1) + " is kept." : "");
+
+            HideBandButtons();
+            bool watch = r.Replay != null;
+            if (lost)
             {
-                _leftHeading.text = "WON";
-                _leftFigure.gameObject.SetActive(false);
-                _pipHost.gameObject.SetActive(false);
-                _rewardHost.gameObject.SetActive(true);
-                if (r.Rewards != null) BattleScreen.AddClearRewardRows(_rewardList, r.Rewards);
+                if (watch) Place(_retry.Root, 420f, _adjust.Root, 320f, _watch.Root, 280f);
+                else Place(_retry.Root, 420f, _adjust.Root, 320f);
                 return;
             }
 
-            // A won mid-stage wave pays nothing and a lost one won nothing new, so both show the
-            // wave track: where the player stands in the stage.
-            _leftHeading.text = "WAVES";
-            _rewardHost.gameObject.SetActive(false);
-            _leftFigure.gameObject.SetActive(true);
-            _pipHost.gameObject.SetActive(true);
+            bool auto = AutoAdvance;
+            _autoCheck.enabled = auto;
+            if (watch) Place(_nextWave.Root, 420f, _watch.Root, 280f, _autoToggle, 190f);
+            else Place(_nextWave.Root, 420f, _autoToggle, 190f);
 
+            _countdownPlate.gameObject.SetActive(false);
+            if (auto && startAuto) _autoRoutine = StartCoroutine(AutoRoutine());
+        }
+
+        /// <summary>
+        /// The one row: the wave track, the count, and a chip for each currency this wave paid.
+        /// Laid out by hand from measured widths so the whole row stays centred whatever it holds.
+        /// </summary>
+        private void PaintRow(WaveResolution r, bool lost)
+        {
+            Clear(_rowHost);
+            int n = Mathf.Max(1, r.WaveCount);
             int cleared = lost ? r.Wave - 1 : r.Wave;
-            _leftFigure.text = cleared + " / " + r.WaveCount;
-            _leftFigure.color = lost ? UITheme.TextMuted : Emberforge.TextGold;
 
-            const float gap = 8f;
-            float width = Mathf.Min(120f, (PanelWidth - Inner * 2f - gap * (r.WaveCount - 1)) / r.WaveCount);
-            float total = r.WaveCount * width + (r.WaveCount - 1) * gap;
-            float x0 = -total * 0.5f + width * 0.5f;
-            for (int i = 1; i <= r.WaveCount; i++)
+            Text count = EmberforgeUI.Label("Count", _rowHost, cleared + " / " + n, UITheme.FontBody,
+                                            lost ? Emberforge.TextBody : Emberforge.TextGold, TextAnchor.MiddleLeft);
+            UIBuilder.Outlined(count, Emberforge.Outline, Emberforge.StrokeThin);
+            float countWidth = count.preferredWidth + 4f;
+
+            List<RectTransform> chips = new List<RectTransform>();
+            List<float> chipWidths = new List<float>();
+            if (!lost && r.WaveGold > 0)
+                AddChip(chips, chipWidths, "Gold", TextureLab.CoinIcon(64), UITheme.Gold, "+" + r.WaveGold);
+            if (!lost && r.WaveAccountXp > 0)
+                AddChip(chips, chipWidths, "Xp", TextureLab.Star(64), Emberforge.GoldLit, "+" + r.WaveAccountXp + " XP");
+
+            float track = (n - 1) * PipWidth + PipCurrentWidth + (n - 1) * PipGap;
+            float total = track + Emberforge.Space16 + countWidth;
+            for (int i = 0; i < chips.Count; i++) total += (i == 0 ? Emberforge.Space24 : Emberforge.Space12) + chipWidths[i];
+
+            float x = -total * 0.5f;
+            for (int i = 1; i <= n; i++)
             {
                 bool current = i == r.Wave;
-                bool done = i < r.Wave || (current && !lost);
-
-                Color fill = done ? Emberforge.GoldLow : Emberforge.SunkenMid;
-                if (current && !lost) fill = Emberforge.GoldMid;
-                RectTransform pip = UIBuilder.Panel("Pip" + i, _pipHost, fill, 8).rectTransform;
-                UIBuilder.Box(pip, x0 + (i - 1) * (width + gap), 0f, width, 56f, Middle);
-                if (current) UIBuilder.Frame("Mark", pip, lost ? UITheme.Danger : Emberforge.GoldLit, 8, 4);
-
-                Text n = EmberforgeUI.Label("N", pip, i.ToString(), UITheme.FontSmall,
-                                            done ? Emberforge.TextOnGold : Emberforge.TextQuiet, TextAnchor.MiddleCenter);
-                UIBuilder.FillParent(n.rectTransform, 0f);
-            }
-        }
-
-        private void PaintBattles(WaveResolution r, bool lost)
-        {
-            Clear(_cellHost);
-
-            float stripWidth = r.BattleCount * CellWidth + (r.BattleCount - 1) * CellGap;
-            float x0 = -stripWidth * 0.5f + CellWidth * 0.5f;
-            for (int b = 1; b <= r.BattleCount; b++)
-            {
-                WaveBattleOutcome o = OutcomeOf(r, b);
-                float cx = x0 + (b - 1) * (CellWidth + CellGap);
-
-                RectTransform cell = UIBuilder.Panel("Cell" + b, _cellHost, Emberforge.SunkenTop, 6).rectTransform;
-                UIBuilder.Box(cell, cx, 0f, CellWidth, CellHeight, TopCentre);
-
-                Color numberColor = Emberforge.TextQuiet;
-                if (b < r.FirstBattle)
+                bool done = i < r.Wave;
+                float w = current ? PipCurrentWidth : PipWidth;
+                Color fill = done ? Emberforge.GoldLow
+                           : current ? (lost ? UITheme.Danger : Emberforge.GoldLit)
+                           : Emberforge.SunkenTop;
+                Image pip = UIBuilder.Panel("Pip" + i, _rowHost, fill, 6);
+                UIBuilder.Box(pip.rectTransform, x + w * 0.5f, 0f, w, current ? PipHeight + 6f : PipHeight, Middle);
+                if (!done && !current)
                 {
-                    // Won by an earlier resolve: a muted solid, since the HP it kept is not on this record.
-                    SetFill(cell, 1f, UITheme.TextDim);
+                    Image edge = UIBuilder.Frame("Edge", pip.rectTransform, UITheme.WithAlpha(Emberforge.GoldDeep, 0.8f), 6, 2);
+                    edge.raycastTarget = false;
                 }
-                else if (o != null && o.Victory)
-                {
-                    SetFill(cell, o.PlayerHpRatio, UITheme.Success);
-                    numberColor = Emberforge.TextBody;
-                }
-                else if (o != null)
-                {
-                    SetFill(cell, 1f, UITheme.Danger);
-                    numberColor = UITheme.Danger;
-                }
-
-                Text n = EmberforgeUI.Label("N" + b, _cellHost, b.ToString(), UITheme.FontTiny, numberColor, TextAnchor.MiddleCenter);
-                UIBuilder.Box(n.rectTransform, cx, -(CellHeight + 4f), CellWidth, 28f, TopCentre);
+                pip.raycastTarget = false;
+                x += w + PipGap;
             }
+            x += Emberforge.Space16 - PipGap;
 
-            if (lost)
+            UIBuilder.Box(count.rectTransform, x + countWidth * 0.5f, 0f, countWidth, RowHeight, Middle);
+            x += countWidth;
+
+            for (int i = 0; i < chips.Count; i++)
             {
-                WaveBattleOutcome last = OutcomeOf(r, r.LostBattle);
-                _marginFigure.text = last != null ? Mathf.RoundToInt(last.EnemyHpRatio * 100f) + "%" : "";
-                _marginFigure.color = UITheme.Danger;
-                _marginLabel.text = "ENEMY HP LEFT";
+                x += i == 0 ? Emberforge.Space24 : Emberforge.Space12;
+                UIBuilder.Box(chips[i], x + chipWidths[i] * 0.5f, 0f, chipWidths[i], ChipHeight, Middle);
+                x += chipWidths[i];
             }
-            else
+        }
+
+        /// <summary>A reward chip: the kit's chip with the currency's icon at its left end.</summary>
+        private void AddChip(List<RectTransform> chips, List<float> widths, string name, Sprite icon, Color tint, string text)
+        {
+            RectTransform chip = EmberforgeUI.Chip(name, _rowHost, text, tint, UITheme.FontSmall);
+            Image mark = UIBuilder.Img("Icon", chip, icon, tint);
+            UIBuilder.Box(mark.rectTransform, Emberforge.Space8, 0f, ChipIcon, ChipIcon, LeftMiddle);
+            mark.raycastTarget = false;
+
+            Text label = chip.Find("Text").GetComponent<Text>();
+            float left = Emberforge.Space8 + ChipIcon + Emberforge.Space8;
+            UIBuilder.FillParent(label.rectTransform, left, 2f, Emberforge.Space12, 2f);
+            label.alignment = TextAnchor.MiddleLeft;
+
+            chips.Add(chip);
+            widths.Add(left + label.preferredWidth + Emberforge.Space12 + 4f);
+        }
+
+        private void PaintCleared(WaveResolution r)
+        {
+            _dim.gameObject.SetActive(true);
+            _cleared.gameObject.SetActive(true);
+            for (int i = _column.childCount - 1; i >= 0; i--)
             {
-                _marginFigure.text = Mathf.RoundToInt(Mathf.Max(0f, r.Margin) * 100f) + "%";
-                _marginFigure.color = UITheme.Success;
-                _marginLabel.text = "HP KEPT";
+                Transform child = _column.GetChild(i);
+                if (child == _continue.Root || child == _watchCleared.Root) continue;
+                Destroy(child.gameObject);
             }
+
+            BattleRewards rewards = r.Rewards;
+            const float width = 1400f;
+            float y = 0f;
+
+            y = PlaceRule("RuleTop", y, 760f);
+            y -= Emberforge.Space12;
+            Text victory = EmberforgeUI.Title("Victory", _column, "VICTORY", 104, Emberforge.TextGold, TextAnchor.MiddleCenter);
+            UIBuilder.Box(victory.rectTransform, 0f, y, width, 112f, TopCentre);
+            UIBuilder.Outlined(victory, Emberforge.Outline, 4f);
+            y -= 112f;
+
+            Text line = EmberforgeUI.Label("StageLine", _column, StageName() + " CLEARED", UITheme.FontBody,
+                                           Emberforge.TextBody, TextAnchor.MiddleCenter);
+            UIBuilder.Box(line.rectTransform, 0f, y, width, 40f, TopCentre);
+            UIBuilder.Outlined(line, Emberforge.Outline, Emberforge.StrokeThin);
+            y -= 40f + Emberforge.Space12;
+            y = PlaceRule("RuleBottom", y, 760f);
+
+            if (rewards != null && rewards.FirstClear)
+            {
+                y -= Emberforge.Space16;
+                RectTransform tag = EmberforgeUI.Chip("FirstClear", _column, "FIRST CLEAR", Emberforge.GoldMid, UITheme.FontSmall);
+                float tagWidth = tag.Find("Text").GetComponent<Text>().preferredWidth + Emberforge.Space24 * 2f;
+                UIBuilder.Box(tag, 0f, y, tagWidth, 40f, TopCentre);
+                y -= 40f;
+            }
+
+            y -= Emberforge.Space24;
+            y = PlaceTiles(rewards, y);
+
+            StageDef unlocked = rewards != null && rewards.UnlockedNextStage ? App.Session.FirstUnclearedStage : null;
+            if (unlocked != null)
+            {
+                y -= Emberforge.Space16;
+                RectTransform row = UIBuilder.Node("Unlocked", _column);
+                Text text = EmberforgeUI.Label("Text", row, "STAGE " + unlocked.DisplayCode + " UNLOCKED", UITheme.FontBody,
+                                               Emberforge.TextGold, TextAnchor.MiddleLeft);
+                UIBuilder.Outlined(text, Emberforge.Outline, Emberforge.StrokeThin);
+                float textWidth = text.preferredWidth + 4f;
+                const float icon = 30f;
+                float rowWidth = icon + Emberforge.Space12 + textWidth;
+                UIBuilder.Box(row, 0f, y, rowWidth, 40f, TopCentre);
+                Image padlock = UIBuilder.Img("Icon", row, TextureLab.Padlock(64), Emberforge.GoldMid);
+                UIBuilder.Box(padlock.rectTransform, 0f, 0f, icon, icon, LeftMiddle);
+                UIBuilder.Box(text.rectTransform, icon + Emberforge.Space12, 0f, textWidth, 40f, LeftMiddle);
+                y -= 40f;
+            }
+
+            y -= Emberforge.Space32;
+            bool watch = r.Replay != null;
+            _watchCleared.Root.gameObject.SetActive(watch);
+            float buttons = watch ? 420f + ButtonGap + 280f : 420f;
+            UIBuilder.Box(_continue.Root, -buttons * 0.5f + 210f, y, 420f, 96f, TopCentre);
+            if (watch) UIBuilder.Box(_watchCleared.Root, buttons * 0.5f - 140f, y, 280f, 96f, TopCentre);
+            y -= 96f;
+
+            // The column is as tall as what it holds, centred on the screen.
+            _column.sizeDelta = new Vector2(width, -y);
         }
 
-        /// <summary>A cell filled from the bottom to a share of its height: a child rect anchored
-        /// to the bottom, rather than a vertically filled image, so it needs nothing beyond the
-        /// plain rect and image the rest of the kit already uses.</summary>
-        private static void SetFill(RectTransform cell, float ratio, Color color)
+        private float PlaceRule(string name, float y, float width)
         {
-            float h = Mathf.Max(4f, Mathf.Clamp01(ratio) * CellHeight);
-            Image fill = UIBuilder.Panel("Fill", cell, color, 6);
-            UIBuilder.Box(fill.rectTransform, 0f, 0f, CellWidth, h, BottomCentre);
+            Image rule = EmberforgeUI.Rule(name, _column);
+            UIBuilder.Box(rule.rectTransform, 0f, y, width, Emberforge.RuleHeight, TopCentre);
+            return y - Emberforge.RuleHeight;
         }
 
-        private static WaveBattleOutcome OutcomeOf(WaveResolution r, int battle)
+        /// <summary>One square tile per reward, in the order the spec names them, each only when
+        /// the clear actually paid it.</summary>
+        private float PlaceTiles(BattleRewards rewards, float y)
         {
-            for (int i = 0; i < r.Battles.Count; i++)
-                if (r.Battles[i].Battle == battle) return r.Battles[i];
-            return null;
+            if (rewards == null) return y;
+            List<RectTransform> tiles = new List<RectTransform>();
+            if (rewards.Gold > 0)
+                tiles.Add(CurrencyTile("Gold", TextureLab.CoinIcon(64), UITheme.Gold, "+" + rewards.Gold, "GOLD"));
+            if (rewards.Shards > 0)
+                tiles.Add(CurrencyTile("Shards", TextureLab.CrystalIcon(64), UITheme.Shard, "+" + rewards.Shards, "EMBER SHARDS"));
+            if (rewards.AccountXp > 0)
+                tiles.Add(CurrencyTile("Xp", TextureLab.Star(64), Emberforge.GoldLit, "+" + rewards.AccountXp, "WAYFARER XP"));
+            if (rewards.ArmorDrop != null) tiles.Add(ArmorTile(rewards.ArmorDrop));
+            if (tiles.Count == 0) return y;
+
+            float total = tiles.Count * TileSize + (tiles.Count - 1) * TileGap;
+            for (int i = 0; i < tiles.Count; i++)
+                UIBuilder.Box(tiles[i], -total * 0.5f + TileSize * 0.5f + i * (TileSize + TileGap), y, TileSize, TileSize, TopCentre);
+            return y - TileSize;
         }
 
-        private void PaintLossLine(WaveResolution r, bool lost)
+        private RectTransform Tile(string name)
         {
-            _lossBox.gameObject.SetActive(lost);
-            if (!lost || r.LostDebrief == null) return;
+            RectTransform tile = UIBuilder.Node(name, _column);
+            EmberforgeUI.PlainPanelOn(tile);
+            return tile;
+        }
 
-            // The same shape as BattleScreen's debrief line: the tinted cause tag, then the
-            // sentence the Debrief already wrote. The tag is left out when there is none.
-            string tag = BattleScreen.CauseTag(r.LostDebrief.Clause);
-            string cause = string.IsNullOrEmpty(tag)
-                ? ""
-                : "<color=#" + ColorUtility.ToHtmlStringRGB(BattleScreen.CauseTint(r.LostDebrief.Clause)) + ">"
-                  + tag + "</color>   ";
-            _lossLine.text = "BATTLE " + r.LostBattle + "   " + cause + r.LostDebrief.Text;
+        private RectTransform CurrencyTile(string name, Sprite icon, Color tint, string amount, string label)
+        {
+            RectTransform tile = Tile(name);
+            Image mark = UIBuilder.Img("Icon", tile, icon, tint);
+            UIBuilder.Box(mark.rectTransform, 0f, -22f, 64f, 64f, TopCentre);
+            TileText(tile, amount, label, tint);
+            return tile;
+        }
+
+        private RectTransform ArmorTile(ArmorPiece piece)
+        {
+            RectTransform tile = Tile("Armor");
+            RectTransform card = ItemCard.ForArmor("Icon", tile, 76f, piece);
+            UIBuilder.Box(card, 0f, -16f, 76f, 76f, TopCentre);
+            Color temper = UITheme.ArmorTemperColor(piece.Temper);
+            TileText(tile, piece.Name, ArmorInfo.TemperLabel(piece.Temper).ToUpperInvariant(), temper);
+            return tile;
+        }
+
+        /// <summary>The amount, then the small caps label, under a tile's icon.</summary>
+        private static void TileText(RectTransform tile, string amount, string label, Color tint)
+        {
+            Text value = EmberforgeUI.Title("Amount", tile, amount, UITheme.FontHeading, Emberforge.TextGold, TextAnchor.MiddleCenter);
+            UIBuilder.Box(value.rectTransform, 0f, -96f, TileSize - Emberforge.Space16, 40f, TopCentre);
+            UIBuilder.BestFit(value, 16, UITheme.FontHeading);
+            UIBuilder.Outlined(value, Emberforge.Outline, Emberforge.StrokeThin);
+
+            Text caption = EmberforgeUI.Label("Label", tile, label, UITheme.FontTiny, tint, TextAnchor.MiddleCenter);
+            UIBuilder.Box(caption.rectTransform, 0f, -140f, TileSize - Emberforge.Space16, 28f, TopCentre);
+            UIBuilder.BestFit(caption, 12, UITheme.FontTiny);
+            UIBuilder.Outlined(caption, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         // ================================================================== buttons
 
-        private void PaintButtons(WaveResolution r, bool lost)
-        {
-            HideButtons();
-            bool watch = r.Replay != null;
-            if (lost) Row(watch, _retry, _adjust, _campaign);
-            else if (r.StageCleared)
-            {
-                if (App.Session.FirstUnclearedStage != null) Row(watch, _continue, _campaign);
-                else Row(watch, _campaign);
-            }
-            else Row(watch, _nextWave, _campaign);
-        }
-
-        /// <summary>The buttons for this result, with WATCH second when there is a battle to watch:
-        /// after the one tap that moves on, before the ways out.</summary>
-        private void Row(bool withWatch, params UIButton[] row)
-        {
-            if (!withWatch) { Place(row); return; }
-            UIButton[] all = new UIButton[row.Length + 1];
-            all[0] = row[0];
-            all[1] = _watch;
-            for (int i = 1; i < row.Length; i++) all[i + 1] = row[i];
-            Place(all);
-        }
-
-        private void HideButtons()
+        private void HideBandButtons()
         {
             _nextWave.Root.gameObject.SetActive(false);
             _retry.Root.gameObject.SetActive(false);
-            _continue.Root.gameObject.SetActive(false);
             _adjust.Root.gameObject.SetActive(false);
-            _campaign.Root.gameObject.SetActive(false);
             _watch.Root.gameObject.SetActive(false);
+            _autoToggle.gameObject.SetActive(false);
         }
 
-        /// <summary>Lays the given buttons out as one centred row along the bottom, the first
-        /// being the wide gold one when there is more than one.</summary>
-        private static void Place(params UIButton[] row)
+        /// <summary>Lays the given controls out as one centred row along the band's bottom, as
+        /// (control, width) pairs in order.</summary>
+        private static void Place(params object[] row)
         {
-            const float gap = 24f;
-            float[] widths = new float[row.Length];
-            float total = gap * (row.Length - 1);
-            for (int i = 0; i < row.Length; i++)
-            {
-                widths[i] = (i == 0 && row.Length > 1) ? 520f : 340f;
-                total += widths[i];
-            }
+            float total = ButtonGap * (row.Length / 2 - 1);
+            for (int i = 1; i < row.Length; i += 2) total += (float)row[i];
 
             float x = -total * 0.5f;
-            for (int i = 0; i < row.Length; i++)
+            for (int i = 0; i < row.Length; i += 2)
             {
-                row[i].Root.gameObject.SetActive(true);
-                UIBuilder.Box(row[i].Root, x + widths[i] * 0.5f, 26f, widths[i], 96f, BottomCentre);
-                x += widths[i] + gap;
+                RectTransform rt = (RectTransform)row[i];
+                float w = (float)row[i + 1];
+                rt.gameObject.SetActive(true);
+                UIBuilder.Box(rt, x + w * 0.5f, ButtonBottom, w, ButtonHeight, BottomCentre);
+                x += w + ButtonGap;
             }
         }
 
         private static void Clear(Transform host)
         {
             for (int i = host.childCount - 1; i >= 0; i--) Destroy(host.GetChild(i).gameObject);
+        }
+
+        // ================================================================== auto
+
+        /// <summary>The countdown: a digit inside NEXT WAVE for each second left, then NEXT WAVE
+        /// itself, through the same handler a tap uses.</summary>
+        private IEnumerator AutoRoutine()
+        {
+            _countdownPlate.gameObject.SetActive(true);
+            float left = AutoSeconds;
+            while (left > 0f)
+            {
+                _countdown.text = Mathf.CeilToInt(left).ToString();
+#if UNITY_EDITOR
+                if (CaptureHoldCountdown) { yield return null; continue; }
+#endif
+                yield return null;
+                left -= Time.unscaledDeltaTime;
+            }
+            _countdownPlate.gameObject.SetActive(false);
+            _autoRoutine = null;
+            OnResolveAgain();
+        }
+
+        /// <summary>Any tap on the band stops the countdown for this wave. AUTO stays as it is set.</summary>
+        private void CancelCountdown()
+        {
+            if (_autoRoutine != null) StopCoroutine(_autoRoutine);
+            _autoRoutine = null;
+            _countdownPlate.gameObject.SetActive(false);
+        }
+
+        private void OnAutoToggle()
+        {
+            App.Audio.Tap();
+            CancelCountdown();
+            AutoAdvance = !AutoAdvance;
+            _autoCheck.enabled = AutoAdvance;
         }
 
         // ================================================================== actions
@@ -525,6 +779,7 @@ namespace Emberfall.UI.Screens
         private void OnResolveAgain()
         {
             App.Audio.Tap();
+            CancelCountdown();
             if (_stage != null) Begin(_stage);
         }
 
@@ -547,6 +802,7 @@ namespace Emberfall.UI.Screens
         private void OnWatch()
         {
             App.Audio.Tap();
+            CancelCountdown();
             WaveReplay replay = _result != null ? _result.Replay : null;
             if (replay == null) return;
 
@@ -557,12 +813,12 @@ namespace Emberfall.UI.Screens
             run.Result = fight;
             run.IsReplay = true;
             run.Home = true;
-            run.Label =replay.Stage.DisplayCode + "   " + replay.Stage.Name.ToUpperInvariant()
+            run.Label = replay.Stage.DisplayCode + "   " + replay.Stage.Name.ToUpperInvariant()
                         + "   WAVE " + replay.Wave + "/" + replay.Stage.WaveCount
                         + "   BATTLE " + replay.Battle + "/" + replay.Stage.BattleCount + "   REPLAY";
             run.Subtitle = "REPLAY   " + fight.Rounds + " ROUNDS   BANNER AT "
                            + Mathf.RoundToInt(fight.PlayerHpRatio * 100f) + "%";
-            run.Rows.Add(new System.Collections.Generic.KeyValuePair<string, string>("REWARDS", "NONE"));
+            run.Rows.Add(new KeyValuePair<string, string>("REWARDS", "NONE"));
             run.PrimaryLabel = "BACK";
             run.OnPrimary = delegate
             {
@@ -579,12 +835,6 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.Formation, false);
-        }
-
-        private void OnCampaign()
-        {
-            App.Audio.Tap();
-            Router.Show(ScreenId.Campaign, false);
         }
     }
 }
