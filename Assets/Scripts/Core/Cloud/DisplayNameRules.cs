@@ -4,10 +4,11 @@ namespace Emberfall.Core.Cloud
     /// The name a friend or a guild-mate sees on a player's line.
     ///
     /// ONE RULE WITH THE GUILD NAME, and that is deliberate rather than convenient: the server
-    /// applies the guild-name rule (`btrim`, 3 to 20 characters, no control characters) to
-    /// display names too, so this validates through the same constants and the same helpers
-    /// GuildRules does. There is no second copy of 3 or 20 to drift from the first. Only the
-    /// words differ, because a refusal that says "a guild name" to somebody choosing their own
+    /// applies the guild-name text rule (its own `btrim`, no control characters) to display
+    /// names too, so this validates through the same constants and the same helpers GuildRules
+    /// does. The column's length bound is still 0001's 1 to 24, not the guild name's 3 to 20;
+    /// the client holds the narrower band, which is stricter and so allowed. There is no second
+    /// copy of 3 or 20 to drift from the first. Only the words differ, because a refusal that says "a guild name" to somebody choosing their own
     /// name is a refusal about the wrong thing.
     ///
     /// The client's job, as with every rule in this namespace, is to stop a player BEFORE a round

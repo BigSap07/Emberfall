@@ -37,6 +37,7 @@ import argparse
 import json
 import os
 import random
+import re
 import string
 import sys
 import urllib.error
@@ -44,6 +45,11 @@ import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(ROOT, "Assets", "Resources", "Config", "supabase.json")
+CAMPAIGN_PATH = os.path.join(ROOT, "Assets", "Resources", "Content", "campaign.json")
+
+# SaveSerializer.PreIdStageOrder, the FROZEN order a pre-version-20 `stagesCleared` position is
+# read through. Never derived from campaign.json, for the reason the serializer gives.
+PRE_ID_STAGE_ORDER = ["ch%d_%d" % (chapter, stage) for chapter in range(1, 7) for stage in range(1, 13)]
 
 URL = ""
 ANON = ""
@@ -220,6 +226,32 @@ def cmd_befriend(args):
     write_token_file(args.token_file, session)
 
 
+def campaign_stage_ids():
+    """Stage ids in campaign.json order. The file carries // comments, so it is read for its
+    stage ids rather than parsed; every stage id has the shape chN_M and nothing else does."""
+    with open(CAMPAIGN_PATH, "r", encoding="utf-8") as handle:
+        return re.findall(r'"id"\s*:\s*"(ch\d+_\d+)"', handle.read())
+
+
+def clear_more_stages(document, save_version, count):
+    """Clears the next `count` stages the way SaveSerializer records them from version 20 on:
+    by id in `clearedStages`, with `stagesCleared` written as the count of ids content names.
+
+    A pre-20 document's `stagesCleared` is a position, so its ids are seeded first through the
+    frozen order, which is the serializer's own migration. The ids then stay a prefix of the
+    campaign, so the position this writes back means the same stages to a pre-20 reader."""
+    cleared = [sid for sid in (document.get("clearedStages") or []) if isinstance(sid, str)]
+    if save_version < 20:
+        position = max(0, min(int(document.get("stagesCleared", 0)), len(PRE_ID_STAGE_ORDER)))
+        for sid in PRE_ID_STAGE_ORDER[:position]:
+            if sid not in cleared:
+                cleared.append(sid)
+    stages = campaign_stage_ids()
+    cleared.extend([sid for sid in stages if sid not in cleared][:count])
+    document["clearedStages"] = cleared
+    document["stagesCleared"] = len(set(cleared) & set(stages))
+
+
 def cmd_conflict(args):
     """Pushes a save to the EDITOR's own account from off the device, so its next sync has to ask.
 
@@ -229,8 +261,9 @@ def cmd_conflict(args):
     the linked email is exactly what a second phone would do.
 
     The document pushed is the account's OWN current cloud save with two fields nudged - a
-    different player name and one more stage cleared - so the conflict card has two genuinely
-    different saves to describe rather than two identical ones. Nothing about the local save is
+    different player name and more stages cleared, by id as SaveSerializer records them - so
+    the conflict card has two genuinely different saves to describe rather than two identical
+    ones. Nothing about the local save is
     touched; the editor still holds whatever it held.
     """
     status, body = request("POST", "/auth/v1/token?grant_type=password",
@@ -252,7 +285,7 @@ def cmd_conflict(args):
     document = row["data"]
     revision = row["revision"]
     document["playerName"] = args.name
-    document["stagesCleared"] = int(document.get("stagesCleared", 0)) + args.stages
+    clear_more_stages(document, int(row["save_version"]), args.stages)
     document["playerLevel"] = int(document.get("playerLevel", 1)) + args.levels
 
     status, pushed = request("POST", "/rest/v1/rpc/push_save", token=token,
@@ -267,6 +300,8 @@ def cmd_conflict(args):
     print("pushed a newer save from 'another-device': revision " + str(revision)
           + " -> " + str(new_revision))
     print("  playerName    -> " + document["playerName"])
+    print("  clearedStages -> " + str(len(document["clearedStages"])) + " ids, last "
+          + (document["clearedStages"][-1] if document["clearedStages"] else "none"))
     print("  stagesCleared -> " + str(document["stagesCleared"]))
     print("  playerLevel   -> " + str(document["playerLevel"]))
     print("")
