@@ -57,6 +57,15 @@ namespace Emberfall.EditorTools
         private const string WidthKey = "PlayModeScreenshot.Width";
         private const string HeightKey = "PlayModeScreenshot.Height";
         private const string SuffixKey = "PlayModeScreenshot.Suffix";
+        private const string VerifiedKey = "PlayModeScreenshot.Verified";
+
+        /// <summary>
+        /// Every run of this tool is on a scratch identity with the cloud held off, unconditionally:
+        /// Begin swaps to it (unless a tool above, ScratchCaptures, already did) and enters Play
+        /// mode through EditorCaptureGuard, which arms the forced-offline switch. The real save is
+        /// not written and the real account is not signed in to, whatever files the worktree holds.
+        /// </summary>
+        private const string ScratchProduct = "Emberfall Screenshots";
 
         /// <summary>
         /// Poll target for an external, file-based trigger: an already-open Editor session cannot
@@ -79,7 +88,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV17-fusion-and-wave-result-merged";
+        private const string BuildMarker = "FIXV18-forced-offline-scratch-identity";
 
         static PlayModeScreenshot()
         {
@@ -283,6 +292,13 @@ namespace Emberfall.EditorTools
                 }
             }
 
+            if (!EditorScratchIdentity.Enter(ScratchProduct))
+            {
+                Debug.LogError("PlayModeScreenshot: could not switch to the scratch identity. "
+                               + "Refusing to enter Play mode on the real one.");
+                return;
+            }
+
             if (!GameViewSize.Apply(width, height))
             {
                 Debug.LogWarning("PlayModeScreenshot: could not pin the Game view to "
@@ -291,6 +307,7 @@ namespace Emberfall.EditorTools
             }
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
             SessionState.SetBool(ActiveKey, true);
+            SessionState.SetBool(VerifiedKey, false);
             SessionState.SetString(TargetKey, target);
             SessionState.SetInt(WidthKey, width);
             SessionState.SetInt(HeightKey, height);
@@ -301,7 +318,7 @@ namespace Emberfall.EditorTools
             // would inherit the first run's arming frame and shoot immediately if they were left.
             SessionState.SetInt(LastShotKey, 0);
             SessionState.SetInt(BattleArmKey, 0);
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         /// <summary>
@@ -336,6 +353,19 @@ namespace Emberfall.EditorTools
             SessionState.SetInt(FrameKey, frame);
             string target = SessionState.GetString(TargetKey, "Events");
 
+            // Once per run, as soon as the game is up: refuse to photograph a session that could
+            // reach the real account or write the real save.
+            if (!SessionState.GetBool(VerifiedKey, false) && (GameApp.Instance != null || frame >= 9))
+            {
+                SessionState.SetBool(VerifiedKey, true);
+                if (!EditorCaptureGuard.Verify("PlayModeScreenshot", true))
+                {
+                    Debug.LogError("PlayModeScreenshot: the run is not offline on a scratch identity. Stopping without a capture.");
+                    Stop();
+                    return;
+                }
+            }
+
             if (target == "Recital") PumpRecital(frame);
             else if (target == "Proving") PumpProving(frame);
             else if (target.StartsWith("Screen:")) PumpScreen(frame, target.Substring(7));
@@ -348,6 +378,7 @@ namespace Emberfall.EditorTools
             SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetBool(ActiveKey, false);
             EditorApplication.isPlaying = false;
+            EditorScratchIdentity.LeaveWhenIdle();
         }
 
         private static string OutputPath(string fileName)

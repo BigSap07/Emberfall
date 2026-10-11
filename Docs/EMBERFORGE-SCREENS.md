@@ -83,7 +83,7 @@ at 20:9 and nowhere else. One aspect is half a check.
 
 `GuildDungeonShots` (`Emberfall/Capture/Guild dungeon`, or
 `Unity.exe -projectPath . -executeMethod Emberfall.EditorTools.GuildDungeonShots.Run`) copies the
-real save into a scratch identity, holds the cloud off (`GameApp.NoCloudKey`, so no anonymous
+real save into a scratch identity, holds the cloud off (`SupabaseConfig.ForcedOffline`, so no anonymous
 account is signed up on the live project), and puts an in-memory guild of three members behind
 `IGuildDungeonBackend`. It then presses the real buttons: chat, WATCH a guildmate's lost fight,
 RUN IT YOURSELF, ATTEMPT, the result, POST TO GUILD CHAT, the boards. Last, it reads the chat as

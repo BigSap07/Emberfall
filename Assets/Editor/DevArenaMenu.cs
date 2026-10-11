@@ -42,7 +42,7 @@ namespace Emberfall.EditorTools
 
             EnsureScene();
             EditorSceneManager.OpenScene(ScenePath, OpenSceneMode.Single);
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         [MenuItem("Emberfall/Dev Arena (create or repair the scene)", false, 11)]

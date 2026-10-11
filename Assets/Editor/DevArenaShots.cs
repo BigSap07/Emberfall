@@ -427,9 +427,18 @@ namespace Emberfall.EditorTools
         public static void CaptureRealBattle()
         {
             if (EditorApplication.isPlaying) { Debug.LogError("[dev-arena-shots] leave Play Mode first"); return; }
+            // The hub boots here, so this is a real GameApp session: scratch identity, never the
+            // real save. The run ends whenever Play mode is stopped, so the restore is queued now
+            // and waits for the editor to leave Play mode.
+            if (!EditorScratchIdentity.Enter("Emberfall Dev Arena Shots"))
+            {
+                Debug.LogError("[dev-arena-shots] could not switch to the scratch identity; not entering Play mode.");
+                return;
+            }
+            EditorScratchIdentity.LeaveWhenIdle();
             SessionState.SetBool(RealBattleKey, true);
             UnityEditor.SceneManagement.EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         private const string RealBattleKey = "Emberfall.DevArenaShots.RealBattle";

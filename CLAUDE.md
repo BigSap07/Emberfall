@@ -53,6 +53,7 @@ campaign progression, summoning, idle income, local saving. Landscape, touch-fir
 - **Design docs commit straight to `main`.** They touch no code, and every agent needs to read
   them.
 - Verify with `Tools/build-check.ps1` before calling work done.
+- Editor captures are forced offline by the capture tooling (`EditorCaptureGuard`); agents no longer need to move `supabase.json`.
 
 ## Update posts (Discord)
 

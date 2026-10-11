@@ -151,7 +151,7 @@ namespace Emberfall.EditorTools
             SessionState.SetBool(SawStackKey, false);
             SessionState.SetBool(SawSpreadKey, false);
             SessionState.SetString(StackTextKey, "");
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         /// <summary>Restarts a run that had to stop Play Mode first, once it has actually exited.</summary>

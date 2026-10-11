@@ -150,7 +150,7 @@ namespace Emberfall.EditorTools
             SessionState.SetString(LabelKey, label);
             SessionState.SetBool(ActiveKey, true);
             _stage = 0;
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         private static string OutDir(string label)

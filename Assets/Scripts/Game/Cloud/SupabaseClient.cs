@@ -85,6 +85,9 @@ namespace Emberfall.Game.Cloud
         {
             _config = config;
             _runner = runner;
+#if UNITY_EDITOR
+            SupabaseConfig.ClientsConstructed++;
+#endif
         }
 
         public SupabaseConfig Config { get { return _config; } }

@@ -106,7 +106,7 @@ namespace Emberfall.EditorTools
             SessionState.SetBool(ActiveKey, true);
             SessionState.SetInt(FrameKey, 0);
             SessionState.SetInt(StageKey, 0);
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         private static void Stop()
