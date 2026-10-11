@@ -135,6 +135,26 @@ GROUPS = [
         note="10 files, 6 of them oversized and uncompressed",
     ),
     Group(
+        name="Hit flipbook sheets",
+        folder="Assets/Resources/Art/Vfx",
+        # 2048, and it must be at least the largest sheet (1040 wide). A flipbook is a cols x rows
+        # grid that VfxDirector slices by UV, so a clamp that bit would rescale the whole sheet and
+        # shear every cell boundary, the same failure the Units group is written to avoid.
+        max_size=2048,
+        npot=0,            # None. 780x520 and 1040x1040 are meant, not rounded to 1024.
+        mipmap=0,          # A hit is never drawn smaller than its frame, so no mip is sampled.
+        filter_mode=1,     # Bilinear: a frame is magnified or near 1:1 at 1080p.
+        # BC7: these are pure white RGB with a soft alpha, and alpha is the whole image. BC7 spends
+        # as much on alpha as on colour, where DXT5 would step the glow; same 8 bits per pixel.
+        win_format=BC7,
+        # ASTC 5x5, chosen by the frame and not by taste, exactly as in the Units group. Every
+        # sheet was cut to 260 px cells, a multiple of both 4 (BC7) and 5 (ASTC 5x5), so no block
+        # on either platform straddles two frames and bleeds one into the next.
+        android_format=ASTC_5x5,
+        crunch_quality=50,
+        note="6 white-on-alpha sheets from the Vefects Lite pack",
+    ),
+    Group(
         name="Backdrops and the hub painting",
         folder="Assets/Resources/Backgrounds",
         max_size=2048,
