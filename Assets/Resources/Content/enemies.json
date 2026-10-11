@@ -277,7 +277,7 @@
       "hp": 960, "attack": 115, "defense": 52, "speed": 95,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 9, "sprite": "forest_boar", "spriteStatus": "pending" },
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 9, "sprite": "forest_boar", "spriteBodyFraction": 0.388, "spriteFootFraction": 0.204 },
       "basic": {
         "id": "forest_boar_basic", "name": "Gore", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
@@ -296,7 +296,7 @@
       "hp": 820, "attack": 105, "defense": 43, "speed": 105,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.15, "effectResist": 0.05,
-      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 6, "sprite": "forest_spider", "spriteStatus": "pending" },
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 6, "sprite": "forest_spider", "spriteBodyFraction": 0.431, "spriteFootFraction": 0.1 },
       "basic": {
         "id": "forest_spider_basic", "name": "Venom Nip", "vfx": "bolt",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
@@ -315,7 +315,7 @@
       "hp": 700, "attack": 128, "defense": 35, "speed": 111,
       "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "none", "scale": 0.81, "sigil": 8, "sprite": "goblin_slinger", "spriteStatus": "pending" },
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "none", "scale": 0.81, "sigil": 8, "sprite": "goblin_slinger", "spriteBodyFraction": 0.45, "spriteFootFraction": 0.204 },
       "basic": {
         "id": "goblin_slinger_basic", "name": "Slingstone", "vfx": "bolt",
         "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
@@ -331,7 +331,7 @@
       "hp": 790, "attack": 136, "defense": 41, "speed": 112,
       "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 8, "sprite": "grey_wolf", "spriteStatus": "pending" },
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 8, "sprite": "grey_wolf", "spriteBodyFraction": 0.362, "spriteFootFraction": 0.204 },
       "basic": {
         "id": "grey_wolf_basic", "name": "Snap", "vfx": "slash",
         "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.0 } ]
@@ -347,7 +347,7 @@
       "hp": 740, "attack": 124, "defense": 37, "speed": 124,
       "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
       "effectHit": 0.10, "effectResist": 0.05,
-      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.95, "sigil": 6, "sprite": "highway_thief", "spriteStatus": "pending" },
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.95, "sigil": 6, "sprite": "highway_thief", "spriteBodyFraction": 0.446, "spriteFootFraction": 0.2 },
       "basic": {
         "id": "highway_thief_basic", "name": "Cutpurse Jab", "vfx": "slash",
         "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
@@ -366,7 +366,7 @@
       "hp": 1730, "attack": 119, "defense": 100, "speed": 88,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.20,
-      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "spear", "scale": 1.06, "sigil": 9, "sprite": "hollowed_guard", "spriteStatus": "pending" },
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "spear", "scale": 1.06, "sigil": 9, "sprite": "hollowed_guard", "spriteBodyFraction": 0.469, "spriteFootFraction": 0.2 },
       "basic": {
         "id": "hollowed_guard_basic", "name": "Rote Thrust", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
@@ -386,7 +386,7 @@
       "hp": 1110, "attack": 171, "defense": 54, "speed": 99,
       "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.12,
-      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "bow", "scale": 1.06, "sigil": 6, "sprite": "hollowed_hunter", "spriteStatus": "pending" },
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "bow", "scale": 1.06, "sigil": 6, "sprite": "hollowed_hunter", "spriteBodyFraction": 0.435, "spriteFootFraction": 0.2 },
       "basic": {
         "id": "hollowed_hunter_basic", "name": "Empty Arrow", "vfx": "bolt",
         "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
@@ -402,7 +402,7 @@
       "hp": 1180, "attack": 162, "defense": 61, "speed": 101,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.12,
-      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "staff", "scale": 1.06, "sigil": 16, "sprite": "hollowed_mage", "spriteStatus": "pending" },
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "staff", "scale": 1.06, "sigil": 16, "sprite": "hollowed_mage", "spriteBodyFraction": 0.473, "spriteFootFraction": 0.2 },
       "basic": {
         "id": "hollowed_mage_basic", "name": "Hollow Spark", "vfx": "bolt",
         "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.9 } ]
@@ -438,7 +438,7 @@
       "hp": 740, "attack": 134, "defense": 35, "speed": 106,
       "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "bow", "scale": 0.95, "sigil": 7, "sprite": "outlaw_archer", "spriteStatus": "pending" },
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "bow", "scale": 0.95, "sigil": 7, "sprite": "outlaw_archer", "spriteBodyFraction": 0.446, "spriteFootFraction": 0.2 },
       "basic": {
         "id": "outlaw_archer_basic", "name": "Loose", "vfx": "bolt",
         "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
@@ -454,7 +454,7 @@
       "hp": 800, "attack": 127, "defense": 41, "speed": 115,
       "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.81, "sigil": 7, "sprite": "road_goblin", "spriteStatus": "pending" },
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.81, "sigil": 7, "sprite": "road_goblin", "spriteBodyFraction": 0.485, "spriteFootFraction": 0.219 },
       "basic": {
         "id": "road_goblin_basic", "name": "Stab", "vfx": "slash",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
@@ -492,7 +492,7 @@
       "hp": 2060, "attack": 165, "defense": 88, "speed": 92,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12, "startEnergy": 15,
       "effectHit": 0.05, "effectResist": 0.18,
-      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "sword", "scale": 1.12, "sigil": 12, "sprite": "the_forsaken", "spriteStatus": "pending" },
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "sword", "scale": 1.12, "sigil": 12, "sprite": "the_forsaken", "spriteBodyFraction": 0.485, "spriteFootFraction": 0.215 },
       "basic": {
         "id": "the_forsaken_basic", "name": "Forsaken Blow", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
@@ -517,7 +517,7 @@
       "hp": 2590, "attack": 235, "defense": 99, "speed": 88,
       "critChance": 0.12, "critDamage": 1.7, "growth": 0.12, "startEnergy": 20,
       "effectHit": 0.15, "effectResist": 0.20,
-      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "orb", "scale": 1.2, "sigil": 13, "sprite": "the_collector", "spriteStatus": "pending" },
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "orb", "scale": 1.2, "sigil": 13, "sprite": "the_collector", "spriteBodyFraction": 0.527, "spriteFootFraction": 0.188 },
       "basic": {
         "id": "the_collector_basic", "name": "Take", "vfx": "bolt",
         "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.62 } ]
@@ -542,7 +542,7 @@
       "hp": 770, "attack": 137, "defense": 42, "speed": 113,
       "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 7, "sprite": "dire_wolf", "spriteStatus": "pending" },
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 7, "sprite": "dire_wolf", "spriteBodyFraction": 0.377, "spriteFootFraction": 0.215 },
       "basic": {
         "id": "dire_wolf_basic", "name": "Rend", "vfx": "slash",
         "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.0 } ]
@@ -563,7 +563,7 @@
       "hp": 970, "attack": 113, "defense": 56, "speed": 98,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 9, "sprite": "thornback_boar", "spriteStatus": "pending" },
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 9, "sprite": "thornback_boar", "spriteBodyFraction": 0.419, "spriteFootFraction": 0.273 },
       "basic": {
         "id": "thornback_boar_basic", "name": "Tusk", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
@@ -579,7 +579,7 @@
       "hp": 700, "attack": 128, "defense": 37, "speed": 126,
       "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
       "effectHit": 0.10, "effectResist": 0.05,
-      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.81, "sigil": 6, "sprite": "goblin_scavenger", "spriteStatus": "pending" },
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "dagger", "scale": 0.81, "sigil": 6, "sprite": "goblin_scavenger", "spriteBodyFraction": 0.473, "spriteFootFraction": 0.219 },
       "basic": {
         "id": "goblin_scavenger_basic", "name": "Pilfer", "vfx": "slash",
         "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
@@ -598,7 +598,7 @@
       "hp": 780, "attack": 120, "defense": 41, "speed": 109,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.15, "effectResist": 0.05,
-      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "none", "scale": 0.81, "sigil": 8, "sprite": "goblin_trapper", "spriteStatus": "pending" },
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "none", "scale": 0.81, "sigil": 8, "sprite": "goblin_trapper", "spriteBodyFraction": 0.462, "spriteFootFraction": 0.204 },
       "basic": {
         "id": "goblin_trapper_basic", "name": "Hurled Snare", "vfx": "bolt",
         "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.9 } ]
@@ -617,7 +617,7 @@
       "hp": 920, "attack": 112, "defense": 54, "speed": 96,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "sword", "scale": 0.95, "sigil": 7, "sprite": "road_marauder", "spriteStatus": "pending" },
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "sword", "scale": 0.95, "sigil": 7, "sprite": "road_marauder", "spriteBodyFraction": 0.465, "spriteFootFraction": 0.212 },
       "basic": {
         "id": "road_marauder_basic", "name": "Hack", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
@@ -636,7 +636,7 @@
       "hp": 750, "attack": 131, "defense": 36, "speed": 106,
       "critChance": 0.12, "critDamage": 1.5, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "bow", "scale": 0.95, "sigil": 7, "sprite": "marauder_crossbowman", "spriteStatus": "pending" },
+      "visual": { "primary": "E05C2A", "secondary": "3A1B14", "accent": "FFCC66", "silhouette": "humanoid", "weapon": "bow", "scale": 0.95, "sigil": 7, "sprite": "marauder_crossbowman", "spriteBodyFraction": 0.469, "spriteFootFraction": 0.212 },
       "basic": {
         "id": "marauder_crossbowman_basic", "name": "Bolt", "vfx": "bolt",
         "effects": [ { "kind": "Damage", "target": "RandomEnemy", "power": 0.95 } ]
@@ -652,7 +652,7 @@
       "hp": 720, "attack": 129, "defense": 37, "speed": 121,
       "critChance": 0.15, "critDamage": 1.6, "growth": 0.12,
       "effectHit": 0.10, "effectResist": 0.05,
-      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 12, "sprite": "bog_crawler", "spriteStatus": "pending" },
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 12, "sprite": "bog_crawler", "spriteBodyFraction": 0.342, "spriteFootFraction": 0.196 },
       "basic": {
         "id": "bog_crawler_basic", "name": "Mire Bite", "vfx": "slash",
         "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 0.95 } ]
@@ -671,7 +671,7 @@
       "hp": 770, "attack": 129, "defense": 39, "speed": 110,
       "critChance": 0.14, "critDamage": 1.55, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.05,
-      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 16, "sprite": "carrion_vulture", "spriteStatus": "pending" },
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "beast", "weapon": "claws", "scale": 0.95, "sigil": 16, "sprite": "carrion_vulture", "spriteBodyFraction": 0.85, "spriteFootFraction": 0.088 },
       "basic": {
         "id": "carrion_vulture_basic", "name": "Peck", "vfx": "slash",
         "effects": [ { "kind": "Damage", "target": "LowestHpEnemy", "power": 1.0 } ]
@@ -687,7 +687,7 @@
       "hp": 1480, "attack": 139, "defense": 72, "speed": 101,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.12,
-      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "staff", "scale": 1.06, "sigil": 9, "sprite": "drifting_pilgrim", "spriteStatus": "pending" },
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "staff", "scale": 1.06, "sigil": 9, "sprite": "drifting_pilgrim", "spriteBodyFraction": 0.442, "spriteFootFraction": 0.212 },
       "basic": {
         "id": "drifting_pilgrim_basic", "name": "Warding Staff", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
@@ -707,7 +707,7 @@
       "hp": 1570, "attack": 143, "defense": 82, "speed": 89,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.12,
-      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "hammer", "scale": 1.06, "sigil": 9, "sprite": "hollowed_woodsman", "spriteStatus": "pending" },
+      "visual": { "primary": "7A8F3C", "secondary": "23301A", "accent": "C6E86B", "silhouette": "humanoid", "weapon": "hammer", "scale": 1.06, "sigil": 9, "sprite": "hollowed_woodsman", "spriteBodyFraction": 0.446, "spriteFootFraction": 0.212 },
       "basic": {
         "id": "hollowed_woodsman_basic", "name": "Felling Swing", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 1.0 } ]
@@ -726,7 +726,7 @@
       "hp": 1280, "attack": 138, "defense": 67, "speed": 102,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.15, "effectResist": 0.12,
-      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "orb", "scale": 1.06, "sigil": 6, "sprite": "hollowed_apothecary", "spriteStatus": "pending" },
+      "visual": { "primary": "6B6270", "secondary": "241F2B", "accent": "9C8FB0", "silhouette": "humanoid", "weapon": "orb", "scale": 1.06, "sigil": 6, "sprite": "hollowed_apothecary", "spriteBodyFraction": 0.442, "spriteFootFraction": 0.204 },
       "basic": {
         "id": "hollowed_apothecary_basic", "name": "Thrown Vial", "vfx": "bolt",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
@@ -745,7 +745,7 @@
       "hp": 1700, "attack": 128, "defense": 100, "speed": 81,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12,
       "effectHit": 0.05, "effectResist": 0.20,
-      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "spear", "scale": 1.06, "sigil": 8, "sprite": "hollowed_sentinel", "spriteStatus": "pending" },
+      "visual": { "primary": "9FB7C9", "secondary": "2C3742", "accent": "E8F3FF", "silhouette": "humanoid", "weapon": "spear", "scale": 1.06, "sigil": 8, "sprite": "hollowed_sentinel", "spriteBodyFraction": 0.458, "spriteFootFraction": 0.212 },
       "basic": {
         "id": "hollowed_sentinel_basic", "name": "Checkpoint Thrust", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.85 } ]
@@ -765,7 +765,7 @@
       "hp": 2010, "attack": 171, "defense": 88, "speed": 94,
       "critChance": 0.07, "critDamage": 1.45, "growth": 0.12, "startEnergy": 15,
       "effectHit": 0.05, "effectResist": 0.18,
-      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "spear", "scale": 1.12, "sigil": 16, "sprite": "the_waykeeper", "spriteStatus": "pending" },
+      "visual": { "primary": "F5E08A", "secondary": "2E2A1A", "accent": "FFF6D0", "silhouette": "humanoid", "weapon": "spear", "scale": 1.12, "sigil": 16, "sprite": "the_waykeeper", "spriteBodyFraction": 0.481, "spriteFootFraction": 0.215 },
       "basic": {
         "id": "the_waykeeper_basic", "name": "Toll", "vfx": "impact",
         "effects": [ { "kind": "Damage", "target": "FrontEnemy", "power": 0.9 } ]
@@ -790,7 +790,7 @@
       "hp": 2430, "attack": 231, "defense": 99, "speed": 92,
       "critChance": 0.12, "critDamage": 1.7, "growth": 0.12, "startEnergy": 20,
       "effectHit": 0.15, "effectResist": 0.20,
-      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "staff", "scale": 1.2, "sigil": 13, "sprite": "the_shepherd", "spriteStatus": "pending" },
+      "visual": { "primary": "3E7E96", "secondary": "16262E", "accent": "9BE0F0", "silhouette": "humanoid", "weapon": "staff", "scale": 1.2, "sigil": 13, "sprite": "the_shepherd", "spriteBodyFraction": 0.492, "spriteFootFraction": 0.204 },
       "basic": {
         "id": "the_shepherd_basic", "name": "Crook", "vfx": "bolt",
         "effects": [ { "kind": "Damage", "target": "AllEnemies", "power": 0.62 } ]
