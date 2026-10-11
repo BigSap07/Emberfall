@@ -805,6 +805,10 @@ on 2026-09-23**, and each entry ends with what the live project answered.
   length of 1 to 24. 0004 refuses `[[:cntrl:]]` on every guild text column because a newline
   breaks a single-line label, and display names appear in the same rosters. The client trims
   and bounds its own renames, but another client does not have to. The fix is a new migration.
+  The client half is in place ahead of it: `DisplayNameRules.Validate` applies the guild-name
+  rule (trimmed, 3 to 20 characters counted as `char_length` counts them, no control character)
+  to every rename, so the client never sends a name that migration will refuse. The column's
+  current 1 to 24 bound is looser than the client's on purpose.
   Case: `check_profile_text`. **Measured: still present.** A name with a newline and a name that is
   only spaces were both stored.
 - **S8. The dungeon seed is trusted as sent.** From 0007: `guild_dungeon_record` stores any

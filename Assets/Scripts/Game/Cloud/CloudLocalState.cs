@@ -59,6 +59,17 @@ namespace Emberfall.Game.Cloud
 
         public long LastSyncUnix;
 
+        /// <summary>
+        /// The user id this device last saved a display name for, or empty.
+        ///
+        /// The profile row always HAS a name - the column defaults to "Wayfarer" - so "has the
+        /// player chosen one" cannot be read off the row alone: a player who types "Wayfarer" on
+        /// purpose is indistinguishable from one who never was asked, and would be asked again
+        /// every time. This is the one bit that tells them apart. It is a user id, not a bool, so
+        /// signing in as somebody else does not inherit the last account's answer.
+        /// </summary>
+        public string ChosenNameFor = "";
+
         public static CloudLocalState Load()
         {
             CloudLocalState state = new CloudLocalState();
@@ -84,6 +95,7 @@ namespace Emberfall.Game.Cloud
                 state.Email = root.GetString("email", "");
                 state.BaseRevision = root.GetInt("baseRevision", 0);
                 state.LastSyncUnix = root.GetLong("lastSyncUnix", 0);
+                state.ChosenNameFor = root.GetString("chosenNameFor", "");
             }
 
             // Minted on first read rather than on first sync, so the id exists before anything
@@ -106,6 +118,7 @@ namespace Emberfall.Game.Cloud
             root.Set("email", Email);
             root.Set("baseRevision", BaseRevision);
             root.Set("lastSyncUnix", LastSyncUnix);
+            root.Set("chosenNameFor", ChosenNameFor);
             try
             {
                 PlayerPrefs.SetString(PrefsKey, root.ToJson(false));
@@ -133,6 +146,7 @@ namespace Emberfall.Game.Cloud
             IsAnonymous = true;
             BaseRevision = 0;
             LastSyncUnix = 0;
+            ChosenNameFor = "";
             Save();
         }
     }

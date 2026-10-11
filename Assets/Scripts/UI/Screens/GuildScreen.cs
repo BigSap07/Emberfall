@@ -709,7 +709,22 @@ namespace Emberfall.UI.Screens
         {
             if (App.Cloud == null || !App.Cloud.SignedIn) { App.Notify("You are offline."); return; }
             App.Audio.Tap();
-            StartCoroutine(CreateRoutine(_nameField.text, _blurbField.text));
+            string typedName = _nameField.text;
+            string typedBlurb = _blurbField.text;
+            StartCoroutine(NamedThen(delegate { StartCoroutine(CreateRoutine(typedName, typedBlurb)); }));
+        }
+
+        /// <summary>
+        /// Runs `go` once the player has a name to be seen by, asking for one first if they have
+        /// not chosen. A guild roster is made of display names, so founding or joining is the
+        /// point a player's name starts being read by strangers. NOT NOW drops the action: the
+        /// player tapped Create or Join, was asked one thing, and said no - they can tap again.
+        /// </summary>
+        private IEnumerator NamedThen(System.Action go)
+        {
+            bool carryOn = false;
+            yield return App.NamePrompt.Ensure(delegate (bool ok) { carryOn = ok; });
+            if (carryOn) go();
         }
 
         private IEnumerator CreateRoutine(string name, string blurb)
@@ -771,7 +786,9 @@ namespace Emberfall.UI.Screens
         {
             if (_found == null) return;
             App.Audio.Tap();
-            StartCoroutine(JoinRoutine(_found.Code, _found.Name));
+            string code = _found.Code;
+            string name = _found.Name;
+            StartCoroutine(NamedThen(delegate { StartCoroutine(JoinRoutine(code, name)); }));
         }
 
         private IEnumerator JoinRoutine(string code, string name)

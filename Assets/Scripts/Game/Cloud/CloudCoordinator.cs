@@ -493,20 +493,47 @@ namespace Emberfall.Game.Cloud
 
         // ================================================================== account actions
 
+        /// <summary>
+        /// True once this account has a display name the player chose, rather than the one the
+        /// database gave it. False while the profile has not been fetched, so a caller that is
+        /// about to decide whether to ask must have called RefreshProfile first.
+        /// </summary>
+        public bool NameChosen
+        {
+            get
+            {
+                if (Profile == null) return false;
+                if (Profile.DisplayName != DisplayNameRules.Default) return true;
+                return !string.IsNullOrEmpty(_state.UserId) && _state.ChosenNameFor == _state.UserId;
+            }
+        }
+
         /// <summary>Renames the account, then re-reads the profile so the screen shows what the
         /// server stored rather than what was typed.</summary>
         public IEnumerator SetDisplayName(string name, Action<string> done)
         {
             if (!SignedIn) { Report(done, "not signed in"); yield break; }
             _busy = true;
+            CloudStatus before = Status;
+            string beforeMessage = Message;
             Set(CloudStatus.Working, "saving your name");
 
             string error = "";
             yield return _account.SetDisplayName(name, delegate (bool ok, string message) { error = ok ? "" : message; });
             _busy = false;
 
-            if (!string.IsNullOrEmpty(error)) { Set(CloudStatus.Failed, error); Report(done, error); yield break; }
+            if (!string.IsNullOrEmpty(error))
+            {
+                // A refused name is an answer to the player, not a failed sync: the save is
+                // exactly as synced as it was, so the status goes back to what it was rather than
+                // reading LAST SYNC FAILED on the Account screen because a name had a newline in it.
+                Set(before == CloudStatus.Working ? CloudStatus.Ready : before, beforeMessage);
+                Report(done, error);
+                yield break;
+            }
 
+            _state.ChosenNameFor = _state.UserId;
+            _state.Save();
             Set(CloudStatus.Ready, "");
             yield return RefreshProfile(null);
             // The name travels with the line, so a rename that did not republish would leave a
