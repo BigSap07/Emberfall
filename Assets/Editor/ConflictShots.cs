@@ -101,7 +101,6 @@ namespace Emberfall.EditorTools
             PlayerSettings.companyName = ScratchCompany;
             PlayerSettings.productName = ScratchProduct;
             EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, true);
-            EditorPrefs.SetBool(GameApp.NoCloudKey, true);
 
             string dataPath = Application.persistentDataPath;
             if (dataPath.IndexOf(ScratchProduct, StringComparison.OrdinalIgnoreCase) < 0)
@@ -125,7 +124,7 @@ namespace Emberfall.EditorTools
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
             SessionState.SetBool(ActiveKey, true);
             _stage = 0;
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         private static string OutDir()
@@ -442,7 +441,6 @@ namespace Emberfall.EditorTools
                 AssetDatabase.SaveAssets();
             }
             EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, SessionState.GetBool(OrigSuppressKey, false));
-            EditorPrefs.SetBool(GameApp.NoCloudKey, false);
 
             string live = SessionState.GetString(LiveSaveKey, "");
             string before = SessionState.GetString(LiveHashKey, "");

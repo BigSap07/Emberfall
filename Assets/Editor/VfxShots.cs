@@ -77,7 +77,7 @@ namespace Emberfall.EditorTools
             if (arena == null) { Debug.LogError("[vfx-shots] Emberfall.Dev.DevArena not found"); SessionState.SetBool(ActiveKey, false); return; }
             host.AddComponent(arena);
             Debug.Log("[vfx-shots] entering Play Mode");
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         private static void Pump()

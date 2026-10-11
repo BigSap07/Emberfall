@@ -102,15 +102,6 @@ namespace Emberfall.Game
         /// and cleared by the capture tool around the run, never by anything that ships.</summary>
         public const string SuppressFirstRunKey = "Emberfall.SuppressFirstRun";
 
-        /// <summary>
-        /// EditorPrefs key that keeps the cloud stack from starting, for a capture run on a scratch
-        /// identity. A scratch identity has no stored session, so a configured build would sign a
-        /// brand-new anonymous account up on the LIVE project and sync the scratch save into it -
-        /// a real account and a real row for a photograph. Set and cleared by the capture tool
-        /// around its run (GuildDungeonShots), never by anything that ships.
-        /// </summary>
-        public const string NoCloudKey = "Emberfall.NoCloudForCapture";
-
         public static string BootStage = "not started";
         public static bool BootCompleted;
         public static bool BootFailed;
@@ -274,13 +265,11 @@ namespace Emberfall.Game
         /// </summary>
         private void StartCloud(bool bootWasFreshStart)
         {
-#if UNITY_EDITOR
-            if (UnityEditor.EditorPrefs.GetBool(NoCloudKey, false))
-            {
-                Debug.Log("Emberfall: cloud held off for a capture run (" + NoCloudKey + ").");
-                return;
-            }
-#endif
+            // Editor automation is held off inside SupabaseConfig, not here: while
+            // SupabaseConfig.ForcedOffline is set, Current is an unconfigured config, so the
+            // Configured check below returns before any SupabaseClient is built. A scratch
+            // identity has no stored session, so a configured build would otherwise sign a
+            // brand-new anonymous account up on the LIVE project for a photograph.
             try
             {
                 SupabaseConfig config = SupabaseConfig.Current;

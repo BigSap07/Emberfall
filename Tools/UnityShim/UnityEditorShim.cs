@@ -107,8 +107,18 @@ namespace UnityEditor
 
     public delegate void CallbackFunction();
 
+    public enum PlayModeStateChange { EnteredEditMode = 0, ExitingEditMode = 1, EnteredPlayMode = 2, ExitingPlayMode = 3 }
+
     public static class EditorApplication
     {
+        public static event Action<PlayModeStateChange> playModeStateChanged;
+        /// <summary>Test seam, not in the real API: raises the event the way the editor does, so
+        /// Tools/OfflineSwitchCheck can drive EditorCaptureGuard's play-mode handler.</summary>
+        public static void RaisePlayModeStateChanged(PlayModeStateChange change)
+        {
+            if (playModeStateChanged != null) playModeStateChanged(change);
+        }
+
         public static CallbackFunction delayCall { get; set; }
         public static CallbackFunction update { get; set; }
         /// <summary>Seconds since the editor started, as a double in the real API. Any editor tool
@@ -233,14 +243,26 @@ namespace UnityEditor
     /// reload that entering/exiting Play Mode triggers.</summary>
     public static class SessionState
     {
-        public static bool GetBool(string key, bool defaultValue) { return defaultValue; }
-        public static void SetBool(string key, bool value) { }
-        public static int GetInt(string key, int defaultValue) { return defaultValue; }
-        public static void SetInt(string key, int value) { }
-        public static float GetFloat(string key, float defaultValue) { return defaultValue; }
-        public static void SetFloat(string key, float value) { }
-        public static string GetString(string key, string defaultValue) { return defaultValue; }
-        public static void SetString(string key, string value) { }
+        // Backed by a dictionary so Tools/OfflineSwitchCheck can execute the real forced-offline
+        // logic in SupabaseConfig. Nothing else runs against the shim, so the other stubs here
+        // keep returning their defaults.
+        private static readonly System.Collections.Generic.Dictionary<string, object> _values =
+            new System.Collections.Generic.Dictionary<string, object>();
+
+        private static T Get<T>(string key, T defaultValue)
+        {
+            object value;
+            return _values.TryGetValue(key, out value) && value is T ? (T)value : defaultValue;
+        }
+
+        public static bool GetBool(string key, bool defaultValue) { return Get(key, defaultValue); }
+        public static void SetBool(string key, bool value) { _values[key] = value; }
+        public static int GetInt(string key, int defaultValue) { return Get(key, defaultValue); }
+        public static void SetInt(string key, int value) { _values[key] = value; }
+        public static float GetFloat(string key, float defaultValue) { return Get(key, defaultValue); }
+        public static void SetFloat(string key, float value) { _values[key] = value; }
+        public static string GetString(string key, string defaultValue) { return Get(key, defaultValue); }
+        public static void SetString(string key, string value) { _values[key] = value; }
     }
 
     /// <summary>Enough of the real type for the verification tools' GameView-focus helper:

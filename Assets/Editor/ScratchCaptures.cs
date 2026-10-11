@@ -17,16 +17,18 @@ namespace Emberfall.EditorTools
     /// look, but "Result" wins a campaign fight, and a win grants gold, shards and a cleared stage
     /// into the save and syncs it. So this does for PlayModeScreenshot what GuildDungeonShots and
     /// ConflictShots do for themselves: switch PlayerSettings to a scratch company and product (so
-    /// PlayerPrefs and persistentDataPath are somewhere else), set GameApp.NoCloudKey, run, restore,
-    /// and hash the real save before and after. A changed hash is logged as a failure.
+    /// PlayerPrefs and persistentDataPath are somewhere else), run, restore, and hash the real save
+    /// before and after. A changed hash is logged as a failure. The cloud is held off by
+    /// PlayModeScreenshot itself, which enters Play mode through EditorCaptureGuard for every
+    /// target, so this class has no cloud switch of its own.
     ///
     /// Each target goes through PlayModeScreenshot's own trigger file, one at a time, so what is
     /// photographed is exactly what that tool photographs, into Tools/Screenshots.
     ///
     ///   Unity -projectPath . -executeMethod Emberfall.EditorTools.ScratchCaptures.Run -captures "Screen:Result;Screen:Toast@2400x1080"
     ///
-    /// NoCloudKey and SuppressFirstRunKey are EditorPrefs, which every editor on this machine
-    /// shares. They are held for the length of the run and restored to what they were.
+    /// SuppressFirstRunKey is an EditorPref, which every editor on this machine shares. It is held
+    /// for the length of the run and restored to what it was.
     /// </summary>
     [InitializeOnLoad]
     public static class ScratchCaptures
@@ -37,7 +39,6 @@ namespace Emberfall.EditorTools
         private const string OrigCompanyKey = "ScratchCaptures.OrigCompany";
         private const string OrigProductKey = "ScratchCaptures.OrigProduct";
         private const string OrigSuppressKey = "ScratchCaptures.OrigSuppress";
-        private const string OrigNoCloudKey = "ScratchCaptures.OrigNoCloud";
         private const string LiveSaveKey = "ScratchCaptures.LiveSave";
         private const string LiveHashKey = "ScratchCaptures.LiveHash";
         private const string ExitAtKey = "ScratchCaptures.ExitAt";
@@ -75,12 +76,10 @@ namespace Emberfall.EditorTools
             SessionState.SetString(OrigCompanyKey, PlayerSettings.companyName);
             SessionState.SetString(OrigProductKey, PlayerSettings.productName);
             SessionState.SetBool(OrigSuppressKey, EditorPrefs.GetBool(GameApp.SuppressFirstRunKey, false));
-            SessionState.SetBool(OrigNoCloudKey, EditorPrefs.GetBool(GameApp.NoCloudKey, false));
 
             PlayerSettings.companyName = ScratchCompany;
             PlayerSettings.productName = ScratchProduct;
             EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, true);
-            EditorPrefs.SetBool(GameApp.NoCloudKey, true);
 
             string scratch = Application.persistentDataPath;
             if (scratch.IndexOf(ScratchProduct, StringComparison.OrdinalIgnoreCase) < 0)
@@ -170,7 +169,6 @@ namespace Emberfall.EditorTools
                 AssetDatabase.SaveAssets();
             }
             EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, SessionState.GetBool(OrigSuppressKey, false));
-            EditorPrefs.SetBool(GameApp.NoCloudKey, SessionState.GetBool(OrigNoCloudKey, false));
 
             string live = SessionState.GetString(LiveSaveKey, "");
             string before = SessionState.GetString(LiveHashKey, "");

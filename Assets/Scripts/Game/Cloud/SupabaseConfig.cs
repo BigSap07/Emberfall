@@ -57,12 +57,52 @@ namespace Emberfall.Game.Cloud
 
         private static SupabaseConfig _loaded;
 
+#if UNITY_EDITOR
+        /// <summary>
+        /// SessionState key for the forced-offline switch. SessionState rather than EditorPrefs on
+        /// purpose: it belongs to THIS editor process. EditorPrefs is one registry entry shared by
+        /// every Unity on the machine, so another agent's capture finishing (and clearing the key)
+        /// would put this one's run back online mid-photograph.
+        /// </summary>
+        public const string ForceOfflineKey = "Emberfall.ForceOffline";
+
+        /// <summary>
+        /// The one switch that holds the cloud off for editor automation. While it is set, Load
+        /// behaves exactly as if supabase.json did not exist: not read, not parsed, Configured
+        /// false, so GameApp.StartCloud returns before it builds a SupabaseClient and nothing signs
+        /// in, calls the network or raises the conflict chooser.
+        ///
+        /// Set through EditorCaptureGuard.Arm (every Play-mode entry in Assets/Editor goes through
+        /// it, and build-check fails if one does not) and cleared when Play mode ends. It is
+        /// compiled out of every player build: the whole member sits inside UNITY_EDITOR, so there
+        /// is nothing in a player to find, set or reach.
+        /// </summary>
+        public static bool ForcedOffline
+        {
+            get { return UnityEditor.SessionState.GetBool(ForceOfflineKey, false); }
+            set { UnityEditor.SessionState.SetBool(ForceOfflineKey, value); }
+        }
+
+        /// <summary>Counts every SupabaseClient built in this editor process, so a capture can
+        /// prove a forced-offline run built none. See SupabaseClient.</summary>
+        public static int ClientsConstructed;
+
+        public const string ForcedOfflineProblem =
+            "forced offline by the editor capture tooling (SupabaseConfig.ForcedOffline); "
+            + "supabase.json was not read";
+#endif
+
         /// <summary>Loaded once and cached. The file cannot change while the app is running, and
         /// a Resources.Load on every request would be a cost for nothing.</summary>
         public static SupabaseConfig Current
         {
             get
             {
+#if UNITY_EDITOR
+                // Ahead of the cache and never stored in it: a capture run must not leave an
+                // offline answer behind for the next, ordinary Play session to inherit.
+                if (ForcedOffline) return Load();
+#endif
                 if (_loaded == null) _loaded = Load();
                 return _loaded;
             }
@@ -71,6 +111,16 @@ namespace Emberfall.Game.Cloud
         public static SupabaseConfig Load()
         {
             SupabaseConfig config = new SupabaseConfig();
+
+#if UNITY_EDITOR
+            // Before the file is touched at all: the switch means "as if it were absent", and a
+            // file that is never loaded cannot be parsed, logged or signed in with.
+            if (ForcedOffline)
+            {
+                config.Problem = ForcedOfflineProblem;
+                return config;
+            }
+#endif
 
             TextAsset asset = Resources.Load<TextAsset>(ResourcePath);
             if (asset == null || string.IsNullOrEmpty(asset.text))

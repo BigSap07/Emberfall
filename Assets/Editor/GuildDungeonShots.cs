@@ -396,7 +396,7 @@ namespace Emberfall.EditorTools
     /// The whole flow runs once per aspect (1920x1080, then 2400x1080) on a fresh guild, so both
     /// sets of shots are of the same moments.
     ///
-    /// THE CLOUD IS HELD OFF (GameApp.NoCloudKey). A scratch identity has no session, and a
+    /// THE CLOUD IS HELD OFF (SupabaseConfig.ForcedOffline, armed by EditorCaptureGuard.EnterPlayMode). A scratch identity has no session, and a
     /// configured build would sign a new anonymous account up on the live project for it.
     ///
     ///   Unity.exe -projectPath . -executeMethod Emberfall.EditorTools.GuildDungeonShots.Run
@@ -480,7 +480,6 @@ namespace Emberfall.EditorTools
             PlayerSettings.companyName = ScratchCompany;
             PlayerSettings.productName = ScratchProduct;
             EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, true);
-            EditorPrefs.SetBool(GameApp.NoCloudKey, true);
 
             string dataPath = Application.persistentDataPath;
             if (dataPath.IndexOf(ScratchProduct, StringComparison.OrdinalIgnoreCase) < 0)
@@ -504,7 +503,7 @@ namespace Emberfall.EditorTools
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
             SessionState.SetBool(ActiveKey, true);
             _stage = 0;
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         private static string OutDir()
@@ -1191,7 +1190,6 @@ namespace Emberfall.EditorTools
                 AssetDatabase.SaveAssets();
             }
             EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, SessionState.GetBool(OrigSuppressKey, false));
-            EditorPrefs.SetBool(GameApp.NoCloudKey, false);
 
             // The real save, read again under the real identity: untouched, or this run is a failure.
             string live = SessionState.GetString(LiveSaveKey, "");

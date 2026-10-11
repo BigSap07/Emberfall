@@ -402,7 +402,10 @@ namespace UnityEngine
 
     public static class Debug
     {
-        public static void Log(object message) { }
+        /// <summary>Test seam, not in the real API: the last Log message, so a check can see which
+        /// branch of a method ran.</summary>
+        public static string LastLog;
+        public static void Log(object message) { LastLog = message == null ? null : message.ToString(); }
         public static void Log(object message, Object context) { }
         public static void LogWarning(object message) { }
         public static void LogWarning(object message, Object context) { }
@@ -481,7 +484,23 @@ namespace UnityEngine
 
     public static class Resources
     {
-        public static T Load<T>(string path) where T : Object { return null; }
+        private static readonly System.Collections.Generic.Dictionary<string, Object> _registered =
+            new System.Collections.Generic.Dictionary<string, Object>();
+
+        /// <summary>Test seam, not in the real API: makes Load return an asset for a path, so
+        /// Tools/OfflineSwitchCheck can stand a config file in front of the real loader.</summary>
+        public static void Register(string path, Object asset) { _registered[path] = asset; }
+
+        /// <summary>Test seam: how many times Load has been asked for an asset, so a check can
+        /// prove a file was never touched.</summary>
+        public static int LoadCalls;
+
+        public static T Load<T>(string path) where T : Object
+        {
+            LoadCalls++;
+            Object found;
+            return _registered.TryGetValue(path, out found) ? found as T : null;
+        }
         public static Object Load(string path) { return null; }
         public static T GetBuiltinResource<T>(string path) where T : Object { return null; }
 
@@ -497,7 +516,10 @@ namespace UnityEngine
 
     public sealed class TextAsset : Object
     {
-        public string text { get { return ""; } }
+        private readonly string _text;
+        public TextAsset() { _text = ""; }
+        public TextAsset(string text) { _text = text; }
+        public string text { get { return _text; } }
         public byte[] bytes { get { return new byte[0]; } }
     }
 

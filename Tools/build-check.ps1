@@ -178,11 +178,115 @@ if (Test-Path $devDir) {
     else { Write-Host "[dev-arena] FAILED" -ForegroundColor Red }
 }
 
+# ---------------------------------------------------------------------------------------------
+# [offline-switch] EDITOR AUTOMATION CANNOT REACH THE REAL CLOUD, measured rather than intended.
+#
+# The worktree holds a gitignored supabase.json, and a Play session that does nothing about it signs
+# in as the real account. SupabaseConfig.ForcedOffline is the one switch that stops that: while it
+# is set the loader behaves as if the file were absent. Four things have to hold:
+#   1. the real switch logic RUNS correctly: Tools/OfflineSwitchCheck executes SupabaseConfig,
+#      GameApp.StartCloud and EditorCaptureGuard against the shim with a stand-in file in front of
+#      the loader, and shows the file is never read and no SupabaseClient is built;
+#   2. every Play-mode entry under Assets/Editor goes through EditorCaptureGuard.EnterPlayMode,
+#      which arms the switch - so a new capture tool that assigns isPlaying = true itself fails here;
+#   3. nothing about the switch exists outside #if UNITY_EDITOR in Assets/Scripts, so no player
+#      build contains it or can reach it;
+#   4. the only place that constructs a SupabaseClient in shipped code is GameApp.StartCloud, after
+#      its `Configured` early return.
+# ---------------------------------------------------------------------------------------------
+$offlineOk = $true
+Write-Host ""
+
+# 2. no raw Play-mode entry outside the guard.
+$rawEntries = @()
+foreach ($f in (Get-ChildItem (Join-Path $root "Assets\Editor") -Filter *.cs -Recurse)) {
+    if ($f.Name -eq "EditorCaptureGuard.cs") { continue }
+    $n = 0
+    foreach ($line in (Get-Content $f.FullName)) {
+        $n++
+        if ($line.TrimStart().StartsWith("//")) { continue }
+        if ($line -match 'isPlaying\s*=\s*true') { $rawEntries += ($f.Name + ":" + $n) }
+    }
+}
+if ($rawEntries.Count -gt 0) {
+    Write-Host ("  Play mode entered without EditorCaptureGuard.EnterPlayMode at: " + ($rawEntries -join ", ")) -ForegroundColor Red
+    $offlineOk = $false
+}
+
+# 3. the switch is editor-only in everything that ships.
+$leaks = @()
+$tokens = 'ForcedOffline|ForceOfflineKey|ForcedOfflineProblem|ClientsConstructed'
+foreach ($f in (Get-ChildItem (Join-Path $root "Assets\Scripts") -Filter *.cs -Recurse)) {
+    $stack = New-Object System.Collections.Generic.List[bool]
+    $n = 0
+    foreach ($line in (Get-Content $f.FullName)) {
+        $n++
+        $t = $line.Trim()
+        if ($t -match '^#if\s+(.*)$') { $stack.Add($Matches[1].Trim() -eq 'UNITY_EDITOR'); continue }
+        if ($t -match '^#(else|elif)\b') { if ($stack.Count -gt 0) { $stack[$stack.Count - 1] = $false }; continue }
+        if ($t -match '^#endif') { if ($stack.Count -gt 0) { $stack.RemoveAt($stack.Count - 1) }; continue }
+        if ($t.StartsWith("//")) { continue }
+        if ($line -match $tokens -and -not $stack.Contains($true)) { $leaks += ($f.Name + ":" + $n) }
+    }
+}
+if ($leaks.Count -gt 0) {
+    Write-Host ("  the forced-offline switch is referenced outside #if UNITY_EDITOR at: " + ($leaks -join ", ")) -ForegroundColor Red
+    $offlineOk = $false
+}
+
+# 4. the one place a client is built.
+$builders = @(Get-ChildItem (Join-Path $root "Assets\Scripts") -Filter *.cs -Recurse |
+              Where-Object { (Get-Content $_.FullName -Raw) -match 'new\s+SupabaseClient\s*\(' })
+if ($builders.Count -ne 1 -or $builders[0].Name -ne "GameApp.cs") {
+    Write-Host ("  SupabaseClient is constructed outside GameApp.StartCloud: " + (($builders | ForEach-Object { $_.Name }) -join ", ")) -ForegroundColor Red
+    $offlineOk = $false
+}
+else {
+    $app = Get-Content $builders[0].FullName -Raw
+    $gate = $app.IndexOf('if (!config.Configured)')
+    $build = $app.IndexOf('new SupabaseClient(')
+    $gateReturns = $false
+    if ($gate -ge 0 -and $build -gt $gate) {
+        $gateReturns = $app.Substring($gate, $build - $gate).Contains('return;')
+    }
+    if (-not $gateReturns) {
+        Write-Host '  GameApp.StartCloud no longer returns on !config.Configured before it builds a SupabaseClient' -ForegroundColor Red
+        $offlineOk = $false
+    }
+}
+
+# 1. the switch's logic, executed.
+if ($okEngine) {
+    $offlineExe = Join-Path $out "OfflineSwitchCheck.exe"
+    $engineDll = Join-Path $out "EmberfallEngineCheck.dll"
+    $offlineSrc = Join-Path $root "Tools\OfflineSwitchCheck\OfflineSwitchCheck.cs"
+    $compileOut = & $csc -nologo -target:exe "-out:$offlineExe" "-reference:$engineDll" $offlineSrc 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        $compileOut | ForEach-Object { Write-Host "  $_" }
+        Write-Host "  OfflineSwitchCheck failed to compile" -ForegroundColor Red
+        $offlineOk = $false
+    }
+    else {
+        $offlineLines = @(& $offlineExe)
+        $offlineCode = $LASTEXITCODE
+        foreach ($l in $offlineLines) { Write-Host ("  " + $l) }
+        if ($offlineCode -ne 0) { $offlineOk = $false }
+    }
+}
+else {
+    Write-Host "  OfflineSwitchCheck not run: the engine code did not compile" -ForegroundColor Yellow
+}
+
+if ($offlineOk) { Write-Host "[offline-switch] ok - editor automation is offline by construction" -ForegroundColor Green }
+else { Write-Host "[offline-switch] FAILED" -ForegroundColor Red }
+
 if (-not $okHarness) { $failures.Add("core+harness: compile FAILED") }
 if (-not $okEngine) { $failures.Add("unity-code: compile FAILED") }
 if (-not $devOk) { $failures.Add("dev-arena: something reaches a release build") }
+if (-not $offlineOk) { $failures.Add("offline-switch: editor automation can reach the real cloud") }
 if (-not ($okHarness -and $okEngine)) { $harnessNote = "not run, a compile failed"; Finish 1 }
 if (-not $devOk) { $harnessNote = "not run, the dev-arena check failed"; Finish 1 }
+if (-not $offlineOk) { $harnessNote = "not run, the offline-switch check failed"; Finish 1 }
 
 if ($NoRun) { $harnessNote = "not run, -NoRun" }
 else {

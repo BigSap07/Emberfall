@@ -153,7 +153,7 @@ namespace Emberfall.EditorTools
             Debug.Log("SummonSequenceShots: capturing into " + outDir);
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
             SessionState.SetBool(ActiveKey, true);
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         private static string OutDir()

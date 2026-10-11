@@ -117,7 +117,7 @@ namespace Emberfall.EditorTools
 
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
             SessionState.SetBool(ActiveKey, true);
-            EditorApplication.isPlaying = true;
+            EditorCaptureGuard.EnterPlayMode();
         }
 
         private static string OutDir()
