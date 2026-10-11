@@ -158,6 +158,25 @@ namespace Emberfall.Core.Session
         public ArmorPiece ArmorDrop;
     }
 
+    /// <summary>
+    /// What one won ladder battle did, from GameSession.RecordLadderWin: whether it finished its
+    /// wave or the stage, what a finished wave's drip share paid, and the stage clear's payout.
+    /// </summary>
+    public sealed class LadderWin
+    {
+        /// <summary>True when the win finished its wave (a stage clear counts).</summary>
+        public bool WaveCleared;
+        /// <summary>True when the win finished the stage; Rewards is then set.</summary>
+        public bool StageCleared;
+        /// <summary>The drip share a finished mid-stage wave paid. Zero otherwise.</summary>
+        public int Gold;
+        public int AccountXp;
+        public int PlayerLevelsGained;
+        /// <summary>The stage clear's payout, net of the drip its waves already paid. Null unless
+        /// StageCleared.</summary>
+        public BattleRewards Rewards;
+    }
+
     /// <summary>Echoes available right now, as GameSession.PeekRecitalEchoes reports it - a
     /// snapshot, not a mutation, the same split IdleReport is for idle income.</summary>
     public sealed class RecitalEchoesStatus
@@ -750,11 +769,11 @@ namespace Emberfall.Core.Session
         /// <summary>
         /// Records a won battle inside a stage and returns TRUE when that win finished the stage.
         ///
-        /// This does NOT pay out. Rewards stay at stage granularity per
-        /// DESIGN-CAMPAIGN-STRUCTURE.md - "repeat cap and idle income stay at Stage granularity" -
-        /// so 143 of a stage's 144 wins move a cursor and pay nothing, and the caller invokes
-        /// GrantBattleResult once, on the win that returns true here. Paying per battle would
-        /// multiply every stage's income by 144 and is exactly what the design rules out.
+        /// This does NOT pay out; it is the cursor half of RecordLadderWin, which is what a
+        /// campaign win calls. Nothing is paid per battle - that would multiply every stage's
+        /// income by 144 and is exactly what DESIGN-CAMPAIGN-STRUCTURE.md rules out - but a
+        /// finished wave of a first clear pays its drip share and the stage clear pays the rest
+        /// (WaveDripPercent), so a stage's whole payout is unchanged.
         /// </summary>
         public bool RecordBattleWon(StageDef stage, int wave, int battle)
         {
@@ -796,6 +815,103 @@ namespace Emberfall.Core.Session
             Profile.CampaignCurrentStageId = "";
             Profile.CampaignCurrentWave = 1;
             Profile.CampaignCurrentBattle = 1;
+        }
+
+        // ============================================================ the per-wave drip
+
+        /// <summary>
+        /// The share of a stage's purse its waves pay as they fall on a FIRST clear, in percent:
+        /// each wave pays an equal share of this much of the stage's gold and Wayfarer XP, and the
+        /// stage clear pays what is left, plus the first-clear bonus, the shards, the drop and the
+        /// unlock as before. The stage's whole payout is the same integer it always was; each share
+        /// is rounded down and the remainder stays on the stage clear. Repeat clears and sweeps do
+        /// not drip. Docs/ui-specs/WAVE-RESULTS.md, section E.
+        ///
+        /// A constant rather than a balance.json key: balance.json is hashed into ContentVersion
+        /// and no fight reads this, so a key there would retire every recorded guild dungeon
+        /// replay over a number none of them can see, which is why guild-path.json is kept out of
+        /// the hash.
+        /// </summary>
+        public const int WaveDripPercent = 40;
+
+        /// <summary>The gold one wave of this stage pays on a first clear. Zero for a stage of
+        /// one wave, whose only wave is its stage clear.</summary>
+        public static int WaveDripGold(StageDef stage)
+        {
+            return stage == null ? 0 : WaveShare(stage.RewardGold, stage);
+        }
+
+        /// <summary>The Wayfarer XP one wave of this stage pays on a first clear.</summary>
+        public static int WaveDripAccountXp(StageDef stage)
+        {
+            return stage == null ? 0 : WaveShare(stage.RewardAccountXp, stage);
+        }
+
+        /// <summary>An equal share of WaveDripPercent of a purse, one per wave, rounded down.
+        /// Integer arithmetic, so a share is the same number on every machine.</summary>
+        private static int WaveShare(int purse, StageDef stage)
+        {
+            int waves = Math.Max(1, stage.WaveCount);
+            if (waves <= 1 || purse <= 0) return 0;
+            return (int)((long)purse * WaveDripPercent / (100L * waves));
+        }
+
+        /// <summary>
+        /// How many of this stage's waves have already paid their share: the waves before the one
+        /// the cursor stands in. A wave pays at the moment the cursor leaves it and the cursor
+        /// never goes back, so this is the count paid, with no field of its own in the save; a
+        /// resume reads the same cursor and cannot pay a wave twice. Zero for any stage the cursor
+        /// is not in.
+        /// </summary>
+        public int WavesPaidBefore(StageDef stage)
+        {
+            if (stage == null || Profile.CampaignCurrentStageId != stage.Id) return 0;
+            int waves = Math.Max(1, stage.WaveCount);
+            return Math.Min(Math.Max(1, Profile.CampaignCurrentWave), waves) - 1;
+        }
+
+        /// <summary>
+        /// A won ladder battle, recorded and paid: the one call every campaign win takes, so the
+        /// cursor and the purse cannot disagree. Moves the cursor through RecordBattleWon; a win
+        /// that finishes a wave of an uncleared stage pays that wave's drip share; a win that
+        /// finishes the stage pays the stage clear through GrantBattleResult, net of the shares
+        /// its waves already paid. On a cleared stage nothing drips and the clear is the full
+        /// repeat purse, exactly as before.
+        /// </summary>
+        public LadderWin RecordLadderWin(StageDef stage, int wave, int battle, long nowUnix)
+        {
+            LadderWin win = new LadderWin();
+            if (stage == null) return win;
+
+            // All read BEFORE the cursor moves: a stage clear resets it, and the first clear is
+            // what adds the id. A wave pays only when the win is in the wave the cursor stands in,
+            // so a caller handing in a position the cursor has already left cannot pay it again.
+            bool firstClear = !Profile.HasClearedStage(stage.Id);
+            int paidWaves = firstClear ? WavesPaidBefore(stage) : 0;
+            int cursorWave, cursorBattle;
+            ResumePointFor(stage, out cursorWave, out cursorBattle);
+
+            if (RecordBattleWon(stage, wave, battle))
+            {
+                win.WaveCleared = true;
+                win.StageCleared = true;
+                win.Rewards = GrantBattleResult(stage, true, nowUnix,
+                                                paidWaves * WaveDripGold(stage),
+                                                paidWaves * WaveDripAccountXp(stage));
+                return win;
+            }
+
+            int nextWave, nextBattle;
+            ResumePointFor(stage, out nextWave, out nextBattle);
+            if (nextWave == wave) return win;
+
+            win.WaveCleared = true;
+            if (!firstClear || wave != cursorWave) return win;
+            win.Gold = WaveDripGold(stage);
+            win.AccountXp = WaveDripAccountXp(stage);
+            Profile.Gold += win.Gold;
+            win.PlayerLevelsGained = GrantAccountXp(win.AccountXp);
+            return win;
         }
 
         /// <summary>
@@ -870,9 +986,9 @@ namespace Emberfall.Core.Session
         /// ResolveLadderBattle, the same helper SweepClearedStage uses, so the battle count per
         /// stage is unchanged and the result screen only reads the record this returns.
         ///
-        /// REWARDS STAY AT STAGE GRANULARITY (DESIGN-CAMPAIGN-STRUCTURE.md): a won mid-stage wave
-        /// moves the cursor and pays nothing; only the wave that finishes the stage calls
-        /// GrantBattleResult, once.
+        /// EVERY WIN GOES THROUGH RecordLadderWin: a won mid-stage wave of a first clear moves the
+        /// cursor and pays its drip share (WaveDripPercent), and the wave that finishes the stage
+        /// pays the rest of the stage clear, once. The stage's whole payout is unchanged.
         ///
         /// A LOSS stops the wave at the lost battle and leaves the cursor on it, so the next
         /// resolve retries exactly that battle and never refights the ones already won.
@@ -902,11 +1018,13 @@ namespace Emberfall.Core.Session
             List<HeroInstance> live = Profile.TeamHeroes();
             for (int i = 0; i < live.Count; i++) fighting.Add(live[i].Copy());
 
+            BattleResult lastFought = null;
             for (int b = battle; b <= res.BattleCount; b++)
             {
                 int ordinal = CampaignWaveGenerator.BattleOrdinal(stage, wave, b);
                 int seed = BattleSeed(baseSeed, ordinal);
                 BattleResult result = ResolveLadderBattle(stage, wave, b, seed);
+                lastFought = result;
 
                 WaveBattleOutcome outcome = new WaveBattleOutcome();
                 outcome.Wave = wave;
@@ -929,19 +1047,27 @@ namespace Emberfall.Core.Session
                     break;
                 }
 
-                res.Margin = result.PlayerHpRatio;
-                if (RecordBattleWon(stage, wave, b))
+                LadderWin win = RecordLadderWin(stage, wave, b, nowUnix);
+                if (win.StageCleared)
                 {
                     res.StageCleared = true;
                     res.WaveCleared = true;
-                    res.Rewards = GrantBattleResult(stage, true, nowUnix);
+                    res.Rewards = win.Rewards;
                     break;
                 }
-
-                int w2, b2;
-                ResumePointFor(stage, out w2, out b2);
-                if (w2 != wave) { res.WaveCleared = true; break; }
+                if (win.WaveCleared)
+                {
+                    res.WaveCleared = true;
+                    res.WaveGold = win.Gold;
+                    res.WaveAccountXp = win.AccountXp;
+                    res.WavePlayerLevelsGained = win.PlayerLevelsGained;
+                    break;
+                }
             }
+
+            if (lastFought != null)
+                for (int i = 0; i < lastFought.Units.Count; i++)
+                    if (lastFought.Units[i].IsPlayer) res.Squad.Add(lastFought.Units[i]);
 
             res.Replay = ChooseReplay(stage, res, fighting);
 
@@ -1082,6 +1208,17 @@ namespace Emberfall.Core.Session
 
         public BattleRewards GrantBattleResult(StageDef stage, bool victory, long nowUnix)
         {
+            return GrantBattleResult(stage, victory, nowUnix, 0, 0);
+        }
+
+        /// <summary>
+        /// The stage clear, less what its waves already paid on the way (RecordLadderWin). The
+        /// deduction applies to a first clear only and never takes the purse below zero; a repeat
+        /// clear has nothing to deduct, because nothing drips on one.
+        /// </summary>
+        private BattleRewards GrantBattleResult(StageDef stage, bool victory, long nowUnix,
+                                                int dripGoldPaid, int dripAccountXpPaid)
+        {
             BattleRewards rewards = new BattleRewards();
             rewards.Victory = victory;
             if (stage == null) return rewards;
@@ -1094,6 +1231,11 @@ namespace Emberfall.Core.Session
             int gold = stage.RewardGold + (firstClear ? stage.FirstClearGold : 0);
             int shards = stage.RewardShards + (firstClear ? stage.FirstClearShards : 0);
             int accountXp = stage.RewardAccountXp;
+            if (firstClear)
+            {
+                gold = Math.Max(0, gold - dripGoldPaid);
+                accountXp = Math.Max(0, accountXp - dripAccountXpPaid);
+            }
 
             // The repeat cap, per DESIGN-REPLAY-ECONOMY. A first clear is progress rather than
             // farming and is never counted or capped; every clear after it spends one of the

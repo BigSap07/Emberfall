@@ -79,7 +79,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV17-fusion-and-wave-result-merged";
+        private const string BuildMarker = "FIXV18-wave-results-band";
 
         static PlayModeScreenshot()
         {
@@ -158,6 +158,10 @@ namespace Emberfall.EditorTools
         // door a tap uses. They refuse to run off a scratch identity: see SeedWaveResult.
         [MenuItem("Emberfall/Capture/Wave result (wave cleared)", false, 82)]
         public static void CaptureWaveResult() { Begin("Screen:WaveResult"); }
+
+        // The same won wave with the player's AUTO setting on, so the countdown digit is in shot.
+        [MenuItem("Emberfall/Capture/Wave result (wave cleared, AUTO on)", false, 82)]
+        public static void CaptureWaveResultAuto() { Begin("Screen:WaveResultAuto"); }
 
         [MenuItem("Emberfall/Capture/Wave result (stage cleared)", false, 83)]
         public static void CaptureWaveResultCleared() { Begin("Screen:WaveResultCleared"); }
@@ -628,6 +632,7 @@ namespace Emberfall.EditorTools
                     case "Battle": id = ScreenId.Battle; break;
                     case "Result": id = ScreenId.Battle; break;
                     case "WaveResult":
+                    case "WaveResultAuto":
                     case "WaveResultCleared":
                     case "WaveResultLost":
                     case "WaveReplay":
@@ -1196,8 +1201,8 @@ namespace Emberfall.EditorTools
 
         private static bool IsWaveResultTarget(string name)
         {
-            return name == "WaveResult" || name == "WaveResultCleared" || name == "WaveResultLost"
-                   || name == "WaveReplay" || name == "WaveReplayResult";
+            return name == "WaveResult" || name == "WaveResultAuto" || name == "WaveResultCleared"
+                   || name == "WaveResultLost" || name == "WaveReplay" || name == "WaveReplayResult";
         }
 
         private const string ReplayStageKey = "PlayModeScreenshot.ReplayStage";
@@ -1300,12 +1305,13 @@ namespace Emberfall.EditorTools
         /// Puts the SCRATCH profile in a state where one tap on a stage resolves to the outcome
         /// the target is named for, and returns the stage to launch (null to skip the target).
         ///
-        ///   WaveResult         a mid-stage wave of the first 12-wave stage, won whole (a 12 cell
-        ///                      strip, "WAVE 4 CLEARED")
-        ///   WaveResultCleared  the last wave of the first stage, which clears it (the reward rows)
+        ///   WaveResult         a mid-stage wave of the first 12-wave stage, won whole ("WAVE 4
+        ///                      CLEARED"), with the player's AUTO setting off
+        ///   WaveResultAuto     the same wave with AUTO on, the countdown held on its first digit
+        ///   WaveResultCleared  the last wave of the same stage, which clears it on a FIRST clear
+        ///                      that drops armor (the reward tiles with an armor tile)
         ///   WaveResultLost     a wave of the 12-wave stage that is lost part-way, ideally after a
-        ///                      few won battles, so the strip shows won cells, the lost cell and
-        ///                      unfought ones
+        ///                      few won battles
         ///
         /// WHAT IT DOES. The campaign is rebuilt from nothing on every call - cleared ids emptied,
         /// the cursor reset, then every stage before the target granted its first clear through
@@ -1336,7 +1342,7 @@ namespace Emberfall.EditorTools
             for (int i = 0; i < stages.Count; i++)
             {
                 if (!stages[i].HasWaveCurve) continue;
-                if (name == "WaveResultCleared" || stages[i].WaveCount >= 12) { index = i; break; }
+                if (stages[i].WaveCount >= 12) { index = i; break; }
             }
             if (index < 0)
             {
@@ -1351,7 +1357,21 @@ namespace Emberfall.EditorTools
             // with the harness's pinned line instead, one five-star per role, which is the kind of
             // line a player at that stage commands. The loss and the stage clear keep the starters:
             // they already produce their outcomes, and a weak line is what a loss looks like.
-            if (name == "WaveResult") FieldLine(session, WaveLine);
+            // The stage clear is the same stage's twelfth wave, which the starters cannot reach
+            // either, so it is fielded with the same line.
+            bool auto = name == "WaveResultAuto";
+            if (auto) name = "WaveResult";
+            WaveResultScreen.AutoAdvance = auto;
+            WaveResultScreen.CaptureHoldCountdown = auto;
+            if (name == "WaveResult" || name == "WaveResultCleared") FieldLine(session, WaveLine);
+
+            // THE PROBE AND THE PHOTOGRAPH MUST REBUILD THE SAME PROFILE, and two things in it
+            // moved between rebuilds: the clock every earlier stage's grant rolled its armor on,
+            // and the armor every probe's own drop added. A stage clear's drop is seeded from the
+            // clock, the stage and how much armor is owned, so both are pinned here: one clock for
+            // the whole search, and the collection cut back to what it held before the search.
+            _waveNow = TimeUtil.NowUnix();
+            _waveArmorBase = session.Profile.OwnedArmor.Count;
 
             List<HeroInstance> team = session.Profile.TeamHeroes();
             if (team.Count == 0)
@@ -1385,7 +1405,7 @@ namespace Emberfall.EditorTools
                     for (int s = 0; s < seeds.Length; s++)
                     {
                         RebuildCampaign(app, stages, index, waves[w], level);
-                        WaveResolution probe = session.ResolveWave(stage, seeds[s], TimeUtil.NowUnix());
+                        WaveResolution probe = session.ResolveWave(stage, seeds[s], _waveNow);
                         int score = ScoreWaveProbe(name, probe);
                         if (score > bestScore) { bestScore = score; bestLevel = level; bestWave = waves[w]; bestSeed = seeds[s]; }
                         if (score >= 1000) break;
@@ -1393,12 +1413,37 @@ namespace Emberfall.EditorTools
                 }
             }
 
+            // A first clear that drops armor: the clear is found above, and the drop is a roll on
+            // the clock, so the clock is searched with that clear's level and seed.
+            long bestNow = _waveNow;
+            if (name == "WaveResultCleared" && bestScore >= 1000)
+            {
+                bool dropped = false;
+                for (int t = 0; t < 400 && !dropped; t++)
+                {
+                    RebuildCampaign(app, stages, index, bestWave, bestLevel);
+                    WaveResolution probe = session.ResolveWave(stage, bestSeed, _waveNow + t);
+                    if (probe.StageCleared && probe.Rewards != null && probe.Rewards.ArmorDrop != null)
+                    {
+                        dropped = true;
+                        bestNow = _waveNow + t;
+                    }
+                }
+                if (!dropped) Debug.LogWarning("PlayModeScreenshot: no clock in 400 seconds dropped armor on the clear.");
+            }
+
             RebuildCampaign(app, stages, index, bestWave, bestLevel);
             WaveResultScreen.CaptureSeed = bestSeed;
+            WaveResultScreen.CaptureNow = bestNow;
             Debug.Log("PlayModeScreenshot: " + name + " seeded on stage " + stage.DisplayCode + ", wave " + bestWave
-                      + ", line level " + bestLevel + " of " + cap + ", seed " + bestSeed + " (probe score " + bestScore + ").");
+                      + ", line level " + bestLevel + " of " + cap + ", seed " + bestSeed + ", clock " + bestNow
+                      + ", AUTO " + (auto ? "on" : "off") + " (probe score " + bestScore + ").");
             return stage;
         }
+
+        /// <summary>The one clock and the armor count a wave capture's rebuilds share; see SeedWaveResult.</summary>
+        private static long _waveNow;
+        private static int _waveArmorBase;
 
         /// <summary>The harness's pinned line (PinnedLine in Tools/DevHarness/Program.cs): one
         /// five-star per role. Restated rather than shared because the harness is not part of the
@@ -1444,9 +1489,10 @@ namespace Emberfall.EditorTools
                 return r.LostBattle >= 3 ? 500 : 100 + r.LostBattle;
             }
             if (name == "WaveResultCleared") return r.StageCleared ? 1000 : (r.WaveCleared ? 50 : 0);
-            // A won mid-stage wave: the whole wave, and with some headroom so the strip is not all lows.
+            // A won mid-stage wave: the whole wave, and one that paid, so the reward chips are in shot.
             if (r.StageCleared || lost) return 0;
-            return r.WaveCleared ? (r.Margin >= 0.35f ? 1000 : 500) : 0;
+            if (!r.WaveCleared) return 0;
+            return r.WaveGold > 0 ? 1000 : 500;
         }
 
         /// <summary>
@@ -1459,8 +1505,10 @@ namespace Emberfall.EditorTools
         {
             GameSession session = app.Session;
             PlayerProfile profile = session.Profile;
-            long now = TimeUtil.NowUnix();
+            long now = _waveNow != 0 ? _waveNow : TimeUtil.NowUnix();
 
+            if (profile.OwnedArmor.Count > _waveArmorBase)
+                profile.OwnedArmor.RemoveRange(_waveArmorBase, profile.OwnedArmor.Count - _waveArmorBase);
             profile.ClearedStageIds.Clear();
             profile.StagesCleared = 0;
             profile.CampaignCurrentStageId = "";
@@ -1488,12 +1536,13 @@ namespace Emberfall.EditorTools
             string actual = r.Refused != WaveRefusal.None ? "refused (" + r.Refused + ")"
                           : r.LostBattle > 0 ? "lost at battle " + r.LostBattle + " of " + r.BattleCount
                                                + " (" + r.Battles.Count + " fought from battle " + r.FirstBattle + ")"
-                          : r.StageCleared ? "stage cleared"
-                          : "wave " + r.Wave + " cleared";
+                          : r.StageCleared ? "stage cleared" + (r.Rewards != null && r.Rewards.FirstClear ? " (first clear)" : "")
+                                             + (r.Rewards != null && r.Rewards.ArmorDrop != null ? " with " + r.Rewards.ArmorDrop.Name : " with no armor")
+                          : "wave " + r.Wave + " cleared, +" + r.WaveGold + " gold, +" + r.WaveAccountXp + " XP";
             bool match = name == "WaveResultLost" ? r.LostBattle > 0
-                       : name == "WaveResultCleared" ? r.StageCleared
+                       : name == "WaveResultCleared" ? r.StageCleared && r.Rewards != null && r.Rewards.FirstClear && r.Rewards.ArmorDrop != null
                        : r.WaveCleared && !r.StageCleared;
-            Debug.Log("PlayModeScreenshot: " + name + " outcome: " + actual + ", margin " + r.Margin + ".");
+            Debug.Log("PlayModeScreenshot: " + name + " outcome: " + actual + ", AUTO " + (WaveResultScreen.AutoAdvance ? "on" : "off") + ".");
             if (!match)
                 Debug.LogWarning("PlayModeScreenshot: " + name + " did NOT produce its named outcome (" + actual
                                  + "). Do not file this capture under that name.");

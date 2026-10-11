@@ -490,10 +490,17 @@ tier set and account rank does not (`GameSession.HeroLevelCapOf`); see **Fusion 
 **A wave resolves in one tap.** `GameSession.ResolveWave` fights the rest of the current wave
 through `ResolveLadderBattle`, the helper `SweepClearedStage` shares, so every campaign battle has
 one resolution path, and returns a `WaveResolution` that `WaveResultScreen` only reads: the
-outcome, the wave track or the stage-clear spoils, the twelve battles with the HP the line kept,
+outcome, what the wave paid or the stage-clear spoils, the line that fought as `Squad` snapshots,
 and on a loss the lost battle with its `Debrief` cause. A loss stops at the lost battle and the
-next resolve starts there; a won mid-stage wave pays nothing and the wave that finishes the stage
-calls `GrantBattleResult` once, so battle count and economy are unchanged. `CampaignFlow.Launch`
+next resolve starts there. **Every campaign win goes through `GameSession.RecordLadderWin`**, which
+`ResolveWave` and the harness's economy walk both call: on a first clear a won mid-stage wave pays
+an equal share of `GameSession.WaveDripPercent` (40, a named constant rather than a `balance.json`
+key because that file is hashed into `ContentVersion` and no fight reads it) percent of the
+stage's gold and Wayfarer XP, and the stage clear pays the rest through `GrantBattleResult`, with
+the rounding remainder, the first-clear bonus, shards, drop and unlock. A stage's whole payout is
+unchanged to the unit; repeat clears and sweeps drip nothing. Paid waves are read off the existing
+cursor (`WavesPaidBefore`), so the save gained no field. `CheckWaveDrip` proves the totals for all
+72 stages, no double pay across save reloads, and no pay on a replay, a repeat or a sweep. `CampaignFlow.Launch`
 is the one door into a stage for `CampaignScreen`, `FirstRun` and `BattleScreen`'s CONTINUE: a
 cleared stage is swept, a stage with a wave curve opens `WaveResultScreen`, and only a stage with
 no ladder reaches `BattleScreen`. `ReportResolvesPerFirstClear` prints what a first clear costs;
@@ -1049,6 +1056,34 @@ step back one screen. It holds:
   Both were shown without being remembered, so the history could not name them. A leave mid-stage
   keeps what the save already holds (`CampaignCurrentStageId`, wave and battle); no field was added.
 - **`WaveReplayResult`**, a `PlayModeScreenshot` target for the replay's result panel.
+
+**`ui/wave-results`** sits on top of `ui/campaign-nav` and builds the locked campaign result design,
+`Docs/ui-specs/WAVE-RESULTS.md`. It holds:
+- **the wave cleared overlay.** `WaveResultScreen` stands the line that fought in idle on the
+  stage's battlefield (`BattleStage`, fed the record's `Squad` snapshots, no enemies), with the
+  field camera's viewport stopping at the band so no hero stands behind it. The band carries the
+  stage line, the title, a 12-pip track with the count and a chip per currency the wave paid,
+  and NEXT WAVE, WATCH and an AUTO checkbox. AUTO fires NEXT WAVE after 2 seconds, any tap on
+  the band cancels it for that wave, and it is a PlayerPrefs setting, not a save field.
+- **the stage cleared screen**: the field darkened under VICTORY, a FIRST CLEAR tag, one tile per
+  reward (gold, Ember Shards, Wayfarer XP, the armor drop through `ItemCard`), the unlock line,
+  CONTINUE and WATCH.
+- **the wave lost band**, the same band in red with the real battle and wave numbers, RETRY,
+  ADJUST LINE and WATCH.
+- **the HP chart and HP KEPT removed**, and `WaveResolution.Margin` with them; the Dev Arena never
+  read it.
+- **the per-wave drip** described under **Campaign and progression**, with `CheckWaveDrip`.
+- `PlayModeScreenshot` targets `WaveResultAuto`, and a stage clear that is a first clear with an
+  armor drop, found by pinning the clock and the armor count the probe and the photograph share.
+
+No save version moved and no content JSON changed. The drip moves no pinned baseline, and
+`CheckEconomyRespondsToIncome` (0.6, gold alone 0.22) and the power band (the same ten stages at the
+same ratios) read as they did before it. **It adds one harness failure, unresolved:**
+`CheckFusionNeverGates` has 1 of 20 non-fusing walks STUCK at `3-4`. The walk pays the drip through
+`RecordLadderWin`, and the failure follows the drip, not its size: at 0 percent the check reads
+exactly as on the base (all 20 finish, the worst spending 35 extra sittings at `3-6`), and at 35,
+40 and 45 percent the same walk sticks at `3-4`. The build check reads **3 failures**: the base's
+CEIL band and power band, and this one, plus `DESIGN-SHOP.md`'s known doc-lint hit.
 
 **`ui/fusion-numbers`** makes the ascend card's three rows readable against the list beside them,
 and cuts the page down to them. It holds:
