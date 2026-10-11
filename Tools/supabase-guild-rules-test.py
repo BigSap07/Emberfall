@@ -8,7 +8,9 @@ remove them, and what happens when thirty devices ask the same question in the s
 The two share nothing but the transport, and merging them would have produced a file where the
 interesting section is the last fifth.
 
-    Run Server/supabase/migrations/0004 through 0010 first, in order.
+    Run Server/supabase/migrations/0004 through 0014 first, in order. The seed, presence and
+    code-lookup cases assert 0014's refusals, so they go red against a project that has not had
+    0014 applied.
 
     python Tools/supabase-guild-rules-test.py
 
@@ -56,6 +58,7 @@ from concurrent.futures import ThreadPoolExecutor
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(ROOT, "Assets", "Resources", "Config", "supabase.json")
 RUN_RECORD = os.path.join(ROOT, "Tools", "SupabaseRuns", "guild.json")
+RULE_GAPS = os.path.join(ROOT, "Server", "supabase", "migrations", "0014_guild_rule_gaps.sql")
 
 URL = ""
 ANON = ""
@@ -333,6 +336,54 @@ def guild_name(prefix):
     return (prefix + "-" + RUN_TAG + "-" + "".join(random.choice(string.digits) for _ in range(3)))[:20]
 
 
+def rate_limits():
+    """guild_rate_limits as 0014 seeds it, read from the migration's insert so the numbers tested
+    are the file's and not a copy here: (touch seconds, misses allowed, window seconds). The live
+    row can be raised by hand and cannot be read by a client, so a project whose row was raised
+    will show it as a failed refusal, not as a pass."""
+    import re
+    try:
+        with open(RULE_GAPS, "r", encoding="utf-8-sig") as handle:
+            found = re.search(r"values \(true, (\d+), (\d+), (\d+)\)", handle.read())
+    except OSError:
+        found = None
+    return tuple(int(g) for g in found.groups()) if found else (30, 10, 600)
+
+
+TOUCH_INTERVAL, CODE_MISS_LIMIT, CODE_MISS_WINDOW = rate_limits()
+
+CODE_ALPHABET = "23456789ABCDEFGHJKMNPQRSTVWXYZ"
+
+
+def random_code():
+    return "".join(random.choice(CODE_ALPHABET) for _ in range(6))
+
+
+def look_up(user, code):
+    """guild_by_code, as the game's FIND button sends it. Since 0014 a hit is also what lets the
+    same account ask to join that guild, so every join below looks the code up first, the way
+    GuildScreen does."""
+    return rpc("guild_by_code", token=user["token"], p_code=code)
+
+
+def ask_to_join(user, code):
+    """Look first, ask second: the game's two taps, and since 0014 the only order the server
+    accepts (guild_request_send takes only the code this account last found)."""
+    look_up(user, code)
+    return rpc("guild_request_send", token=user["token"], p_code=code)
+
+
+def when(stamp):
+    """A timestamptz as PostgREST renders it, as a comparable datetime. None stays None."""
+    import datetime
+    if not isinstance(stamp, str):
+        return None
+    try:
+        return datetime.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
 # ---------------------------------------------------------------- the cases
 
 
@@ -423,6 +474,8 @@ def check_lookup_and_privacy(guild, a, b, c):
 def check_requests(guild, a, b, c):
     section("REQUESTS - who may queue, who may answer, and who may not see one at all")
 
+    # Sent straight, without a look_up: B found this code in the section above (and missed with
+    # ZZZZZZ after it), and 0014 takes the last code an account FOUND, which a miss does not undo.
     status, body = rpc("guild_request_send", token=b["token"], p_code=guild["guild_code"])
     check(status == 200 and body == "requested",
           "B asks to join a closed guild and is queued, not admitted", (status, body))
@@ -516,7 +569,7 @@ def check_roles(guild, a, b, c):
 def check_officer_powers(guild, a, b, c, d):
     section("WHAT AN OFFICER MAY DO - accept and remove members, and nothing above that")
 
-    status, body = rpc("guild_request_send", token=c["token"], p_code=guild["guild_code"])
+    status, body = ask_to_join(c, guild["guild_code"])
     check(status == 200 and body == "requested", "C asks to join", (status, body))
     status, body = request("GET", "/rest/v1/guild_requests?select=id,user_id", token=b["token"])
     check(status == 200 and isinstance(body, list) and len(body) == 1,
@@ -528,7 +581,7 @@ def check_officer_powers(guild, a, b, c, d):
     status, body = rpc("guild_request_accept", token=b["token"], p_request_id=pending["id"])
     check(status == 200, "and accepts it, which is an officer's job", (status, message_of(body)))
 
-    status, body = rpc("guild_request_send", token=d["token"], p_code=guild["guild_code"])
+    status, body = ask_to_join(d, guild["guild_code"])
     status, body = request("GET", "/rest/v1/guild_requests?select=id,user_id", token=b["token"])
     spare = body[0] if status == 200 and isinstance(body, list) and body else None
     if spare:
@@ -559,7 +612,7 @@ def check_officer_powers(guild, a, b, c, d):
           "but an officer CAN remove a member", (status, gone))
 
     # Two officers: the one thing the delete policy deliberately does not permit.
-    rpc("guild_request_send", token=c["token"], p_code=guild["guild_code"])
+    ask_to_join(c, guild["guild_code"])
     status, body = request("GET", "/rest/v1/guild_requests?select=id", token=a["token"])
     again = body[0] if status == 200 and isinstance(body, list) and body else None
     if again:
@@ -586,7 +639,7 @@ def check_leaving(guild, a, b, c):
           "THE LEADER CANNOT LEAVE - the row will not move, whatever the client shows",
           (status, still))
 
-    rpc("guild_request_send", token=c["token"], p_code=guild["guild_code"])
+    ask_to_join(c, guild["guild_code"])
     status, body = request("GET", "/rest/v1/guild_requests?select=id", token=a["token"])
     pending = body[0] if status == 200 and isinstance(body, list) and body else None
     if pending:
@@ -609,7 +662,7 @@ def check_leaving(guild, a, b, c):
           "the former leader can now leave, which is what a transfer is for", status)
 
     # Put A back as leader so the rest of the run has a guild to work in.
-    rpc("guild_request_send", token=a["token"], p_code=guild["guild_code"])
+    ask_to_join(a, guild["guild_code"])
     status, body = request("GET", "/rest/v1/guild_requests?select=id", token=b["token"])
     back = body[0] if status == 200 and isinstance(body, list) and body else None
     if back:
@@ -676,17 +729,37 @@ def check_chat(guild, a, b, c):
           "and cannot be deleted either - they are still there", (status, len(body2) if isinstance(body2, list) else body2))
 
 
-def check_presence(a, b):
+def check_presence(a, b, c):
     section("PRESENCE - stamped by the database, never sent by a client")
 
+    # 0014: a touch writes only when the stored stamp is at least TOUCH_INTERVAL old, and answers
+    # the stamp that is there either way. A has just posted in check_chat, which stamps too, so
+    # A is inside the window here.
     before = my_membership(a)
-    time.sleep(1.1)
     status, body = rpc("guild_touch", token=a["token"])
-    check(status == 200 and isinstance(body, str), "guild_touch answers with the stamp it wrote",
-          (status, body))
+    held = my_membership(a)
+    check(status == 200 and before and held and when(body) == when(before["last_seen"])
+          and held["last_seen"] == before["last_seen"],
+          "A TOUCH INSIDE THE WINDOW WRITES NOTHING - it answers the stamp already there, and "
+          "last_seen does not move", (status, body, before, held))
+
+    note("waiting " + str(TOUCH_INTERVAL + 1) + "s for the presence window to pass")
+    time.sleep(TOUCH_INTERVAL + 1)
+    status, body = rpc("guild_touch", token=a["token"])
     after = my_membership(a)
-    check(before and after and after["last_seen"] > before["last_seen"],
+    check(status == 200 and isinstance(body, str) and after and when(body) == when(after["last_seen"]),
+          "outside it, guild_touch answers with the stamp it wrote", (status, body, after))
+    check(before and after and when(after["last_seen"]) > when(before["last_seen"]),
           "and last_seen moved forward", (before, after))
+
+    status, body = rpc("guild_touch", token=a["token"])
+    check(status == 200 and after and when(body) == when(after["last_seen"]),
+          "and a touch straight after that is back inside the window, answering the same stamp",
+          (status, body, after))
+
+    status, body = rpc("guild_touch", token=c["token"])
+    check(status == 200 and body is None, "C, in no guild, is answered NULL rather than an error - "
+          "the client calls this on a timer", (status, body))
 
     status, body = request("PATCH", "/rest/v1/guild_members?user_id=eq." + a["id"], token=a["token"],
                            body={"last_seen": "2099-01-01T00:00:00Z"})
@@ -752,13 +825,33 @@ DUNGEON_LINE = [{"defId": "kael_the_unyielding", "level": 40, "stars": 5}]
 CONTENT_VERSION = "c1-0000000000000000"
 
 
+def seed_for(guild_id, cycle):
+    """GuildDungeon.SeedFor, ported: 32-bit FNV-1a over "<guild id, trimmed, lower case>:<cycle>",
+    top bit cleared. 0014's guild_dungeon_seed_for is the same function in SQL, and its migration
+    refuses to apply unless it reproduces SEED_VECTORS."""
+    hashed = 2166136261
+    for byte in ((guild_id or "").strip().lower() + ":" + str(int(cycle))).encode("utf-8"):
+        hashed = ((hashed ^ byte) * 16777619) & 0xFFFFFFFF
+    return hashed & 0x7FFFFFFF
+
+
+# What the C# GuildDungeon.SeedFor answers for these, computed from that function. The same three
+# are checked inside 0014 before it replaces guild_dungeon_submit.
+SEED_VECTORS = (("3f2a9c1e-7b4d-4e8a-9c21-5d6e7f8a9b0d", 37, 35606394),
+                ("00000000-0000-0000-0000-000000000000", 0, 1967870163),
+                ("FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF", 41, 734521770))
+
+
 def record_attempt(user, cycle, floor, team=None, **overrides):
     """One guild_dungeon_submit call (0008) with a well-formed attempt, any argument overridable.
-    The values are what a client would send. The server trusts the fight itself, which is the
-    design, so the cases below are about WHO may write, HOW MANY, WHEN, and WHAT SHAPE of line,
-    not whether the fight was real. 0007's guild_dungeon_record is revoked from authenticated;
-    check_record_is_closed proves it."""
-    args = {"p_cycle": cycle, "p_floor": floor, "p_seed": 417005212,
+    The values are what a client would send, the seed included: since 0014 the server refuses any
+    seed but the one it derives for the caller's guild and cycle, so the default is that one. The
+    server trusts the fight itself, which is the design, so the cases below are about WHO may
+    write, HOW MANY, WHEN, and WHAT SHAPE of line, not whether the fight was real. 0007's
+    guild_dungeon_record is revoked from authenticated; check_record_is_closed proves it."""
+    if "p_seed" not in overrides:
+        overrides["p_seed"] = seed_for(guild_of(user), cycle)
+    args = {"p_cycle": cycle, "p_floor": floor,
             "p_team": DUNGEON_LINE if team is None else team,
             "p_victory": True, "p_turns": 9, "p_power": 12345, "p_avg_stars": 5.0,
             "p_fallen": 0, "p_content_version": CONTENT_VERSION}
@@ -797,7 +890,7 @@ def check_dungeon(guild, a, b, c):
         return None
     check(first.get("attempt") == 1 and first.get("user_id") == a["id"] and first.get("guild_id") == guild["id"],
           "numbered 1, and filed under A and A's guild by the server rather than by anything A sent", first)
-    check(first.get("team") == DUNGEON_LINE and first.get("seed") == 417005212,
+    check(first.get("team") == DUNGEON_LINE and first.get("seed") == seed_for(guild["id"], cycle),
           "carrying the seed and the whole line that fought - what a replay needs", first)
 
     for expected in (2, 3):
@@ -1120,11 +1213,15 @@ def check_share_attempt(guild, a, b, gate):
 # written from the migrations' text and confirmed to parse, nothing more. A case whose label says
 # STILL PRESENT asserts a defect the audit wrote up and left alone, so it goes red the day that
 # defect is fixed - flip it then, and move the entry in Docs/CLOUD-GAPS.md.
+#
+# The seed, presence and lookup cases were flipped that way for 0014: they assert its refusals,
+# were written from its text, and were checked only against a local in-memory Postgres with
+# 0001-0014 applied. NOT YET RUN against the live project, and red there until 0014 is applied.
 
 
 def join_via_leader(user, guild, leader):
     """Ask to join and have the leader accept. Returns True once the user is a member."""
-    rpc("guild_request_send", token=user["token"], p_code=guild["guild_code"])
+    ask_to_join(user, guild["guild_code"])
     status, body = request("GET", "/rest/v1/guild_requests?select=id,user_id&user_id=eq." + user["id"],
                            token=leader["token"])
     pending = body[0] if status == 200 and isinstance(body, list) and body else None
@@ -1178,19 +1275,48 @@ def check_after_leaving(guild, a, cycle):
     request("DELETE", "/rest/v1/guild_members?user_id=eq." + leaver["id"], token=leaver["token"])
 
 
-def check_seed_is_not_checked(a, cycle):
-    """Docs/CLOUD-GAPS.md S8. guild_dungeon_record stored whatever seed it was sent, and
-    guild_dungeon_submit kept the rule. The seed is a pure function of (guild id, cycle) -
-    GuildDungeon.SeedFor - so the server could refuse a wrong one, and does not: a record can
-    claim any fight at all, including an easier one.
+def check_seed_is_derived(a, cycle):
+    """Docs/CLOUD-GAPS.md S8, closed by 0014. guild_dungeon_submit stored whatever seed it was
+    sent; the seed is a pure function of (guild id, cycle), GuildDungeon.SeedFor, so a record
+    could claim any fight at all, including an easier one. 0014 derives it on the server and
+    refuses any other, through both doors the client uses (0011's guild_dungeon_attempt calls
+    guild_dungeon_submit).
 
     This is also the victory at floor 3 that opens floor 4 for check_dungeon_race, so it runs
     before the race."""
-    section("THE DUNGEON SEED - trusted as sent")
-    status, body = record_attempt(a, cycle, 3, p_seed=1)
-    check(status == 200 and isinstance(body, dict) and body.get("seed") == 1,
-          "STILL PRESENT (S8) - an attempt claiming seed 1, which no guild's cycle derives, is stored",
+    section("THE DUNGEON SEED - derived by the server, never chosen by the client")
+
+    wrong = [(g, c, want, seed_for(g, c)) for g, c, want in SEED_VECTORS if seed_for(g, c) != want]
+    check(not wrong, "this file's seed_for reproduces GuildDungeon.SeedFor on its three vectors", wrong)
+
+    guild_id = guild_of(a)
+    expected = seed_for(guild_id, cycle)
+    status, body = rpc("guild_dungeon_seed_for", token=a["token"], p_guild=guild_id, p_cycle=cycle)
+    check(status == 200 and body == expected,
+          "THE SERVER DERIVES THE SAME SEED for A's guild this cycle (" + str(expected) + ")",
           (status, message_of(body)))
+
+    def floor_three_rows():
+        rows = dungeon_rows(a, guild_id)
+        return len([r for r in rows or [] if r["user_id"] == a["id"] and r["floor"] == 3])
+
+    held = floor_three_rows()
+    for seed, why in ((1, "seed 1, which no guild's cycle derives"),
+                      ((expected + 1) & 0x7FFFFFFF, "the right seed plus one")):
+        status, body = record_attempt(a, cycle, 3, p_seed=seed)
+        check(status == 400 and "seed" in message_of(body),
+              "REFUSED: an attempt claiming " + why, (status, message_of(body)))
+    status, body = rpc("guild_dungeon_attempt", token=a["token"], p_cycle=cycle, p_floor=3, p_seed=1,
+                       p_team=DUNGEON_LINE, p_victory=True, p_turns=9, p_power=12345, p_avg_stars=5.0,
+                       p_fallen=0, p_content_version=CONTENT_VERSION, p_boards=0)
+    check(status == 400 and "seed" in message_of(body),
+          "and through 0011's guild_dungeon_attempt, the door the game uses", (status, message_of(body)))
+    check(floor_three_rows() == held, "NONE OF THEM SPENT AN ATTEMPT - a wrong seed is refused before the cap",
+          (held, floor_three_rows()))
+
+    status, body = record_attempt(a, cycle, 3)
+    check(status == 200 and isinstance(body, dict) and body.get("seed") == expected and body.get("victory"),
+          "while the derived seed is stored, as a win at floor 3", (status, message_of(body)))
 
 
 def check_anon_helpers():
@@ -1201,6 +1327,8 @@ def check_anon_helpers():
                        ("guild_member_cap", {}), ("guild_normalise_code", {"p_code": "abc234"}),
                        ("guild_dungeon_attempt_cap", {}), ("guild_dungeon_floor_count", {}),
                        ("guild_dungeon_hero_level", {}),
+                       ("guild_dungeon_seed_for", {"p_guild": "00000000-0000-0000-0000-000000000000",
+                                                   "p_cycle": 0}),
                        ("guild_dungeon_cycle_at", {"p_at": "2026-09-22T00:00:00Z"}),
                        ("is_friend", {"other_user": "00000000-0000-0000-0000-000000000000"})):
         status, body = rpc(name, **args)
@@ -1212,19 +1340,47 @@ def check_anon_helpers():
           (status, message_of(body)))
 
 
-def measure_unthrottled_loops(a):
-    """Docs/CLOUD-GAPS.md A-list. Everything but chat is unthrottled per account. Measured, not
-    abused: twenty calls each, and a refusal of any of them would mean a limit exists."""
-    section("CALLS IN A LOOP - what answers without a limit")
-    touches = [rpc("guild_touch", token=a["token"])[0] for _ in range(20)]
-    check(all(s == 200 for s in touches),
-          "STILL PRESENT (A-list) - twenty guild_touch calls back to back, each one a row write, none refused",
-          touches)
-    codes = ["".join(random.choice("23456789ABCDEFGHJKMNPQRSTVWXYZ") for _ in range(6)) for _ in range(20)]
-    lookups = [rpc("guild_by_code", token=a["token"], p_code=code)[0] for code in codes]
-    check(all(s == 200 for s in lookups),
-          "STILL PRESENT (A-list) - twenty random guild codes probed back to back, none refused - "
-          "guild_by_code can be walked", lookups)
+def check_loops_are_bounded(guild, a, b):
+    """Docs/CLOUD-GAPS.md A-list, the guild_touch and guild_by_code rows, closed by 0014. Each
+    used to answer twenty back-to-back calls with twenty row writes or twenty answers. Now a
+    touch inside the window writes nothing, and an account that misses CODE_MISS_LIMIT codes is
+    refused every lookup until the window ends - while the paths the game uses keep working."""
+    section("CALLS IN A LOOP - guild_touch and guild_by_code are bounded")
+
+    stamps = [rpc("guild_touch", token=a["token"]) for _ in range(20)]
+    row = my_membership(a)
+    check(all(s == 200 for s, _ in stamps) and row
+          and all(when(body) == when(row["last_seen"]) for _, body in stamps),
+          "TWENTY guild_touch CALLS BACK TO BACK WRITE AT MOST ONCE - every one answers the stamp "
+          "last_seen holds afterwards", ([s for s, _ in stamps], row))
+
+    hits = [look_up(b, guild["guild_code"]) for _ in range(CODE_MISS_LIMIT + 5)]
+    check(all(s == 200 and isinstance(body, list) and len(body) == 1 for s, body in hits),
+          "B looks the guild's real code up " + str(len(hits)) + " times and is answered every time - "
+          "a hit is never counted", [s for s, _ in hits])
+
+    walker = must_sign_up("walker")
+    CAST_EXTRA.append(walker)
+    status, body = look_up(walker, "ab0i1z")
+    check(status == 200 and body == [], "a malformed code answers nothing, and costs nothing", (status, body))
+    misses = [look_up(walker, random_code()) for _ in range(CODE_MISS_LIMIT)]
+    check(all(s == 200 and body == [] for s, body in misses),
+          "a walker's first " + str(CODE_MISS_LIMIT) + " random codes are answered with nothing",
+          [s for s, _ in misses])
+    status, body = look_up(walker, random_code())
+    check(status == 429, "THE NEXT ONE IS REFUSED WITH 429 - guild_by_code cannot be walked",
+          (status, message_of(body)))
+    status, body = look_up(walker, guild["guild_code"])
+    check(status == 429, "AND SO IS A REAL CODE while the window runs - a throttled walker learns "
+          "nothing about which codes exist", (status, message_of(body)))
+    note("the window itself (" + str(CODE_MISS_WINDOW) + "s) is not waited out here")
+
+    status, body = rpc("guild_request_send", token=walker["token"], p_code=random_code())
+    check(status == 428, "guild_request_send IS NO WAY ROUND IT - a code the walker never found is "
+          "refused with 428, not answered with 404", (status, message_of(body)))
+    status, body = rpc("guild_request_send", token=walker["token"], p_code=guild["guild_code"])
+    check(status == 428, "and a real guild's code it never found gets the same 428 - one answer for both",
+          (status, message_of(body)))
 
 
 def check_friends_keep_access(c, d):
@@ -1291,7 +1447,7 @@ def check_one_guild_rule(guild, d):
     if rival is None:
         return None
 
-    status, body = rpc("guild_request_send", token=d["token"], p_code=guild["guild_code"])
+    status, body = ask_to_join(d, guild["guild_code"])
     check(status == 409, "D CANNOT ASK TO JOIN A SECOND GUILD while leading one",
           (status, message_of(body)))
 
@@ -1338,6 +1494,12 @@ def check_cap_race(racers, leader):
         cap = body
     note("the database's own cap is " + str(cap) + "; the guild already holds its leader, so "
          + str(cap - 1) + " of the " + str(len(racers)) + " racers can fit")
+
+    # Every racer finds the guild first, one after another and before the barrier, the way each
+    # device would have before its player pressed JOIN (0014: only a found code may be asked for).
+    # Hits are never counted against the lookup limit, so thirty of them cost nothing.
+    for user in racers:
+        look_up(user, guild["guild_code"])
 
     barrier = threading.Barrier(len(racers))
     results = [None] * len(racers)
@@ -1524,17 +1686,17 @@ def main():
             check_officer_powers(guild, a, b, c, d)
             check_leaving(guild, a, b, c)
             check_chat(guild, a, b, c)
-            check_presence(a, b)
+            check_presence(a, b, c)
             check_snapshots(guild, a, b, c)
             cycle = check_dungeon(guild, a, b, c)
             if cycle is not None:
                 check_record_is_closed(a, cycle)
                 check_dungeon_normalised(a, cycle)
-                check_seed_is_not_checked(a, cycle)
+                check_seed_is_derived(a, cycle)
                 check_dungeon_race(guild, b, cycle)
                 check_after_leaving(guild, a, cycle)
                 check_share_attempt(guild, a, b, check_dungeon_floor_gate())
-            measure_unthrottled_loops(a)
+            check_loops_are_bounded(guild, a, b)
             check_one_guild_rule(guild, d)
         check_anon_role()
         check_anon_helpers()
