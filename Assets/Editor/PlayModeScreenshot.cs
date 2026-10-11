@@ -176,6 +176,9 @@ namespace Emberfall.EditorTools
 
         // The same won wave as the first of the three, then WATCH pressed: one frame of the replay
         // on the battle screen, frozen while a hit effect is alive. See PumpWaveReplay.
+        [MenuItem("Emberfall/Capture/Wave replay (mid-heal)", false, 86)]
+        public static void CaptureWaveReplayHeal() { Begin("Screen:WaveReplayHeal"); }
+
         [MenuItem("Emberfall/Capture/Wave replay (mid-fight)", false, 85)]
         public static void CaptureWaveReplay() { Begin("Screen:WaveReplay"); }
 
@@ -662,7 +665,8 @@ namespace Emberfall.EditorTools
                     case "WaveResultCleared":
                     case "WaveResultLost":
                     case "WaveReplay":
-                    case "WaveReplayResult": id = ScreenId.WaveResult; break;
+                    case "WaveReplayResult":
+                    case "WaveReplayHeal": id = ScreenId.WaveResult; break;
                     // The ability breakdown is a DIALOG over the hero page rather than a screen,
                     // so it routes to the page and opens the dialog a frame later, exactly as the
                     // Hub's layers do below.
@@ -786,7 +790,7 @@ namespace Emberfall.EditorTools
                     // started the way the Campaign screen starts it, with a stage and a seeded
                     // profile behind it.
                     // A replay is watched from a won mid-stage wave, so it seeds as one.
-                    StageDef waveStage = SeedWaveResult(app, name == "WaveReplay" || name == "WaveReplayResult" ? "WaveResult" : name);
+                    StageDef waveStage = SeedWaveResult(app, name == "WaveReplay" || name == "WaveReplayResult" || name == "WaveReplayHeal" ? "WaveResult" : name);
                     if (waveStage == null)
                     {
                         SessionState.SetInt(StageKey, slot + 1);
@@ -809,7 +813,7 @@ namespace Emberfall.EditorTools
             if (IsWaveResultTarget(name))
             {
                 if (frame <= showAt) return;
-                if (name == "WaveReplay" || name == "WaveReplayResult")
+                if (name == "WaveReplay" || name == "WaveReplayResult" || name == "WaveReplayHeal")
                 {
                     PumpWaveReplay(app, name, frame, showAt, slot, BattleWaitCeiling, BattlePaintDelay);
                     return;
@@ -1228,7 +1232,7 @@ namespace Emberfall.EditorTools
         private static bool IsWaveResultTarget(string name)
         {
             return name == "WaveResult" || name == "WaveResultCleared" || name == "WaveResultLost"
-                   || name == "WaveReplay" || name == "WaveReplayResult";
+                   || name == "WaveReplay" || name == "WaveReplayResult" || name == "WaveReplayHeal";
         }
 
         private const string ReplayStageKey = "PlayModeScreenshot.ReplayStage";
@@ -1246,6 +1250,8 @@ namespace Emberfall.EditorTools
             // the fight to its result panel, where the replay's BACK button lives, instead of
             // freezing a hit mid-fight.
             bool toResult = name == "WaveReplayResult";
+            // WaveReplayHeal freezes on a Heal being played instead of a blow, to photograph the heal flipbook.
+            bool onHeal = name == "WaveReplayHeal";
             int stage = SessionState.GetInt(ReplayStageKey, 0);
             int armed = SessionState.GetInt(BattleArmKey, 0);
 
@@ -1301,7 +1307,7 @@ namespace Emberfall.EditorTools
                     ParticleSystem[] systems = director.GetComponentsInChildren<ParticleSystem>();
                     for (int i = 0; i < systems.Length; i++) live += systems[i].particleCount;
                 }
-                if (battle != null && battle.RoundUnderway && battle.HitJustPlayed && live >= 8)
+                if (battle != null && battle.RoundUnderway && (onHeal ? battle.HealJustPlayed : battle.HitJustPlayed) && live >= (onHeal ? 1 : 8))
                 {
                     Time.timeScale = 0f;
                     SessionState.SetInt(ReplayStageKey, 2);

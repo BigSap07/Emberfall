@@ -213,6 +213,10 @@ namespace Emberfall.UI.Screens
         /// <summary>True while the event last played is a blow rather than a tick, so a capture
         /// can freeze on a hit effect and not on a status ring. Read only; set in Handle.</summary>
         public bool HitJustPlayed { get; private set; }
+
+        /// <summary>True for a quarter second after a Heal plays, so a capture can freeze on the heal effect.</summary>
+        public bool HealJustPlayed { get { return Time.unscaledTime - _lastHealAt < 0.25f; } }
+        private float _lastHealAt = -10f;
 #endif
 
         /// <summary>Index of the strip icon whose turn is being played. See AdvanceTurnStrip.</summary>
@@ -1141,6 +1145,7 @@ namespace Emberfall.UI.Screens
             _world.Director.Play(e);
 #if UNITY_EDITOR
             HitJustPlayed = e.Type == BattleEventType.Damage && e.Status == StatusKind.None;
+            if (e.Type == BattleEventType.Heal && e.Value > 0) _lastHealAt = Time.unscaledTime;
 #endif
 
             switch (e.Type)
