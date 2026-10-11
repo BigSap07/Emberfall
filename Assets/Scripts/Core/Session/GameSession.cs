@@ -681,14 +681,32 @@ namespace Emberfall.Core.Session
         public bool IsStageUnlocked(StageDef stage)
         {
             if (stage == null) return false;
-            return stage.GlobalIndex <= Profile.StagesCleared;
+            // A cleared stage stays open wherever content later puts it; the only open stage that
+            // is not cleared is the frontier, the first uncleared one in campaign order.
+            if (Profile.HasClearedStage(stage.Id)) return true;
+            StageDef first = FirstUnclearedStage;
+            return first != null && stage.Id == first.Id;
+        }
+
+        /// <summary>The first stage in campaign order the player has not cleared, or null when
+        /// every stage is cleared. Derived from the cleared ids, never from a stored position.</summary>
+        public StageDef FirstUnclearedStage
+        {
+            get { return CampaignProgress.FirstUncleared(Profile, Content); }
+        }
+
+        /// <summary>The cleared stage furthest along the campaign, or null before the first clear.
+        /// What idle income and the profile's furthest-stage line are paid and named from.</summary>
+        public StageDef FurthestClearedStage
+        {
+            get { return CampaignProgress.FurthestCleared(Profile, Content); }
         }
 
         public StageDef NextStage
         {
             get
             {
-                StageDef stage = Content.GetStageByGlobalIndex(Profile.StagesCleared);
+                StageDef stage = FirstUnclearedStage;
                 if (stage != null) return stage;
                 // campaign fully cleared - let the player replay the last stage
                 return Content.AllStages.Count > 0 ? Content.AllStages[Content.AllStages.Count - 1] : null;
@@ -799,10 +817,8 @@ namespace Emberfall.Core.Session
             BattleRewards rewards = new BattleRewards();
             if (stage == null) return rewards;
 
-            StageDef hardest = CampaignWaveGenerator.BuildBattle(
-                stage, Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
-
-            BattleResult result = CombatSimulation.Run(BuildBattleRequest(hardest, seed));
+            BattleResult result = ResolveLadderBattle(
+                stage, Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount), seed);
             if (!result.Victory)
             {
                 rewards.Victory = false;
@@ -810,6 +826,170 @@ namespace Emberfall.Core.Session
                 return rewards;
             }
             return GrantBattleResult(stage, true, nowUnix);
+        }
+
+        /// <summary>
+        /// Resolves ONE battle of a stage's ladder: builds it with CampaignWaveGenerator.BuildBattle
+        /// and runs it through CombatSimulation. The single path every ladder fight takes, shared
+        /// by SweepClearedStage (the hardest battle) and ResolveWave (each battle of a wave), so
+        /// there is no second resolution path that could drift from the first. The seed is the
+        /// caller's; this adds nothing to it.
+        /// </summary>
+        public BattleResult ResolveLadderBattle(StageDef stage, int wave, int battle, int seed)
+        {
+            StageDef resolved = CampaignWaveGenerator.BuildBattle(stage, wave, battle);
+            return CombatSimulation.Run(BuildBattleRequest(resolved, seed));
+        }
+
+        /// <summary>
+        /// The seed for one battle of a wave resolve: the caller's base seed mixed with the
+        /// battle's ordinal in the stage, so battles of one wave do not share an RNG stream while
+        /// the whole wave stays reproducible from one number. A murmur-style finaliser, not
+        /// cryptographic. DeterministicRng takes any non-zero int (it maps 0 to a constant and
+        /// reads the rest as a uint), so the result is NOT masked positive; only zero is avoided.
+        /// </summary>
+        public static int BattleSeed(int baseSeed, int ordinal)
+        {
+            unchecked
+            {
+                uint h = (uint)baseSeed ^ ((uint)ordinal * 0x9E3779B9u);
+                h ^= h >> 16; h *= 0x85EBCA6Bu; h ^= h >> 13; h *= 0xC2B2AE35u; h ^= h >> 16;
+                return h == 0u ? 1 : (int)h;
+            }
+        }
+
+        /// <summary>
+        /// Resolves the rest of the CURRENT wave in one tap.
+        ///
+        /// WHY ONE TAP: a stage is up to 12 waves of 12 battles, and fighting every battle by
+        /// hand is a chore, not a decision. A wave is the unit the player reasons about ("did I
+        /// win the wave, am I still winning"), so the resolve runs every remaining battle of that
+        /// wave and stops there.
+        ///
+        /// NOTHING ABOUT THE FIGHTS CHANGES. Each battle still runs through CombatSimulation via
+        /// ResolveLadderBattle, the same helper SweepClearedStage uses, so the battle count per
+        /// stage is unchanged and the result screen only reads the record this returns.
+        ///
+        /// REWARDS STAY AT STAGE GRANULARITY (DESIGN-CAMPAIGN-STRUCTURE.md): a won mid-stage wave
+        /// moves the cursor and pays nothing; only the wave that finishes the stage calls
+        /// GrantBattleResult, once.
+        ///
+        /// A LOSS stops the wave at the lost battle and leaves the cursor on it, so the next
+        /// resolve retries exactly that battle and never refights the ones already won.
+        /// Refusals change nothing. A cleared stage is refused: the sweep is its only replay path.
+        /// </summary>
+        public WaveResolution ResolveWave(StageDef stage, int baseSeed, long nowUnix)
+        {
+            WaveResolution res = new WaveResolution();
+            if (stage == null) { res.Refused = WaveRefusal.NoStage; return res; }
+            res.StageId = stage.Id;
+            if (!stage.HasWaveCurve) { res.Refused = WaveRefusal.NoWaveCurve; return res; }
+            if (Profile.HasClearedStage(stage.Id)) { res.Refused = WaveRefusal.StageCleared; return res; }
+            if (!IsStageUnlocked(stage)) { res.Refused = WaveRefusal.StageLocked; return res; }
+            if (Profile.TeamHeroes().Count == 0) { res.Refused = WaveRefusal.NoTeam; return res; }
+
+            int wave, battle;
+            ResumePointFor(stage, out wave, out battle);
+            res.Wave = wave;
+            res.WaveCount = Math.Max(1, stage.WaveCount);
+            res.BattleCount = Math.Max(1, stage.BattleCount);
+            res.FirstBattle = battle;
+
+            // The line that is about to fight, copied before anything can move it. A stage clear
+            // pays out below, after the fights, and the player can level a hero the moment they
+            // leave the result screen; the replay has to be the line that fought.
+            List<HeroInstance> fighting = new List<HeroInstance>();
+            List<HeroInstance> live = Profile.TeamHeroes();
+            for (int i = 0; i < live.Count; i++) fighting.Add(live[i].Copy());
+
+            for (int b = battle; b <= res.BattleCount; b++)
+            {
+                int ordinal = CampaignWaveGenerator.BattleOrdinal(stage, wave, b);
+                int seed = BattleSeed(baseSeed, ordinal);
+                BattleResult result = ResolveLadderBattle(stage, wave, b, seed);
+
+                WaveBattleOutcome outcome = new WaveBattleOutcome();
+                outcome.Wave = wave;
+                outcome.Battle = b;
+                outcome.Ordinal = ordinal;
+                outcome.Seed = seed;
+                outcome.Victory = result.Victory;
+                outcome.TimedOut = result.TimedOut;
+                outcome.Rounds = result.Rounds;
+                outcome.PlayerHpRatio = result.PlayerHpRatio;
+                outcome.EnemyHpRatio = result.EnemyHpRatio;
+                res.Battles.Add(outcome);
+
+                if (!result.Victory)
+                {
+                    RecordBattleLost(stage, wave, b);
+                    res.LostBattle = b;
+                    res.LostResult = result;
+                    res.LostDebrief = Debrief.Summarize(result);
+                    break;
+                }
+
+                res.Margin = result.PlayerHpRatio;
+                if (RecordBattleWon(stage, wave, b))
+                {
+                    res.StageCleared = true;
+                    res.WaveCleared = true;
+                    res.Rewards = GrantBattleResult(stage, true, nowUnix);
+                    break;
+                }
+
+                int w2, b2;
+                ResumePointFor(stage, out w2, out b2);
+                if (w2 != wave) { res.WaveCleared = true; break; }
+            }
+
+            res.Replay = ChooseReplay(stage, res, fighting);
+
+            int nextWave, nextBattle;
+            ResumePointFor(stage, out nextWave, out nextBattle);
+            res.NextWave = nextWave;
+            res.NextBattle = nextBattle;
+            return res;
+        }
+
+        /// <summary>
+        /// The battle of a resolved wave worth watching: the one that was lost, else the win that
+        /// left the lowest share of the line's HP. The first of equals, so the choice is stable.
+        /// Chosen from the record ResolveWave already holds, so it adds no fight and no rule.
+        /// </summary>
+        private static WaveReplay ChooseReplay(StageDef stage, WaveResolution res, List<HeroInstance> fighting)
+        {
+            WaveBattleOutcome pick = null;
+            for (int i = 0; i < res.Battles.Count; i++)
+            {
+                WaveBattleOutcome o = res.Battles[i];
+                if (!o.Victory) { pick = o; break; }
+                if (pick == null || o.PlayerHpRatio < pick.PlayerHpRatio) pick = o;
+            }
+            if (pick == null) return null;
+
+            WaveReplay replay = new WaveReplay();
+            replay.Stage = stage;
+            replay.Wave = pick.Wave;
+            replay.Battle = pick.Battle;
+            replay.Seed = pick.Seed;
+            replay.Lost = !pick.Victory;
+            replay.Team.AddRange(fighting);
+            return replay;
+        }
+
+        /// <summary>
+        /// Fights a replay's battle again: the same stage position, the same seed, the copied line.
+        /// Reads the profile only for what a request always reads from it (equipped armor and guild
+        /// tech) and writes nothing to it: no cursor, no purse, no tally. That is the whole of what
+        /// "a replay pays nothing" means, and CheckWaveReplay proves it against the serialized save.
+        /// </summary>
+        public BattleResult ReplayBattle(WaveReplay replay)
+        {
+            StageDef resolved = CampaignWaveGenerator.BuildBattle(replay.Stage, replay.Wave, replay.Battle);
+            BattleRequest request = BuildBattleRequest(resolved, replay.Seed);
+            request.Team = replay.Team;
+            return CombatSimulation.Run(request);
         }
 
         /// <summary>Whether a one-tap sweep is offered: the stage has a real curve and the player
@@ -821,7 +1001,7 @@ namespace Emberfall.Core.Session
 
         public bool CampaignComplete
         {
-            get { return Profile.StagesCleared >= Content.AllStages.Count; }
+            get { return Content.AllStages.Count > 0 && FirstUnclearedStage == null; }
         }
 
         /// <summary>
@@ -962,12 +1142,13 @@ namespace Emberfall.Core.Session
 
             if (firstClear)
             {
+                // The frontier is taken BEFORE the id is added: clearing the frontier stage is
+                // what unlocks the next one, and once the id is in the list the frontier has
+                // already moved on.
+                StageDef frontier = FirstUnclearedStage;
                 Profile.ClearedStageIds.Add(stage.Id);
-                if (stage.GlobalIndex >= Profile.StagesCleared)
-                {
-                    Profile.StagesCleared = stage.GlobalIndex + 1;
-                    rewards.UnlockedNextStage = true;
-                }
+                Profile.StagesCleared = CampaignProgress.CountCleared(Profile, Content);
+                rewards.UnlockedNextStage = frontier != null && frontier.Id == stage.Id;
             }
 
             // The armor drop rides the repeat cap on exactly the branch Relic Dust does, per
@@ -2121,8 +2302,7 @@ namespace Emberfall.Core.Session
             if (elapsed > report.CapSeconds) { elapsed = (long)report.CapSeconds; report.Capped = true; }
             report.Seconds = elapsed;
 
-            StageDef idleStage = Profile.StagesCleared > 0
-                ? Content.GetStageByGlobalIndex(Profile.StagesCleared - 1) : null;
+            StageDef idleStage = FurthestClearedStage;
             report.Gold = (int)Math.Floor(StatMath.IdleGoldPerSecond(Balance, idleStage) * elapsed);
             report.Shards = (int)Math.Floor(StatMath.IdleShardsPerSecond(Balance, idleStage) * elapsed);
             return report;
@@ -2141,8 +2321,7 @@ namespace Emberfall.Core.Session
         {
             get
             {
-                StageDef s = Profile.StagesCleared > 0
-                    ? Content.GetStageByGlobalIndex(Profile.StagesCleared - 1) : null;
+                StageDef s = FurthestClearedStage;
                 return StatMath.IdleGoldPerSecond(Balance, s) * 3600f;
             }
         }
@@ -2151,8 +2330,7 @@ namespace Emberfall.Core.Session
         {
             get
             {
-                StageDef s = Profile.StagesCleared > 0
-                    ? Content.GetStageByGlobalIndex(Profile.StagesCleared - 1) : null;
+                StageDef s = FurthestClearedStage;
                 return StatMath.IdleShardsPerSecond(Balance, s) * 3600f;
             }
         }

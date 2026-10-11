@@ -135,6 +135,30 @@ namespace Emberfall.Core.Model
 
         [NonSerialized] public HeroDef Def;
 
+        /// <summary>
+        /// An independent copy of every field the simulation or the save reads, so a line can be
+        /// held after the player changes the hero it was taken from (GameSession.ResolveWave keeps
+        /// one to replay its hardest battle). Every public instance field is copied, and the
+        /// harness reflects over them to say so: a field added to this class and left out here
+        /// fails CheckWaveReplay rather than quietly replaying a different hero.
+        /// </summary>
+        public HeroInstance Copy()
+        {
+            HeroInstance c = new HeroInstance();
+            c.Uid = Uid;
+            c.DefId = DefId;
+            c.Level = Level;
+            c.Copies = Copies;
+            c.AcquiredUnix = AcquiredUnix;
+            c.Ascension = Ascension;
+            c.EquippedRelicId = EquippedRelicId;
+            for (int i = 0; i < EquippedArmor.Length && i < c.EquippedArmor.Length; i++)
+                c.EquippedArmor[i] = EquippedArmor[i];
+            c.SelectedTalent = SelectedTalent;
+            c.Def = Def;
+            return c;
+        }
+
         public UnitStats Stats
         {
             get { return Def != null ? StatMath.ForHero(Def, Level) : new UnitStats(); }
@@ -367,13 +391,20 @@ namespace Emberfall.Core.Model
         /// </summary>
         public long Slag;
 
-        /// <summary>Number of distinct campaign stages cleared; also the index of the next locked stage.</summary>
+        /// <summary>
+        /// How many stages the loaded content names among ClearedStageIds. DERIVED, and it decides
+        /// nothing: unlocks, the frontier, idle income and the furthest-stage readout all read the
+        /// ids through CampaignProgress. It is kept (and saved as "stagesCleared") only so the
+        /// cloud summary, the save comparison and the debug panel have a count without loading
+        /// content. Before save version 20 it was a position, and a pre-20 save is migrated
+        /// through SaveSerializer.PreIdStageOrder.
+        /// </summary>
         public int StagesCleared;
 
         /// <summary>
         /// Position INSIDE the stage currently being attempted, per DESIGN-CAMPAIGN-STRUCTURE.md.
         ///
-        /// StagesCleared says which stages are done; these three say how far into the next one the
+        /// ClearedStageIds says which stages are done; these three say how far into the next one the
         /// player has got. Mirrors RecitalCurrentFloor exactly: a plain persisted position with no
         /// expiry, so leaving a stage 90 battles in and coming back a week later resumes at battle
         /// 91 rather than restarting. There is deliberately no timestamp and no decay.

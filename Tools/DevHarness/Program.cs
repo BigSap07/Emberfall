@@ -263,6 +263,11 @@ namespace Emberfall.DevHarness
             CheckEvents(content, contentDir);
             CheckRecital(content);
             CheckCampaignStructure(content);
+            CheckWaveResolve(content);
+            CheckWaveReplay(content);
+            CheckClearedStagesById(content, contentDir);
+            CheckStageResumeAfterWaveResolve(content);
+            CheckRegenClampOnLoad(content);
             CheckProving(content);
             CheckSaveRoundTrip(content);
             CheckAccounts(content);
@@ -299,6 +304,7 @@ namespace Emberfall.DevHarness
             CheckCampaignPowerCurve(content, SimulateEconomyUnder(content, 1, false, false));
             ReportPaceTargets(economy);
             ReportFusionWalk(content, economy);
+            ReportResolvesPerFirstClear(content, economy);
             ReportPaceAcrossSeeds(content);
             CheckFusionNeverGates(content);
             CheckEconomyRespondsToIncome(content);
@@ -3494,12 +3500,12 @@ namespace Emberfall.DevHarness
 
             // ---- the save. No version moved, and none needed to: the gate is derived from a tier
             // the format has carried since long before talents existed. The gate landed at 17;
-            // 18 is the level clamp's and 19 the milestone claims' (see
-            // SaveSerializer.CurrentVersion), not the gate's.
-            Check(SaveSerializer.CurrentVersion == 19,
+            // 18 is the level clamp's, 19 the milestone claims' and 20 the cleared-stage ids' (with
+            // the Echo and Brand bank clamp) - see SaveSerializer.CurrentVersion, not the gate's.
+            Check(SaveSerializer.CurrentVersion == 20,
                   "the ascension gate moved no save version - it is derived from Ascension, which is already "
                   + "stored, and a persisted 'unlocked' could only ever disagree with the tier (version "
-                  + SaveSerializer.CurrentVersion + ", which the level clamp and the milestone claims moved from 17)");
+                  + SaveSerializer.CurrentVersion + ", which the level clamp, the milestone claims and the cleared-stage ids moved from 17)");
             hero.Ascension = 0;
             string json = SaveSerializer.Serialize(profile);
             string error;
@@ -4693,13 +4699,13 @@ namespace Emberfall.DevHarness
 
         /// <summary>The content in dir. eventsOverride, when given, stands in for events.json's
         /// text, so a check can load the game under a retuned event without writing the file.</summary>
-        private static ContentDatabase LoadContent(string dir, string eventsOverride = null)
+        private static ContentDatabase LoadContent(string dir, string eventsOverride = null, string campaignOverride = null)
         {
             try
             {
                 string heroes = File.ReadAllText(Path.Combine(dir, "heroes.json"));
                 string enemies = File.ReadAllText(Path.Combine(dir, "enemies.json"));
-                string campaign = File.ReadAllText(Path.Combine(dir, "campaign.json"));
+                string campaign = campaignOverride ?? File.ReadAllText(Path.Combine(dir, "campaign.json"));
                 string balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
                 string relicsPath = Path.Combine(dir, "relics.json");
                 string relics = File.Exists(relicsPath) ? File.ReadAllText(relicsPath) : null;
@@ -11740,6 +11746,597 @@ namespace Emberfall.DevHarness
             CheckCampaignRetrySingleBattle(db);
             CheckCampaignSweep(db);
             CheckCampaignProgressSaveRoundTrip(db);
+        }
+
+        // ==================================================================== wave resolve, ids, regen clamp
+
+        /// <summary>Grants first clears down the campaign in order until the frontier is the
+        /// stage at <paramref name="index"/>. Cleared stages are ids now, so "pushing the
+        /// frontier" has to clear every stage before it.</summary>
+        private static void ClearThrough(GameSession session, ContentDatabase db, int index, long now)
+        {
+            for (int i = 0; i < index && i < db.AllStages.Count; i++)
+                session.GrantBattleResult(db.AllStages[i], true, now);
+        }
+
+        /// <summary>Everything a won mid-stage wave must NOT have moved.</summary>
+        private static string PurseSignature(PlayerProfile p)
+        {
+            return p.Gold + "|" + p.Shards + "|" + p.RelicDust + "|" + p.PlayerLevel + "|" + p.PlayerXp + "|"
+                   + p.TotalBattlesWon + "|" + string.Join(",", p.ClearedStageIds.ToArray()) + "|" + p.StagesCleared;
+        }
+
+        private static void CheckWaveResolve(ContentDatabase db)
+        {
+            Line("");
+            Line("WAVE RESOLVE (one tap per wave, every battle through ResolveLadderBattle)");
+            StageDef ch11 = db.GetStage("ch1_1");
+            StageDef ch15 = db.GetStage("ch1_5");
+            StageDef ch21 = db.GetStage("ch2_1");
+            StageDef ch4 = db.GetStage("ch4_6");
+            if (ch11 == null || ch15 == null || ch21 == null || ch4 == null)
+            {
+                Check(false, "content has ch1_1, ch1_5, ch2_1 and ch4_6 to test the wave resolve with");
+                return;
+            }
+            const long Now = 1700000000L;
+            const int Base = 31337;
+
+            // ---- the seed mixer
+            Check(GameSession.BattleSeed(Base, 1) != GameSession.BattleSeed(Base, 2)
+                  && GameSession.BattleSeed(Base, 7) == GameSession.BattleSeed(Base, 7)
+                  && GameSession.BattleSeed(0, 0) != 0,
+                  "BattleSeed is stable, differs between ordinals and is never zero");
+
+            // ---- shape: the resolve changed no stage's ladder
+            int shapeMiss = 0; string firstShape = "";
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef st = db.AllStages[i];
+                bool ok = st.BattleCount == 12 && st.WaveCount == ExpectedWaveCount(st)
+                          && st.TotalBattles == st.WaveCount * st.BattleCount;
+                if (!ok) { shapeMiss++; if (firstShape.Length == 0) firstShape = st.DisplayCode; }
+            }
+            Check(shapeMiss == 0,
+                  "every stage keeps BattleCount 12 and its ExpectedWaveCount, TotalBattles unchanged"
+                  + (shapeMiss == 0 ? "" : " (first miss " + firstShape + ")"));
+
+            // ---- a won mid-stage wave: pays nothing, moves the cursor, and re-runs identically
+            GameSession a = BuildPinnedLineAt(db, ch11, false, int.MaxValue);
+            string before = SaveSerializer.Serialize(a.Profile);
+            string purseBefore = PurseSignature(a.Profile);
+            WaveResolution r1 = a.ResolveWave(ch11, Base, Now);
+            Check(r1.Refused == WaveRefusal.None && r1.Battles.Count == 12 && r1.LostBattle == 0 && r1.WaveCleared
+                  && !r1.StageCleared && r1.Rewards == null,
+                  "an over-powered line wins wave 1 of ch1_1 in one resolve of 12 battles, no loss, no stage clear ("
+                  + r1.Battles.Count + " battles)");
+            Check(PurseSignature(a.Profile) == purseBefore,
+                  "a won mid-stage wave pays nothing: gold, shards, dust, account XP, battles won, cleared ids all unchanged");
+            int cw, cb;
+            a.ResumePointFor(ch11, out cw, out cb);
+            Check(cw == 2 && cb == 1 && r1.NextWave == 2 && r1.NextBattle == 1 && r1.Wave == 1 && r1.FirstBattle == 1,
+                  "and the cursor moved to (wave 2, battle 1) (now " + cw + "," + cb + ")");
+            Check(r1.Margin >= 0f, "Margin carries the last won battle's HP ratio (" + r1.Margin.ToString("0.00", CultureInfo.InvariantCulture) + ")");
+
+            GameSession twin = new GameSession(db, SaveSerializer.Deserialize(before, db, out _waveErr));
+            bool same = true; string firstDiff = "";
+            for (int i = 0; i < r1.Battles.Count; i++)
+            {
+                WaveBattleOutcome o = r1.Battles[i];
+                int expectSeed = GameSession.BattleSeed(Base, CampaignWaveGenerator.BattleOrdinal(ch11, o.Wave, o.Battle));
+                BattleResult viaTwin = twin.ResolveLadderBattle(ch11, o.Wave, o.Battle, o.Seed);
+                BattleResult viaLive = a.ResolveLadderBattle(ch11, o.Wave, o.Battle, o.Seed);
+                bool row = o.Seed == expectSeed && viaTwin.Victory == o.Victory && viaTwin.Rounds == o.Rounds
+                           && FingerprintOf(viaTwin) == FingerprintOf(viaLive);
+                if (!row && same) { same = false; firstDiff = "battle " + o.Battle; }
+            }
+            Check(same, "every fought battle re-runs identically on a twin loaded from the pre-resolve save (seed, victory, rounds, event fingerprint)"
+                        + (same ? "" : " - first difference at " + firstDiff));
+
+            // ---- the sweep is unchanged: the same fight, at the seed it was handed
+            GameSession sw = BuildPinnedLineAt(db, ch11, false, int.MaxValue);
+            sw.GrantBattleResult(ch11, true, Now);
+            BattleResult direct = sw.ResolveLadderBattle(ch11, ch11.WaveCount, ch11.BattleCount, 777);
+            BattleRewards swept = sw.SweepClearedStage(ch11, 777, Now + 5);
+            Check(swept.Victory == direct.Victory && direct.Victory,
+                  "SweepClearedStage resolves exactly ResolveLadderBattle(stage, last wave, last battle) at the seed it is handed");
+
+            // ---- a guaranteed loss: stops at the lost battle, retries it, never refights the earlier ones
+            GameSession weak = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            ClearThrough(weak, db, ch4.GlobalIndex, Now);
+            weak.Profile.CampaignCurrentStageId = ch4.Id;
+            weak.Profile.CampaignCurrentWave = 1;
+            weak.Profile.CampaignCurrentBattle = 5;
+            string weakPurse = PurseSignature(weak.Profile);
+            WaveResolution lost = weak.ResolveWave(ch4, Base, Now);
+            Check(lost.Refused == WaveRefusal.None && lost.Battles.Count == 1 && lost.LostBattle == 5 && lost.FirstBattle == 5
+                  && !lost.WaveCleared && !lost.StageCleared && lost.Rewards == null,
+                  "a level 1 line on ch4_6 resumed at battle 5 loses at battle 5: one battle fought, LostBattle 5 ("
+                  + lost.Battles.Count + " fought, lost " + lost.LostBattle + ")");
+            Check(lost.LostResult != null && !lost.LostResult.Victory && lost.LostDebrief != null
+                  && !string.IsNullOrEmpty(lost.LostDebrief.Text),
+                  "the loss carries its BattleResult and a non-empty debrief (\"" + (lost.LostDebrief != null ? lost.LostDebrief.Text : "") + "\")");
+            weak.ResumePointFor(ch4, out cw, out cb);
+            Check(cw == 1 && cb == 5 && lost.NextWave == 1 && lost.NextBattle == 5 && PurseSignature(weak.Profile) == weakPurse,
+                  "the cursor is still (1, 5) after the loss and nothing was paid");
+            WaveResolution again = weak.ResolveWave(ch4, Base + 1, Now);
+            Check(again.FirstBattle == 5 && again.Battles.Count == 1 && again.Battles[0].Battle == 5,
+                  "the next resolve starts at battle 5 again - battles 1 to 4 are not refought");
+
+            // ---- guards
+            GameSession fresh = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            string freshSave = SaveSerializer.Serialize(fresh.Profile);
+            WaveResolution locked = fresh.ResolveWave(ch21, Base, Now);
+            Check(locked.Refused == WaveRefusal.StageLocked && locked.Battles.Count == 0
+                  && SaveSerializer.Serialize(fresh.Profile) == freshSave,
+                  "a locked stage is refused (StageLocked) and changes nothing");
+            GameSession empty = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            for (int i = 0; i < empty.Profile.Team.Length; i++) empty.Profile.ClearTeamSlot(i);
+            string emptySave = SaveSerializer.Serialize(empty.Profile);
+            WaveResolution noTeam = empty.ResolveWave(ch11, Base, Now);
+            Check(noTeam.Refused == WaveRefusal.NoTeam && SaveSerializer.Serialize(empty.Profile) == emptySave,
+                  "an empty team is refused (NoTeam) and changes nothing");
+            Check(fresh.ResolveWave(null, Base, Now).Refused == WaveRefusal.NoStage, "no stage is refused (NoStage)");
+
+            // ---- full first clears: exactly one resolve per wave, one grant, then the stage refuses
+            System.Diagnostics.Stopwatch watch = new System.Diagnostics.Stopwatch();
+            long totalTicks = 0; int totalWaves = 0, totalBattles = 0;
+            StageDef[] full = { ch11, ch15, ch21 };
+            int[] wantResolves = { 3, 6, 12 };
+            for (int s = 0; s < full.Length; s++)
+            {
+                StageDef st = full[s];
+                GameSession g = BuildPinnedLineAt(db, st, false, int.MaxValue);
+                ClearThrough(g, db, st.GlobalIndex, Now);
+                long goldBefore = g.Profile.Gold;
+                int resolves = 0; int losses = 0; int grants = 0; bool clearedFirst = false;
+                WaveResolution last = null;
+                watch.Reset(); watch.Start();
+                while (!g.Profile.HasClearedStage(st.Id) && resolves < 40)
+                {
+                    last = g.ResolveWave(st, Base + resolves, Now + resolves);
+                    resolves++;
+                    totalBattles += last.Battles.Count;
+                    if (last.LostBattle != 0) losses++;
+                    if (last.Rewards != null) { grants++; clearedFirst = last.Rewards.FirstClear; }
+                    if (last.Refused != WaveRefusal.None) break;
+                }
+                watch.Stop();
+                totalTicks += watch.ElapsedTicks; totalWaves += resolves;
+                Check(resolves == wantResolves[s] && losses == 0 && last != null && last.StageCleared,
+                      "an over-powered line clears " + st.Id + " in exactly " + wantResolves[s] + " resolves with no loss (" + resolves + " resolves, " + losses + " losses)");
+                Check(grants == 1 && clearedFirst && g.Profile.HasClearedStage(st.Id)
+                      && g.Profile.CampaignCurrentStageId.Length == 0 && g.Profile.Gold > goldBefore,
+                      st.Id + ": the stage-clearing wave grants exactly once (FirstClear), adds the id and clears the cursor");
+                if (s == 0)
+                {
+                    string cleared = SaveSerializer.Serialize(g.Profile);
+                    WaveResolution refused = g.ResolveWave(st, Base, Now);
+                    Check(refused.Refused == WaveRefusal.StageCleared && refused.Battles.Count == 0
+                          && SaveSerializer.Serialize(g.Profile) == cleared,
+                          "a further ResolveWave on the cleared stage is refused (StageCleared) and changes nothing - the sweep is the only replay path");
+                    Check(last != null && last.NextWave == 1 && last.NextBattle == 1,
+                          "after a stage clear the record reads (1, 1)");
+                }
+            }
+            double ms = totalTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency;
+            Line("  timing (print only): " + (ms / Math.Max(1, totalWaves)).ToString("0.0", CultureInfo.InvariantCulture)
+                 + " ms per wave, " + (ms / Math.Max(1, totalBattles)).ToString("0.00", CultureInfo.InvariantCulture)
+                 + " ms per battle over " + totalWaves + " resolves / " + totalBattles + " battles");
+        }
+
+        private static void CheckWaveReplay(ContentDatabase db)
+        {
+            Line("");
+            Line("WAVE REPLAY (WATCH on the wave result screen: same seed, same line, pays nothing, touches no save)");
+            StageDef ch11 = db.GetStage("ch1_1");
+            StageDef ch4 = db.GetStage("ch4_6");
+            if (ch11 == null || ch4 == null || db.Heroes.Count == 0)
+            {
+                Check(false, "content has ch1_1, ch4_6 and a hero to test the replay with");
+                return;
+            }
+            const long Now = 1700000000L;
+            const int Base = 31337;
+
+            // ---- the squad copy carries every field, found by reflection so a new field cannot be missed
+            System.Reflection.FieldInfo[] fields = typeof(HeroInstance).GetFields(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            HeroInstance src = new HeroInstance();
+            string unsupported = "";
+            for (int i = 0; i < fields.Length; i++)
+            {
+                System.Reflection.FieldInfo f = fields[i];
+                if (f.FieldType == typeof(string)) f.SetValue(src, "v" + i);
+                else if (f.FieldType == typeof(int)) f.SetValue(src, 100 + i);
+                else if (f.FieldType == typeof(long)) f.SetValue(src, 1000L + i);
+                else if (f.FieldType == typeof(string[]))
+                {
+                    string[] arr = (string[])f.GetValue(src);
+                    for (int k = 0; k < arr.Length; k++) arr[k] = "a" + i + "_" + k;
+                }
+                else if (f.FieldType == typeof(HeroDef)) f.SetValue(src, db.Heroes[0]);
+                else if (unsupported.Length == 0) unsupported = f.Name + " (" + f.FieldType.Name + ")";
+            }
+            HeroInstance dup = src.Copy();
+            string firstWrong = unsupported.Length > 0 ? "unsupported field type " + unsupported : "";
+            for (int i = 0; i < fields.Length && firstWrong.Length == 0; i++)
+            {
+                System.Reflection.FieldInfo f = fields[i];
+                object a = f.GetValue(src), b = f.GetValue(dup);
+                bool same;
+                if (f.FieldType == typeof(string[]))
+                {
+                    string[] x = (string[])a, y = (string[])b;
+                    same = !ReferenceEquals(x, y) && x.Length == y.Length;
+                    for (int k = 0; same && k < x.Length; k++) same = x[k] == y[k];
+                }
+                else if (f.FieldType == typeof(HeroDef)) same = ReferenceEquals(a, b);
+                else same = Equals(a, b);
+                if (!same) firstWrong = f.Name;
+            }
+            Check(firstWrong.Length == 0,
+                  "HeroInstance.Copy carries every one of its " + fields.Length + " public fields, with its own armor array"
+                  + (firstWrong.Length == 0 ? "" : " - first wrong: " + firstWrong));
+
+            // ---- a won wave: the closest win is chosen, and replaying it is the same fight
+            GameSession a1 = BuildPinnedLineAt(db, ch11, true, int.MaxValue);
+            string preResolve = SaveSerializer.Serialize(a1.Profile);
+            WaveResolution r1 = a1.ResolveWave(ch11, Base, Now);
+            Check(r1.Replay != null && !r1.Replay.Lost && r1.Replay.Team.Count == a1.Profile.TeamHeroes().Count,
+                  "a won wave keeps a replay of its line (" + (r1.Replay != null ? r1.Replay.Team.Count : 0) + " heroes)");
+
+            WaveBattleOutcome lowest = null;
+            for (int i = 0; i < r1.Battles.Count; i++)
+                if (lowest == null || r1.Battles[i].PlayerHpRatio < lowest.PlayerHpRatio) lowest = r1.Battles[i];
+            Check(r1.Replay != null && lowest != null && r1.Replay.Battle == lowest.Battle && r1.Replay.Wave == lowest.Wave
+                  && r1.Replay.Seed == lowest.Seed,
+                  "it is the win that left the least HP: battle " + (lowest != null ? lowest.Battle : 0) + " at "
+                  + (lowest != null ? Pct(lowest.PlayerHpRatio) : "-") + ", at the seed the resolve gave it");
+
+            // The fight as it was resolved: a twin loaded from the pre-resolve save, at the recorded seed.
+            GameSession twin = new GameSession(db, SaveSerializer.Deserialize(preResolve, db, out _waveErr));
+            BattleResult original = twin.ResolveLadderBattle(ch11, r1.Replay.Wave, r1.Replay.Battle, r1.Replay.Seed);
+
+            string saveBefore = SaveSerializer.Serialize(a1.Profile);
+            string purseBefore = PurseSignature(a1.Profile);
+            int cw0, cb0;
+            a1.ResumePointFor(ch11, out cw0, out cb0);
+            BattleResult replayed = a1.ReplayBattle(r1.Replay);
+            BattleResult replayedAgain = a1.ReplayBattle(r1.Replay);
+
+            Check(FingerprintOf(replayed) == FingerprintOf(original)
+                  && replayed.Victory == lowest.Victory && replayed.Rounds == lowest.Rounds
+                  && replayed.PlayerHpRatio == lowest.PlayerHpRatio && replayed.EnemyHpRatio == lowest.EnemyHpRatio,
+                  "the replay is the resolved fight: same event record, victory, rounds and HP ratios as the recorded outcome ("
+                  + replayed.Events.Count + " events)");
+            Check(FingerprintOf(replayedAgain) == FingerprintOf(replayed),
+                  "and a second replay is the first: there is no roll to be had");
+
+            int cw1, cb1;
+            a1.ResumePointFor(ch11, out cw1, out cb1);
+            Check(SaveSerializer.Serialize(a1.Profile) == saveBefore && PurseSignature(a1.Profile) == purseBefore
+                  && cw1 == cw0 && cb1 == cb0,
+                  "replaying twice leaves the serialized save byte for byte as it was: no purse, tally, cleared id or cursor moved");
+
+            // The copied line, not the live one: levelling a hero after the wave must not change what is watched.
+            List<HeroInstance> live = a1.Profile.TeamHeroes();
+            for (int i = 0; i < live.Count; i++) live[i].Level += 4;
+            Check(FingerprintOf(a1.ReplayBattle(r1.Replay)) == FingerprintOf(original),
+                  "the replay fights the line that fought: levelling every hero afterwards changes nothing in it");
+
+            // ---- a stage-clearing wave pays after its fights; the replay must still be those fights and pay nothing more
+            GameSession g = BuildPinnedLineAt(db, ch11, false, int.MaxValue);
+            WaveResolution last = null;
+            for (int w = 0; w < 6 && (last == null || !last.StageCleared); w++)
+                last = g.ResolveWave(ch11, Base + w, Now + w);
+            Check(last != null && last.StageCleared && last.Rewards != null && last.Replay != null,
+                  "the wave that clears the stage keeps a replay as well");
+            if (last != null && last.Replay != null)
+            {
+                string clearedSave = SaveSerializer.Serialize(g.Profile);
+                string clearedPurse = PurseSignature(g.Profile);
+                BattleResult watched = g.ReplayBattle(last.Replay);
+                Check(SaveSerializer.Serialize(g.Profile) == clearedSave && PurseSignature(g.Profile) == clearedPurse,
+                      "replaying a stage-clearing wave pays no second clear: the save is byte for byte as the clear left it");
+                Check(watched.Events.Count > 0 && watched.Victory == !last.Replay.Lost,
+                      "and it plays back as the victory it was (" + watched.Events.Count + " events)");
+            }
+
+            // ---- a lost wave: the lost battle is the one to watch
+            GameSession weak = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            ClearThrough(weak, db, ch4.GlobalIndex, Now);
+            weak.Profile.CampaignCurrentStageId = ch4.Id;
+            weak.Profile.CampaignCurrentWave = 1;
+            weak.Profile.CampaignCurrentBattle = 5;
+            WaveResolution lost = weak.ResolveWave(ch4, Base, Now);
+            Check(lost.Replay != null && lost.Replay.Lost && lost.Replay.Battle == lost.LostBattle && lost.Replay.Wave == lost.Wave,
+                  "a lost wave keeps the lost battle (battle " + lost.LostBattle + ") as its replay");
+            if (lost.Replay != null)
+            {
+                string lostSave = SaveSerializer.Serialize(weak.Profile);
+                BattleResult lostAgain = weak.ReplayBattle(lost.Replay);
+                Check(!lostAgain.Victory && FingerprintOf(lostAgain) == FingerprintOf(lost.LostResult),
+                      "and it replays as the same loss, event for event");
+                Check(SaveSerializer.Serialize(weak.Profile) == lostSave,
+                      "watching a loss changes nothing in the save, and the cursor still points at the lost battle");
+            }
+
+            // ---- a refusal has nothing to watch
+            GameSession fresh = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            Check(fresh.ResolveWave(db.GetStage("ch2_1"), Base, Now).Replay == null,
+                  "a refused resolve (stage locked) keeps no replay");
+        }
+
+        private static string _waveErr;
+
+        /// <summary>A copy of a save with its version, count and cleared ids rewritten, for the
+        /// saves a pre-20 or hand-edited build would have written.</summary>
+        private static string RewriteSave(string json, int version, int stagesCleared, string[] ids)
+        {
+            json = System.Text.RegularExpressions.Regex.Replace(json, "\"version\":\\s*\\d+", "\"version\": " + version);
+            json = System.Text.RegularExpressions.Regex.Replace(json, "\"stagesCleared\":\\s*\\d+", "\"stagesCleared\": " + stagesCleared);
+            StringBuilder arr = new StringBuilder("\"clearedStages\": [");
+            for (int i = 0; i < ids.Length; i++) { if (i > 0) arr.Append(", "); arr.Append('"').Append(ids[i]).Append('"'); }
+            arr.Append(']');
+            return System.Text.RegularExpressions.Regex.Replace(json, "\"clearedStages\":\\s*\\[[^\\]]*\\]", arr.ToString());
+        }
+
+        /// <summary>Text of the stage object whose id is <paramref name="id"/>, brace matched.</summary>
+        private static bool FindStageObject(string text, string id, out int start, out int end)
+        {
+            start = end = -1;
+            int at = text.IndexOf("\"id\": \"" + id + "\"", StringComparison.Ordinal);
+            if (at < 0) return false;
+            start = text.LastIndexOf('{', at);
+            int depth = 0;
+            for (int i = start; i < text.Length; i++)
+            {
+                if (text[i] == '{') depth++;
+                else if (text[i] == '}') { depth--; if (depth == 0) { end = i + 1; return true; } }
+            }
+            return false;
+        }
+
+        private static void CheckClearedStagesById(ContentDatabase db, string contentDir)
+        {
+            Line("");
+            Line("CLEARED STAGES BY ID (version 20: progress is ids, stagesCleared is a derived count)");
+
+            // ---- the frozen table's shape. Deliberately NOT compared to live content: it must not move when content does.
+            int n = SaveSerializer.PreIdStageCount;
+            HashSet<string> seen = new HashSet<string>();
+            bool shape = n == 72;
+            for (int i = 0; i < n; i++)
+            {
+                string id = SaveSerializer.PreIdStageId(i);
+                int chapter = i / 12 + 1, m = i % 12 + 1;
+                if (id == null || !seen.Add(id) || id != "ch" + chapter + "_" + m) shape = false;
+            }
+            Check(shape && SaveSerializer.PreIdStageId(-1) == null && SaveSerializer.PreIdStageId(n) == null,
+                  "PreIdStageOrder holds 72 distinct ids, chapter-major chN_M with M running 1 to 12, and is null outside its range");
+
+            PlayerProfile baseProfile = GameSession.CreateNewProfile(db, 1700000000L);
+            string baseJson = SaveSerializer.Serialize(baseProfile);
+            string error;
+
+            // ---- a version 19 save: stagesCleared 30 and no ids
+            string v19 = RewriteSave(baseJson, 19, 30, new string[0]);
+            PlayerProfile p19 = SaveSerializer.Deserialize(v19, db, out error);
+            bool prefix = p19 != null && p19.ClearedStageIds.Count == 30;
+            for (int i = 0; prefix && i < 30; i++) if (p19.ClearedStageIds[i] != SaveSerializer.PreIdStageId(i)) prefix = false;
+            Check(prefix, "a version 19 save with stagesCleared 30 and no ids loads with exactly the table's first 30 ids cleared");
+            if (p19 != null)
+            {
+                GameSession s19 = new GameSession(db, p19);
+                StageDef s31 = db.GetStage(SaveSerializer.PreIdStageId(30));
+                StageDef s32 = db.GetStage(SaveSerializer.PreIdStageId(31));
+                StageDef s30 = db.GetStage(SaveSerializer.PreIdStageId(29));
+                Check(s31 != null && s32 != null && s30 != null && s19.IsStageUnlocked(s31) && !s19.IsStageUnlocked(s32),
+                      "the 31st stage is unlocked and the 32nd is locked");
+                Check(s30 != null && s19.IdleGoldPerHour == StatMath.IdleGoldPerSecond(db.Balance, s30) * 3600f
+                      && p19.StagesCleared == 30,
+                      "idle income is the 30th stage's rate and the derived count reads 30");
+            }
+
+            // ---- insert reshape: a new stage placed before the frontier does not shift what was cleared
+            string text = File.ReadAllText(Path.Combine(contentDir, "campaign.json"));
+            int so, eo;
+            if (!FindStageObject(text, "ch2_1", out so, out eo))
+            {
+                Check(false, "campaign.json has a ch2_1 stage object to build the reshape from");
+                return;
+            }
+            string copy = text.Substring(so, eo - so).Replace("\"id\": \"ch2_1\"", "\"id\": \"ch2_0\"");
+            string inserted = text.Substring(0, so) + copy + ",\n        " + text.Substring(so);
+            ContentDatabase grown = LoadContent(contentDir, null, inserted);
+            if (grown == null) { Check(false, "content with an inserted ch2_0 loads"); return; }
+            PlayerProfile pg = SaveSerializer.Deserialize(v19, grown, out error);
+            bool prefixG = pg != null && pg.ClearedStageIds.Count == 30;
+            for (int i = 0; prefixG && i < 30; i++) if (pg.ClearedStageIds[i] != SaveSerializer.PreIdStageId(i)) prefixG = false;
+            Check(prefixG && pg != null && !pg.HasClearedStage("ch2_0") && grown.AllStages.Count == db.AllStages.Count + 1,
+                  "insert reshape: with ch2_0 inserted at the front of chapter 2, the same version 19 save still clears the table's first 30 ids and ch2_0 is not cleared");
+            if (pg != null)
+            {
+                GameSession sg = new GameSession(grown, pg);
+                Check(sg.IsStageUnlocked(grown.GetStage("ch2_0")) && !sg.IsStageUnlocked(grown.GetStage(SaveSerializer.PreIdStageId(30))),
+                      "and ch2_0 is the frontier: it is open and the stage after the old 30 stays locked behind it");
+            }
+
+            // ---- shrink reshape: drop chapters 5 and 6
+            int ch5 = text.IndexOf("\"id\": \"ch5\"", StringComparison.Ordinal);
+            int open5 = ch5 < 0 ? -1 : text.LastIndexOf('{', ch5);
+            int comma5 = open5 < 0 ? -1 : text.LastIndexOf(',', open5);
+            int close = text.LastIndexOf(']');
+            if (comma5 < 0 || close < comma5)
+            {
+                Check(false, "campaign.json has a chapter 5 to drop for the shrink reshape");
+                return;
+            }
+            string shrunk = text.Substring(0, comma5) + "\n  " + text.Substring(close);
+            ContentDatabase small = LoadContent(contentDir, null, shrunk);
+            if (small == null) { Check(false, "content with chapters 5 and 6 dropped loads"); return; }
+            PlayerProfile ps = SaveSerializer.Deserialize(RewriteSave(baseJson, 19, 72, new string[0]), small, out error);
+            if (ps == null) { Check(false, "a version 19 save at 72 loads against the shrunk campaign (" + error + ")"); return; }
+            GameSession ss = new GameSession(small, ps);
+            StageDef ch412 = small.GetStage("ch4_12");
+            float oldRuleGold = StatMath.IdleGoldPerSecond(small.Balance, small.GetStageByGlobalIndex(72 - 1)) * 3600f;
+            float wantGold = StatMath.IdleGoldPerSecond(small.Balance, ch412) * 3600f;
+            Line("  shrink reshape: " + small.AllStages.Count + " stages left; the OLD position rule read stage index 71 and found "
+                 + (small.GetStageByGlobalIndex(71) == null ? "no stage" : "a stage") + ", so it paid the floor rate "
+                 + oldRuleGold.ToString("0", CultureInfo.InvariantCulture) + "/h; the id rule pays ch4_12's "
+                 + wantGold.ToString("0", CultureInfo.InvariantCulture) + "/h");
+            Check(ch412 != null && ss.IdleGoldPerHour == wantGold && wantGold > oldRuleGold && ss.FurthestClearedStage == ch412,
+                  "shrink reshape: a version 19 save at 72 keeps ch4_12's idle rate (" + wantGold.ToString("0", CultureInfo.InvariantCulture)
+                  + "/h), not the floor the old position rule gave (" + oldRuleGold.ToString("0", CultureInfo.InvariantCulture) + "/h)");
+            Check(ss.CampaignComplete && ps.StagesCleared == small.AllStages.Count,
+                  "and CampaignComplete is true, the derived count being the " + small.AllStages.Count + " stages content names");
+
+            // ---- a version 20 count is never re-read as a position
+            PlayerProfile p20 = SaveSerializer.Deserialize(RewriteSave(baseJson, 20, 40, new[] { "ch1_1", "ch1_2" }), db, out error);
+            Check(p20 != null && p20.ClearedStageIds.Count == 2 && p20.StagesCleared == 2,
+                  "a version 20 save carrying ids [ch1_1, ch1_2] and stagesCleared 40 loads with exactly 2 ids and a count of 2");
+
+            // ---- an unknown id is kept and not counted
+            PlayerProfile pu = SaveSerializer.Deserialize(RewriteSave(baseJson, 20, 3, new[] { "ch1_1", "retired_stage", "ch1_2" }), db, out error);
+            string reJson = pu != null ? SaveSerializer.Serialize(pu) : "";
+            PlayerProfile pu2 = pu != null ? SaveSerializer.Deserialize(reJson, db, out error) : null;
+            Check(pu != null && pu2 != null && pu2.ClearedStageIds.Contains("retired_stage") && pu2.ClearedStageIds.Count == 3
+                  && pu2.StagesCleared == 2 && pu.StagesCleared == 2,
+                  "an id content does not name is kept through a round trip and never counted (3 ids, count 2)");
+
+            // ---- the writer: ids are saved and the count is derived on the way back
+            GameSession w = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            ClearThrough(w, db, 5, 100);
+            PlayerProfile back = SaveSerializer.Deserialize(SaveSerializer.Serialize(w.Profile), db, out error);
+            Check(back != null && back.ClearedStageIds.Count == 5 && back.StagesCleared == 5 && w.Profile.StagesCleared == 5,
+                  "five first clears save as five ids and a count of 5 on both sides of the round trip");
+        }
+
+        private static void CheckStageResumeAfterWaveResolve(ContentDatabase db)
+        {
+            Line("");
+            Line("STAGE RESUME AFTER A WAVE RESOLVE");
+            StageDef ch4 = db.GetStage("ch4_6");
+            StageDef ch21 = db.GetStage("ch2_1");
+            if (ch4 == null || ch21 == null) { Check(false, "content has ch4_6 and ch2_1 to test resume with"); return; }
+            const long Now = 1700000000L;
+            string error;
+
+            // after a lost resolve
+            GameSession weak = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            ClearThrough(weak, db, ch4.GlobalIndex, Now);
+            weak.Profile.CampaignCurrentStageId = ch4.Id;
+            weak.Profile.CampaignCurrentWave = 1;
+            weak.Profile.CampaignCurrentBattle = 5;
+            WaveResolution lost = weak.ResolveWave(ch4, 99, Now);
+            PlayerProfile back = SaveSerializer.Deserialize(SaveSerializer.Serialize(weak.Profile), db, out error);
+            GameSession reloaded = new GameSession(db, back);
+            int w, b;
+            reloaded.ResumePointFor(ch4, out w, out b);
+            Check(lost.LostBattle == 5 && w == 1 && b == 5,
+                  "after a lost resolve and a save round trip the resume point is exactly (1, 5) (" + w + "," + b + ")");
+            WaveResolution next = reloaded.ResolveWave(ch4, 100, Now);
+            Check(next.FirstBattle == 5 && next.Wave == 1,
+                  "and the next resolve on the reloaded profile starts at battle 5 of wave 1 (" + next.FirstBattle + ")");
+
+            // a mid-wave position reached by RecordBattleWon
+            GameSession mid = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            ClearThrough(mid, db, ch21.GlobalIndex, Now);
+            int ww = 1, bb = 1;
+            while (!(ww == 2 && bb == 6))
+            {
+                mid.RecordBattleWon(ch21, ww, bb);
+                mid.ResumePointFor(ch21, out ww, out bb);
+            }
+            PlayerProfile backMid = SaveSerializer.Deserialize(SaveSerializer.Serialize(mid.Profile), db, out error);
+            GameSession midReloaded = new GameSession(db, backMid);
+            midReloaded.ResumePointFor(ch21, out w, out b);
+            Check(w == 2 && b == 6 && midReloaded.HasResumePoint(ch21),
+                  "a mid-wave position (wave 2, battle 6) survives the round trip exactly (" + w + "," + b + ")");
+            WaveResolution midNext = midReloaded.ResolveWave(ch21, 7, Now);
+            Check(midNext.Refused == WaveRefusal.None && midNext.Wave == 2 && midNext.FirstBattle == 6
+                  && midNext.Battles.Count > 0 && midNext.Battles[0].Battle == 6,
+                  "and the next resolve begins at wave 2, battle 6 - the rest of the wave only (first battle " + midNext.FirstBattle + ")");
+        }
+
+        private static void CheckRegenClampOnLoad(ContentDatabase db)
+        {
+            Line("");
+            Line("REGEN BANK CLAMP ON LOAD (every load, not version-conditioned)");
+            int echoMax = db.Balance.RecitalEchoesMax, brandMax = db.Balance.ProvingBrandsMax;
+            const long Now = 1700000000L;
+            PlayerProfile seed = GameSession.CreateNewProfile(db, Now);
+            seed.RecitalEchoesClockUnix = 12345L;
+            seed.ProvingBrandsClockUnix = 67890L;
+            seed.ProvingAttempts = 999;
+            string json = SaveSerializer.Serialize(seed);
+            int[] versions = { SaveSerializer.CurrentVersion, 19 };
+            for (int v = 0; v < versions.Length; v++)
+            {
+                string tag = "version " + versions[v];
+                string stamped = System.Text.RegularExpressions.Regex.Replace(json, "\"version\":\\s*\\d+", "\"version\": " + versions[v]);
+                string error;
+
+                PlayerProfile high = SaveSerializer.Deserialize(SetBanks(stamped, 99, 99), db, out error);
+                Check(high != null && high.RecitalEchoesBanked == echoMax && high.ProvingBrandsBanked == brandMax,
+                      tag + ": banks of 99 load at their caps (" + echoMax + " and " + brandMax + ")");
+                PlayerProfile neg = SaveSerializer.Deserialize(SetBanks(stamped, -3, -3), db, out error);
+                Check(neg != null && neg.RecitalEchoesBanked == 0 && neg.ProvingBrandsBanked == 0,
+                      tag + ": banks of -3 load at 0");
+                Check(high != null && high.RecitalEchoesClockUnix == 12345L && high.ProvingBrandsClockUnix == 67890L
+                      && high.ProvingAttempts == 999,
+                      tag + ": the clocks are untouched and the lifetime ProvingAttempts of 999 is not capped");
+                if (high != null)
+                {
+                    GameSession hs = new GameSession(db, high);
+                    RecitalEchoesStatus re = hs.PeekRecitalEchoes(Now);
+                    ProvingBrandsStatus pb = hs.PeekProvingBrands(Now);
+                    Check(re.Banked == echoMax && re.Max == echoMax && pb.Banked == brandMax && pb.Max == brandMax,
+                          tag + ": Peek reads both banks as full after the clamp (" + re.Banked + "/" + re.Max + ", " + pb.Banked + "/" + pb.Max + ")");
+                }
+                string absent = stamped.Replace("\"recitalEchoesBanked\"", "\"_wasEchoes\"").Replace("\"provingBrandsBanked\"", "\"_wasBrands\"");
+                PlayerProfile none = SaveSerializer.Deserialize(absent, db, out error);
+                Check(none != null && none.RecitalEchoesBanked == echoMax && none.ProvingBrandsBanked == brandMax,
+                      tag + ": an absent key still defaults to a full bank");
+            }
+        }
+
+        private static string SetBanks(string json, int echoes, int brands)
+        {
+            json = System.Text.RegularExpressions.Regex.Replace(json, "\"recitalEchoesBanked\":\\s*-?\\d+", "\"recitalEchoesBanked\": " + echoes);
+            return System.Text.RegularExpressions.Regex.Replace(json, "\"provingBrandsBanked\":\\s*-?\\d+", "\"provingBrandsBanked\": " + brands);
+        }
+
+        /// <summary>
+        /// Report only. A wave resolve ends at the end of a wave or at a loss, so a first clear
+        /// costs WaveCount resolves plus one per lost battle, for the walk's own fight sequence.
+        /// EconomyStageOutcome.Losses counts lost battles of the stage's own ladder during its
+        /// first clear (farm sweeps on the previous stage are not in it), which is what this
+        /// needs. The walk's sittings end at a 40-battle budget, which a resolve does not have.
+        /// </summary>
+        private static void ReportResolvesPerFirstClear(ContentDatabase db, EconomyRun run)
+        {
+            Line("");
+            Line("RESOLVES PER FIRST CLEAR (report only: WaveCount + lost ladder battles, from the walk's own fights)");
+            int ch1 = 0, ch2 = 0, all = 0, twelve = 0, twelveSum = 0, skipped = 0;
+            for (int i = 0; i < run.Stages.Count; i++)
+            {
+                EconomyStageOutcome o = run.Stages[i];
+                if (!o.Cleared) { skipped++; continue; }
+                int resolves = o.Stage.WaveCount + o.Losses;
+                Line("  " + o.Stage.DisplayCode.PadRight(6) + o.Stage.WaveCount.ToString().PadLeft(3) + " waves + "
+                     + o.Losses.ToString().PadLeft(4) + " losses = " + resolves.ToString().PadLeft(4) + " resolves");
+                all += resolves;
+                if (o.Stage.ChapterNumber == 1) ch1 += resolves;
+                if (o.Stage.ChapterNumber == 2) ch2 += resolves;
+                if (o.Stage.WaveCount == 12) { twelve++; twelveSum += resolves; }
+            }
+            Line("  chapter 1: " + ch1 + " resolves   chapter 2: " + ch2 + " resolves   whole campaign: " + all + " resolves"
+                 + (skipped > 0 ? "   (" + skipped + " stage(s) the walk never cleared are left out)" : ""));
+            Line("  a 12-wave stage averages " + (twelve > 0 ? ((double)twelveSum / twelve).ToString("0.0", CultureInfo.InvariantCulture) : "n/a")
+                 + " resolves over " + twelve + " stages");
+            Line("  note: Losses counts lost battles of the stage's own first-clear ladder only; farm sweeps are not in it.");
         }
 
         /// <summary>

@@ -590,8 +590,8 @@ namespace Emberfall.Core.Progression
         // ---------- idle income ----------
 
         /// <summary>
-        /// Rate resolved from the player's best cleared stage. Pass null when StagesCleared is
-        /// zero (no stage cleared yet) to get the floor rate from BalanceConfig.
+        /// Rate resolved from the player's best cleared stage. Pass null when no stage is
+        /// cleared yet (GameSession.FurthestClearedStage is null) to get the floor rate from BalanceConfig.
         /// </summary>
         public static float IdleGoldPerSecond(BalanceConfig cfg, StageDef stage)
         {

@@ -364,7 +364,76 @@ namespace Emberfall.Core.Save
         /// WHY THIS IS A BUMP. Version 18 code reads `claimedMilestones` and not
         /// `claimedMilestoneIds`, so it would see every claimed milestone as unclaimed and pay the
         /// whole ladder again. The bump refuses that.
-        public const int CurrentVersion = 19;
+        ///
+        /// 20: cleared stages are recorded by id, the Echo and Brand banks are clamped to their
+        /// caps, and in-stage progress keeps the keys it already had.
+        ///
+        /// (a) `clearedStages` (the ids) is now the one record of progress. `stagesCleared`
+        /// changes from a POSITION ("the first N stages of campaign.json are done") to a COUNT
+        /// derived from the ids that loaded content names, kept only so the summary readers
+        /// (SaveSummaryReader, SaveComparison, the cloud card) have a number without loading
+        /// content. Unlocks, the frontier, idle income and the furthest stage all read the ids
+        /// through CampaignProgress. Upgrade DOES need a migration: a pre-20 save's position
+        /// becomes the first N ids of PreIdStageOrder, a frozen copy of the campaign as it stood
+        /// while the position was the record, and NOT of this build's campaign.json - live
+        /// content is exactly what a reshape moves, which is the bug this version removes. A
+        /// position past the end of the table is dropped: no pre-20 build could write one. An id
+        /// this build's content does not name is kept in the list and never counted, so it cannot
+        /// reopen or shift anything if content names it again.
+        ///
+        /// (b) This is the FIRST migration step conditioned on the version, and it has to be.
+        /// Run on every load, it would read a version 20 COUNT as a position again and mark
+        /// stages cleared that were never fought: with a stage inserted before the frontier, a
+        /// count of 30 is not "the first 30 ids". Only a pre-20 document holds a position.
+        ///
+        /// (c) The Echo and Brand banks are clamped to Balance.RecitalEchoesMax and
+        /// ProvingBrandsMax, and that clamp runs on EVERY load, like the version 18 level clamp,
+        /// so the next cap change is migrated by this code without anyone having to remember. The
+        /// clocks are left alone: a bank at its cap with an old clock is snapped to now by
+        /// SettleRecitalEchoes and SettleProvingBrands on the next spend, and the PEEK methods
+        /// already cap what they report. ProvingAttempts is a lifetime counter that seeds
+        /// ProvingGenerator and is NOT capped.
+        ///
+        /// (d) In-stage progress gets no new keys. `campaignCurrentStageId`, `campaignCurrentWave`
+        /// and `campaignCurrentBattle` (version 11) already persist it, and the wave resolve
+        /// (GameSession.ResolveWave) writes through them.
+        ///
+        /// WHY THIS IS A BUMP. A version 19 build reads `stagesCleared` as a position, so it
+        /// would read the new count as one and unlock stages and pay idle income against the
+        /// wrong stage after any campaign reshape. The bump refuses that: Windows builds in
+        /// circulation are version 19 and will refuse a save this build writes, through the
+        /// existing newer-version refusal in TryReadVersion.
+        public const int CurrentVersion = 20;
+
+        /// <summary>
+        /// The campaign's stage ids in campaign.json order as they stood when version 20 moved
+        /// progress from a position to ids. FROZEN: this is how a pre-20 `stagesCleared` is read,
+        /// not a copy of campaign.json, so it must never be edited or regenerated from live
+        /// content. A pre-20 save's position meant a position in the campaign of its day, and
+        /// reading it against anything newer is the bug version 20 exists to remove. The older
+        /// 24-stage campaign's positions 0..23 name the same ids as this table's first 24, so a
+        /// save from either era resolves exactly.
+        /// </summary>
+        private static readonly string[] PreIdStageOrder =
+        {
+            "ch1_1", "ch1_2", "ch1_3", "ch1_4", "ch1_5", "ch1_6", "ch1_7", "ch1_8", "ch1_9", "ch1_10", "ch1_11", "ch1_12",
+            "ch2_1", "ch2_2", "ch2_3", "ch2_4", "ch2_5", "ch2_6", "ch2_7", "ch2_8", "ch2_9", "ch2_10", "ch2_11", "ch2_12",
+            "ch3_1", "ch3_2", "ch3_3", "ch3_4", "ch3_5", "ch3_6", "ch3_7", "ch3_8", "ch3_9", "ch3_10", "ch3_11", "ch3_12",
+            "ch4_1", "ch4_2", "ch4_3", "ch4_4", "ch4_5", "ch4_6", "ch4_7", "ch4_8", "ch4_9", "ch4_10", "ch4_11", "ch4_12",
+            "ch5_1", "ch5_2", "ch5_3", "ch5_4", "ch5_5", "ch5_6", "ch5_7", "ch5_8", "ch5_9", "ch5_10", "ch5_11", "ch5_12",
+            "ch6_1", "ch6_2", "ch6_3", "ch6_4", "ch6_5", "ch6_6", "ch6_7", "ch6_8", "ch6_9", "ch6_10", "ch6_11", "ch6_12",
+        };
+
+        /// <summary>How many positions PreIdStageOrder names; a pre-20 position past this is dropped.</summary>
+        public static int PreIdStageCount { get { return PreIdStageOrder.Length; } }
+
+        /// <summary>The id a pre-version-20 `stagesCleared` position (0-based) stood for, or
+        /// null when it is outside PreIdStageOrder.</summary>
+        public static string PreIdStageId(int position)
+        {
+            if (position < 0 || position >= PreIdStageOrder.Length) return null;
+            return PreIdStageOrder[position];
+        }
 
         /// <summary>
         /// Every event milestone that existed while claims were saved by threshold (version 18
@@ -906,7 +975,6 @@ namespace Emberfall.Core.Save
             profile.Shards = Math.Max(0, root.GetLong("shards", 0));
             profile.RelicDust = Math.Max(0, root.GetLong("relicDust", 0));
             profile.Slag = Math.Max(0, root.GetLong("slag", 0));
-            profile.StagesCleared = Math.Max(0, root.GetInt("stagesCleared", 0));
             profile.LastIdleClaimUnix = root.GetLong("lastIdleClaimUnix", 0);
             profile.LastSaveUnix = root.GetLong("lastSaveUnix", 0);
             profile.DailyResetUnix = Math.Max(0, root.GetLong("dailyResetUnix", 0));
@@ -929,7 +997,12 @@ namespace Emberfall.Core.Save
             profile.CampaignCurrentBattle = Math.Max(1, root.GetInt("campaignCurrentBattle", 1));
             profile.RecitalCurrentFloor = Math.Max(1, root.GetInt("recitalCurrentFloor", 1));
             profile.RecitalHighestFloor = Math.Max(0, root.GetInt("recitalHighestFloor", 0));
-            profile.RecitalEchoesBanked = Math.Max(0, root.GetInt("recitalEchoesBanked", defaultEchoes));
+            // THE VERSION 20 BANK CLAMP (see CurrentVersion): runs on EVERY load, like the version
+            // 18 level clamp, so a bank above the cap (a cap lowered since it was written, a
+            // hand-edited save) comes back at the cap. Only the count is clamped; the clock stays,
+            // since the Settle methods snap it to now the first time the bank is full.
+            int echoCap = content != null && content.Balance != null ? Math.Max(0, content.Balance.RecitalEchoesMax) : int.MaxValue;
+            profile.RecitalEchoesBanked = Math.Min(echoCap, Math.Max(0, root.GetInt("recitalEchoesBanked", defaultEchoes)));
             profile.RecitalEchoesClockUnix = root.GetLong("recitalEchoesClockUnix", 0);
             profile.Coda = Math.Max(0, root.GetLong("coda", 0));
 
@@ -937,7 +1010,8 @@ namespace Emberfall.Core.Save
             // attempt immediately rather than waiting out a full recharge for a resource their save
             // never had an opinion on. Every other new key takes its bare field default.
             int defaultBrands = content != null && content.Balance != null ? content.Balance.ProvingBrandsMax : 0;
-            profile.ProvingBrandsBanked = Math.Max(0, root.GetInt("provingBrandsBanked", defaultBrands));
+            int brandsCap = content != null && content.Balance != null ? Math.Max(0, content.Balance.ProvingBrandsMax) : int.MaxValue;
+            profile.ProvingBrandsBanked = Math.Min(brandsCap, Math.Max(0, root.GetInt("provingBrandsBanked", defaultBrands)));
             profile.Valor = Math.Max(0, root.GetLong("valor", 0));
             profile.ProvingBrandsClockUnix = root.GetLong("provingBrandsClockUnix", 0);
             profile.ProvingStanding = Math.Max(0, root.GetInt("provingStanding", 0));
@@ -951,6 +1025,22 @@ namespace Emberfall.Core.Save
                 string id = cleared[i].AsString(null);
                 if (!string.IsNullOrEmpty(id) && !profile.ClearedStageIds.Contains(id)) profile.ClearedStageIds.Add(id);
             }
+
+            // THE VERSION 20 MIGRATION (see CurrentVersion): before 20, `stagesCleared` was a
+            // position, so its first N entries of the FROZEN PreIdStageOrder are the stages that
+            // save had cleared. Conditioned on the version, unlike the clamps: from 20 on the
+            // field is a count, and reading a count as a position would mark stages cleared that
+            // were never fought. A position past the table is dropped (no pre-20 build wrote one).
+            if (version < 20)
+            {
+                int legacy = Math.Min(Math.Max(0, root.GetInt("stagesCleared", 0)), PreIdStageOrder.Length);
+                for (int i = 0; i < legacy; i++)
+                    if (!profile.ClearedStageIds.Contains(PreIdStageOrder[i])) profile.ClearedStageIds.Add(PreIdStageOrder[i]);
+            }
+            // Derived, never trusted: the count the file carries is only read when there is no
+            // content to count against.
+            profile.StagesCleared = content != null ? CampaignProgress.CountCleared(profile, content)
+                                                    : Math.Max(0, root.GetInt("stagesCleared", 0));
 
             // Armor uids worn by a hero this build cannot resolve. Those pieces are held back with
             // the hero below, so this build cannot salvage or combine what that hero is wearing.

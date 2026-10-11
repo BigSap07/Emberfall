@@ -204,6 +204,10 @@ namespace Emberfall.UI.Screens
         /// and never does the thing itself.
         /// </summary>
         public void SkipToEndForCapture() { SkipToEnd(); }
+
+        /// <summary>True while the event last played is a blow rather than a tick, so a capture
+        /// can freeze on a hit effect and not on a status ring. Read only; set in Handle.</summary>
+        public bool HitJustPlayed { get; private set; }
 #endif
 
         /// <summary>Index of the strip icon whose turn is being played. See AdvanceTurnStrip.</summary>
@@ -801,6 +805,10 @@ namespace Emberfall.UI.Screens
                 GameObject host = new GameObject("BattleWorld");
                 _world = host.AddComponent<BattleStage>();
                 _world.Initialise();
+                // This screen has every event in hand as it plays it and feeds them to the
+                // director in Handle, which silences the taps UnitActor would otherwise fire for
+                // the same blow. Set once here because the director is built once per stage.
+                _world.Director.ExactFeed = true;
             }
             _world.BuildWorld(_stage.Environment);
         }
@@ -839,13 +847,14 @@ namespace Emberfall.UI.Screens
             else if (_provingOpponent != null) request = App.Session.BuildProvingRequest(_stage, _provingOpponent, seed);
             else
             {
-                // The stage as it stands at THIS wave and battle. BuildBattle returns the stage
-                // unchanged when it has no curve, so Recital floors and every synthetic stage take
-                // this line without needing a branch of their own.
-                StageDef fought = CampaignWaveGenerator.BuildBattle(_stage, _campaignWave, _campaignBattle);
-                request = App.Session.BuildBattleRequest(fought, seed);
+                // The stage as it stands at THIS wave and battle, through the one function every
+                // campaign battle in the game takes (the wave resolve and the sweep use it too).
+                // BuildBattle returns the stage unchanged when it has no curve, so Recital floors
+                // and every synthetic stage resolve exactly as before without a branch of their own.
+                request = null;
+                _result = App.Session.ResolveLadderBattle(_stage, _campaignWave, _campaignBattle, seed);
             }
-            _result = CombatSimulation.Run(request);
+            if (request != null) _result = CombatSimulation.Run(request);
             _world.Populate(_result);
             BuildBars();
         }
@@ -1084,6 +1093,16 @@ namespace Emberfall.UI.Screens
                 _pendingAnimationTail = 0f;
                 yield return Wait(tail);
             }
+
+            // Hit feedback, fed the event itself. Before the switch on purpose: the director reads a
+            // shield break off DisplayShield against the amount absorbed and a kill off a unit that
+            // is still standing, and the cases below are what subtract the one and end the other.
+            // It plays what the record says and decides nothing, so a skip that never reaches
+            // this line leaves the fight and its result exactly as they were.
+            _world.Director.Play(e);
+#if UNITY_EDITOR
+            HitJustPlayed = e.Type == BattleEventType.Damage && e.Status == StatusKind.None;
+#endif
 
             switch (e.Type)
             {
@@ -1872,7 +1891,9 @@ namespace Emberfall.UI.Screens
             _skipButton.Interactable = false;
 
             App.RefreshHud();
-            App.RequestSave();
+            // A replay holds a result somebody already has. It reaches no grant below, and it does
+            // not ask for a save either, so watching one cannot touch the save file.
+            if (_guildRun == null || !_guildRun.IsReplay) App.RequestSave();
 
             _resultTitle.text = _result.Victory ? "VICTORY" : "DEFEAT";
             _resultTitle.color = _result.Victory ? UITheme.Gold : UITheme.Danger;
@@ -1906,7 +1927,7 @@ namespace Emberfall.UI.Screens
             // The prologue is checked FIRST and this ordering is load-bearing, not stylistic.
             // ShowCampaignResult is the else of this chain, and it calls GrantBattleResult, which
             // on a win writes the stage id into ClearedStageIds, adds gold, shards and account XP,
-            // and bumps StagesCleared - permanently, into the save, for a tutorial fight against a
+            // and refreshes the derived StagesCleared count - permanently, into the save, for a tutorial fight against a
             // synthetic stage id. A prologue step that reached that branch would not merely show
             // the wrong panel; it would corrupt the campaign progress of an account that has not
             // started the campaign. ShowPrologueResult grants nothing at all.
@@ -1930,8 +1951,8 @@ namespace Emberfall.UI.Screens
             //
             // ORDER MATTERS, and it is why this sits here rather than up with the title and the
             // Debrief line where it reads more naturally. NextStage is derived from
-            // Profile.StagesCleared, and the clear is not recorded until GrantBattleResult, which
-            // ShowCampaignResult calls. Computed any earlier, NextStage still returns the stage
+            // Profile.ClearedStageIds (the first stage whose id is not in it), and the clear is
+            // not recorded until GrantBattleResult, which ShowCampaignResult calls. Computed any earlier, NextStage still returns the stage
             // just fought, the id comparison below matches, and CONTINUE never appears on the one
             // screen it exists for. Measured, not assumed: the first build of this fix put the
             // block above and a live win still showed REMATCH.
@@ -2168,29 +2189,7 @@ namespace Emberfall.UI.Screens
 
             if (_result.Victory)
             {
-                if (rewards.FirstClear) AddRewardRow("FIRST CLEAR BONUS", "INCLUDED", UITheme.Success);
-                // Why the purse below reads zero, said before the player reads it as a bug.
-                else if (rewards.RepeatCapped) AddRewardRow("DAILY REPEAT CAP", "REACHED", UITheme.Warning);
-                else AddRewardRow("PAID REPEATS LEFT TODAY", rewards.RepeatClearsRemaining.ToString(), UITheme.TextMuted);
-                AddRewardRow("GOLD", "+" + rewards.Gold, UITheme.Gold);
-                AddRewardRow("EMBER SHARDS", "+" + rewards.Shards, UITheme.Shard);
-                AddRewardRow("WAYFARER XP", "+" + rewards.AccountXp, UITheme.Shard);
-                if (rewards.PlayerLevelsGained > 0)
-                    AddRewardRow("RANK UP", "+" + rewards.PlayerLevelsGained, UITheme.Success);
-                if (rewards.UnlockedNextStage) AddRewardRow("NEW STAGE UNLOCKED", "AHEAD", UITheme.Ember);
-                // Named by its temper rather than just "ARMOR", because the temper is the only part
-                // of the drop a player can judge before opening the inventory.
-                // The row used to put "HONED BOOTS" in the label and "Roadworn Boots" in the
-                // value, which reads as two names for one object. Only one of them ever was a
-                // name: "Roadworn Boots" is the item, from armor.json's Boots list, and "Honed" is
-                // its TEMPER - the Rough/Honed/Gilded/Radiant rung, a rarity. Every other screen
-                // already gets this right, showing the name with the temper as a chip beside it,
-                // so the Debrief was the only place inventing a second title. Label names the kind
-                // of reward, value carries the item and its rung in the order the Bag shows them.
-                if (rewards.ArmorDrop != null)
-                    AddRewardRow("ARMOR DROP",
-                                 rewards.ArmorDrop.Name + "  -  " + ArmorInfo.TemperLabel(rewards.ArmorDrop.Temper).ToUpperInvariant(),
-                                 UITheme.ArmorTemperColor(rewards.ArmorDrop.Temper));
+                AddClearRewardRows(_rewardList, rewards);
                 App.Audio.Victory();
             }
             else
@@ -2333,7 +2332,7 @@ namespace Emberfall.UI.Screens
         /// Fallback returns empty on purpose. It is the clause that fires when nothing else did,
         /// so there is no cause to name, and labelling it anyway would be inventing a reason.
         /// </summary>
-        private static string CauseTag(DebriefClause clause)
+        internal static string CauseTag(DebriefClause clause)
         {
             // Every clause Debrief can produce is about what happened TO the player's line -
             // AbilityDominant only totals damage where target.IsPlayer, Resisted counts the
@@ -2360,7 +2359,7 @@ namespace Emberfall.UI.Screens
         /// something the player could have done differently, Energy for the aspect wheel because
         /// that is the colour the aspect chips already use, TextMuted for the rest.
         /// </summary>
-        private static Color CauseTint(DebriefClause clause)
+        internal static Color CauseTint(DebriefClause clause)
         {
             switch (clause)
             {
@@ -2373,7 +2372,43 @@ namespace Emberfall.UI.Screens
 
         private void AddRewardRow(string label, string value, Color tint)
         {
-            Widgets.StatRow(label, _rewardList, label, value, tint, 44f);
+            AddRewardRow(_rewardList, label, value, tint);
+        }
+
+        private static void AddRewardRow(Transform list, string label, string value, Color tint)
+        {
+            Widgets.StatRow(label, list, label, value, tint, 44f);
+        }
+
+        /// <summary>
+        /// The stage-clear reward rows, built into any list so this screen and the wave result
+        /// screen print the same rows for the same BattleRewards.
+        /// </summary>
+        internal static void AddClearRewardRows(Transform list, BattleRewards rewards)
+        {
+            if (rewards.FirstClear) AddRewardRow(list, "FIRST CLEAR BONUS", "INCLUDED", UITheme.Success);
+            // Why the purse below reads zero, said before the player reads it as a bug.
+            else if (rewards.RepeatCapped) AddRewardRow(list, "DAILY REPEAT CAP", "REACHED", UITheme.Warning);
+            else AddRewardRow(list, "PAID REPEATS LEFT TODAY", rewards.RepeatClearsRemaining.ToString(), UITheme.TextMuted);
+            AddRewardRow(list, "GOLD", "+" + rewards.Gold, UITheme.Gold);
+            AddRewardRow(list, "EMBER SHARDS", "+" + rewards.Shards, UITheme.Shard);
+            AddRewardRow(list, "WAYFARER XP", "+" + rewards.AccountXp, UITheme.Shard);
+            if (rewards.PlayerLevelsGained > 0)
+                AddRewardRow(list, "RANK UP", "+" + rewards.PlayerLevelsGained, UITheme.Success);
+            if (rewards.UnlockedNextStage) AddRewardRow(list, "NEW STAGE UNLOCKED", "AHEAD", UITheme.Ember);
+            // Named by its temper rather than just "ARMOR", because the temper is the only part
+            // of the drop a player can judge before opening the inventory.
+            // The row used to put "HONED BOOTS" in the label and "Roadworn Boots" in the
+            // value, which reads as two names for one object. Only one of them ever was a
+            // name: "Roadworn Boots" is the item, from armor.json's Boots list, and "Honed" is
+            // its TEMPER - the Rough/Honed/Gilded/Radiant rung, a rarity. Every other screen
+            // already gets this right, showing the name with the temper as a chip beside it,
+            // so the Debrief was the only place inventing a second title. Label names the kind
+            // of reward, value carries the item and its rung in the order the Bag shows them.
+            if (rewards.ArmorDrop != null)
+                AddRewardRow(list, "ARMOR DROP",
+                             rewards.ArmorDrop.Name + "  -  " + ArmorInfo.TemperLabel(rewards.ArmorDrop.Temper).ToUpperInvariant(),
+                             UITheme.ArmorTemperColor(rewards.ArmorDrop.Temper));
         }
 
         private void ComputeStats()
@@ -2700,9 +2735,14 @@ namespace Emberfall.UI.Screens
                 return;
             }
 
-            SetStage(next);
+            // Through the single campaign entry point: a fresh stage with a wave curve is resolved
+            // a wave at a time on the wave result screen, not fought here. OnHide runs first so
+            // this screen is torn down whichever way Launch goes (Router.Show only hides it when it
+            // is leaving for another screen, and a stage without a curve comes straight back here).
             OnHide();
-            OnShow();
+            CampaignFlow.LaunchResult went = CampaignFlow.Launch(App, next);
+            if (went == CampaignFlow.LaunchResult.Refused || went == CampaignFlow.LaunchResult.Swept)
+                Router.Show(ScreenId.Campaign, false);
         }
 
         /// <summary>

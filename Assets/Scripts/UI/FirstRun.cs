@@ -473,10 +473,12 @@ namespace Emberfall.UI
         /// Out of the prologue and into the real game: the first Campaign stage, with the three
         /// starters CreateNewProfile already granted.
         ///
-        /// The hand-off is deliberately the same SetStage-then-Show path CONTINUE and
-        /// CampaignScreen use, so there is no second way to start a real fight to keep in sync -
-        /// and SetStage clears the prologue squad, which is what puts the player back on their own
-        /// line rather than the borrowed one.
+        /// The hand-off is deliberately CampaignFlow.Launch, the one path every campaign start
+        /// uses (CONTINUE and CampaignScreen too), so there is no second way to start a real stage
+        /// to keep in sync. A first stage has a wave curve, so it opens the wave result screen,
+        /// which resolves on the player's own line; a stage without a ladder still goes through
+        /// BattleScreen.SetStage, which clears the prologue squad, so either way the player is
+        /// back on their own line rather than the borrowed one.
         ///
         /// Falls back to leaving them on the Hub if there is no stage to fight, which should be
         /// impossible with shipped content but is one branch rather than a null dereference on a
@@ -490,8 +492,7 @@ namespace Emberfall.UI
             StageDef first = app.Session != null ? app.Session.NextStage : null;
             if (first == null) return;
 
-            app.Router.Battle.SetStage(first);
-            app.Router.Show(ScreenId.Battle, false);
+            CampaignFlow.Launch(app, first);
         }
 
         // ================================================================ fallback

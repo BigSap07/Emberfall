@@ -984,6 +984,30 @@ names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, whi
 
 ## In progress
 
+**`feature/battle-feel`** is based on `engine/wave-resolve` with `feature/hit-vfx` merged, and does
+two things. It holds:
+- **the hit feedback wired.** `VfxDirector` (flash, hit stop, knockback, shake, a particle burst, and a
+  flipbook path that waits for a sheet) is fed every event by `BattleScreen.Handle` through `Play`,
+  with `ExactFeed` set when the stage is built, as the director's own contract says. Before this the
+  screen reached it only through `UnitActor`'s taps, which cannot see a `StatusApplied`; nothing uses
+  the taps now. Presentation only: nothing in `CombatSimulation`, `GameSession` or the save reads it.
+- **WATCH on `WaveResultScreen`.** `GameSession.ResolveWave` keeps a `WaveReplay` on the
+  `WaveResolution`, in memory only: the lost battle, else the win that left the least HP, its stage
+  position, the seed `BattleSeed` gave it and copies of the line that fought it (`HeroInstance.Copy`,
+  taken before the fights and so before a stage clear pays). `GameSession.ReplayBattle` runs it through
+  `CombatSimulation.Run` again, so the replay is the resolved fight and not a second roll. The button
+  hands the result to `BattleScreen` as a `GuildBattleRun` flagged `IsReplay`, the handed-in-result
+  shape the guild dungeon already uses; that mode reaches no grant and, for a replay, asks for no
+  save. BACK redraws the wave result as it stood, without resolving again. The save did not change
+  and no version moved. `CheckWaveReplay` proves the replay matches the recorded outcome, that the
+  copy carries every `HeroInstance` field (by reflection), and that replaying leaves the serialized
+  save byte for byte as it was, including after a stage clear and after a loss.
+
+The build check reads **4 failures**, the four already on `main`: the moved stage fingerprints, the
+geared CEIL band, the campaign power band and the economy model's response to authored income. No
+baseline moved and no content JSON changed. `PlayModeScreenshot` has a `WaveReplay` target that
+presses WATCH and freezes a replay frame while a hit effect is alive.
+
 **`ui/fusion-numbers`** makes the ascend card's three rows readable against the list beside them,
 and cuts the page down to them. It holds:
 - **the cap row in tier levels.** It bound the absolute Level cap, so a hero the list called

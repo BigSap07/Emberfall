@@ -333,7 +333,10 @@ namespace Emberfall.UI.Screens
 
     /// <summary>
     /// A fight BattleScreen plays without computing: the result is handed in, and so is
-    /// everything the result panel says and does. See BattleScreen.SetGuildRun.
+    /// everything the result panel says and does. See BattleScreen.SetGuildRun. Named for the
+    /// guild dungeon, which came first, but nothing in it is guild-specific: the campaign's WATCH
+    /// on the wave result screen hands in a replay the same way. IsReplay means the result is one
+    /// somebody already has, and BattleScreen asks for no save on it.
     /// </summary>
     public sealed class GuildBattleRun
     {

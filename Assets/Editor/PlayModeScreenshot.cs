@@ -5,6 +5,7 @@ using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using Emberfall.Battle;
 using Emberfall.Game;
 using Emberfall.UI;
 using Emberfall.UI.Screens;
@@ -78,7 +79,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV16-fusion-subject-funded";
+        private const string BuildMarker = "FIXV17-fusion-and-wave-result-merged";
 
         static PlayModeScreenshot()
         {
@@ -151,6 +152,23 @@ namespace Emberfall.EditorTools
 
         [MenuItem("Emberfall/Capture/Battle result", false, 73)]
         public static void CaptureBattleResult() { Begin("Screen:Result"); }
+
+        // The wave result screen, one target per outcome it can show. Each seeds the scratch
+        // profile through GameSession, then starts the wave through CampaignFlow.Launch, the same
+        // door a tap uses. They refuse to run off a scratch identity: see SeedWaveResult.
+        [MenuItem("Emberfall/Capture/Wave result (wave cleared)", false, 82)]
+        public static void CaptureWaveResult() { Begin("Screen:WaveResult"); }
+
+        [MenuItem("Emberfall/Capture/Wave result (stage cleared)", false, 83)]
+        public static void CaptureWaveResultCleared() { Begin("Screen:WaveResultCleared"); }
+
+        [MenuItem("Emberfall/Capture/Wave result (lost)", false, 84)]
+        public static void CaptureWaveResultLost() { Begin("Screen:WaveResultLost"); }
+
+        // The same won wave as the first of the three, then WATCH pressed: one frame of the replay
+        // on the battle screen, frozen while a hit effect is alive. See PumpWaveReplay.
+        [MenuItem("Emberfall/Capture/Wave replay (mid-fight)", false, 85)]
+        public static void CaptureWaveReplay() { Begin("Screen:WaveReplay"); }
 
         // Formation and Hero detail are the two portrait-dense screens that had no target here,
         // which is how a portrait delivery could have been called verified without either being
@@ -326,6 +344,8 @@ namespace Emberfall.EditorTools
 
         private static void Stop()
         {
+            Time.timeScale = 1f;
+            SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetBool(ActiveKey, false);
             EditorApplication.isPlaying = false;
         }
@@ -607,6 +627,10 @@ namespace Emberfall.EditorTools
                     case "GuildChat": id = ScreenId.GuildChat; break;
                     case "Battle": id = ScreenId.Battle; break;
                     case "Result": id = ScreenId.Battle; break;
+                    case "WaveResult":
+                    case "WaveResultCleared":
+                    case "WaveResultLost":
+                    case "WaveReplay": id = ScreenId.WaveResult; break;
                     // The ability breakdown is a DIALOG over the hero page rather than a screen,
                     // so it routes to the page and opens the dialog a frame later, exactly as the
                     // Hub's layers do below.
@@ -724,8 +748,58 @@ namespace Emberfall.EditorTools
                     }
                     app.Router.Battle.SetStage(next);
                 }
-                app.Router.Show(id);
+                if (IsWaveResultTarget(name))
+                {
+                    // Not Router.Show: the screen resolves a wave as it opens, so it has to be
+                    // started the way the Campaign screen starts it, with a stage and a seeded
+                    // profile behind it.
+                    // A replay is watched from a won mid-stage wave, so it seeds as one.
+                    StageDef waveStage = SeedWaveResult(app, name == "WaveReplay" ? "WaveResult" : name);
+                    if (waveStage == null)
+                    {
+                        SessionState.SetInt(StageKey, slot + 1);
+                        return;
+                    }
+                    CampaignFlow.LaunchResult went = CampaignFlow.Launch(app, waveStage);
+                    if (went != CampaignFlow.LaunchResult.Resolved)
+                        Debug.LogWarning("PlayModeScreenshot: CampaignFlow.Launch returned " + went
+                                         + " for " + name + ", not Resolved.");
+                }
+                else app.Router.Show(id);
                 Debug.Log("PlayModeScreenshot: showing " + name);
+            }
+
+            // THE WAVE RESULT waits on the screen, not on a frame count: how long a wave takes to
+            // resolve depends on how far the line gets, and the screen paints only after the
+            // resolve. Painted is its own answer, and the same paint delay as the battle result
+            // lets the layout settle before the shot. The outcome is logged and checked against
+            // the target's name, because a capture of the wrong outcome is a wrong capture.
+            if (IsWaveResultTarget(name))
+            {
+                if (frame <= showAt) return;
+                if (name == "WaveReplay") { PumpWaveReplay(app, frame, showAt, slot, BattleWaitCeiling, BattlePaintDelay); return; }
+
+                int armed = SessionState.GetInt(BattleArmKey, 0);
+                if (armed == 0)
+                {
+                    WaveResultScreen waveScreen = app.Router.WaveResult;
+                    if (waveScreen != null && waveScreen.Painted)
+                    {
+                        SessionState.SetInt(BattleArmKey, frame);
+                        ReportWaveOutcome(name, waveScreen.Result);
+                    }
+                    else if (frame > showAt + BattleWaitCeiling)
+                    {
+                        SessionState.SetInt(BattleArmKey, frame);
+                        Debug.LogWarning("PlayModeScreenshot: the wave result never painted within "
+                                         + BattleWaitCeiling + " frames. Shooting anyway.");
+                    }
+                    return;
+                }
+
+                if (frame == armed + BattlePaintDelay - 5) Canvas.ForceUpdateCanvases();
+                if (frame == armed + BattlePaintDelay) Shoot(name, frame, slot);
+                return;
             }
 
             // Battle takes over the schedule from here: it arms when the round starts, or when
@@ -1111,6 +1185,293 @@ namespace Emberfall.EditorTools
                 case "Gallery": return "gallery";
             }
             return "dialog";
+        }
+
+        // ================================================================== wave result
+
+        private static bool IsWaveResultTarget(string name)
+        {
+            return name == "WaveResult" || name == "WaveResultCleared" || name == "WaveResultLost"
+                   || name == "WaveReplay";
+        }
+
+        private const string ReplayStageKey = "PlayModeScreenshot.ReplayStage";
+
+        /// <summary>
+        /// WaveReplay: waits for the won wave to paint, presses WATCH through the screen's own
+        /// handler, waits for the replay to be underway with a hit effect alive, freezes time, and
+        /// shoots. Time is frozen rather than the shot timed because an effect lives a fraction of
+        /// a second and a frame count cannot land on one; a frozen particle system still renders.
+        /// Stage 0 waits on the result, 1 on the effect, 2 is frozen and counting down to the shot.
+        /// </summary>
+        private static void PumpWaveReplay(GameApp app, int frame, int showAt, int slot, int waitCeiling, int paintDelay)
+        {
+            int stage = SessionState.GetInt(ReplayStageKey, 0);
+            int armed = SessionState.GetInt(BattleArmKey, 0);
+
+            if (stage == 0)
+            {
+                WaveResultScreen waveScreen = app.Router.WaveResult;
+                if (waveScreen != null && waveScreen.Painted)
+                {
+                    ReportWaveOutcome("WaveResult", waveScreen.Result);
+                    if (waveScreen.Result == null || waveScreen.Result.Replay == null)
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: the wave kept no replay to watch. Skipping WaveReplay.");
+                        SessionState.SetInt(StageKey, slot + 1);
+                        return;
+                    }
+                    waveScreen.WatchForCapture();
+                    Debug.Log("PlayModeScreenshot: WATCH pressed on wave " + waveScreen.Result.Replay.Wave
+                              + ", battle " + waveScreen.Result.Replay.Battle + ", seed " + waveScreen.Result.Replay.Seed + ".");
+                    SessionState.SetInt(ReplayStageKey, 1);
+                    SessionState.SetInt(BattleArmKey, frame);
+                }
+                else if (frame > showAt + waitCeiling)
+                {
+                    Debug.LogWarning("PlayModeScreenshot: the wave result never painted. Skipping WaveReplay.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                }
+                return;
+            }
+
+            if (stage == 1)
+            {
+                BattleScreen battle = app.Router.Battle;
+                VfxDirector director = UnityEngine.Object.FindFirstObjectByType<VfxDirector>();
+                int live = 0;
+                if (director != null)
+                {
+                    ParticleSystem[] systems = director.GetComponentsInChildren<ParticleSystem>();
+                    for (int i = 0; i < systems.Length; i++) live += systems[i].particleCount;
+                }
+                if (battle != null && battle.RoundUnderway && battle.HitJustPlayed && live >= 8)
+                {
+                    Time.timeScale = 0f;
+                    SessionState.SetInt(ReplayStageKey, 2);
+                    SessionState.SetInt(BattleArmKey, frame);
+                    Debug.Log("PlayModeScreenshot: froze the replay with " + live + " live particles at frame " + frame + ".");
+                }
+                else if (frame > armed + waitCeiling)
+                {
+                    Debug.LogWarning("PlayModeScreenshot: no hit effect appeared in the replay within " + waitCeiling
+                                     + " frames. Shooting whatever is on screen - do not file it as a hit.");
+                    SessionState.SetInt(ReplayStageKey, 2);
+                    SessionState.SetInt(BattleArmKey, frame);
+                }
+                return;
+            }
+
+            if (frame == armed + paintDelay - 5) Canvas.ForceUpdateCanvases();
+            if (frame == armed + paintDelay)
+            {
+                Shoot("WaveReplay", frame, slot);
+                Time.timeScale = 1f;
+                SessionState.SetInt(ReplayStageKey, 0);
+            }
+        }
+
+        /// <summary>
+        /// Puts the SCRATCH profile in a state where one tap on a stage resolves to the outcome
+        /// the target is named for, and returns the stage to launch (null to skip the target).
+        ///
+        ///   WaveResult         a mid-stage wave of the first 12-wave stage, won whole (a 12 cell
+        ///                      strip, "WAVE 4 CLEARED")
+        ///   WaveResultCleared  the last wave of the first stage, which clears it (the reward rows)
+        ///   WaveResultLost     a wave of the 12-wave stage that is lost part-way, ideally after a
+        ///                      few won battles, so the strip shows won cells, the lost cell and
+        ///                      unfought ones
+        ///
+        /// WHAT IT DOES. The campaign is rebuilt from nothing on every call - cleared ids emptied,
+        /// the cursor reset, then every stage before the target granted its first clear through
+        /// GrantBattleResult in campaign order - so the result does not depend on which target ran
+        /// before it. The line is then set to a level and the wave tried for real through
+        /// GameSession.ResolveWave, which changes the profile; each candidate therefore starts from
+        /// that same rebuild. A sweep over level and seed finds the first state that gives the
+        /// outcome, and the state is rebuilt once more for the screen's own resolve to run on, with
+        /// the winning seed handed to it through WaveResultScreen.CaptureSeed, so the photograph is
+        /// the probe's wave. ReportWaveOutcome still checks, rather than assuming it.
+        ///
+        /// It sets hero levels and credits gold directly, which is why it refuses to run unless the
+        /// identity is the scratch one ScratchCaptures installs: the same rule PopulateRecitalLadder
+        /// documents for real balances.
+        /// </summary>
+        private static StageDef SeedWaveResult(GameApp app, string name)
+        {
+            if (Application.persistentDataPath.IndexOf("Emberfall Scratch", StringComparison.OrdinalIgnoreCase) < 0)
+            {
+                Debug.LogError("PlayModeScreenshot: " + name + " rewrites campaign progress and hero levels, so it"
+                               + " only runs on the scratch identity (run it through ScratchCaptures). Skipping.");
+                return null;
+            }
+
+            GameSession session = app.Session;
+            List<StageDef> stages = session.Content.AllStages;
+            int index = -1;
+            for (int i = 0; i < stages.Count; i++)
+            {
+                if (!stages[i].HasWaveCurve) continue;
+                if (name == "WaveResultCleared" || stages[i].WaveCount >= 12) { index = i; break; }
+            }
+            if (index < 0)
+            {
+                Debug.LogWarning("PlayModeScreenshot: no stage suits " + name + ", skipping it.");
+                return null;
+            }
+            StageDef stage = stages[index];
+
+            // A CHAPTER 2 WAVE NEEDS A CHAPTER 2 LINE. The scratch profile starts with the three
+            // starters, and at their cap they lost battle 1 of ch2_1's fourth wave at every level,
+            // so "WAVE 4 CLEARED" could never be photographed with them. The won wave is fielded
+            // with the harness's pinned line instead, one five-star per role, which is the kind of
+            // line a player at that stage commands. The loss and the stage clear keep the starters:
+            // they already produce their outcomes, and a weak line is what a loss looks like.
+            if (name == "WaveResult") FieldLine(session, WaveLine);
+
+            List<HeroInstance> team = session.Profile.TeamHeroes();
+            if (team.Count == 0)
+            {
+                Debug.LogWarning("PlayModeScreenshot: no deployed hero, skipping " + name + ".");
+                return null;
+            }
+            int cap = 1;
+            for (int i = 0; i < team.Count; i++) cap = Math.Max(cap, session.HeroLevelCapOf(team[i]));
+
+            int wave = name == "WaveResultCleared" ? stage.WaveCount : 4;
+            int[] waves = name == "WaveResultLost"
+                ? new int[] { stage.WaveCount, stage.WaveCount / 2, 1 }
+                : new int[] { wave };
+            int step = name == "WaveResultLost" ? 1 : 2;
+
+            // THE SEED IS PART OF THE SEARCH, and the screen is handed the one that won it. Probing
+            // on a clock seed and then resolving on another let the photograph land a different wave
+            // from the one the probe found: the first run shot "lost at battle 1" under
+            // WaveResultLost at 2400x1080 after its probe had found a later loss. With fixed seeds
+            // the probe and the photograph are the same wave.
+            int[] seeds = { 1009, 2003, 3001, 4007 };
+            int bestLevel = cap;
+            int bestWave = waves[0];
+            int bestSeed = seeds[0];
+            int bestScore = -1;
+            for (int w = 0; w < waves.Length && bestScore < 1000; w++)
+            {
+                for (int level = 1; level <= cap && bestScore < 1000; level += step)
+                {
+                    for (int s = 0; s < seeds.Length; s++)
+                    {
+                        RebuildCampaign(app, stages, index, waves[w], level);
+                        WaveResolution probe = session.ResolveWave(stage, seeds[s], TimeUtil.NowUnix());
+                        int score = ScoreWaveProbe(name, probe);
+                        if (score > bestScore) { bestScore = score; bestLevel = level; bestWave = waves[w]; bestSeed = seeds[s]; }
+                        if (score >= 1000) break;
+                    }
+                }
+            }
+
+            RebuildCampaign(app, stages, index, bestWave, bestLevel);
+            WaveResultScreen.CaptureSeed = bestSeed;
+            Debug.Log("PlayModeScreenshot: " + name + " seeded on stage " + stage.DisplayCode + ", wave " + bestWave
+                      + ", line level " + bestLevel + " of " + cap + ", seed " + bestSeed + " (probe score " + bestScore + ").");
+            return stage;
+        }
+
+        /// <summary>The harness's pinned line (PinnedLine in Tools/DevHarness/Program.cs): one
+        /// five-star per role. Restated rather than shared because the harness is not part of the
+        /// project; a renamed hero is logged and skipped rather than failing the capture.</summary>
+        private static readonly string[] WaveLine =
+        {
+            "kael_the_unyielding", "aeron_the_unbroken_stride", "nereia_the_field_medic",
+            "seraphine_the_closed_volume", "isolde_the_slow_fading",
+        };
+
+        /// <summary>Grants the named heroes through GameSession.GrantHeroDirect and deploys them
+        /// as the line, in order. Scratch identity only, like everything SeedWaveResult does.</summary>
+        private static void FieldLine(GameSession session, string[] ids)
+        {
+            PlayerProfile profile = session.Profile;
+            long now = TimeUtil.NowUnix();
+            List<string> uids = new List<string>();
+            for (int i = 0; i < ids.Length; i++)
+            {
+                HeroDef def = session.Content.GetHero(ids[i]);
+                if (def == null) { Debug.LogWarning("PlayModeScreenshot: no hero '" + ids[i] + "' to field, skipping it."); continue; }
+                HeroInstance hero = session.GrantHeroDirect(def, now);
+                if (hero != null) uids.Add(hero.Uid);
+            }
+            if (uids.Count == 0) return;
+            for (int i = 0; i < profile.Team.Length; i++) profile.ClearTeamSlot(i);
+            for (int i = 0; i < uids.Count && i < profile.Team.Length; i++) profile.AssignToTeam(i, uids[i]);
+        }
+
+        /// <summary>
+        /// How close a probe resolve came to the target's outcome. 1000 or more is the outcome
+        /// wanted; below that is a ranking, so a sweep with no perfect level still settles on the
+        /// nearest thing and says so.
+        /// </summary>
+        private static int ScoreWaveProbe(string name, WaveResolution r)
+        {
+            if (r.Refused != WaveRefusal.None) return -1;
+            bool lost = r.LostBattle > 0;
+            if (name == "WaveResultLost")
+            {
+                if (!lost) return 0;
+                if (r.LostBattle >= 4) return 1000;
+                return r.LostBattle >= 3 ? 500 : 100 + r.LostBattle;
+            }
+            if (name == "WaveResultCleared") return r.StageCleared ? 1000 : (r.WaveCleared ? 50 : 0);
+            // A won mid-stage wave: the whole wave, and with some headroom so the strip is not all lows.
+            if (r.StageCleared || lost) return 0;
+            return r.WaveCleared ? (r.Margin >= 0.35f ? 1000 : 500) : 0;
+        }
+
+        /// <summary>
+        /// The campaign as a player who had cleared every stage before the target and stands at
+        /// the start of the given wave of it, with the deployed line at the given level (never past
+        /// a hero's cap). Rebuilt from nothing each time, through GrantBattleResult for the
+        /// earlier stages, so it can be called repeatedly and after any other target.
+        /// </summary>
+        private static void RebuildCampaign(GameApp app, List<StageDef> stages, int targetIndex, int wave, int level)
+        {
+            GameSession session = app.Session;
+            PlayerProfile profile = session.Profile;
+            long now = TimeUtil.NowUnix();
+
+            profile.ClearedStageIds.Clear();
+            profile.StagesCleared = 0;
+            profile.CampaignCurrentStageId = "";
+            profile.CampaignCurrentWave = 1;
+            profile.CampaignCurrentBattle = 1;
+            for (int i = 0; i < targetIndex; i++) session.GrantBattleResult(stages[i], true, now);
+
+            List<HeroInstance> team = profile.TeamHeroes();
+            for (int i = 0; i < team.Count; i++)
+                team[i].Level = Math.Max(1, Math.Min(level, session.HeroLevelCapOf(team[i])));
+
+            StageDef target = stages[targetIndex];
+            profile.CampaignCurrentStageId = target.Id;
+            profile.CampaignCurrentWave = Math.Max(1, Math.Min(wave, target.WaveCount));
+            profile.CampaignCurrentBattle = 1;
+            app.RefreshHud();
+        }
+
+        /// <summary>Logs what the wave actually came to and warns when it is not what the target is
+        /// named for. The probe and the screen share a seed, so a mismatch means the state moved
+        /// between the two.</summary>
+        private static void ReportWaveOutcome(string name, WaveResolution r)
+        {
+            if (r == null) { Debug.LogWarning("PlayModeScreenshot: " + name + " painted with no resolution."); return; }
+            string actual = r.Refused != WaveRefusal.None ? "refused (" + r.Refused + ")"
+                          : r.LostBattle > 0 ? "lost at battle " + r.LostBattle + " of " + r.BattleCount
+                                               + " (" + r.Battles.Count + " fought from battle " + r.FirstBattle + ")"
+                          : r.StageCleared ? "stage cleared"
+                          : "wave " + r.Wave + " cleared";
+            bool match = name == "WaveResultLost" ? r.LostBattle > 0
+                       : name == "WaveResultCleared" ? r.StageCleared
+                       : r.WaveCleared && !r.StageCleared;
+            Debug.Log("PlayModeScreenshot: " + name + " outcome: " + actual + ", margin " + r.Margin + ".");
+            if (!match)
+                Debug.LogWarning("PlayModeScreenshot: " + name + " did NOT produce its named outcome (" + actual
+                                 + "). Do not file this capture under that name.");
         }
 
         private static void PumpRecital(int frame)
