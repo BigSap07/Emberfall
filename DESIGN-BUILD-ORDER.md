@@ -219,8 +219,9 @@ Eight JSON files in `Assets/Resources/Content`. Balance and content changes go t
 - `heroes.json`: 94 heroes, **all 94 authored**. 8 one-star, 12 two-star, 18 three-star,
   26 four-star, 30 five-star.
 - `enemies.json`: 96 enemy templates. **Pinoy's 84 are the campaign**: aspect, kind, stats and kit
-  are ours and the mapping is `Docs/CAMPAIGN-SPEC.md` section 9. Each of the 84 names its future
-  sprite and is `pending`, so it draws the mannequin. **The shipped 12 are retired but kept**: no
+  are ours and the mapping is `Docs/CAMPAIGN-SPEC.md` section 9. Each of the 84 names its sprite.
+  **The ones with a battle sheet in `Assets/Resources/Sprites/Units` carry no `spriteStatus`; the
+  rest are `pending`** and draw the mannequin. **The shipped 12 are retired but kept**: no
   stage fields them, so neither the guild dungeon nor the Deep Recital draws them, and they stay in
   the file because `PrologueScript` spawns seven of them by id.
 - `campaign.json`: **Pinoy's six chapters of twelve, 72 stages** (The Forgotten Road, The Abandoned
@@ -901,6 +902,14 @@ their name under its feet, which makes "not drawn yet" a thing the game can say 
 the only art the roster is still missing, and with every kit authored they are **the last thing
 between the roster and being finished**. `Docs/PINOY-LIST.md` section 5 is the list.
 
+**Enemies draw from the same sheets, and 26 of Pinoy's 84 have them**: 12 of chapter 1's 14 and all
+14 of chapter 2's, in the five clips the battle plays (idle, basic, skill, hit reaction, death) at
+220 by 260 a frame, the size every hero sheet is. Each carries the measured `spriteBodyFraction`
+and `spriteFootFraction` in its `visual` block, because `UnitRig.BuildSprite` sizes the quad from
+the first. `lost_villager` and `wild_bear` have no sheet, chapter 3 has none, and the Hollowed
+Hunter's sheets arrived under the stem `hollowed_archer`. `Docs/PINOY-LIST.md` section 5b has the
+discrepancies.
+
 ### Dev Arena
 
 `Assets/Dev/DevArena.unity`, with its scripts in `Assets/Scripts/Dev`, opened from the editor's
@@ -1170,7 +1179,8 @@ In order.
 ## Blocked
 
 - **Chapters 3 to 6's art**, on Pinoy. The stages exist and field his enemies as pending
-  mannequins; no enemy sheet has been delivered for any chapter. `DESIGN-WORLD`'s
+  mannequins; no enemy sheet has been delivered for chapters 3 to 6, and chapter 1's
+  `lost_villager` and `wild_bear` are still owed. `DESIGN-WORLD`'s
   contested-region proposal for chapter 3 is moot: his chapter 3 is City of Strangers.
 - **An APK**, on having an Android device to run it on.
 - **iOS**, on a Mac and an Apple developer account. Neither exists.

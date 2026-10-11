@@ -727,3 +727,43 @@ and Zella; `controlled` for Aeron, Dahlia, Merek, Mireth, Oris and Zella; `skill
 set for Celen; and all seven clips for each of the 63 heroes on the mannequin. Rheia's `idle2` is
 pinned in the harness as delivered and deliberately unplayed, so it is not mistaken for an unused
 clip; it can be deleted once her `skill` arrives.
+
+### 5b. Enemy sheets for chapters 1 and 2: what arrived, what is owed, what to look at
+
+26 enemies arrived as five clips each (idle, basic, skill, hit reaction, death), 130 sheets, and all
+26 are wired. They are the same 9 by 8 grids as the hero sheets at four times the size, 880 by 1040
+a frame, and were imported by the same per-frame downscale to 220 by 260, so every frame
+keeps the proportions it was drawn at. Enemies have no `basic2` or `controlled`, which the
+battle does not ask them for.
+
+**Still owed:**
+- **Chapter 1: `lost_villager` and `wild_bear`.** Both still draw the mannequin, in stage 1-4 and
+  stages 1-6 to 1-12.
+- **Chapter 3: all 14 enemies.** No chapter 3 delivery was in the folder; the two archives were
+  chapters 1 and 2.
+
+**Names to confirm:**
+- **The Hollowed Hunter arrived as `hollowed_archer`.** It is mapped to `hollowed_hunter`, the id
+  `campaign.json` fields, and its sheets are named for the id. If the archer is a separate enemy,
+  `hollowed_hunter` is still owed.
+- **The Shepherd is spelled correctly** (`the_shepherd`), where the earlier art stem was
+  `The_sheperd`. Nothing to fix.
+- Four archive folders have a doubled space in the name (`Forest  boar`, `Forest  spider`,
+  `The  waykeeper`, `Thornback  boar`) and one file is `Hollowed_mage_skill.mp4.png`. Harmless, and
+  noted only so a re-export does not carry it forward.
+
+**Sizes that differ from their siblings, none of them resized:**
+- **Hollowed Mage `skill` is 3897 by 4096, 433 by 512 a frame.** Its other four clips are 880 by
+  1040. The aspect matches, so it plays at the right size, but it is a lower-resolution source than
+  its siblings.
+- **Four sheets are narrower grids at the usual frame size**: Forest Boar `skill`, Grey Wolf `idle`
+  and Hollowed Guard `idle` are 8 by 8, and Carrion Vulture `idle` is 8 by 7 with 55 frames. The
+  Forest Boar `skill` manifest names a start section (frame 0) and an end section (frame 63) and no
+  default animation, which the importer does not read, so it plays all 64 frames in order.
+- **Carrion Vulture's `death` draws about 1.3 times as tall as its `idle`** with the feet about 36
+  pixels lower in the frame, and its idle spans 85 percent of the frame's height across its frames
+  against 34 to 53 percent for every other enemy, because the wings reach the top and bottom of it.
+  A flying body is expected to look different; this is flagged because the unit changes size and
+  ground line between clips.
+- Three sheets ended in fully transparent frames, which the importer trims: Carrion Vulture `skill`
+  and `death`, and The Shepherd `skill`, each from 72 frames to 70.
