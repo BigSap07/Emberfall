@@ -28,6 +28,33 @@ $lintOk = $true
 if ($LASTEXITCODE -ne 0) { $lintOk = $false }
 Write-Host ""
 
+# ---- the status file.
+#
+# Every exit from here on goes through Finish, which writes STATUS.md (Tools/status.ps1) from what
+# this run found and then exits with the code this run decided. The failures are named as they are
+# found, so the file says which checks failed rather than how many.
+#
+# STATUS CANNOT CHANGE THE VERDICT. The code is fixed before status.ps1 is called and passed to it,
+# not read back; the call is wrapped so anything it throws is reported and swallowed; and exit names
+# the code explicitly, so whatever $LASTEXITCODE the status run leaves behind is never consulted.
+$failures = New-Object System.Collections.Generic.List[string]
+$harnessRan = $false
+$harnessNote = ""
+$harnessLines = @()
+if (-not $lintOk) { $failures.Add("doc-lint: new violations (listed above the compile steps)") }
+
+function Finish([int]$code) {
+    try {
+        & (Join-Path $PSScriptRoot "status.ps1") -BuildCheck @{
+            ExitCode = $code; Failures = $failures.ToArray(); HarnessRan = $harnessRan
+            HarnessNote = $harnessNote; HarnessLines = $harnessLines
+        }
+    } catch {
+        Write-Host ("[status] STATUS.md was not written: " + $_.Exception.Message + " - build-check's result is unaffected") -ForegroundColor Yellow
+    }
+    exit $code
+}
+
 function Compile($label, $sources, $target, $outputPath, $defines) {
     $rsp = Join-Path $env:TEMP ("emberfall_" + $label + ".rsp")
     # UTF-8 WITHOUT A BOM, written through .NET rather than Set-Content -Encoding UTF8, which on
@@ -151,14 +178,33 @@ if (Test-Path $devDir) {
     else { Write-Host "[dev-arena] FAILED" -ForegroundColor Red }
 }
 
-if (-not ($okHarness -and $okEngine)) { exit 1 }
-if (-not $devOk) { exit 1 }
+if (-not $okHarness) { $failures.Add("core+harness: compile FAILED") }
+if (-not $okEngine) { $failures.Add("unity-code: compile FAILED") }
+if (-not $devOk) { $failures.Add("dev-arena: something reaches a release build") }
+if (-not ($okHarness -and $okEngine)) { $harnessNote = "not run, a compile failed"; Finish 1 }
+if (-not $devOk) { $harnessNote = "not run, the dev-arena check failed"; Finish 1 }
 
-if (-not $NoRun) {
+if ($NoRun) { $harnessNote = "not run, -NoRun" }
+else {
     Write-Host ""
-    & (Join-Path $out "DevHarness.exe")
+    # Tee rather than a plain call, so STATUS.md can name each failing check. The output still
+    # streams to the console line by line; the harness writes plain ASCII, so nothing is re-encoded.
+    & (Join-Path $out "DevHarness.exe") | Tee-Object -Variable harnessLines
     $harnessCode = $LASTEXITCODE
-    if ($harnessCode -ne 0) { exit $harnessCode }
+    $harnessRan = $true
+    $harnessLines = @($harnessLines)
+    foreach ($l in $harnessLines) {
+        if ($l -match '^\s*\[FAIL\]\s*(.*)$') {
+            $name = $Matches[1]
+            if ($name.Length -gt 200) { $name = $name.Substring(0, 200) + "..." }
+            $failures.Add("harness: " + $name)
+        }
+    }
+    if ($harnessCode -ne 0) {
+        # A non-zero exit with no [FAIL] line (a crash, an unhandled exception) is still a failure.
+        if (-not ($failures | Where-Object { $_ -like "harness: *" })) { $failures.Add("harness: exited $harnessCode with no [FAIL] line") }
+        Finish $harnessCode
+    }
 }
 
 # The lint verdict is applied last so its failure cannot mask a compile or harness failure, which
@@ -166,5 +212,6 @@ if (-not $NoRun) {
 if (-not $lintOk) {
     Write-Host ""
     Write-Host "doc-lint reported new violations - see above." -ForegroundColor Red
-    exit 1
+    Finish 1
 }
+Finish 0

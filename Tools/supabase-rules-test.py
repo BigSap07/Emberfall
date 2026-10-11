@@ -10,15 +10,23 @@ Every rule is tested WITHOUT the game client, on purpose. A test that went throu
 SocialService would be testing the two halves together, and the half that matters here is the
 one that has to hold when the client is hostile, missing or replaced.
 
-    Run the three migrations in Server/supabase/migrations first, in order.
+    Run the migrations in Server/supabase/migrations first, in order. The S2 and S7 cases
+    assert 0013's refusals, so they go red against a project that has not had 0013 applied.
 
-    $env:SUPABASE_URL      = 'https://<ref>.supabase.co'
-    $env:SUPABASE_ANON_KEY = '<anon public key>'
     python Tools/supabase-rules-test.py
+
+CREDENTIALS. Assets/Resources/Config/supabase.json - the same gitignored file the game reads, so
+a machine that can run the game can run this - with SUPABASE_URL and SUPABASE_ANON_KEY each
+overriding its own field when set. Tools/supabase-guild-rules-test.py reads them the same way.
+THE KEY IS NEVER PRINTED; the run says where each value came from, and prints the project url.
 
 Only the ANON PUBLIC key is used, and only the anon key is needed - every case here is either
 an unauthenticated request or one made as a user the script itself created. The service role
 key is never used and must not be set for this.
+
+THE RUN IS RECORDED in Tools/SupabaseRuns/rules.json (gitignored): when, at which commit, and
+the pass and fail counts. Tools/status.ps1 reads it, and reports the test as not run unless the
+record was made at the commit it is describing.
 
 WHAT IT LEAVES BEHIND: two anonymous users, and their profiles, saves, snapshots and
 friendship - plus, since the cloud audit's cases were added, about six more throwaway users,
@@ -37,8 +45,13 @@ import sys
 import urllib.error
 import urllib.request
 
-URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
-ANON = os.environ.get("SUPABASE_ANON_KEY", "")
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_PATH = os.path.join(ROOT, "Assets", "Resources", "Config", "supabase.json")
+RUN_RECORD = os.path.join(ROOT, "Tools", "SupabaseRuns", "rules.json")
+SAVE_SERIALIZER = os.path.join(ROOT, "Assets", "Scripts", "Core", "Save", "SaveSerializer.cs")
+
+URL = ""
+ANON = ""
 
 PASSES = 0
 FAILURES = 0
@@ -112,6 +125,65 @@ def check(condition, label, detail=""):
 def section(title):
     print("")
     print(title)
+
+
+# ---------------------------------------------------------------- credentials and the run record
+#
+# load_credentials and record_run are the same in Tools/supabase-guild-rules-test.py. Keep them so.
+
+
+def load_credentials():
+    """supabase.json first, then SUPABASE_URL and SUPABASE_ANON_KEY, each overriding its own field.
+    Returns False with the reason printed when either value is still missing. Never prints the key."""
+    global URL, ANON
+    url, anon, sources = "", "", {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8-sig") as handle:
+                config = json.load(handle)
+        except (OSError, ValueError) as err:
+            # Not fatal: the environment may supply both values. The type only, never the text,
+            # which for a parse error can quote the file.
+            print("note: Assets/Resources/Config/supabase.json could not be read (" + type(err).__name__ + ")")
+            config = None
+        if isinstance(config, dict):
+            url = (config.get("url") or "").strip()
+            anon = (config.get("anonKey") or "").strip()
+            if url:
+                sources["url"] = "supabase.json"
+            if anon:
+                sources["key"] = "supabase.json"
+    if os.environ.get("SUPABASE_URL", "").strip():
+        url, sources["url"] = os.environ["SUPABASE_URL"].strip(), "SUPABASE_URL"
+    if os.environ.get("SUPABASE_ANON_KEY", "").strip():
+        anon, sources["key"] = os.environ["SUPABASE_ANON_KEY"].strip(), "SUPABASE_ANON_KEY"
+    if not url or not anon:
+        print("FATAL: no " + ("project url" if not url else "anon key") + ". Put url and anonKey in")
+        print("Assets/Resources/Config/supabase.json (copy supabase.template.json), or set")
+        print("SUPABASE_URL / SUPABASE_ANON_KEY, which override the file field by field.")
+        return False
+    URL, ANON = url.rstrip("/"), anon
+    print("credentials: url from " + sources["url"] + ", key from " + sources["key"] + " (the key is never printed)")
+    return True
+
+
+def record_run(passes, failures):
+    """What Tools/status.ps1 reads to say whether this test ran at the commit it describes."""
+    import datetime
+    import subprocess
+    try:
+        commit = subprocess.run(["git", "-C", ROOT, "rev-parse", "HEAD"], capture_output=True,
+                                text=True, timeout=30).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        commit = ""
+    record = {"utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "commit": commit, "passes": passes, "failures": failures}
+    try:
+        os.makedirs(os.path.dirname(RUN_RECORD), exist_ok=True)
+        with open(RUN_RECORD, "w", encoding="utf-8") as handle:
+            json.dump(record, handle)
+    except OSError as err:
+        print("note: could not write " + RUN_RECORD + " (" + type(err).__name__ + ")")
 
 
 # ---------------------------------------------------------------- transport
@@ -551,32 +623,74 @@ def check_push_races(a):
     check(stored_revision(fresh) == 1, "and the one row is revision 1")
 
 
-def check_push_accepts_anything():
-    """Docs/CLOUD-GAPS.md S2. push_save checks that a document is present and nothing about what
-    it is. The client no longer sends a non-object (P3), but the database would still store one,
-    and the save_version column is whatever the caller claims."""
-    section("WHAT PUSH_SAVE WILL STORE - checked only for presence")
+def current_save_version():
+    """SaveSerializer.CurrentVersion, read from the file, so the version a real build writes today
+    is the one tested - not a number copied here that the next save bump leaves behind."""
+    import re
+    try:
+        with open(SAVE_SERIALIZER, "r", encoding="utf-8-sig") as handle:
+            found = re.search(r"public\s+const\s+int\s+CurrentVersion\s*=\s*(\d+)\s*;", handle.read())
+    except OSError:
+        return None
+    return int(found.group(1)) if found else None
+
+
+def check_push_refuses_non_saves():
+    """Docs/CLOUD-GAPS.md S2, flipped. This case used to assert the defect - that push_save stored
+    an empty object, a bare string and an array, and took save_version 999 at the caller's word -
+    and went red the day it was fixed. 0013 is the fix, so it now asserts the refusals, and it is
+    RED AGAINST A PROJECT 0013 HAS NOT BEEN APPLIED TO. That is what makes applying it checkable.
+
+    Every refusal is asserted by its exact status, never as "not 200": with the old push_save, the
+    first bad push is stored and every later one at the same revision answers 409, which "not 200"
+    would read as a refusal. The revision is followed through any push that does land, so each
+    case is a fresh question to the server rather than a stale-revision echo of the one before."""
+    section("WHAT PUSH_SAVE REFUSES - a document that is not a save, a version no build writes, a 3 MB body")
     user = extra_user("shape")
     revision = 0
-    for label, data in (("an empty object", {}), ("a bare string", "not a save"), ("an array", [1, 2, 3])):
+
+    def push(version, data):
+        nonlocal revision
         status, body = request("POST", "/rest/v1/rpc/push_save", token=user["token"],
-                               body={"p_expected_revision": revision, "p_save_version": 14,
+                               body={"p_expected_revision": revision, "p_save_version": version,
                                      "p_device_id": "shape", "p_data": data})
-        check(status == 200, "STILL PRESENT (S2) - push_save stores " + label + " as a save", (status, body))
         if status == 200 and isinstance(body, dict):
             revision = body.get("revision", revision)
+        return status, body
 
-    status, body = request("POST", "/rest/v1/rpc/push_save", token=user["token"],
-                           body={"p_expected_revision": revision, "p_save_version": 999,
-                                 "p_device_id": "shape", "p_data": {"version": 14}})
-    check(status == 200, "STILL PRESENT (S2) - and labels it save_version 999 because the caller said so, "
-          "after which every real client refuses to sync this account", (status, body))
+    def reason(body):
+        return body.get("message") if isinstance(body, dict) else body
 
+    for label, data in (("an empty object", {}), ("a bare string", "not a save"), ("an array", [1, 2, 3])):
+        status, body = push(14, data)
+        check(status == 400, "S2 - push_save REFUSES " + label + " as a save (400)", (status, reason(body)))
+
+    status, body = push(14, {"version": 14, "playerName": "Shape", "heroes": []})
+    check(status == 200, "and still stores a real save-shaped object at version 14", (status, reason(body)))
+    stored = stored_revision(user)
+
+    status, body = push(999, {"version": 999})
+    check(status == 400, "S2 - push_save REFUSES save_version 999, which would leave every real client "
+          "refusing to sync this account (400)", (status, reason(body)))
+    _, rows = request("GET", "/rest/v1/saves?select=save_version,revision&user_id=eq." + user["id"], token=user["token"])
+    row = rows[0] if isinstance(rows, list) and rows else {}
+    check(row.get("save_version") == 14 and row.get("revision") == stored,
+          "and the stored row keeps its version (14) and revision (" + str(stored) + ")", row)
+
+    current = current_save_version()
+    if current is None:
+        check(False, "SaveSerializer.CurrentVersion could be read from " + SAVE_SERIALIZER)
+    else:
+        status, body = push(current, {"version": current, "playerName": "Shape", "heroes": []})
+        check(status == 200, "a save at this tree's CurrentVersion (" + str(current) + ") is accepted - "
+              "save_limits.max_save_version has kept up with the client", (status, reason(body)))
+
+    held = stored_revision(user)
     big = {"version": 14, "padding": "x" * (3 * 1024 * 1024)}
-    status, body = request("POST", "/rest/v1/rpc/push_save", token=user["token"],
-                           body={"p_expected_revision": revision + 1 if status == 200 else revision,
-                                 "p_save_version": 14, "p_device_id": "shape", "p_data": big})
-    print("        measured: a 3 MB document answered " + str(status) + " (A-list: no size cap is declared)")
+    status, body = push(14, big)
+    check(status == 413, "S2 - push_save REFUSES a 3 MB document (413, the size cap 0013 declares)",
+          (status, reason(body)))
+    check(stored_revision(user) == held, "and the revision did not move (" + str(held) + ")")
 
 
 def check_third_party(a, b):
@@ -617,15 +731,27 @@ def check_third_party(a, b):
 
 
 def check_profile_text(a):
-    """Docs/CLOUD-GAPS.md S7. 0004 refuses control characters in every guild text column because a
-    newline breaks a single-line label. profiles.display_name, shown in the same rosters, does not."""
-    section("DISPLAY NAMES - the one free-text column without the guild tables' rule")
+    """Docs/CLOUD-GAPS.md S7, flipped. 0004 refuses control characters in every guild text column,
+    and requires a guild name to be its own trim, because a newline breaks a single-line label.
+    profiles.display_name, shown in the same rosters, used to take both a newline and a name of
+    nothing but spaces, and this case asserted that. 0013 gives display_name the guild rule, so it
+    now asserts the refusal, and it is RED AGAINST A PROJECT 0013 HAS NOT BEEN APPLIED TO.
+
+    A refusal is a 400 (PostgREST's answer to a check violation) AND an unchanged name: a PATCH the
+    row policy filtered out would also store nothing, but it answers 200 or 204, not 400."""
+    section("DISPLAY NAMES - the guild tables' text rule, on the one free-text column that lacked it")
+    request("PATCH", "/rest/v1/profiles?user_id=eq." + a["id"], token=a["token"], body={"display_name": "Matthias"})
+    for label, name in (("a display name carrying a newline", "two\nlines"),
+                        ("one that is nothing but spaces", "   ")):
+        status, body = request("PATCH", "/rest/v1/profiles?user_id=eq." + a["id"], token=a["token"],
+                               body={"display_name": name})
+        after = profile_of(a)
+        check(status == 400 and after is not None and after["display_name"] == "Matthias",
+              "S7 - " + label + " is REFUSED (400) and the stored name is unchanged",
+              (status, after and after["display_name"]))
     status, _ = request("PATCH", "/rest/v1/profiles?user_id=eq." + a["id"], token=a["token"],
-                        body={"display_name": "two\nlines"})
-    check(status in (200, 204), "STILL PRESENT (S7) - a display name carrying a newline is stored", status)
-    status, _ = request("PATCH", "/rest/v1/profiles?user_id=eq." + a["id"], token=a["token"],
-                        body={"display_name": "   "})
-    check(status in (200, 204), "STILL PRESENT (S7) - and so is one that is nothing but spaces", status)
+                        body={"display_name": "Matthias Two"})
+    check(status in (200, 204), "and an ordinary name with an inner space is still accepted", status)
     request("PATCH", "/rest/v1/profiles?user_id=eq." + a["id"], token=a["token"], body={"display_name": "Matthias"})
 
 
@@ -719,8 +845,7 @@ def check_refresh_reuse():
 
 
 def main():
-    if not URL or not ANON:
-        print("Set SUPABASE_URL and SUPABASE_ANON_KEY first. See the header of this file.")
+    if not load_credentials():
         return 2
     broken = guard_fires()
     if broken:
@@ -749,7 +874,7 @@ def main():
         check_friendship_and_snapshots(a, b, pa, pb)
         check_third_party(a, b)
     check_push_races(a)
-    check_push_accepts_anything()
+    check_push_refuses_non_saves()
     check_profile_text(a)
     check_anon_functions()
     check_email_collision()
@@ -766,6 +891,7 @@ def main():
     for user in EXTRA_USERS:
         print("  " + user["name"] + "  " + user["id"])
     print("Deleting a user cascades to its profile, save, snapshot and friendships.")
+    record_run(PASSES, FAILURES)
     return 1 if FAILURES else 0
 
 

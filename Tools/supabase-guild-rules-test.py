@@ -10,17 +10,19 @@ interesting section is the last fifth.
 
     Run Server/supabase/migrations/0004 through 0010 first, in order.
 
-    $env:SUPABASE_URL      = 'https://<ref>.supabase.co'
-    $env:SUPABASE_ANON_KEY = '<anon public key>'
     python Tools/supabase-guild-rules-test.py
 
     python Tools/supabase-guild-rules-test.py --racers 30   # the cap race, default 30
     python Tools/supabase-guild-rules-test.py --no-race     # everything except the cap race
 
-CREDENTIALS. Environment first, then Assets/Resources/Config/supabase.json - the same gitignored
-file the game reads, so a machine that can run the game can run this. NEITHER VALUE IS EVER
-PRINTED. Only the ANON PUBLIC key is used: every request here is either unauthenticated or made
-as a user this script created. The service role key bypasses RLS, so every check would pass and
+CREDENTIALS. Assets/Resources/Config/supabase.json - the same gitignored file the game reads, so
+a machine that can run the game can run this - with SUPABASE_URL and SUPABASE_ANON_KEY each
+overriding its own field when set. Tools/supabase-rules-test.py reads them the same way, with the
+same function. THE KEY IS NEVER PRINTED; the project url is. The finished run is recorded in
+Tools/SupabaseRuns/guild.json (gitignored) for Tools/status.ps1.
+
+Only the ANON PUBLIC key is used: every request here is either unauthenticated or made as a
+user this script created. The service role key bypasses RLS, so every check would pass and
 none of them would mean anything; it appears nowhere in this project and must not be set.
 
 EVERY USER THIS CREATES IS TAGGED. Each throwaway account's display_name is set to
@@ -53,6 +55,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CONFIG_PATH = os.path.join(ROOT, "Assets", "Resources", "Config", "supabase.json")
+RUN_RECORD = os.path.join(ROOT, "Tools", "SupabaseRuns", "guild.json")
 
 URL = ""
 ANON = ""
@@ -149,23 +152,57 @@ def section(title):
 
 
 def load_credentials():
+    """supabase.json first, then SUPABASE_URL and SUPABASE_ANON_KEY, each overriding its own field.
+    Returns False with the reason printed when either value is still missing. Never prints the key."""
     global URL, ANON
-    URL = os.environ.get("SUPABASE_URL", "").rstrip("/")
-    ANON = os.environ.get("SUPABASE_ANON_KEY", "")
-    if URL and ANON:
-        print("credentials: from SUPABASE_URL / SUPABASE_ANON_KEY")
-        return
-    if not os.path.exists(CONFIG_PATH):
-        print("FATAL: no SUPABASE_URL/SUPABASE_ANON_KEY and no Assets/Resources/Config/supabase.json")
-        sys.exit(2)
-    with open(CONFIG_PATH, "r", encoding="utf-8") as handle:
-        config = json.load(handle)
-    URL = (config.get("url") or "").rstrip("/")
-    ANON = config.get("anonKey") or ""
-    if not URL or not ANON:
-        print("FATAL: Assets/Resources/Config/supabase.json is missing url or anonKey")
-        sys.exit(2)
-    print("credentials: from Assets/Resources/Config/supabase.json (not printed)")
+    url, anon, sources = "", "", {}
+    if os.path.exists(CONFIG_PATH):
+        try:
+            with open(CONFIG_PATH, "r", encoding="utf-8-sig") as handle:
+                config = json.load(handle)
+        except (OSError, ValueError) as err:
+            # Not fatal: the environment may supply both values. The type only, never the text,
+            # which for a parse error can quote the file.
+            print("note: Assets/Resources/Config/supabase.json could not be read (" + type(err).__name__ + ")")
+            config = None
+        if isinstance(config, dict):
+            url = (config.get("url") or "").strip()
+            anon = (config.get("anonKey") or "").strip()
+            if url:
+                sources["url"] = "supabase.json"
+            if anon:
+                sources["key"] = "supabase.json"
+    if os.environ.get("SUPABASE_URL", "").strip():
+        url, sources["url"] = os.environ["SUPABASE_URL"].strip(), "SUPABASE_URL"
+    if os.environ.get("SUPABASE_ANON_KEY", "").strip():
+        anon, sources["key"] = os.environ["SUPABASE_ANON_KEY"].strip(), "SUPABASE_ANON_KEY"
+    if not url or not anon:
+        print("FATAL: no " + ("project url" if not url else "anon key") + ". Put url and anonKey in")
+        print("Assets/Resources/Config/supabase.json (copy supabase.template.json), or set")
+        print("SUPABASE_URL / SUPABASE_ANON_KEY, which override the file field by field.")
+        return False
+    URL, ANON = url.rstrip("/"), anon
+    print("credentials: url from " + sources["url"] + ", key from " + sources["key"] + " (the key is never printed)")
+    return True
+
+
+def record_run(passes, failures):
+    """What Tools/status.ps1 reads to say whether this test ran at the commit it describes."""
+    import datetime
+    import subprocess
+    try:
+        commit = subprocess.run(["git", "-C", ROOT, "rev-parse", "HEAD"], capture_output=True,
+                                text=True, timeout=30).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        commit = ""
+    record = {"utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "commit": commit, "passes": passes, "failures": failures}
+    try:
+        os.makedirs(os.path.dirname(RUN_RECORD), exist_ok=True)
+        with open(RUN_RECORD, "w", encoding="utf-8") as handle:
+            json.dump(record, handle)
+    except OSError as err:
+        print("note: could not write " + RUN_RECORD + " (" + type(err).__name__ + ")")
 
 
 def request(method, path, token=None, body=None, prefer=None, timeout=30):
@@ -1442,7 +1479,8 @@ def main():
                              "hourly anonymous limit is already spent")
     args = parser.parse_args()
 
-    load_credentials()
+    if not load_credentials():
+        return 2
     broken = guard_fires()
     if broken:
         print("The key guard does not work (expected, got): " + str(broken) + ". Not running with a")
@@ -1554,6 +1592,8 @@ def main():
         print("RESULT: " + str(PASSES) + " ok, " + str(FAILURES) + " FAILED")
         print_cleanup_statement()
 
+    # After the finally, so a run that crashed part way is not recorded as one that finished.
+    record_run(PASSES, FAILURES)
     return 1 if FAILURES else 0
 
 

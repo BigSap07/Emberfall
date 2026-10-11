@@ -623,9 +623,10 @@ it be proven in this tree?
 | P8 | open at the time; measured in the third pass, **fixed** after it | not a format question; narrowing `TokenWasRejected` without GoTrue's real error codes could leave a dead token retried forever. The third pass measured them, and the fix was written against those answers (see P8). The P13 retry does not widen it: a failed renewal clears nothing |
 | P11 | open at the time; **fixed in words** in the UI pass | a product decision (should reset keep the cloud copy?) and a dialog, which is UI |
 | P3, the rest | open | atomic writes need `File.Replace` verified on an Android device, and none exists. Preferring the newer of file and mirror by `lastSaveUnix` is cheap but has nothing to do with the format being free, and it changes which copy boots, so it belongs with the atomic-write work |
-| S2 | open, **measured** in the third pass | the format being free makes "the document's version must equal `save_version`" easy to state, but it is a server migration, it cannot be applied or measured from here, and this client never sends a mismatch: `Push` always labels a document `Serialize` just wrote at `CurrentVersion` |
+| S2 | open, **measured** in the third pass; **fix written as `0013`, not applied** | 0013 refuses shape, an empty object, a version above the server's maximum and a body over 1 MiB. "The document's version must equal `save_version`" was left out: it would make the database read the save format |
 | S6 | **closed**: revoked by hand on the live project, recorded as `0010` | a one-line revoke |
-| S7, S8 | open, **measured** in the third pass | server migrations, unrelated to the save format |
+| S7 | open, **measured** in the third pass; **fix written as `0013`, not applied** | a server migration, unrelated to the save format |
+| S8 | open, **measured** in the third pass | a server migration, unrelated to the save format |
 
 **UI pass, afterwards.** P9 and P11's dialog were the two findings both audits had left because
 they were UI. Both are now done: P9 in full, P11 in words (the reset still reaches the cloud,
@@ -764,7 +765,14 @@ on 2026-09-23**, and each entry ends with what the live project answered.
   0008 is in flight elsewhere and a second new file would race it for the number. The case is
   `check_push_accepts_anything`, and it also measures what a 3 MB document gets back. **Measured:
   still present.** An empty object, a bare string and an array were each stored, a label of 999
-  was accepted, and a 3 MB document answered 200. `0010` is now taken by S6, so the fix is `0011`.
+  was accepted, and a 3 MB document answered 200. **Fix written, not applied:**
+  `0013_save_and_name_rules.sql` (`0010`, `0011` and `0012` went to S6, the Guild Path and the
+  guild tech tree) has `push_save` refuse a document that is not an object, an empty object, a
+  `save_version` above `save_limits.max_save_version` (seeded at 19, `SaveSerializer.CurrentVersion`),
+  and a document over `save_limits.max_document_bytes` (1 MiB). It does not require the document's
+  `version` to equal `save_version`, because that would make the database read the save format.
+  The case is now `check_push_refuses_non_saves` and asserts the refusals, so it is red until 0013
+  is applied.
 - **S3. A refresh token presented twice.** A response lost after the server rotated the token
   leaves the device holding a used one. Supabase's reuse detection is expected to refuse it, and
   may revoke the whole session. `Resume` then reads that, rightly, as "the token is dead", and an
@@ -806,7 +814,9 @@ on 2026-09-23**, and each entry ends with what the live project answered.
   breaks a single-line label, and display names appear in the same rosters. The client trims
   and bounds its own renames, but another client does not have to. The fix is a new migration.
   Case: `check_profile_text`. **Measured: still present.** A name with a newline and a name that is
-  only spaces were both stored.
+  only spaces were both stored. **Fix written, not applied:** `0013_save_and_name_rules.sql` gives
+  `display_name` 0004's guild-name rule (its own `btrim`, no `[[:cntrl:]]`). `check_profile_text` now
+  asserts both are refused, so it is red until 0013 is applied.
 - **S8. The dungeon seed is trusted as sent.** From 0007: `guild_dungeon_record` stores any
   `p_seed`. The seed is a pure function of guild and cycle (`GuildDungeon.SeedFor`), so the
   server could refuse a wrong one, and a board can hold a win against an easier fight. 0007 says
@@ -849,7 +859,7 @@ build and asks.
 | `auth/v1/signup` (anonymous) | an auth user, a profile row, a friend code | per-IP auth limit | unlimited throwaway accounts across addresses, each able to do everything below |
 | `PUT auth/v1/user` with an email | a confirmation mail to any address | the project's mail quota | mail sent to strangers, and a spent quota that blocks real players' confirmation links (suspected: the quota is dashboard config) |
 | `auth/v1/token` refresh | a rotated token | per-IP auth limit | nothing, beyond load |
-| `rpc/push_save` | a full rewrite of one row, WAL and bloat | nothing, and no declared size cap | storage churn on the caller's own row; size is measured by S2's case |
+| `rpc/push_save` | a full rewrite of one row, WAL and bloat | nothing; a 1 MiB size cap is written in `0013`, not applied | storage churn on the caller's own row; S2's case asserts the cap refuses 3 MB |
 | `profiles` select | a page of up to the row limit | nothing | every player's id, display name and friend code: accepted in 0001, but anonymous sign-up makes it public in practice |
 | `profiles` display_name update | a row write | nothing | renames in a loop, and control characters (S7) |
 | `friendships` insert and delete | a row | the pair's unique index, only while the row exists | a friend request to every player in the profile table, and after a decline, again |
