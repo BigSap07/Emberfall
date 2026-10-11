@@ -1078,12 +1078,31 @@ step back one screen. It holds:
 
 No save version moved and no content JSON changed. The drip moves no pinned baseline, and
 `CheckEconomyRespondsToIncome` (0.6, gold alone 0.22) and the power band (the same ten stages at the
-same ratios) read as they did before it. **It adds one harness failure, unresolved:**
-`CheckFusionNeverGates` has 1 of 20 non-fusing walks STUCK at `3-4`. The walk pays the drip through
-`RecordLadderWin`, and the failure follows the drip, not its size: at 0 percent the check reads
-exactly as on the base (all 20 finish, the worst spending 35 extra sittings at `3-6`), and at 35,
-40 and 45 percent the same walk sticks at `3-4`. The build check reads **3 failures**: the base's
-CEIL band and power band, and this one, plus `DESIGN-SHOP.md`'s known doc-lint hit.
+same ratios) read as they did before it.
+
+**The drip stuck one non-fusing walk at `3-4`, and that was the walk, not a wall.** The drip pays
+first-clear gold sooner, so at `1-7` one walk buys a level a sitting early. Its fights end sooner,
+the walk's clock moves, and `RollArmorDrop` seeds from that clock, so the drops, then the battles
+and then the summon stream all land differently. That walk then pulls Zella at `3-4` instead of
+`4-1`, and the line policy (`EconomyDeployLine`, which ranks by `CeilingPower` and never reads a
+fight) swaps her in for Isolde, a Stalker for a Stalker. With the roster the walk held when it
+stuck, the Isolde line wins 98% of `3-4`'s 144 battles and 97% of battle 11.3; the Zella line
+wins 0% of 11.3, and the walk lost there for fourteen sittings until it was called STUCK. Without
+the drip the same swap is made at `4-1`, where that line wins out the campaign. Gold was never the
+limit: the walk was holding over a million it could not spend.
+
+So `SimulateEconomy` now takes the stage's swaps back once before calling a stall STUCK
+(`UndoStageSwaps`): the line returns to the one the stage was first attempted with, and the heroes
+that came in since are benched for the rest of the walk (`EconomyRun.Benched`). A bench that ended
+at the next stage only let the ceiling rule field Zella again at `3-5`, which cost 26 more
+sittings at `3-6` for the same reason. Only the branch that used to end a walk changes, so every
+walk that already finished walks exactly as before: 39 of the 40 readings at 0 and 40 percent are
+identical, and the one that stuck now finishes and pays for the swap where the table can see it
+(15 extra sittings at `3-4`, 5 at `3-6`). `CheckFusionNeverGates` is green with the drip at 40.
+
+A loss in wave 1 no longer says `Progress up to wave 0 is kept.`: the loss band leaves that
+sentence out when no wave is kept. The build check reads **2 harness failures**, the base's CEIL
+band and power band, plus `DESIGN-SHOP.md`'s known doc-lint hit.
 
 **`ui/fusion-numbers`** makes the ascend card's three rows readable against the list beside them,
 and cuts the page down to them. It holds:

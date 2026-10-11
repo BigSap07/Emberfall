@@ -463,9 +463,10 @@ namespace Emberfall.UI.Screens
             PaintRow(r, lost);
 
             _lossLine.gameObject.SetActive(lost);
+            // A loss in wave 1 keeps no wave, so it says nothing about what is kept.
             if (lost)
-                _lossLine.text = "Fell in battle " + r.LostBattle + " of " + r.BattleCount
-                                 + ". Progress up to wave " + (r.Wave - 1) + " is kept.";
+                _lossLine.text = "Fell in battle " + r.LostBattle + " of " + r.BattleCount + "."
+                                 + (r.Wave > 1 ? " Progress up to wave " + (r.Wave - 1) + " is kept." : "");
 
             HideBandButtons();
             bool watch = r.Replay != null;

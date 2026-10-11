@@ -16984,6 +16984,9 @@ namespace Emberfall.DevHarness
             /// two, and target A is graded on that split rather than on where the Level stands.</summary>
             public Dictionary<string, int> GoldLevels = new Dictionary<string, int>();
             public Dictionary<string, int> CopyLevels = new Dictionary<string, int>();
+            /// <summary>Heroes a stall took back out of the line, by uid; the line policy passes
+            /// them over for the rest of the walk. See UndoStageSwaps.</summary>
+            public HashSet<string> Benched = new HashSet<string>();
 
             private int _seed = 1;
             public int NextSeed() { return _seed++; }
@@ -17038,6 +17041,8 @@ namespace Emberfall.DevHarness
                 outcome.EntryLedger = run.Ledger.Snapshot();
                 AttributeEntryLevels(run, outcome);
                 ProbeWallAtCap(db, session, outcome, stageIdx);
+                string[] entryTeam = (string[])profile.Team.Clone();
+                bool swapsUndone = false;
 
                 int rounds = 0;
                 int sessions = 0;
@@ -17168,7 +17173,22 @@ namespace Emberfall.DevHarness
                     if (power > bestPower) { bestPower = power; stalled = 0; }
                     else if (rosterMoved) stalled = 0;
                     else stalled++;
-                    if (!cleared && stalled >= EconomyStallSessions) break;
+                    if (!cleared && stalled >= EconomyStallSessions)
+                    {
+                        // Before STUCK, the walk takes back once the swaps it made at this stage.
+                        // The swap rule reads a ceiling, never a fight, so a like-for-like swap
+                        // can field a line that wins no battle the line it replaced was winning;
+                        // STUCK says no line this player owns can pass, and that line is one it
+                        // owns. Only this branch changes, so every walk that finished before
+                        // walks exactly as it did. The sittings it took are counted.
+                        if (!swapsUndone && UndoStageSwaps(session, run, outcome, entryTeam))
+                        {
+                            swapsUndone = true;
+                            stalled = 0;
+                            continue;
+                        }
+                        break;
+                    }
                 }
 
                 outcome.Cleared = cleared;
@@ -20885,6 +20905,7 @@ namespace Emberfall.DevHarness
         {
             PlayerProfile p = session.Profile;
             List<HeroInstance> ranked = new List<HeroInstance>(p.Heroes);
+            ranked.RemoveAll(h => run.Benched.Contains(h.Uid));
             ranked.Sort(delegate(HeroInstance a, HeroInstance b)
             {
                 int c = CeilingPower(session, b).CompareTo(CeilingPower(session, a));
@@ -20969,6 +20990,42 @@ namespace Emberfall.DevHarness
                     + StatMath.HeroLevelCap(session.Balance, outt.Def.Stars, outt.Ascension) + ")");
             }
             return filled || entering.Count > 0;
+        }
+
+        /// <summary>
+        /// A stalled stage's one retreat: the line goes back to the one the stage was first
+        /// attempted with, and each hero that came in since is benched for the rest of the walk.
+        /// What a player does after a new hero loses them the same battle for a fortnight; benched
+        /// only to the next stage, the ceiling rule fielded the same hero straight back and paid
+        /// the same fortnight again. The bench can only take strength from the walk, so it cannot
+        /// open a wall the walk could not otherwise pass. False, and nothing changed, when the line
+        /// is the one the stage began with; the stall is then STUCK as before.
+        /// </summary>
+        private static bool UndoStageSwaps(GameSession session, EconomyRun run,
+                                           EconomyStageOutcome outcome, string[] entryTeam)
+        {
+            PlayerProfile p = session.Profile;
+            List<string> benched = new List<string>();
+            for (int s = 0; s < p.Team.Length; s++)
+                if (!string.IsNullOrEmpty(p.Team[s]) && Array.IndexOf(entryTeam, p.Team[s]) < 0) benched.Add(p.Team[s]);
+            if (benched.Count == 0) return false;
+
+            List<string> names = new List<string>();
+            for (int i = 0; i < benched.Count; i++)
+            {
+                HeroInstance h = p.FindHeroByUid(benched[i]);
+                if (h != null) names.Add(h.DisplayName);
+                run.Benched.Add(benched[i]);
+            }
+            for (int s = 0; s < p.Team.Length; s++) p.ClearTeamSlot(s);
+            // A hero the stage began with that is gone since (spent as fodder) leaves its slot
+            // empty, and the next sitting's deploy fills it.
+            for (int s = 0; s < entryTeam.Length && s < p.Team.Length; s++)
+                if (!string.IsNullOrEmpty(entryTeam[s]) && p.FindHeroByUid(entryTeam[s]) != null) p.AssignToTeam(s, entryTeam[s]);
+            run.SwapLog.Add(outcome.Stage.DisplayCode + " sitting " + run.TotalSessions + ": stalled, so "
+                + string.Join(", ", names.ToArray()) + " benched and the line the stage began with restored ("
+                + DescribeLine(session) + ")");
+            return true;
         }
 
         private static string DescribeLine(GameSession session)

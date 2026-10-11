@@ -41,7 +41,8 @@ Look and feel: reuse the game's existing fonts, colours, button styles and panel
 ## C. Wave lost: the same band as A, in a red tone
 
 - The title `WAVE 5 LOST` in muted red. The current pip is red.
-- One line: `Fell in battle 7 of 12. Progress up to wave 4 is kept.` with the real numbers.
+- One line: `Fell in battle 7 of 12. Progress up to wave 4 is kept.` with the real numbers. A loss
+  in wave 1 keeps no wave, so its line is only `Fell in battle 7 of 12.`
 - Buttons: RETRY (primary), ADJUST LINE, WATCH. No auto-advance on a loss.
 
 ## D. Removed everywhere
