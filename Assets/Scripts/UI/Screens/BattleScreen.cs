@@ -1906,7 +1906,7 @@ namespace Emberfall.UI.Screens
             // The prologue is checked FIRST and this ordering is load-bearing, not stylistic.
             // ShowCampaignResult is the else of this chain, and it calls GrantBattleResult, which
             // on a win writes the stage id into ClearedStageIds, adds gold, shards and account XP,
-            // and bumps StagesCleared - permanently, into the save, for a tutorial fight against a
+            // and refreshes the derived StagesCleared count - permanently, into the save, for a tutorial fight against a
             // synthetic stage id. A prologue step that reached that branch would not merely show
             // the wrong panel; it would corrupt the campaign progress of an account that has not
             // started the campaign. ShowPrologueResult grants nothing at all.
@@ -1930,8 +1930,8 @@ namespace Emberfall.UI.Screens
             //
             // ORDER MATTERS, and it is why this sits here rather than up with the title and the
             // Debrief line where it reads more naturally. NextStage is derived from
-            // Profile.StagesCleared, and the clear is not recorded until GrantBattleResult, which
-            // ShowCampaignResult calls. Computed any earlier, NextStage still returns the stage
+            // Profile.ClearedStageIds (the first stage whose id is not in it), and the clear is
+            // not recorded until GrantBattleResult, which ShowCampaignResult calls. Computed any earlier, NextStage still returns the stage
             // just fought, the id comparison below matches, and CONTINUE never appears on the one
             // screen it exists for. Measured, not assumed: the first build of this fix put the
             // block above and a live win still showed REMATCH.

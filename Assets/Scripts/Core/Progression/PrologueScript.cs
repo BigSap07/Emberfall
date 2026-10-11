@@ -9,7 +9,7 @@ namespace Emberfall.Core.Progression
     ///
     /// WHY THIS IS CODE AND NOT campaign.json, which is the same reason ProvingGenerator is:
     /// everything in campaign.json is reachable by playing, and reachable means counted.
-    /// GetStageByGlobalIndex walks it, NextStage derives from StagesCleared over it, the harness's
+    /// GetStageByGlobalIndex walks it, NextStage derives from ClearedStageIds over it, the harness's
     /// pinned win-rate curve iterates it, and CampaignScreen lists it. A prologue stage that
     /// appeared there would show up in all four - a thirteenth chapter-1 row nobody can replay, a
     /// stage index that shifts every id after it, and a win-rate column for a fight the player is

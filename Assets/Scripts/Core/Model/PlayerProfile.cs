@@ -367,13 +367,20 @@ namespace Emberfall.Core.Model
         /// </summary>
         public long Slag;
 
-        /// <summary>Number of distinct campaign stages cleared; also the index of the next locked stage.</summary>
+        /// <summary>
+        /// How many stages the loaded content names among ClearedStageIds. DERIVED, and it decides
+        /// nothing: unlocks, the frontier, idle income and the furthest-stage readout all read the
+        /// ids through CampaignProgress. It is kept (and saved as "stagesCleared") only so the
+        /// cloud summary, the save comparison and the debug panel have a count without loading
+        /// content. Before save version 20 it was a position, and a pre-20 save is migrated
+        /// through SaveSerializer.PreIdStageOrder.
+        /// </summary>
         public int StagesCleared;
 
         /// <summary>
         /// Position INSIDE the stage currently being attempted, per DESIGN-CAMPAIGN-STRUCTURE.md.
         ///
-        /// StagesCleared says which stages are done; these three say how far into the next one the
+        /// ClearedStageIds says which stages are done; these three say how far into the next one the
         /// player has got. Mirrors RecitalCurrentFloor exactly: a plain persisted position with no
         /// expiry, so leaving a stage 90 battles in and coming back a week later resumes at battle
         /// 91 rather than restarting. There is deliberately no timestamp and no decay.

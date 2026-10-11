@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
+using Emberfall.Core.Progression;
 
 namespace Emberfall.UI.Screens
 {
@@ -15,7 +16,7 @@ namespace Emberfall.UI.Screens
     /// existed all along, defaulting to "Wayfarer", written and read by SaveSerializer, and shown
     /// by HudTopBar as "NAME - RANK n". What never existed was any way for a player to CHANGE it -
     /// the only writer was the deserializer. Every lifetime number below already existed too
-    /// (StagesCleared, RecitalHighestFloor, ProvingStanding, the hero list); none of them is
+    /// (ClearedStageIds, RecitalHighestFloor, ProvingStanding, the hero list); none of them is
     /// computed or stored fresh for this screen, they are read where they live.
     ///
     /// The one genuinely new piece of state is AvatarHeroId, and it is one string.
@@ -300,11 +301,12 @@ namespace Emberfall.UI.Screens
             PlayerProfile profile = App.Session.Profile;
             ContentDatabase content = App.Session.Content;
 
-            // StagesCleared is a COUNT, so the furthest stage is the one at index count-1. Naming
-            // the stage rather than printing the count is the difference between "7" and
-            // "1-7 The Shardfall Verge", and only one of those means anything to a player.
-            StageDef furthest = profile.StagesCleared > 0
-                ? content.GetStageByGlobalIndex(profile.StagesCleared - 1) : null;
+            // The furthest stage is the cleared id that sits latest in the campaign, read from
+            // ClearedStageIds through the static helper because this screen may be handed a
+            // profile that is not the session's. Naming the stage rather than printing a count is
+            // the difference between "7" and "1-7 The Shardfall Verge", and only one of those
+            // means anything to a player.
+            StageDef furthest = CampaignProgress.FurthestCleared(profile, content);
             StatRow("FURTHEST STAGE", furthest != null
                 ? furthest.DisplayCode + "  " + furthest.Name
                 : "none cleared yet", furthest != null ? UITheme.TextPrimary : UITheme.TextDim);
