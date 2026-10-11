@@ -1,0 +1,16 @@
+{
+  "frameWidth": 220,
+  "frameHeight": 260,
+  "sheet": {
+    "cols": 9,
+    "rows": 8
+  },
+  "defaultAnimation": {
+    "start": 0,
+    "end": 65,
+    "fps": 30,
+    "loop": true,
+    "footFraction": 0.2,
+    "impactFraction": 0.446
+  }
+}
