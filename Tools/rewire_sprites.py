@@ -1,12 +1,16 @@
 """Re-wire sprite sheets for specified heroes.
 
-Reads source PNGs + manifest from an extracted zip folder, downsamples each
-frame to 220x260, trims trailing transparent frames, measures foot/body
+Reads source PNGs + manifest from an extracted zip folder, fits each frame by height into a
+transparent 220x260 cell (uniform scale, centred; see fit_frame), trims trailing transparent frames, measures foot/body
 fractions, and writes the output PNG + sidecar JSON + .meta into
 Assets/Resources/Sprites/Units.
 
 Usage:
-    python Tools/rewire_sprites.py
+    python Tools/rewire_sprites.py [--source-root DIR] [--out-dir DIR] [Short ...]
+
+    --source-root DIR   read each hero from DIR/<Short>/ instead of the TEMP layout
+    --out-dir DIR       write somewhere other than Sprites/Units (for diffing a run)
+    Short ...           only these heroes, by the short names in HEROES
 """
 
 import json
@@ -24,7 +28,8 @@ except ImportError:
     sys.exit(1)
 
 REPO = Path(__file__).resolve().parent.parent
-OUT_DIR = REPO / "Assets" / "Resources" / "Sprites" / "Units"
+UNITS_DIR = REPO / "Assets" / "Resources" / "Sprites" / "Units"
+OUT_DIR = UNITS_DIR  # --out-dir redirects the writes; the .meta template always comes from UNITS_DIR
 ALPHA_THRESHOLD = 10
 DST_W = 220
 DST_H = 260
@@ -66,6 +71,22 @@ HEROES = [
         "manifest_prefix": "mireth",
         "file_prefix": "mireth",
     },
+    # The five Ember 5-stars were delivered as 720x1280 frames. Their sources are flat zips, so
+    # pass --source-root DIR (DIR/<Short>/ holding sprite_sheets.json) rather than relying on
+    # the nested TEMP layout above. "clips" overrides CLIP_MAP tokens for this delivery only.
+    {"short": "Kael", "hero_id": "kael_the_unyielding", "manifest_prefix": "kael",
+     "file_prefix": "kael", "clips": {"basic": "basic", "basic2": "basic_2"}},
+    {"short": "Kiva", "hero_id": "kiva_the_forsaken_oath", "manifest_prefix": "kiva",
+     "file_prefix": "kiva"},
+    {"short": "Seraphine", "hero_id": "seraphine_the_closed_volume",
+     "manifest_prefix": "seraphine", "file_prefix": "seraphine"},
+    {"short": "Hale", "hero_id": "hale_the_relentless_hunter", "manifest_prefix": "hale",
+     "file_prefix": "hale"},
+    {"short": "Marrow", "hero_id": "marrow_the_irrevocable_vow", "manifest_prefix": "marrow",
+     "file_prefix": "marrow", "clips": {"basic": "basic"}},
+    # A normal 880x1040 delivery, kept as the control for "identical to the old plain resize".
+    {"short": "Isara", "hero_id": "isara_the_second_chance", "manifest_prefix": "isara",
+     "file_prefix": "isara"},
 ]
 
 # Map engine clip name -> manifest token. basic1 -> basic, basic2 -> basic2.
@@ -90,7 +111,7 @@ def find_meta_template():
     by guid, so the first one that exists serves; naming a particular hero only created something
     that could be deleted out from under this.
     """
-    for f in sorted(OUT_DIR.glob("*.png.meta")):
+    for f in sorted(UNITS_DIR.glob("*.png.meta")):
         return f
     return None
 
@@ -197,12 +218,42 @@ def compute_foot_fraction_with_border(frame_img):
     return round(empty_rows / h, 3), border_bottom
 
 
+def fit_frame(frame, log_label=None):
+    """Scale one source frame uniformly into a transparent DST_W x DST_H cell.
+
+    The loader derives a character's width from the SHAPE of one cell (sidecar frameWidth over
+    frameHeight), so the cell has to stay 220x260 and the art has to keep its own proportions
+    inside it. This used to be frame.resize((DST_W, DST_H)), which stretched whatever aspect the
+    delivery used to 0.846: the five Ember 5-stars arrived as 720x1280 (0.5625) and rendered 1.3x
+    to 1.65x too wide. Fit by height; centre horizontally. If that would be wider than the cell,
+    fit by width instead and centre vertically, and say so (log_label names the clip once).
+    A frame that is already 0.846 maps to the full cell and comes out identical to a plain resize.
+    """
+    w, h = frame.size
+    new_w = round(w * DST_H / h)
+    new_h = DST_H
+    if new_w > DST_W:
+        new_w = DST_W
+        new_h = round(h * DST_W / w)
+        if log_label:
+            print(f"    NOTE {log_label}: {w}x{h} is wider than the cell, fit by width "
+                  f"-> {new_w}x{new_h}, centred vertically")
+    resized = frame.resize((new_w, new_h), Image.LANCZOS)
+    if (new_w, new_h) == (DST_W, DST_H):
+        return resized
+    cell = Image.new("RGBA", (DST_W, DST_H), (0, 0, 0, 0))
+    cell.paste(resized, ((DST_W - new_w) // 2, (DST_H - new_h) // 2))
+    return cell
+
+
 def process_hero(hero_cfg, meta_template):
     """Process all clips for one hero."""
     hero_id = hero_cfg["hero_id"]
     source = hero_cfg["source"]
     manifest_prefix = hero_cfg["manifest_prefix"]
     file_prefix = hero_cfg["file_prefix"]
+
+    clip_map = {**CLIP_MAP, **hero_cfg.get("clips", {})}
 
     manifest_path = source / "sprite_sheets.json"
     if not manifest_path.exists():
@@ -218,7 +269,7 @@ def process_hero(hero_cfg, meta_template):
     idle_top = None
     idle_bottom = None
 
-    for engine_clip, token in CLIP_MAP.items():
+    for engine_clip, token in clip_map.items():
         sheet_entry = find_sheet(sprites, token, manifest_prefix)
         if sheet_entry is None:
             print(f"  {engine_clip:<15} SKIPPED - no sheet matching '{token}'")
@@ -259,7 +310,7 @@ def process_hero(hero_cfg, meta_template):
             sr = n // cols
             src_box = (sc * src_fw, sr * src_fh, (sc + 1) * src_fw, (sr + 1) * src_fh)
             frame = src_img.crop(src_box)
-            frame = frame.resize((DST_W, DST_H), Image.LANCZOS)
+            frame = fit_frame(frame, f"{hero_id}_{engine_clip}" if n == 0 else None)
             dst_img.paste(frame, (sc * DST_W, sr * DST_H))
 
         src_img.close()
@@ -342,9 +393,12 @@ def process_hero(hero_cfg, meta_template):
                 "defaultAnimation": anim,
             }
 
-        with open(sidecar_path, "w", encoding="utf-8") as f:
-            json.dump(sidecar, f, indent=2, ensure_ascii=False)
-            f.write("\n")
+        # Leave a sidecar alone when the re-wire measured nothing new: rewriting it only adds
+        # a trailing newline to files that were committed without one.
+        if existing_sidecar is None or sidecar != json.loads(sidecar_path.read_text("utf-8")):
+            with open(sidecar_path, "w", encoding="utf-8") as f:
+                json.dump(sidecar, f, indent=2, ensure_ascii=False)
+                f.write("\n")
 
         # Write .meta
         meta_status = write_meta(out_png, meta_template)
@@ -379,12 +433,33 @@ def process_hero(hero_cfg, meta_template):
 
 
 def main():
+    global OUT_DIR
+    args = sys.argv[1:]
+    source_root = None
+    only = []
+    while args:
+        a = args.pop(0)
+        if a == "--source-root":
+            source_root = Path(args.pop(0))
+        elif a == "--out-dir":
+            OUT_DIR = Path(args.pop(0))
+            OUT_DIR.mkdir(parents=True, exist_ok=True)
+        else:
+            only.append(a.lower())
+
     meta_template = find_meta_template()
     if meta_template is None:
         print("WARNING: no *.png.meta in Sprites/Units to template from - sheets will import at\n"
               "         Unity's 2048 default and be sheared. Import one hero by hand first.")
 
     for hero_cfg in HEROES:
+        if only and hero_cfg["short"].lower() not in only:
+            continue
+        if source_root is not None:
+            hero_cfg = {**hero_cfg, "source": source_root / hero_cfg["short"]}
+        elif "source" not in hero_cfg:
+            print(f"  {hero_cfg['short']}: needs --source-root, skipped")
+            continue
         print(f"\n{'='*60}")
         print(f"  {hero_cfg['short']} -> {hero_cfg['hero_id']}")
         print(f"  source: {hero_cfg['source']}")

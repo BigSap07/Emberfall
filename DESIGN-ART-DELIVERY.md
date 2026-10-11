@@ -166,11 +166,36 @@ world.
 ratio: a wider canvas produces a visibly wider, bulkier-looking character; a narrower canvas
 produces a slimmer one. There is no target box you're drawing into and no padding to hit a
 required aspect ratio. Whatever proportions your canvas has are the proportions the character
-will have on screen, scaled up or down together to match the fixed height. A perfectly square
+will have on screen, scaled up or down together to match the fixed height. **This holds for a
+single static image only.** A sprite sheet goes through the importer first, which does fix the
+cell shape; see "Sprite sheets: the importer pads every frame to one cell" below. A perfectly square
 canvas would read unusually wide and squat for a person; the shipped placeholder uses a
 canvas a bit under six units wide for every ten units tall, which reads as a plausible human
 proportion at the fixed height the game uses. Use that as a rough starting ratio if you want
 a normal build, and go wider for a deliberately bulky read or narrower for a slight one.
+
+### Sprite sheets: the importer pads every frame to one cell
+
+A sheet does not get the freedom above. `Tools/rewire_sprites.py` turns every delivered sheet
+into a grid of **220 x 260 cells** (aspect 0.846) before the game sees it, and the sidecar
+records that cell as `frameWidth` and `frameHeight`. The loader reads the character's width off
+that cell, so what decides the on-screen width is what the importer puts inside it. `fit_frame`
+in the script does this for each source frame:
+
+- **Fit by height.** The frame is scaled uniformly (never stretched) to 260 tall.
+- **Pad to the cell.** The scaled frame is centred horizontally in a transparent 220 x 260 cell.
+  A 720 x 1280 frame (aspect 0.5625) becomes 146 x 260 at an x offset of 37; an 880 x 1040
+  frame (0.846) fills the cell exactly and comes out identical to a plain resize.
+- **Fit by width if it does not fit.** If the scaled frame would be wider than 220 (a square
+  944 x 944 frame, for instance), it is scaled to 220 wide instead and centred vertically. The
+  script prints a `NOTE` line for every clip where that happens, so it is never silent.
+
+So an artist can deliver a sheet at any frame aspect and the character keeps its drawn
+proportions, but a slim frame yields a slim character inside empty padding, not a wider cell.
+The earlier importer stretched every frame to 220 x 260 whatever its shape; the five Ember
+5-stars, delivered at 720 x 1280, rendered 1.3x to 1.65x too wide until this was fixed. The
+padding is transparent, so it costs nothing on screen, and the sidecar, the import settings and
+`heroes.json` are unaffected by a frame's aspect.
 
 One more thing worth knowing: each hero already has an overall size number set in the game's
 data (a general "how big does this character read" multiplier, not something this document
