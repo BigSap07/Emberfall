@@ -9,6 +9,10 @@
 // the procedural rig's Emberfall/Lit materials already answer to, without UnitActor needing to
 // know or care which kind of rig it is animating.
 //
+// _FlashColor is what _Flash lerps toward. It defaults to white, which is what the flash always
+// was, so nothing that never sets it changes. VfxDirector sets it per hit so a shield absorb or a
+// status landing can read as a different flash from a blow.
+//
 // Like Emberfall/Lit, the pass carries no LightMode tag so it renders under both the
 // Built-In pipeline and URP.
 Shader "Emberfall/Fx"
@@ -20,6 +24,7 @@ Shader "Emberfall/Fx"
         _SrcBlend ("Src Blend", Float) = 5   // SrcAlpha
         _DstBlend ("Dst Blend", Float) = 1   // One
         _Flash ("Hit Flash", Range(0,1)) = 0
+        _FlashColor ("Hit Flash Colour", Color) = (1,1,1,1)
         _Fade ("Fade", Range(0,1)) = 1
         _Emission ("Emission", Range(0,4)) = 0
     }
@@ -44,6 +49,7 @@ Shader "Emberfall/Fx"
             float4 _MainTex_ST;
             fixed4 _Color;
             float _Flash;
+            fixed4 _FlashColor;
             float _Fade;
             float _Emission;
 
@@ -71,7 +77,7 @@ Shader "Emberfall/Fx"
             {
                 fixed4 c = tex2D(_MainTex, i.uv) * _Color;
                 c.rgb += c.rgb * _Emission;
-                c.rgb = lerp(c.rgb, fixed3(1, 1, 1), _Flash * step(0.5, c.a));
+                c.rgb = lerp(c.rgb, _FlashColor.rgb, _Flash * step(0.5, c.a));
                 c.a *= _Fade;
                 return c;
             }

@@ -138,12 +138,21 @@ namespace Emberfall.Battle
 
         public Camera Camera;
         public BattleVfx Vfx;
+
+        /// <summary>
+        /// Hit feedback: flash, hit stop, knockback, particles, flipbooks. Presentation only, and
+        /// driven by the events the host is already playing. See VfxDirector.
+        /// </summary>
+        public VfxDirector Director;
+
         public readonly List<UnitActor> Actors = new List<UnitActor>();
 
         private Transform _world;
         private Transform _cameraRig;
         private Vector3 _cameraHome;
         private Coroutine _shake;
+        private float _shakeStrength;
+        private float _shakeUntil;
 
         public void Initialise()
         {
@@ -206,6 +215,11 @@ namespace Emberfall.Battle
             vfxHost.transform.SetParent(transform, false);
             Vfx = vfxHost.AddComponent<BattleVfx>();
             Vfx.Cam = Camera;
+
+            GameObject directorHost = new GameObject("VfxDirector");
+            directorHost.transform.SetParent(transform, false);
+            Director = directorHost.AddComponent<VfxDirector>();
+            Director.Attach(this);
         }
 
         // ------------------------------------------------------------------ world
@@ -331,8 +345,10 @@ namespace Emberfall.Battle
                 host.transform.SetParent(_world, false);
                 UnitActor actor = host.AddComponent<UnitActor>();
                 actor.Setup(snapshot, new Vector3(slot.x, 0f, slot.y), snapshot.IsPlayer);
+                actor.Director = Director;
                 Actors.Add(actor);
             }
+            if (Director != null) Director.Bind(result);
         }
 
         public UnitActor Find(int unitId)
@@ -357,6 +373,7 @@ namespace Emberfall.Battle
         public void Teardown()
         {
             if (Vfx != null) Vfx.StopAll();
+            if (Director != null) Director.Clear();
             ClearWorld();
         }
 
@@ -365,7 +382,20 @@ namespace Emberfall.Battle
         public void Shake(float strength, float duration)
         {
             if (_shake != null) StopCoroutine(_shake);
+            _shakeStrength = strength;
+            _shakeUntil = Time.time + duration;
             _shake = StartCoroutine(ShakeRoutine(strength, duration));
+        }
+
+        /// <summary>
+        /// A shake that never weakens one already running. The host shakes the camera on a crit
+        /// itself, and a second call from the director a frame apart must not replace its 0.14
+        /// with a smaller number, or cut its duration short.
+        /// </summary>
+        public void ShakeAtLeast(float strength, float duration)
+        {
+            if (_shake != null && _shakeStrength >= strength && _shakeUntil >= Time.time + duration) return;
+            Shake(strength, duration);
         }
 
         private IEnumerator ShakeRoutine(float strength, float duration)
