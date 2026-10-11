@@ -120,6 +120,9 @@ namespace UnityEditor
         // what these tools do with it.
         public static bool isPlaying { get; set; }
         public static bool isPlayingOrWillChangePlaymode { get { return false; } }
+        /// <summary>Real API: asks for one player-loop update on the next editor tick. VfxShots uses
+        /// it so an unfocused editor still advances game frames.</summary>
+        public static void QueuePlayerLoopUpdate() { }
         public static void Exit(int returnValue) { }
         public static bool isCompiling { get { return false; } }
         public static bool isUpdating { get { return false; } }

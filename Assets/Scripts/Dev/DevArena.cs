@@ -121,6 +121,10 @@ namespace Emberfall.Dev
             host.transform.SetParent(transform, false);
             _stage = host.AddComponent<BattleStage>();
             _stage.Initialise();
+            // The arena has every event in hand as it plays it, so it feeds them to the director
+            // directly (Handle, below) rather than letting UnitActor's taps look them up. That is
+            // also the only way a StatusApplied gets an effect.
+            _stage.Director.ExactFeed = true;
 
             _ui = new DevArenaUi();
             _ui.Build(transform);
@@ -229,6 +233,10 @@ namespace Emberfall.Dev
             BattleEvent e = _session.Events[index];
             UnitActor src = e.SourceId >= 0 ? _stage.Find(e.SourceId) : null;
             UnitActor tgt = e.TargetId >= 0 ? _stage.Find(e.TargetId) : null;
+
+            // Before the switch mutates anything: a shield break is read off DisplayShield against
+            // the amount absorbed, so it has to be asked before the absorb is subtracted.
+            _stage.Director.Play(e);
 
             switch (e.Type)
             {

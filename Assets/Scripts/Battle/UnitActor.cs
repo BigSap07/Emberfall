@@ -16,10 +16,37 @@ namespace Emberfall.Battle
         public bool Alive = true;
         public float DisplayHp;
         public float MaxHp;
-        public float DisplayShield;
         public int Energy;
 
+        /// <summary>
+        /// Set by BattleStage.Populate. Presentation feedback attaches here, at the moments the
+        /// host already plays a hit, a shield absorbing and a death, so a host needs no changes to
+        /// get them (see VfxDirector). Null in any rig built without a stage.
+        /// </summary>
+        public VfxDirector Director;
+
+        private float _displayShield;
+
+        /// <summary>
+        /// The shield bar's value, which the host writes from the ShieldGain and ShieldAbsorb
+        /// events. A property so a fall in it is observable: that fall is a shield absorbing a
+        /// blow, and a fall to zero is the shield breaking. The record has no event for the second.
+        /// </summary>
+        public float DisplayShield
+        {
+            get { return _displayShield; }
+            set
+            {
+                float before = _displayShield;
+                _displayShield = value;
+                if (value < before && Director != null) Director.NoteShield(this, before, value);
+            }
+        }
+
         private float _idlePhase;
+        private float _hitStop;
+        private Vector3 _knockDirection;
+        private float _knockScale = 1f;
         private float _flash;
         private float _bobSpeed = 1.6f;
         private float _bobHeight = 0.09f;
@@ -62,6 +89,16 @@ namespace Emberfall.Battle
         private void Update()
         {
             if (Rig == null || Rig.Body == null) return;
+
+            // Hit stop: a blow freezes both units it touches for a few frames. Animation, bob and
+            // the flash decay all wait, so the flash holds at its peak for the duration. Counted in
+            // unscaled time so it is a real-time pause whatever the game clock is doing, and the
+            // motion coroutines below wait on the same counter.
+            if (_hitStop > 0f)
+            {
+                _hitStop -= Time.unscaledDeltaTime;
+                return;
+            }
 
             // Runs whether or not the unit is still alive - a death clip needs ticks after Alive
             // flips false to reach and then hold its final frame. A no-op for every unit besides
@@ -193,6 +230,7 @@ namespace Emberfall.Battle
             float t = 0f;
             while (t < duration)
             {
+                if (_hitStop > 0f) { yield return null; continue; }
                 t += Time.deltaTime;
                 float k = Mathf.Clamp01(t / duration);
                 float lift = Mathf.Sin(k * Mathf.PI) * 0.28f;
@@ -213,6 +251,17 @@ namespace Emberfall.Battle
 
         public void PlayHit(bool critical)
         {
+            // First, before the Alive test, so the director's view of which Damage event this is
+            // never slips against the host's: it is told once per call, dead target or not.
+            if (Director != null) Director.NoteHit(this, critical);
+
+            // Consumed here whether or not a flinch follows, so a direction set for a blow that
+            // did not flinch cannot leak into the next one.
+            Vector3 knock = _knockDirection;
+            float knockScale = _knockScale;
+            _knockDirection = Vector3.zero;
+            _knockScale = 1f;
+
             if (!Alive) return;
             _flash = critical ? 1f : 0.75f;
             if (Rig != null) Rig.SetFlash(_flash);
@@ -220,12 +269,55 @@ namespace Emberfall.Battle
             // landing while this unit is still swinging or casting flashes it and nothing more.
             if (_acting) return;
             if (Rig != null && Rig.Animation != null && !Rig.Animation.PlayReaction(BattleClips.HitReaction)) return;
-            Restart(FlinchRoutine(critical ? 0.24f : 0.15f));
+            Restart(FlinchRoutine((critical ? 0.24f : 0.15f) * knockScale, knock));
         }
 
-        private IEnumerator FlinchRoutine(float distance)
+        /// <summary>
+        /// A flash that is not a blow: a shield taking a hit, a status landing. Sets the colour the
+        /// flash lerps toward, and the amount; it starts no flinch and no hit stop.
+        /// </summary>
+        public void Flash(float amount, Color color)
+        {
+            if (Rig == null || !Alive) return;
+            Rig.SetFlashColor(color);
+            _flash = Mathf.Max(_flash, amount);
+            Rig.SetFlash(_flash);
+        }
+
+        public void SetFlashColor(Color color)
+        {
+            if (Rig != null) Rig.SetFlashColor(color);
+        }
+
+        /// <summary>
+        /// Freezes this unit for `seconds` of real time. Called on both ends of a blow. A longer
+        /// request wins over one already running; two short ones do not add.
+        /// </summary>
+        public void HitStop(float seconds)
+        {
+            if (seconds > _hitStop) _hitStop = seconds;
+        }
+
+        /// <summary>
+        /// Which way the next flinch goes: along `awayWorld`, the attacker-to-target line, instead
+        /// of the fixed step toward the camera. `scale` stretches the nudge (a crit pushes harder).
+        /// Used once, by the next PlayHit.
+        /// </summary>
+        public void SetKnock(Vector3 awayWorld, float scale)
+        {
+            awayWorld.y = 0f;
+            _knockDirection = awayWorld.sqrMagnitude > 0.0001f ? awayWorld.normalized : Vector3.zero;
+            _knockScale = scale;
+        }
+
+        private IEnumerator FlinchRoutine(float distance, Vector3 awayWorld)
         {
             Vector3 back = new Vector3(0f, 0f, -distance);
+            if (awayWorld.sqrMagnitude > 0.0001f)
+            {
+                back = transform.InverseTransformVector(awayWorld * distance);
+                back.y = 0f;
+            }
             yield return Move(Vector3.zero, back, 0.06f, false);
             yield return Move(back, Vector3.zero, 0.16f, false);
             if (Rig != null) Rig.Root.localPosition = Vector3.zero;
@@ -257,6 +349,7 @@ namespace Emberfall.Battle
 
         public IEnumerator PlayDeath(float speed)
         {
+            if (Director != null) Director.NoteDeath(this);
             Alive = false;
             _acting = false;
             if (_motion != null) StopCoroutine(_motion);
@@ -367,6 +460,7 @@ namespace Emberfall.Battle
             float t = 0f;
             while (t < duration)
             {
+                if (_hitStop > 0f) { yield return null; continue; }
                 t += Time.deltaTime;
                 float k = Mathf.Clamp01(t / duration);
                 if (ease) k = k * k;

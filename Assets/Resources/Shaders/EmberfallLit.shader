@@ -16,6 +16,7 @@ Shader "Emberfall/Lit"
         _RimPower ("Rim Power", Range(0.5,8)) = 3
         _Emission ("Emission", Range(0,4)) = 0
         _Flash ("Hit Flash", Range(0,1)) = 0
+        _FlashColor ("Hit Flash Colour", Color) = (1,1,1,1)
         _Fade ("Dissolve", Range(0,1)) = 1
         _BurnColor ("Burn Edge", Color) = (1,0.5,0.18,1)
     }
@@ -43,6 +44,7 @@ Shader "Emberfall/Lit"
             float _RimPower;
             float _Emission;
             float _Flash;
+            fixed4 _FlashColor;
             float _Fade;
             fixed4 _BurnColor;
 
@@ -98,7 +100,7 @@ Shader "Emberfall/Lit"
                 float edge = 1.0 - saturate(cut * 9.0);
                 lit = lerp(lit, _BurnColor.rgb * 2.0, edge * burning);
 
-                lit = lerp(lit, float3(1.0, 1.0, 1.0), _Flash);
+                lit = lerp(lit, _FlashColor.rgb, _Flash);
                 return fixed4(lit, 1.0);
             }
             ENDCG

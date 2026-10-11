@@ -311,6 +311,7 @@ namespace UnityEngine
         public void Rotate(Vector3 euler) { }
         public void DetachChildren() { }
         public Vector3 InverseTransformPoint(Vector3 worldPoint) { return Vector3.zero; }
+        public Vector3 InverseTransformVector(Vector3 worldVector) { return Vector3.zero; }
         public Vector3 TransformPoint(Vector3 localPoint) { return Vector3.zero; }
         public IEnumerator GetEnumerator() { yield break; }
     }
@@ -418,6 +419,8 @@ namespace UnityEngine
         public static float unscaledTime { get { return 0f; } }
         public static float realtimeSinceStartup { get { return 0f; } }
         public static float timeScale { get; set; }
+        /// <summary>Real API: a non-zero value fixes deltaTime to 1/n whatever the real frame rate.</summary>
+        public static int captureFramerate { get; set; }
         public static int frameCount { get { return 0; } }
     }
 
@@ -626,6 +629,91 @@ namespace UnityEngine
     }
 
     public sealed class MeshRenderer : Renderer { }
+
+    // ------------------------------------------------------------------ particles
+    //
+    // Just the surface VfxDirector uses. The modules are structs in the real API, written through
+    // to the native system; here they hold nothing, which is all a type-check needs.
+
+    public enum ParticleSystemSimulationSpace { Local, World, Custom }
+    public enum ParticleSystemRenderMode { Billboard, Stretch, HorizontalBillboard, VerticalBillboard, Mesh, None }
+
+    public struct Keyframe { public Keyframe(float time, float value) { } }
+
+    public sealed class AnimationCurve
+    {
+        public AnimationCurve() { }
+        public AnimationCurve(params Keyframe[] keys) { }
+        public static AnimationCurve Linear(float timeStart, float valueStart, float timeEnd, float valueEnd) { return new AnimationCurve(); }
+    }
+
+    public struct GradientColorKey { public GradientColorKey(Color color, float time) { } }
+    public struct GradientAlphaKey { public GradientAlphaKey(float alpha, float time) { } }
+
+    public sealed class Gradient
+    {
+        public void SetKeys(GradientColorKey[] colorKeys, GradientAlphaKey[] alphaKeys) { }
+    }
+
+    public sealed class ParticleSystem : Component
+    {
+        public struct MinMaxCurve
+        {
+            public MinMaxCurve(float multiplier, AnimationCurve curve) { }
+            public static implicit operator MinMaxCurve(float constant) { return new MinMaxCurve(); }
+        }
+
+        public struct MinMaxGradient
+        {
+            public static implicit operator MinMaxGradient(Color color) { return new MinMaxGradient(); }
+            public static implicit operator MinMaxGradient(Gradient gradient) { return new MinMaxGradient(); }
+        }
+
+        public struct MainModule
+        {
+            public bool playOnAwake { get; set; }
+            public bool loop { get; set; }
+            public int maxParticles { get; set; }
+            public ParticleSystemSimulationSpace simulationSpace { get; set; }
+            public MinMaxCurve gravityModifier { get; set; }
+            public MinMaxCurve startLifetime { get; set; }
+            public MinMaxCurve startSize { get; set; }
+        }
+
+        public struct EmissionModule { public bool enabled { get; set; } }
+        public struct ShapeModule { public bool enabled { get; set; } }
+        public struct ColorOverLifetimeModule { public bool enabled { get; set; } public MinMaxGradient color { get; set; } }
+        public struct SizeOverLifetimeModule { public bool enabled { get; set; } public MinMaxCurve size { get; set; } }
+
+        public struct EmitParams
+        {
+            public Vector3 position { get; set; }
+            public Vector3 velocity { get; set; }
+            public float startLifetime { get; set; }
+            public float startSize { get; set; }
+            public Color32 startColor { get; set; }
+            public float rotation { get; set; }
+        }
+
+        public MainModule main { get { return new MainModule(); } }
+        public EmissionModule emission { get { return new EmissionModule(); } }
+        public ShapeModule shape { get { return new ShapeModule(); } }
+        public ColorOverLifetimeModule colorOverLifetime { get { return new ColorOverLifetimeModule(); } }
+        public SizeOverLifetimeModule sizeOverLifetime { get { return new SizeOverLifetimeModule(); } }
+        public int particleCount { get { return 0; } }
+
+        public void Play() { }
+        public void Stop() { }
+        public void Clear() { }
+        public void Emit(EmitParams emitParams, int count) { }
+    }
+
+    public sealed class ParticleSystemRenderer : Renderer
+    {
+        public ParticleSystemRenderMode renderMode { get; set; }
+        public float lengthScale { get; set; }
+        public float velocityScale { get; set; }
+    }
 
     /// <summary>Legacy world-space text. UnitRig's placeholder nameplate is the only user.</summary>
     public sealed class TextMesh : Component
