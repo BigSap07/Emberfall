@@ -630,7 +630,8 @@ namespace Emberfall.EditorTools
                     case "WaveResult":
                     case "WaveResultCleared":
                     case "WaveResultLost":
-                    case "WaveReplay": id = ScreenId.WaveResult; break;
+                    case "WaveReplay":
+                    case "WaveReplayResult": id = ScreenId.WaveResult; break;
                     // The ability breakdown is a DIALOG over the hero page rather than a screen,
                     // so it routes to the page and opens the dialog a frame later, exactly as the
                     // Hub's layers do below.
@@ -754,7 +755,7 @@ namespace Emberfall.EditorTools
                     // started the way the Campaign screen starts it, with a stage and a seeded
                     // profile behind it.
                     // A replay is watched from a won mid-stage wave, so it seeds as one.
-                    StageDef waveStage = SeedWaveResult(app, name == "WaveReplay" ? "WaveResult" : name);
+                    StageDef waveStage = SeedWaveResult(app, name == "WaveReplay" || name == "WaveReplayResult" ? "WaveResult" : name);
                     if (waveStage == null)
                     {
                         SessionState.SetInt(StageKey, slot + 1);
@@ -777,7 +778,11 @@ namespace Emberfall.EditorTools
             if (IsWaveResultTarget(name))
             {
                 if (frame <= showAt) return;
-                if (name == "WaveReplay") { PumpWaveReplay(app, frame, showAt, slot, BattleWaitCeiling, BattlePaintDelay); return; }
+                if (name == "WaveReplay" || name == "WaveReplayResult")
+                {
+                    PumpWaveReplay(app, name, frame, showAt, slot, BattleWaitCeiling, BattlePaintDelay);
+                    return;
+                }
 
                 int armed = SessionState.GetInt(BattleArmKey, 0);
                 if (armed == 0)
@@ -1192,7 +1197,7 @@ namespace Emberfall.EditorTools
         private static bool IsWaveResultTarget(string name)
         {
             return name == "WaveResult" || name == "WaveResultCleared" || name == "WaveResultLost"
-                   || name == "WaveReplay";
+                   || name == "WaveReplay" || name == "WaveReplayResult";
         }
 
         private const string ReplayStageKey = "PlayModeScreenshot.ReplayStage";
@@ -1204,8 +1209,12 @@ namespace Emberfall.EditorTools
         /// a second and a frame count cannot land on one; a frozen particle system still renders.
         /// Stage 0 waits on the result, 1 on the effect, 2 is frozen and counting down to the shot.
         /// </summary>
-        private static void PumpWaveReplay(GameApp app, int frame, int showAt, int slot, int waitCeiling, int paintDelay)
+        private static void PumpWaveReplay(GameApp app, string name, int frame, int showAt, int slot, int waitCeiling, int paintDelay)
         {
+            // WaveReplayResult is the same walk to the same replay, ended at the other end: it skips
+            // the fight to its result panel, where the replay's BACK button lives, instead of
+            // freezing a hit mid-fight.
+            bool toResult = name == "WaveReplayResult";
             int stage = SessionState.GetInt(ReplayStageKey, 0);
             int armed = SessionState.GetInt(BattleArmKey, 0);
 
@@ -1238,6 +1247,22 @@ namespace Emberfall.EditorTools
             if (stage == 1)
             {
                 BattleScreen battle = app.Router.Battle;
+                if (toResult)
+                {
+                    if (battle != null && battle.RoundUnderway)
+                    {
+                        battle.SkipToEndForCapture();
+                        SessionState.SetInt(ReplayStageKey, 2);
+                        SessionState.SetInt(BattleArmKey, frame);
+                    }
+                    else if (frame > armed + waitCeiling)
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: the replay never got underway. Skipping WaveReplayResult.");
+                        SessionState.SetInt(ReplayStageKey, 0);
+                        SessionState.SetInt(StageKey, slot + 1);
+                    }
+                    return;
+                }
                 VfxDirector director = UnityEngine.Object.FindFirstObjectByType<VfxDirector>();
                 int live = 0;
                 if (director != null)
@@ -1265,7 +1290,7 @@ namespace Emberfall.EditorTools
             if (frame == armed + paintDelay - 5) Canvas.ForceUpdateCanvases();
             if (frame == armed + paintDelay)
             {
-                Shoot("WaveReplay", frame, slot);
+                Shoot(name, frame, slot);
                 Time.timeScale = 1f;
                 SessionState.SetInt(ReplayStageKey, 0);
             }

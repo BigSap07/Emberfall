@@ -343,6 +343,9 @@ namespace Emberfall.UI.Screens
         public StageDef Stage;
         public BattleResult Result;
         public bool IsReplay;
+        /// <summary>True for a campaign wave's replay: the battle screen draws HOME for it, and
+        /// the back key takes OnPrimary. A guild dungeon run leaves it false and has neither.</summary>
+        public bool Home;
         public string Label = "";
         public string Subtitle = "";
         public readonly List<KeyValuePair<string, string>> Rows = new List<KeyValuePair<string, string>>();

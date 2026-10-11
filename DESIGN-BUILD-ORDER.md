@@ -1037,6 +1037,19 @@ names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, whi
 
 ## In progress
 
+**`ui/campaign-nav`** puts a HOME disc top left on every campaign-flow screen and makes the back key
+step back one screen. It holds:
+- **HOME.** `ScreenChrome.HomeDisc` and `ForgedHeader`'s `home` overload, the same disc the back
+  control uses with HOME in the glyph slot. `CampaignScreen` takes it in place of its chevron;
+  `WaveResultScreen` and `BattleScreen` (a campaign fight or a campaign wave's replay, marked by
+  `GuildBattleRun.Home`) draw it in the corner. `ScreenRouter.GoHome` clears the history and shows
+  the main menu; it resolves, pays and saves nothing.
+- **Back.** `UIScreen.TryStepBack`, asked by `GameApp.HandleBack` before the history: the wave result
+  steps to the campaign map and a campaign replay takes its BACK button's step to the wave result.
+  Both were shown without being remembered, so the history could not name them. A leave mid-stage
+  keeps what the save already holds (`CampaignCurrentStageId`, wave and battle); no field was added.
+- **`WaveReplayResult`**, a `PlayModeScreenshot` target for the replay's result panel.
+
 **`ui/fusion-numbers`** makes the ascend card's three rows readable against the list beside them,
 and cuts the page down to them. It holds:
 - **the cap row in tier levels.** It bound the absolute Level cap, so a hero the list called

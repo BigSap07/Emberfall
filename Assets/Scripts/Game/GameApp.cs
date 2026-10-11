@@ -678,6 +678,15 @@ namespace Emberfall.Game
 
             if (Router == null || Router.Current == null) return false;
             if (Router.Current.Id == ScreenId.MainMenu) return false;
+
+            // A screen that knows its own step back goes first: the wave result and a campaign
+            // replay were shown without being remembered, so the history cannot name them.
+            if (Router.Current.TryStepBack())
+            {
+                if (Audio != null) Audio.Tap();
+                return true;
+            }
+
             if (Router.Current.Id == ScreenId.Battle) return false;
 
             if (Audio != null) Audio.Tap();

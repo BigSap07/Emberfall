@@ -94,6 +94,11 @@ namespace Emberfall.UI.Screens
         /// <summary>The AUTO/SPEED/SKIP strip. Held so it can be raised back above the result panel
         /// - see the note where that happens.</summary>
         private RectTransform _topHud;
+        private ForgeDisc _home;
+
+        /// <summary>Where the stage and round labels start while HOME is up: just past its hit
+        /// rect, which is the same width as the disc's touch target.</summary>
+        private const float HomeLabelInset = HubStyle.TouchMin + 4f;
 
         /// <summary>Device-level UI preferences, deliberately in PlayerPrefs rather than
         /// PlayerProfile: how fast someone likes their battles and whether they chain is a property
@@ -510,6 +515,39 @@ namespace Emberfall.UI.Screens
             _skipButton = EmberforgeUI.Button("Skip", bar, "SKIP", UITheme.FontTiny, ForgeButtonKind.Secondary);
             UIBuilder.Box(_skipButton.Root, -96f, 0f, 100f, 44f, new Vector2(1f, 0.5f));
             _skipButton.OnClick(SkipToEnd);
+
+            // Top-left, where every campaign screen keeps it. Shown only for a campaign fight (see
+            // RefreshHome), and a child of the strip so the result panel, which re-raises the
+            // strip above itself, never covers it.
+            _home = ScreenChrome.HomeDisc(bar, Router, 0f, 4f);
+        }
+
+        /// <summary>
+        /// HOME belongs to the campaign flow: a campaign stage's own fight and a campaign wave's
+        /// replay. A Recital floor, a Proving match, a duel, the prologue and a guild dungeon run
+        /// each have their own way out and are left exactly as they were. The stage and round
+        /// labels step right of the disc while it is up, because the corner is otherwise theirs.
+        /// </summary>
+        private void RefreshHome()
+        {
+            bool show = _guildRun != null
+                ? _guildRun.Home
+                : _recitalFloor < 0 && _provingOpponent == null && _duelOpponent == null
+                  && _prologueSquad == null;
+            _home.Root.gameObject.SetActive(show);
+
+            float x = show ? HomeLabelInset : 4f;
+            _stageLabel.rectTransform.anchoredPosition = new Vector2(x, _stageLabel.rectTransform.anchoredPosition.y);
+            _roundLabel.rectTransform.anchoredPosition = new Vector2(x, _roundLabel.rectTransform.anchoredPosition.y);
+        }
+
+        /// <summary>The back key leaves a campaign replay for the wave it came from, the same
+        /// step its BACK button takes. A live fight stays unleavable by key, as it always was.</summary>
+        public override bool TryStepBack()
+        {
+            if (_guildRun == null || !_guildRun.Home || _guildRun.OnPrimary == null) return false;
+            _guildRun.OnPrimary();
+            return true;
         }
 
         // 980 x 132 at 0.62 alpha was close to a third of the screen's width in solid black, put
@@ -686,6 +724,7 @@ namespace Emberfall.UI.Screens
             if (!chainable) _auto = false;
             else _auto = PlayerPrefs.GetInt(AutoPrefKey, 0) == 1;
             RefreshAutoButton();
+            RefreshHome();
 
             if (_recitalFloor < 0 && _stage == null) _stage = App.Session.NextStage;
             if (_stage == null)
