@@ -931,11 +931,15 @@ Damage event to the strike; per-clip `footFraction` stops a clip floating or sin
 path it looked in when a unit declares art it does not have.
 
 **Hit feedback is fed from the event list.** `VfxDirector` (flash, hit stop, knockback, shake, a
-particle burst, and a flipbook path that waits for a sheet) receives every event from
+particle burst, and a flipbook path) receives every event from
 `BattleScreen.Handle` through `Play`, with `ExactFeed` set when the stage is built, so it sees a
 `StatusApplied` that `UnitActor`'s taps never could; nothing uses the taps now. It reads
 `vfx.json`, which is not part of `ContentVersion`. Presentation only: nothing in
-`CombatSimulation`, `GameSession` or the save reads it.
+`CombatSimulation`, `GameSession` or the save reads it. All seven `types` entries now carry a
+flipbook `sheet` from `Assets/Resources/Art/Vfx` (six white-on-alpha sheets, `buff` sharing
+`heal`'s, credited in that folder's `README.md`), so the procedural numbers beside each sheet
+play only where a sheet is missing. The sheets are white so the attacker's aspect accent tints
+them; `Tools/texture-import-policy.py` has a group for the folder.
 
 **WATCH replays the hardest battle of a resolved wave.** `GameSession.ResolveWave` keeps a
 `WaveReplay` on the `WaveResolution`, in memory only: the lost battle, else the win that left the
