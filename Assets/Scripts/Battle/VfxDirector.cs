@@ -160,6 +160,9 @@ namespace Emberfall.Battle
                 case BattleEventType.ShieldAbsorb:
                     if (target != null) PlayShield(e, target, target.DisplayShield <= e.Value);
                     break;
+                case BattleEventType.Heal:
+                    if (e.Value > 0) PlayBenefit(target, "heal", 0.35f);
+                    break;
                 case BattleEventType.StatusApplied:
                     PlayStatus(e, target);
                     break;
@@ -325,11 +328,39 @@ namespace Emberfall.Battle
             Color tint = harmful ? UITheme.Danger : UITheme.Success;
             Vector3 point = FxPoint(target);
 
+            // A beneficial status plays the buff entry from vfx.json, as a heal plays the heal one.
+            if (!harmful)
+            {
+                PlayBenefit(target, "buff", 0.30f);
+                return;
+            }
+
             // A harmful status sinks, a beneficial one rises. Direction is the whole difference
             // between them besides colour, so it reads without the colour.
             target.Flash(0.30f, tint);
             EmitRing(point, tint, harmful ? 0.9f : 1.1f, 0.30f);
             EmitChips(point, tint, 5, 1.2f, 0.19f, 0.5f, harmful ? Direction.Fall : Direction.Rise);
+        }
+
+        /// <summary>A heal or a beneficial status: the vfx.json types entry of that name (a flipbook
+        /// if its sheet exists, else the procedural numbers), in the success colour, with the chips
+        /// rising. Not tinted by the source's aspect: a regen tick has no source, and a heal should
+        /// read as a heal whoever cast it.</summary>
+        private void PlayBenefit(UnitActor target, string typeKey, float flash)
+        {
+            if (target == null || !target.Alive) return;
+            Color tint = UITheme.Success;
+            Vector3 point = FxPoint(target);
+            target.Flash(flash, tint);
+
+            VfxEntry entry;
+            if (!Config.Types.TryGetValue(typeKey, out entry)) entry = BuiltInEntry;
+
+            Texture2D sheet = entry.HasSheet ? LoadSheet(entry.Sheet) : null;
+            if (sheet != null) StartCoroutine(Flipbook(sheet, entry, point, tint, 1f));
+            else EmitRing(point, tint, Mathf.Max(1.1f, entry.Ring), 0.30f);
+
+            EmitChips(point, tint, Mathf.Max(1, entry.Chips), entry.Speed * 0.75f, entry.Size, entry.Life * 1.3f, Direction.Rise);
         }
 
         private void PlayKill(BattleEvent e, UnitActor target)

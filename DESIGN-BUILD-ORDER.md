@@ -1403,8 +1403,6 @@ Beyond the harness:
 
 - **Rheia has no skill clip.** Her delivery included an `idle2` where `skill` should be, so her
   active plays with no animation and the idle continues. Silent, not an error.
-- **Six orphaned sprite PNGs** remain under `Assets/Resources/Sprites/Units` for heroes deleted in
-  the roster swap, referenced by nothing.
 
 - **A save written before the star-gated caps loads heroes above their own cap, and nothing
   clamps them.** The caps used to be `heroLevelCapBase` 12 plus 4 per account rank, so a rank-30
