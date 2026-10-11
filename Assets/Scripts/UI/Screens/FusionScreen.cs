@@ -44,20 +44,20 @@ namespace Emberfall.UI.Screens
     ///     whichever aspect is chosen, so the difference reads as two prices rather than as one
     ///     price and a complaint. The roster count the rule is made of is behind the "?".
     ///
-    ///   THE TIER LEVEL RESETS AND THE LEVEL DOES NOT (F6). This is the one number on the page
-    ///     that reads as a bug if it is met without warning, and the warning is three rows of
-    ///     before and after printed above the button: the tier level falls to 1, the Level rises,
-    ///     the cap over the tier level rises further. All three come from
+    ///   THE TIER LEVEL RESETS (F6). This is the one number on the page that reads as a bug if
+    ///     it is met without warning, and the warning is two rows of before and after printed
+    ///     above the button: the tier level falls to 1 and the cap over it rises. Both come from
     ///     GameSession.PreviewAscension, which shares its arithmetic with Ascend itself, so the
     ///     page cannot promise a landing the ascension does not make.
     ///
-    ///     ALL THREE ROWS ARE READ AGAINST THE LIST BESIDE THEM. The hero list prints
-    ///     "TIER 0 - LEVEL 9 / 9" from TierLevelOf and HeroLevelCap, both counted in tier levels,
-    ///     so the card's cap row is counted the same way: a tier-0 hero at the top of its tier
-    ///     reads 9 / 9 in the list and 9 » 1 with a cap of 9 » 18 on the card, one hero in one
-    ///     unit. The LEVEL row between them, 9 » 10, is the one absolute figure on the card and
-    ///     the one that does not reset. The before-and-after mark is "»" and not a hyphen, because
-    ///     "9 - 18" reads as a range.
+    ///     THERE IS ONE UNIT ON THIS PAGE, THE TIER LEVEL, AND EVERY FIGURE IN IT SAYS SO. The
+    ///     hero list prints "TIER LEVEL 9" and "TIER CAP 9" from TierLevelOf and HeroLevelCap,
+    ///     and the card's two rows are the same pair under the same names: a tier-0 hero at the
+    ///     top of its tier reads 9 and 9 in the list and 9 » 1 over 9 » 18 on the card, one hero
+    ///     in one unit. The absolute Level (AscensionPreview.LevelBefore, 9 » 10 for that hero)
+    ///     is deliberately not drawn anywhere here: set beside a cap in tier levels it read as
+    ///     "10 of 18", and it belongs on the hero detail page. The before-and-after mark is "»"
+    ///     and not a hyphen, because "9 - 18" reads as a range.
     ///
     ///   A FIVE-STAR IS NEVER FODDER (F5) and heroes below five stars never ascend (F1, F2). Both
     ///     are structural here rather than enforced: the ascend tab's list holds five-stars only,
@@ -155,7 +155,10 @@ namespace Emberfall.UI.Screens
                                              + Emberforge.RuleHeight + BlockGap
                                              + CostRowHeight + BlockGap
                                              + Emberforge.RuleHeight + BlockGap
-                                             + MoveRowHeight * 3f + CardPad;
+                                             + MoveRowHeight * MoveRowCount + CardPad;
+
+        /// <summary>The card's before-and-after rows: the tier level and the cap over it.</summary>
+        private const int MoveRowCount = 2;
 
         // ------------------------------------------------------------------ state
 
@@ -407,15 +410,13 @@ namespace Emberfall.UI.Screens
             Divider(_ascendCardBody, top);
             top += Emberforge.RuleHeight + BlockGap;
 
-            // THREE ROWS, BEFORE AND AFTER, and the tier level is deliberately the first of them.
-            // It is the only one of the three that goes DOWN, it is the number a player is about
-            // to watch fall, and burying it under two rising figures would be the page hiding the
-            // thing it is here to warn about.
+            // TWO ROWS, BEFORE AND AFTER, both in tier levels, and the tier level is deliberately
+            // the first. It is the one that goes DOWN, it is the number a player is about to watch
+            // fall, and putting it under the rising cap would be the page hiding the thing it is
+            // here to warn about.
             _moveRows.Add(MoveRow("TierLevel", "TIER LEVEL", top));
             top += MoveRowHeight;
-            _moveRows.Add(MoveRow("Level", "LEVEL", top));
-            top += MoveRowHeight;
-            _moveRows.Add(MoveRow("Cap", "LEVEL CAP", top));
+            _moveRows.Add(MoveRow("Cap", "TIER CAP", top));
         }
 
         /// <summary>One before-and-after row: what moves, where it stands, and where it lands.
@@ -433,7 +434,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Outlined(before, Emberforge.Outline, Emberforge.StrokeThin);
 
             // "»", the talent page's before-and-after mark. A hyphen between two numbers reads
-            // as a range, and "LEVEL CAP 9 - 18" is a cap of nine to eighteen.
+            // as a range, and "TIER CAP 9 - 18" is a cap of nine to eighteen.
             Text arrow = EmberforgeUI.Label(name + "Arrow", _ascendCardBody, "»", UITheme.FontSmall,
                                             Emberforge.TextQuiet, TextAnchor.MiddleCenter);
             UIBuilder.Box(arrow.rectTransform, CardPad + 336f, -top, 40f, 30f, new Vector2(0f, 1f));
@@ -821,19 +822,15 @@ namespace Emberfall.UI.Screens
                 ? "TIER " + preview.FromTier + "  »  TIER " + preview.ToTier
                 : "TIER " + preview.FromTier + "  -  HIGHEST";
 
-            // The three figures, from the preview rather than from arithmetic done here. A hero
-            // with no next tier repeats the present in all three rows, which is the honest reading:
+            // The two figures, from the preview rather than from arithmetic done here. A hero
+            // with no next tier repeats the present in both rows, which is the honest reading:
             // nothing moves.
             //
-            // THE CAP ROW IS IN TIER LEVELS, and that is the fix this pass exists for. It used to
-            // bind AscensionPreview.CapAfter, the cap as a LEVEL, so a tier-0 hero the list beside
-            // it called "LEVEL 9 / 9" read on the card as a cap of 9 rising to 45 - the same cap,
-            // answered in a unit the rest of the page never uses. Rows 0 and 2 are now a pair: a
-            // tier level and the cap over it, 9 / 9 becoming 1 / 18, which is what the list says.
-            // Row 1 is the one absolute figure on the card, and the one that does not reset.
+            // BOTH ROWS ARE IN TIER LEVELS: a tier level and the cap over it, 9 / 9 becoming
+            // 1 / 18, which is what the list beside the card says. AscensionPreview also carries
+            // the absolute Level, and it is left unread on purpose - see the class comment.
             SetMoveRow(0, preview.TierLevelBefore, preview.TierLevelAfter);
-            SetMoveRow(1, preview.LevelBefore, preview.LevelAfter);
-            SetMoveRow(2, preview.TierCapBefore, preview.TierCapAfter);
+            SetMoveRow(1, preview.TierCapBefore, preview.TierCapAfter);
 
             if (preview.HasNextTier)
             {
@@ -924,21 +921,28 @@ namespace Emberfall.UI.Screens
                 UIBuilder.BestFit(name, UITheme.FontTiny - 2, UITheme.FontSmall);
                 UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
 
-                // THE TIER BESIDE THE LEVEL, everywhere a level is shown. DESIGN-FUSION section 4:
+                // THE TIER BESIDE THE TIER LEVEL, and each figure named. DESIGN-FUSION section 4:
                 // once ascension exists a level number stops being comparable between heroes -
                 // level 40 at tier 2 beats level 100 at tier 0 - so a row that printed a bare
-                // level would be inviting exactly the comparison the system has broken.
+                // level would be inviting exactly the comparison the system has broken. The
+                // figure is the tier level and the cap over it, the same pair as the card's rows,
+                // on a line of its own so the names fit at a size that can be read.
                 AscensionPreview preview = session.PreviewAscension(hero);
-                string ready = preview.Possible ? "  -  READY" : "";
+                Color lineTint = preview.Possible ? UITheme.Success : Emberforge.TextQuiet;
                 Text line2 = EmberforgeUI.Label("Line", card.Body,
-                    "TIER " + hero.Ascension + "  -  LEVEL " + session.TierLevelOf(hero)
-                    + " / " + StatMath.HeroLevelCap(session.Balance, hero.Def.Stars, hero.Ascension)
-                    + "  -  " + (hero.Copies - 1) + " SPARE" + ready,
-                    UITheme.FontTiny - 4, preview.Possible ? UITheme.Success : Emberforge.TextQuiet,
-                    TextAnchor.UpperLeft);
-                UIBuilder.Box(line2.rectTransform, 100f, -46f, width - 112f, 24f, new Vector2(0f, 1f));
+                    "TIER " + hero.Ascension + "  -  TIER LEVEL " + preview.TierLevelBefore
+                    + "  -  TIER CAP " + preview.TierCapBefore,
+                    UITheme.FontTiny - 4, lineTint, TextAnchor.UpperLeft);
+                UIBuilder.Box(line2.rectTransform, 100f, -44f, width - 112f, 24f, new Vector2(0f, 1f));
                 UIBuilder.BestFit(line2, UITheme.FontTiny - 8, UITheme.FontTiny - 4);
                 UIBuilder.Outlined(line2, Emberforge.Outline, Emberforge.StrokeThin);
+
+                Text line3 = EmberforgeUI.Label("Spare", card.Body,
+                    (hero.Copies - 1) + " SPARE" + (preview.Possible ? "  -  READY" : ""),
+                    UITheme.FontTiny - 4, lineTint, TextAnchor.UpperLeft);
+                UIBuilder.Box(line3.rectTransform, 100f, -68f, width - 112f, 24f, new Vector2(0f, 1f));
+                UIBuilder.BestFit(line3, UITheme.FontTiny - 8, UITheme.FontTiny - 4);
+                UIBuilder.Outlined(line3, Emberforge.Outline, Emberforge.StrokeThin);
 
                 _heroCards.Add(card);
                 EmberforgeUI.SetCardSelected(card, hero == _subject);
