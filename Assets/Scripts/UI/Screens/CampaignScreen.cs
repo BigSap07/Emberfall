@@ -72,7 +72,7 @@ namespace Emberfall.UI.Screens
         protected override void Build()
         {
             BuildBackdrop();
-            ScreenChrome.ForgedHeader(Root, "CAMPAIGN", Router, out _headerSubtitle);
+            ScreenChrome.ForgedHeader(Root, "CAMPAIGN", Router, true, out _headerSubtitle);
             BuildChipRow();
             BuildStageLabel();
             BuildSquadPower();

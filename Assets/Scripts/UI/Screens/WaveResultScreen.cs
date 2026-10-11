@@ -147,6 +147,18 @@ namespace Emberfall.UI.Screens
             _campaign.OnClick(OnCampaign);
             _watch = EmberforgeUI.Button("Watch", _content, "WATCH", UITheme.FontBody, ForgeButtonKind.Secondary);
             _watch.OnClick(OnWatch);
+
+            // On Root rather than in _content, which is hidden while the wave resolves: the way
+            // home is there from the first frame. Built last so it draws over everything.
+            ScreenChrome.HomeDisc(Root, Router);
+        }
+
+        /// <summary>One screen back is the campaign map, which this screen was never remembered
+        /// from. Resolves and pays nothing, as CAMPAIGN does.</summary>
+        public override bool TryStepBack()
+        {
+            Router.Show(ScreenId.Campaign, false);
+            return true;
         }
 
         private void BuildLeft()
@@ -544,7 +556,8 @@ namespace Emberfall.UI.Screens
             run.Stage = replay.Stage;
             run.Result = fight;
             run.IsReplay = true;
-            run.Label = replay.Stage.DisplayCode + "   " + replay.Stage.Name.ToUpperInvariant()
+            run.Home = true;
+            run.Label =replay.Stage.DisplayCode + "   " + replay.Stage.Name.ToUpperInvariant()
                         + "   WAVE " + replay.Wave + "/" + replay.Stage.WaveCount
                         + "   BATTLE " + replay.Battle + "/" + replay.Stage.BattleCount + "   REPLAY";
             run.Subtitle = "REPLAY   " + fight.Rounds + " ROUNDS   BANNER AT "

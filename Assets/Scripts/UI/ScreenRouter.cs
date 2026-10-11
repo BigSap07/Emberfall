@@ -88,6 +88,14 @@ namespace Emberfall.UI
         /// <summary>Called every time the screen becomes visible - repaint from the profile here.</summary>
         public virtual void OnShow() { }
         public virtual void OnHide() { }
+
+        /// <summary>
+        /// The hardware back key's answer on this screen, asked before the router's history. True
+        /// means the screen stepped back itself and the press is spent. The default is false: the
+        /// history decides. A screen overrides it when "one screen back" is a place the history
+        /// does not hold, because the screens between it and there were shown without remembering.
+        /// </summary>
+        public virtual bool TryStepBack() { return false; }
     }
 
     /// <summary>Owns the screen instances and the transition between them.</summary>
@@ -289,6 +297,16 @@ namespace Emberfall.UI
         public void ClearHistory()
         {
             _history.Clear();
+        }
+
+        /// <summary>
+        /// The main menu, in one step, with nothing behind it to go back to. Resolves, pays and
+        /// saves nothing: it is a screen change and no more.
+        /// </summary>
+        public void GoHome()
+        {
+            _history.Clear();
+            Show(ScreenId.MainMenu, false);
         }
 
         private UIScreen Find(ScreenId id)
