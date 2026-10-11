@@ -838,6 +838,12 @@ a guild of 30.
 - **Not done:** the live guild rules test does not cover 0012, and no screen has been captured with
   `PlayModeScreenshot` since the tree replaced the Path screen.
 
+**The rule gaps (0014).** `Server/supabase/migrations/0014_guild_rule_gaps.sql` - **written, not
+applied.** The guild dungeon seed is derived and checked by the server, `guild_touch` writes at most
+once per 30 seconds, and `guild_by_code` refuses an account after ten misses in ten minutes, with
+`guild_request_send` taking only a found code. `Tools/supabase-guild-rules-test.py` asserts all
+three. Operator steps are in `Docs/CLOUD-GAPS.md`, **Fixed, pending apply: 0014**.
+
 ### The Deep Recital, The Proving, events, shop
 
 `RecitalGenerator` builds an endless floor ladder with a Guardian every tenth floor and an unbroken
@@ -1083,12 +1089,6 @@ editor prints `editor` and a player built through a door that did not stamp it p
 names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, which is `0.3.0`.
 
 ## In progress
-
-- **`server/rule-gaps`**: `0014_guild_rule_gaps.sql`, written and not applied. The guild dungeon
-  seed is derived and checked by the server, `guild_touch` writes at most once per 30 seconds, and
-  `guild_by_code` refuses an account after ten misses in ten minutes, with `guild_request_send`
-  taking only a found code. The guild rules test asserts all three. Operator steps are in
-  `Docs/CLOUD-GAPS.md`, **Fixed, pending apply: 0014**.
 
 A branch is named here when it holds work worth naming, and only while it is unmerged.
 
