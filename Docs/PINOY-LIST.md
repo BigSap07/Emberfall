@@ -109,34 +109,36 @@ character of her own who has landed in Cyrra's slot.
 
 ### 2a. One design change, not a transcription
 
-**Kiva III, Unclaimed Victory.** This is the only entry in this file where a number was decided
-here rather than transcribed, so it is the one that most needs saying yes or no to.
+**Kiva III, Unclaimed Victory.** This is the only entry in this file where the numbers and the
+trigger were decided here rather than transcribed, so it is the one that most needs saying yes or
+no to. **The wording below is pending your confirmation, and your wording wins** if it differs.
 
 - **As written:** "When Kiva defeats a Forsaken target, consume all Broken Links. Each one gives her
   a 12% Max HP Shield for 2 rounds."
-- **What it paid:** exactly zero, for a rate rather than for a bug. All three Shield clauses gated on
-  her holding a Broken Link, and Abandoned Support banks at most one link a round while Severance
-  Paid spends one on every basic against a Forsaken body - the same basic whose own Mark banked it.
-  She opens every turn at zero, so a kill finds nothing to consume.
-- **What it says now:** "When Kiva defeats a Forsaken target, she gains a Shield equal to 12% of her
-  Max HP for 2 rounds, and 12% more for each Broken Link she is holding, up to 36%. All Broken Links
-  are consumed."
-- **What changed:** the first of the three Shield clauses is ungated. The two link-gated clauses are
-  untouched, at the same 12% of Max HP and the same thresholds. It pays on the kill its own text
-  names rather than on a resource the rest of her kit spends before the kill arrives, and it is
-  still worth more to a Kiva who held links than to one who did not. It reads 1118 Shield in its own
-  arena against 0.
-- **And the "up to 36%" has never been paid, which the text now says out loud.** Measured over the
-  four dark arenas that can raise a Forsaken kill, three seeds each, and over the hero sweep's five:
-  **every payout is exactly 1118**, which is 12% of her 9320 Max HP at level 40, and there is never
-  a second ShieldGain event beside it. The two link-gated clauses are authored, correct and
-  reachable in principle; they are inert at the rates the rest of her kit runs at, which is the same
-  rate this entry already describes. The talent's own description carries the measurement now rather
-  than advertising a number nothing has produced. **Nothing about the kit changed for this** - it is
-  the sentence catching up with the arithmetic.
+- **What it paid as written:** exactly zero, for a rate rather than for a bug. Every Shield clause
+  gated on her holding a Broken Link, and Abandoned Support banks at most one link a round while
+  Severance Paid spends one on every basic against a Forsaken body, the same basic whose own Mark
+  banked it. She opened most turns at zero, so a kill found nothing to consume.
+- **What ships now:** when any enemy is defeated, whoever lands the blow, Kiva gains a Ward of 16%
+  of her Max HP for 3 rounds. If she is holding a Broken Link, she gains a further 12% of her Max HP
+  and every Broken Link she holds is spent. Two clauses: the first asks for nothing, the second asks
+  for one link.
+- **What changed, in two steps.** First the base clause was ungated, so the talent paid on the kill
+  its text names (a flat 12%, with link-gated 12% steps on top up to 36%). Then the talent-value pass
+  found that still too narrow: the killing blow is rarely Kiva's, and the 24% and 36% steps never
+  paid at her kit's rates. It moved the trigger to any enemy falling, took the Forsaken gate off,
+  raised the base to 16% for 3 rounds, and kept one link-gated 12% clause that spends every link.
+- **What it pays.** In its own room (`CheckDarkTalents`, level 40, Max HP 9320) it fires once and
+  pays 2609 Ward against 0 with no talent picked: 1491 from the base clause and 1118 from the link
+  clause, so the link clause is reachable now. Over 40 paired seeds in the sweep arena it reads
+  +3491 of her output a battle, t 7.8. The harness now also asserts that every firing pays at least
+  the ungated base, so the talent cannot drift back to paying only when a link happens to be held.
+- **The card says:** "When an enemy falls, Kiva takes a Ward worth a share of her Max HP. If she is
+  holding a Broken Link, the Ward is larger and every Broken Link she holds is spent."
 
-The wording was changed in `import/Heroes.json` as well as on the shipped talent, so both say the
-same thing. **If the answer is no, both come back together.**
+`import/Heroes.json` says the same thing in numbers. **If the answer is no, both come back
+together**, and so does the kit: going back to a Forsaken kill only, or to the 12% base, is a
+balance change that moves Kiva's sweep, talent and stage baselines.
 
 ### 2b. Clauses the engine could not say as written
 
@@ -324,10 +326,11 @@ the output total cannot see, or pay a price their own sentence names, and are fi
 Nysera's Deeper Absence strips a buff (a taunting tank's Provoke, in the sweep), Rheia's Endless
 Revision trades casts for bigger ones, Rheia's Perfect Reversal pays Energy for every strike it
 keeps Revision for, Marrow's Shared Oath spreads a smaller Promise over a third ally, and Kiva's
-Unclaimed Victory buys a Shield on every Forsaken kill. Kiva's talent left the list once her buff
+Unclaimed Victory bought a Shield on every Forsaken kill. Kiva's talent left the list once her buff
 listeners heard real buffs only and came back when the rarer-aspect pass lifted her kit x1.15: it
-read -410 a battle, t -1.7, and reads -807, t -2.9, in the same room, which also shows the Shield
-absorbing 308 and one ally death fewer. Mireth's No Record Remains left it the same way and gains in
+read -410 a battle, t -1.7, then -807, t -2.9, in the same room, which also showed the Shield
+absorbing 308 and one ally death fewer. **It has left the list since**: the talent-value pass made it
+answer any enemy falling, and it reads +3491, t 7.8 (2a has what ships). Mireth's No Record Remains left it the same way and gains in
 its own room. **These two buy nothing, and each is a conflict between the talent and the kit it hangs on**,
 so the smallest repair is a change to the kit rather than to a number.
 

@@ -1419,6 +1419,20 @@ Beyond the harness:
   photographs as tier level `9 -> 18` over Level `60 -> 60`, all four figures correct for a hero
   that should not exist. Whether the fix is a clamp on load, a regrant, or leaving old saves alone
   is a decision about player progress and has not been taken.
+- **The talent screen reads "no clear change" for talents the harness reads as clear gains, and
+  it is resolution, not a sampling bug.** On the local editor save of 2026-10-11 (Kael at Level 10 beside
+  Kiva, Isara, Kest and Oris), `TalentTrial` at its 40 seeds reads Kael I +468, t 1.69 and Kael II
+  +33, t 1.91, both `Unclear`, and Kael III +2307, t 9.7. The harness reads the same three as +757,
+  t 18.4, +4311, t 53.7 (in `s_triple`, because the sweep arena never raises Kael II) and +6535,
+  t 8.5. Seeds, pairing, the talent copy and the ascension gate all check out: both arms are the
+  same event for event until the talent first fires. The difference is the arena. The mirror is an
+  even fight (21 of 40 won), so the first firing flips who wins and how long it runs, and Kael I's
+  bare and talent outputs correlate at 0.09 across seeds where a stat-stick sweep keeps them
+  paired. Kael II stays paired, but changes only 11 of 40 fights in that line. At 120 seeds all
+  three read `Gains` (Kael I +451, t 3.0; II +65, t 4.4), for 370 ms of desktop simulation against
+  189 ms. The fix is a call about what the screen shows: more seeds for an unclear reading, and an
+  `Unclear` line that prints its estimate and how many fights it changed, rather than a word that
+  reads as zero.
 
 ## Waiting on Pinoy
 

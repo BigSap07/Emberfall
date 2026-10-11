@@ -27806,6 +27806,7 @@ namespace Emberfall.DevHarness
             public int Events, Rounds;
             public bool Victory;
             public int SubjectId = -1;
+            public float SubjectMaxHp;
             public int SubjectDamage, SubjectHeal, SubjectShield;
             /// <summary>How many damage EVENTS the subject produced, which is the
             /// only way to see a talent that appends a blow whose size is bounded.
@@ -27879,7 +27880,7 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < r.Units.Count; i++)
             {
                 UnitSnapshot u = r.Units[i];
-                if (u.DefId == subject.Id && p.SubjectId < 0) p.SubjectId = u.Id;
+                if (u.DefId == subject.Id && p.SubjectId < 0) { p.SubjectId = u.Id; p.SubjectMaxHp = u.MaxHp; }
                 if (!u.IsPlayer && u.MaxHp > biggestHp) { biggestHp = u.MaxHp; biggestEnemy = u.Id; }
                 energy[u.Id] = u.StartEnergy;
             }
@@ -28131,7 +28132,7 @@ namespace Emberfall.DevHarness
                       + " biggest body in this room often enough that the mark alone is close either"
                       + " way, and nothing else in her kit breaks a guard at all");
 
-            // ---- Kiva III: the same kill, and what it pays out now that the first clause is free.
+            // ---- Kiva III: a body falls, and what it pays out with no Broken Link asked for.
             //
             // THIS CHECK ASSERTS A SHIELD AGAIN. It stopped being able to when Severance Paid was
             // repaired, and the reason was a rate rather than a bug: Severance Paid was inert -
@@ -28141,26 +28142,40 @@ namespace Emberfall.DevHarness
             // banked at the kill. With those four gates repaired the spend is live and the rates
             // leave no remainder: Abandoned Support banks at most one link a round and Severance
             // Paid consumes one on every basic against a Forsaken body, the same basic whose own
-            // Mark banked it, so she opens every turn at zero and a kill found nothing to consume.
+            // Mark banked it, so she opens most turns at zero and a kill found nothing to consume.
             // A talent that pays exactly zero for structural reasons is not a talent.
             //
-            // The repair is content and it is the smallest one that answers the rate: the FIRST of
-            // the three Shield clauses is ungated, and the two link-gated ones are untouched. The
-            // talent reads 12 / 24 / 36% of her Max HP - it pays on the kill its own text names
-            // rather than on a resource the rest of her kit spends before the kill arrives, and it
-            // is still worth more to a Kiva who held links than to one who did not.
+            // The repair is content: the FIRST Shield clause is ungated, and a link-gated one sits
+            // on top of it and spends every link she holds. The talent-value pass then moved the
+            // trigger off OnKill, because the killing blow is rarely hers, to OnEnemyDefeated, and
+            // took the Forsaken gate off with it, so it answers any enemy falling now. Two clauses,
+            // not three: the clause that needed two links held at once went with that pass. The
+            // third check pins the ungated clause itself rather than the total, so a talent that
+            // came to pay only when a link happened to be held would fail here even though it
+            // still pays something.
             if (!DarkPair("kiva_the_forsaken_oath", 3, "s_soft_mid_big", "", 1, false, out a, out b))
                 Check(false, "kiva III arena built");
             else
             {
                 Check(b.Fires("kiva_unclaimed_victory") > 0 && a.Fires("kiva_unclaimed_victory") == 0,
-                      "Kiva III fires on a Forsaken kill (" + b.Fires("kiva_unclaimed_victory")
+                      "Kiva III fires when an enemy falls (" + b.Fires("kiva_unclaimed_victory")
                       + " against " + a.Fires("kiva_unclaimed_victory") + ")");
                 Check(b.SubjectShield > a.SubjectShield && a.SubjectShield == 0,
                       "and PAYS on it (" + b.SubjectShield + " Shield against " + a.SubjectShield
-                      + " with no talent selected) - the first of its three clauses is ungated now,"
-                      + " so the payout no longer depends on a Broken Link her own basic spends"
-                      + " before the kill lands");
+                      + " with no talent selected)");
+                PassiveDef uv = live.GetHero("kiva_the_forsaken_oath").TalentAt(3);
+                EffectDef ungated = uv != null && uv.Effects.Count > 0 ? uv.Effects[0] : null;
+                int floorPerFire = ungated == null ? 0
+                    : (int)Math.Round(b.SubjectMaxHp * ungated.SelfHpRatio, MidpointRounding.AwayFromZero);
+                Check(ungated != null && ungated.Kind == EffectKind.Shield
+                      && ungated.Condition == EffectCondition.None && floorPerFire > 0
+                      && b.SubjectShield >= b.Fires("kiva_unclaimed_victory") * floorPerFire,
+                      "and its first clause asks for no Broken Link: every firing paid at least "
+                      + floorPerFire + " Shield ("
+                      + ((ungated == null ? 0f : ungated.SelfHpRatio) * 100f).ToString("0", CultureInfo.InvariantCulture)
+                      + "% of her " + b.SubjectMaxHp.ToString("0", CultureInfo.InvariantCulture) + " Max HP), " + b.SubjectShield + " over "
+                      + b.Fires("kiva_unclaimed_victory") + " firing(s) - anything past the floor is"
+                      + " the link-gated clause on top");
                 Check(a.Count(StatusKind.HealSuppression) > 0,
                       "and Severance Paid, which named no status on its own stack gate and was inert"
                       + " for it, now lands with no talent selected at all: "
