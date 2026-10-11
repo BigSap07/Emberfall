@@ -29,8 +29,9 @@ namespace Emberfall.Battle
     ///   matching event off the BattleResult it was bound to, in order, per event type, matching on
     ///   target (and on crit for a hit). That is a lookup into the record, not a derivation, and a
     ///   tap that finds no match still plays a plain, neutral effect rather than a wrong one.
-    ///   BattleScreen uses the taps today. A StatusApplied has no tap, because nothing in the
-    ///   actor is touched when one plays; it needs the exact feed.
+    ///   Nothing in the game uses the taps now: BattleScreen and the Dev Arena both feed Play. A
+    ///   StatusApplied has no tap, because nothing in the actor is touched when one plays; it
+    ///   needs the exact feed.
     ///
     /// ART BIBLE. No element-literal effects: no flames because the attacker is Ember, nothing
     /// smoke-like for Umbra. Every shape is a neutral chip, streak or ring, tinted by the

@@ -801,6 +801,10 @@ namespace Emberfall.UI.Screens
                 GameObject host = new GameObject("BattleWorld");
                 _world = host.AddComponent<BattleStage>();
                 _world.Initialise();
+                // This screen has every event in hand as it plays it and feeds them to the
+                // director in Handle, which silences the taps UnitActor would otherwise fire for
+                // the same blow. Set once here because the director is built once per stage.
+                _world.Director.ExactFeed = true;
             }
             _world.BuildWorld(_stage.Environment);
         }
@@ -1085,6 +1089,13 @@ namespace Emberfall.UI.Screens
                 _pendingAnimationTail = 0f;
                 yield return Wait(tail);
             }
+
+            // Hit feedback, fed the event itself. Before the switch on purpose: the director reads a
+            // shield break off DisplayShield against the amount absorbed and a kill off a unit that
+            // is still standing, and the cases below are what subtract the one and end the other.
+            // It plays what the record says and decides nothing, so a skip that never reaches
+            // this line leaves the fight and its result exactly as they were.
+            _world.Director.Play(e);
 
             switch (e.Type)
             {
@@ -1873,7 +1884,9 @@ namespace Emberfall.UI.Screens
             _skipButton.Interactable = false;
 
             App.RefreshHud();
-            App.RequestSave();
+            // A replay holds a result somebody already has. It reaches no grant below, and it does
+            // not ask for a save either, so watching one cannot touch the save file.
+            if (_guildRun == null || !_guildRun.IsReplay) App.RequestSave();
 
             _resultTitle.text = _result.Victory ? "VICTORY" : "DEFEAT";
             _resultTitle.color = _result.Victory ? UITheme.Gold : UITheme.Danger;

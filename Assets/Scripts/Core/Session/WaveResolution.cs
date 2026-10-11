@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using Emberfall.Core.Combat;
+using Emberfall.Core.Data;
+using Emberfall.Core.Model;
 
 namespace Emberfall.Core.Session
 {
@@ -35,6 +37,28 @@ namespace Emberfall.Core.Session
         /// <summary>Share of the player's HP left at the end. The "am I still winning" signal.</summary>
         public float PlayerHpRatio;
         public float EnemyHpRatio;
+    }
+
+    /// <summary>
+    /// What it takes to fight one battle of a resolved wave again: the stage and position, the seed
+    /// the battle was resolved at, and the line that fought it. A fight is a pure function of its
+    /// request, so these four are the whole battle and a replay is the same event list, not a
+    /// second roll.
+    ///
+    /// MEMORY ONLY. It lives on the WaveResolution and nowhere else: SaveSerializer never sees it,
+    /// no save version moved for it, and it is gone when the next wave resolves. The line is a set
+    /// of copies, so a hero levelled after the wave does not change the fight being watched.
+    /// </summary>
+    public sealed class WaveReplay
+    {
+        /// <summary>The authored stage, not the resolved battle; GameSession.ReplayBattle resolves it.</summary>
+        public StageDef Stage;
+        public int Wave;
+        public int Battle;
+        public int Seed;
+        /// <summary>True when this is the battle that was lost, false when it is the closest win.</summary>
+        public bool Lost;
+        public readonly List<HeroInstance> Team = new List<HeroInstance>();
     }
 
     /// <summary>
@@ -83,5 +107,11 @@ namespace Emberfall.Core.Session
         /// <summary>PlayerHpRatio of the last battle WON, how much headroom the line had at the
         /// end of the run; -1 when no battle was won.</summary>
         public float Margin = -1f;
+
+        /// <summary>
+        /// The battle worth watching: the lost one after a loss, otherwise the win that left the
+        /// least of the line's HP. Null on a refusal. Never saved.
+        /// </summary>
+        public WaveReplay Replay;
     }
 }

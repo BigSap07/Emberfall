@@ -258,6 +258,7 @@ namespace Emberfall.DevHarness
             CheckRecital(content);
             CheckCampaignStructure(content);
             CheckWaveResolve(content);
+            CheckWaveReplay(content);
             CheckClearedStagesById(content, contentDir);
             CheckStageResumeAfterWaveResolve(content);
             CheckRegenClampOnLoad(content);
@@ -11916,6 +11917,149 @@ namespace Emberfall.DevHarness
             Line("  timing (print only): " + (ms / Math.Max(1, totalWaves)).ToString("0.0", CultureInfo.InvariantCulture)
                  + " ms per wave, " + (ms / Math.Max(1, totalBattles)).ToString("0.00", CultureInfo.InvariantCulture)
                  + " ms per battle over " + totalWaves + " resolves / " + totalBattles + " battles");
+        }
+
+        private static void CheckWaveReplay(ContentDatabase db)
+        {
+            Line("");
+            Line("WAVE REPLAY (WATCH on the wave result screen: same seed, same line, pays nothing, touches no save)");
+            StageDef ch11 = db.GetStage("ch1_1");
+            StageDef ch4 = db.GetStage("ch4_6");
+            if (ch11 == null || ch4 == null || db.Heroes.Count == 0)
+            {
+                Check(false, "content has ch1_1, ch4_6 and a hero to test the replay with");
+                return;
+            }
+            const long Now = 1700000000L;
+            const int Base = 31337;
+
+            // ---- the squad copy carries every field, found by reflection so a new field cannot be missed
+            System.Reflection.FieldInfo[] fields = typeof(HeroInstance).GetFields(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            HeroInstance src = new HeroInstance();
+            string unsupported = "";
+            for (int i = 0; i < fields.Length; i++)
+            {
+                System.Reflection.FieldInfo f = fields[i];
+                if (f.FieldType == typeof(string)) f.SetValue(src, "v" + i);
+                else if (f.FieldType == typeof(int)) f.SetValue(src, 100 + i);
+                else if (f.FieldType == typeof(long)) f.SetValue(src, 1000L + i);
+                else if (f.FieldType == typeof(string[]))
+                {
+                    string[] arr = (string[])f.GetValue(src);
+                    for (int k = 0; k < arr.Length; k++) arr[k] = "a" + i + "_" + k;
+                }
+                else if (f.FieldType == typeof(HeroDef)) f.SetValue(src, db.Heroes[0]);
+                else if (unsupported.Length == 0) unsupported = f.Name + " (" + f.FieldType.Name + ")";
+            }
+            HeroInstance dup = src.Copy();
+            string firstWrong = unsupported.Length > 0 ? "unsupported field type " + unsupported : "";
+            for (int i = 0; i < fields.Length && firstWrong.Length == 0; i++)
+            {
+                System.Reflection.FieldInfo f = fields[i];
+                object a = f.GetValue(src), b = f.GetValue(dup);
+                bool same;
+                if (f.FieldType == typeof(string[]))
+                {
+                    string[] x = (string[])a, y = (string[])b;
+                    same = !ReferenceEquals(x, y) && x.Length == y.Length;
+                    for (int k = 0; same && k < x.Length; k++) same = x[k] == y[k];
+                }
+                else if (f.FieldType == typeof(HeroDef)) same = ReferenceEquals(a, b);
+                else same = Equals(a, b);
+                if (!same) firstWrong = f.Name;
+            }
+            Check(firstWrong.Length == 0,
+                  "HeroInstance.Copy carries every one of its " + fields.Length + " public fields, with its own armor array"
+                  + (firstWrong.Length == 0 ? "" : " - first wrong: " + firstWrong));
+
+            // ---- a won wave: the closest win is chosen, and replaying it is the same fight
+            GameSession a1 = BuildPinnedLineAt(db, ch11, true, int.MaxValue);
+            string preResolve = SaveSerializer.Serialize(a1.Profile);
+            WaveResolution r1 = a1.ResolveWave(ch11, Base, Now);
+            Check(r1.Replay != null && !r1.Replay.Lost && r1.Replay.Team.Count == a1.Profile.TeamHeroes().Count,
+                  "a won wave keeps a replay of its line (" + (r1.Replay != null ? r1.Replay.Team.Count : 0) + " heroes)");
+
+            WaveBattleOutcome lowest = null;
+            for (int i = 0; i < r1.Battles.Count; i++)
+                if (lowest == null || r1.Battles[i].PlayerHpRatio < lowest.PlayerHpRatio) lowest = r1.Battles[i];
+            Check(r1.Replay != null && lowest != null && r1.Replay.Battle == lowest.Battle && r1.Replay.Wave == lowest.Wave
+                  && r1.Replay.Seed == lowest.Seed,
+                  "it is the win that left the least HP: battle " + (lowest != null ? lowest.Battle : 0) + " at "
+                  + (lowest != null ? Pct(lowest.PlayerHpRatio) : "-") + ", at the seed the resolve gave it");
+
+            // The fight as it was resolved: a twin loaded from the pre-resolve save, at the recorded seed.
+            GameSession twin = new GameSession(db, SaveSerializer.Deserialize(preResolve, db, out _waveErr));
+            BattleResult original = twin.ResolveLadderBattle(ch11, r1.Replay.Wave, r1.Replay.Battle, r1.Replay.Seed);
+
+            string saveBefore = SaveSerializer.Serialize(a1.Profile);
+            string purseBefore = PurseSignature(a1.Profile);
+            int cw0, cb0;
+            a1.ResumePointFor(ch11, out cw0, out cb0);
+            BattleResult replayed = a1.ReplayBattle(r1.Replay);
+            BattleResult replayedAgain = a1.ReplayBattle(r1.Replay);
+
+            Check(FingerprintOf(replayed) == FingerprintOf(original)
+                  && replayed.Victory == lowest.Victory && replayed.Rounds == lowest.Rounds
+                  && replayed.PlayerHpRatio == lowest.PlayerHpRatio && replayed.EnemyHpRatio == lowest.EnemyHpRatio,
+                  "the replay is the resolved fight: same event record, victory, rounds and HP ratios as the recorded outcome ("
+                  + replayed.Events.Count + " events)");
+            Check(FingerprintOf(replayedAgain) == FingerprintOf(replayed),
+                  "and a second replay is the first: there is no roll to be had");
+
+            int cw1, cb1;
+            a1.ResumePointFor(ch11, out cw1, out cb1);
+            Check(SaveSerializer.Serialize(a1.Profile) == saveBefore && PurseSignature(a1.Profile) == purseBefore
+                  && cw1 == cw0 && cb1 == cb0,
+                  "replaying twice leaves the serialized save byte for byte as it was: no purse, tally, cleared id or cursor moved");
+
+            // The copied line, not the live one: levelling a hero after the wave must not change what is watched.
+            List<HeroInstance> live = a1.Profile.TeamHeroes();
+            for (int i = 0; i < live.Count; i++) live[i].Level += 4;
+            Check(FingerprintOf(a1.ReplayBattle(r1.Replay)) == FingerprintOf(original),
+                  "the replay fights the line that fought: levelling every hero afterwards changes nothing in it");
+
+            // ---- a stage-clearing wave pays after its fights; the replay must still be those fights and pay nothing more
+            GameSession g = BuildPinnedLineAt(db, ch11, false, int.MaxValue);
+            WaveResolution last = null;
+            for (int w = 0; w < 6 && (last == null || !last.StageCleared); w++)
+                last = g.ResolveWave(ch11, Base + w, Now + w);
+            Check(last != null && last.StageCleared && last.Rewards != null && last.Replay != null,
+                  "the wave that clears the stage keeps a replay as well");
+            if (last != null && last.Replay != null)
+            {
+                string clearedSave = SaveSerializer.Serialize(g.Profile);
+                string clearedPurse = PurseSignature(g.Profile);
+                BattleResult watched = g.ReplayBattle(last.Replay);
+                Check(SaveSerializer.Serialize(g.Profile) == clearedSave && PurseSignature(g.Profile) == clearedPurse,
+                      "replaying a stage-clearing wave pays no second clear: the save is byte for byte as the clear left it");
+                Check(watched.Events.Count > 0 && watched.Victory == !last.Replay.Lost,
+                      "and it plays back as the victory it was (" + watched.Events.Count + " events)");
+            }
+
+            // ---- a lost wave: the lost battle is the one to watch
+            GameSession weak = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            ClearThrough(weak, db, ch4.GlobalIndex, Now);
+            weak.Profile.CampaignCurrentStageId = ch4.Id;
+            weak.Profile.CampaignCurrentWave = 1;
+            weak.Profile.CampaignCurrentBattle = 5;
+            WaveResolution lost = weak.ResolveWave(ch4, Base, Now);
+            Check(lost.Replay != null && lost.Replay.Lost && lost.Replay.Battle == lost.LostBattle && lost.Replay.Wave == lost.Wave,
+                  "a lost wave keeps the lost battle (battle " + lost.LostBattle + ") as its replay");
+            if (lost.Replay != null)
+            {
+                string lostSave = SaveSerializer.Serialize(weak.Profile);
+                BattleResult lostAgain = weak.ReplayBattle(lost.Replay);
+                Check(!lostAgain.Victory && FingerprintOf(lostAgain) == FingerprintOf(lost.LostResult),
+                      "and it replays as the same loss, event for event");
+                Check(SaveSerializer.Serialize(weak.Profile) == lostSave,
+                      "watching a loss changes nothing in the save, and the cursor still points at the lost battle");
+            }
+
+            // ---- a refusal has nothing to watch
+            GameSession fresh = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            Check(fresh.ResolveWave(db.GetStage("ch2_1"), Base, Now).Replay == null,
+                  "a refused resolve (stage locked) keeps no replay");
         }
 
         private static string _waveErr;

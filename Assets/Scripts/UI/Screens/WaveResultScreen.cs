@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
+using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Session;
 
@@ -72,10 +73,15 @@ namespace Emberfall.UI.Screens
         private UIButton _continue;
         private UIButton _adjust;
         private UIButton _campaign;
+        private UIButton _watch;
 
         private StageDef _pending;
         private StageDef _stage;
         private WaveResolution _result;
+
+        /// <summary>Set when WATCH sends the player to the battle screen, so coming back paints the
+        /// wave they left instead of resolving another or showing a blank page.</summary>
+        private bool _returning;
 
         /// <summary>True once the result is on screen. The capture tool waits on this rather than
         /// on a fixed delay, because how long a wave takes to resolve depends on the line.</summary>
@@ -123,7 +129,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_lossLine.rectTransform, 20f, 4f, 20f, 4f);
             UIBuilder.BestFit(_lossLine, 14, UITheme.FontSmall);
 
-            // All five are built once and shown or hidden per result, so a listener is wired once
+            // All six are built once and shown or hidden per result, so a listener is wired once
             // (UIButton.OnClick appends) and the names stay stable for the capture tool.
             _nextWave = EmberforgeUI.Button("NextWave", _content, "NEXT WAVE", UITheme.FontHeading, ForgeButtonKind.Primary);
             _nextWave.OnClick(OnResolveAgain);
@@ -135,6 +141,8 @@ namespace Emberfall.UI.Screens
             _adjust.OnClick(OnAdjust);
             _campaign = EmberforgeUI.Button("Campaign", _content, "CAMPAIGN", UITheme.FontBody, ForgeButtonKind.Secondary);
             _campaign.OnClick(OnCampaign);
+            _watch = EmberforgeUI.Button("Watch", _content, "WATCH", UITheme.FontBody, ForgeButtonKind.Secondary);
+            _watch.OnClick(OnWatch);
         }
 
         private void BuildLeft()
@@ -202,6 +210,15 @@ namespace Emberfall.UI.Screens
             StopAllCoroutines();
             Painted = false;
             _content.gameObject.SetActive(false);
+            if (_pending == null && _returning && _result != null && _result.Refused == WaveRefusal.None)
+            {
+                // Back from watching a replay: the wave is already resolved and already paid, so
+                // draw it again as it stood. Nothing is resolved, granted or saved on this path.
+                _returning = false;
+                Paint();
+                return;
+            }
+            _returning = false;
             if (_pending == null)
             {
                 // Reached with nothing to resolve: the way out and nothing else, not a blank page.
@@ -426,13 +443,26 @@ namespace Emberfall.UI.Screens
         private void PaintButtons(WaveResolution r, bool lost)
         {
             HideButtons();
-            if (lost) Place(_retry, _adjust, _campaign);
+            bool watch = r.Replay != null;
+            if (lost) Row(watch, _retry, _adjust, _campaign);
             else if (r.StageCleared)
             {
-                if (App.Session.FirstUnclearedStage != null) Place(_continue, _campaign);
-                else Place(_campaign);
+                if (App.Session.FirstUnclearedStage != null) Row(watch, _continue, _campaign);
+                else Row(watch, _campaign);
             }
-            else Place(_nextWave, _campaign);
+            else Row(watch, _nextWave, _campaign);
+        }
+
+        /// <summary>The buttons for this result, with WATCH second when there is a battle to watch:
+        /// after the one tap that moves on, before the ways out.</summary>
+        private void Row(bool withWatch, params UIButton[] row)
+        {
+            if (!withWatch) { Place(row); return; }
+            UIButton[] all = new UIButton[row.Length + 1];
+            all[0] = row[0];
+            all[1] = _watch;
+            for (int i = 1; i < row.Length; i++) all[i + 1] = row[i];
+            Place(all);
         }
 
         private void HideButtons()
@@ -442,6 +472,7 @@ namespace Emberfall.UI.Screens
             _continue.Root.gameObject.SetActive(false);
             _adjust.Root.gameObject.SetActive(false);
             _campaign.Root.gameObject.SetActive(false);
+            _watch.Root.gameObject.SetActive(false);
         }
 
         /// <summary>Lays the given buttons out as one centred row along the bottom, the first
@@ -487,6 +518,44 @@ namespace Emberfall.UI.Screens
             StageDef next = App.Session.NextStage;
             if (next == null) { Router.Show(ScreenId.Campaign, false); return; }
             CampaignFlow.Launch(App, next);
+        }
+
+        /// <summary>
+        /// Plays the wave's hardest battle (the lost one, after a loss) on the battle screen.
+        ///
+        /// The fight is re-run by GameSession.ReplayBattle from the seed and the line the resolve
+        /// kept, which is the same pure function the resolve ran, and handed to the battle screen
+        /// as a finished result. The screen computes nothing, pays nothing and asks for no save;
+        /// its one button comes back here and draws this wave again.
+        /// </summary>
+        private void OnWatch()
+        {
+            App.Audio.Tap();
+            WaveReplay replay = _result != null ? _result.Replay : null;
+            if (replay == null) return;
+
+            BattleResult fight = App.Session.ReplayBattle(replay);
+
+            GuildBattleRun run = new GuildBattleRun();
+            run.Stage = replay.Stage;
+            run.Result = fight;
+            run.IsReplay = true;
+            run.Label = replay.Stage.DisplayCode + "   " + replay.Stage.Name.ToUpperInvariant()
+                        + "   WAVE " + replay.Wave + "/" + replay.Stage.WaveCount
+                        + "   BATTLE " + replay.Battle + "/" + replay.Stage.BattleCount + "   REPLAY";
+            run.Subtitle = "REPLAY   " + fight.Rounds + " ROUNDS   BANNER AT "
+                           + Mathf.RoundToInt(fight.PlayerHpRatio * 100f) + "%";
+            run.Rows.Add(new System.Collections.Generic.KeyValuePair<string, string>("REWARDS", "NONE"));
+            run.PrimaryLabel = "BACK";
+            run.OnPrimary = delegate
+            {
+                _returning = true;
+                Router.Show(ScreenId.WaveResult, false);
+            };
+
+            _returning = true;
+            App.Router.Battle.SetGuildRun(run);
+            Router.Show(ScreenId.Battle, false);
         }
 
         private void OnAdjust()

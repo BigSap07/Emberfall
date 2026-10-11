@@ -135,6 +135,30 @@ namespace Emberfall.Core.Model
 
         [NonSerialized] public HeroDef Def;
 
+        /// <summary>
+        /// An independent copy of every field the simulation or the save reads, so a line can be
+        /// held after the player changes the hero it was taken from (GameSession.ResolveWave keeps
+        /// one to replay its hardest battle). Every public instance field is copied, and the
+        /// harness reflects over them to say so: a field added to this class and left out here
+        /// fails CheckWaveReplay rather than quietly replaying a different hero.
+        /// </summary>
+        public HeroInstance Copy()
+        {
+            HeroInstance c = new HeroInstance();
+            c.Uid = Uid;
+            c.DefId = DefId;
+            c.Level = Level;
+            c.Copies = Copies;
+            c.AcquiredUnix = AcquiredUnix;
+            c.Ascension = Ascension;
+            c.EquippedRelicId = EquippedRelicId;
+            for (int i = 0; i < EquippedArmor.Length && i < c.EquippedArmor.Length; i++)
+                c.EquippedArmor[i] = EquippedArmor[i];
+            c.SelectedTalent = SelectedTalent;
+            c.Def = Def;
+            return c;
+        }
+
         public UnitStats Stats
         {
             get { return Def != null ? StatMath.ForHero(Def, Level) : new UnitStats(); }

@@ -894,6 +894,13 @@ namespace Emberfall.Core.Session
             res.BattleCount = Math.Max(1, stage.BattleCount);
             res.FirstBattle = battle;
 
+            // The line that is about to fight, copied before anything can move it. A stage clear
+            // pays out below, after the fights, and the player can level a hero the moment they
+            // leave the result screen; the replay has to be the line that fought.
+            List<HeroInstance> fighting = new List<HeroInstance>();
+            List<HeroInstance> live = Profile.TeamHeroes();
+            for (int i = 0; i < live.Count; i++) fighting.Add(live[i].Copy());
+
             for (int b = battle; b <= res.BattleCount; b++)
             {
                 int ordinal = CampaignWaveGenerator.BattleOrdinal(stage, wave, b);
@@ -935,11 +942,53 @@ namespace Emberfall.Core.Session
                 if (w2 != wave) { res.WaveCleared = true; break; }
             }
 
+            res.Replay = ChooseReplay(stage, res, fighting);
+
             int nextWave, nextBattle;
             ResumePointFor(stage, out nextWave, out nextBattle);
             res.NextWave = nextWave;
             res.NextBattle = nextBattle;
             return res;
+        }
+
+        /// <summary>
+        /// The battle of a resolved wave worth watching: the one that was lost, else the win that
+        /// left the lowest share of the line's HP. The first of equals, so the choice is stable.
+        /// Chosen from the record ResolveWave already holds, so it adds no fight and no rule.
+        /// </summary>
+        private static WaveReplay ChooseReplay(StageDef stage, WaveResolution res, List<HeroInstance> fighting)
+        {
+            WaveBattleOutcome pick = null;
+            for (int i = 0; i < res.Battles.Count; i++)
+            {
+                WaveBattleOutcome o = res.Battles[i];
+                if (!o.Victory) { pick = o; break; }
+                if (pick == null || o.PlayerHpRatio < pick.PlayerHpRatio) pick = o;
+            }
+            if (pick == null) return null;
+
+            WaveReplay replay = new WaveReplay();
+            replay.Stage = stage;
+            replay.Wave = pick.Wave;
+            replay.Battle = pick.Battle;
+            replay.Seed = pick.Seed;
+            replay.Lost = !pick.Victory;
+            replay.Team.AddRange(fighting);
+            return replay;
+        }
+
+        /// <summary>
+        /// Fights a replay's battle again: the same stage position, the same seed, the copied line.
+        /// Reads the profile only for what a request always reads from it (equipped armor and guild
+        /// tech) and writes nothing to it: no cursor, no purse, no tally. That is the whole of what
+        /// "a replay pays nothing" means, and CheckWaveReplay proves it against the serialized save.
+        /// </summary>
+        public BattleResult ReplayBattle(WaveReplay replay)
+        {
+            StageDef resolved = CampaignWaveGenerator.BuildBattle(replay.Stage, replay.Wave, replay.Battle);
+            BattleRequest request = BuildBattleRequest(resolved, replay.Seed);
+            request.Team = replay.Team;
+            return CombatSimulation.Run(request);
         }
 
         /// <summary>Whether a one-tap sweep is offered: the stage has a real curve and the player
