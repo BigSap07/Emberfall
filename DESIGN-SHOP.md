@@ -226,9 +226,9 @@ move, and a seed would mean every retune silently rerolled the stock a player wa
 An upgrading save has none of these keys, reads as an empty stock with a zero stamp, and rolls fresh
 stock the first time the shop is opened. No migration.
 
-**A version-number collision to be aware of.** `SaveSerializer.CurrentVersion` is **8** on `main`
-today, but the unmerged `feat/the-proving` branch already takes **9**. Whichever of the two lands
-second takes 10. This document deliberately does not claim a number, because claiming one would put
+**A version-number collision to be aware of.** When this was written, `SaveSerializer.CurrentVersion`
+was **8** on `main`, and The Proving's save change, not yet merged, had already taken **9**. Whichever
+of the two landed second took 10. This document deliberately does not claim a number, because claiming one would put
 a wrong constant into a doc that outlives the branch race.
 
 ---
