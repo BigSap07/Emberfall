@@ -106,17 +106,32 @@ namespace Emberfall.UI
         private void BuildCurrencies()
         {
             float step = PillWidth + UITheme.Space12;
-            _dustText = Pill("Dust", -UITheme.ScreenPadding - step * 2f, UITheme.Dust);
-            _goldText = Pill("Gold", -UITheme.ScreenPadding - step, UITheme.Gold);
-            _shardText = Pill("Shards", -UITheme.ScreenPadding, UITheme.Shard);
+            _dustText = Pill("Dust", "DUST", -UITheme.ScreenPadding - step * 2f, UITheme.Dust);
+            _goldText = Pill("Gold", "GOLD", -UITheme.ScreenPadding - step, UITheme.Gold);
+            _shardText = Pill("Shards", "SHARDS", -UITheme.ScreenPadding, UITheme.Shard);
         }
 
-        private Text Pill(string name, float x, Color jewelTint)
+        /// <summary>
+        /// One pill, NAMED. Three jewels of one shape told apart only by colour were three
+        /// identical diamonds to anyone who had not already learned which colour was which, so
+        /// each pill says what it holds in the quiet voice beside its jewel.
+        /// </summary>
+        private Text Pill(string name, string caption, float x, Color jewelTint)
         {
             ForgePill pill = EmberforgeUI.CurrencyPill(name, Root, PillWidth, PillHeight,
                                                        jewelTint, null);
             UIBuilder.Box(pill.Root, x, -(UITheme.TopBarHeight - PillHeight) * 0.5f,
                           PillWidth, PillHeight, new Vector2(1f, 1f));
+
+            // Hung in the pill's own left half, after the jewel, where the right-aligned figure
+            // never reaches: the widest figure Format writes is five characters.
+            float captionLeft = PillHeight * 0.14f + PillHeight * 0.72f + Emberforge.Space8;
+            Text label = EmberforgeUI.Label("Caption", pill.Root, caption, UITheme.FontTiny - 4,
+                                            Emberforge.TextQuiet, TextAnchor.MiddleLeft);
+            UIBuilder.Box(label.rectTransform, captionLeft, 0f, 90f, 28f, new Vector2(0f, 0.5f));
+            UIBuilder.BestFit(label, UITheme.FontTiny - 8, UITheme.FontTiny - 4);
+            UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
+            label.raycastTarget = false;
             return pill.Value;
         }
 

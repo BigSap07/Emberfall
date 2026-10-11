@@ -137,6 +137,9 @@ namespace Emberfall.UI
             _body = EmberforgeUI.Body("Body", _panel, "", UITheme.FontBody, Emberforge.TextBody,
                                       TextAnchor.UpperCenter);
             UIBuilder.Box(_body.rectTransform, 0f, -110f, 700f, 230f, new Vector2(0.5f, 1f));
+            // Shrinks rather than spills: a "?" notice carries the paragraph a page moved off its
+            // cards, which can be longer than a confirm's one line. Text that fits keeps FontBody.
+            UIBuilder.BestFit(_body, UITheme.FontTiny - 2, UITheme.FontBody);
             UIBuilder.Outlined(_body, Emberforge.Outline, Emberforge.StrokeThin);
 
             // TEAL cancels and EMBER confirms, which is the kit's whole button vocabulary: the

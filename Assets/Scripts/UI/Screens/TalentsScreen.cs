@@ -19,41 +19,46 @@ namespace Emberfall.UI.Screens
     /// diagram. The three cards are the same size at the same height with the same blocks in the
     /// same order, because the only thing a reader is being asked to do here is compare them.
     ///
-    /// WHAT A TALENT DOES IS THE MIDDLE OF THE CARD AND THE LARGEST THING ON IT. Three blocks,
-    /// top to bottom:
+    /// THE CARD ANSWERS THREE QUESTIONS AND NOTHING ELSE: what do I have, what does this cost,
+    /// what do I get. The legibility pass is what cut it to that. Every block that explained a
+    /// rule - the authored sentence, the audit's account of a trade, the two footnotes, the
+    /// page's footer - moved behind a "?", one tap away, because a card that explains itself in
+    /// prose is a card a new player reads none of. Top to bottom:
     ///
-    ///   WHAT IT COSTS, when it costs anything. TalentAudit.Costly names seven talents that buy
-    ///     their utility with their own hero's output, and a cost the reader finds last is a cost
-    ///     the reader does not find. So it is a chip and a sentence directly under the name,
-    ///     above the prose, saying both halves of the trade.
-    ///   WHAT IT SAYS. The authored sentence, which by house rule quotes no number.
-    ///   WHAT IT DOES, IN NUMBERS. Durations, sizes, thresholds, Energy and damage, printed from
-    ///     the effect data through TalentMath, AbilityMath and TalentText - before and after,
-    ///     where a talent moves something the kit already had. Not one figure here is written in
-    ///     this file; they come from the same AbilityMath the harness proves equal to what
-    ///     CombatSimulation deals, in CheckAbilityNumbersMatchTheSimulation.
+    ///   WHAT IT COSTS, when it costs anything. TalentAudit.Costly names the talents that buy
+    ///     their utility with their own hero's output. The chip stays on the card, under the
+    ///     name, because a cost found last is a cost not found; the sentence saying both halves
+    ///     of the trade is the first thing behind the card's "?".
+    ///   WHAT YOU GET, IN NUMBERS, and it is the LARGEST TEXT ON THE CARD. Durations, sizes,
+    ///     thresholds, Energy and damage, printed from the effect data through TalentMath,
+    ///     AbilityMath and TalentText - before and after, where a talent moves something the kit
+    ///     already had. Not one figure here is written in this file; they come from the same
+    ///     AbilityMath the harness proves equal to what CombatSimulation deals, in
+    ///     CheckAbilityNumbersMatchTheSimulation. A talent with no number of its own prints its
+    ///     sentence here instead, because then the sentence IS what you get.
     ///
-    /// AND THE THREE WAYS A FIGURE CAN BE TRUE ARE TOLD APART rather than flattened. Six effects
-    /// in the roster take their amount from a runtime quantity and twenty-one are priced entirely
-    /// off the target's health: neither has an honest flat number outside a fight, so those print
-    /// their clause. Twenty-eight carry a term the card cannot see, and the seven of those that
-    /// also carry a real caster-side figure - the other twenty-one being the flatless list again -
-    /// print that figure and say "or more", because it is the least the fight deals rather than
-    /// the whole. TalentFigureBasis is the distinction and TalentText.FloorNote and ClauseNote are
-    /// the two sentences that explain it, said once under a list that contains one rather than on
-    /// every line that is one.
+    /// AND THE THREE WAYS A FIGURE CAN BE TRUE ARE STILL TOLD APART. Six effects in the roster
+    /// take their amount from a runtime quantity and twenty-one are priced entirely off the
+    /// target's health: neither has an honest flat number outside a fight, so those print their
+    /// clause. Those that carry a term the card cannot see and a real caster-side figure print
+    /// the figure and say "or more". TalentFigureBasis is the distinction; TalentText.FloorNote
+    /// and ClauseNote, the two sentences that explain it, are behind the "?" of a card whose list
+    /// earned one.
     ///
-    /// NONE IS ONE OF THE OPTIONS, not the absence of one. It sits under the three as a bar in
-    /// the same plate, selected the same way, with the same kind of button - because an
-    /// unselected talent is genuinely absent from the fight (HeroDef.TalentAt returns null and
-    /// the simulation appends nothing), and a page that made "none" a way of failing to choose
-    /// would be lying about what the fourth state is.
+    /// NONE IS ONE OF THE OPTIONS, not the absence of one, and it stays selectable the same way
+    /// - a row under the three that the player presses. But it is the QUIETEST control on the
+    /// page: a page whose purpose is picking a talent spent its loudest button on picking none,
+    /// and button weight follows usefulness. It is a plain row with no coloured button.
     ///
-    /// THE MEASUREMENT IS ONE LINE. TalentTrial fights the player's own line against a mirror of
-    /// itself and reports what each talent did to this hero's output. That is real and it stays,
-    /// but it is a reading of ONE line and it cannot see what a trade buys - TalentAudit exists
-    /// for exactly that reason - so it is a quiet line under the numbers rather than the block it
-    /// used to be. What a talent DOES outranks what it measured here once.
+    /// THE MEASUREMENT IS ONE LINE per card. TalentTrial fights the player's own line against a
+    /// mirror of itself and reports what each talent did to this hero's output, which is a
+    /// reading of what you get and stays. How the reading was taken - fights, milliseconds on
+    /// this device - was telemetry for whoever built the page, and is gone from it.
+    ///
+    /// CARDS END WHERE THEIR CONTENT ENDS. The three used to stretch to the bottom of the
+    /// canvas whatever they held, so a talent printing one figure carried a third of a card of
+    /// empty panel. They are top-anchored and as tall as the tallest of the three needs, and the
+    /// none row follows directly under them.
     ///
     /// NO GAME LOGIC HERE. The rule is GameSession.SelectTalent, the numbers are TalentMath and
     /// AbilityMath, the measurement is TalentTrial, and this page draws what they return.
@@ -62,19 +67,17 @@ namespace Emberfall.UI.Screens
     {
         public override ScreenId Id { get { return ScreenId.Talents; } }
 
-        // THE PAGE STRETCHES between the header and the footer, measured against the SHORTEST
-        // canvas this game targets, the way the hero page does.
+        // THE CARDS HANG FROM THE STRIP and are as tall as their content, up to what the
+        // SHORTEST canvas this game targets leaves them:
         //
-        //   966 short canvas - 252 header - 92 hero strip - 8 - 152 bottom = 462 of card.
+        //   966 short canvas - 252 header - 92 hero strip - 8 - 12 - 64 none row - 20 = 518 of card.
         //
-        // Inside a card the top block (name, cost, sentence) and the bottom block (measurement,
-        // button) are fixed, and the numbers list between them takes what is left and scrolls past
-        // it: six figures on an ordinary card at 20:9 and four on one carrying a cost banner, and
-        // more than that at every wider aspect. Measured against the roster rather than guessed:
-        // of the 90 authored talents the longest list is Talren III at six figures, ten carry a
-        // clause footnote and three a floor footnote, no card carries both, and none of the seven
-        // the audit calls costly carries either. Build below asserts the worst case anyway,
-        // because that is a fact about today's content and not about the layout.
+        // Inside a card the top block (name, cost chip) and the bottom block (measurement,
+        // button) are fixed, and the numbers list between them is as long as its figures, and
+        // scrolls only once the canvas runs out. Measured against the roster rather than
+        // guessed: of the 90 authored talents the longest list is Talren III at six figures.
+        // Build below asserts the worst case anyway, because that is a fact about today's
+        // content and not about the layout.
         private const float ShortestCanvasHeight = 966f;
         private const float HeaderBottom = 252f;
         private const float StripHeight = 92f;
@@ -82,37 +85,38 @@ namespace Emberfall.UI.Screens
         private const float CardsTop = HeaderBottom + StripHeight + StripGap;
         private const float CardGutter = 24f;
 
-        // The bottom block, measured from the screen's bottom edge: three lines of page rule, then
-        // the none bar above them.
-        private const float FooterLine = 20f;
-        private const float NoneBarBottom = 68f;
-        private const float NoneBarHeight = 74f;
-        private const float BottomBlock = NoneBarBottom + NoneBarHeight + 10f;
+        // The none row, directly under the cards rather than pinned to the canvas bottom.
+        private const float NoneRowGap = 12f;
+        private const float NoneRowHeight = 64f;
+        private const float BottomMargin = 20f;
 
         private const float CardPad = 28f;
         private const float BlockGap = 8f;
         private const float NameTop = 18f;
         private const float NameHeight = 38f;
-        private const float CostHeight = 64f;
-        private const float ProseHeight = 68f;
+        private const float CostHeight = 28f;
         private const float RuleGap = 6f;
-        private const float HeadingHeight = 20f;
-        private const float NumberRow = 24f;
-        private const float NoteRow = 22f;
+        private const float WhereRow = 22f;
+        private const float OutcomeRow = 36f;
+        private const float ListSpacing = 2f;
+        private const float ListPad = 4f;
 
         private const float ButtonHeight = 60f;
         private const float MeasuredHeight = 22f;
 
-        /// <summary>Everything under the numbers list that is always there: the measurement line
-        /// and the button. The footnotes are added to this per card, because a card that needs
-        /// none should not reserve room for two.</summary>
-        private const float CardBottomBase = CardPad * 0.5f + ButtonHeight + 10f + MeasuredHeight + 6f;
+        /// <summary>The "?" disc in a card's top-right corner, and the room the row beside it
+        /// leaves for it whether or not this card has anything behind one.</summary>
+        private const float HelpDiscSize = 44f;
+        private const float HelpReserve = HelpDiscSize + 10f;
+        private const float StateChipWidth = 116f;
 
-        /// <summary>Where the numbers list starts, for a talent the audit says nothing about.</summary>
-        private const float NumbersTopPlain = NameTop + NameHeight + BlockGap
-                                            + ProseHeight + BlockGap + RuleGap + HeadingHeight;
+        /// <summary>Everything under the numbers list: the measurement line and the button.</summary>
+        private const float CardBottom = CardPad * 0.5f + ButtonHeight + 10f + MeasuredHeight + BlockGap;
 
-        /// <summary>The same, for one carrying a cost banner.</summary>
+        /// <summary>Where the numbers list starts, for a hero whose talents carry no cost chip.</summary>
+        private const float NumbersTopPlain = NameTop + NameHeight + BlockGap + Emberforge.RuleHeight + RuleGap;
+
+        /// <summary>The same, for a hero one of whose talents carries one.</summary>
         private const float NumbersTopCostly = NumbersTopPlain + CostHeight + BlockGap;
 
         private const float StripCell = 92f;
@@ -136,15 +140,14 @@ namespace Emberfall.UI.Screens
         private Text _emptyBody;
         private UIButton _emptyButton;
 
-        private RectTransform _noneBar;
         private ForgeCard _noneCard;
         private RectTransform _noneChip;
-        private Text _noneBody;
-        private UIButton _noneRun;
+        private Text _noneLabel;
+        private RectTransform _noneState;
 
-        private Text _footerRule;
-        private Text _footerTravels;
-        private Text _footerMeasure;
+        /// <summary>What the page's own "?" says: the rules every pick on it shares, rewritten on
+        /// every repaint because they name the hero and its tier.</summary>
+        private string _pageHelp = "";
 
         /// <summary>What one talent's card needs to repaint without being rebuilt.</summary>
         private sealed class CardView
@@ -155,16 +158,13 @@ namespace Emberfall.UI.Screens
             public Text Name;
             public RectTransform StateChip;
             public RectTransform CostChip;
-            public Text CostNote;
-            public Text Prose;
-            public RectTransform Heading;
+            public ForgeDisc Help;
+            public string HelpTitle = "";
+            public string HelpBody = "";
             public Image Rule;
-            public Image RuleBottom;
             public RectTransform NumbersList;
             public ScrollRect NumbersScroll;
             public Text More;
-            public Text FloorNote;
-            public Text ClauseNote;
             public Text Measured;
             public UIButton Run;
         }
@@ -181,23 +181,38 @@ namespace Emberfall.UI.Screens
         protected override void Build()
         {
             EmberforgeUI.Ground(Root);
-            ScreenChrome.ForgedHeader(Root, "TALENTS", Router, out _headerSubtitle);
+            RectTransform header = ScreenChrome.ForgedHeader(Root, "TALENTS", Router, out _headerSubtitle);
+            ScreenChrome.HeaderHelp(header, delegate { App.Modal.ShowNotice("TALENTS", _pageHelp, "OK", null); });
             BuildStrip();
             BuildCards();
             BuildEmpty();
-            BuildNoneBar();
-            BuildFooter();
+            BuildNoneRow();
 
             // Says out loud when a card has outgrown the shortest canvas, for the reason
             // DesignGallery.CheckFits exists: the failure is silent at 16:9. The case measured is
-            // the worst one - a costly talent whose figures need both footnotes - and the floor is
-            // two lines of numbers, below which the list is not a list.
-            float card = ShortestCanvasHeight - CardsTop - BottomBlock;
-            float needed = NumbersTopCostly + NumberRow * 2f + CardBottomBase + NoteRow * 2f
-                         + Emberforge.RuleHeight + 10f;
+            // the worst one - a hero carrying a cost chip - and the floor is two figures under
+            // their ability's name, below which the list is not a list.
+            float card = MostCardHeight(ShortestCanvasHeight);
+            float needed = NumbersTopCostly + ListNeed(2, 1) + CardBottom;
             if (needed > card)
                 Debug.LogError("TalentsScreen: the worst card needs " + needed + " units for two lines of"
                                + " numbers and the shortest canvas leaves " + card + ".");
+        }
+
+        /// <summary>The tallest a card may be on a canvas this tall: what is left under the strip
+        /// once the none row and the bottom margin are taken.</summary>
+        private static float MostCardHeight(float canvasHeight)
+        {
+            return canvasHeight - CardsTop - NoneRowGap - NoneRowHeight - BottomMargin;
+        }
+
+        /// <summary>How tall a numbers list is with this many figure rows and ability headings,
+        /// measured the way its layout group lays them out.</summary>
+        private static float ListNeed(int outcomeRows, int whereRows)
+        {
+            int rows = outcomeRows + whereRows;
+            return outcomeRows * OutcomeRow + whereRows * WhereRow
+                 + Mathf.Max(0, rows - 1) * ListSpacing + ListPad;
         }
 
         /// <summary>
@@ -221,10 +236,12 @@ namespace Emberfall.UI.Screens
 
         private void BuildCards()
         {
+            // Top-anchored; FillCards sets the height once it knows what the three hold.
             _cardsHost = UIBuilder.Node("Cards", Root);
-            _cardsHost.anchorMin = new Vector2(0f, 0f);
+            _cardsHost.anchorMin = new Vector2(0f, 1f);
             _cardsHost.anchorMax = new Vector2(1f, 1f);
-            _cardsHost.offsetMin = new Vector2(UITheme.ScreenPadding, BottomBlock);
+            _cardsHost.pivot = new Vector2(0.5f, 1f);
+            _cardsHost.offsetMin = new Vector2(UITheme.ScreenPadding, -(CardsTop + MostCardHeight(ShortestCanvasHeight)));
             _cardsHost.offsetMax = new Vector2(-UITheme.ScreenPadding, -CardsTop);
 
             for (int i = 0; i < HeroDef.MaxTalents; i++) _cards.Add(BuildCard(i));
@@ -254,59 +271,46 @@ namespace Emberfall.UI.Screens
                                              UITheme.FontSmall);
             UIBuilder.Box(view.Numeral, CardPad, -NameTop, 58f, NameHeight, new Vector2(0f, 1f));
 
-            view.Name = EmberforgeUI.Title("Name", root, "", UITheme.FontBody, Emberforge.TextGold,
+            // The name is SMALLER than the figures under it: what the talent is called is how the
+            // player finds it again, and what it gives is what the card is for.
+            view.Name = EmberforgeUI.Title("Name", root, "", UITheme.FontSmall, Emberforge.TextGold,
                                            TextAnchor.MiddleLeft);
             view.Name.rectTransform.anchorMin = new Vector2(0f, 1f);
             view.Name.rectTransform.anchorMax = new Vector2(1f, 1f);
             view.Name.rectTransform.pivot = new Vector2(0f, 1f);
             view.Name.rectTransform.offsetMin = new Vector2(CardPad + 70f, -(NameTop + NameHeight));
-            view.Name.rectTransform.offsetMax = new Vector2(-(CardPad + 150f), -NameTop);
+            view.Name.rectTransform.offsetMax = new Vector2(-(CardPad + HelpReserve + StateChipWidth + 10f), -NameTop);
             view.Name.resizeTextForBestFit = true;
-            view.Name.resizeTextMinSize = UITheme.FontTiny - 2;
-            view.Name.resizeTextMaxSize = UITheme.FontBody;
+            view.Name.resizeTextMinSize = UITheme.FontTiny - 4;
+            view.Name.resizeTextMaxSize = UITheme.FontSmall;
             UIBuilder.Outlined(view.Name, Emberforge.Outline, Emberforge.StrokeThin);
 
             view.StateChip = EmberforgeUI.Chip("Running", root, "RUNNING", UITheme.Success, UITheme.FontTiny - 4);
-            UIBuilder.Box(view.StateChip, -CardPad, -(NameTop + 6f), 136f, NameHeight - 12f, new Vector2(1f, 1f));
+            UIBuilder.Box(view.StateChip, -(CardPad + HelpReserve), -(NameTop + 6f), StateChipWidth,
+                          NameHeight - 12f, new Vector2(1f, 1f));
 
-            // WHAT IT COSTS, first, and only on the seven talents that cost anything. The chip
-            // says a cost exists; the note says what the cost buys. TalentAudit's own sentence is
-            // printed exactly as it is authored, so a talent that leaves the audited list loses
-            // its banner with no change here.
+            // The "?", centred on the name row's right end. Box pivots on the anchor, so the
+            // TouchMin hit rect's corner is placed half a hit rect out from the disc's centre.
+            int captured = index;
+            view.Help = EmberforgeUI.HelpDisc("Help", root, HelpDiscSize, delegate { ShowCardHelp(captured); });
+            float half = HubStyle.TouchMin * 0.5f;
+            UIBuilder.Box(view.Help.Root, -(CardPad + HelpDiscSize * 0.5f) + half,
+                          -(NameTop + NameHeight * 0.5f) + half, HubStyle.TouchMin, HubStyle.TouchMin,
+                          new Vector2(1f, 1f));
+
+            // WHAT IT COSTS, and only on the talents that cost anything: the chip alone. What the
+            // cost buys is TalentAudit's own sentence, the first thing behind this card's "?", so a
+            // talent that leaves the audited list loses both with no change here.
             view.CostChip = EmberforgeUI.Chip("Cost", root, "COSTS OUTPUT", UITheme.Warning, UITheme.FontTiny - 5);
-            UIBuilder.Box(view.CostChip, CardPad, -(NameTop + NameHeight + BlockGap), 186f, 24f,
+            UIBuilder.Box(view.CostChip, CardPad, -(NameTop + NameHeight + BlockGap), 186f, CostHeight,
                           new Vector2(0f, 1f));
-
-            view.CostNote = EmberforgeUI.Body("CostNote", root, "", UITheme.FontTiny - 3, UITheme.Warning,
-                                              TextAnchor.UpperLeft);
-            Stretch(view.CostNote.rectTransform, NameTop + NameHeight + BlockGap + 26f, CostHeight - 26f);
-            BestFit(view.CostNote, UITheme.FontTiny - 8, UITheme.FontTiny - 3);
-            UIBuilder.Outlined(view.CostNote, Emberforge.Outline, Emberforge.StrokeThin);
-
-            view.Prose = EmberforgeUI.Body("Prose", root, "", UITheme.FontTiny, Emberforge.TextBody,
-                                           TextAnchor.UpperLeft);
-            Stretch(view.Prose.rectTransform, NumbersTopPlain - ProseHeight - BlockGap - RuleGap - HeadingHeight,
-                    ProseHeight);
-            BestFit(view.Prose, UITheme.FontTiny - 6, UITheme.FontTiny);
-            UIBuilder.Outlined(view.Prose, Emberforge.Outline, Emberforge.StrokeThin);
 
             view.Rule = EmberforgeUI.Rule("Rule", root);
 
-            // The band the figures live in is CLOSED at the bottom as well as opened at the top.
-            // A talent that changes one thing prints one line, and an open-ended band with one
-            // line in it and a third of a card under it reads as a card that failed to finish
-            // rather than as a talent that does one thing.
-            view.RuleBottom = EmberforgeUI.Rule("RuleBottom", root);
-
-            view.Heading = UIBuilder.Node("Heading", root);
-            Text heading = EmberforgeUI.Label("Text", view.Heading, "WHAT IT DOES", UITheme.FontTiny - 4,
-                                              Emberforge.TextGold, TextAnchor.LowerLeft);
-            UIBuilder.FillParent(heading.rectTransform, 0f);
-            UIBuilder.Outlined(heading, Emberforge.Outline, Emberforge.StrokeThin);
-
-            // The numbers list: the middle of the card, and the largest block on it.
+            // The numbers list: what you get, and the largest text on the card.
             ScrollRect scroll;
-            view.NumbersList = UIBuilder.ScrollList("Numbers", root, out scroll, 2f, new RectOffset(0, 0, 2, 2));
+            view.NumbersList = UIBuilder.ScrollList("Numbers", root, out scroll, ListSpacing,
+                                                    new RectOffset(0, 0, (int)(ListPad * 0.5f), (int)(ListPad * 0.5f)));
             view.NumbersScroll = scroll;
 
             // Says there is more below when the list outruns its room. A list cut at its fourth
@@ -315,18 +319,6 @@ namespace Emberfall.UI.Screens
                                            TextAnchor.LowerRight);
             UIBuilder.Outlined(view.More, Emberforge.Outline, Emberforge.StrokeThin);
             view.More.gameObject.SetActive(false);
-
-            // The two footnotes, under the list rather than on the lines they belong to: a list
-            // where four of six figures carry the same rider is a list nobody finishes.
-            view.ClauseNote = EmberforgeUI.Body("ClauseNote", root, TalentText.ClauseNote,
-                                                UITheme.FontTiny - 7, Emberforge.TextQuiet, TextAnchor.LowerLeft);
-            BestFit(view.ClauseNote, UITheme.FontTiny - 10, UITheme.FontTiny - 7);
-            UIBuilder.Outlined(view.ClauseNote, Emberforge.Outline, Emberforge.StrokeThin);
-
-            view.FloorNote = EmberforgeUI.Body("FloorNote", root, TalentText.FloorNote,
-                                               UITheme.FontTiny - 7, Emberforge.TextQuiet, TextAnchor.LowerLeft);
-            BestFit(view.FloorNote, UITheme.FontTiny - 10, UITheme.FontTiny - 7);
-            UIBuilder.Outlined(view.FloorNote, Emberforge.Outline, Emberforge.StrokeThin);
 
             // The measurement, one line, bottom-anchored so the three read across as one row.
             view.Measured = EmberforgeUI.Label("Measured", root, "", UITheme.FontTiny - 4, Emberforge.TextQuiet,
@@ -348,48 +340,46 @@ namespace Emberfall.UI.Screens
         }
 
         /// <summary>
-        /// THE FOURTH OPTION, in the same plate as the other three and selected the same way.
+        /// THE FOURTH OPTION, selected the same way as the other three and pressed the same way
+        /// as a card in the strip: the whole row is the control.
         ///
-        /// A bar rather than a card because it has no numbers to print - that IS what it does -
+        /// A row rather than a card because it has no numbers to print - that IS what it does -
         /// and a fourth column would have shrunk the three that do. It sits directly under them,
-        /// in reading order, so the choice is read as four things and not as three things plus an
-        /// escape hatch in a corner.
+        /// in reading order, so the choice is read as four things.
+        ///
+        /// IT CARRIES NO COLOURED BUTTON. It used to carry the only teal one on the page, which
+        /// made "run nothing" the loudest thing on a screen whose purpose is picking something.
+        /// Button weight follows usefulness, so this row speaks in the quiet voice and only its
+        /// gold frame and RUNNING chip say when it is the pick.
         /// </summary>
-        private void BuildNoneBar()
+        private void BuildNoneRow()
         {
-            _noneBar = UIBuilder.Node("NoTalentBar", Root);
-            _noneBar.anchorMin = new Vector2(0f, 0f);
-            _noneBar.anchorMax = new Vector2(1f, 0f);
-            _noneBar.pivot = new Vector2(0.5f, 0f);
-            _noneBar.offsetMin = new Vector2(UITheme.ScreenPadding, NoneBarBottom);
-            _noneBar.offsetMax = new Vector2(-UITheme.ScreenPadding, NoneBarBottom + NoneBarHeight);
+            _noneCard = EmberforgeUI.SelectableCard("NoTalentRow", Root, delegate { Pick(0); });
+            RectTransform row = _noneCard.Root;
+            row.anchorMin = new Vector2(0f, 1f);
+            row.anchorMax = new Vector2(1f, 1f);
+            row.pivot = new Vector2(0.5f, 1f);
+            PlaceNoneRow(MostCardHeight(ShortestCanvasHeight));
 
-            _noneCard = new ForgeCard();
-            _noneCard.Root = _noneBar;
-            _noneCard.Plate = EmberforgeUI.PlainPanelOn(_noneBar);
-            _noneCard.Plate.raycastTarget = false;
+            _noneChip = EmberforgeUI.Chip("Numeral", _noneCard.Body, "NONE", Emberforge.TextQuiet, UITheme.FontTiny - 4);
+            UIBuilder.Box(_noneChip, CardPad, 0f, 96f, 30f, new Vector2(0f, 0.5f));
 
-            _noneChip = EmberforgeUI.Chip("Numeral", _noneBar, "NONE", Emberforge.TextQuiet, UITheme.FontTiny - 2);
-            UIBuilder.Box(_noneChip, CardPad, 0f, 110f, 34f, new Vector2(0f, 0.5f));
+            _noneLabel = EmberforgeUI.Label("Label", _noneCard.Body, "", UITheme.FontTiny,
+                                            Emberforge.TextQuiet, TextAnchor.MiddleLeft);
+            UIBuilder.Box(_noneLabel.rectTransform, CardPad + 112f, 0f, 520f, 34f, new Vector2(0f, 0.5f));
+            UIBuilder.Outlined(_noneLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            Text title = EmberforgeUI.Title("Title", _noneBar, "NO TALENT", UITheme.FontBody,
-                                            Emberforge.TextGold, TextAnchor.MiddleLeft);
-            UIBuilder.Box(title.rectTransform, CardPad + 126f, 0f, 260f, 34f, new Vector2(0f, 0.5f));
-            UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
+            _noneState = EmberforgeUI.Chip("Running", _noneCard.Body, "RUNNING", UITheme.Success, UITheme.FontTiny - 4);
+            UIBuilder.Box(_noneState, -CardPad, 0f, StateChipWidth, NameHeight - 12f, new Vector2(1f, 0.5f));
+        }
 
-            _noneBody = EmberforgeUI.Body("Body", _noneBar, "", UITheme.FontTiny - 2, Emberforge.TextBody,
-                                          TextAnchor.MiddleLeft);
-            _noneBody.rectTransform.anchorMin = new Vector2(0f, 0f);
-            _noneBody.rectTransform.anchorMax = new Vector2(1f, 1f);
-            _noneBody.rectTransform.offsetMin = new Vector2(CardPad + 400f, 8f);
-            _noneBody.rectTransform.offsetMax = new Vector2(-(CardPad + 300f), -8f);
-            BestFit(_noneBody, UITheme.FontTiny - 7, UITheme.FontTiny - 2);
-            UIBuilder.Outlined(_noneBody, Emberforge.Outline, Emberforge.StrokeThin);
-
-            _noneRun = EmberforgeUI.Button("Run", _noneBar, "RUN NO TALENT", UITheme.FontSmall,
-                                           ForgeButtonKind.Secondary);
-            UIBuilder.Box(_noneRun.Root, -(CardPad * 0.5f), 0f, 260f, ButtonHeight, new Vector2(1f, 0.5f));
-            _noneRun.OnClick(delegate { Pick(0); });
+        /// <summary>Hangs the none row directly under cards of this height.</summary>
+        private void PlaceNoneRow(float cardHeight)
+        {
+            RectTransform row = _noneCard.Root;
+            float top = CardsTop + cardHeight + NoneRowGap;
+            row.offsetMin = new Vector2(UITheme.ScreenPadding, -(top + NoneRowHeight));
+            row.offsetMax = new Vector2(-UITheme.ScreenPadding, -top);
         }
 
         /// <summary>The page for a hero with no talents, in place of the three cards.</summary>
@@ -414,30 +404,6 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(_emptyButton.Root, 0f, Emberforge.OrnamentClearance, 420f, 76f, new Vector2(0.5f, 0f));
             _emptyButton.OnClick(delegate { App.Audio.Tap(); Router.Show(ScreenId.Summon); });
             _empty.gameObject.SetActive(false);
-        }
-
-        /// <summary>The three facts that are true of every pick on the page, said once under all
-        /// four options rather than on each of them: the rule the page is shaped by, where this
-        /// hero's pick is seen, and how the reading was taken.</summary>
-        private void BuildFooter()
-        {
-            RectTransform footer = UIBuilder.Node("Footer", Root);
-            UIBuilder.BottomStrip(footer, NoneBarBottom - 6f, 0f, 0f);
-
-            _footerRule = EmberforgeUI.Label("Rule", footer, "", UITheme.FontTiny - 2, Emberforge.TextGold,
-                                             TextAnchor.LowerLeft);
-            FooterLineAt(_footerRule.rectTransform, FooterLine * 2f + 2f);
-            BestFit(_footerRule, UITheme.FontTiny - 7, UITheme.FontTiny - 2);
-
-            _footerTravels = EmberforgeUI.Label("Travels", footer, "", UITheme.FontTiny - 4, Emberforge.TextBody,
-                                                TextAnchor.LowerLeft);
-            FooterLineAt(_footerTravels.rectTransform, FooterLine + 2f);
-            BestFit(_footerTravels, UITheme.FontTiny - 8, UITheme.FontTiny - 4);
-
-            _footerMeasure = EmberforgeUI.Label("Measure", footer, "", UITheme.FontTiny - 6, Emberforge.TextQuiet,
-                                                TextAnchor.LowerLeft);
-            FooterLineAt(_footerMeasure.rectTransform, 2f);
-            BestFit(_footerMeasure, UITheme.FontTiny - 9, UITheme.FontTiny - 6);
         }
 
         // ------------------------------------------------------------------ show
@@ -467,7 +433,7 @@ namespace Emberfall.UI.Screens
             bool has = hero != null && hero.Def != null && hero.Def.Talents.Count > 0;
             _cardsHost.gameObject.SetActive(has);
             _empty.gameObject.SetActive(!has);
-            _noneBar.gameObject.SetActive(has);
+            _noneCard.Root.gameObject.SetActive(has);
 
             if (hero == null || hero.Def == null)
             {
@@ -500,29 +466,26 @@ namespace Emberfall.UI.Screens
             string name = hero != null && hero.Def != null ? hero.Def.Name : "This hero";
             int stars = hero != null && hero.Def != null ? hero.Def.Stars : 0;
             _emptyTitle.text = name.ToUpperInvariant() + " HAS NO TALENTS";
-            string body = "Talents belong to the thirty 5-star heroes, three to each. "
-                        + (stars > 0 ? name + " is a " + stars + "-star, and that kit is complete as it stands." : "");
-            body += fives > 0
-                ? "\n\nPick one of your " + fives + (fives == 1 ? " 5-star" : " 5-stars") + " above to compare what theirs do."
-                : "\n\nYou do not hold a 5-star yet. Every pull from the Rift is one.";
-            _emptyBody.text = body;
+            // What the player has and where to go. Why talents are a 5-star's alone is a rule, and
+            // it is behind the page's "?" with the others.
+            _emptyBody.text = fives > 0
+                ? "Pick one of your " + fives + (fives == 1 ? " 5-star" : " 5-stars") + " above."
+                : "You do not hold a 5-star yet.";
             _emptyButton.Root.gameObject.SetActive(fives == 0);
+            _pageHelp = "Talents belong to the thirty 5-star heroes, three to each."
+                      + (stars > 0 ? " " + name + " is a " + stars + "-star, and that kit is complete as it stands." : "");
         }
 
         /// <summary>
-        /// The three cards, filled from the hero's own kit.
+        /// The three cards, filled from the hero's own kit, and then sized to what they hold.
         ///
-        /// Two of the blocks are conditional, so the heights are decided here rather than at build
-        /// time: a cost banner exists on seven talents in the roster and the footnotes exist only
-        /// where a figure needs one. Reserving room for all of them on every card would take the
-        /// numbers list - the one block the page is for - down to three lines everywhere to spare
-        /// a handful of cards a scroll.
+        /// The cost chip is decided ONCE FOR THE HERO: it sits above the numbers, so it moves the
+        /// list's top, and the list's top is read across the three cards. A card without a chip
+        /// leaves that row empty rather than starting its figures higher than its neighbours'.
         ///
-        /// The two are decided at DIFFERENT SCOPES, and that is deliberate. The cost banner sits
-        /// above the numbers, so its height moves the band's top, and the band's top is read
-        /// across the three cards - it is decided once for the hero. The footnotes sit below the
-        /// numbers, under a rule, where nothing is read across, so each card takes only the ones
-        /// its own figures earned.
+        /// The HEIGHT is decided after all three are filled: the three are read across, so they
+        /// share one height, and that height is the tallest of their contents - capped by what
+        /// the canvas has, past which the list scrolls.
         /// </summary>
         private void FillCards(HeroInstance hero)
         {
@@ -533,15 +496,12 @@ namespace Emberfall.UI.Screens
             UnitStats stats = StatMath.ForHero(def, hero.Level, relic, App.Session.Profile.EquippedArmorOf(hero),
                                                App.Session.Content.Armor);
 
-            // ONE BAND TOP FOR ALL THREE, decided by whether ANY of this hero's talents carries a
-            // cost banner. The three cards are read across, and a rule that sat lower on one of
-            // them would be the page quietly saying the cards are not the same kind of thing. A
-            // card without a banner spends the difference on its sentence, which costs nothing.
             bool anyCostly = false;
             for (int i = 0; i < _cards.Count; i++)
                 if (TalentAudit.For(def.Id, _cards[i].Selection) != null) anyCostly = true;
-            float bandTop = anyCostly ? NumbersTopCostly : NumbersTopPlain;
+            float listTop = anyCostly ? NumbersTopCostly : NumbersTopPlain;
 
+            float listNeed = 0f;
             for (int i = 0; i < _cards.Count; i++)
             {
                 CardView view = _cards[i];
@@ -552,34 +512,31 @@ namespace Emberfall.UI.Screens
                 view.Name.text = talent.Name.ToUpperInvariant();
 
                 // Read from the list, never named here: a talent that leaves the audit (Velis III
-                // did) loses its banner with no change to this screen. The harness keeps the list
+                // did) loses its chip with no change to this screen. The harness keeps the list
                 // equal to its KnownCostlyTalents in CheckTalentAuditMatchesHarness.
                 AuditedTalent audit = TalentAudit.For(def.Id, view.Selection);
                 bool costly = audit != null;
-                Color costTint = costly && audit.Trap ? UITheme.Danger : UITheme.Warning;
                 view.CostChip.gameObject.SetActive(costly);
-                view.CostNote.gameObject.SetActive(costly);
-                if (costly)
-                {
-                    EmberforgeUI.SetChipTint(view.CostChip, costTint);
-                    view.CostNote.text = audit.Note;
-                    view.CostNote.color = costTint;
-                }
+                if (costly) EmberforgeUI.SetChipTint(view.CostChip, audit.Trap ? UITheme.Danger : UITheme.Warning);
 
-                float proseTop = NameTop + NameHeight + BlockGap + (costly ? CostHeight + BlockGap : 0f);
-                Stretch(view.Prose.rectTransform, proseTop,
-                        bandTop - HeadingHeight - RuleGap - BlockGap - proseTop);
-                view.Prose.text = TalentText.Prose(talent);
-                view.Prose.color = view.Prose.text == TalentText.NoProse ? Emberforge.TextQuiet : Emberforge.TextBody;
-
-                Stretch(view.Rule.rectTransform, bandTop - HeadingHeight - RuleGap, Emberforge.RuleHeight);
-                Stretch(view.Heading, bandTop - HeadingHeight, HeadingHeight);
+                Stretch(view.Rule.rectTransform, listTop - RuleGap - Emberforge.RuleHeight, Emberforge.RuleHeight);
 
                 for (int c = view.NumbersList.childCount - 1; c >= 0; c--)
                     Destroy(view.NumbersList.GetChild(c).gameObject);
                 List<TalentNumber> numbers = TalentText.Numbers(def, talent, stats, App.Session.Balance);
+                string prose = TalentText.Prose(talent);
+                bool hasProse = prose != TalentText.NoProse;
+
+                int outcomeRows = 0;
+                int whereRows = 0;
                 if (numbers.Count == 0)
-                    AddNumberRow(view.NumbersList, TalentText.NoNumbers, Emberforge.TextQuiet);
+                {
+                    // NO NUMBER OF ITS OWN, so the sentence is what you get, and it takes the
+                    // figures' place rather than hiding behind the "?" with nothing left on the card.
+                    AddProseOutcome(view.NumbersList, hasProse ? prose : TalentText.NoProse,
+                                    hasProse ? Emberforge.TextBody : Emberforge.TextQuiet);
+                    outcomeRows = 2;
+                }
                 string heading = null;
                 for (int n = 0; n < numbers.Count; n++)
                 {
@@ -589,52 +546,91 @@ namespace Emberfall.UI.Screens
                     {
                         heading = numbers[n].Where;
                         AddNumberHeading(view.NumbersList, heading);
+                        whereRows++;
                     }
                     AddNumberRow(view.NumbersList, numbers[n].Figure, numbers[n].Tint);
+                    outcomeRows++;
                 }
+                listNeed = Mathf.Max(listNeed, ListNeed(outcomeRows, whereRows));
 
-                // The two riders, said once each under the list and only where the list earns them.
-                bool floor = TalentText.Any(numbers, TalentFigureBasis.Floor);
-                bool clause = TalentText.Any(numbers, TalentFigureBasis.Clause);
-                view.FloorNote.gameObject.SetActive(floor);
-                view.ClauseNote.gameObject.SetActive(clause);
+                // BEHIND THE "?": what the cost buys, the authored sentence when the figures said
+                // what it does, and the riders on the figures that need one. All of it was on the
+                // card, and all of it is explanation rather than what the player gets.
+                string help = "";
+                if (costly) help = Join(help, audit.Note);
+                if (numbers.Count > 0 && hasProse) help = Join(help, prose);
+                if (TalentText.Any(numbers, TalentFigureBasis.Floor)) help = Join(help, TalentText.FloorNote);
+                if (TalentText.Any(numbers, TalentFigureBasis.Clause)) help = Join(help, TalentText.ClauseNote);
+                view.HelpTitle = talent.Name.ToUpperInvariant();
+                view.HelpBody = help;
+                view.Help.Root.gameObject.SetActive(help.Length > 0);
+            }
 
-                float notes = (floor ? NoteRow : 0f) + (clause ? NoteRow : 0f);
-                if (clause) Bottom(view.ClauseNote.rectTransform, CardBottomBase, NoteRow);
-                if (floor) Bottom(view.FloorNote.rectTransform, CardBottomBase + (clause ? NoteRow : 0f), NoteRow);
+            // ONE HEIGHT FOR ALL THREE: the tallest content, or what the canvas leaves.
+            float canvas = Root.rect.height > 0f ? Root.rect.height : ShortestCanvasHeight;
+            float cardHeight = Mathf.Min(listTop + listNeed + CardBottom, MostCardHeight(canvas));
+            _cardsHost.offsetMin = new Vector2(UITheme.ScreenPadding, -(CardsTop + cardHeight));
+            _cardsHost.offsetMax = new Vector2(-UITheme.ScreenPadding, -CardsTop);
+            PlaceNoneRow(cardHeight);
 
-                float bandBottom = CardBottomBase + notes + 6f;
-                Bottom(view.RuleBottom.rectTransform, bandBottom, Emberforge.RuleHeight);
-
+            for (int i = 0; i < _cards.Count; i++)
+            {
+                CardView view = _cards[i];
                 RectTransform scrollRect = view.NumbersScroll.GetComponent<RectTransform>();
                 scrollRect.anchorMin = new Vector2(0f, 0f);
                 scrollRect.anchorMax = new Vector2(1f, 1f);
-                scrollRect.offsetMin = new Vector2(CardPad, bandBottom + Emberforge.RuleHeight + 4f);
-                scrollRect.offsetMax = new Vector2(-CardPad, -bandTop);
-                Bottom(view.More.rectTransform, bandBottom + Emberforge.RuleHeight + 4f, 18f);
+                scrollRect.offsetMin = new Vector2(CardPad, CardBottom);
+                scrollRect.offsetMax = new Vector2(-CardPad, -listTop);
+                view.NumbersScroll.verticalNormalizedPosition = 1f;
+                Bottom(view.More.rectTransform, CardBottom, 18f);
             }
+        }
+
+        private static string Join(string a, string b)
+        {
+            return a.Length == 0 ? b : a + "\n\n" + b;
+        }
+
+        private void ShowCardHelp(int index)
+        {
+            CardView view = _cards[index];
+            if (view.HelpBody.Length == 0) return;
+            App.Modal.ShowNotice(view.HelpTitle, view.HelpBody, "OK", null);
         }
 
         /// <summary>The ability a run of numbers belongs to, in the kit's quiet voice.</summary>
         private void AddNumberHeading(RectTransform list, string where)
         {
             RectTransform row = UIBuilder.Node("Where", list);
-            UIBuilder.Sized(row, 0f, HeadingHeight);
+            UIBuilder.Sized(row, 0f, WhereRow);
             Text w = EmberforgeUI.Label("Text", row, where.ToUpperInvariant(), UITheme.FontTiny - 6,
                                         Emberforge.TextQuiet, TextAnchor.LowerLeft);
             UIBuilder.FillParent(w.rectTransform, 0f);
             UIBuilder.Outlined(w, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
-        /// <summary>One figure, in the colour of what it is. Shrinks rather than wraps: the
-        /// longest, "1,105 to 994 damage (210% to 189% of Attack)", is most of a card on its own.</summary>
+        /// <summary>One figure, in the colour of what it is, at the card's largest size. Shrinks
+        /// rather than wraps: the longest, "1,105 to 994 damage (210% to 189% of Attack)", is most
+        /// of a card on its own.</summary>
         private void AddNumberRow(RectTransform list, string figure, Color tint)
         {
             RectTransform row = UIBuilder.Node("Number", list);
-            UIBuilder.Sized(row, 0f, NumberRow);
-            Text f = EmberforgeUI.Label("Figure", row, figure, UITheme.FontTiny - 1, tint, TextAnchor.MiddleLeft);
+            UIBuilder.Sized(row, 0f, OutcomeRow);
+            Text f = EmberforgeUI.Label("Figure", row, figure, UITheme.FontBody, tint, TextAnchor.MiddleLeft);
             UIBuilder.FillParent(f.rectTransform, 12f, 0f, 0f, 0f);
-            BestFit(f, UITheme.FontTiny - 8, UITheme.FontTiny - 1);
+            BestFit(f, UITheme.FontTiny - 4, UITheme.FontBody);
+            UIBuilder.Outlined(f, Emberforge.Outline, Emberforge.StrokeThin);
+        }
+
+        /// <summary>A talent's sentence standing in for figures it does not have: two rows tall,
+        /// wrapped, and no larger than a figure would be.</summary>
+        private void AddProseOutcome(RectTransform list, string text, Color tint)
+        {
+            RectTransform row = UIBuilder.Node("Outcome", list);
+            UIBuilder.Sized(row, 0f, OutcomeRow * 2f + ListSpacing);
+            Text f = EmberforgeUI.Body("Text", row, text, UITheme.FontSmall, tint, TextAnchor.UpperLeft);
+            UIBuilder.FillParent(f.rectTransform, 0f);
+            BestFit(f, UITheme.FontTiny - 4, UITheme.FontSmall);
             UIBuilder.Outlined(f, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
@@ -757,9 +753,9 @@ namespace Emberfall.UI.Screens
         /// two. A locked card is NOT HIDDEN, because the player deciding whether to ascend is
         /// deciding on the strength of what ascending buys, and a page that hid it would be asking
         /// for that decision while withholding the only thing it turns on. So the card keeps its
-        /// name, its sentence, its figures and its reading, and three things say it is not
-        /// available: the chip reads LOCKED, the button names the tier that opens it instead of
-        /// offering to run it, and the footer says the rule once for the whole page.
+        /// name, its figures and its reading, and two things say it is not available: the chip
+        /// reads LOCKED, and the button names the tier that opens it instead of offering to run
+        /// it. The rule itself is behind the page's "?".
         ///
         /// THE FRAME MEANS "YOUR PICK" AND THE CHIP MEANS "ITS STATE", and locking is the first
         /// thing that pulls those apart. A pick made at tier 2 and then locked - a tier that moved
@@ -769,12 +765,7 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void RefreshState()
         {
-            if (_hero == null || _hero.Def == null)
-            {
-                _footerRule.text = "";
-                _footerTravels.text = "";
-                return;
-            }
+            if (_hero == null || _hero.Def == null) return;
             int running = _hero.SelectedTalent;
             int lockedSlots = 0;
             for (int i = 0; i < _cards.Count; i++)
@@ -794,12 +785,8 @@ namespace Emberfall.UI.Screens
 
                 // The button is where the card says what to DO about it, which for a locked card
                 // is not "run this" - the one action that would change anything is an ascension,
-                // and it names the tier rather than saying "locked" a second time.
-                //
-                // AND IT IS PRESSABLE NOW. This caption was written before there was a fusion
-                // page, so the button that carried it was deliberately dead: it named the move and
-                // could not make it. The page exists, so the button goes there, and a locked card
-                // stops being the one card on the screen that cannot be acted on.
+                // and it names the tier rather than saying "locked" a second time. Pressing it
+                // opens the fusion page on this hero.
                 view.Run.SetText(locked ? "ASCEND TO TIER " + HeroInstance.TierUnlockingTalent(view.Selection)
                                         : on ? "RUNNING" : "RUN THIS TALENT");
                 view.Run.Interactable = locked || !on;
@@ -808,53 +795,58 @@ namespace Emberfall.UI.Screens
             bool none = running == 0;
             EmberforgeUI.SetCardSelected(_noneCard, none);
             EmberforgeUI.SetChipTint(_noneChip, none ? Emberforge.TextGold : Emberforge.TextQuiet);
-            _noneRun.SetText(none ? "RUNNING" : "RUN NO TALENT");
-            _noneRun.Interactable = !none;
+            _noneState.gameObject.SetActive(none);
+            _noneLabel.text = none ? "NO TALENT" : "RUN NO TALENT";
+            _noneLabel.color = none ? Emberforge.TextGold : Emberforge.TextQuiet;
+            _noneCard.Button.Button.interactable = !none;
 
+            // THE PAGE'S RULES, behind its "?". Every sentence below used to be printed on the
+            // page - in the none bar and in two footer lines - and each one explains a rule rather
+            // than saying what the player has, what it costs or what they get.
             string name = _hero.Def.Name;
             // "the three" is read off the hero rather than written here: HeroDef.MaxTalents is the
             // ceiling and not a promise, and a hero authoring two would be told it has three.
             int count = _hero.Def.Talents.Count;
+            if (count == 0) return;
             string which = count == 1 ? "it" : "the " + Word(count);
 
-            // WHAT THE HERO IS ACTUALLY FIGHTING WITH, which is not always what the player picked.
-            // A pick that resolves to nothing - locked, or naming a slot this version of the game
-            // no longer authors - means the hero fights with none, and the NONE bar is the one
-            // block on the page that is about fighting with none, so it is where that is said.
-            // Both cases end the same way, because both follow the same rule: the pick is kept.
-            PassiveDef live = _hero.LiveTalent;
-            if (live != null || none)
-            {
-                _noneBody.text = name + " fights with none of " + which
-                               + ". An unselected talent is not a quieter talent: it is not in the battle at all.";
-            }
-            else if (_hero.Def.TalentAt(running) != null)
-            {
-                _noneBody.text = name + " fights with none of " + which + " today: talent " + Roman(running)
-                               + " is picked and still locked, so it is not in the battle at all. Ascend to tier "
-                               + HeroInstance.TierUnlockingTalent(running) + " and it comes straight back.";
-            }
-            else
-            {
-                _noneBody.text = name + " fights with none of " + which + ": the pick is talent " + Roman(running)
-                               + ", which this version of Emberfall does not have. It is kept rather than lost -"
-                               + " if that talent returns, so does the pick.";
-            }
-
-            _footerRule.text = count == 0 ? ""
-                : lockedSlots == 0
+            string rule = lockedSlots == 0
                 ? "One at a time, or none. Free to change, any time, as often as you like - nothing is"
                   + " spent, nothing is locked in, and no talent unlocks another."
                 : "One at a time, or none, and free to change as often as you like - nothing is spent. No talent"
                   + " unlocks another; ascension does. Tier 1 opens the second, tier 2 the third. " + name
                   + " is at tier " + Mathf.Max(0, _hero.Ascension) + ", so " + Word(lockedSlots)
-                  + (lockedSlots == 1 ? " is" : " are") + " still shut. Tap a shut card to go where"
-                  + " that tier is bought.";
+                  + (lockedSlots == 1 ? " is" : " are") + " still shut.";
+
+            // WHAT THE HERO IS ACTUALLY FIGHTING WITH, which is not always what the player picked.
+            // A pick that resolves to nothing - locked, or naming a slot this version of the game
+            // no longer authors - means the hero fights with none. Both cases end the same way,
+            // because both follow the same rule: the pick is kept.
+            string fights;
+            PassiveDef live = _hero.LiveTalent;
+            if (live != null || none)
+            {
+                fights = "An unselected talent is not a quieter talent: it is not in the battle at all.";
+            }
+            else if (_hero.Def.TalentAt(running) != null)
+            {
+                fights = name + " fights with none of " + which + " today: talent " + Roman(running)
+                       + " is picked and still locked, so it is not in the battle at all. Ascend to tier "
+                       + HeroInstance.TierUnlockingTalent(running) + " and it comes straight back.";
+            }
+            else
+            {
+                fights = name + " fights with none of " + which + ": the pick is talent " + Roman(running)
+                       + ", which this version of Emberfall does not have. It is kept rather than lost -"
+                       + " if that talent returns, so does the pick.";
+            }
+
             bool deployed = App.Session.Profile.TeamSlotOf(_hero.Uid) >= 0;
-            _footerTravels.text = _hero.Def.Talents.Count == 0 ? ""
-                : deployed
+            string travels = deployed
                 ? name + " is in your line, so this pick is part of what other players meet: friends who duel you face it from your next save, and your next Proving ghost carries it."
                 : name + " is on the bench. A pick only reaches the line friends duel, and your Proving ghost, once " + name + " stands in it.";
+
+            _pageHelp = rule + "\n\n" + fights + "\n\n" + travels;
         }
 
         // ------------------------------------------------------------------ the measurement
@@ -886,13 +878,15 @@ namespace Emberfall.UI.Screens
             }
         }
 
+        /// <summary>
+        /// The per-card readings, and nothing about how they were taken. The fight count and the
+        /// milliseconds this device spent were a footer line for whoever built the page; they go
+        /// to the console once, when the trial finishes, and never to the screen.
+        /// </summary>
         private void RefreshReadings()
         {
             if (_trial == null)
             {
-                SetFooterMeasure(_hero != null && _hero.Def != null && _hero.Def.Talents.Count > 0
-                    ? "No reading: there is no line to measure this hero in."
-                    : "");
                 for (int i = 0; i < _cards.Count; i++) _cards[i].Measured.text = "";
                 return;
             }
@@ -905,46 +899,14 @@ namespace Emberfall.UI.Screens
                 ShowReading(view, _trial.Readings[view.Selection], bare);
             }
 
-            string where = _trial.StandIn != null
-                ? _hero.Def.Name + " standing in for " + _trial.StandIn.Def.Name + " at the back of your line"
-                : "your line as it stands";
-            if (!_trial.Finished)
-            {
-                SetFooterMeasure("Measuring: " + where + ", against a mirror of itself with nothing picked. "
-                                 + _trial.FightsRun + " of " + _trial.FightsTotal + " fights.");
-                return;
-            }
-
-            SetFooterMeasure("Measured: " + where + ", " + _trial.Seeds + " fights per talent against a mirror"
-                             + " of itself with nothing picked, " + Seconds(_trial.SimulationMs) + " on this device."
-                             + (_trial.Failures > 0 ? " " + _trial.Failures + " fights failed." : ""));
-            if (!_trialLogged)
-            {
-                _trialLogged = true;
-                Debug.Log("TalentsScreen: measured " + _hero.Def.Name + " - " + _trial.FightsTotal + " fights, "
-                          + _trial.SimulationMs.ToString("0", CultureInfo.InvariantCulture) + " ms of simulation over "
-                          + _trialFrames + " frames" + (_trial.StandIn != null ? " (bench, stood in for " + _trial.StandIn.Def.Name + ")" : "")
-                          + ".");
-                if (_trial.Failures > 0)
-                    Debug.LogError("TalentsScreen: " + _trial.Failures + " trial fights threw. Last: " + _trial.LastError);
-            }
-        }
-
-        /// <summary>
-        /// The footer's measurement line: how the trial was taken, how many fights it has run and
-        /// how many milliseconds of simulation this device spent on it. That is telemetry for
-        /// whoever is building the page, not something a player acts on, so a release player
-        /// leaves the line empty. The label is still built and still holds its row, so the
-        /// footer measures the same in every build. The per-card readings above it are the part
-        /// a player reads, and they are not affected.
-        /// </summary>
-        private void SetFooterMeasure(string text)
-        {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
-            _footerMeasure.text = text;
-#else
-            _footerMeasure.text = "";
-#endif
+            if (!_trial.Finished || _trialLogged) return;
+            _trialLogged = true;
+            Debug.Log("TalentsScreen: measured " + _hero.Def.Name + " - " + _trial.FightsTotal + " fights, "
+                      + _trial.SimulationMs.ToString("0", CultureInfo.InvariantCulture) + " ms of simulation over "
+                      + _trialFrames + " frames" + (_trial.StandIn != null ? " (bench, stood in for " + _trial.StandIn.Def.Name + ")" : "")
+                      + ".");
+            if (_trial.Failures > 0)
+                Debug.LogError("TalentsScreen: " + _trial.Failures + " trial fights threw. Last: " + _trial.LastError);
         }
 
         /// <summary>
@@ -1010,13 +972,6 @@ namespace Emberfall.UI.Screens
             return n == 1 ? "I" : n == 2 ? "II" : n == 3 ? "III" : n.ToString(CultureInfo.InvariantCulture);
         }
 
-        private static string Seconds(double ms)
-        {
-            return ms < 1000.0
-                ? ms.ToString("0", CultureInfo.InvariantCulture) + " ms"
-                : (ms / 1000.0).ToString("0.0", CultureInfo.InvariantCulture) + " s";
-        }
-
         /// <summary>Full card width less the padding, hung from the card's top.</summary>
         private static void Stretch(RectTransform rt, float top, float height)
         {
@@ -1042,16 +997,6 @@ namespace Emberfall.UI.Screens
             label.resizeTextForBestFit = true;
             label.resizeTextMinSize = min;
             label.resizeTextMaxSize = max;
-        }
-
-        /// <summary>One footer line, full page width, stood at a height above the page's bottom.</summary>
-        private static void FooterLineAt(RectTransform rt, float bottom)
-        {
-            rt.anchorMin = new Vector2(0f, 0f);
-            rt.anchorMax = new Vector2(1f, 0f);
-            rt.pivot = new Vector2(0f, 0f);
-            rt.offsetMin = new Vector2(UITheme.ScreenPadding, bottom);
-            rt.offsetMax = new Vector2(-UITheme.ScreenPadding, bottom + FooterLine);
         }
 
 #if UNITY_EDITOR

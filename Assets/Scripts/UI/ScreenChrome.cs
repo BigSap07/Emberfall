@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -67,6 +68,21 @@ namespace Emberfall.UI
             UIBuilder.Outlined(subtitle, Emberforge.Outline, Emberforge.StrokeThin);
 
             return header;
+        }
+
+        /// <summary>
+        /// A "?" disc on the header's right edge, mirroring the back disc on its left: the page's
+        /// rules, one tap away rather than printed under its content.
+        /// </summary>
+        public static ForgeDisc HeaderHelp(RectTransform header, Action action)
+        {
+            ForgeDisc help = EmberforgeUI.HelpDisc("Help", header, 84f, delegate
+            {
+                if (Game.GameApp.Instance != null) Game.GameApp.Instance.Audio.Tap();
+                action();
+            });
+            UIBuilder.Box(help.Root, 0f, 0f, HubStyle.TouchMin, HubStyle.TouchMin, new Vector2(1f, 0.5f));
+            return help;
         }
     }
 }

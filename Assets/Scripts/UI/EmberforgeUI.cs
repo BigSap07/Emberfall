@@ -636,6 +636,28 @@ namespace Emberfall.UI
         }
 
         /// <summary>
+        /// THE "?" DISC: where a page keeps what it explains, so the card itself only says what
+        /// the player has, what it costs and what they get.
+        ///
+        /// Built the way CloseDisc is - a glyph-less rail disc with a Text glyph over it - and
+        /// unplaced, because a header and a card corner want it in different places. The hit rect
+        /// is the kit's TouchMin whatever the disc's size.
+        /// </summary>
+        public static ForgeDisc HelpDisc(string name, Transform parent, float discSize, Action action)
+        {
+            ForgeDisc disc = IconButton(name, parent, "", TextureLab.Sigil(0, 64),
+                                        Emberforge.TextGold, discSize, action);
+            disc.Glyph.enabled = false;
+
+            Text mark = Title("Mark", disc.Face, "?", discSize >= 60f ? UITheme.FontHeading : UITheme.FontSmall,
+                              Emberforge.TextGold, TextAnchor.MiddleCenter);
+            UIBuilder.FillParent(mark.rectTransform, 0f);
+            UIBuilder.Outlined(mark, Emberforge.Outline, Emberforge.StrokeThin);
+            mark.raycastTarget = false;
+            return disc;
+        }
+
+        /// <summary>
         /// A SINGLE-LINE TEXT BOX: the kit's sunken surface with a field wired into it.
         ///
         /// Same parameters and same contract as UIBuilder.TextField, including the one that

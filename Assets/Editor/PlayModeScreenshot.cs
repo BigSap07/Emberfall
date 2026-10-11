@@ -78,7 +78,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV14-toast-fits-its-message";
+        private const string BuildMarker = "FIXV16-fusion-subject-funded";
 
         static PlayModeScreenshot()
         {
@@ -966,7 +966,40 @@ namespace Emberfall.EditorTools
         {
             List<HeroInstance> owned = app.Session.Profile.Heroes;
             if (owned == null) return null;
+
+            // A TIER-0 FIVE-STAR STANDING AT ITS CAP, which is the frame the card's three rows are
+            // checked against: tier level 9 » 1, Level 9 » 10, cap 9 » 18. The capture profile
+            // carries heroes from before the star-gated caps at Level 60 (DESIGN-BUILD-ORDER,
+            // Known bugs), and one of those photographs four correct figures for a hero that
+            // should not exist. So an owned hero already at its cap is taken first, and failing
+            // that an unowned five-star is granted and levelled to its cap through the same
+            // LevelUpHero the hero page calls. Each level's price is seeded first, the way
+            // DebugCheatPanel seeds gold: a fresh profile cannot pay for nine levels, and the
+            // frame stopped at Level 3 the first time this ran.
             HeroInstance subject = null;
+            for (int i = 0; i < owned.Count && subject == null; i++)
+            {
+                HeroInstance h = owned[i];
+                if (h.Def != null && h.Def.Stars >= 5 && h.Ascension == 0
+                    && h.Level == app.Session.HeroLevelCapOf(h)) subject = h;
+            }
+            List<HeroDef> heroes = app.Session.Content.Heroes;
+            for (int i = 0; i < heroes.Count && subject == null; i++)
+            {
+                HeroDef def = heroes[i];
+                if (def.Stars < 5 || def.Talents.Count < HeroDef.MaxTalents || app.Session.Profile.Owns(def.Id)) continue;
+                HeroInstance granted = app.Session.GrantHeroDirect(def, 0);
+                if (granted == null) continue;
+                for (int guard = 0; guard < 100 && granted.Level < app.Session.HeroLevelCapOf(granted); guard++)
+                {
+                    app.Session.Profile.Gold += app.Session.LevelUpCost(granted);
+                    app.Session.LevelUpHero(granted, 1);
+                }
+                if (granted.Level != app.Session.HeroLevelCapOf(granted))
+                    Debug.LogWarning("PlayModeScreenshot: " + def.Name + " stopped at Level " + granted.Level
+                                     + " short of its cap.");
+                subject = granted;
+            }
             for (int i = 0; i < owned.Count && subject == null; i++)
                 if (owned[i].Def != null && owned[i].Def.Stars >= 5) subject = owned[i];
             if (subject == null) return null;
