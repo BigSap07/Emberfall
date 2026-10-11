@@ -1042,6 +1042,12 @@ namespace Emberfall.EditorTools
             List<HeroInstance> owned = app.Session.Profile.Heroes;
             if (owned == null) return null;
             HeroInstance subject = null;
+            // Kael first when the profile has him: he is a starter, and the hero the trial's
+            // confidence batches were diagnosed on, so his page is the one that shows a reading
+            // taking more than forty fights to settle. Any other talent hero is the fallback.
+            for (int i = 0; i < owned.Count && subject == null; i++)
+                if (owned[i].DefId == "kael_the_unyielding" && owned[i].Def != null
+                    && owned[i].Def.Talents.Count >= HeroDef.MaxTalents) subject = owned[i];
             for (int i = 0; i < owned.Count && subject == null; i++)
                 if (owned[i].Def != null && owned[i].Def.Talents.Count >= HeroDef.MaxTalents) subject = owned[i];
             if (subject == null) return null;
@@ -1200,6 +1206,9 @@ namespace Emberfall.EditorTools
         private static void Shoot(string name, int frame, int slot)
         {
             string file = "screen_" + name + SessionState.GetString(SuffixKey, "") + ".png";
+            // The talent page measures on its own frames, and a capture that fired mid-trial
+            // would photograph "Measuring..." or a reading still on its first batch.
+            if (name == "Talents" && GameApp.Instance != null) GameApp.Instance.Router.Talents.FinishTrialForCapture();
             ScreenCapture.CaptureScreenshot(OutputPath(file), 1);
             Debug.Log("PlayModeScreenshot: requested " + file);
             SessionState.SetInt(LastShotKey, frame);

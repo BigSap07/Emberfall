@@ -434,6 +434,18 @@ sentence, what it changes in numbers through `TalentMath`, and what it did to th
 `TalentTrial`, with `TalentAudit` naming the audited traps and trades. `TalentAudit.Costly` is a copy
 of the harness's list, and `CheckTalentAuditMatchesHarness` holds the two equal.
 
+**A forty-fight trial could not see a gain of 1 to 4 percent.** A mirror fight is noisy: on the
+reference save Kael I read +468 at t 1.69 and Kael II +33 at t 1.91, both under the two-standard-error
+line, so the screen printed "no clear change" while the harness measured a real gain. `TalentTrial`
+now runs in batches of forty and decides only at the end of a batch: a talent that reads clear, gain
+or loss, is not fought again, and one that is still unclear gets another batch, to 120 fights. The
+reading depends on the save and the content and on nothing else, so the same save gives the same
+reading at any frame rate, and `CheckTalentTrialConfidence` holds that and holds Kael I as a clear
+gain on the reference save. The cap costs a desktop CLR under a quarter of a second for a hero in
+the worst case, about 115 ms on average. A reading still unclear at the cap prints as an estimate
+with how often the talent changed a fight, "+3% (unclear, changed 11 of 120 fights)", never as a
+bare "no clear change".
+
 **A talent a player picks should not make their hero worse, and `CheckTalentsAreWorthPicking` says
 which ones do.** It reads every talent against the same hero with nothing picked, paired seed for
 seed over 40 seeds, in the sweep arena wherever the talent changes a sweep fight and in its dark
@@ -1084,7 +1096,11 @@ names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, whi
 
 ## In progress
 
-Nothing on a pushed branch. A branch is named here when it holds work worth naming, and only while it is unmerged.
+`ui/talent-trial-confidence`, unmerged: `TalentTrial` runs further batches of forty fights, to a cap
+of 120, while a reading is unclear, and the talent screen prints an unclear reading as an estimate
+with how many fights the talent changed. The harness holds it with a reference save
+(`Tools/DevHarness/reference-save.json`): the same reading every time, and Kael I a clear gain.
+Also on it: the corrected `Docs/PINOY-LIST.md` section 2e.
 
 ## Next
 
@@ -1436,10 +1452,10 @@ sentence said at last and two of them real questions - Cyrra's store also pays w
 and Isolde's rider counts debuffs because Cinder cannot stack. Section 2d gained Aminah's three
 numbers, the first moved by the 5-star check.
 
-**Section 2e is the two talents that cost the hero who picks them**, Kael III and Mireth I, each a
-conflict with its own kit that a number cannot mend. Velis III was the second until the content pass
-gated No Second Breath; it reads inside the noise now, and its design question stays in 2e as a note. `CheckTalentsAreWorthPicking` pins both, so
-the day either kit changes the harness says whether the talent became worth picking.
+**Section 2e is the talents that cost the hero who picks them, and there is one**: Nysera I, a
+trade. Kael III and Mireth I were the two it was opened for, and both were rewritten until they
+gain. `CheckTalentsAreWorthPicking` reads all 90 and fails if a talent starts losing without being
+listed, so the day a kit change makes one a trap the harness says so.
 
 ## Later
 

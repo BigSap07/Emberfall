@@ -901,7 +901,7 @@ namespace Emberfall.UI.Screens
 
             if (!_trial.Finished || _trialLogged) return;
             _trialLogged = true;
-            Debug.Log("TalentsScreen: measured " + _hero.Def.Name + " - " + _trial.FightsTotal + " fights, "
+            Debug.Log("TalentsScreen: measured " + _hero.Def.Name + " - " + _trial.FightsRun + " fights, "
                       + _trial.SimulationMs.ToString("0", CultureInfo.InvariantCulture) + " ms of simulation over "
                       + _trialFrames + " frames" + (_trial.StandIn != null ? " (bench, stood in for " + _trial.StandIn.Def.Name + ")" : "")
                       + ".");
@@ -952,9 +952,11 @@ namespace Emberfall.UI.Screens
                                        + tail;
                     break;
                 default:
+                    // Still under the line, after as many fights as the trial will give it: say
+                    // what the estimate is and how often the talent changed a fight at all.
                     view.Measured.color = Emberforge.TextQuiet;
-                    view.Measured.text = "In your line: no clear change in " + _hero.Def.Name + "'s own output"
-                                       + tail;
+                    view.Measured.text = "In your line: " + pct + " (unclear, changed " + r.Changed
+                                       + " of " + r.Fights + " fights)" + tail;
                     break;
             }
         }
