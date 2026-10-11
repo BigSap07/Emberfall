@@ -343,6 +343,68 @@ monotonically from 56 at iteration 10 to 5 at iteration 40, and the run then abo
 nothing. It is a guard against divergence rather than a budget (the loop stops the moment a walk
 proposes nothing), so it is now 120 and a converging run pays nothing for the headroom.
 
+**And its twin, `SolverMaxProbesPerStage`.** It was 60, and it is the same mistake one level down:
+a guard against a search that will not converge, sized as though it were a budget. The level search
+spends one probe per unit per step, so 60 buys twelve single-unit steps on a five-unit roster and
+fifteen on a four-unit one - enough when a seed lands near the band, and nothing like enough when it
+does not. On the solved table, seven of the 67 graded stages spent the whole 60 without one probe
+ever reading under the band's high edge - 3-8, 3-9, 4-3, 4-4, 4-7, 5-3, 5-7 - and because the search
+only keeps a candidate that strictly improves its margin, all seven kept the levels they started
+from and reported no movement at all. Unbounded, all 67 converge; the worst, 3-8, needs 68
+single-unit steps and 171 probes to walk 100% down to 85.8%. It is now 400. A whole pass over the
+graded stages costs 1,672 probes unbounded against 1,189 at 60, because only the truncated seven pay
+anything.
+
+`DevHarness --probe-study` is the instrument that says this: it re-runs the level search alone on
+every graded stage from the committed table and prints, per stage, the probes spent and whether the
+exit was `converged` or `BUDGET`. Re-run it before changing that constant again.
+
+**The escalating grant, and why the solver does not use it.** 400 on every stage reads like a
+tax on the 60 that never needed it, and the obvious repair is a ladder: start every stage at 60,
+grant double to a stage that spends its grant without reaching the band, up to 400. That ladder is
+built - `SolverProbeGrants` and `SolveStageLevels`, with the single-grant search under it as
+`SolveStageLevelsAt` - and `--probe-study` runs it and a flat ceiling over the same table and
+prints both totals. The solver itself calls the flat path, for two reasons that are structural
+rather than a matter of taste.
+
+**A flat ceiling is never charged to a stage that converges.** The grant is read in exactly one
+place, the `while` in `SolveStageLevelsAt`, and the search leaves it the instant a candidate crosses
+the target or sits `SolverBandCushion` inside both edges. It is a stopping condition, not a quota.
+60 of the 67 graded stages converge inside 55 probes and spend those same 55 at any ceiling above
+55. There is no tax on those 60 to repair.
+
+**And on the seven that do not converge, the ladder is strictly worse, because a grant can only be
+found too small by spending it.** A retry restarts the walk from the seed - the walk is
+deterministic in the stage's own seed, so a stage re-solved at 120 re-fights the identical 60 probes
+it already fought before it sees new ground. Against the per-stage figures measured in the previous
+row, taken from the flat-400 run:
+
+| stage | probes it needs | flat | ladder | wasted |
+|---|---|---|---|---|
+| 3-8 | 171 | 171 | 60 + 120 + 171 = 351 | 180 |
+| 4-7 | 145 | 145 | 60 + 120 + 145 = 325 | 180 |
+| 3-9 | 136 | 136 | 60 + 120 + 136 = 316 | 180 |
+| 5-7 | 125 | 125 | 60 + 120 + 125 = 305 | 180 |
+| 4-3 | 114 | 114 | 60 + 114 = 174 | 60 |
+| 5-3 | 112 | 112 | 60 + 112 = 172 | 60 |
+| 4-4 | 100 | 100 | 60 + 100 = 160 | 60 |
+
+Over a whole pass: **1,672 probes flat against 2,572 under the ladder, for identical landings** -
+the ladder costs 900 more, 1.54x. The flat-60 and flat-400 totals are measured (`--probe-study` at
+each budget, 2026-09-24); the ladder total is arithmetic on that run's per-stage spends, and it is
+exact rather than an estimate, because a truncated search stops at precisely its grant and a restart
+reproduces the walk it already made.
+
+**The one escalation that wastes nothing is not an escalation.** Resuming a walk instead of
+restarting it would drop the 900, and it would drop the ladder with it: since the grant only gates
+that one loop, a walk resumed under a raised ceiling visits exactly the probes, in exactly the
+order, that a single flat search at the final rung would have visited. Escalate-by-resume is not
+cheaper than a flat ceiling; it is a flat ceiling, spelled across four calls.
+
+The ladder is kept anyway. It costs nothing unrun, and it is what `--probe-study` measures the flat
+ceiling against, so the next session that finds 400 suspicious can re-derive this rather than take
+it on trust.
+
 **Correction to `CAMPAIGN-SPEC.md` 10.8 row 6, and to the task that commissioned this.** Both said Rough reached zero at
 3-11 and that no later stage dropped it. The weight is floored at 1 (`ArmorRoller.RollTemper`), so
 every stage still dropped Rough - at 4.2% at 3-11 and 5.9% at 6-12. Either reading gave the same

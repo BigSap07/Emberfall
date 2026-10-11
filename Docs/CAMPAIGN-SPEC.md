@@ -975,10 +975,24 @@ exponents came from. The full law, the fit and the per-channel reasoning are in
 `Tools/_author_campaign_stages.py` (`rewards_at`) and summarised in `campaign.json`'s header;
 `DESIGN-BUILD-ORDER.md`'s economy curve section carries the short version.
 
+**The one exception, and why it is not a third boundary: the finale's FIRST CLEAR, x1.50.**
+Both rejected shapes died on a step a player meets twice - the rate they had already earned drops,
+or the purse has to grow 4x a chapter to avoid that. A first clear is paid once, so there is no
+second meeting and no step to give back, and nothing that compounds. It exists because the law as
+first written marked the finale with nothing at all: a finale is the hardest stage in its chapter,
+derived at a 65% CEIL rather than 85%, and its whole first payout was SMALLER than the ordinary
+stage after it - `1-12` paid 835 + 1,440 = 2,275 against `2-1`'s 950 + 1,630 = 2,580. x1.22 is the
+smallest bump that clears that at every boundary; x1.50 leads the next opener by 16% at `1-12`
+rising to 25% by `5-12`. Every repeatable channel is untouched and still strictly rises at all 71
+steps. The whole bump adds 81,250 gold and 12,145 shards over 72 stages, a quarter of one percent
+of the campaign's gold, so it is an event where a player is standing rather than an economy change.
+
 The generator refuses to write:
 - a line naming an undefined enemy, an enemy twice, or any of the shipped 12
 - a body count outside 1-5, or under the ramp in chapters 2-6
 - a finale not led by exactly one boss, or a stage 6 not led by exactly one miniboss
+- a first-clear channel that does not rise across the ordinary stages, a finale that does not
+  lead both its neighbours, or a finale whose whole first payout trails the next chapter's opener
 - a boss or miniboss anywhere else
 - two identical lines in one chapter
 - a campaign with any of the 84 unfielded

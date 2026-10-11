@@ -37,6 +37,7 @@ namespace Emberfall.DevHarness
             bool reconcile = false;
             int wallStudy = 0;
             bool lineCalibration = false;
+            bool probeStudy = false;
             bool tempoStudy = false;
             string tempoMode = null;
             bool solvePrereqs = false;
@@ -52,6 +53,9 @@ namespace Emberfall.DevHarness
                 if (args[i] == "--talents-worth-picking") { talentValue = true; continue; }
                 if (args[i] == "--fidelity") { fidelity = true; continue; }
                 if (args[i] == "--line-calibration") { lineCalibration = true; continue; }
+                // Measurement only: the level search on its own, at the committed table. See
+                // RunProbeStudy - it is how SolverMaxProbesPerStage is sized.
+                if (args[i] == "--probe-study") { probeStudy = true; continue; }
                 if (args[i] == "--wall-study")
                 {
                     wallStudy = 20;
@@ -107,6 +111,8 @@ namespace Emberfall.DevHarness
             if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
             if (wallStudy > 0) return RunWallStudy(contentDir, wallStudy);
             if (lineCalibration) return RunLineCalibration(contentDir);
+            // Nor this: the probe study measures the level search and writes nothing.
+            if (probeStudy) return RunProbeStudy(contentDir);
             // Not a check either: the tempo study (TempoStudy.cs) measures and writes nothing.
             if (tempoStudy) return RunTempoStudy(contentDir, tempoMode);
             // Nor this: the solve's prerequisites (SolvePrereqs.cs) measure and write nothing.
@@ -18065,6 +18071,31 @@ namespace Emberfall.DevHarness
         private const float SolverStuckStep = 1.05f;
 
         /// <summary>
+        /// HOW MANY TIMES THE SOLVE RELEASES BANKED STEPS BEFORE IT GIVES UP TRYING: 8, which is
+        /// more rounds than any stage has ever banked steps.
+        ///
+        /// SolverStuckStep is a RATCHET, and a ratchet records history rather than need. A stage
+        /// that stuck at iteration 3, when chapters 3-6 still carried chapter 2's numbers by
+        /// position, kept that step through iteration 34 against a table it would no longer stick
+        /// on. The first solve of the 72 banked between 2 and 4 steps on every wall in chapters
+        /// 2-6, and every one of those walls then read x1.086 to x1.197 where its band ends at
+        /// x1.02 - because ONE step of 5% on a middle of x0.985 is already outside the wall band.
+        /// Chapter 1's two walls were in band precisely because they banked none.
+        ///
+        /// So a solve does not finish when the ratchet settles. It settles, then RELEASES one step
+        /// from every stage that holds any, and settles again. A stage that sticks after a release
+        /// has proved it needs that step and is never asked to give it up a second time; a stage
+        /// that does not is a stage carrying a step it earned against a table that no longer
+        /// exists. The phase ends when nothing is left to release or every remaining step is
+        /// proven, so it terminates: each round either removes a step or proves one.
+        ///
+        /// What it cannot do is invent headroom. If a wall genuinely cannot be passed by a player
+        /// who never converts and never ascends at x0.985, the step comes back and the wall reads
+        /// out of band, which is the true statement about that content.
+        /// </summary>
+        private const int SolverStepReleaseRounds = 8;
+
+        /// <summary>
         /// The band middle one stage is derived against. The four tutorial stages have no band to
         /// sit in, and the curve pass put them on chapter 1's ordinary middle: the committed 2,977
         /// at 1-1 is exactly that stage's entry power over x1.20, which is where the reading comes
@@ -18191,6 +18222,124 @@ namespace Emberfall.DevHarness
         /// at identical levels; guard 53% at its seed, solver 62% at its own, each line reproducing
         /// the other's number exactly at the other's seed, reference 60.8% over 5,000.
         /// </summary>
+        /// <summary>
+        /// NOT A CHECK, and it writes nothing. --probe-study re-runs the LEVEL SEARCH ALONE on
+        /// every graded stage, seeded from the committed table rather than from the scale
+        /// inversion, and says for each one how many probes it spent, how far it walked, what the
+        /// stage read before and after, and which exit it took.
+        ///
+        /// It exists because the search's two failure modes look identical from outside. A stage
+        /// whose CEIL sits outside the band either is content the search cannot satisfy, or is
+        /// content the search never finished looking at. The exit column separates them: converged
+        /// means the walk crossed the target or reached the cushion and the levels it wrote are the
+        /// answer; BUDGET means it ran out of SolverMaxProbesPerStage first and the levels are
+        /// wherever it was standing. That is the measurement SolverMaxProbesPerStage was sized
+        /// against, and it is the one to re-run before changing that number again.
+        ///
+        /// The full solver is the expensive thing here - it runs an economy walk per iteration and
+        /// this does not - so a question about the search on its own can be asked in minutes.
+        /// </summary>
+        private static int RunProbeStudy(string contentDir)
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+            ContentDatabase db = LoadContent(contentDir);
+            if (db == null) return 1;
+            Line("");
+            Line("PROBE STUDY - the level search alone, re-run on every graded stage from the COMMITTED");
+            Line("  table at " + SolverCeilSamples + " samples a probe, under BOTH probe schemes:");
+            Line("    LADDER  each stage is granted " + SolverProbeGrants[0] + " probes, and a stage that spends them");
+            Line("            without reaching the band is granted double, up to " + SolverMaxProbesPerStage + ". A retry restarts.");
+            Line("    FLAT    every stage is granted " + SolverMaxProbesPerStage + " from the start and exits on convergence.");
+            Line("  Floor-pinned stages are skipped: the instrument cannot be placed on them, so there is");
+            Line("  nothing to search for. The FIRST RUNG of the ladder is a flat " + SolverProbeGrants[0] + " for free, so the");
+            Line("  old scheme is read off the ladder run rather than paid for a third time.");
+            Line("");
+            Line("  stage  roster                ladder   flat  rungs            steps   was      landed   band    exit");
+            int worstProbes = 0, worstSteps = 0; string worstStage = null;
+            int graded = 0, landedIn = 0;
+            int ladderTotal = 0, flatTotal = 0, floorTotal = 0;
+            int ladderTruncated = 0, flatTruncated = 0, floorTruncated = 0, escalated = 0;
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef stage = db.AllStages[i];
+                if (IsFloorPinned(db, stage)) continue;
+                graded++;
+                int ramp = stage.CeilingLevel - stage.FloorLevel;
+                int[] roster = new int[stage.Enemies.Count];
+                for (int e = 0; e < roster.Length; e++) roster[e] = stage.Enemies[e].Level;
+                int[] seeded = new int[roster.Length];
+                for (int e = 0; e < roster.Length; e++) seeded[e] = roster[e] + ramp;
+                string wasText = SolverRosterText(stage);
+                int guardSeed = 6000000 + stage.GlobalIndex * 97 + 13;
+                float wasRate = CurveRate(BuildPinnedLine(db, stage, true), stage,
+                                          Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount),
+                                          SolverCeilSamples, guardSeed, _gearedCurveOrdinals);
+
+                // THE LADDER, which is what the solver runs. Its rung list carries the old flat 60
+                // inside it: rung one IS a flat 60, and a stage with more than one rung is a stage
+                // that a flat 60 was truncating.
+                int ladder = 0;
+                LevelConfig landed = SolveStageLevels(db, stage, roster, ramp, ref ladder);
+                string rungText = "";
+                for (int r = 0; r < landed.Rungs.Count; r++)
+                    rungText += (r > 0 ? "+" : "") + landed.Rungs[r];
+                floorTotal += landed.Rungs[0];
+                if (landed.Rungs.Count > 1) { escalated++; floorTruncated++; }
+                if (landed.Truncated) ladderTruncated++;
+                bool inBand = CeilBandMargin(db, stage, landed.Rate) >= 0f;
+                if (inBand) landedIn++;
+                string landedText = SolverRosterText(stage);
+
+                // THE FLAT CEILING, over the same stage from the same seeded roster. Restored first
+                // so the second search starts where the first one did rather than where it landed.
+                SolverApplyCeiling(stage, seeded, ramp);
+                int flat = 0;
+                LevelConfig flatLanded = SolveStageLevelsAt(db, stage, roster, ramp,
+                                                            SolverMaxProbesPerStage, ref flat);
+                if (flatLanded.Truncated) flatTruncated++;
+                // Same walk, same seed, same landing - the schemes differ in what they spend, not
+                // in where they arrive, and a divergence here would mean the restart is not clean.
+                if (Math.Abs(flatLanded.Rate - landed.Rate) > 0.0001f)
+                    Line("    !! " + stage.DisplayCode + " landed differently under the two schemes: "
+                         + Pct(landed.Rate) + " ladder against " + Pct(flatLanded.Rate) + " flat");
+                SolverApplyCeiling(stage, landed.Ceiling, ramp);
+
+                ladderTotal += ladder;
+                flatTotal += flat;
+                if (ladder > worstProbes) { worstProbes = ladder; worstSteps = landed.UnitsMoved; worstStage = stage.DisplayCode; }
+                Line("  " + stage.DisplayCode.PadRight(6) + " " + (wasText + " -> " + landedText).PadRight(22)
+                     + ladder.ToString().PadLeft(6) + flat.ToString().PadLeft(7) + "  " + rungText.PadRight(16)
+                     + landed.UnitsMoved.ToString().PadLeft(5)
+                     + Pct(wasRate).PadLeft(9) + Pct(landed.Rate).PadLeft(9)
+                     + (inBand ? "  in " : "  OUT").PadLeft(8)
+                     + (landed.Truncated ? "   BUDGET" : "   converged"));
+            }
+            Line("");
+            Line("  " + graded + " graded stage(s); " + landedIn + " landed in band.");
+            Line("  " + escalated + " stage(s) spent a first rung of " + SolverProbeGrants[0]
+                 + " without reaching the band and were escalated.");
+            Line("");
+            Line("  TOTAL PROBES OVER ONE PASS, the three schemes on the same table:");
+            Line("    flat " + SolverProbeGrants[0].ToString().PadLeft(3) + "   " + floorTotal.ToString().PadLeft(6)
+                 + "   " + floorTruncated + " stage(s) interrupted - what those wrote is not an answer");
+            Line("    flat " + SolverMaxProbesPerStage.ToString().PadLeft(3) + "   " + flatTotal.ToString().PadLeft(6)
+                 + "   " + flatTruncated + " stage(s) interrupted");
+            Line("    ladder  " + ladderTotal.ToString().PadLeft(6)
+                 + "   " + ladderTruncated + " stage(s) interrupted");
+            Line("");
+            Line("  The ladder costs " + (ladderTotal - flatTotal) + " probe(s) MORE than the flat ceiling"
+                 + (flatTotal > 0 ? " (x" + Ratio3((float)ladderTotal / flatTotal) + ")" : "")
+                 + ", for the same landings.");
+            Line("  A grant can only be found too small by spending it, so every escalated stage re-fights");
+            Line("  its earlier rungs from the seed. And the flat ceiling is not a quota - the search exits");
+            Line("  on convergence - so the stages that converge inside " + SolverProbeGrants[0] + " pay the same under either");
+            Line("  scheme, and the stages that do not are exactly the ones the ladder charges twice.");
+            Line("  worst: " + worstStage + " at " + worstProbes + " probe(s), " + worstSteps + " single-unit step(s).");
+            Line("  A stage reading BUDGET was interrupted rather than measured. If any does, the ceiling is");
+            Line("  under what this content asks for and the out-of-band readings downstream are its doing.");
+            return 0;
+        }
+
         private static int RunCeilReconcile(string contentDir, string onlyStage, string levels)
         {
             Console.OutputEncoding = Encoding.UTF8;
@@ -18571,7 +18720,45 @@ namespace Emberfall.DevHarness
         /// either side, less the solver's own error on the landing.</summary>
         private const float SolverBandCushion = 0.05f;
 
-        private const int SolverMaxProbesPerStage = 60;
+        /// <summary>
+        /// THE PER-STAGE PROBE BUDGET: 400, and like SolverMaxIterations it is a divergence guard
+        /// rather than a budget. The search exits the instant a candidate crosses the target or
+        /// sits SolverBandCushion inside both edges, so a stage that converges never reaches this
+        /// number and the headroom costs it nothing.
+        ///
+        /// At 60 it was cutting searches off. --probe-study re-solves every graded stage from the
+        /// committed table and says which exit each one took; on the table this constant was raised
+        /// against, 7 of the 67 graded stages spent the whole budget without ever reading under the
+        /// band's high edge - 3-8, 3-9, 4-3, 4-4, 4-7, 5-3 and 5-7, every one of them still at 100%
+        /// and, because `best` only moves on a strictly better margin and every probe scored the
+        /// same, still sitting on the levels it started from. Not a hard stage: a search that never
+        /// got to look at one.
+        ///
+        /// Unbounded, all 67 converge. The worst is 3-8, which needs 68 single-unit steps and 171
+        /// probes to walk 32/32/32/32 up to 49/49/49/49 and 100% down to 85.8%; then 4-7 at 145,
+        /// 3-9 at 136, 5-7 at 125, 4-3 at 114, 5-3 at 112 and 4-4 at 100. Nothing else exceeds 55.
+        /// 400 clears the measured worst by 2.3x, which on the widest roster in the campaign is 80
+        /// single-unit steps and on 3-8's four-unit roster is 100.
+        ///
+        /// It is nearly free. A whole iteration of the search over all 67 graded stages costs 1,672
+        /// probes unbounded against 1,189 at 60 - 1.4x, because only the seven stages that were
+        /// being truncated pay anything at all, and every iteration after the first starts nearer
+        /// the band than this one did.
+        /// </summary>
+        private const int SolverMaxProbesPerStage = 400;
+
+        /// <summary>
+        /// THE GRANT LADDER. A stage is handed 60 probes; a stage that spends them without reaching
+        /// the band is handed double, and doubled again, up to SolverMaxProbesPerStage. Only a
+        /// stage that fails pays for the headroom, and a stage that converges never sees past the
+        /// first rung.
+        ///
+        /// That is the intent. What it actually costs is measured by --probe-study, which runs the
+        /// ladder and a flat SolverMaxProbesPerStage over the same table and prints both totals,
+        /// because the saving here is arithmetic rather than obvious and the arithmetic does not
+        /// go the way the shape of the idea suggests. See SolveStageLevels.
+        /// </summary>
+        private static readonly int[] SolverProbeGrants = { 60, 120, 240, SolverMaxProbesPerStage };
 
         private static float CeilBandLow(ContentDatabase db, StageDef stage)
         {
@@ -18597,6 +18784,15 @@ namespace Emberfall.DevHarness
             public int[] Ceiling;    // the ceiling battle's level per unit
             public float Rate = -1f; // its measured CEIL win rate at recommendedPower
             public int UnitsMoved;   // how far the search walked from the inversion's seed
+            // True when the search stopped because it had spent its grant rather than because it
+            // crossed the target or reached the cushion. A stage that exits this way was not
+            // measured, it was interrupted, and its levels are wherever the walk happened to be
+            // standing. Counted per iteration so the report says so out loud.
+            public bool Truncated;
+            // What each rung of the grant ladder spent, in order, on the walk that produced this
+            // landing. One entry means the stage converged inside its first 60. Set by
+            // SolveStageLevels; left null by a single-grant search.
+            public List<int> Rungs;
         }
 
         /// <summary>
@@ -18616,8 +18812,54 @@ namespace Emberfall.DevHarness
             stage.CeilingLevel = top + Math.Max(0, ramp);
         }
 
+        /// <summary>
+        /// THE ESCALATING GRANT. Runs the level search at the first rung of SolverProbeGrants and,
+        /// only if that rung was spent without reaching the band, runs it again at the next one.
+        ///
+        /// A RETRY IS A RESTART, and that is the whole cost. The walk is deterministic in the
+        /// stage's own seed and starts from `roster` every time, so a stage re-solved at 120 spends
+        /// its first 60 probes re-fighting the identical battles it already fought at 60 and only
+        /// then sees new ground. A stage that needs 171 probes therefore pays 60 + 120 + 171 = 351
+        /// under the ladder against 171 flat - the ladder cannot skip to the rung that would have
+        /// worked, because the only way to learn a rung is too small is to spend it.
+        ///
+        /// Resuming instead of restarting would remove that waste, and removes the ladder with it:
+        /// the grant is only ever read by the `while` in SolveStageLevelsAt, so a walk resumed with
+        /// a raised ceiling visits exactly the probes, in exactly the order, that one flat search at
+        /// the final rung would have visited. Escalate-by-resume is not cheaper than a flat ceiling;
+        /// it IS a flat ceiling, spelled across four calls.
+        ///
+        /// Which leaves the ladder's real question: what does a flat ceiling cost a stage that does
+        /// not need it? Nothing. The grant is a stopping condition, never a quota - SolveStageLevelsAt
+        /// exits the instant a candidate crosses the target or reaches the cushion, and 60 of the 67
+        /// graded stages do that inside 55 probes and would do it inside 55 at any ceiling above 55.
+        /// The number to beat is not 67 x 400. Measured, it is 1,672 probes a pass flat against 2,572
+        /// under this ladder, for identical landings: see Docs/SOLVE-PREREQS.md item 4.
+        ///
+        /// SO THE SOLVER DOES NOT CALL THIS. RunRecommendedPowerSolver goes straight to
+        /// SolveStageLevelsAt at SolverMaxProbesPerStage; the ladder is kept because --probe-study
+        /// is what measures the flat ceiling against it, and a constant this expensive should be
+        /// re-derivable by the next session rather than taken on trust.
+        /// </summary>
         private static LevelConfig SolveStageLevels(ContentDatabase db, StageDef stage, int[] roster,
                                                    int ramp, ref int probes)
+        {
+            LevelConfig landed = null;
+            List<int> rungs = new List<int>();
+            for (int g = 0; g < SolverProbeGrants.Length; g++)
+            {
+                int spent = 0;
+                landed = SolveStageLevelsAt(db, stage, roster, ramp, SolverProbeGrants[g], ref spent);
+                rungs.Add(spent);
+                probes += spent;
+                if (!landed.Truncated) break;
+            }
+            landed.Rungs = rungs;
+            return landed;
+        }
+
+        private static LevelConfig SolveStageLevelsAt(ContentDatabase db, StageDef stage, int[] roster,
+                                                     int ramp, int budget, ref int probes)
         {
             float target = TargetCeilRate(db, stage);
             // Fixed per stage, so the search fights identical battles every time it runs and
@@ -18640,7 +18882,7 @@ namespace Emberfall.DevHarness
             int movedCount = 0;
             int walked = 0;
 
-            while (probes < SolverMaxProbesPerStage)
+            while (probes < budget)
             {
                 if (movedCount == n) { movedThisRound = new bool[n]; movedCount = 0; }
 
@@ -18653,7 +18895,7 @@ namespace Emberfall.DevHarness
                     // fall below 1. The second is the binding one on a stage with a long ramp.
                     if (ceiling[u] + direction < 1) continue;
                     if (ceiling[u] + direction - ramp < 1) continue;
-                    if (probes >= SolverMaxProbesPerStage) break;
+                    if (probes >= budget) break;
 
                     ceiling[u] += direction;
                     LevelConfig probe = SolverProbe(db, stage, ceiling, ramp, walked + 1, seed, ref probes);
@@ -18685,6 +18927,8 @@ namespace Emberfall.DevHarness
                 walked++;
             }
 
+            best.Truncated = probes >= budget
+                             && CeilBandMargin(db, stage, best.Rate) < SolverBandCushion;
             SolverApplyCeiling(stage, best.Ceiling, ramp);
             return best;
         }
@@ -18810,6 +19054,16 @@ namespace Emberfall.DevHarness
             int iterations = 0;
             bool settled = false;
             Dictionary<string, int> stuckSteps = new Dictionary<string, int>();
+            // The release phase's bookkeeping. `proven` holds the stages that stuck AFTER a
+            // release, which is the only evidence that a banked step is still load-bearing.
+            HashSet<string> proven = new HashSet<string>();
+            // Only a stage that has actually been asked to give a step up can prove it needs one.
+            // Without this, a stage sticking for the first time late in the run - after some other
+            // stage's release moved the table under it - would be pinned as proven on a step it was
+            // never asked about, which is the accumulation this phase exists to undo.
+            HashSet<string> everReleased = new HashSet<string>();
+            int releases = 0;
+            List<string> releaseLog = new List<string>();
             while (iterations < SolverMaxIterations)
             {
                 iterations++;
@@ -18840,6 +19094,12 @@ namespace Emberfall.DevHarness
                     int had;
                     stuckSteps.TryGetValue(id, out had);
                     stuckSteps[id] = had + 1;
+                    // A stick at a stage that has given a step up is the proof that the step was
+                    // carrying weight on the finished table rather than on the seed one. It takes
+                    // the step back, keeps it, and is never asked for it again.
+                    if (everReleased.Contains(id) && proven.Add(id))
+                        releaseLog.Add(db.GetStage(id).DisplayCode + " stuck after a release and is"
+                                       + " back to " + stuckSteps[id] + " step(s) - proven, kept");
                 }
                 if (stuckIds.Count > 0 && stuckAt == null)
                 {
@@ -18863,6 +19123,7 @@ namespace Emberfall.DevHarness
 
                 int moved = 0;
                 int probes = 0;
+                int truncated = 0;
                 for (int i = 0; i < run.Stages.Count; i++)
                 {
                     StageBaseline was = baseline[run.Stages[i].Stage.Id];
@@ -18886,10 +19147,17 @@ namespace Emberfall.DevHarness
                     if (!p.FloorPinned)
                     {
                         int stageProbes = 0;
-                        LevelConfig landed = SolveStageLevels(db, p.Stage, shifted, ramp, ref stageProbes);
+                        // THE FLAT CEILING, not the grant ladder, and the choice is measured rather
+                        // than preferred: --probe-study runs both over the same table and prints the
+                        // two totals. The ladder loses, and it loses for a reason that is structural
+                        // rather than incidental - see SolveStageLevels. It is kept because the
+                        // instrument needs something to measure the ceiling against.
+                        LevelConfig landed = SolveStageLevelsAt(db, p.Stage, shifted, ramp,
+                                                                SolverMaxProbesPerStage, ref stageProbes);
                         p.LandedCeilRate = landed.Rate;
                         p.UnitsMoved = landed.UnitsMoved;
                         probes += stageProbes;
+                        if (landed.Truncated) truncated++;
                     }
                     p.NewFloor = p.Stage.FloorLevel;
                     p.NewCeiling = p.Stage.CeilingLevel;
@@ -18900,6 +19168,11 @@ namespace Emberfall.DevHarness
 
                 Line("  iteration " + iterations + ": " + moved + " stage(s) moved, " + probes
                      + " ceiling probe(s) at " + SolverCeilSamples + " samples each"
+                     + (truncated > 0
+                        ? "; " + truncated + " stage(s) SPENT THE WHOLE GRANT LADDER without reaching"
+                          + " the band, so their levels are where the walk stopped rather than where"
+                          + " it was going - raise SolverMaxProbesPerStage"
+                        : "")
                      + (stuckAt != null ? "; the reference walk stuck at " + stuckAt : ""));
                 if (moved == 0 && stuckAt != null)
                 {
@@ -18908,7 +19181,42 @@ namespace Emberfall.DevHarness
                          + " not written and is still the committed table.");
                     return 1;
                 }
-                if (moved == 0) { settled = true; break; }
+                if (moved == 0)
+                {
+                    // THE RATCHET HAS SETTLED. Before calling that the answer, ask which of the
+                    // banked steps the finished table still needs. See SolverStepReleaseRounds.
+                    List<string> release = new List<string>();
+                    foreach (KeyValuePair<string, int> kv in stuckSteps)
+                        if (kv.Value > 0 && !proven.Contains(kv.Key)) release.Add(kv.Key);
+                    if (release.Count == 0 || releases >= SolverStepReleaseRounds)
+                    {
+                        if (release.Count > 0)
+                            Line("  The release phase is out of rounds at " + releases + " and "
+                                 + release.Count + " stage(s) still hold an unproven step.");
+                        settled = true;
+                        break;
+                    }
+                    release.Sort(StringComparer.Ordinal);
+                    releases++;
+                    List<string> codes = new List<string>();
+                    foreach (string id in release)
+                    {
+                        stuckSteps[id] = stuckSteps[id] - 1;
+                        everReleased.Add(id);
+                        codes.Add(db.GetStage(id).DisplayCode + " " + (stuckSteps[id] + 1)
+                                  + "->" + stuckSteps[id]);
+                    }
+                    Line("  RELEASE " + releases + ": the ratchet settled, so one banked step comes"
+                         + " off every stage that holds an unproven one - "
+                         + string.Join(", ", codes.ToArray())
+                         + ". A stage that sticks from here keeps what it has.");
+                    releaseLog.Add("release " + releases + ": " + string.Join(", ", codes.ToArray()));
+                    // The state key is about to be revisited legitimately: the same table with a
+                    // different step behind it is not the cycle the detector is looking for.
+                    seen.Clear();
+                    seen.Add(SolverStateKey(db));
+                    continue;
+                }
 
                 string key = SolverStateKey(db);
                 int repeat = seen.IndexOf(key);
@@ -18933,6 +19241,29 @@ namespace Emberfall.DevHarness
                      + " harder stages cost more retries, retries are paid for by farming, farming"
                      + " buys power, and power asks for harder stages.");
                 return 1;
+            }
+
+            Line("");
+            if (releaseLog.Count == 0)
+            {
+                Line("  THE STUCK-STEP RATCHET: nothing was banked, so there was nothing to release."
+                     + " Every wall is derived at its own band middle.");
+            }
+            else
+            {
+                Line("  THE STUCK-STEP RATCHET, and what the release phase did with it. A banked step"
+                     + " aims a stage 5% higher than its band middle and so puts it OUTSIDE its band;"
+                     + " a step banked against an early iteration's table is a step the finished table"
+                     + " may not need. Each line is one release round or one stage proving it does:");
+                for (int i = 0; i < releaseLog.Count; i++) Line("    " + releaseLog[i]);
+                List<string> held = new List<string>();
+                foreach (KeyValuePair<string, int> kv in stuckSteps)
+                    if (kv.Value > 0) held.Add(db.GetStage(kv.Key).DisplayCode + " x" + kv.Value);
+                held.Sort(StringComparer.Ordinal);
+                Line("    still held at the end: " + (held.Count == 0 ? "none - every wall sits at its"
+                     + " own band middle" : string.Join(", ", held.ToArray())
+                     + ". Each of these is a stage a player who never converts and never ascends"
+                     + " could not pass at its band middle, and each will read OVER its band."));
             }
 
             Line("");
@@ -19133,8 +19464,11 @@ namespace Emberfall.DevHarness
         /// It scales the loaded StageDefs in memory and puts them back afterwards. Nothing is
         /// written to campaign.json, and the restore is unconditional.
         /// </summary>
+        private const float IncomeProbeMultiplier = 2.5f;
+
         private static void CheckEconomyRespondsToIncome(ContentDatabase db)
         {
+            const float Multiplier = IncomeProbeMultiplier;
             Line("");
             Line("ECONOMY RESPONDS TO INCOME (the guard the old model would have failed)");
 
@@ -19148,7 +19482,6 @@ namespace Emberfall.DevHarness
             // happened to roll. So the guarded response is to ALL income, gold and shards together,
             // and the gold-only response is still printed beside it as a reading.
 
-            const float Multiplier = 2.5f;
 
             // Set from the measured spread, not from a wish. The broken model moved 0.03 on this
             // input; the fixed one moves about 0.16. The bar sits at 0.10 - more than three times
@@ -19241,11 +19574,77 @@ namespace Emberfall.DevHarness
                  + "   (gold buys levels; levels stop at each hero's cap, which only ascension raises)");
             Line("  The old one-session-per-attempt model responded about 0.03 to this same input,");
             Line("  which is how it was caught. Anything near that means the link is severed again.");
+            ReportIncomeAbsorption(db, poor, rich);
 
             Check(response > MinimumResponse,
                   "the economy model responds to a " + Fmt(Multiplier) + "x change in authored income"
                   + " (moved " + Fmt(response) + ", needs more than " + Fmt(MinimumResponse) + ")");
             Line("");
+        }
+
+        /// <summary>
+        /// WHERE THE EXTRA INCOME WENT, channel by channel, so a response that is small or negative
+        /// can be read rather than argued about.
+        ///
+        /// The response is a ratio, power over recommendedPower, and recommendedPower is identical
+        /// in both runs - so every point of it is the numerator, and the numerator is exactly three
+        /// multiplicative pieces: the roster the player deployed, the levels gold bought on top of
+        /// it, and the armor clears dropped. This prints all three at the last stage reached, next
+        /// to the income that was supposed to buy them and the battles that were fought for them.
+        ///
+        /// A NEGATIVE response is a real outcome, not a broken link, and this is the shape it has:
+        /// gold stops at each hero's cap, shards stop when the roster is saturated, and ARMOR IS
+        /// NOT BOUGHT AT ALL - it drops from battles. So income that arrives past both ceilings
+        /// cannot buy power, while the retries and the farming it makes unnecessary are battles
+        /// that would have dropped armor. Richer, shorter, and slightly weaker at the end.
+        ///
+        /// That is why the guard cannot be answered by paying MORE. It can only be answered by
+        /// income arriving where a ceiling is not yet binding, and this report is what says whether
+        /// a reshaping did that: the levels line moving means gold found room under the caps, the
+        /// roster line moving means shards found a hero worth summoning.
+        /// </summary>
+        private static void ReportIncomeAbsorption(ContentDatabase db, EconomyRun poor, EconomyRun rich)
+        {
+            EconomyStageOutcome a = LastReached(poor), b = LastReached(rich);
+            if (a == null || b == null) return;
+            Line("  WHERE THE EXTRA INCOME WENT - the ratio's numerator is roster x levels x armor,"
+                 + " and nothing else:");
+            Line("    at " + a.Stage.DisplayCode + "          1x          " + Fmt(IncomeProbeMultiplier)
+                 + "x        change");
+            AbsorptionRow("    roster (5 at Lv1) ", a.EntryRosterPower, b.EntryRosterPower);
+            AbsorptionRow("    levels x          ", a.EntryBarePower - a.EntryRosterPower,
+                                                   b.EntryBarePower - b.EntryRosterPower);
+            AbsorptionRow("    armor x           ", a.EntryPower - a.EntryBarePower,
+                                                   b.EntryPower - b.EntryBarePower);
+            AbsorptionRow("    entry power       ", a.EntryPower, b.EntryPower);
+            Line("");
+            AbsorptionRow("    gold earned       ", poor.Ledger.GoldTotal, rich.Ledger.GoldTotal);
+            AbsorptionRow("    gold into levels  ", poor.Ledger.GoldSpentOnLevels, rich.Ledger.GoldSpentOnLevels);
+            AbsorptionRow("    hero levels bought", poor.Ledger.HeroLevelsBought, rich.Ledger.HeroLevelsBought);
+            AbsorptionRow("    shards earned     ", poor.Ledger.ShardTotal, rich.Ledger.ShardTotal);
+            AbsorptionRow("    summons           ", poor.Ledger.Summons, rich.Ledger.Summons);
+            AbsorptionRow("    duplicate refunds ", poor.Ledger.ShardDuplicate, rich.Ledger.ShardDuplicate);
+            AbsorptionRow("    battles fought    ", poor.TotalBattles, rich.TotalBattles);
+            AbsorptionRow("    armor drops       ", poor.Ledger.ArmorDrops, rich.Ledger.ArmorDrops);
+            Line("    Read it this way: gold that cannot buy a level because the hero is at its cap,"
+                 + " and shards that");
+            Line("    refund as duplicates because the roster is saturated, are income the ratio"
+                 + " cannot see. Armor is");
+            Line("    the one channel income does not buy, so a shorter walk carries less of it.");
+        }
+
+        private static EconomyStageOutcome LastReached(EconomyRun run)
+        {
+            for (int i = run.Stages.Count - 1; i >= 0; i--)
+                if (run.Stages[i].Stage != null && run.Stages[i].Stage.RecommendedPower > 0)
+                    return run.Stages[i];
+            return null;
+        }
+
+        private static void AbsorptionRow(string label, long poor, long rich)
+        {
+            string delta = poor == 0 ? "-" : (rich >= poor ? "+" : "") + Pct((rich - poor) / (float)poor);
+            Line(label + poor.ToString().PadLeft(12) + rich.ToString().PadLeft(12) + delta.PadLeft(12));
         }
 
         private static float CapBlockedShare(EconomyRun run)
