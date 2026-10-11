@@ -93,6 +93,24 @@ function Test-FileContains([string]$path, [string]$needle) {
 }
 
 # What would make this tree's hash a lie about the player built from it, one line per cause.
+#
+# git status names the CANDIDATES; content decides. Status flags a file whose bytes on disk differ
+# from what git last checked out, and a line-ending difference is enough: Unity rewrites
+# ProjectSettings/*.asset with LF, core.autocrlf checked them out as CRLF, and status called them
+# modified with an empty diff. Trusting the flag refused good trees and quarantined good players.
+# So a flagged file is a problem only when its content, cleaned the way `git add` would clean it
+# (hash-object applies the same eol and text filters), is not the blob HEAD holds. Anything that
+# cannot be compared that way - a deletion, a rename, a path HEAD does not have - stays a problem.
+function Test-SameAsHead([string]$path) {
+    $full = Join-Path $root ($path -replace '/', [char]92)
+    if (-not (Test-Path -LiteralPath $full -PathType Leaf)) { return $false }
+    $headBlob = "$(Invoke-Git rev-parse --verify --quiet "HEAD:$path")".Trim()
+    if ($script:GitExit -ne 0 -or -not $headBlob) { return $false }
+    $diskBlob = "$(Invoke-Git hash-object --path $path -- $full)".Trim()
+    if ($script:GitExit -ne 0 -or -not $diskBlob) { return $false }
+    return ($diskBlob -eq $headBlob)
+}
+
 function Get-TreeProblems {
     $problems = @()
     $status = @(Invoke-Git status --porcelain --untracked-files=all)
@@ -103,6 +121,9 @@ function Get-TreeProblems {
         $path = $line.Substring(3).Trim('"')
         if ($code -eq "??") {
             if ($path -match '^(Assets|Packages|ProjectSettings)/') { $problems += "untracked  $path" }
+        } elseif ($code -match '^[ MT][ MT]$' -and (Test-SameAsHead $path)) {
+            # Flagged, but the content is HEAD's: a line-ending or stat-only difference.
+            continue
         } else {
             $problems += "changed    $path"
         }
@@ -163,9 +184,22 @@ try {
 
     $null = Invoke-Git rev-parse --git-dir
     if ($script:GitExit -ne 0) { Fail "$root is not a git working tree." }
-    foreach ($marker in @("MERGE_HEAD", "REBASE_HEAD", "CHERRY_PICK_HEAD")) {
-        $gitPath = (Invoke-Git rev-parse --git-path $marker)
-        if ($gitPath -and (Test-Path (Join-Path $root $gitPath))) { Fail "a $marker is in progress. Finish it first." }
+    # What git leaves while an operation is UNFINISHED. Not REBASE_HEAD: git writes that during a
+    # rebase and leaves it behind for days after the rebase completes, so testing for it refused
+    # clean trees. A rebase in progress is the rebase-merge directory (the merge backend, and -i)
+    # or rebase-apply (the apply backend, and git am).
+    #
+    # --git-path answers relative to the root in a plain clone but ABSOLUTE in a linked worktree
+    # (.git/worktrees/<name>/...), and Join-Path onto an absolute path builds a path that never
+    # exists - so in a worktree none of these guards could ever fire. A rooted answer is used as is.
+    foreach ($marker in @("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "rebase-merge", "rebase-apply")) {
+        $gitPath = "$(Invoke-Git rev-parse --git-path $marker)".Trim()
+        if (-not $gitPath) { continue }
+        if (-not [IO.Path]::IsPathRooted($gitPath)) { $gitPath = Join-Path $root $gitPath }
+        if (Test-Path $gitPath) {
+            $what = if ($marker -like "rebase-*") { "rebase" } else { $marker }
+            Fail "a $what is in progress ($gitPath exists). Finish or abort it first."
+        }
     }
 
     $before = @(Get-TreeProblems)
