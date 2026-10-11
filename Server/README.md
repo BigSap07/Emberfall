@@ -32,11 +32,18 @@ project owner:
 10. `0010_revoke_generate_friend_code.sql` - revokes `generate_friend_code()` from `public` and
    `anon`, the last function `0001` left callable with the anon key alone. Applied to the live
    project by hand first; the file is the record of it.
+11. `0011_guild_path.sql` - the Guild Path: what the guild dungeon pays, and what it buys.
+12. `0012_guild_tech.sql` - the guild tech tree that replaced the four-node Path. Run after `0011`.
+13. `0013_save_and_name_rules.sql` - `push_save` refuses a document that is not a non-empty
+   object, a `save_version` above the server's maximum, and a document over the size cap, both
+   held in the one-row `save_limits` table; `display_name` takes the guild tables' text rule
+   (`Docs/CLOUD-GAPS.md` S2 and S7). **Raise `save_limits.max_save_version` before shipping a
+   build that bumps `SaveSerializer.CurrentVersion`**, or that build cannot sync.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0010` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0013` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
 after a half-finished run, is a no-op rather than a failure to unpick.
 
