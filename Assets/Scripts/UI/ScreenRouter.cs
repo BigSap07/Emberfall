@@ -35,7 +35,8 @@ namespace Emberfall.UI
         GuildDungeonResult,
         GuildDungeonBoards,
         GuildTech,
-        Fusion
+        Fusion,
+        WaveResult
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -127,6 +128,7 @@ namespace Emberfall.UI
         public Screens.GuildDungeonBoardsScreen GuildDungeonBoards;
         public Screens.GuildTechScreen GuildTech;
         public Screens.FusionScreen Fusion;
+        public Screens.WaveResultScreen WaveResult;
 
         public UIScreen Current { get; private set; }
 
@@ -188,6 +190,10 @@ namespace Emberfall.UI
             // moment the player is told levelling has stopped - and from the talent page's locked
             // cards, which is the moment they are told what would open one.
             Fusion = Create<Screens.FusionScreen>();
+
+            // One result screen per resolved wave. Reached through CampaignFlow.Launch, never by
+            // routing to it directly: it resolves the wave as it opens, so it needs a stage.
+            WaveResult = Create<Screens.WaveResultScreen>();
         }
 
         /// <summary>

@@ -150,3 +150,33 @@ It asserts nothing about its own output, so run `Tools/build-check.ps1` afterwar
 the guard on the levels under them. Where it moved authored enemy levels it moved the
 stage fingerprints with them, and regenerating that baseline stays a separate deliberate
 act (`EMBERFALL_REGEN_STAGE_FP=1`).
+
+## Amended 2026-10-11: a wave resolves in one tap
+
+A first clear is now one resolve per wave, not one fight per battle. `GameSession.ResolveWave`
+runs the rest of the current wave through `ResolveLadderBattle`, the helper
+`SweepClearedStage` already used, so there is one resolution path for every campaign battle,
+and returns a `WaveResolution` that `WaveResultScreen` only reads. `CampaignFlow.Launch` is the
+single door a stage start goes through: a cleared stage is swept, a stage with a wave curve
+opens `WaveResultScreen`, and only a stage with no ladder reaches `BattleScreen`.
+
+What this supersedes: the per-battle Auto chain decision above. `BattleScreen`'s Auto and
+NEXT BATTLE remain in the code, but nothing in the campaign reaches them.
+
+What it leaves alone:
+
+- The battle count. A stage is still `waveCount` x `battleCount` battles and each still runs
+  through `CombatSimulation`; the resolve only stops asking the player to start each one.
+- Defeat retries the single lost battle. The resolve stops at it, `RecordBattleLost` leaves
+  the cursor on it, and the next resolve starts there, not at the wave.
+- Rewards stay at stage granularity. A won mid-stage wave pays nothing and the wave that
+  finishes the stage calls `GrantBattleResult` once.
+
+What a first clear costs the player is now one resolve per wave plus one for every lost
+battle: 3 on stages 1-1 to 1-4, 6 on 1-5 to 1-12, and 12 from chapter 2 on.
+`ReportResolvesPerFirstClear` in the harness prints the count for the reference player's walk.
+
+Cleared stages are recorded by id from save version 20: `CampaignProgress` derives the
+frontier, the furthest stage and the count from `ClearedStageIds`, and a save older than that
+migrates its position through the frozen `SaveSerializer.PreIdStageOrder`, never through the
+live `campaign.json`.

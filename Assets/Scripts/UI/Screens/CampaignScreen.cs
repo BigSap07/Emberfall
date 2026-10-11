@@ -19,9 +19,9 @@ namespace Emberfall.UI.Screens
     /// wave restructure multiplied what sits behind each row by 144. The stepper shows one stage
     /// at a time because there is now far more to say about one stage than a row can hold.
     ///
-    /// PRESENTATION ONLY. Launch and Sweep below are untouched: the sweep rule, the repeat cap and
-    /// everything the wave structure landed still resolve exactly as they did, and this screen
-    /// still never simulates anything itself.
+    /// PRESENTATION ONLY. Launch below only routes, to CampaignFlow, which owns the sweep: the
+    /// sweep rule, the repeat cap and everything the wave structure landed still resolve exactly
+    /// as they did, and this screen still never simulates anything itself.
     /// </summary>
     public sealed class CampaignScreen : UIScreen
     {
@@ -732,62 +732,13 @@ namespace Emberfall.UI.Screens
 
         private void Launch(StageDef stage)
         {
-            if (App.Session.Profile.TeamHeroes().Count == 0)
-            {
-                App.Notify("Deploy at least one hero first.");
-                return;
-            }
+            // A STAGE ALREADY CLEARED IS SWEPT, NOT REFOUGHT, and a fresh one is resolved a wave
+            // at a time; CampaignFlow.Launch decides which. DESIGN-CAMPAIGN-STRUCTURE.md: "a
+            // cleared stage becomes a one-tap sweep, resolved instantly, not a full 144-battle
+            // real-time replay". A sweep still spends a daily repeat, because it IS a stage clear
+            // and that system's granularity is unchanged.
             App.Audio.Tap();
-
-            // A STAGE ALREADY CLEARED IS SWEPT, NOT REFOUGHT.
-            //
-            // DESIGN-CAMPAIGN-STRUCTURE.md: "a cleared stage becomes a one-tap sweep, resolved
-            // instantly, not a full 144-battle real-time replay". Farming for gold cannot mean
-            // sitting through 144 fights, so the replay path resolves here and never opens the
-            // battle screen at all. It still spends a daily repeat, because a sweep IS a stage
-            // clear and that system's granularity is unchanged.
-            //
-            // A stage never cleared falls through and is fought battle by battle.
-            if (App.Session.CanSweep(stage))
-            {
-                Sweep(stage);
-                return;
-            }
-
-            Router.Battle.SetStage(stage);
-            Router.Show(ScreenId.Battle);
-        }
-
-        /// <summary>
-        /// Resolves a repeat clear in one tap and reports it as a toast rather than a result
-        /// screen, because there is no fight to narrate - the outcome is already known by the time
-        /// the tap finishes.
-        ///
-        /// A sweep can fail. It runs the stage's hardest battle to decide (see
-        /// GameSession.SweepClearedStage), so a line that has been stripped of gear since the
-        /// original clear is told so instead of being paid for a stage it can no longer beat.
-        /// </summary>
-        private void Sweep(StageDef stage)
-        {
-            int seed = Mathf.Abs(stage.Id.GetHashCode() * 31
-                                 + App.Session.Profile.TotalBattlesWon * 7919
-                                 + Mathf.RoundToInt(Time.unscaledTime * 997f));
-            if (seed == 0) seed = 1;
-
-            BattleRewards rewards = App.Session.SweepClearedStage(stage, seed, TimeUtil.NowUnix());
-            if (!rewards.Victory)
-            {
-                App.Notify("Your line cannot sweep " + stage.Name + " any more.");
-                App.Audio.Defeat();
-                return;
-            }
-
-            App.Audio.Victory();
-            App.Notify(rewards.RepeatCapped
-                ? "Swept " + stage.Name + ". Daily repeat cap reached, no spoils."
-                : "Swept " + stage.Name + ".  +" + rewards.Gold + "g  +" + rewards.Shards + " shards");
-            App.RefreshHud();
-            OnShow();
+            if (CampaignFlow.Launch(App, stage) == CampaignFlow.LaunchResult.Swept) OnShow();
         }
     }
 }
