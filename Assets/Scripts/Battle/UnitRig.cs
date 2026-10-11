@@ -764,6 +764,13 @@ namespace Emberfall.Battle
             for (int i = 0; i < Materials.Count; i++) Materials[i].SetFloat("_Flash", amount);
         }
 
+        /// <summary>What SetFlash lerps toward. White unless a caller says otherwise; both unit
+        /// shaders carry _FlashColor, defaulting to white.</summary>
+        public void SetFlashColor(Color color)
+        {
+            for (int i = 0; i < Materials.Count; i++) Materials[i].SetColor("_FlashColor", color);
+        }
+
         public void SetFade(float amount)
         {
             for (int i = 0; i < Materials.Count; i++) Materials[i].SetFloat("_Fade", amount);
