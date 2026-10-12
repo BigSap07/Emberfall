@@ -721,6 +721,7 @@ namespace Emberfall.UI.Screens
         /// names is actually bought.</summary>
         private void OpenFusion()
         {
+            if (!FeatureGates.TryEnter(App, "talents.LockedCard")) return;
             App.Audio.Tap();
             Router.Fusion.ShowHero(_hero);
             Router.Show(ScreenId.Fusion);

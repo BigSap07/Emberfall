@@ -149,6 +149,7 @@ namespace Emberfall.DevHarness
                     if (m == null) { Check(false, "no check called " + names[n]); continue; }
                     System.Reflection.ParameterInfo[] ps = m.GetParameters();
                     m.Invoke(null, ps.Length == 0 ? new object[0]
+                        : ps.Length == 2 ? new object[] { content, contentDir }
                         : new object[] { ps[0].ParameterType == typeof(string) ? (object)contentDir : content });
                 }
                 Line(_failures == 0 ? "RESULT: all checks passed" : "RESULT: " + _failures + " check(s) FAILED");
@@ -272,6 +273,8 @@ namespace Emberfall.DevHarness
             CheckRegenClampOnLoad(content);
             CheckProving(content);
             CheckSaveRoundTrip(content);
+            CheckOnboarding(content);
+            CheckFeatureUnlockGating(content, contentDir);
             CheckAccounts(content);
             _failures += CloudChecks.Run(content, contentDir);
             CheckGuilds(contentDir);
@@ -310,6 +313,7 @@ namespace Emberfall.DevHarness
             ReportPaceAcrossSeeds(content);
             CheckFusionNeverGates(content);
             CheckEconomyRespondsToIncome(content);
+            CheckWalksRespectUnlocks(content, economy);
             // After all of them, because it asserts on what they actually resolved
             // while running - the economy responsiveness probe included.
             CheckInstrumentsSeeTheWholeCurve(content);
@@ -3502,12 +3506,13 @@ namespace Emberfall.DevHarness
 
             // ---- the save. No version moved, and none needed to: the gate is derived from a tier
             // the format has carried since long before talents existed. The gate landed at 17;
-            // 18 is the level clamp's, 19 the milestone claims' and 20 the cleared-stage ids' (with
-            // the Echo and Brand bank clamp) - see SaveSerializer.CurrentVersion, not the gate's.
-            Check(SaveSerializer.CurrentVersion == 20,
+            // 18 is the level clamp's, 19 the milestone claims', 20 the cleared-stage ids' (with
+            // the Echo and Brand bank clamp) and 21 the onboarding step and seen tips' - see
+            // SaveSerializer.CurrentVersion, not the gate's.
+            Check(SaveSerializer.CurrentVersion == 21,
                   "the ascension gate moved no save version - it is derived from Ascension, which is already "
                   + "stored, and a persisted 'unlocked' could only ever disagree with the tier (version "
-                  + SaveSerializer.CurrentVersion + ", which the level clamp, the milestone claims and the cleared-stage ids moved from 17)");
+                  + SaveSerializer.CurrentVersion + ", which the level clamp, the milestone claims, the cleared-stage ids and onboarding moved from 17)");
             hero.Ascension = 0;
             string json = SaveSerializer.Serialize(profile);
             string error;
@@ -4722,6 +4727,8 @@ namespace Emberfall.DevHarness
                 db.LoadGuildPath(File.Exists(pathPath) ? File.ReadAllText(pathPath) : null);
                 string techPath = Path.Combine(dir, "guild-tech.json");
                 db.LoadGuildTech(File.Exists(techPath) ? File.ReadAllText(techPath) : null);
+                string onboardingPath = Path.Combine(dir, "onboarding.json");
+                db.LoadOnboarding(File.Exists(onboardingPath) ? File.ReadAllText(onboardingPath) : null);
                 return db;
             }
             catch (Exception ex)
@@ -9157,6 +9164,10 @@ namespace Emberfall.DevHarness
         private static void EquipInstrumentArmor(ContentDatabase db, GameSession session, StageDef stage)
         {
             if (db.Armor == null || !db.Armor.IsUsable) return;
+            // THE UNLOCK TABLE (DESIGN-ONBOARDING.md): a line read at a stage wears armor only if a
+            // player arriving there has it, which is 1-12 cleared. Before that the armored line is
+            // the bare one, levelled to the same target.
+            if (!FeatureGate.IsUnlockedArriving(db, stage, Feature.Armor)) { _armorWithheldReadings++; return; }
             PlayerProfile profile = session.Profile;
             int stageIndex = stage != null ? stage.GlobalIndex : 0;
             int seed = 990000 + stageIndex * 7919;
@@ -9198,6 +9209,9 @@ namespace Emberfall.DevHarness
         private static void EquipBestOwnedArmor(ContentDatabase db, GameSession session)
         {
             PlayerProfile profile = session.Profile;
+            // THE UNLOCK TABLE: the walk banks every drop from the first clear, and wears none of it
+            // until armor opens.
+            if (!FeatureGate.IsUnlocked(db, profile, Feature.Armor)) return;
             List<HeroInstance> team = profile.TeamHeroes();
             for (int i = 0; i < team.Count; i++)
             {
@@ -17015,7 +17029,9 @@ namespace Emberfall.DevHarness
             // The walk's guild tech, and it is NULL for every walk but G5's own reading: the
             // reference player recommendedPower is derived for has none, and CheckGuildTechNeverGates
             // asserts that rather than this arranging it. See SimulateEconomyWithTech.
-            if (_walkGuildTech != null) profile.GuildTech = _walkGuildTech.Clone();
+            // It arrives with the guild: guild tech is applied the sitting Guilds opens (2-1 cleared)
+            // and never before, which is the unlock table's row read by the walk.
+            GuildTechState walkTech = _walkGuildTech;
             GameSession session = new GameSession(db, profile);
             run.Profile = profile;
             run.Session = session;
@@ -17030,6 +17046,11 @@ namespace Emberfall.DevHarness
                 EconomyStageOutcome outcome = new EconomyStageOutcome();
                 outcome.Stage = stage;
                 long stageStart = run.Now;
+                if (walkTech != null && FeatureGate.IsUnlocked(db, profile, Feature.Guilds))
+                {
+                    profile.GuildTech = walkTech.Clone();
+                    walkTech = null;
+                }
 
                 // Read BEFORE the first sitting of this stage runs. The band the curve guard
                 // enforces is specified at the moment the player first attempts the stage, which
@@ -20710,6 +20731,10 @@ namespace Emberfall.DevHarness
         {
             bool moved = false;
             PlayerProfile profile = session.Profile;
+            // THE UNLOCK TABLE: no conversion and no ascension before fusion opens (1-6 cleared).
+            // The deploy below still runs; it is the line, not fusion.
+            bool fusionOpen = FeatureGate.IsUnlocked(session.Content, profile, Feature.Fusion);
+            if (!fusionOpen) return EconomyDeployLine(session, run, outcome, stageIdx);
 
             for (int guard = 0; guard < 500 && _walkConverts; guard++)
             {

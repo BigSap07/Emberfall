@@ -6,6 +6,7 @@ using Emberfall.Core.Data;
 using Emberfall.Core.Json;
 using Emberfall.Core.Model;
 using Emberfall.Core.Progression;
+using Emberfall.Core.Session;
 
 namespace Emberfall.Core.Save
 {
@@ -403,7 +404,24 @@ namespace Emberfall.Core.Save
         /// wrong stage after any campaign reshape. The bump refuses that: Windows builds in
         /// circulation are version 19 and will refuse a save this build writes, through the
         /// existing newer-version refusal in TryReadVersion.
-        public const int CurrentVersion = 20;
+        ///
+        /// 21: the first session (DESIGN-ONBOARDING.md). Two keys, the minimum the flow needs:
+        /// `tutorialStep`, how many onboarding steps are complete (Onboarding's constants), and
+        /// `seenTips`, the free-play tips already shown and the features already opened since they
+        /// unlocked. Nothing else about the flow is stored: where it resumes is the step after the
+        /// last completed one, and what it shows is read from onboarding.json.
+        ///
+        /// Upgrade DOES need a migration, conditioned on the version like 20's. A pre-21 save that
+        /// has any campaign progress (Onboarding.HasCampaignProgress) is a player the tutorial is
+        /// too late for, so it loads complete with every tip seen (Onboarding.MarkComplete) and
+        /// never sees the flow. A pre-21 save with no progress loads at step 0 and is walked through
+        /// it; it already owns Kael, so its recall gives nothing and changes nothing.
+        ///
+        /// WHY THIS IS A BUMP. A version 20 build drops both keys on write, so a player who opened
+        /// it mid-tutorial would come back to a save with no step and be walked through the flow
+        /// again from the wake. The bump refuses that. The server's save_limits row must be raised
+        /// to 21 before a cloud player ships this, as it had to be for 20.
+        public const int CurrentVersion = 21;
 
         /// <summary>
         /// The campaign's stage ids in campaign.json order as they stood when version 20 moved
@@ -807,6 +825,12 @@ namespace Emberfall.Core.Save
             for (int i = 0; i < profile.ClearedStageIds.Count; i++) cleared.Add(profile.ClearedStageIds[i]);
             root.Set("clearedStages", cleared);
 
+            // Version 21: the first session's step and the tips already shown.
+            root.Set("tutorialStep", profile.TutorialStep);
+            JsonValue seenTips = JsonValue.NewArray();
+            for (int i = 0; i < profile.SeenTips.Count; i++) seenTips.Add(profile.SeenTips[i]);
+            root.Set("seenTips", seenTips);
+
             JsonValue heroes = JsonValue.NewArray();
             for (int i = 0; i < profile.Heroes.Count; i++)
             {
@@ -1037,6 +1061,20 @@ namespace Emberfall.Core.Save
                 for (int i = 0; i < legacy; i++)
                     if (!profile.ClearedStageIds.Contains(PreIdStageOrder[i])) profile.ClearedStageIds.Add(PreIdStageOrder[i]);
             }
+            // THE VERSION 21 MIGRATION (see CurrentVersion): the first session's step and the tips
+            // seen. Read as written from 21 on. Before 21 there is no step to read, so a save with
+            // campaign progress is complete with every tip seen and one without starts at the wake.
+            // Conditioned on the version: a version 21 save at step 0 with progress is a player
+            // who has not finished the flow, and must not be marked done.
+            profile.TutorialStep = Math.Max(0, Math.Min(Onboarding.Complete, root.GetInt("tutorialStep", 0)));
+            List<JsonValue> seenTips = root.GetList("seenTips");
+            for (int i = 0; i < seenTips.Count; i++)
+            {
+                string key = seenTips[i].AsString(null);
+                if (!string.IsNullOrEmpty(key) && !profile.SeenTips.Contains(key)) profile.SeenTips.Add(key);
+            }
+            if (version < 21 && Onboarding.HasCampaignProgress(profile)) Onboarding.MarkComplete(profile);
+
             // Derived, never trusted: the count the file carries is only read when there is no
             // content to count against.
             profile.StagesCleared = content != null ? CampaignProgress.CountCleared(profile, content)

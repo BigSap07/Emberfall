@@ -72,6 +72,32 @@ namespace Emberfall.Core.Data
         }
 
         /// <summary>
+        /// The first session's words and the feature unlock table (onboarding.json,
+        /// DESIGN-ONBOARDING.md). Loaded after Load for guild-path.json's reason and NOT part of
+        /// ContentVersion: no fight reads it. Empty (IsUsable false) on a database that never had
+        /// it loaded, which FeatureGate reads as every feature open.
+        /// </summary>
+        public OnboardingConfig Onboarding = new OnboardingConfig();
+
+        /// <summary>Parses onboarding.json into Onboarding, adding its warnings to Warnings, and
+        /// warns for an unlock row or a recall hero this content does not name. Does not touch
+        /// ContentVersion; see Onboarding.</summary>
+        public void LoadOnboarding(string onboardingJson)
+        {
+            Onboarding = OnboardingConfig.FromJson(onboardingJson);
+            for (int i = 0; i < Onboarding.Warnings.Count; i++) Warnings.Add(Onboarding.Warnings[i]);
+            for (int i = 0; i < Onboarding.Unlocks.Count; i++)
+            {
+                string stage = Onboarding.Unlocks[i].StageId;
+                if (!string.IsNullOrEmpty(stage) && GetStage(stage) == null)
+                    Warnings.Add("onboarding.json: " + Onboarding.Unlocks[i].Feature + " unlocks at '" + stage
+                                 + "', which campaign.json does not name");
+            }
+            if (Onboarding.IsUsable && GetHero(Onboarding.RecallHeroId) == null)
+                Warnings.Add("onboarding.json: the recall hero '" + Onboarding.RecallHeroId + "' is not in heroes.json");
+        }
+
+        /// <summary>
         /// Which content this database was built from, as one short string: a hash of the text of
         /// every file handed to Load, in a fixed order.
         ///

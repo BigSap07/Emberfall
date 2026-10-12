@@ -305,6 +305,7 @@ namespace UnityEngine
         public void SetParent(Transform p, bool worldPositionStays) { }
         public Transform GetChild(int index) { return null; }
         public Transform Find(string n) { return null; }
+        public bool IsChildOf(Transform p) { return false; }
         public void SetAsLastSibling() { }
         public void SetAsFirstSibling() { }
         public void SetSiblingIndex(int index) { }

@@ -74,6 +74,23 @@ Two runs decide whether the tree is healthy, and they measure different things.
   file directly under `Tools/DevHarness` is missing from either.
   **The power-band guard allows 0.005 past either edge** (`BandTolerance`) **and prints ratios to
   three decimals.** `2-1` once failed the build by 0.09% and printed as "x1.1 under x1.1".
+  **The unlock table moved both, and nothing was retuned to answer it** (`DESIGN-ONBOARDING.md`).
+  The walks and the pinned lines now spend a feature only once a player arriving at the stage
+  has it: no conversion or ascension before 1-6 is cleared, no armor worn before 1-12, no guild
+  tech before 2-1, and the walks never used relics or talents. Measured against the base run:
+  **the geared CEIL band now fails first at `1-3`** (100% against [78%, 92%]): 1-3 to 1-5 were
+  floor-pinned while the line wore armor and are graded now that it cannot. Chapter 1's CEIL moved
+  1-6 86.8% to 71.8%, 1-7 62.7% to 74.1%, 1-8 87.2% to 94.1%, 1-9 83.6% to 71.4%, 1-10 83.8% to
+  55.3%, 1-11 42.6% to 1.8% and 1-12 68% to 67.2%; chapter 2 onwards did not move. **The power
+  band has eleven stages out, not ten**: 1-12 x0.958 under x1.000 and 2-1 x1.061 under x1.100
+  are new, 4-12 came back inside (x1.095 within tolerance), and the other nine moved by up to
+  x0.027 (3-12 x1.189 to x1.207, 6-6 x1.168 to x1.195, 2-12 x1.142 to x1.118). The reference
+  walk's 1-12 wall entry fell from x1.074 to x1.003. `CheckFusionNeverGates` still passes (all
+  20 reference walks finish; the 1-6 wall's worst case went from 3 extra sittings to 4),
+  `CheckGuildTechNeverGates` and `CheckStageWinnability` still pass, and
+  `CheckEconomyRespondsToIncome`'s response rose from 0.6 to 0.89. No pinned baseline moved:
+  the recall leaves a new player byte for byte on the profile every walk starts from. A retune is
+  owed and follows this work.
   **A 3rd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
@@ -705,7 +722,7 @@ ships on top of that, with `RelicShopScreen` as its storefront.
 
 Summoning with a pity rule that guarantees distinct unowned heroes. Idle income accrues against a
 real clock and is capped. `SaveSerializer` writes the whole document, at
-`SaveSerializer.CurrentVersion` 20, and a save from a newer build is refused rather than read.
+`SaveSerializer.CurrentVersion` 21, and a save from a newer build is refused rather than read.
 Version 15 keeps records this build cannot resolve; version 16 adds each hero's ascension tier;
 version 17 adds the Guild Path's copy of the server's answer and the formation's saved lines, and
 later the guild tech tree's copy of it - deliberately without a further bump, because the server
@@ -729,6 +746,10 @@ an id the loaded content does not name is kept and not counted. The Echo and Bra
 clamped to their caps on every load. `CheckClearedStagesById` and `CheckRegenClampOnLoad` prove
 it. **The server must accept it before a cloud player ships**: 0013 inserts its `save_limits` row
 at `max_save_version` 19, and `push_save` refuses a version 20 save until that row is raised to 20.
+Version 21 records the first session: `tutorialStep` (the onboarding steps completed) and
+`seenTips` (the free-play tips shown and the features opened since they unlocked). A pre-21 save
+with any campaign progress loads tutorial-complete with every tip seen; one with none starts at
+the wake. `CheckOnboarding` proves it, and the server's `save_limits` row has to reach 21 too.
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -1150,6 +1171,14 @@ names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, whi
 ## In progress
 
 A branch is named here when it holds work worth naming, and only while it is unmerged.
+
+- `feature/onboarding` holds the first session and the feature unlock table, built to
+  `DESIGN-ONBOARDING.md`: the wake, the Cinder's scripted recall of Kael, the prologue battle,
+  five guided steps with forced arrows, free-play tips, locked-not-hidden features read from
+  `onboarding.json`, and save version 21. Its "As built" section records what the build decided
+  and one finding for the owner (the level-up step is unaffordable after 1-1). Its harness
+  movement is under **The instruments**. Five of its six onboarding captures still have to be
+  retaken; see its "As built" section.
 
 ## Next
 

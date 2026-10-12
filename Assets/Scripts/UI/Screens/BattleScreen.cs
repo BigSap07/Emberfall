@@ -255,7 +255,7 @@ namespace Emberfall.UI.Screens
         /// instead of leaving.</summary>
         private bool _midStageAdvance;
 
-        /// <summary>What FirstRun wants told when a prologue fight is done with, true on a win.
+        /// <summary>What OnboardingCoach wants told when a prologue fight is done with, true on a win.
         /// Null in every other mode.</summary>
         private System.Action<bool> _prologueOnResolved;
 
@@ -425,8 +425,8 @@ namespace Emberfall.UI.Screens
         /// The callback is the whole reason this mode exists as a fourth discriminator instead of
         /// as a campaign stage with a flag. Every other mode owns what happens after its result -
         /// Campaign continues, Recital returns to its tower, the Proving returns to its ladder.
-        /// The prologue does not: what follows step 8 is a scripted antagonist beat that belongs
-        /// to FirstRun, not to a battle screen, and it has to fire on a WIN as well as a loss.
+        /// The prologue does not: what follows it is the first session's guided loop, which belongs
+        /// to OnboardingCoach, not to a battle screen, and it has to fire on a WIN as well as a loss.
         /// Passing the outcome back leaves that decision in the one place that knows the script.
         ///
         /// onResolved is invoked from the gold button, not from the moment the sim ends, so the
@@ -2676,12 +2676,12 @@ namespace Emberfall.UI.Screens
         /// which mode the player is in.
         /// </summary>
         /// <summary>
-        /// Hands the outcome back to FirstRun and gets out of the way.
+        /// Hands the outcome back to OnboardingCoach and gets out of the way.
         ///
         /// The callback is read into a local and the field cleared BEFORE invoking, because what
-        /// FirstRun does with it is start the next step - which calls SetPrologueStep and assigns
-        /// a new callback. Clearing after the call would wipe the one just installed and strand
-        /// the sequence on the following step with a dead gold button.
+        /// OnboardingCoach does with it may start another step, which calls SetPrologueStep and
+        /// assigns a new callback. Clearing after the call would wipe the one just installed and
+        /// strand the sequence on the following step with a dead gold button.
         /// </summary>
         private void ResolvePrologueStep()
         {

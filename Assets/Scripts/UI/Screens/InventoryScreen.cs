@@ -156,7 +156,15 @@ namespace Emberfall.UI.Screens
             UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
 
             _railButtons.Add(tab);
+
+            // Relics open at their own row of the unlock table, later than armor and this page.
+            if (index == RelicFilter)
+                FeatureLockView.Attach(tab.Root, "inventory.tab.RELIC", label, new Vector2(30f, 18f),
+                                       FeatureLockView.TagSide.Right);
         }
+
+        /// <summary>The rail index of the RELIC tab.</summary>
+        private const int RelicFilter = 1;
 
         private void BuildGrid(float top)
         {
@@ -579,13 +587,16 @@ namespace Emberfall.UI.Screens
         public override void OnShow()
         {
             ClosePicker();
+            if (_filter == RelicFilter && !FeatureGates.Allows(App, "inventory.tab.RELIC")) _filter = 0;
             App.RefreshHud();
             RebuildAll();
+            FeatureLockView.RefreshAll(App, Root);
         }
 
         private void SetFilter(int filter)
         {
             if (_filter == filter) return;
+            if (filter == RelicFilter && !FeatureGates.TryEnter(App, "inventory.tab.RELIC")) return;
             _filter = filter;
             _selected = "";
             App.Audio.Tap();

@@ -88,7 +88,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV21-wave-results-merged";
+        private const string BuildMarker = "FIXV22-onboarding";
 
         static PlayModeScreenshot()
         {
@@ -134,6 +134,30 @@ namespace Emberfall.EditorTools
         // Added as menu items rather than only as trigger-file targets because the trigger route
         // depends on this process winning OS focus for Unity, which it has repeatedly failed to do
         // from a non-interactive shell. A menu item needs no focus fight: a human clicks it.
+
+        // ------------------------------------------------------------------ onboarding targets
+        // DESIGN-ONBOARDING.md's verification: six frames of the first session, each on a NEW
+        // player - the scratch save is deleted and the first run is NOT suppressed for these, so
+        // the game boots exactly as an install does. Every other target keeps the suppression and
+        // the gate bypass (FeatureGates.CaptureBypass), so they photograph their screens as before.
+
+        [MenuItem("Emberfall/Capture/Onboarding/Wake", false, 90)]
+        public static void CaptureOnboardWake() { Begin("Screen:OnboardWake"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Cinder recall", false, 91)]
+        public static void CaptureOnboardRecall() { Begin("Screen:OnboardRecall"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Recall result", false, 92)]
+        public static void CaptureOnboardRecallResult() { Begin("Screen:OnboardRecallResult"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Forced-arrow step", false, 93)]
+        public static void CaptureOnboardArrow() { Begin("Screen:OnboardArrow"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Hub with locked features", false, 94)]
+        public static void CaptureOnboardLocks() { Begin("Screen:OnboardLocks"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/First-time tip", false, 95)]
+        public static void CaptureOnboardTip() { Begin("Screen:OnboardTip"); }
 
         [MenuItem("Emberfall/Capture/Hub (MainMenu)", false, 60)]
         public static void CaptureHubScreen() { Begin("Screen:MainMenu"); }
@@ -306,6 +330,21 @@ namespace Emberfall.EditorTools
                 return;
             }
 
+            // An onboarding target is a NEW player: no save on the scratch identity, no PlayerPrefs
+            // mirror of one, and the first run left on. Every other target is the opposite, set
+            // here too because a reused scratch identity keeps whatever the last run left.
+            if (target.StartsWith(OnboardPrefix))
+            {
+                if (EditorScratchIdentity.IsScratch)
+                {
+                    string save = Path.Combine(Application.persistentDataPath, SaveService.FileName);
+                    if (File.Exists(save)) File.Delete(save);
+                    PlayerPrefs.DeleteAll();
+                }
+                EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, false);
+            }
+            else EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, true);
+
             if (!GameViewSize.Apply(width, height))
             {
                 Debug.LogWarning("PlayModeScreenshot: could not pin the Game view to "
@@ -373,10 +412,111 @@ namespace Emberfall.EditorTools
                 }
             }
 
+            // Every target but the onboarding ones photographs a feature's screen on a fresh
+            // profile that has cleared nothing, so they walk past the unlock table.
+            FeatureGates.CaptureBypass = !target.StartsWith(OnboardPrefix);
+
             if (target == "Recital") PumpRecital(frame);
             else if (target == "Proving") PumpProving(frame);
+            else if (target.StartsWith(OnboardPrefix)) PumpOnboard(frame, target.Substring(7));
             else if (target.StartsWith("Screen:")) PumpScreen(frame, target.Substring(7));
             else PumpEvents(frame);
+        }
+
+        private const string OnboardPrefix = "Screen:Onboard";
+
+        /// <summary>
+        /// One frame of the first session. The game boots as a new player at the wake; this drives
+        /// Onboarding's own calls - the same ones the coach's buttons make - to the frame asked for,
+        /// lets the coach draw it, and shoots. It refuses a session that did not boot as a new
+        /// player, since a capture of the wrong player is a capture of the wrong screen.
+        /// </summary>
+        private static void PumpOnboard(int frame, string name)
+        {
+            GameApp app = GameApp.Instance;
+            if (app == null)
+            {
+                if (frame > 300) { Debug.LogError("PlayModeScreenshot: GameApp.Instance never appeared."); Stop(); }
+                return;
+            }
+            int stage = SessionState.GetInt(StageKey, 0);
+            if (stage == 0 && frame >= 30)
+            {
+                PlayerProfile profile = app.Session.Profile;
+                if (profile.TutorialStep != Onboarding.StepWake || profile.ClearedStageIds.Count > 0)
+                {
+                    Debug.LogError("PlayModeScreenshot: " + name + " needs a NEW player and this one is at step "
+                                   + profile.TutorialStep + " with " + profile.ClearedStageIds.Count + " stages cleared. Not shooting.");
+                    Stop();
+                    return;
+                }
+                SetUpOnboarding(app, name);
+                SessionState.SetInt(StageKey, 1);
+                SessionState.SetInt(BattleArmKey, frame);
+                return;
+            }
+            if (stage == 1)
+            {
+                int armed = SessionState.GetInt(BattleArmKey, 0);
+                if (name == "OnboardTip" && frame == armed + 20) app.Router.Show(ScreenId.Summon);
+                if (frame == armed + 115) Canvas.ForceUpdateCanvases();
+                if (frame == armed + 120)
+                {
+                    PlayerProfile p = app.Session.Profile;
+                    OnboardingCoach coach = OnboardingCoach.Instance;
+                    Debug.Log("PlayModeScreenshot: " + name + " at step " + p.TutorialStep + " on "
+                              + (app.Router.Current != null ? app.Router.Current.Id.ToString() : "none")
+                              + ", Kael owned " + p.Owns("kael_the_unyielding") + ", tip showing "
+                              + (coach != null && coach.TipShowing) + ", summons " + p.TotalSummons);
+                    if (coach != null) Debug.Log("PlayModeScreenshot: coach " + coach.DescribeForCapture());
+                    Shoot(name, frame, 1);
+                }
+                return;
+            }
+            if (stage >= 2 && frame > SessionState.GetInt(LastShotKey, 0) + 60)
+            {
+                Debug.Log("PlayModeScreenshot: onboarding capture done.");
+                Stop();
+            }
+        }
+
+        private static void SetUpOnboarding(GameApp app, string name)
+        {
+            GameSession session = app.Session;
+            PlayerProfile profile = session.Profile;
+            long now = TimeUtil.NowUnix();
+            switch (name)
+            {
+                case "OnboardWake":
+                    break;
+                case "OnboardRecall":
+                    Onboarding.CompleteStep(profile, Onboarding.StepWake);
+                    break;
+                case "OnboardRecallResult":
+                    Onboarding.CompleteStep(profile, Onboarding.StepWake);
+                    if (OnboardingCoach.Instance != null) OnboardingCoach.Instance.ShowRecallResultForCapture();
+                    break;
+                case "OnboardArrow":
+                    // Guided step 1 of 5 on the Hub: the arrow on HEROES, the line beside it.
+                    Onboarding.CompleteStep(profile, Onboarding.StepWake);
+                    Onboarding.Recall(session, now);
+                    Onboarding.CompleteStep(profile, Onboarding.StepPrologue);
+                    break;
+                case "OnboardLocks":
+                case "OnboardTip":
+                    // Free play. The locks capture clears the first four stages so the Hub shows
+                    // Friends just unlocked, with its one-time dot, beside everything still locked.
+                    Onboarding.Skip(session, now);
+                    if (name == "OnboardLocks")
+                        for (int i = 0; i < 4 && i < session.Content.AllStages.Count; i++)
+                            profile.ClearedStageIds.Add(session.Content.AllStages[i].Id);
+                    profile.StagesCleared = CampaignProgress.CountCleared(profile, session.Content);
+                    app.Router.GoHome();
+                    break;
+            }
+            app.SaveNow();
+            app.RefreshHud();
+            Debug.Log("PlayModeScreenshot: set up " + name);
         }
 
         private static void Stop()

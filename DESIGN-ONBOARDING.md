@@ -96,3 +96,86 @@ recalling heroes through the Cinder, so the first guided tap is a recall.
    - resume after quitting mid-step;
    - an existing progressed save never sees the tutorial;
    - the summon pool and pity state are untouched by the recall.
+
+## As built
+
+Recorded with the code that builds it. Where the build had to decide something the spec left
+open, or found the spec at odds with the content, it is said here.
+
+**Where it lives.** `Onboarding` in `Assets/Scripts/Core/Session` holds the flow: a counter,
+`PlayerProfile.TutorialStep`, of steps COMPLETED (wake, recall, prologue, then the five guided
+steps), saved the moment each one finishes. `OnboardingCoach` in `Assets/Scripts/UI` draws
+whichever step the profile is on and notices when it is done; it holds no state of its own, so a
+relaunch shows exactly the step after the last completed one. Every word is in
+`Assets/Resources/Content/onboarding.json`, as is the unlock table. That file is read by no fight
+and is not hashed into `ContentDatabase.ContentVersion`, for `guild-path.json`'s reason.
+
+**The recall.** Kael (`kael_the_unyielding`) is a starting hero in `heroes.json`, so a new player
+would own him before the Cinder recalled anyone. `Onboarding.CreateKeeperProfile` is the ordinary
+new profile with Kael held back, and `Onboarding.Recall` puts him back exactly where
+`GameSession.CreateNewProfile` had him: his uid, his place in the roster, the starting banner.
+After the recall the save is byte for byte the ordinary new profile, which is why no economy walk,
+stage fingerprint or sweep moved. It never reads or writes `TotalSummons`, shards, gold or the
+rates, and the pulls after it match an ordinary profile's pull for pull.
+
+**The prologue battle** is one of `PrologueScript`'s existing steps with its existing squad,
+named in `onboarding.json` (`"prologue": { "step": ... }`). The spec says "the existing prologue
+battle" and the prologue has five fights; the build plays the full-line battle (`fullBattle`),
+which is winnable, rather than the boss, which is the scripted loss. Change the one word to play
+another. The old eight-step prologue sequence and its cards are gone.
+
+**The guided steps** light one control per screen and route the player there, screen by screen:
+team (the Hub's HEROES, then back out of the banner), campaign 1-1 (CONTINUE CAMPAIGN, ENTER
+BATTLE), the wave result (NEXT WAVE until 1-1 is cleared), a level up (HOME, HEROES, VIEW ALL
+HEROES, the first hero, LEVEL UP) and the idle claim (back to the Hub, the chest, CLAIM). Kael
+already stands in the line after the recall, so the team step's "placed automatically" holds
+with nothing done; if he is taken off the banner, he is placed again when the step completes.
+Where a screen has no control on the route, the step says its line and leaves the screen usable
+rather than lock the player out. The back key does nothing during the forced steps.
+
+**FINDING: the level-up step cannot be done when the spec puts it.** All three starters are
+5-stars whose first level costs 1070 gold. A new player holds 400, and 780 after clearing 1-1.
+Without retuning content, which this work does not do, the step routes on down the campaign while
+no level is affordable (its `short` line in `onboarding.json`, the arrow on CONTINUE), and comes
+back to LEVEL UP once one is: after 1-2 the player holds 1235. This is a decision for the owner:
+keep the detour, cheapen the first level, or move the step.
+
+**SKIP** ends the forced flow from any step, marks it complete and still gives Kael once. It
+leaves the free-play tips to come, since a player who skipped the guided loop is the one a tip is
+most for. The migration's "complete with all tips seen" is for progressed saves only.
+
+**Tips** are keyed by screen name. A screen met inside the forced flow spends its tip, because
+the flow taught it. Seen tips and opened features share `PlayerProfile.SeenTips`: a feature's
+one-time "new" dot clears on its first opening (`FeatureGate.OpenedKey`), so no third field was
+needed.
+
+**The save** is version 21: `tutorialStep` and `seenTips`. A pre-21 save with any cleared stage
+or a stage in progress loads complete, with `*` in `seenTips` standing for every tip including
+ones added later. A pre-21 save with no progress starts at the wake; it already owns Kael, so its
+recall gives nothing. The server's `save_limits` row must be raised to 21 before a cloud player
+ships this.
+
+**Unlocks.** A feature opens the moment its stage is CLEARED. `FeatureGate` reads the table and
+nothing else decides. `FeatureEntryPoints` lists every door into every feature (the router's
+screens, the Hub's buildings, nav cells, rail and card, the panel tabs, the hero page's TALENTS,
+ASCEND and armor slots, the talent page's locked cards, the inventory's RELIC tab, the
+formation's GUILD TECH), and the UI passes each door's id to `FeatureGates`. `ScreenRouter.Show`
+refuses every screen of a locked feature whoever asks, which is the door a deep link would use;
+this build has no deep-link handler. Armor is the Inventory (the Bag) as a whole; relics are its
+RELIC tab and the Relic Shop.
+
+**Editor captures** keep their old behaviour: the first-run suppression that every capture tool
+already sets also opens the gate, so a capture of the Forge on a fresh scratch profile is still a
+capture of the Forge. `PlayModeScreenshot`'s `OnboardWake`, `OnboardRecall`,
+`OnboardRecallResult`, `OnboardArrow`, `OnboardLocks` and `OnboardTip` targets leave the first run
+on, delete the scratch save and refuse a session that did not boot as a new player.
+
+**Captures, 2026-10-12.** `PlayModeScreenshot` on a new scratch player. The wake is captured at
+both sizes and is current. The recall, the recall result, a forced-arrow step, the Hub with
+locked features and a first-time tip were each photographed correctly once at 1920x1080 and
+looked at; a later batch meant to retake all six at both sizes after three small layout fixes
+(SKIP moved below the top bar, the dim deepened to the reveal scrim, Friends' dot moved onto its
+disc, the tip's scrim deepened) came back as stale frames of the wake, because the editor's Game
+view stopped repainting. The recall then came back stale a second time and the run was stopped
+there, by the rule that a capture showing the wrong screen twice is reported rather than retried.
+Those five are owed at both sizes, from a focused editor.

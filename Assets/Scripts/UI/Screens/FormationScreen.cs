@@ -155,7 +155,14 @@ namespace Emberfall.UI.Screens
                                                 ForgeButtonKind.Secondary);
             UIBuilder.Box(path.Root, -(UITheme.ScreenPadding + 340f), -(UITheme.TopBarHeight + RosterLabelTop - 12f),
                           260f, 54f, new Vector2(1f, 1f));
-            path.OnClick(delegate { App.Audio.Tap(); Router.Show(ScreenId.GuildTech); });
+            path.OnClick(delegate
+            {
+                if (!FeatureGates.TryEnter(App, "formation.GuildTech")) return;
+                App.Audio.Tap();
+                Router.Show(ScreenId.GuildTech);
+            });
+            FeatureLockView.Attach(path.Root, "formation.GuildTech", path.Label, new Vector2(-100f, 0f),
+                                   FeatureLockView.TagSide.Below);
 
             ScrollRect scroll;
             _rosterList = UIBuilder.ScrollList("Roster", Root, out scroll, 10f, new RectOffset(0, 0, 4, 32));
@@ -167,6 +174,7 @@ namespace Emberfall.UI.Screens
 
         public override void OnShow()
         {
+            FeatureLockView.RefreshAll(App, Root);
             App.RefreshHud();
             _selectedUid = "";
             Refresh();
