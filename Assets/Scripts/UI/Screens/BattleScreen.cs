@@ -783,6 +783,7 @@ namespace Emberfall.UI.Screens
                 // No spend point here either: an attempt was stored before it was handed in, and a
                 // replay is a record. See SetGuildRun.
                 _stageLabel.text = _guildRun.Label;
+                _progressText = _guildRun.Progress ?? "";
             }
             else if (_duelOpponent != null)
             {
