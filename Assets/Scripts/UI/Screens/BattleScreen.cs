@@ -8,6 +8,7 @@ using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Progression;
 using Emberfall.Core.Session;
+using Emberfall.UI.Battle;
 
 namespace Emberfall.UI.Screens
 {
@@ -91,14 +92,17 @@ namespace Emberfall.UI.Screens
         /// FightNextBattle goes through OnHide every time.</summary>
         private bool _chaining;
 
-        /// <summary>The AUTO/SPEED/SKIP strip. Held so it can be raised back above the result panel
-        /// - see the note where that happens.</summary>
+        /// <summary>The top bar: its ground and its safe-area content. Held so it can be raised
+        /// back above the result panel - see the note where that happens.</summary>
         private RectTransform _topHud;
+        private Image _barGround;
         private ForgeDisc _home;
 
-        /// <summary>Where the stage and round labels start while HOME is up: just past its hit
-        /// rect, which is the same width as the disc's touch target.</summary>
-        private const float HomeLabelInset = HubStyle.TouchMin + 4f;
+        /// <summary>The bar's second line is WAVE / BATTLE, then ROUND. The wave and battle part
+        /// is set once per fight and the round part on every RoundStart, so they are held apart
+        /// and joined in RefreshStatusLine.</summary>
+        private string _progressText = "";
+        private string _roundText = "";
 
         /// <summary>Device-level UI preferences, deliberately in PlayerPrefs rather than
         /// PlayerProfile: how fast someone likes their battles and whether they chain is a property
@@ -475,55 +479,87 @@ namespace Emberfall.UI.Screens
             UIBuilder.HStack(_turnStrip, 8f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
         }
 
-        // The heavy element here was never the text, it was the full-width black band behind it.
-        // That band existed to make two short labels legible, which a text outline does for free,
-        // and it cost a 112 tall opaque stripe across the top of the battlefield to do it. Panel
-        // dropped, strip 112 -> 64, labels down a size each with the round counter dimmed to
-        // TextDim, buttons 128x76 and 150x76 -> 84x44 and 100x44. Nothing is removed: the stage
-        // name, the round counter, speed and skip are all still there, they just stop being the
-        // brightest thing on screen.
+        // THE TOP BAR, opaque, BattleHudMetrics.BarHeight under the top of the safe area with a
+        // thin rule along its lower edge. It used to be a transparent 64-unit strip of outlined
+        // labels over the painting, and units and their tags stood behind it. Now the battle
+        // camera's viewport stops at the bar's lower edge (see BuildWorld and SyncFrame), so the
+        // bar covers nothing: no unit, no plate and no number is ever drawn under it, and it can
+        // be a solid surface that reads at a glance instead of text fighting a painting.
+        //
+        // The ground runs up to the very top of the screen, so a top inset shows bar rather than
+        // field; the content sits in a SafeAreaRect child, so HOME and the buttons never land
+        // under a notch. HOME on the left, then two lines, the stage and then WAVE / BATTLE /
+        // ROUND, and AUTO, SKIP and the speed button on the right. Sizes are BattleHudMetrics',
+        // colours BattleHudStyle's.
         private void BuildTopHud()
         {
-            RectTransform bar = UIBuilder.Node("TopHud", Root);
-            _topHud = bar;
-            UIBuilder.TopStrip(bar, 64f, 16f, UITheme.ScreenPadding);
+            // A full-screen holder with no graphic of its own, so the bar's ground and its
+            // safe-area content rise above the result panel together (see ShowResult) without
+            // the holder catching a tap anywhere.
+            _topHud = UIBuilder.Node("TopHud", Root);
+            UIBuilder.FillParent(_topHud, 0f);
 
-            _stageLabel = EmberforgeUI.Label("Stage", bar, "", UITheme.FontTiny, Emberforge.TextBody, TextAnchor.UpperLeft);
-            // 760 rather than 520: the wave/battle suffix pushed the longest real label
-            // ("2-4  THE DRIFTING CAUSEWAY  WAVE 12/12  BATTLE 12/12") to 652px, which drew
-            // outside the old box. It LOOKED fine because the top-left is otherwise empty, which
-            // is exactly the kind of defect that survives a screenshot and dies the moment
-            // anything else is placed there. Measured, not eyeballed.
-            UIBuilder.Box(_stageLabel.rectTransform, 4f, -2f, 760f, 26f, new Vector2(0f, 1f));
-            UIBuilder.Outlined(_stageLabel, Emberforge.Outline, Emberforge.StrokeThin);
+            _barGround = UIBuilder.Img("Bar", _topHud, TextureLab.White, BattleHudStyle.BarFill);
+            RectTransform ground = _barGround.rectTransform;
+            ground.anchorMin = new Vector2(0f, 1f);
+            ground.anchorMax = new Vector2(1f, 1f);
+            ground.pivot = new Vector2(0.5f, 1f);
+            ground.anchoredPosition = Vector2.zero;
+            ground.sizeDelta = new Vector2(0f, BattleHudMetrics.BarHeight);
 
-            _roundLabel = EmberforgeUI.Label("Round", bar, "", UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.LowerLeft);
-            UIBuilder.Box(_roundLabel.rectTransform, 4f, 4f, 520f, 22f, new Vector2(0f, 0f));
-            UIBuilder.Outlined(_roundLabel, Emberforge.Outline, Emberforge.StrokeThin);
+            Image rule = UIBuilder.Img("Rule", ground, TextureLab.White, BattleHudStyle.BarRule);
+            rule.rectTransform.anchorMin = Vector2.zero;
+            rule.rectTransform.anchorMax = new Vector2(1f, 0f);
+            rule.rectTransform.pivot = new Vector2(0.5f, 0f);
+            rule.rectTransform.anchoredPosition = Vector2.zero;
+            rule.rectTransform.sizeDelta = new Vector2(0f, BattleHudMetrics.BarRuleHeight);
+
+            RectTransform safe = UIBuilder.Node("Safe", _topHud);
+            SafeAreaRect.Attach(safe);
+            RectTransform bar = UIBuilder.Node("Content", safe);
+            UIBuilder.TopStrip(bar, BattleHudMetrics.BarHeight, 0f, UITheme.ScreenPadding);
+
+            _stageLabel = EmberforgeUI.Label("Stage", bar, "", BattleHudMetrics.BarStageLineFont,
+                                             BattleHudStyle.StageLine, TextAnchor.MiddleLeft);
+            UIBuilder.Box(_stageLabel.rectTransform, BattleHudMetrics.BarLabelInset, -BattleHudMetrics.BarStageLineTop,
+                          BattleHudMetrics.BarLabelWidth, BattleHudMetrics.BarStageLineHeight, new Vector2(0f, 1f));
+            UIBuilder.Outlined(_stageLabel, BattleHudStyle.TextOutline, Emberforge.StrokeThin);
+
+            _roundLabel = EmberforgeUI.Label("Round", bar, "", BattleHudMetrics.BarStatusLineFont,
+                                             BattleHudStyle.StatusLine, TextAnchor.MiddleLeft);
+            UIBuilder.Box(_roundLabel.rectTransform, BattleHudMetrics.BarLabelInset, -BattleHudMetrics.BarStatusLineTop,
+                          BattleHudMetrics.BarLabelWidth, BattleHudMetrics.BarStatusLineHeight, new Vector2(0f, 1f));
+            UIBuilder.Outlined(_roundLabel, BattleHudStyle.TextOutline, Emberforge.StrokeThin);
 
             // TEAL, all three. These are the controls that change how the fight in front of you
             // plays out, and none of them is the thing the screen wants pressed - the battle is
             // what the screen wants watched. The one ember button in this whole screen is the
             // primary on the result panel, which is the only place there IS a next tap.
-            _speedButton = EmberforgeUI.Button("Speed", bar, "1x", UITheme.FontTiny, ForgeButtonKind.Secondary);
-            UIBuilder.Box(_speedButton.Root, -4f, 0f, 84f, 44f, new Vector2(1f, 0.5f));
+            float x = 0f;
+            _speedButton = EmberforgeUI.Button("Speed", bar, "1x", BattleHudMetrics.BarButtonFont, ForgeButtonKind.Secondary);
+            UIBuilder.Box(_speedButton.Root, x, 0f, BattleHudMetrics.BarSpeedWidth, BattleHudMetrics.BarButtonHeight,
+                          new Vector2(1f, 0.5f));
             _speedButton.OnClick(CycleSpeed);
+            x -= BattleHudMetrics.BarSpeedWidth + BattleHudMetrics.BarButtonGap;
+
+            _skipButton = EmberforgeUI.Button("Skip", bar, "SKIP", BattleHudMetrics.BarButtonFont, ForgeButtonKind.Secondary);
+            UIBuilder.Box(_skipButton.Root, x, 0f, BattleHudMetrics.BarSkipWidth, BattleHudMetrics.BarButtonHeight,
+                          new Vector2(1f, 0.5f));
+            _skipButton.OnClick(SkipToEnd);
+            x -= BattleHudMetrics.BarSkipWidth + BattleHudMetrics.BarButtonGap;
 
             // Same row as SPEED and SKIP, to the left of both: the three controls that change how
             // the fight in front of you plays out belong together, and AUTO is the one you set once
             // per stage rather than per battle, so it sits furthest from the thumb's resting edge.
-            _autoButton = EmberforgeUI.Button("Auto", bar, "AUTO", UITheme.FontTiny, ForgeButtonKind.Secondary);
-            UIBuilder.Box(_autoButton.Root, -204f, 0f, 100f, 44f, new Vector2(1f, 0.5f));
+            _autoButton = EmberforgeUI.Button("Auto", bar, "AUTO", BattleHudMetrics.BarButtonFont, ForgeButtonKind.Secondary);
+            UIBuilder.Box(_autoButton.Root, x, 0f, BattleHudMetrics.BarAutoWidth, BattleHudMetrics.BarButtonHeight,
+                          new Vector2(1f, 0.5f));
             _autoButton.OnClick(ToggleAuto);
 
-            _skipButton = EmberforgeUI.Button("Skip", bar, "SKIP", UITheme.FontTiny, ForgeButtonKind.Secondary);
-            UIBuilder.Box(_skipButton.Root, -96f, 0f, 100f, 44f, new Vector2(1f, 0.5f));
-            _skipButton.OnClick(SkipToEnd);
-
             // Top-left, where every campaign screen keeps it. Shown only for a campaign fight (see
-            // RefreshHome), and a child of the strip so the result panel, which re-raises the
-            // strip above itself, never covers it.
-            _home = ScreenChrome.HomeDisc(bar, Router, 0f, 4f);
+            // RefreshHome), and inside the bar so the result panel, which re-raises the bar above
+            // itself, never covers it.
+            _home = ScreenChrome.HomeDisc(bar, Router, 0f, BattleHudMetrics.BarHomeTop);
         }
 
         /// <summary>
@@ -540,7 +576,7 @@ namespace Emberfall.UI.Screens
                   && _prologueSquad == null;
             _home.Root.gameObject.SetActive(show);
 
-            float x = show ? HomeLabelInset : 4f;
+            float x = show ? BattleHudMetrics.BarLabelInsetWithHome : BattleHudMetrics.BarLabelInset;
             _stageLabel.rectTransform.anchoredPosition = new Vector2(x, _stageLabel.rectTransform.anchoredPosition.y);
             _roundLabel.rectTransform.anchoredPosition = new Vector2(x, _roundLabel.rectTransform.anchoredPosition.y);
         }
@@ -627,7 +663,7 @@ namespace Emberfall.UI.Screens
             //
             // 700 rather than taller because this card shares the screen with the battle HUD: at
             // 20:9 the canvas is 966, so a 700-tall card centred on it starts at y 133 and clears
-            // the HUD's own strip, which ends at 80. An 880-tall card would have run into SKIP.
+            // the HUD's top bar, which ends at 100. An 880-tall card would have run into SKIP.
             RectTransform card = UIBuilder.Node("Rewards", _resultPanel);
             UIBuilder.Box(card, 460f, 0f, 820f, 700f, new Vector2(0.5f, 0.5f));
             EmberforgeUI.PanelOn(card, true);
@@ -705,6 +741,7 @@ namespace Emberfall.UI.Screens
         {
             App.SetBackgroundVisible(false);
             _finished = false;
+            _progressText = "";
             _resultPanel.gameObject.SetActive(false);
             _banner.gameObject.SetActive(false);
             // RESTORED, not reset. This used to force 1x on every OnShow, which is invisible when a
@@ -783,17 +820,17 @@ namespace Emberfall.UI.Screens
             }
             else
             {
-                // "1-3  THE SMOKING ORCHARD   WAVE 4 OF 12  -  BATTLE 7 OF 12". The wave line is
-                // appended rather than given its own label so it travels with the stage name and
-                // cannot drift away from it as the top bar changes; a stage with no curve shows
-                // exactly what it showed before.
-                _stageLabel.text = _stage.DisplayCode + "   " + _stage.Name.ToUpperInvariant()
-                                 + (_stage.HasWaveCurve
-                                    ? "   WAVE " + _campaignWave + "/" + _stage.WaveCount
-                                      + "   BATTLE " + _campaignBattle + "/" + _stage.BattleCount
-                                    : "");
+                // "1-3 · THE SMOKING ORCHARD" over "WAVE 4 / 12 · BATTLE 7 / 12 · ROUND 2 / 30".
+                // The stage on the first line, and on the second everything that counts up while
+                // it is fought, outermost first. A stage with no curve has no wave or battle, and
+                // its second line is the round alone.
+                _stageLabel.text = _stage.DisplayCode + BattleHudStyle.Separator + _stage.Name.ToUpperInvariant();
+                if (_stage.HasWaveCurve)
+                    _progressText = "WAVE " + _campaignWave + " / " + _stage.WaveCount
+                                    + BattleHudStyle.Separator + "BATTLE " + _campaignBattle + " / " + _stage.BattleCount;
             }
-            _roundLabel.text = "PREPARING";
+            _roundText = "PREPARING";
+            RefreshStatusLine();
 
             BuildWorld();
             RunSimulation();
@@ -853,7 +890,57 @@ namespace Emberfall.UI.Screens
                 // the same blow. Set once here because the director is built once per stage.
                 _world.Director.ExactFeed = true;
             }
+            // The viewport BEFORE the world: BuildWorld fits the backdrop to the camera's aspect,
+            // and the field has to stop at the top bar's lower edge from its first frame. Setting it
+            // afterwards would mean rebuilding, and BattleStage.BuildWorld clears the actors.
+            _world.Camera.rect = FieldViewport();
             _world.BuildWorld(_stage.Environment);
+#if UNITY_EDITOR
+            _framingChecked = false;
+#endif
+        }
+
+        private float CanvasScale()
+        {
+            float scale = App.RootCanvas != null ? App.RootCanvas.scaleFactor : 1f;
+            return scale > 0f ? scale : 1f;
+        }
+
+        /// <summary>The battle camera's viewport for the screen as it is now: under the top bar,
+        /// above the safe area's bottom edge, the full width. See BattleHudLayout.Viewport.</summary>
+        private Rect FieldViewport()
+        {
+            Rect safe = SafeAreaRect.Current;
+            BattleFraming.CanvasRect v = BattleHudLayout.Viewport(Screen.width, Screen.height,
+                                                                  safe.y, safe.y + safe.height, CanvasScale());
+            return new Rect(v.X, v.Y, v.Width, v.Height);
+        }
+
+        /// <summary>The top of the safe area, in canvas units from the bottom of the screen.</summary>
+        private float SafeTopCanvas(float scale)
+        {
+            Rect safe = SafeAreaRect.Current;
+            return (safe.y + safe.height) / scale;
+        }
+
+        /// <summary>
+        /// Keeps the frame matched to the screen. The safe area and the canvas scale can change
+        /// mid-fight (a rotation, a resized Game view), and Unity raises no event for either, so
+        /// this polls like SafeAreaRect does. A new viewport only re-fits the backdrop: rebuilding
+        /// the world would clear the actors in the middle of their fight. The bar's ground grows
+        /// to cover any top inset.
+        /// </summary>
+        private void SyncFrame(float scale)
+        {
+            Rect want = FieldViewport();
+            if (_world.Camera.rect != want)
+            {
+                _world.Camera.rect = want;
+                _world.FitBackdrop();
+            }
+
+            float topInset = Mathf.Max(0f, Screen.height / scale - SafeTopCanvas(scale));
+            _barGround.rectTransform.sizeDelta = new Vector2(0f, BattleHudMetrics.BarHeight + topInset);
         }
 
         private void RunSimulation()
@@ -1082,19 +1169,24 @@ namespace Emberfall.UI.Screens
         private void LateUpdate()
         {
             if (_world == null || _world.Camera == null || Root == null || !Root.gameObject.activeInHierarchy) return;
-            float scale = App.RootCanvas != null ? App.RootCanvas.scaleFactor : 1f;
-            if (scale <= 0f) scale = 1f;
+            float scale = CanvasScale();
+            SyncFrame(scale);
+#if UNITY_EDITOR
+            CheckFramingAgainstCamera(scale);
+#endif
 
             // Orthographic gives one pixel scale for the whole field, independent of depth, so
-            // this is exact rather than an average across near and far units.
-            float pixelsPerWorldUnit = Screen.height / (2f * Mathf.Max(0.01f, _world.Camera.orthographicSize));
+            // this is exact rather than an average across near and far units. The viewport's own
+            // height, not the screen's: the field stops at the top bar.
+            float pixelsPerWorldUnit = Screen.height * _world.Camera.rect.height
+                                       / (2f * Mathf.Max(0.01f, _world.Camera.orthographicSize));
             float rise = BarWorldRise * pixelsPerWorldUnit / scale;
 
-            // The back rank's far-z slot projects a head to about 97% of screen height, so there
-            // is genuinely no room above it for a 110-unit stack; without this the whole bar left
-            // the screen and read as a stray bar stuck to the top edge belonging to nobody.
-            // Clamped it overlaps its own unit instead, which is legible and still attached.
-            float ceiling = Screen.height / scale - BarStackHeight - 6f;
+            // The back rank's far-z slot projects a head close to the top of the field, so there
+            // is genuinely no room above it for the stack; without this the whole bar would sit
+            // under the top bar. Clamped it overlaps its own unit instead, which is legible and
+            // still attached.
+            float ceiling = BattleHudLayout.BarBottom(SafeTopCanvas(scale)) - BarStackHeight - 6f;
 
             for (int i = 0; i < _world.Actors.Count; i++)
             {
@@ -1111,6 +1203,52 @@ namespace Emberfall.UI.Screens
                 bar.Root.anchoredPosition = new Vector2(screen.x / scale, Mathf.Min(y, ceiling));
             }
         }
+
+#if UNITY_EDITOR
+        private bool _framingChecked;
+
+        /// <summary>
+        /// TIES THE HARNESS'S MODEL TO THE REAL CAMERA. Tools/DevHarness proves the plates never
+        /// overlap using BattleFraming.Project as the camera; this compares that projection with
+        /// Camera.WorldToScreenPoint for every actor's feet and head, once per battle, on the first
+        /// frame the camera stands at rest with the actors placed, and warns if any point differs
+        /// by more than a pixel. Editor only: it asserts, it never moves anything.
+        /// </summary>
+        private void CheckFramingAgainstCamera(float scale)
+        {
+            if (_framingChecked || _world.Actors.Count == 0) return;
+            Vector3 home = new Vector3(BattleFraming.CameraX, BattleFraming.CameraY, BattleFraming.CameraZ);
+            if ((_world.Camera.transform.localPosition - home).sqrMagnitude > 1e-8f) return;
+            _framingChecked = true;
+
+            Rect r = _world.Camera.rect;
+            BattleFraming.CanvasRect viewport = BattleHudLayout.ToCanvas(
+                new BattleFraming.CanvasRect(r.x, r.y, r.width, r.height), Screen.width / scale, Screen.height / scale);
+            float worst = 0f;
+            string worstAt = "";
+            int points = 0;
+            for (int i = 0; i < _world.Actors.Count; i++)
+            {
+                UnitActor actor = _world.Actors[i];
+                Vector3[] probes = { actor.transform.position, actor.HeadPosition };
+                for (int p = 0; p < probes.Length; p++)
+                {
+                    Vector3 world = probes[p];
+                    BattleFraming.CanvasPoint model = BattleFraming.Project(world.x, world.y, world.z, viewport);
+                    Vector3 real = _world.Camera.WorldToScreenPoint(world);
+                    float error = Mathf.Max(Mathf.Abs(model.X * scale - real.x), Mathf.Abs(model.Y * scale - real.y));
+                    points++;
+                    if (error > worst) { worst = error; worstAt = actor.Snapshot.Name + (p == 0 ? " feet" : " head"); }
+                }
+            }
+
+            string summary = "BattleHud: BattleFraming.Project against Camera.WorldToScreenPoint at " + Screen.width + "x"
+                             + Screen.height + ", " + points + " points on " + _world.Actors.Count + " units, worst "
+                             + worst.ToString("0.000") + " px" + (worstAt.Length > 0 ? " (" + worstAt + ")" : "");
+            if (worst > 1f) Debug.LogWarning(summary + " - the harness's layout model no longer matches the camera");
+            else Debug.Log(summary);
+        }
+#endif
 
         // ------------------------------------------------------------------ playback
 
@@ -1151,7 +1289,8 @@ namespace Emberfall.UI.Screens
             switch (e.Type)
             {
                 case BattleEventType.RoundStart:
-                    _roundLabel.text = RoundText(e.Value);
+                    _roundText = RoundText(e.Value);
+                    RefreshStatusLine();
                     RebuildTurnStrip(index);
                     yield return Wait(0.10f);
                     break;
@@ -1892,7 +2031,8 @@ namespace Emberfall.UI.Screens
             // That is the "58 on top of the Sundered Colossus's name" case, and it was not bad
             // luck: for a head-targeted number it was certain. Clearing the tag's own height puts
             // the number above it and it rises away rather than across.
-            float rise = BarWorldRise * (Screen.height / (2f * Mathf.Max(0.01f, _world.Camera.orthographicSize)));
+            float rise = BarWorldRise * (Screen.height * _world.Camera.rect.height
+                                         / (2f * Mathf.Max(0.01f, _world.Camera.orthographicSize)));
             start.y += (rise / canvasScale) + BarStackHeight + 6f;
 
             // Jitter was +/-34, which is more than half the 120-unit tag width, so a number could
@@ -1907,7 +2047,7 @@ namespace Emberfall.UI.Screens
             // from its unit and parked several of them on one arbitrary line - numbers hanging in
             // open sky belonging to nobody. A number that starts on its owner and rises a shorter
             // distance is still attributable; one that starts somewhere else never was.
-            float ceiling = Screen.height / canvasScale - 30f;
+            float ceiling = BattleHudLayout.BarBottom(SafeTopCanvas(canvasScale)) - BattleHudMetrics.FloatStopBelowBar;
             float climb = Mathf.Clamp(ceiling - start.y, 24f, FloatRise);
 
             float duration = 0.75f / _speed;
@@ -2094,8 +2234,8 @@ namespace Emberfall.UI.Screens
                 // it in Play mode and watching the raycast land on Result.
                 //
                 // Raising the whole strip rather than just AUTO keeps SPEED reachable there too,
-                // which has the same argument, and costs nothing: the strip is 64px at the very top
-                // and the panel's own content starts well below it.
+                // which has the same argument, and costs nothing: the bar is 100 units at the very
+                // top and the panel's own content starts below it.
                 if (_topHud != null) _topHud.SetAsLastSibling();
                 _resultGroup.alpha = 1f;
                 return;
@@ -2132,8 +2272,8 @@ namespace Emberfall.UI.Screens
                 // it in Play mode and watching the raycast land on Result.
                 //
                 // Raising the whole strip rather than just AUTO keeps SPEED reachable there too,
-                // which has the same argument, and costs nothing: the strip is 64px at the very top
-                // and the panel's own content starts well below it.
+                // which has the same argument, and costs nothing: the bar is 100 units at the very
+                // top and the panel's own content starts below it.
                 if (_topHud != null) _topHud.SetAsLastSibling();
                 _resultGroup.alpha = 1f;
                 return;
@@ -2172,8 +2312,8 @@ namespace Emberfall.UI.Screens
                 // it in Play mode and watching the raycast land on Result.
                 //
                 // Raising the whole strip rather than just AUTO keeps SPEED reachable there too,
-                // which has the same argument, and costs nothing: the strip is 64px at the very top
-                // and the panel's own content starts well below it.
+                // which has the same argument, and costs nothing: the bar is 100 units at the very
+                // top and the panel's own content starts below it.
                 if (_topHud != null) _topHud.SetAsLastSibling();
             _resultGroup.alpha = 1f;
         }
@@ -2612,6 +2752,14 @@ namespace Emberfall.UI.Screens
             return "ROUND " + round + " / " + App.Session.Balance.MaxRounds;
         }
 
+        /// <summary>The bar's second line: the wave and battle, where the stage has a curve, then
+        /// the round.</summary>
+        private void RefreshStatusLine()
+        {
+            _roundLabel.text = string.IsNullOrEmpty(_progressText)
+                ? _roundText : _progressText + BattleHudStyle.Separator + _roundText;
+        }
+
         /// <summary>
         /// The header as a fight played to the end leaves it: the last round's number, and that
         /// round's turn order with the last turn taken lit. A skip stops playback before the rest
@@ -2627,7 +2775,8 @@ namespace Emberfall.UI.Screens
                 if (_result.Events[i].Type == BattleEventType.RoundStart) lastRound = i;
             if (lastRound < 0) return;
 
-            _roundLabel.text = RoundText(_result.Events[lastRound].Value);
+            _roundText = RoundText(_result.Events[lastRound].Value);
+            RefreshStatusLine();
             RebuildTurnStrip(lastRound);
             for (int i = lastRound + 1; i < _result.Events.Count; i++)
                 if (_result.Events[i].Type == BattleEventType.TurnStart) AdvanceTurnStrip(_result.Events[i].SourceId);

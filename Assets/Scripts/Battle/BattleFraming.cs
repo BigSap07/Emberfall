@@ -193,6 +193,12 @@ namespace Emberfall.Battle
         // 3.85 -> 3.65 renders everything 5% larger again. See the slot comment above for why
         // that is the ceiling and what would have to change to beat it.
         //
+        // The battle screen's top bar takes the top of the screen out of the camera's viewport
+        // (BattleHudLayout.Viewport) and orthographicSize stays 3.65 against the shorter viewport,
+        // so every number above still holds in world units and the whole field renders about 10%
+        // smaller on screen. That was accepted when the HUD was reworked: it keeps each clearance
+        // above true as stated, and no unit or plate can be drawn under the bar.
+        //
         // Camera: x 0, symmetric. z -9.5 unchanged. y re-solved for the new centre:
         // camY = (0.791 + 9.5*0.4695) / 0.8829 = 5.95. Floors re-checked: camY (5.95) is
         // still above orthographicSize*cos(28) (3.22), and the nearest occupied point is well
@@ -233,7 +239,9 @@ namespace Emberfall.Battle
         /// Where a world point lands, for the camera at rest, given the camera's viewport in the
         /// same canvas units as the answer. Under orthographic projection one world unit is
         /// viewport.Height / (2 * OrthographicSize) canvas units everywhere in the frame, so this
-        /// is exact rather than an average across near and far units.
+        /// is exact rather than an average across near and far units. The editor compares it
+        /// against Camera.WorldToScreenPoint on the first steady frame of every battle
+        /// (BattleScreen), which is what ties this model to the real camera.
         /// </summary>
         public static CanvasPoint Project(float x, float y, float z, CanvasRect viewport)
         {

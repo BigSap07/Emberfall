@@ -32,6 +32,11 @@ namespace Emberfall.Battle
         private Transform _cameraRig;
         private Vector3 _cameraHome;
         private Coroutine _shake;
+
+        /// <summary>The painted backdrop quad and its texture's aspect, kept so FitBackdrop can
+        /// re-fit it to a new viewport without rebuilding the world.</summary>
+        private Transform _backdrop;
+        private float _backdropAspect;
         private float _shakeStrength;
         private float _shakeUntil;
 
@@ -98,6 +103,30 @@ namespace Emberfall.Battle
 
             Texture2D painting = BattleAssets.BackdropTexture(environmentId);
 
+            GameObject backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            backdrop.name = "Backdrop";
+            Strip(backdrop);
+            backdrop.transform.SetParent(_world, false);
+            MeshRenderer backdropRenderer = backdrop.GetComponent<MeshRenderer>();
+            backdropRenderer.material = BattleAssets.NewFx(painting, Color.white, false);
+            backdropRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            backdropRenderer.receiveShadows = false;
+
+            _backdrop = backdrop.transform;
+            _backdropAspect = painting.height > 0 ? painting.width / (float)painting.height : 0f;
+            FitBackdrop();
+        }
+
+        /// <summary>
+        /// Sizes and places the backdrop for the camera's viewport as it is now. Split out of
+        /// BuildWorld so a host whose viewport changes mid-fight (the battle screen's top bar
+        /// follows the safe area) can re-fit the painting without BuildWorld's ClearWorld, which
+        /// would destroy every actor standing on it. It touches the quad and nothing else.
+        /// </summary>
+        public void FitBackdrop()
+        {
+            if (_backdrop == null) return;
+
             // Sizing is read off the live camera rather than written out as constants. The camera
             // has moved three times in this session and every hardcoded backdrop number went
             // stale each time; taking orthographicSize, aspect and the rig's own rotation from
@@ -130,13 +159,18 @@ namespace Emberfall.Battle
             // changed from the three-rank pass (width fit exactly there) purely because the frame
             // shape changed, not because this logic did - it is still whichever axis the image's
             // own aspect ratio makes tightest against the frame's.
+            //
+            // The battle screen's top bar now takes the top of the screen out of the viewport, so
+            // its frame is wider than 16:9 (12.98 / 7.30 becomes about 1.96 at 1920x1080 under a
+            // 100-unit bar) and WIDTH is the exact fit there, with the painting cropped top and
+            // bottom. Same rule, different frame; nothing here changed for it.
             float frameH = Camera.orthographicSize * 2f;
             float frameW = frameH * Camera.aspect;
             const float ShakeMargin = 0.30f;
             float needW = frameW + ShakeMargin * 2f;
             float needH = frameH + ShakeMargin * 2f;
 
-            float imageAspect = painting.height > 0 ? painting.width / (float)painting.height : Camera.aspect;
+            float imageAspect = _backdropAspect > 0f ? _backdropAspect : Camera.aspect;
             float quadH = needH;
             float quadW = quadH * imageAspect;
             if (quadW < needW)
@@ -156,17 +190,9 @@ namespace Emberfall.Battle
             const float Distance = 22f;
             Vector3 forward = _cameraRig.localRotation * Vector3.forward;
 
-            GameObject backdrop = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            backdrop.name = "Backdrop";
-            Strip(backdrop);
-            backdrop.transform.SetParent(_world, false);
-            backdrop.transform.localPosition = _cameraHome + forward * Distance;
-            backdrop.transform.localRotation = _cameraRig.localRotation * Quaternion.Euler(0f, 180f, 0f);
-            backdrop.transform.localScale = new Vector3(quadW, quadH, 1f);
-            MeshRenderer backdropRenderer = backdrop.GetComponent<MeshRenderer>();
-            backdropRenderer.material = BattleAssets.NewFx(painting, Color.white, false);
-            backdropRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            backdropRenderer.receiveShadows = false;
+            _backdrop.localPosition = _cameraHome + forward * Distance;
+            _backdrop.localRotation = _cameraRig.localRotation * Quaternion.Euler(0f, 180f, 0f);
+            _backdrop.localScale = new Vector3(quadW, quadH, 1f);
         }
 
         private static void Strip(GameObject go)
@@ -212,6 +238,7 @@ namespace Emberfall.Battle
             if (_world == null) return;
             for (int i = _world.childCount - 1; i >= 0; i--) Destroy(_world.GetChild(i).gameObject);
             Actors.Clear();
+            _backdrop = null;
         }
 
         public void Teardown()
