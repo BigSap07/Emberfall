@@ -114,6 +114,29 @@ namespace Emberfall.UI.Battle
         /// </summary>
         public const string Separator = " · ";
 
+        // ---------------------------------------------------------------- the pills
+
+        /// <summary>The ability's own name, in the kit's gold; the caster after it; PASSIVE quieter.</summary>
+        public static readonly Color CalloutAbility = Emberforge.TextGold;
+        public static readonly Color CalloutCaster = Emberforge.TextBody;
+        public static readonly Color CalloutPassive = Emberforge.TextQuiet;
+
+        public static readonly Color NextLabel = Emberforge.TextQuiet;
+
+        /// <summary>A turn order disc is tinted by side, so a badged ally and a badged enemy still
+        /// read apart by the rim the badge leaves showing.</summary>
+        public static readonly Color DiscAlly = UITheme.HealthAlly;
+        public static readonly Color DiscEnemy = UITheme.HealthEnemy;
+
+        /// <summary>A disc for a unit with no drawn badge shows its initial in this colour.</summary>
+        public static readonly Color DiscInitial = Emberforge.TextOnColor;
+
+        /// <summary>Both pills' plate: the kit's dark pill with the gold line inside it.</summary>
+        public static Sprite PillPlate { get { return EmberforgeSkin.Get(EmberforgeArt.Slot.Pill); } }
+
+        /// <summary>The ground of a turn order disc, through HudSkin's disc slot.</summary>
+        public static Sprite Disc { get { return HudSkin.Circle(HudSkin.Disc, 64); } }
+
         // ---------------------------------------------------------------- faces
 
         /// <summary>Every label in the battle HUD is set in the kit's UI face (Barlow Condensed).

@@ -1138,6 +1138,13 @@ names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, whi
 
 A branch is named here when it holds work worth naming, and only while it is unmerged.
 
+- **`ui/battle-hud`** reworks the battle HUD, presentation only: an opaque top bar with the battle
+  camera's viewport stopping under it, one plate per unit under its feet with status icons
+  (`UnitPlate`, `StatusIcons.Compose`), the ability callout as a pill under the bar and the turn
+  order as a NEXT pill at the bottom centre (`TurnOrderPill`), all placed through the engine-free
+  `BattleHudLayout` over `BattleFraming`, which `BattleHudChecks` in the harness proves overlap-free
+  at every formation slot.
+
 ## Next
 
 In order.

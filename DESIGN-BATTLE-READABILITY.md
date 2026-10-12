@@ -22,7 +22,7 @@ record it was handed.
 ## What the screen throws away
 
 - **`TurnStart`** — no case in `Handle`. Adding one costs nothing and fixes priority 1.
-  *Fixed. `BattleScreen.Handle` has a `TurnStart` case: the actor rises and the turn strip advances.*
+  *Fixed. `BattleScreen.Handle` has a `TurnStart` case: the actor rises and the turn order advances.*
 - **The real target.** `BasicAttack` and `AbilityCast` carry `SourceId == TargetId == self`; the
   target is only revealed by the `Damage` event that follows. So the screen guesses with
   `NearestOpponent()` — geometry. That is wrong for Ryn (LowestHpEnemy), Nyx (HighestAttackEnemy),
@@ -36,7 +36,9 @@ record it was handed.
 - **`StatusApplied.Duration`** - the plate stores only the kind and its depth.
 - **The round's turn order.** Between one `RoundStart` and the next, the `TurnStart` events *are*
   the initiative list. Enough to draw a turn strip with no new data at all.
-  *Fixed. `BuildTurnStrip`/`RebuildTurnStrip`/`AdvanceTurnStrip` in `BattleScreen` read the round's `TurnStart` events and step the strip per turn.*
+  *Fixed. `RebuildTurnStrip`/`AdvanceTurnStrip` in `BattleScreen` read the round's `TurnStart` events and step
+  through them per turn, and `TurnOrderPill` draws the result as a pill at the bottom centre: the acting
+  unit's portrait disc enlarged, then NEXT and up to six units still to act this round.*
 - **Lethal lookahead.** Each unit's `Death` index is knowable up front — use it to *pace*, not
   to spoil: hold the beat before a killing blow rather than flagging it early.
 
@@ -68,6 +70,10 @@ per turn:
 1. **Turn pip lights** on the acting unit's plate; the actor rises slightly. *Cause, 0.12s.*
 2. **Intent** — the actor turns toward its real target (lookahead) and the target's bar pulses
    once. If the unit is casting, the ability banner appears **now**, before anything moves.
+   *The banner is a slim callout pill centred under the top bar, "Unusable Cover · KAEL" for a
+   cast and "Unusable Cover · KAEL · PASSIVE" for a passive (`BattleScreen.ShowCallout`). The top
+   bar is opaque and the battle camera's viewport stops at its lower edge, so no unit, plate or
+   number is drawn under it.*
 3. **Motion** — lunge or projectile travels. 0.16s minimum; this is the beat that says *this one,
    not that one*.
 4. **Impact** — flash and shake on the target.
