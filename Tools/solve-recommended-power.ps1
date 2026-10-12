@@ -40,14 +40,17 @@ if (-not (Test-Path $csc)) { Write-Error "C# compiler not found at $csc"; exit 1
 # whole value of this thing is that its answer describes the tree as it stands right now.
 # BattleClips.cs rides with the harness exactly as it does in build-check.ps1: the harness reads the
 # clip vocabulary the battle requests, and without it this compile fails on its first using. The
-# same holds for SummonTiming.cs, GuildDungeonChecks.cs and CloudChecks.cs, which Program.cs names directly: this
+# same holds for SummonTiming.cs, GuildDungeonChecks.cs, CloudChecks.cs and the battle HUD's engine-free
+# files (BattleFraming.cs, BattleHudMetrics.cs, BattleHudLayout.cs), which Program.cs names directly: this
 # list and build-check.ps1's are the same list, and a file added to one belongs in the other.
 $sources = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs -Recurse |
              Select-Object -Expand FullName) + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") +
            (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") +
            (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs") +
            (Join-Path $root "Tools\DevHarness\CloudChecks.cs") + (Join-Path $root "Tools\DevHarness\ArenaMatrix.cs") +
-           (Join-Path $root "Tools\DevHarness\WallResolve.cs") + (Join-Path $root "Tools\DevHarness\TempoStudy.cs") + (Join-Path $root "Tools\DevHarness\SolvePrereqs.cs") + (Join-Path $root "Tools\DevHarness\ParityStudy.cs") + (Join-Path $root "Tools\DevHarness\GuildPathChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTechChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentParity.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentThemes.cs")
+           (Join-Path $root "Tools\DevHarness\WallResolve.cs") + (Join-Path $root "Tools\DevHarness\TempoStudy.cs") + (Join-Path $root "Tools\DevHarness\SolvePrereqs.cs") + (Join-Path $root "Tools\DevHarness\ParityStudy.cs") + (Join-Path $root "Tools\DevHarness\GuildPathChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTechChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentParity.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentThemes.cs") +
+           (Join-Path $root "Assets\Scripts\Battle\BattleFraming.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudMetrics.cs") +
+           (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudLayout.cs") + (Join-Path $root "Tools\DevHarness\BattleHudChecks.cs")
 $rsp = Join-Path $env:TEMP "emberfall_recpwr.rsp"
 $lines = @($sources | ForEach-Object { '"' + $_ + '"' })
 [IO.File]::WriteAllLines($rsp, [string[]]$lines, [Text.UTF8Encoding]::new($false))
