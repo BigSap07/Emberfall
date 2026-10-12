@@ -84,6 +84,7 @@ namespace Emberfall.UI.Screens
         private UIButton _retry;
         private UIButton _adjust;
         private UIButton _watch;
+        private UIButton _stats;
         private RectTransform _autoToggle;
         private Image _autoCheck;
 
@@ -91,7 +92,11 @@ namespace Emberfall.UI.Screens
         private RectTransform _column;
         private UIButton _continue;
         private UIButton _watchCleared;
+        private UIButton _statsCleared;
 
+        private readonly BattleStatsPanel _statsPanel = new BattleStatsPanel();
+
+        private BattleStatsView _view;
         private StageDef _pending;
         private StageDef _stage;
         private WaveResolution _result;
@@ -140,6 +145,15 @@ namespace Emberfall.UI.Screens
         /// <summary>Presses WATCH from outside, so a capture can photograph the replay. Drives the
         /// same private handler the button drives, as SkipToEndForCapture does on the battle screen.</summary>
         public void WatchForCapture() { OnWatch(); }
+
+        /// <summary>Presses STATS from outside, so a capture can photograph the panel, on the
+        /// scope the panel opens on or the other one.</summary>
+        public void StatsForCapture(bool otherScope)
+        {
+            OnStats();
+            if (otherScope && _view != null)
+                _statsPanel.Select(_view.Scope == StatsScope.Whole ? StatsScope.Battle : StatsScope.Whole);
+        }
 #endif
 
         protected override void Build()
@@ -156,6 +170,9 @@ namespace Emberfall.UI.Screens
 
             // On Root, built last so it draws over everything, and there from the first frame.
             ScreenChrome.HomeDisc(Root, Router);
+
+            // After HOME, so the stats layer covers the whole screen, HOME included.
+            _statsPanel.Build(Root, null);
         }
 
         private void BuildBand()
@@ -217,6 +234,8 @@ namespace Emberfall.UI.Screens
             _adjust.OnClick(OnAdjust);
             _watch = EmberforgeUI.Button("Watch", _band, "WATCH", UITheme.FontBody, ForgeButtonKind.Secondary);
             _watch.OnClick(OnWatch);
+            _stats = EmberforgeUI.Button("Stats", _band, "STATS", UITheme.FontBody, ForgeButtonKind.Secondary);
+            _stats.OnClick(OnStats);
 
             BuildAutoToggle();
         }
@@ -261,12 +280,15 @@ namespace Emberfall.UI.Screens
             _continue.OnClick(OnContinue);
             _watchCleared = EmberforgeUI.Button("Watch", _column, "WATCH", UITheme.FontBody, ForgeButtonKind.Secondary);
             _watchCleared.OnClick(OnWatch);
+            _statsCleared = EmberforgeUI.Button("Stats", _column, "STATS", UITheme.FontBody, ForgeButtonKind.Secondary);
+            _statsCleared.OnClick(OnStats);
         }
 
         /// <summary>One screen back is the campaign map, which this screen was never remembered
         /// from. Resolves and pays nothing.</summary>
         public override bool TryStepBack()
         {
+            if (_statsPanel.IsOpen) { _statsPanel.Hide(); return true; }
             Router.Show(ScreenId.Campaign, false);
             return true;
         }
@@ -291,6 +313,7 @@ namespace Emberfall.UI.Screens
             _autoRoutine = null;
             Painted = false;
             HideAll();
+            _view = null;
             if (_pending == null && _returning && _result != null && _result.Refused == WaveRefusal.None && _stage != null)
             {
                 // Back from watching a replay: the wave is already resolved and already paid, so
@@ -412,6 +435,7 @@ namespace Emberfall.UI.Screens
             _dim.gameObject.SetActive(false);
             _band.gameObject.SetActive(false);
             _cleared.gameObject.SetActive(false);
+            _statsPanel.Hide();
         }
 
         /// <summary>A refusal changes nothing and has nothing to show: HOME, and no more.</summary>
@@ -472,15 +496,15 @@ namespace Emberfall.UI.Screens
             bool watch = r.Replay != null;
             if (lost)
             {
-                if (watch) Place(_retry.Root, 420f, _adjust.Root, 320f, _watch.Root, 280f);
-                else Place(_retry.Root, 420f, _adjust.Root, 320f);
+                if (watch) Place(_retry.Root, 420f, _adjust.Root, 320f, _watch.Root, 280f, _stats.Root, 280f);
+                else Place(_retry.Root, 420f, _adjust.Root, 320f, _stats.Root, 280f);
                 return;
             }
 
             bool auto = AutoAdvance;
             _autoCheck.enabled = auto;
-            if (watch) Place(_nextWave.Root, 420f, _watch.Root, 280f, _autoToggle, 190f);
-            else Place(_nextWave.Root, 420f, _autoToggle, 190f);
+            if (watch) Place(_nextWave.Root, 420f, _watch.Root, 280f, _stats.Root, 280f, _autoToggle, 190f);
+            else Place(_nextWave.Root, 420f, _stats.Root, 280f, _autoToggle, 190f);
 
             _countdownPlate.gameObject.SetActive(false);
             if (auto && startAuto) _autoRoutine = StartCoroutine(AutoRoutine());
@@ -568,7 +592,7 @@ namespace Emberfall.UI.Screens
             for (int i = _column.childCount - 1; i >= 0; i--)
             {
                 Transform child = _column.GetChild(i);
-                if (child == _continue.Root || child == _watchCleared.Root) continue;
+                if (child == _continue.Root || child == _watchCleared.Root || child == _statsCleared.Root) continue;
                 Destroy(child.gameObject);
             }
 
@@ -623,9 +647,11 @@ namespace Emberfall.UI.Screens
             y -= Emberforge.Space32;
             bool watch = r.Replay != null;
             _watchCleared.Root.gameObject.SetActive(watch);
-            float buttons = watch ? 420f + ButtonGap + 280f : 420f;
+            float buttons = (watch ? 420f + ButtonGap + 280f : 420f) + ButtonGap + 280f;
             UIBuilder.Box(_continue.Root, -buttons * 0.5f + 210f, y, 420f, 96f, TopCentre);
-            if (watch) UIBuilder.Box(_watchCleared.Root, buttons * 0.5f - 140f, y, 280f, 96f, TopCentre);
+            float next = -buttons * 0.5f + 420f + ButtonGap;
+            if (watch) { UIBuilder.Box(_watchCleared.Root, next + 140f, y, 280f, 96f, TopCentre); next += 280f + ButtonGap; }
+            UIBuilder.Box(_statsCleared.Root, next + 140f, y, 280f, 96f, TopCentre);
             y -= 96f;
 
             // The column is as tall as what it holds, centred on the screen.
@@ -708,6 +734,7 @@ namespace Emberfall.UI.Screens
             _retry.Root.gameObject.SetActive(false);
             _adjust.Root.gameObject.SetActive(false);
             _watch.Root.gameObject.SetActive(false);
+            _stats.Root.gameObject.SetActive(false);
             _autoToggle.gameObject.SetActive(false);
         }
 
@@ -829,6 +856,19 @@ namespace Emberfall.UI.Screens
             _returning = true;
             App.Router.Battle.SetGuildRun(run);
             Router.Show(ScreenId.Battle, false);
+        }
+
+        /// <summary>
+        /// Opens the Battle stats panel over the result. Counts as a tap on the band, so an AUTO
+        /// countdown is cancelled for this wave and NEXT WAVE cannot fire behind the panel. Reads
+        /// the tally ResolveWave kept; resolves, pays and saves nothing.
+        /// </summary>
+        private void OnStats()
+        {
+            App.Audio.Tap();
+            CancelCountdown();
+            _view = BattleStatsView.For(_result, _stage != null ? _stage.DisplayCode : "");
+            if (_view != null) _statsPanel.Show(_view);
         }
 
         private void OnAdjust()

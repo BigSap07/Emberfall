@@ -265,6 +265,7 @@ namespace Emberfall.DevHarness
             CheckCampaignStructure(content);
             CheckWaveResolve(content);
             CheckWaveReplay(content);
+            CheckBattleStats(content);
             CheckWaveDrip(content);
             CheckClearedStagesById(content, contentDir);
             CheckStageResumeAfterWaveResolve(content);
@@ -11933,6 +11934,192 @@ namespace Emberfall.DevHarness
             Line("  timing (print only): " + (ms / Math.Max(1, totalWaves)).ToString("0.0", CultureInfo.InvariantCulture)
                  + " ms per wave, " + (ms / Math.Max(1, totalBattles)).ToString("0.00", CultureInfo.InvariantCulture)
                  + " ms per battle over " + totalWaves + " resolves / " + totalBattles + " battles");
+        }
+
+        /// <summary>One signature string for a WaveStats, so two runs compare exactly.</summary>
+        private static string StatsSignature(WaveStats s)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int b = 0; b <= s.Battles.Count; b++)
+            {
+                TallySet set = b == s.Battles.Count ? s.Whole : s.Battles[b].Stats;
+                sb.Append(b == s.Battles.Count ? "W" : "B" + s.Battles[b].Battle).Append(':');
+                for (int i = 0; i < set.Heroes.Count; i++)
+                {
+                    HeroTally t = set.Heroes[i];
+                    sb.Append(t.DefId).Append('/').Append(t.Slot).Append('/').Append(t.Dealt).Append('/').Append(t.Taken)
+                      .Append('/').Append(t.Healed).Append('/').Append(t.Shielded).Append('/').Append(t.Kills).Append(';');
+                }
+            }
+            return sb.ToString();
+        }
+
+        /// <summary>The straight sum over a fight's BattleEvents, written separately from BattleTally
+        /// (it asks FindUnit per event rather than keeping lookup tables): one hero's five figures.</summary>
+        private static long[] StraightSum(BattleResult r, string defId)
+        {
+            long dealt = 0, taken = 0, healed = 0, shielded = 0, kills = 0;
+            for (int i = 0; i < r.Events.Count; i++)
+            {
+                BattleEvent e = r.Events[i];
+                UnitSnapshot src = r.FindUnit(e.SourceId), dst = r.FindUnit(e.TargetId);
+                bool mine = src != null && src.IsPlayer && src.DefId == defId;
+                if (e.Type == BattleEventType.Damage)
+                {
+                    if (mine && dst != null && !dst.IsPlayer) dealt += e.Value;
+                    if (dst != null && dst.IsPlayer && dst.DefId == defId) taken += e.Value;
+                }
+                else if (e.Type == BattleEventType.Heal && mine) healed += e.Value;
+                else if (e.Type == BattleEventType.ShieldGain && mine) shielded += e.Value;
+                else if (e.Type == BattleEventType.Death && mine && dst != null && !dst.IsPlayer) kills++;
+            }
+            return new long[] { dealt, taken, healed, shielded, kills };
+        }
+
+        private static bool TallyMatches(HeroTally t, long[] want)
+        {
+            return t.Dealt == want[0] && t.Taken == want[1] && t.Healed == want[2] && t.Shielded == want[3] && t.Kills == want[4];
+        }
+
+        /// <summary>Checks one resolved wave's stats against fights re-run on a twin from the pre-resolve save.</summary>
+        private static void CheckStatsAgainstEvents(ContentDatabase db, string label, StageDef stage,
+                                                    string preSave, WaveResolution res)
+        {
+            GameSession twin = new GameSession(db, SaveSerializer.Deserialize(preSave, db, out _waveErr));
+            bool perBattle = res.Stats != null && res.Stats.Battles.Count == res.Battles.Count;
+            bool whole = perBattle;
+            long grandDealt = 0;
+            Dictionary<string, long[]> sums = new Dictionary<string, long[]>();
+            for (int i = 0; perBattle && i < res.Battles.Count; i++)
+            {
+                WaveBattleOutcome o = res.Battles[i];
+                BattleResult fight = twin.ResolveLadderBattle(stage, o.Wave, o.Battle, o.Seed);
+                BattleTallyEntry entry = res.Stats.ForBattle(o.Battle);
+                perBattle = perBattle && entry != null && entry.Lost == !o.Victory
+                            && entry.Stats.Heroes.Count == twin.Profile.TeamHeroes().Count;
+                for (int u = 0; perBattle && u < fight.Units.Count; u++)
+                {
+                    if (!fight.Units[u].IsPlayer) continue;
+                    string def = fight.Units[u].DefId;
+                    long[] want = StraightSum(fight, def);
+                    HeroTally t = entry.Stats.Find(def);
+                    perBattle = t != null && TallyMatches(t, want);
+                    long[] acc;
+                    if (!sums.TryGetValue(def, out acc)) { acc = new long[5]; sums[def] = acc; }
+                    for (int k = 0; k < 5; k++) acc[k] += want[k];
+                    grandDealt += want[0];
+                }
+            }
+            foreach (KeyValuePair<string, long[]> kv in sums)
+            {
+                HeroTally t = res.Stats.Whole.Find(kv.Key);
+                whole = whole && t != null && TallyMatches(t, kv.Value);
+            }
+            Check(perBattle, label + ": every hero's dealt, taken, healed, shielded and kills in every battle equal a straight sum over that fight's BattleEvents ("
+                  + res.Battles.Count + " battles)");
+            Check(whole && sums.Count == res.Stats.Whole.Heroes.Count && grandDealt > 0,
+                  label + ": the whole-wave totals equal the sum of the per-battle sums (" + sums.Count + " heroes, " + grandDealt + " damage dealt)");
+        }
+
+        private static void CheckBattleStats(ContentDatabase db)
+        {
+            Line("");
+            Line("BATTLE STATS (STATS on the wave result: tallied from the BattleEvents inside ResolveWave, memory only, never saved)");
+            StageDef ch11 = db.GetStage("ch1_1");
+            StageDef ch4 = db.GetStage("ch4_6");
+            if (ch11 == null || ch4 == null)
+            {
+                Check(false, "content has ch1_1 and ch4_6 to test the battle stats with");
+                return;
+            }
+            const long Now = 1700000000L;
+            const int Base = 31337;
+
+            // ---- a cleared wave
+            GameSession a = BuildPinnedLineAt(db, ch11, true, int.MaxValue);
+            string pre = SaveSerializer.Serialize(a.Profile);
+            WaveResolution r1 = a.ResolveWave(ch11, Base, Now);
+            Check(r1.Stats != null && r1.WaveCleared, "a resolved wave carries its stats (" + (r1.Stats != null ? r1.Stats.Battles.Count : 0) + " battles tallied)");
+            CheckStatsAgainstEvents(db, "CheckBattleStatsClearedWave", ch11, pre, r1);
+
+            // ---- the tally and the view touch nothing: the serialized save is byte for byte as it was
+            string saveBefore = SaveSerializer.Serialize(a.Profile);
+            string purseBefore = PurseSignature(a.Profile);
+            BattleStatsView v = BattleStatsView.For(r1, ch11.DisplayCode);
+            StatsScope first = v.Scope;
+            v.Select(StatsScope.Battle);
+            string battleRows = v.Rows.Count + ":" + v.MvpName;
+            v.Select(StatsScope.Whole);
+            v.Select(StatsScope.Battle);
+            BattleTally.Of(a.ResolveLadderBattle(ch11, 1, 1, 99));
+            Check(SaveSerializer.Serialize(a.Profile) == saveBefore && PurseSignature(a.Profile) == purseBefore,
+                  "CheckBattleStatsLeavesSaveAlone: building the view, selecting both scopes and tallying a fight leave the serialized save byte for byte as it was");
+            Check(first == StatsScope.Whole && v.DefaultScope == StatsScope.Whole && v.BattleNumber == r1.Replay.Battle
+                  && v.Heading.EndsWith("WAVE 1 CLEARED") && battleRows.StartsWith(a.Profile.TeamHeroes().Count + ":"),
+                  "a cleared wave opens on the whole wave and its single battle is the WATCH battle (battle " + v.BattleNumber + "): \"" + v.Heading + "\"");
+
+            // ---- bars scale to the column maximum, the MVP is the top damage dealer
+            v.Select(StatsScope.Whole);
+            float maxBar = 0f; string top = ""; long topDealt = -1, sumDealt = 0;
+            for (int i = 0; i < v.Rows.Count; i++)
+            {
+                maxBar = Math.Max(maxBar, v.Rows[i].DealtBar);
+                sumDealt += v.Rows[i].Dealt;
+                if (v.Rows[i].Dealt > topDealt) { topDealt = v.Rows[i].Dealt; top = v.Rows[i].Name; }
+            }
+            Check(maxBar == 1f && v.MvpName == top && sumDealt > 0
+                  && Math.Abs(v.MvpShare - (float)topDealt / sumDealt) < 1e-6f,
+                  "the tallest bar is the column maximum and the MVP is " + top + " at " + Pct(v.MvpShare) + " of the line's damage");
+
+            // ---- determinism: the same wave from identical starting state gives identical stats
+            GameSession b1 = new GameSession(db, SaveSerializer.Deserialize(pre, db, out _waveErr));
+            GameSession b2 = new GameSession(db, SaveSerializer.Deserialize(pre, db, out _waveErr));
+            WaveResolution d1 = b1.ResolveWave(ch11, Base, Now);
+            WaveResolution d2 = b2.ResolveWave(ch11, Base, Now);
+            Check(StatsSignature(d1.Stats) == StatsSignature(r1.Stats) && StatsSignature(d1.Stats) == StatsSignature(d2.Stats),
+                  "CheckBattleStatsDeterministic: three resolves of the same wave from the same save give identical stats");
+
+            // ---- a lost wave: opens on the lost battle
+            GameSession weak = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            ClearThrough(weak, db, ch4.GlobalIndex, Now);
+            weak.Profile.CampaignCurrentStageId = ch4.Id;
+            weak.Profile.CampaignCurrentWave = 1;
+            weak.Profile.CampaignCurrentBattle = 5;
+            string weakPre = SaveSerializer.Serialize(weak.Profile);
+            WaveResolution lost = weak.ResolveWave(ch4, Base, Now);
+            CheckStatsAgainstEvents(db, "CheckBattleStatsLostWave", ch4, weakPre, lost);
+            string weakSave = SaveSerializer.Serialize(weak.Profile);
+            BattleStatsView lv = BattleStatsView.For(lost, ch4.DisplayCode);
+            lv.Select(StatsScope.Whole);
+            lv.Select(StatsScope.Battle);
+            Check(lost.LostBattle == 5 && lv.DefaultScope == StatsScope.Battle && lv.BattleNumber == 5
+                  && lv.Heading.EndsWith("WAVE 1 LOST") && SaveSerializer.Serialize(weak.Profile) == weakSave,
+                  "a lost wave opens on the single-battle scope at the lost battle (" + lv.BattleNumber + "): \"" + lv.Heading + "\", save untouched");
+
+            // ---- a stage clear
+            GameSession g = BuildPinnedLineAt(db, ch11, false, int.MaxValue);
+            WaveResolution last = null; string lastPre = "";
+            for (int w = 0; w < 6 && (last == null || !last.StageCleared); w++)
+            {
+                lastPre = SaveSerializer.Serialize(g.Profile);
+                last = g.ResolveWave(ch11, Base + w, Now + w);
+            }
+            if (last != null && last.StageCleared)
+            {
+                CheckStatsAgainstEvents(db, "CheckBattleStatsStageClear", ch11, lastPre, last);
+                BattleStatsView sv = BattleStatsView.For(last, ch11.DisplayCode);
+                string clearedSave = SaveSerializer.Serialize(g.Profile);
+                sv.Select(StatsScope.Battle);
+                Check(sv.DefaultScope == StatsScope.Whole && sv.Heading.EndsWith("STAGE CLEARED")
+                      && SaveSerializer.Serialize(g.Profile) == clearedSave,
+                      "a stage clear opens on the whole wave: \"" + sv.Heading + "\", save untouched");
+            }
+            else Check(false, "the pinned line clears ch1_1 so a stage clear's stats can be checked");
+
+            // ---- a refusal has no stats
+            GameSession fresh = new GameSession(db, GameSession.CreateNewProfile(db, Now));
+            WaveResolution refused = fresh.ResolveWave(db.GetStage("ch2_1"), Base, Now);
+            Check(refused.Stats == null && BattleStatsView.For(refused, "2-1") == null, "a refused resolve keeps no stats and offers no view");
         }
 
         private static void CheckWaveReplay(ContentDatabase db)

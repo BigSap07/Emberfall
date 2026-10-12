@@ -178,6 +178,14 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/Wave result (lost)", false, 84)]
         public static void CaptureWaveResultLost() { Begin("Screen:WaveResultLost"); }
 
+        // The Battle stats panel over the lost wave (opens on the lost battle) and over the stage
+        // clear (opens on the whole wave).
+        [MenuItem("Emberfall/Capture/Battle stats (lost wave)", false, 85)]
+        public static void CaptureWaveStatsLost() { Begin("Screen:WaveStatsLost"); }
+
+        [MenuItem("Emberfall/Capture/Battle stats (stage cleared)", false, 85)]
+        public static void CaptureWaveStatsCleared() { Begin("Screen:WaveStatsCleared"); }
+
         // The same won wave as the first of the three, then WATCH pressed: one frame of the replay
         // on the battle screen, frozen while a hit effect is alive. See PumpWaveReplay.
         [MenuItem("Emberfall/Capture/Wave replay (mid-heal)", false, 86)]
@@ -669,6 +677,8 @@ namespace Emberfall.EditorTools
                     case "WaveResultAuto":
                     case "WaveResultCleared":
                     case "WaveResultLost":
+                    case "WaveStatsLost":
+                    case "WaveStatsCleared":
                     case "WaveReplay":
                     case "WaveReplayResult":
                     case "WaveReplayHeal": id = ScreenId.WaveResult; break;
@@ -795,7 +805,7 @@ namespace Emberfall.EditorTools
                     // started the way the Campaign screen starts it, with a stage and a seeded
                     // profile behind it.
                     // A replay is watched from a won mid-stage wave, so it seeds as one.
-                    StageDef waveStage = SeedWaveResult(app, name == "WaveReplay" || name == "WaveReplayResult" || name == "WaveReplayHeal" ? "WaveResult" : name);
+                    StageDef waveStage = SeedWaveResult(app, name == "WaveReplay" || name == "WaveReplayResult" || name == "WaveReplayHeal" ? "WaveResult" : WaveBase(name));
                     if (waveStage == null)
                     {
                         SessionState.SetInt(StageKey, slot + 1);
@@ -831,7 +841,9 @@ namespace Emberfall.EditorTools
                     if (waveScreen != null && waveScreen.Painted)
                     {
                         SessionState.SetInt(BattleArmKey, frame);
-                        ReportWaveOutcome(name, waveScreen.Result);
+                        ReportWaveOutcome(WaveBase(name), waveScreen.Result);
+                        // The stats targets open the panel on the scope it opens on by itself.
+                        if (name == "WaveStatsLost" || name == "WaveStatsCleared") waveScreen.StatsForCapture(false);
                     }
                     else if (frame > showAt + BattleWaitCeiling)
                     {
@@ -1238,7 +1250,16 @@ namespace Emberfall.EditorTools
         {
             return name == "WaveResult" || name == "WaveResultAuto" || name == "WaveResultCleared"
                    || name == "WaveResultLost" || name == "WaveReplay" || name == "WaveReplayResult"
-                   || name == "WaveReplayHeal";
+                   || name == "WaveReplayHeal" || name == "WaveStatsLost" || name == "WaveStatsCleared";
+        }
+
+        /// <summary>The wave target whose seeded state a stats target photographs: the panel is
+        /// opened over the lost wave or over the stage clear those targets already build.</summary>
+        private static string WaveBase(string name)
+        {
+            if (name == "WaveStatsLost") return "WaveResultLost";
+            if (name == "WaveStatsCleared") return "WaveResultCleared";
+            return name;
         }
 
         private const string ReplayStageKey = "PlayModeScreenshot.ReplayStage";

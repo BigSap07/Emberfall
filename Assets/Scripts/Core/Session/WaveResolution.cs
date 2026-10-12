@@ -126,5 +126,12 @@ namespace Emberfall.Core.Session
         /// least of the line's HP. Null on a refusal. Never saved.
         /// </summary>
         public WaveReplay Replay;
+
+        /// <summary>
+        /// What each hero did, per battle and summed over the battles this resolve fought, tallied
+        /// from the BattleEvents inside ResolveWave. Null on a refusal. Never saved, and nothing
+        /// that fights reads it.
+        /// </summary>
+        public WaveStats Stats;
     }
 }
