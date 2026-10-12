@@ -1,38 +1,70 @@
-"""Re-wire sprite sheets for specified heroes.
+"""Re-wire sprite sheets for specified heroes, or re-export every unit sheet at the current cell.
 
 Reads source PNGs + manifest from an extracted zip folder, fits each frame by height into a
-transparent 220x260 cell (uniform scale, centred; see fit_frame), trims trailing transparent frames, measures foot/body
+transparent 336x396 cell (uniform scale, centred; see fit_frame), trims trailing transparent frames, measures foot/body
 fractions, and writes the output PNG + sidecar JSON + .meta into
 Assets/Resources/Sprites/Units.
 
 Usage:
     python Tools/rewire_sprites.py [--source-root DIR] [--out-dir DIR] [Short ...]
+    python Tools/rewire_sprites.py --reexport [--import-root DIR] [--out-dir DIR] [--jobs N] [unit_id ...]
 
     --source-root DIR   read each hero from DIR/<Short>/ instead of the TEMP layout
     --out-dir DIR       write somewhere other than Sprites/Units (for diffing a run)
     Short ...           only these heroes, by the short names in HEROES
+
+    --reexport          rebuild EVERY sheet that already has a sidecar in Sprites/Units from the
+                        original deliveries, at the current cell size. See reexport_unit.
+    --import-root DIR   where the deliveries live (default: the folder beside the repo named
+                        import, i.e. D:/Emberfall/import): heroes as sprites/<Name>.zip, enemies as
+                        enemies-ch1-3/<Chapter>/SPRITES/<Name>/.
 """
 
+import io
 import json
 import math
 import os
+import re
 import shutil
 import sys
 import uuid
+import zipfile
 from pathlib import Path
 
 try:
-    from PIL import Image
+    from PIL import Image, ImageChops, ImageStat
 except ImportError:
     print("Requires Pillow: pip install Pillow", file=sys.stderr)
     sys.exit(1)
+
+Image.MAX_IMAGE_PIXELS = None  # delivered sheets reach 8496 x 9360; they are trusted local files
 
 REPO = Path(__file__).resolve().parent.parent
 UNITS_DIR = REPO / "Assets" / "Resources" / "Sprites" / "Units"
 OUT_DIR = UNITS_DIR  # --out-dir redirects the writes; the .meta template always comes from UNITS_DIR
 ALPHA_THRESHOLD = 10
-DST_W = 220
-DST_H = 260
+
+# THE CELL. 336 x 396, which is 220 x 260 scaled by 1.523, and every one of these numbers is
+# forced, not chosen:
+#
+#   - Resolution. At 220 x 260 a unit was drawn at 1.5 to 1.7 screen pixels per texel (heroes) and
+#     about 2.0 (elites and bosses) at 1920 x 1080, and the desktop's 4x4 compression blocks showed
+#     as blotches at that magnification. 396 rows puts the hero median at 1.03.
+#   - Multiple of 4 on both axes, for BC7 on Windows. Since Unity 2021.2 a BCn texture's width and
+#     height must both be multiples of 4 or it is not compressed at all, and a sheet is cols x
+#     frameWidth by rows x frameHeight with cols and rows from 7 to 9. 330 x 390, the plain 1.5x,
+#     fails that: 9 x 330 = 2970 and 7 x 390 = 2730 are not multiples of 4, so those sheets would
+#     have landed in the Windows player as uncompressed RGBA32, four times the memory.
+#   - Multiple of 6 on both axes, for ASTC 6x6 on Android, so every frame boundary is also a block
+#     boundary and no block mixes the end of one frame with the start of the next.
+#
+# The smallest cell at or above 1.5x that is a multiple of 12 both ways and keeps the 11:13 shape
+# within half a pixel is 336 x 396. The shape is 0.8485 against 0.8462, and fit_frame pads that
+# extra 0.28% as transparency, so an 880 x 1040 frame becomes 335 x 396 centred in the cell and the
+# character keeps the proportions it was drawn at; nothing on screen gets wider.
+DST_W = 336
+DST_H = 396
+CELL_MULTIPLE = 12  # lcm of the BC7 block (4) and the ASTC 6x6 block (6)
 
 # Hero configs: (short_name, hero_id, source_dir, manifest_prefix_override)
 # manifest_prefix_override handles the Nereia/Celen name mismatch
@@ -218,31 +250,39 @@ def compute_foot_fraction_with_border(frame_img):
     return round(empty_rows / h, 3), border_bottom
 
 
-def fit_frame(frame, log_label=None):
-    """Scale one source frame uniformly into a transparent DST_W x DST_H cell.
+def fit_frame(frame, log_label=None, cell_w=None, cell_h=None):
+    """Scale one source frame uniformly into a transparent cell_w x cell_h cell (DST_W x DST_H).
 
     The loader derives a character's width from the SHAPE of one cell (sidecar frameWidth over
-    frameHeight), so the cell has to stay 220x260 and the art has to keep its own proportions
-    inside it. This used to be frame.resize((DST_W, DST_H)), which stretched whatever aspect the
-    delivery used to 0.846: the five Ember 5-stars arrived as 720x1280 (0.5625) and rendered 1.3x
-    to 1.65x too wide. Fit by height; centre horizontally. If that would be wider than the cell,
-    fit by width instead and centre vertically, and say so (log_label names the clip once).
-    A frame that is already 0.846 maps to the full cell and comes out identical to a plain resize.
+    frameHeight), so the cell has to keep its 11:13 shape and the art has to keep its own
+    proportions inside it. This used to be frame.resize((DST_W, DST_H)), which stretched whatever
+    aspect the delivery used to 0.846: the five Ember 5-stars arrived as 720x1280 (0.5625) and
+    rendered 1.3x to 1.65x too wide. Fit by height; centre horizontally. If that would be wider than
+    the cell, fit by width instead and centre vertically, and say so (log_label names the clip once).
+
+    Upscaling is allowed, with the same filter, and is reported: a frame shorter than the cell (the
+    Hollowed Mage's skill clip was delivered at 433 x 512) is magnified to fit, which is softer than
+    the rest of its set and is the designer's call to redeliver, not something to hide.
     """
+    cell_w = cell_w or DST_W
+    cell_h = cell_h or DST_H
     w, h = frame.size
-    new_w = round(w * DST_H / h)
-    new_h = DST_H
-    if new_w > DST_W:
-        new_w = DST_W
-        new_h = round(h * DST_W / w)
+    new_w = round(w * cell_h / h)
+    new_h = cell_h
+    if new_w > cell_w:
+        new_w = cell_w
+        new_h = round(h * cell_w / w)
         if log_label:
             print(f"    NOTE {log_label}: {w}x{h} is wider than the cell, fit by width "
                   f"-> {new_w}x{new_h}, centred vertically")
+    if log_label and new_h > h:
+        print(f"    UPSCALED {log_label}: source frame {w}x{h} magnified {new_h / h:.2f}x to "
+              f"{new_w}x{new_h} - softer than its set, flag it for redelivery")
     resized = frame.resize((new_w, new_h), Image.LANCZOS)
-    if (new_w, new_h) == (DST_W, DST_H):
+    if (new_w, new_h) == (cell_w, cell_h):
         return resized
-    cell = Image.new("RGBA", (DST_W, DST_H), (0, 0, 0, 0))
-    cell.paste(resized, ((DST_W - new_w) // 2, (DST_H - new_h) // 2))
+    cell = Image.new("RGBA", (cell_w, cell_h), (0, 0, 0, 0))
+    cell.paste(resized, ((cell_w - new_w) // 2, (cell_h - new_h) // 2))
     return cell
 
 
@@ -432,10 +472,276 @@ def process_hero(hero_cfg, meta_template):
     return results
 
 
+# ---------------------------------------------------------------------------------------------
+# --reexport: every sheet already in Sprites/Units, rebuilt from the original deliveries
+# ---------------------------------------------------------------------------------------------
+#
+# This is how a cell-size change reaches all 57 units without anyone re-deciding, per clip, which
+# delivered file it came from. That mapping is NOT derivable from names: basic is basic1 for most
+# heroes and basic for Kael and Marrow, Kael's second basic is basic_2, Nereia's manifest says
+# celen_* over files named nereia_*, the Hollowed Hunter shipped as hollowed_archer, and Rheia
+# ships an idle2. So the re-export does not guess. It renders three frames of every delivered
+# sheet at the cell the shipped sheet uses today and compares them, pixel by pixel, with the
+# shipped sheet; a delivered sheet is written only into the clip it reproduces. A right match
+# scores about 0.01 (mean absolute difference per channel, 0..255) and the nearest wrong one over
+# 10, so MATCH_TOLERANCE has a wide margin either side, and a clip nothing reproduces is reported
+# rather than filled.
+#
+# Only the PNG and the two pixel fields in the sidecar (frameWidth, frameHeight) change. Every
+# other sidecar value is a fraction of the cell or a frame index - footFraction, impactFraction,
+# start, end, the grid - and survives a uniform resize unchanged, as do spriteBodyFraction and
+# spriteFootFraction in heroes.json and enemies.json. The run re-measures each clip's start-frame
+# foot and the idle clip's body at the new size and prints them beside the authored ones, so that
+# claim is checked on every run rather than assumed. The .meta is never touched: its guid is the
+# asset's identity.
+
+MATCH_TOLERANCE = 2.0
+CLIP_SUFFIXES = ("hit_reaction", "controlled", "basic2", "basic", "idle2", "idle", "skill", "death")
+
+# A shipped cell -> the cell it re-exports to. 220 x 260 is every sheet but Brenna's; her 944 x 944
+# delivery was cut to 236 x 236 cells and scales by the same 1.523 to the nearest multiple of 12.
+# A cell already in the right-hand column is current and re-exports to itself, so a second run
+# rebuilds the same sheets rather than growing them again.
+LEGACY_CELLS = {(220, 260): (DST_W, DST_H), (236, 236): (360, 360)}
+STEM_ALIASES = {"hollowed_archer": "hollowed_hunter"}
+
+
+def target_cell(w, h):
+    if (w, h) in LEGACY_CELLS:
+        return LEGACY_CELLS[(w, h)]
+    if (w, h) in LEGACY_CELLS.values():
+        return (w, h)
+    raise ValueError(f"no target cell for a {w}x{h} sheet - add it to LEGACY_CELLS")
+
+
+class Delivery(object):
+    """One unit's delivered export: a zip (heroes) or an extracted folder (enemies)."""
+
+    def __init__(self, path):
+        self.path = Path(path)
+        self.zip = zipfile.ZipFile(self.path) if self.path.suffix.lower() == ".zip" else None
+        if self.zip:
+            names = self.zip.namelist()
+        else:
+            names = [str(Path(r, f).relative_to(self.path)).replace("\\", "/")
+                     for r, _, fs in os.walk(self.path) for f in fs]
+        manifests = [n for n in names if n.endswith("sprite_sheets.json")]
+        if len(manifests) != 1:
+            raise ValueError(f"{self.path}: expected one sprite_sheets.json, found {len(manifests)}")
+        self.base = manifests[0][: -len("sprite_sheets.json")]
+        self.manifest = json.loads(self._read(manifests[0]))
+        self.pngs = {}
+        for n in names:
+            rel = n[len(self.base):]
+            if n.startswith(self.base) and rel.lower().endswith(".png") and "/" not in rel:
+                self.pngs[rel.lower()] = n
+
+    def _read(self, name):
+        if self.zip:
+            return self.zip.read(name)
+        return (self.path / name).read_bytes()
+
+    def resolve(self, image):
+        """The file a manifest entry names. Nereia's manifest says celen_* over nereia_* files, so
+        fall back to the one file whose name after its first underscore matches."""
+        hit = self.pngs.get(image.lower())
+        if hit is None:
+            tail = image.lower().split("_", 1)[-1]
+            hits = [v for k, v in self.pngs.items() if k.split("_", 1)[-1] == tail]
+            hit = hits[0] if len(hits) == 1 else None
+        return hit
+
+    def open(self, name):
+        return Image.open(io.BytesIO(self._read(name))).convert("RGBA")
+
+
+def find_deliveries(import_root):
+    """unit key -> delivery path. Heroes by zip stem (the hero's first name), enemies by folder."""
+    found = {}
+    for z in sorted((import_root / "sprites").glob("*.zip")):
+        found[z.stem.lower()] = z
+    for d in sorted((import_root / "enemies-ch1-3").glob("*/SPRITES/*")):
+        if d.is_dir():
+            key = re.sub(r"\s+", "_", d.name.strip().lower())
+            found[STEM_ALIASES.get(key, key)] = d
+    return found
+
+
+def shipped_clips(unit_id):
+    clips = {}
+    for clip in CLIP_SUFFIXES:
+        side = UNITS_DIR / f"{unit_id}_{clip}.json"
+        if side.exists() and (UNITS_DIR / f"{unit_id}_{clip}.png").exists():
+            clips[clip] = side
+    return clips
+
+
+def shipped_units():
+    units = set()
+    for side in UNITS_DIR.glob("*.json"):
+        for clip in CLIP_SUFFIXES:
+            if side.stem.endswith("_" + clip):
+                units.add(side.stem[: -len(clip) - 1])
+                break
+    return sorted(units)
+
+
+def cell_of(img, n, cols, w, h):
+    c, r = n % cols, n // cols
+    return img.crop((c * w, r * h, (c + 1) * w, (r + 1) * h))
+
+
+def mean_diff(a, b):
+    return sum(ImageStat.Stat(ImageChops.difference(a, b)).mean) / 4.0
+
+
+def alpha_rows(cell):
+    """(top, bottom) rows of the cell's alpha above ALPHA_THRESHOLD, or None when it is empty."""
+    box = cell.getchannel("A").point(lambda a: 255 if a > ALPHA_THRESHOLD else 0).getbbox()
+    return None if box is None else (box[1], box[3] - 1)
+
+
+def reexport_unit(unit_id, delivery_path, out_dir):
+    """Rebuild every shipped clip of one unit at its target cell. Returns (log lines, summary)."""
+    log = []
+    delivery = Delivery(delivery_path)
+    clips = shipped_clips(unit_id)
+    shipped = {}
+    for clip, side in clips.items():
+        sc = json.loads(side.read_text("utf-8"))
+        shipped[clip] = (sc, Image.open(UNITS_DIR / f"{unit_id}_{clip}.png").convert("RGBA"))
+    unmatched = set(clips)
+    summary = {"unit": unit_id, "written": [], "missing": [], "upscaled": [], "idle": None}
+
+    for entry in delivery.manifest.get("sprites", []):
+        name = delivery.resolve(entry["image"])
+        if name is None:
+            log.append(f"  {entry['image']}: named by the manifest, not in the delivery")
+            continue
+        cols, rows = entry["sheet"]["cols"], entry["sheet"]["rows"]
+        frames = entry["sheet"]["frames"]
+        sfw, sfh = entry["frameWidth"], entry["frameHeight"]
+        candidates = [c for c in unmatched
+                      if (shipped[c][0]["sheet"]["cols"], shipped[c][0]["sheet"]["rows"]) == (cols, rows)]
+        if not candidates:
+            log.append(f"  {name}: no shipped clip with a {cols}x{rows} grid left, not imported")
+            continue
+        src = delivery.open(name)
+        probe = sorted({0, frames // 3, (2 * frames) // 3})
+        scores = []
+        for clip in candidates:
+            sc, old = shipped[clip]
+            ow, oh = sc["frameWidth"], sc["frameHeight"]
+            d = sum(mean_diff(fit_frame(cell_of(src, k, cols, sfw, sfh), None, ow, oh),
+                              cell_of(old, k, cols, ow, oh)) for k in probe) / len(probe)
+            scores.append((d, clip))
+        scores.sort()
+        d, clip = scores[0]
+        if d > MATCH_TOLERANCE:
+            log.append(f"  {name}: reproduces no shipped clip (best {clip} at {d:.2f}), not imported")
+            src.close()
+            continue
+        unmatched.discard(clip)
+        sc, old = shipped[clip]
+        nw, nh = target_cell(sc["frameWidth"], sc["frameHeight"])
+
+        dst = Image.new("RGBA", (cols * nw, rows * nh), (0, 0, 0, 0))
+        buf = io.StringIO()
+        stdout, sys.stdout = sys.stdout, buf
+        try:
+            for n in range(frames):
+                frame = fit_frame(cell_of(src, n, cols, sfw, sfh),
+                                  f"{unit_id}_{clip}" if n == 0 else None, nw, nh)
+                dst.paste(frame, ((n % cols) * nw, (n // cols) * nh))
+        finally:
+            sys.stdout = stdout
+        notes = [l for l in buf.getvalue().splitlines() if l.strip()]
+        log.extend(notes)
+        if any("UPSCALED" in l for l in notes):
+            summary["upscaled"].append(clip)
+        src.close()
+
+        out_png = out_dir / f"{unit_id}_{clip}.png"
+        dst.save(str(out_png), "PNG")
+
+        # The sidecar keeps every byte but the two pixel fields, so it diffs as exactly those two
+        # lines (several were committed without a trailing newline, and json.dump would add one).
+        text = clips[clip].read_text("utf-8")
+        text = re.sub(r'("frameWidth":\s*)\d+', r"\g<1>%d" % nw, text, count=1)
+        text = re.sub(r'("frameHeight":\s*)\d+', r"\g<1>%d" % nh, text, count=1)
+        with open(out_dir / f"{unit_id}_{clip}.json", "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+
+        anim = sc["defaultAnimation"]
+        start = anim.get("start", 0)
+        foot_new, _ = compute_foot_fraction_with_border(cell_of(dst, start, cols, nw, nh))
+        log.append(f"  {clip:<13} <- {name:<44} match {d:5.2f}  {cols * nw}x{rows * nh}  "
+                   f"{out_png.stat().st_size / 1048576:6.1f} MB  foot {anim.get('footFraction')} "
+                   f"-> {foot_new:.3f} re-measured")
+        if clip == "idle":
+            top, bottom = nh, -1
+            for n in range(start, anim.get("end", frames - 1) + 1):
+                b = alpha_rows(cell_of(dst, n, cols, nw, nh))
+                if b:
+                    top, bottom = min(top, b[0]), max(bottom, b[1])
+            summary["idle"] = {"body": round((bottom - top) / nh, 3),
+                               "foot": round((nh - 1 - bottom) / nh, 3), "cell": [nw, nh]}
+        summary["written"].append(clip)
+        dst.close()
+
+    for clip in sorted(unmatched):
+        log.append(f"  {clip:<13} MISSING - no delivered sheet reproduces it; left as shipped")
+        summary["missing"].append(clip)
+    return log, summary
+
+
+def _reexport_job(job):
+    unit_id, delivery_path, out_dir = job
+    try:
+        return unit_id, reexport_unit(unit_id, delivery_path, Path(out_dir))
+    except Exception as e:  # one unit's broken delivery must not lose the other units' report
+        return unit_id, ([f"  ERROR {type(e).__name__}: {e}"],
+                         {"unit": unit_id, "written": [], "missing": ["*"], "upscaled": [], "idle": None})
+
+
+def reexport(import_root, out_dir, only, jobs):
+    from concurrent.futures import ProcessPoolExecutor
+    deliveries = find_deliveries(import_root)
+    work = []
+    for unit_id in shipped_units():
+        if only and unit_id not in only:
+            continue
+        key = unit_id if unit_id in deliveries else unit_id.split("_", 1)[0]
+        if key not in deliveries:
+            print(f"{unit_id}: no delivery under {import_root}, left as shipped")
+            continue
+        work.append((unit_id, str(deliveries[key]), str(out_dir)))
+    summaries = []
+    with ProcessPoolExecutor(max_workers=jobs) as pool:
+        for unit_id, (log, summary) in pool.map(_reexport_job, work):
+            print(f"\n{unit_id}", flush=True)
+            for line in log:
+                print(line, flush=True)
+            summaries.append(summary)
+    missing = [(s["unit"], m) for s in summaries for m in s["missing"]]
+    upscaled = [(s["unit"], c) for s in summaries for c in s["upscaled"]]
+    print(f"\n{sum(len(s['written']) for s in summaries)} sheets written for {len(summaries)} units")
+    print(f"upscaled from a source smaller than the cell: {upscaled or 'none'}")
+    print(f"shipped clips no delivery reproduces: {missing or 'none'}")
+    print("idle clip re-measured at the new cell (compare with spriteBodyFraction / spriteFootFraction):")
+    for s in summaries:
+        if s["idle"]:
+            print(f"  {s['unit']:<32} body {s['idle']['body']:.3f}  foot {s['idle']['foot']:.3f}")
+    return 1 if missing else 0
+
+
 def main():
     global OUT_DIR
     args = sys.argv[1:]
     source_root = None
+    import_root = REPO.parent / "import"
+    do_reexport = False
+    jobs = max(1, (os.cpu_count() or 2) // 2)
     only = []
     while args:
         a = args.pop(0)
@@ -444,8 +750,17 @@ def main():
         elif a == "--out-dir":
             OUT_DIR = Path(args.pop(0))
             OUT_DIR.mkdir(parents=True, exist_ok=True)
+        elif a == "--reexport":
+            do_reexport = True
+        elif a == "--import-root":
+            import_root = Path(args.pop(0))
+        elif a == "--jobs":
+            jobs = int(args.pop(0))
         else:
             only.append(a.lower())
+
+    if do_reexport:
+        return reexport(import_root, OUT_DIR, only, jobs)
 
     meta_template = find_meta_template()
     if meta_template is None:
@@ -468,4 +783,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
