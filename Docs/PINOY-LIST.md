@@ -39,8 +39,8 @@ batch appends to it rather than rebuilding it again.
 **Sections 2b and 2c are closed lists**: every hero has a shipped kit, so no further batch can add
 a row to either, and 2c's four-clause Energy question is now answered here rather than waiting.
 **Sections 2d and 2e are not closed**, because they hold what a MEASUREMENT produced rather than
-an authoring batch, and the instruments keep running. 2e holds two talents that cost the hero who
-picks them. **2f** is the ability text that still carries a drafting note, one yes or no question
+an authoring batch, and the instruments keep running. 2e holds the talents that cost the hero who
+picks them, which is one. **2f** is the ability text that still carries a drafting note, one yes or no question
 per note, and it shrinks as answers arrive. **2g** is eleven sentences the engine gaps pass 3
 rewrote when it made the kits do what they say, each one to confirm. **2h is the newest**: the eight
 talents the arena matrix found the old talent sweep had counted on nothing but their own
@@ -318,32 +318,35 @@ Defence takes a share of every blow before the record sees it, so a clause that 
 of damage and ceilings against raw Attack is reading two different currencies. Nothing else in the
 roster is shaped that way today.
 
-### 2e. Two talents that cost their own hero, and cannot be mended from content
+### 2e. Talents that cost their own hero: one, and it is a trade
 
-Every authored talent was measured against the same hero with nothing picked, over 40 seeds, in
-the sweep arena and in the arena built to raise it. Seven cost their hero output. Five buy something
-the output total cannot see, or pay a price their own sentence names, and are fine as written:
-Nysera's Deeper Absence strips a buff (a taunting tank's Provoke, in the sweep), Rheia's Endless
-Revision trades casts for bigger ones, Rheia's Perfect Reversal pays Energy for every strike it
-keeps Revision for, Marrow's Shared Oath spreads a smaller Promise over a third ally, and Kiva's
-Unclaimed Victory bought a Shield on every Forsaken kill. Kiva's talent left the list once her buff
-listeners heard real buffs only and came back when the rarer-aspect pass lifted her kit x1.15: it
-read -410 a battle, t -1.7, then -807, t -2.9, in the same room, which also showed the Shield
-absorbing 308 and one ally death fewer. **It has left the list since**: the talent-value pass made it
-answer any enemy falling, and it reads +3491, t 7.8 (2a has what ships). Mireth's No Record Remains left it the same way and gains in
-its own room. **These two buy nothing, and each is a conflict between the talent and the kit it hangs on**,
-so the smallest repair is a change to the kit rather than to a number.
+Every authored talent is read against the same hero with nothing picked, over 40 seeds, in the
+sweep arena and in the arena built to raise it (`CheckTalentsAreWorthPicking`). A talent that loses
+has to be on `KnownCostlyTalents` with what it buys, and the check fails both ways, so the list
+cannot go stale in either direction. It holds **one entry**: Nysera's Deeper Absence, a trade. The
+Dispel strips a buff off the body that targets her, which in the sweep is a taunting tank's
+Provoke, and her own output falls because her basic then leaves the body that was feeding
+Vanishing Mark. Nothing is asked of Pinoy there; the sentence says what it does. The talent screen
+carries the same entry as `TalentAudit.Costly`, and a harness check holds the two equal.
+Kiva's Unclaimed Victory and Mireth's No Record Remains were on the list too and left it when their
+kits changed: Kiva III answers any enemy falling now and reads +3491, t 7.8 (2a has what ships),
+and Mireth's talent gains in its own room.
 
-| hero | talent as written | what it costs | why nothing comes back |
+This section used to hold two talents that bought nothing, Kael III and Mireth I, each a conflict
+between the talent and the kit it hung on. **Both were rewritten, and both gain now.**
+
+| hero | talent now | what it does | reading |
 |---|---|---|---|
-| **Kael** | Lasting Materials: "Rubble no longer expires after 3 rounds. Kael can hold up to 5 Rubble, but Take Down the Wall deals 10% less base damage." | 1,726 of his 23,781 output a battle, t -36.6: the 10% cut, exactly | What Breaks Forward consumes all Rubble on his very next Basic Attack, so Rubble never lives long enough to expire and never stacks past what one cast gave. The retention and the cap of 5 have nothing to act on. It loses in every arena it was tried in, including one where his Dispel has four long buffs to take. Unusable Cover now spends Rubble only when it moves a Ward, as its own sentence says, which keeps a Rubble in hand a little longer and changes nothing here: it is still gone at the next basic. The question: should What Breaks Forward stop consuming all of it, or should the talent buy something What Breaks Forward cannot spend first? |
-| **Mireth** | Deeper Erasure: "Remove From Record can trigger twice per Focused enemy during its duration, but the second trigger deals 30% less bonus damage." | against one enemy that buffs every turn, 31,145 of her 96,401 a battle, t -92; the sweep no longer raises The Missing Page, so it is read in that room now | The Missing Page now lands in every round a Focused enemy gains a buff: its once-a-round limit is spent by a landing rather than by the first buff anywhere, which is what "the first time each round" says. Over Focus's two rounds that is already two landings at full strength. The talent lifts the round limit and caps the clause at two landings per enemy, and the engine's count of those cannot start again when Focus is laid again, so over a fight it is fewer landings, the second one softer. The question: now that the base clause lands every round, should Deeper Erasure take the 30% cut off, or buy a third landing? |
+| **Kael** | Salvaged Materials: "Kael salvages a piece of Rubble from every blow he lands, and can hold more of it than before." | His basic attack gives a piece of Rubble, and Take Down the Wall's Rubble limit is one higher. The 10% cut to Take Down the Wall is gone. | sweep 23,781 to 30,316 a battle (+6,535, t 8.5); it read -1,726, t -36.6, as Lasting Materials |
+| **Mireth** | Deeper Erasure: "The Missing Page erases two marks from the page instead of one, and Mireth can carry more Absence for what she takes away." | Each landing of The Missing Page strips one more mark, and her Absence limit is two higher. The two-landing cap and the 30% cut are gone. | in the room built to raise it, 96,401 to 99,718 a battle (+3,317, t 176.1) |
 
-**Velis's Final Denial was the second row, and it no longer costs measurably.** Once No Second
+Neither is a question for Pinoy any more.
+
+**Velis's Final Denial was a second row once, and it no longer costs measurably.** Once No Second
 Breath paid its Energy only for enemies below half HP, as its sentence says, the reading fell to
 -341 a battle, t -1.4, inside the noise. The question it carried still stands as a design question:
 was Final Denial meant to deny the enemy's healer rather than the healing Velis herself feeds on?
-It is no longer a trap by the numbers, and `CheckTalentsAreWorthPicking` has taken it off the list.
+It is not a trap by the numbers, and `CheckTalentsAreWorthPicking` has taken it off the list.
 
 ### 2f. Ability text waiting on an answer
 

@@ -60,49 +60,49 @@ tree on 2026-09-23.
 - **Why.** The store shares its entry with the one Cyrra's full Veiled Weight already opens, so
   "lose it if the Ward never broke" would also delete the base kit's full-Weight payout. In the sweep,
   none of the breaks found anything stored, so as written the talent would read near zero: a talent
-  that does nothing measurable, which is the trap shape of I3 and I4.
+  that does nothing measurable, which is the trap shape I3 and I4 had before their rewrites.
 - **Cost either way.** Keep: the talent stops being "payback when your Ward is broken" and becomes a
   reliable deferred heal that overlaps her base clause, so its own identity blurs. It is worth about
   +3,175 a battle, and Cyrra already reads x1.37 of the Mender 5-star median, one of the three
   5-stars named as nearest the ceiling. Revert: needs a second, separate store kind in the engine,
   and leaves a talent that pays almost never.
 
-### I3. Kael III, Lasting Materials: a talent the base kit spends before it can matter
+### I3. Kael III, Salvaged Materials: Rubble from every blow, in place of Rubble that lasts
 
 - **Written:** "Rubble no longer expires after 3 rounds. Kael can hold up to 5 Rubble, but Take Down
   the Wall deals 10% less base damage."
-- **The trap:** What Breaks Forward spends **all** Rubble on Kael's very next basic attack, so Rubble
-  never lives long enough to expire or to stack past what one cast gave. He pays the 10% and gets
-  nothing, in every arena it was tried in.
-- **Proposed: change the talent, not the base kit.** New talent: **Take Down the Wall grants an extra
-  Rubble and Kael can hold more, but deals less damage.** Card text: *"Take Down the Wall gives Kael
-  more Rubble and he can hold more of it, but Take Down the Wall deals less damage."* The size of
-  the damage cut is set by measurement, so the talent check reads it as a gain or a trade its own
-  sentence names.
-- **Why the talent side.** Kael is a starter and is in every opening battle, so changing What Breaks
-  Forward moves every campaign fingerprint and forces a campaign re-solve. The base kit does what
-  its sentence says. And no change to how What Breaks Forward spends would rescue the talent as
-  written: Rubble comes in at one a cast, and any spend rule spends it faster than that. The
-  talent's real promise is "more Rubble, at a price"; this says that directly, and should be
-  buildable from content alone.
+- **The trap it was:** What Breaks Forward spends **all** Rubble on Kael's very next basic attack, so
+  Rubble never lived long enough to expire or to stack past what one cast gave. He paid the 10% and
+  got nothing: -1,726 a battle, t -36.6, in every arena it was tried in.
+- **Built:** the talent was rewritten rather than the base kit, which stays as it is because Kael is
+  in every opening battle. His basic attack now gives a piece of Rubble, Take Down the Wall's Rubble
+  limit is one higher, and the 10% cut is gone. It gains: 23,781 to 30,316 a battle in the sweep
+  (+6,535, t 8.5).
+- **Proposed: keep.** The card reads:
 
-### I4. Mireth I, Deeper Erasure: a talent that lands less often than the base kit
+  > *Kael salvages a piece of Rubble from every blow he lands, and can hold more of it than before.*
+
+  `Docs/PINOY-LIST.md` 2e has the reading.
+
+### I4. Mireth I, Deeper Erasure: two marks off the page per landing
 
 - **Written:** "Remove From Record can trigger twice per Focused enemy during its duration, but the
   second trigger deals 30% less bonus damage."
-- **The trap:** The Missing Page now lands once in *every* round a marked enemy gains a buff, which
-  over a two-round mark is already two full-strength landings. The talent lifts the round limit but
-  caps the page at two landings per enemy **for the whole battle** (the engine's count does not
-  restart when the mark is laid again), the second one softer. Over a fight she lands fewer, weaker
-  pages: 31,145 of her 96,401 a battle lost against an enemy that buffs every turn.
-- **Proposed: change the talent.** Drop the per-enemy cap, keep the lifted round limit, keep the
-  softer later strikes. Card text: *"The Missing Page is no longer limited to once per round. After
-  its first strike on an enemy, later strikes land softer."* This is a content change (remove one
-  override). If measurement shows it over-pays against an enemy line that buffs many times a round,
-  add a small engine limit of "twice per round" rather than restoring the lifetime cap.
-- **Why the talent side.** The base clause is now the designer's own sentence, faithfully. The talent
-  was written against a base that fired less, and literally read ("twice during its duration") it
-  now buys exactly what the base already gives.
+- **The trap it was:** The Missing Page lands once in *every* round a marked enemy gains a buff, which
+  over a two-round mark is already two full-strength landings. The talent capped the page at two
+  landings per enemy **for the whole battle**, the second one softer, so over a fight she landed
+  fewer, weaker pages: 31,145 of her 96,401 a battle lost against an enemy that buffs every turn.
+  Turning the round limit off instead was measured and buys nothing: that enemy is already hit once a
+  round.
+- **Built:** the two-landing cap and the 30% cut are gone. Each landing of The Missing Page strips one
+  more mark, and her Absence limit is two higher. In the room built to raise it, 96,401 to 99,718 a
+  battle (+3,317, t 176.1).
+- **Proposed: keep.** The card reads:
+
+  > *The Missing Page erases two marks from the page instead of one, and Mireth can carry more
+  > Absence for what she takes away.*
+
+  `Docs/PINOY-LIST.md` 2e has the reading.
 
 ### I5. Niko, Take the Floor: a disruptor who now pulls the blow onto Niko
 

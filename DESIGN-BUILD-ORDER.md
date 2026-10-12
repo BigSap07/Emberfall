@@ -434,6 +434,18 @@ sentence, what it changes in numbers through `TalentMath`, and what it did to th
 `TalentTrial`, with `TalentAudit` naming the audited traps and trades. `TalentAudit.Costly` is a copy
 of the harness's list, and `CheckTalentAuditMatchesHarness` holds the two equal.
 
+**A forty-fight trial could not see a gain of 1 to 4 percent.** A mirror fight is noisy: on the
+reference save Kael I read +468 at t 1.69 and Kael II +33 at t 1.91, both under the two-standard-error
+line, so the screen printed "no clear change" while the harness measured a real gain. `TalentTrial`
+now runs in batches of forty and decides only at the end of a batch: a talent that reads clear, gain
+or loss, is not fought again, and one that is still unclear gets another batch, to 120 fights. The
+reading depends on the save and the content and on nothing else, so the same save gives the same
+reading at any frame rate, and `CheckTalentTrialConfidence` holds that and holds Kael I as a clear
+gain on the reference save. The cap costs a desktop CLR under a quarter of a second for a hero in
+the worst case, about 115 ms on average. A reading still unclear at the cap prints as an estimate
+with how often the talent changed a fight, "+3% (unclear, changed 11 of 120 fights)", never as a
+bare "no clear change".
+
 **A talent a player picks should not make their hero worse, and `CheckTalentsAreWorthPicking` says
 which ones do.** It reads every talent against the same hero with nothing picked, paired seed for
 seed over 40 seeds, in the sweep arena wherever the talent changes a sweep fight and in its dark
@@ -466,10 +478,11 @@ harness fights, not by reading the room lists.
   entries off the page per landing now and reads +3317. Turning that limit off instead was measured
   and buys nothing at all: against a body that buffs every turn the passive already lands once a
   round, so unlimited lands the same fourteen times.
-- **Two are trades**, and they are the two whose purchase is real and is not made of output.
-  Nysera I strips a buff off the body targeting her, which in the sweep is a taunting tank's
-  Provoke, and frees the whole line's aim. Marrow I spreads Promise over a third ally for a smaller
-  Promise heal. Three more were on the list and are not: Rheia I paid two Energy off every Applied
+- **One is a trade**, the only entry on `KnownCostlyTalents`: its purchase is real and is not made
+  of output. Nysera I strips a buff off the body targeting her, which in the sweep is a taunting
+  tank's Provoke, and frees the whole line's aim. Marrow I, which spreads Promise over a third ally
+  for a smaller Promise heal, was the second trade and is off the list: it gains in the sweep now
+  (+3725, t 5.0). Three more were on the list and are not: Rheia I paid two Energy off every Applied
   Revision - her whole cast rate - for a rider on one clause; Rheia III's own entry said her casts
   refill the Revision it was buying back; Kiva III had two clauses no rate her kit banks at can
   reach, and answered OnKill, which is rarely hers. All three are gains now.
@@ -1500,10 +1513,10 @@ sentence said at last and two of them real questions - Cyrra's store also pays w
 and Isolde's rider counts debuffs because Cinder cannot stack. Section 2d gained Aminah's three
 numbers, the first moved by the 5-star check.
 
-**Section 2e is the two talents that cost the hero who picks them**, Kael III and Mireth I, each a
-conflict with its own kit that a number cannot mend. Velis III was the second until the content pass
-gated No Second Breath; it reads inside the noise now, and its design question stays in 2e as a note. `CheckTalentsAreWorthPicking` pins both, so
-the day either kit changes the harness says whether the talent became worth picking.
+**Section 2e is the talents that cost the hero who picks them, and there is one**: Nysera I, a
+trade. Kael III and Mireth I were the two it was opened for, and both were rewritten until they
+gain. `CheckTalentsAreWorthPicking` reads all 90 and fails if a talent starts losing without being
+listed, so the day a kit change makes one a trap the harness says so.
 
 ## Later
 

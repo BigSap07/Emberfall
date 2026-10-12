@@ -243,6 +243,7 @@ namespace Emberfall.DevHarness
             CheckTalentTargetsResolve(content);
             CheckTalentOverridesNameALiveField(content);
             CheckWhatOtherBranchesWrote(content);
+            CheckTalentTrialConfidence(content);
             CheckKitDefects(content);
             CheckFidelityPassTwo(content);
             CheckEngineGapsPassThree(content);

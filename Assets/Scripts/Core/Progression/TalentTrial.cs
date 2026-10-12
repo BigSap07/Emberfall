@@ -47,6 +47,11 @@ namespace Emberfall.Core.Progression
         /// reached it and was worth nothing".</summary>
         public bool Unreached;
 
+        /// <summary>In how many of this talent's fights the hero's output differed from the
+        /// baseline's at the same seed. A reading that cannot clear the line can still say this:
+        /// "changed 11 of 120 fights" is an answer, where "no clear change" is a shrug.</summary>
+        public int Changed;
+
         public TalentVerdict Verdict
         {
             get
@@ -107,20 +112,30 @@ namespace Emberfall.Core.Progression
     public sealed class TalentTrial
     {
         /// <summary>
-        /// Fights per reading. Forty, the harness's own TalentValueSeeds, and measured here rather
+        /// Fights per batch. Forty, the harness's own TalentValueSeeds, and measured here rather
         /// than borrowed: on a real save (thirty 5-stars at level 13) sixteen seeds left both
         /// talents then audited as traps inside the noise, and forty put Kael's Lasting Materials
         /// at t -4.5 and Velis's Final Denial at t -2.2, the same side of the line the harness
-        /// found them on. Velis III has since left the audited list (-341 a battle, t -1.4); which
-        /// talents are traps now is TalentAudit.Costly, never this note.
-        /// Four readings of forty is 160 fights, which cost 90 ms per hero on average and 129 ms
-        /// at worst on a desktop CLR, so a screen spreading them over frames finishes in well
-        /// under a second.
+        /// found them on. Which talents are traps now is TalentAudit.Costly, never this note.
+        ///
+        /// FORTY IS ENOUGH FOR A BIG CHANGE AND NOT FOR A SMALL ONE. A mirror fight is noisy, and
+        /// a gain of 1 to 4 percent sits inside that noise at forty: on the reference save Kael
+        /// I read +468 at t 1.69 and Kael II +33 at t 1.91, both under the line, while the
+        /// harness measured a real gain. So a reading that is still unclear after a batch is run
+        /// for another, up to <see cref="DefaultMaxSeeds"/>, and a reading that is clear either way
+        /// stops there. Decisions are taken only at the end of a batch, so the line is looked at
+        /// three times, not once per fight.
         /// </summary>
         public const int DefaultSeeds = 40;
 
-        /// <summary>Fights per reading for this trial.</summary>
+        /// <summary>The most fights any one reading is given: three batches of forty.</summary>
+        public const int DefaultMaxSeeds = 120;
+
+        /// <summary>Fights per batch for this trial.</summary>
         public readonly int Seeds;
+
+        /// <summary>Fights per reading at the most, for this trial.</summary>
+        public readonly int MaxSeeds;
 
         /// <summary>How far past zero, in standard errors, a change has to sit to be printed as a
         /// gain or a loss. The harness's own line (TalentValueLossT).</summary>
@@ -146,7 +161,16 @@ namespace Emberfall.Core.Progression
         private int _nextSeed;
         private int _nextSelection;
 
-        public bool Finished { get { return _nextSeed >= Seeds; } }
+        /// <summary>Seeds the current batch runs to. Starts at Seeds and grows by Seeds while a
+        /// reading is unclear, to MaxSeeds.</summary>
+        private int _seedLimit;
+        private bool _finished;
+
+        /// <summary>A talent whose reading was clear at the end of a batch. It is not fought
+        /// again, so its reading stays what that batch made it.</summary>
+        private readonly bool[] _settled;
+
+        public bool Finished { get { return _finished; } }
 
         /// <summary>Fights that threw, and the last thing one threw. Zero on every trial the
         /// engine can finish, which is every one after the ExpireStatuses guard.</summary>
@@ -157,27 +181,46 @@ namespace Emberfall.Core.Progression
         /// cost the device, as against how long it took to spread across frames.</summary>
         public double SimulationMs;
 
-        /// <summary>Fights run, out of Seeds * (TalentCount + 1).</summary>
-        public int FightsRun { get { return _nextSeed * Readings.Length + _nextSelection; } }
-        public int FightsTotal { get { return Seeds * Readings.Length; } }
+        /// <summary>Fights run so far, baseline included.</summary>
+        public int FightsRun
+        {
+            get
+            {
+                int n = 0;
+                for (int i = 0; i < Readings.Length; i++) n += Readings[i].Fights;
+                return n;
+            }
+        }
+
+        /// <summary>The most fights this trial can run, if no reading ever settles.</summary>
+        public int FightsCap { get { return MaxSeeds * Readings.Length; } }
 
         /// <summary>Null when there is nothing to measure: no hero, no talents, or no fight.</summary>
         public static TalentTrial Create(GameSession session, HeroInstance subject)
         {
-            return Create(session, subject, DefaultSeeds);
+            return Create(session, subject, DefaultSeeds, DefaultMaxSeeds);
         }
 
+        /// <summary>A trial of exactly this many fights per reading, with no further batches.</summary>
         public static TalentTrial Create(GameSession session, HeroInstance subject, int seeds)
+        {
+            return Create(session, subject, seeds, seeds);
+        }
+
+        public static TalentTrial Create(GameSession session, HeroInstance subject, int seeds, int maxSeeds)
         {
             if (session == null || subject == null || subject.Def == null) return null;
             if (subject.Def.Talents.Count == 0) return null;
-            return new TalentTrial(session, subject, Math.Max(2, seeds));
+            int batch = Math.Max(2, seeds);
+            return new TalentTrial(session, subject, batch, Math.Max(batch, maxSeeds));
         }
 
-        private TalentTrial(GameSession session, HeroInstance subject, int seeds)
+        private TalentTrial(GameSession session, HeroInstance subject, int seeds, int maxSeeds)
         {
             _session = session;
             Seeds = seeds;
+            MaxSeeds = maxSeeds;
+            _seedLimit = seeds;
             Subject = subject;
             Fight = ProvingGenerator.BuildStage();
 
@@ -198,6 +241,7 @@ namespace Emberfall.Core.Progression
 
             int count = subject.Def.Talents.Count;
             Readings = new TalentReading[count + 1];
+            _settled = new bool[count + 1];
             _teams = new List<HeroInstance>[count + 1];
             for (int t = 0; t <= count; t++)
             {
@@ -222,6 +266,10 @@ namespace Emberfall.Core.Progression
         /// returns true once it is finished. A whole round of selections at one seed is the unit
         /// of progress only in the sense that readings are compared at equal fight counts; the
         /// budget can stop between any two fights.
+        ///
+        /// THE BUDGET ONLY CHOOSES WHERE TO PAUSE. Which fights run, and whether another batch
+        /// follows, depend on the readings at the end of a batch and on nothing else, so the same
+        /// save gives the same readings at any frame rate.
         /// </summary>
         public bool Step(double budgetMs)
         {
@@ -234,15 +282,16 @@ namespace Emberfall.Core.Progression
             CombatSimulation.OnBattleComplete = null;
             try
             {
-            while (!Finished)
+            while (!_finished)
             {
-                RunOne(_nextSelection, _nextSeed);
+                if (_nextSelection == 0 || !_settled[_nextSelection]) RunOne(_nextSelection, _nextSeed);
                 _nextSelection++;
                 if (_nextSelection >= Readings.Length)
                 {
                     _nextSelection = 0;
                     _nextSeed++;
                     Pair();
+                    if (_nextSeed >= _seedLimit) EndBatch();
                 }
                 if (clock.Elapsed.TotalMilliseconds >= budgetMs) break;
             }
@@ -255,10 +304,28 @@ namespace Emberfall.Core.Progression
             return Finished;
         }
 
+        /// <summary>
+        /// The end of a batch: a talent that reads clear, gain or loss or never reached, is
+        /// settled and not fought again; the trial finishes when none is left open or the cap is
+        /// reached, and otherwise the open ones get another batch.
+        /// </summary>
+        private void EndBatch()
+        {
+            bool open = false;
+            for (int t = 1; t < Readings.Length; t++)
+            {
+                if (_settled[t]) continue;
+                if (Readings[t].Verdict == TalentVerdict.Unclear) open = true;
+                else _settled[t] = true;
+            }
+            if (!open || _seedLimit >= MaxSeeds) _finished = true;
+            else _seedLimit = Math.Min(MaxSeeds, _seedLimit + Seeds);
+        }
+
         /// <summary>Runs the whole trial in one call. For the harness and for timing.</summary>
         public void RunAll()
         {
-            while (!Finished) Step(double.MaxValue);
+            while (!_finished) Step(double.MaxValue);
         }
 
         private void RunOne(int selection, int seedIndex)
@@ -308,12 +375,14 @@ namespace Emberfall.Core.Progression
                 if (n == 0) continue;
                 double mean = 0;
                 bool same = true;
+                int changed = 0;
                 for (int i = 0; i < n; i++)
                 {
                     long d = reading.Outputs[i] - bare[i];
-                    if (d != 0) same = false;
+                    if (d != 0) { same = false; changed++; }
                     mean += d;
                 }
+                reading.Changed = changed;
                 mean /= n;
                 double ss = 0;
                 for (int i = 0; i < n; i++)
