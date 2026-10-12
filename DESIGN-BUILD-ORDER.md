@@ -1103,6 +1103,12 @@ file and shows the file is never read and no client is built; no Play-mode entry
 `Assets/Scripts`; and `GameApp.StartCloud`, after its `Configured` return, is the only place
 shipped code builds a `SupabaseClient`.
 
+**A battle capture can name its stage.** `PlayModeScreenshot`'s Battle target fights
+`Session.NextStage`, wherever the scratch profile stands, unless the target names a stage:
+`Tools/capture-screen.sh "Battle=ch2_9" out.png` fights `ch2_9` and writes
+`screen_Battle=ch2_9.png`, the stage riding in the file name for the same reason the frame size
+does.
+
 **The arena matrix** (`Tools/DevHarness/ArenaMatrix.cs`) measures every basic, active, passive
 and talent in the roster, 428 rules, by ablation. It fights the same hero in the same room at the
 same seed with that one rule taken out, and leaves the rule's own announcement out of the
