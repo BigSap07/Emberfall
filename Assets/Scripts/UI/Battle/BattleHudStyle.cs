@@ -1,4 +1,5 @@
 using UnityEngine;
+using Emberfall.Core.Data;
 
 namespace Emberfall.UI.Battle
 {
@@ -24,6 +25,87 @@ namespace Emberfall.UI.Battle
 
         /// <summary>The kit's dark outline, under every label the HUD draws over the field.</summary>
         public static readonly Color TextOutline = Emberforge.Outline;
+
+        // ---------------------------------------------------------------- plates
+
+        public static readonly Color PlateName = Emberforge.TextOnColor;
+
+        /// <summary>The name's outline weight. 2.4 rather than the kit's thin stroke, because the
+        /// name sits on a PAINTED backdrop and the bright horizon band of the ashen and proving
+        /// fields gives light text almost no separation without it.</summary>
+        public const float PlateNameStroke = 2.4f;
+
+        public static readonly Color HpAlly = UITheme.HealthAlly;
+        public static readonly Color HpEnemy = UITheme.HealthEnemy;
+        public static readonly Color HpTrack = UITheme.BarTrackDeep;
+        public static readonly Color HpGhost = UITheme.BarGhostFill;
+
+        /// <summary>The ward draws over the HP bar's own rectangle, so a warded unit is one bar.</summary>
+        public static readonly Color Ward = UITheme.WithAlpha(UITheme.Shield, 0.95f);
+        public static readonly Color EnergyTrack = UITheme.InkDisplay;
+        public static readonly Color Energy = UITheme.Energy;
+
+        /// <summary>Energy lights gold at full: "casts on its next turn" is the state worth seeing
+        /// across the field, not the fill level.</summary>
+        public static readonly Color EnergyFull = UITheme.Gold;
+        public static readonly Color TurnPip = UITheme.Gold;
+
+        // ---------------------------------------------------------------- status icons
+
+        public static readonly Color StatusBuff = UITheme.Success;
+        public static readonly Color StatusDebuff = UITheme.Danger;
+        public static readonly Color StatusShield = UITheme.Shield;
+        public static readonly Color StatusInert = UITheme.TextMuted;
+        public static readonly Color StatusDepth = Emberforge.TextOnColor;
+        public static readonly Color StatusOverflow = Emberforge.TextBody;
+
+        /// <summary>A dark disc behind each icon, so a green chevron still reads over green grass.</summary>
+        public static readonly Color StatusBacking = UITheme.WithAlpha(Emberforge.Outline, 0.72f);
+        public static Sprite StatusBackingSprite { get { return TextureLab.Circle(IconTexture); } }
+
+        /// <summary>
+        /// The sprite for a status icon, and the tint to draw it with. Three steps, most specific
+        /// first, through HudSkin, so an artist reskins by dropping a PNG and nothing else:
+        ///
+        ///   1. Sprites/Hud/hud_status_&lt;kind&gt;.png, one kind's own art, drawn as authored;
+        ///   2. Sprites/Hud/hud_status_&lt;role&gt;.png, the art for every kind in that role;
+        ///   3. the drawn placeholder: a green chevron up for a buff, a red chevron down for a
+        ///      debuff, the shield glyph for Shield, a grey diamond for the inert bookkeeping kinds.
+        ///
+        /// Authored art is drawn white, so the PNG's own colours show; the placeholders are white
+        /// masks and take the role's colour.
+        /// </summary>
+        public static Sprite StatusSprite(StatusKind kind, StatusIconRole role, out Color tint)
+        {
+            string kindSlot = HudSkin.StatusKindSlot(kind);
+            if (HudSkin.IsAuthored(kindSlot)) { tint = Color.white; return HudSkin.Icon(kindSlot, null); }
+
+            string roleSlot = RoleSlot(role);
+            if (HudSkin.IsAuthored(roleSlot)) { tint = Color.white; return HudSkin.Icon(roleSlot, null); }
+
+            switch (role)
+            {
+                case StatusIconRole.Debuff: tint = StatusDebuff; return TextureLab.Chevron(IconTexture, false);
+                case StatusIconRole.Shield: tint = StatusShield; return TextureLab.Shield(IconTexture);
+                case StatusIconRole.Inert: tint = StatusInert; return TextureLab.Diamond(IconTexture);
+                default: tint = StatusBuff; return TextureLab.Chevron(IconTexture, true);
+            }
+        }
+
+        private static string RoleSlot(StatusIconRole role)
+        {
+            switch (role)
+            {
+                case StatusIconRole.Debuff: return HudSkin.StatusDebuff;
+                case StatusIconRole.Shield: return HudSkin.StatusShield;
+                case StatusIconRole.Inert: return HudSkin.StatusInert;
+                default: return HudSkin.StatusBuff;
+            }
+        }
+
+        /// <summary>The placeholder glyphs' texture size: four times the icon, so they stay crisp
+        /// at the canvas scale of a 20:9 phone.</summary>
+        private const int IconTexture = 64;
 
         /// <summary>
         /// What goes between the parts of the bar's second line, and between the parts of a

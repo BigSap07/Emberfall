@@ -21,17 +21,15 @@ namespace Emberfall.UI.Screens
         public override bool HidesTopBar { get { return true; } }
         public override ScreenId Id { get { return ScreenId.Battle; } }
 
+        /// <summary>
+        /// One unit's plate and what this screen remembers about it. The plate (UnitPlate) draws;
+        /// the mirror of the unit's statuses and the turn cue's lift are this screen's, because
+        /// they are read off the record here and handed to the plate, never worked out by it.
+        /// </summary>
         private sealed class UnitBar
         {
-            public RectTransform Root;
-            public Text Name;
-            public Image HpFill;
-            public Image HpGhost;
-            public Image ShieldFill;
-            public Image EnergyFill;
-            public Text Status;
-            public Image TurnPip;
-            public CanvasGroup Group;
+            public UnitPlate Plate;
+
             /// <summary>
             /// One entry per entry the simulation holds, duplicates included, in the order they
             /// first landed. It used to be a set, which is what made Ember's stacking invisible:
@@ -41,7 +39,7 @@ namespace Emberfall.UI.Screens
             /// </summary>
             public readonly List<StatusKind> Statuses = new List<StatusKind>();
 
-            /// <summary>Added to the bar's tracked screen position by LateUpdate while the turn cue plays.</summary>
+            /// <summary>Added to the plate's tracked screen position by LateUpdate while the turn cue plays.</summary>
             public float TurnLift;
         }
 
@@ -994,7 +992,7 @@ namespace Emberfall.UI.Screens
         private void ClearBars()
         {
             foreach (KeyValuePair<int, UnitBar> pair in _bars)
-                if (pair.Value.Root != null) Destroy(pair.Value.Root.gameObject);
+                if (pair.Value.Plate != null && pair.Value.Plate.Root != null) Destroy(pair.Value.Plate.Root.gameObject);
             _bars.Clear();
         }
 
@@ -1006,87 +1004,30 @@ namespace Emberfall.UI.Screens
                 UnitSnapshot snapshot = _result.Units[i];
                 _bars[snapshot.Id] = CreateBar(snapshot);
             }
+
+            // ONE NAME PER UNIT. A placeholder mannequin wears its name at its feet in the world
+            // (UnitRig.BuildNameplate), and the plate now hangs its name in the same place, so a
+            // pending hero or an undrawn enemy read its name twice, one over the other. The plate
+            // is the one this screen keeps; the rig's label is switched off rather than deleted,
+            // because the wave result screen and the Dev Arena show the rig with no plate under it.
+            for (int i = 0; i < _world.Actors.Count; i++)
+            {
+                UnitActor actor = _world.Actors[i];
+                if (actor.Rig != null && actor.Rig.Nameplate != null) actor.Rig.Nameplate.gameObject.SetActive(false);
+            }
         }
 
+        // THE PLATE HANGS UNDER THE FEET. It used to float above the head, which put the back
+        // rank's tags against the top of the screen (clamped there, over their own units) and
+        // every tag in the path of the damage numbers rising off the same heads. Under the feet it
+        // sits on the ground the unit stands on, the rank in front is lower on screen and so is
+        // its plate, and the head is left to the numbers. BattleHudMetrics has the sizes and
+        // Tools/DevHarness (BattleHudChecks) proves no two plates meet at any formation slot.
         private UnitBar CreateBar(UnitSnapshot snapshot)
         {
             UnitBar bar = new UnitBar();
-            bar.Root = UIBuilder.Node("Bar_" + snapshot.Name, _barLayer);
-            bar.Root.anchorMin = Vector2.zero;
-            bar.Root.anchorMax = Vector2.zero;
-            bar.Root.pivot = new Vector2(0.5f, 0f);
-            UIBuilder.Size(bar.Root, BarWidth + 40f, BarStackHeight);
-            bar.Group = bar.Root.gameObject.AddComponent<CanvasGroup>();
-
-            Color tint = snapshot.IsPlayer ? UITheme.HealthAlly : UITheme.HealthEnemy;
-
-            // Rebuilt as a small tag rather than a slab, and rebuilt bottom-up rather than
-            // re-tuned. The root's pivot is its BOTTOM edge and LateUpdate places that bottom edge
-            // BarWorldRise above the unit's head, so whatever sits at local y 0 is what the player
-            // reads as "the gap". Previously that was empty space: the stack ran energy at y 16,
-            // ward at 27, health at 36, name at 58, status at 84, turn pip at 108, so the health
-            // bar was 36 canvas units above an anchor that was itself 0.28 world units up, and the
-            // gap that actually rendered was 0.28 + 36/pixelsPerWorldUnit, more than double the
-            // number anyone was reading. The health bar now sits AT y 0, so the rise means what it
-            // says and no constant had to be fudged to get there.
-            //
-            // 200 x 18 -> 120 x 7, and the label fonts drop with it.
-            bar.HpGhost = UIBuilder.Bar("HpGhost", bar.Root, UITheme.BarTrackDeep, UITheme.BarGhostFill);
-            UIBuilder.Box(bar.HpGhost.rectTransform.parent as RectTransform, 0f, 0f, BarWidth, BarHeight, new Vector2(0.5f, 0f));
-
-            bar.HpFill = UIBuilder.Bar("Hp", bar.Root, UITheme.BarTrackNone, tint);
-            UIBuilder.Box(bar.HpFill.rectTransform.parent as RectTransform, 0f, 0f, BarWidth, BarHeight, new Vector2(0.5f, 0f));
-
-            // Ward is no longer its own strip. It occupies the SAME rectangle as health and draws
-            // over it, so the unit still reads as one bar while a warded unit is still obviously
-            // warded. Kept rather than cut because a ward changes whether an incoming number
-            // matters at all, which is the one thing on this tag the player cannot infer from the
-            // health fill alone.
-            bar.ShieldFill = UIBuilder.Bar("Shield", bar.Root, UITheme.BarTrackNone, UITheme.WithAlpha(UITheme.Shield, 0.95f));
-            UIBuilder.Box(bar.ShieldFill.rectTransform.parent as RectTransform, 0f, 0f, BarWidth, BarHeight, new Vector2(0.5f, 0f));
-            UIBuilder.SetBar(bar.ShieldFill, 0f);
-
-            // Energy sits directly on top of health, thinner and the same width, so the tag still
-            // reads as one object. Above rather than below because below would put it between the
-            // head and the health bar, spending the deliberately small BarWorldRise gap on the
-            // subordinate readout.
-            bar.EnergyFill = UIBuilder.Bar("Energy", bar.Root, UITheme.InkDisplay, UITheme.Energy);
-            UIBuilder.Box(bar.EnergyFill.rectTransform.parent as RectTransform,
-                          0f, BarHeight + 1f, BarWidth, EnergyHeight, new Vector2(0.5f, 0f));
-            SetEnergy(bar, snapshot.EnergyMax > 0 ? snapshot.StartEnergy / (float)snapshot.EnergyMax : 0f);
-
-            // Name only. The level number that used to trail it is gone: it never changes during a
-            // battle, so it was permanent clutter on a tag that has to be readable in a glance.
-            // Font up from FontTiny-5 to FontTiny-2 and the outline from 1.4 to 2.4. Both matter
-            // and for different reasons: the size is what makes the glyphs resolvable at all, and
-            // the outline is what keeps them readable over a PAINTED backdrop, which is the case
-            // that was failing - light text on the bright horizon band of the ashen and proving
-            // fields had almost no separation. The outline does the work a plate would do without
-            // reinstating the slab this tag was deliberately rebuilt away from.
-            //
-            // THE BARS THEMSELVES STAY PLAIN RECTANGLES and that is deliberate rather than
-            // unconverted: a nine-sliced Emberforge trough is a rounded section with an outline,
-            // an inner shadow and two corner regions, and at 7 units tall over a unit's head
-            // there is no middle left to stretch - it would render as two squashed corners. The
-            // kit reaches the text on this tag, which is where it can do its job.
-            bar.Name = EmberforgeUI.Label("Name", bar.Root, snapshot.Name,
-                                          UITheme.FontTiny - 2, Emberforge.TextOnColor, TextAnchor.LowerCenter);
-            UIBuilder.Box(bar.Name.rectTransform, 0f, BarHeight + EnergyHeight + 3f, 240f, 22f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(bar.Name, Emberforge.Outline, 2.4f);
-
-            // Status sits above the name and is empty unless the unit actually carries one, so it
-            // costs nothing visually at rest. Kept against a literal reading of "nothing else"
-            // because DESIGN-BATTLE-READABILITY.md names it as load-bearing: without it there is
-            // no way to see that a unit is burning, taunting or warded down.
-            bar.Status = EmberforgeUI.Label("Status", bar.Root, "", UITheme.FontTiny - 5, UITheme.Warning, TextAnchor.LowerCenter);
-            UIBuilder.Box(bar.Status.rectTransform, 0f, BarHeight + EnergyHeight + 26f, 240f, 18f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(bar.Status, Emberforge.Outline, 1.9f);
-
-            // Turn pip moved from above the whole stack to a dot beside the bar, which is what let
-            // the stack lose 60 units of height. Starts transparent; TurnCue lights it.
-            bar.TurnPip = UIBuilder.Panel("TurnPip", bar.Root, Color.clear, 5);
-            UIBuilder.Box(bar.TurnPip.rectTransform, -(BarWidth * 0.5f + 9f), -1f, 10f, 10f, new Vector2(0.5f, 0f));
-
+            bar.Plate = UnitPlate.Create(_barLayer, snapshot.Name, snapshot.IsPlayer);
+            bar.Plate.SetEnergy(snapshot.EnergyMax > 0 ? snapshot.StartEnergy / (float)snapshot.EnergyMax : 0f);
             return bar;
         }
 
@@ -1094,77 +1035,17 @@ namespace Emberfall.UI.Screens
         /// Fills the energy meter and lights it gold at full. The colour change is the point of
         /// the meter, not decoration on it: in a fight the player cannot influence, "this unit
         /// casts on its next turn" is the only thing worth anticipating, and a fill level read
-        /// across five tags at once is much harder to judge than a colour that either is or is
+        /// across five plates at once is much harder to judge than a colour that either is or is
         /// not gold.
         /// </summary>
         private static void SetEnergy(UnitBar bar, float fraction)
         {
-            if (bar == null || bar.EnergyFill == null) return;
-            float k = Mathf.Clamp01(fraction);
-            UIBuilder.SetBar(bar.EnergyFill, k);
-            bar.EnergyFill.color = k >= 0.999f ? UITheme.Gold : UITheme.Energy;
+            if (bar == null || bar.Plate == null) return;
+            bar.Plate.SetEnergy(fraction);
         }
-
-        // How far above a unit's head its bar floats, in screen pixels rather than world units.
-        // A world offset (the old approach: HeadPosition + up * 0.28) is fragile - the same
-        // world gap projects to a different pixel gap whenever the camera's pitch or distance
-        // changes, so it needs retuning every time BattleStage's camera does. Projecting the
-        // head first and adding the offset after, in pixels, makes the bar's on-screen rise
-        // constant regardless of how the battle camera is framed. This mechanism itself did not
-        // need to change for the perspective-to-orthographic switch: WorldToScreenPoint resolves
-        // correctly under either projection mode, and a pixel offset added after projection has
-        // no notion of perspective to begin with.
-        //
-        // What the gap should be, in world units. The pixel figure is computed per frame below
-        // instead of being baked in, because baking it in is exactly how it went wrong: the
-        // constant here used to be 58 px, derived - correctly, at the time - against an
-        // orthographicSize of 2.6, giving 1080 / 5.2 = 207.7 px per world unit. BattleStage has
-        // since reframed three times and is now at 4.25, which is 1080 / 8.5 = 127.1 px per world
-        // unit, so those 58 px had quietly become 0.46 world units, two thirds again the gap
-        // intended. Reading orthographicSize off the live camera cannot go stale that way.
-        // 0.28 -> 0.12. The anchor bug that made this render as roughly double its value is fixed,
-        // so this is now just a preference, set to taste rather than to correct anything: 0.12
-        // world units is about 18 px at 1080p and orthographicSize 3.65. Checked against putting
-        // tags on the heads themselves before choosing it, and there is a lot of room left. The
-        // tag's own bottom edge is what lands here, and the nearest thing above any unit is the
-        // next rank's feet, which for the tightest pair (back rank slot 3 under slot 4) sits about
-        // 120 px above the head. So anything up to roughly 0.5 world would still clear; 0.12 is a
-        // deliberate choice well inside that, not a limit.
-        private const float BarWorldRise = 0.12f;
-
-        private const float BarWidth = 120f;
-        // 7 -> 10. At the 1920-wide reference this tag is authored against, a 7-unit bar renders
-        // about three physical pixels on a phone-sized game view, which is below the width at
-        // which a fill LEVEL can be judged at all - the bar could only be read as present or
-        // absent. The stack constant below moves with it.
-        private const float BarHeight = 10f;
-
-        /// <summary>Energy meter height. Deliberately thinner than the health bar it sits on.</summary>
-        private const float EnergyHeight = 5f;
 
         /// <summary>How far a damage or heal number climbs over its life, in canvas units.</summary>
         private const float FloatRise = 120f;
-
-        // Full height of the tag above its own anchor, in canvas units: bar 7, name to 27, status
-        // to 44. Was 110. Used to size the root and to keep the tag on screen, see the clamp in
-        // LateUpdate.
-        //
-        // The energy meter is back, and the reasoning that removed it was wrong. The argument was
-        // that nothing the player DOES depends on it, since the fight is resolved before the first
-        // frame and the screen offers only speed and skip. That is true and beside the point:
-        // being unable to act is exactly what makes knowing what is coming valuable. Energy is the
-        // only forward-looking quantity on screen, the one thing that says an ultimate is one turn
-        // away rather than reporting damage already dealt. DESIGN-BATTLE-READABILITY.md step 7
-        // had it right.
-        //
-        // Restored at the new stack's scale rather than at its old proportions: 200 x 9 under a
-        // 200 x 18 health bar became 120 x 4 over a 120 x 7 one, so it reads as a subordinate
-        // strip on the same tag rather than a second slab. It also lights to gold at full, since
-        // "can cast now" is the state worth seeing across the field, not the fill level.
-        // 48 -> 56, tracking the taller bar and larger labels. This is not decoration: the
-        // floating-damage spawn clears exactly this height, so a stack that grew without it would
-        // put numbers back on top of the names.
-        private const float BarStackHeight = 56f;
 
         private void LateUpdate()
         {
@@ -1175,32 +1056,24 @@ namespace Emberfall.UI.Screens
             CheckFramingAgainstCamera(scale);
 #endif
 
-            // Orthographic gives one pixel scale for the whole field, independent of depth, so
-            // this is exact rather than an average across near and far units. The viewport's own
-            // height, not the screen's: the field stops at the top bar.
-            float pixelsPerWorldUnit = Screen.height * _world.Camera.rect.height
-                                       / (2f * Mathf.Max(0.01f, _world.Camera.orthographicSize));
-            float rise = BarWorldRise * pixelsPerWorldUnit / scale;
-
-            // The back rank's far-z slot projects a head close to the top of the field, so there
-            // is genuinely no room above it for the stack; without this the whole bar would sit
-            // under the top bar. Clamped it overlaps its own unit instead, which is legible and
-            // still attached.
-            float ceiling = BattleHudLayout.BarBottom(SafeTopCanvas(scale)) - BarStackHeight - 6f;
-
+            // Each plate is pinned to its unit's feet as the camera sees them this frame, so it
+            // follows a lunge and the camera's shake. A unit's feet are its own position: every
+            // rig stands on y 0. The plate's offsets from that point are BattleHudLayout's.
             for (int i = 0; i < _world.Actors.Count; i++)
             {
                 UnitActor actor = _world.Actors[i];
                 UnitBar bar;
                 if (!_bars.TryGetValue(actor.Snapshot.Id, out bar)) continue;
 
-                Vector3 screen = _world.Camera.WorldToScreenPoint(actor.HeadPosition);
+                Vector3 screen = _world.Camera.WorldToScreenPoint(actor.transform.position);
                 bool visible = screen.z > 0f && actor.Alive;
-                bar.Group.alpha = visible ? 1f : Mathf.Max(0f, bar.Group.alpha - Time.deltaTime * 4f);
+                CanvasGroup group = bar.Plate.Group;
+                group.alpha = visible ? 1f : Mathf.Max(0f, group.alpha - Time.deltaTime * 4f);
                 if (!visible) continue;
 
-                float y = screen.y / scale + rise + bar.TurnLift;
-                bar.Root.anchoredPosition = new Vector2(screen.x / scale, Mathf.Min(y, ceiling));
+                BattleFraming.CanvasPoint at = BattleHudLayout.PlateOrigin(
+                    new BattleFraming.CanvasPoint(screen.x / scale, screen.y / scale), bar.TurnLift);
+                bar.Plate.Root.anchoredPosition = new Vector2(at.X, at.Y);
             }
         }
 
@@ -1298,10 +1171,10 @@ namespace Emberfall.UI.Screens
                 case BattleEventType.TurnStart:
                 {
                     UnitBar bar = BarOf(e.SourceId);
-                    // TurnPip is checked, not just the wrapper: ClearBars destroys the bar's
+                    // TurnPip is checked, not just the wrapper: ClearBars destroys the plate's
                     // GameObject but leaves this UnitBar instance alive, so a non-null wrapper can
-                    // still hold a destroyed Image. SettleTurnBar dereferences TurnPip directly.
-                    if (_activeTurnBar != null && _activeTurnBar != bar && _activeTurnBar.TurnPip != null)
+                    // still hold a destroyed Image. SettleTurnBar reaches TurnPip through it.
+                    if (_activeTurnBar != null && _activeTurnBar != bar && _activeTurnBar.Plate.TurnPip != null)
                         SettleTurnBar(_activeTurnBar);
                     _activeTurnBar = bar;
                     AdvanceTurnStrip(e.SourceId);
@@ -1649,30 +1522,28 @@ namespace Emberfall.UI.Screens
 
         // ------------------------------------------------------------------ turn cue / strip
 
-        /// <summary>Turn pip lights and the bar rises over 0.12s - the "cause" beat before intent/motion/impact.</summary>
+        /// <summary>Turn pip lights and the plate rises over 0.12s - the "cause" beat before intent/motion/impact.</summary>
         private IEnumerator TurnCue(UnitBar bar)
         {
             float duration = Mathf.Max(0.05f, 0.12f / _speed);
-            Color lit = UITheme.Gold;
             float t = 0f;
             while (t < duration)
             {
                 t += Time.deltaTime;
                 float k = Mathf.Clamp01(t / duration);
-                bar.TurnPip.color = UITheme.WithAlpha(lit, k);
-                bar.TurnLift = Mathf.Lerp(0f, 14f, k);
+                bar.Plate.SetTurnPip(k);
+                bar.TurnLift = Mathf.Lerp(0f, BattleHudMetrics.PlateTurnLift, k);
                 yield return null;
             }
-            bar.TurnPip.color = lit;
-            bar.TurnLift = 14f;
+            bar.Plate.SetTurnPip(1f);
+            bar.TurnLift = BattleHudMetrics.PlateTurnLift;
         }
 
-        /// <summary>Drops a bar out of "acting now" state - called on the previous actor once a new TurnStart fires.</summary>
+        /// <summary>Drops a plate out of "acting now" state - called on the previous actor once a new TurnStart fires.</summary>
         private void SettleTurnBar(UnitBar bar)
         {
             bar.TurnLift = 0f;
-            Color c = bar.TurnPip.color;
-            bar.TurnPip.color = UITheme.WithAlpha(c, 0f);
+            bar.Plate.SetTurnPip(0f);
         }
 
         /// <summary>Repopulates the turn strip from the TurnStart events between this RoundStart and the next.</summary>
@@ -1869,58 +1740,43 @@ namespace Emberfall.UI.Screens
             UnitBar bar = BarOf(actor.Snapshot.Id);
             if (bar == null) return;
             float ratio = actor.MaxHp > 0f ? actor.DisplayHp / actor.MaxHp : 0f;
-            UIBuilder.SetBar(bar.HpFill, ratio);
-            UIBuilder.SetBar(bar.ShieldFill, actor.MaxHp > 0f ? Mathf.Clamp01(actor.DisplayShield / actor.MaxHp) : 0f);
+            bar.Plate.SetHp(ratio, actor.MaxHp > 0f ? Mathf.Clamp01(actor.DisplayShield / actor.MaxHp) : 0f);
             StartCoroutine(DrainGhost(bar, ratio));
         }
 
         private IEnumerator DrainGhost(UnitBar bar, float target)
         {
-            float current = bar.HpGhost.fillAmount;
-            if (current <= target) { UIBuilder.SetBar(bar.HpGhost, target); yield break; }
+            Image ghost = bar.Plate.HpGhost;
+            float current = ghost.fillAmount;
+            if (current <= target) { UIBuilder.SetBar(ghost, target); yield break; }
             yield return Wait(0.16f);
             float t = 0f;
             while (t < 1f)
             {
                 t += Time.deltaTime * 3.2f * _speed;
-                UIBuilder.SetBar(bar.HpGhost, Mathf.Lerp(current, target, t));
+                if (ghost == null) yield break;
+                UIBuilder.SetBar(ghost, Mathf.Lerp(current, target, t));
                 yield return null;
             }
-            UIBuilder.SetBar(bar.HpGhost, target);
+            if (ghost != null) UIBuilder.SetBar(ghost, target);
         }
 
         /// <summary>
-        /// Ember (DESIGN-ASPECTS section 6): the bar states how deep a stack is. Four distinct
-        /// kinds is still the cap on what the row shows, but the cap now counts kinds rather than
-        /// entries - with stacking, four entries could be one affliction, and a row that spent its
-        /// whole width saying BRN four times would be less readable than the one this replaces.
-        ///
-        /// The suffix is only written for a real stack. A lone status reads BRN exactly as it
-        /// always did, so the count is a mark of the thing Ember does rather than noise on every
-        /// tag in the game.
+        /// The plate's status icons, from this screen's mirror of the record. One icon per kind
+        /// with its depth as a small digit, so Ember's stacking (DESIGN-ASPECTS section 6) still
+        /// shows: three Burn entries are one Burn icon marked 3, never three icons. Harmful kinds
+        /// first, then Shield, then buffs, then the inert bookkeeping kinds, three at most and a
+        /// "+N" for the rest - StatusIcons.Compose decides, and the harness checks it. The row was
+        /// a line of short text tags (BRN x3 GRD) in one warning colour, which said a unit carried
+        /// something and left the player to decode whether it was good or bad.
         /// </summary>
-        private static void RefreshStatusText(UnitBar bar)
+        private void RefreshStatusText(UnitBar bar)
         {
-            string text = "";
-            int shown = 0;
-            for (int i = 0; i < bar.Statuses.Count && shown < 4; i++)
-            {
-                StatusKind kind = bar.Statuses[i];
-
-                bool alreadyShown = false;
-                for (int j = 0; j < i; j++) if (bar.Statuses[j] == kind) { alreadyShown = true; break; }
-                if (alreadyShown) continue;
-
-                int depth = 0;
-                for (int j = i; j < bar.Statuses.Count; j++) if (bar.Statuses[j] == kind) depth++;
-
-                if (text.Length > 0) text += " ";
-                text += StatusInfo.ShortTag(kind);
-                if (depth > 1) text += "x" + depth;
-                shown++;
-            }
-            bar.Status.text = text;
+            int overflow = StatusIcons.Compose(bar.Statuses, _iconScratch);
+            bar.Plate.ShowStatuses(_iconScratch, overflow);
         }
+
+        private readonly List<StatusIcon> _iconScratch = new List<StatusIcon>();
 
         /// <summary>
         /// Set the bar's entry count for one status to what the simulation says it is.
@@ -1934,7 +1790,7 @@ namespace Emberfall.UI.Screens
         /// AddOrRefresh and so can never produce a stack. Treated as "at least one present", which
         /// leaves an existing stack alone rather than flattening it to a single tag.
         /// </summary>
-        private static void SyncStatusCount(UnitBar bar, StatusKind kind, int count)
+        private void SyncStatusCount(UnitBar bar, StatusKind kind, int count)
         {
             if (kind == StatusKind.None) return;
 
@@ -2026,17 +1882,13 @@ namespace Emberfall.UI.Screens
             Vector3 screen = _world.Camera.WorldToScreenPoint(worldPosition);
             Vector2 start = new Vector2(screen.x / canvasScale, screen.y / canvasScale);
 
-            // Callers pass HeadPosition, which is exactly where that unit's tag is anchored, so
-            // a number spawned here started underneath the name and rose straight through it.
-            // That is the "58 on top of the Sundered Colossus's name" case, and it was not bad
-            // luck: for a head-targeted number it was certain. Clearing the tag's own height puts
-            // the number above it and it rises away rather than across.
-            float rise = BarWorldRise * (Screen.height * _world.Camera.rect.height
-                                         / (2f * Mathf.Max(0.01f, _world.Camera.orthographicSize)));
-            start.y += (rise / canvasScale) + BarStackHeight + 6f;
+            // Callers pass HeadPosition. The number used to have to clear a tag anchored on that
+            // same head (the "58 on top of the Sundered Colossus's name" case); the plate now hangs
+            // under the feet, so the head is the number's alone and it starts just above it.
+            start.y += BattleHudMetrics.FloatSpawnAboveHead;
 
-            // Jitter was +/-34, which is more than half the 120-unit tag width, so a number could
-            // start closer to a NEIGHBOUR's tag than to the unit that produced it. On a five-unit
+            // Jitter was +/-34, which was more than half the old 120-unit tag width, so a number
+            // could start closer to a NEIGHBOUR's unit than to the one that produced it. On a five-unit
             // line that is the whole attribution problem: the number was correct and unreadable as
             // to whose it was. +/-9 still separates two hits landing on the same unit in the same
             // frame, which is all the jitter was ever for.
@@ -2047,7 +1899,10 @@ namespace Emberfall.UI.Screens
             // from its unit and parked several of them on one arbitrary line - numbers hanging in
             // open sky belonging to nobody. A number that starts on its owner and rises a shorter
             // distance is still attributable; one that starts somewhere else never was.
-            float ceiling = BattleHudLayout.BarBottom(SafeTopCanvas(canvasScale)) - BattleHudMetrics.FloatStopBelowBar;
+            // The climb stops with the number's centre FloatStopBelowBar, plus half a line, under
+            // the top bar, so a number off the back rank's tallest unit never runs into the bar.
+            float ceiling = BattleHudLayout.BarBottom(SafeTopCanvas(canvasScale))
+                            - BattleHudMetrics.FloatStopBelowBar - BattleHudMetrics.FloatHalfLine;
             float climb = Mathf.Clamp(ceiling - start.y, 24f, FloatRise);
 
             float duration = 0.75f / _speed;
