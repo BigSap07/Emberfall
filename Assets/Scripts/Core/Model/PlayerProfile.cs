@@ -432,6 +432,34 @@ namespace Emberfall.Core.Model
         public readonly List<HeroInstance> Heroes = new List<HeroInstance>();
 
         /// <summary>
+        /// How far through the first session's guided flow this player is (DESIGN-ONBOARDING.md):
+        /// the number of steps COMPLETED, so a player who quits resumes at the step after the last
+        /// one they finished. The steps and the complete value are Onboarding's constants. Saved
+        /// from version 21; a save from before it that has any campaign progress loads as complete.
+        /// </summary>
+        public int TutorialStep;
+
+        /// <summary>
+        /// The free-play tips this player has seen, by screen name, and the features they have
+        /// opened since each unlocked (FeatureGate.OpenedKey), which is what retires a feature's
+        /// one-time "new" dot. Onboarding.AllTipsSeen stands for every tip there is, including ones
+        /// added later: it is what a save that predates tips is migrated to. Saved from version 21.
+        /// </summary>
+        public readonly List<string> SeenTips = new List<string>();
+
+        /// <summary>Whether this tip or opening is recorded. Null-safe so a caller with no profile
+        /// reads "not seen".</summary>
+        public static bool HasSeen(PlayerProfile profile, string key)
+        {
+            if (profile == null || string.IsNullOrEmpty(key)) return false;
+            return profile.SeenTips.Contains(key) || profile.SeenTips.Contains(AllTipsSeenKey);
+        }
+
+        /// <summary>The SeenTips entry that stands for every tip. Onboarding.AllTipsSeen is the
+        /// same string; it is declared here because HasSeen reads it.</summary>
+        public const string AllTipsSeenKey = "*";
+
+        /// <summary>
         /// Every relic the player owns, assigned or not. HeroInstance.EquippedRelicId references
         /// entries here by relic id; an entry nothing references is simply unassigned.
         /// </summary>

@@ -343,6 +343,8 @@ namespace Emberfall.UI.Screens
                                                ForgeButtonKind.Secondary);
             UIBuilder.Box(_openTalents.Root, -UITheme.Space24, -top, BannerButtonWidth, 48f, new Vector2(1f, 1f));
             _openTalents.OnClick(OpenTalents);
+            FeatureLockView.Attach(_openTalents.Root, "herodetail.Talents", _openTalents.Label,
+                                   new Vector2(-BannerButtonWidth * 0.5f, 0f), FeatureLockView.TagSide.Below);
 
             _talentRunning = EmberforgeUI.Label("TalentRunning", _right, "", UITheme.FontTiny - 4,
                                                 Emberforge.TextQuiet, TextAnchor.UpperRight);
@@ -454,6 +456,8 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(_fusionButton.Root, -UITheme.ScreenPadding, 14f, 300f, 88f,
                           new Vector2(1f, 0f));
             _fusionButton.OnClick(OpenFusion);
+            FeatureLockView.Attach(_fusionButton.Root, "herodetail.Fusion", _fusionButton.Label,
+                                   new Vector2(-150f, 0f), FeatureLockView.TagSide.Above);
 
             _obtainButton = EmberforgeUI.Button("Obtain", bar, "OPEN THE RIFT", UITheme.FontHeading,
                                                 ForgeButtonKind.Primary);
@@ -478,6 +482,7 @@ namespace Emberfall.UI.Screens
             App.RefreshHud();
             RebuildStatic();
             Refresh();
+            FeatureLockView.RefreshAll(App, Root);
         }
 
         /// <summary>Rebuilds the parts that only change when the selected hero changes.</summary>
@@ -587,7 +592,11 @@ namespace Emberfall.UI.Screens
                 Button press = host.gameObject.AddComponent<Button>();
                 press.transition = Selectable.Transition.None;
                 press.targetGraphic = target;
-                press.onClick.AddListener(OpenInventory);
+                press.onClick.AddListener(OpenArmorSlot);
+                // Armor opens at its row of the unlock table: each slot carries the padlock, and
+                // the first carries the one tag for all six.
+                FeatureLockView.Attach(host, "herodetail.ArmorSlot", label, Vector2.zero,
+                                       FeatureLockView.TagSide.Below, i == 0).Refresh(App);
             }
         }
 
@@ -1213,6 +1222,7 @@ namespace Emberfall.UI.Screens
         private void OpenTalents()
         {
             if (_hero == null || _prologueView) return;
+            if (!FeatureGates.TryEnter(App, "herodetail.Talents")) return;
             App.Audio.Tap();
             Router.Talents.SetHero(_hero);
             Router.Show(ScreenId.Talents);
@@ -1224,6 +1234,7 @@ namespace Emberfall.UI.Screens
         private void OpenFusion()
         {
             if (_hero == null || _prologueView) return;
+            if (!FeatureGates.TryEnter(App, "herodetail.Fusion")) return;
             App.Audio.Tap();
             Router.Fusion.ShowHero(_hero);
             Router.Show(ScreenId.Fusion);
@@ -1233,7 +1244,8 @@ namespace Emberfall.UI.Screens
         {
             bool show = _hero != null && !_prologueView;
             _openTalents.Root.gameObject.SetActive(show);
-            _talentRunning.gameObject.SetActive(show);
+            // Its tag takes this line's place while talents are locked.
+            _talentRunning.gameObject.SetActive(show && FeatureGates.Allows(App, "herodetail.Talents"));
             if (!show) return;
             HeroDef def = _hero.Def;
             bool has = def != null && def.Talents.Count > 0;
@@ -1256,6 +1268,13 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.Inventory);
+        }
+
+        /// <summary>An armor slot's tap: the Inventory, once armor has unlocked.</summary>
+        private void OpenArmorSlot()
+        {
+            if (!FeatureGates.TryEnter(App, "herodetail.ArmorSlot")) return;
+            OpenInventory();
         }
 
         private void LevelUp(int times)

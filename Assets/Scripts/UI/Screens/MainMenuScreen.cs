@@ -257,15 +257,15 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildMapNodes()
         {
-            AddMapNode("HEROES", HeroesX, HeroesY, OpenHeroes);
-            AddMapNode("SUMMON", SummonX, SummonY, OpenSummon);
-            AddMapNode("FORGE", ForgeX, ForgeY, OpenForge);
-            AddMapNode("RELICS", MarketX, MarketY, OpenRelicShop);
-            AddMapNode("DEEP RECITAL", RecitalX, RecitalY, OpenRecital);
-            AddMapNode("PROVING", ProvingX, ProvingY, OpenProving);
+            AddMapNode("HEROES", HeroesX, HeroesY, OpenHeroes, "hub.map.HEROES");
+            AddMapNode("SUMMON", SummonX, SummonY, OpenSummon, "hub.map.SUMMON");
+            AddMapNode("FORGE", ForgeX, ForgeY, OpenForge, "hub.map.FORGE");
+            AddMapNode("RELICS", MarketX, MarketY, OpenRelicShop, "hub.map.RELICS");
+            AddMapNode("DEEP RECITAL", RecitalX, RecitalY, OpenRecital, "hub.map.RECITAL");
+            AddMapNode("PROVING", ProvingX, ProvingY, OpenProving, "hub.map.PROVING");
             // The portal is a place you can walk to, like the others. Its live state and its
             // primary action live in the corner card instead, so the map keeps only the tap target.
-            AddMapNode("CAMPAIGN", CampaignX, CampaignY, OpenCampaign);
+            AddMapNode("CAMPAIGN", CampaignX, CampaignY, OpenCampaign, "hub.map.CAMPAIGN");
         }
 
         /// <summary>
@@ -340,11 +340,29 @@ namespace Emberfall.UI.Screens
             get { return HubStyle.HudEdge + HubStyle.TouchMin + HubStyle.RailGap; }
         }
 
-        private UIButton AddMapNode(string label, float mx, float my, System.Action action)
+        /// <summary>
+        /// One building. Every one carries its FeatureEntryPoints id: the tap asks the unlock
+        /// table first, and a locked building keeps its place and its name, greyed, with a
+        /// padlock on its left edge and its gold "UNLOCKS AT" tag above it (FeatureLockView).
+        /// </summary>
+        private UIButton AddMapNode(string label, float mx, float my, System.Action action, string entryId)
         {
             UIButton node = BuildNodePlate(label, mx, my);
-            node.OnClick(action);
+            node.OnClick(Gated(entryId, action));
+            FeatureLockView.Attach(node.Root, entryId, node.Label,
+                                   new Vector2(-HubStyle.LabelWidthFor(label) * 0.5f, 0f),
+                                   FeatureLockView.TagSide.Above);
             return node;
+        }
+
+        /// <summary>A door's action behind the unlock table: a locked door says its line instead.</summary>
+        private System.Action Gated(string entryId, System.Action action)
+        {
+            return delegate
+            {
+                if (!FeatureGates.TryEnter(App, entryId)) return;
+                action();
+            };
         }
 
         /// <summary>
@@ -421,7 +439,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(_continueButton.Root, 0f, CardInner,
                           CardWidth - Emberforge.OrnamentClearance * 2f,
                           HubStyle.TouchMin, new Vector2(0.5f, 0f));
-            _continueButton.OnClick(OpenCampaign);
+            _continueButton.OnClick(Gated("hub.card.Campaign", OpenCampaign));
         }
 
         /// <summary>
@@ -432,7 +450,7 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildIdleChest()
         {
-            _chest = HudWidgets.ChestButton("IdleChest", _hud, OpenClaim);
+            _chest = HudWidgets.ChestButton("IdleChest", _hud, Gated("hub.chest", OpenClaim));
             UIBuilder.Box(_chest.Root, -(HubStyle.HudEdge + CardWidth + Emberforge.Space16),
                           HubStyle.NavBarHeight + Emberforge.Space16,
                           HubStyle.ChestSize, HubStyle.ChestSize, new Vector2(1f, 0f));
@@ -456,8 +474,13 @@ namespace Emberfall.UI.Screens
 
             _friendsButton = HudWidgets.RailButton("Friends", _hud, HudSkin.IconFriends,
                                                    TextureLab.Heart(64), HubStyle.LabelText,
-                                                   OpenFriends);
+                                                   Gated("hub.rail.Friends", OpenFriends));
             Place(_friendsButton.Root, top);
+            // On the disc rather than its larger hit rect, so the padlock and the one-time dot sit
+            // on the art the way the pending-work badge does.
+            FeatureLockView.Attach(_friendsButton.Disc.rectTransform, "hub.rail.Friends", null,
+                                   new Vector2(HubStyle.RailDisc * 0.3f, -HubStyle.RailDisc * 0.3f),
+                                   FeatureLockView.TagSide.Right);
 
             HudElement mail = HudWidgets.RailButton("Mail", _hud, HudSkin.IconMail,
                                                     TextureLab.Envelope(64), HubStyle.LabelText,
@@ -508,16 +531,27 @@ namespace Emberfall.UI.Screens
                           new Vector2(0.5f, 0f));
             UIBuilder.HStack(nav, HubStyle.NavCellGap, new RectOffset(0, 0, 0, 0), TextAnchor.LowerCenter);
 
-            HudWidgets.NavButton("Heroes", nav, "HEROES", HudSkin.IconHeroes,
-                                 TextureLab.Helm(64), UITheme.ChromeBrass, OpenHeroes);
-            HudWidgets.NavButton("Bag", nav, "BAG", HudSkin.IconBag,
-                                 TextureLab.Plate(64), UITheme.ChromeBrass, OpenInventory);
-            HudWidgets.NavButton("Summon", nav, "SUMMON", HudSkin.IconSummon,
-                                 TextureLab.Spark(64), UITheme.Shard, OpenSummon);
-            HudWidgets.NavButton("Guild", nav, "GUILD", HudSkin.IconGuild,
-                                 TextureLab.Sigil(2, 64), UITheme.ChromeBrass, OpenGuild);
-            HudWidgets.NavButton("Campaign", nav, "CAMPAIGN", HudSkin.IconCampaign,
-                                 TextureLab.Swords(64), UITheme.Ember, OpenCampaign);
+            NavCell("Heroes", nav, "HEROES", HudSkin.IconHeroes,
+                    TextureLab.Helm(64), UITheme.ChromeBrass, OpenHeroes, "hub.nav.Heroes");
+            NavCell("Bag", nav, "BAG", HudSkin.IconBag,
+                    TextureLab.Plate(64), UITheme.ChromeBrass, OpenInventory, "hub.nav.Bag");
+            NavCell("Summon", nav, "SUMMON", HudSkin.IconSummon,
+                    TextureLab.Spark(64), UITheme.Shard, OpenSummon, "hub.nav.Summon");
+            NavCell("Guild", nav, "GUILD", HudSkin.IconGuild,
+                    TextureLab.Sigil(2, 64), UITheme.ChromeBrass, OpenGuild, "hub.nav.Guild");
+            NavCell("Campaign", nav, "CAMPAIGN", HudSkin.IconCampaign,
+                    TextureLab.Swords(64), UITheme.Ember, OpenCampaign, "hub.nav.Campaign");
+        }
+
+        /// <summary>One nav cell behind the unlock table, with its lock dress: the caption greys,
+        /// the padlock sits on the disc and the tag rides above the cell.</summary>
+        private void NavCell(string name, RectTransform nav, string caption, string slot, Sprite glyph,
+                             Color tint, System.Action action, string entryId)
+        {
+            HudElement cell = HudWidgets.NavButton(name, nav, caption, slot, glyph, tint, Gated(entryId, action));
+            FeatureLockView.Attach(cell.Root, entryId, cell.Caption,
+                                   new Vector2(HubStyle.NavIcon * 0.3f, HubStyle.NavCellHeight * 0.5f - HubStyle.NavIcon * 0.75f),
+                                   FeatureLockView.TagSide.Above);
         }
 
         /// <summary>
@@ -572,6 +606,7 @@ namespace Emberfall.UI.Screens
             App.SetTopBarBackingVisible(false);
 
             RefreshFriendBadge();
+            FeatureLockView.RefreshAll(App, Root);
             _tick = 0f;
         }
 

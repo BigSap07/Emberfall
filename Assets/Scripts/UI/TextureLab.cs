@@ -1022,5 +1022,47 @@ namespace Emberfall.UI
                 return 0f;
             });
         }
+
+        /// <summary>The onboarding coach's arrow: a solid triangle pointing DOWN, with a stem.</summary>
+        public static Sprite Arrow(int size)
+        {
+            return Mask("arrow_" + size, size, delegate (float u, float v)
+            {
+                if (v < 0.55f) return Mathf.Abs(u - 0.5f) < v * 0.82f ? 1f : 0f;   // head, tip at the bottom
+                return Mathf.Abs(u - 0.5f) < 0.16f && v < 0.98f ? 1f : 0f;        // stem
+            });
+        }
+
+        /// <summary>
+        /// A spotlight: opaque everywhere except a soft-edged clear disc in the middle. Stretched
+        /// over a target, it dims the screen around it and leaves the target lit. White, so the
+        /// caller tints it.
+        /// </summary>
+        public static Sprite Spotlight(int size)
+        {
+            string key = "spotlight_" + size;
+            Sprite cached;
+            if (Cache.TryGetValue(key, out cached)) return cached;
+
+            Texture2D tex = NewTexture(size, size);
+            Color32[] pixels = new Color32[size * size];
+            float r = size * 0.5f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float dx = (x + 0.5f - r) / r;
+                    float dy = (y + 0.5f - r) / r;
+                    float d = Mathf.Sqrt(dx * dx + dy * dy);
+                    float a = Mathf.Clamp01((d - 0.62f) / 0.30f);
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.Clamp(a * 255f, 0f, 255f));
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            Sprite sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            Cache[key] = sprite;
+            return sprite;
+        }
     }
 }

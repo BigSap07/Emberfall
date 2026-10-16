@@ -89,6 +89,8 @@ namespace Emberfall.UI
         /// row with a single tab in it is decoration pretending to be a control.</summary>
         public void ShowGuild()
         {
+            // A sheet hosts its screen without the router, so the unlock table is asked here too.
+            if (!FeatureGates.TryEnter(_app, "panel.guild")) return;
             _tabs.Clear();
             Add("GUILD", _app.Router.Guild);
             Open("GUILD", "GUILD");
@@ -119,6 +121,8 @@ namespace Emberfall.UI
             int index = 0;
             for (int i = 0; i < _tabs.Count; i++)
                 if (string.Equals(_tabs[i].Caption, tab, StringComparison.OrdinalIgnoreCase)) index = i;
+            // A locked tab asked for by name says its line and the sheet opens on its first tab.
+            if (!FeatureGates.TryEnter(_app, TabEntry(_tabs[index].Caption))) index = 0;
             Select(index);
 
             // Registered once per opening rather than per tab change: switching tabs inside an
@@ -155,6 +159,7 @@ namespace Emberfall.UI
             if (index < 0 || index >= _tabs.Count) return;
             Tab tab = _tabs[index];
             if (_hosted == tab.Screen) return;
+            if (_hosted != null && !FeatureGates.TryEnter(_app, TabEntry(tab.Caption))) return;
 
             Detach();
             _hosted = tab.Screen;
@@ -172,6 +177,18 @@ namespace Emberfall.UI
             _hosted.Root.gameObject.SetActive(true);
             if (_hosted.Group != null) _hosted.Group.alpha = 1f;
             _hosted.OnShow();
+            if (FeatureGates.NoteOpened(_app, _hosted.Id)) _app.RequestSave();
+            if (Shown != null) Shown(_hosted.Id);
+        }
+
+        /// <summary>Raised when a sheet hosts a screen, as ScreenRouter.Shown is for the router.</summary>
+        public event Action<ScreenId> Shown;
+
+        /// <summary>The FeatureEntryPoints id of a tab of the player panel, or of the guild sheet.
+        /// Only FRIENDS and GUILD belong to a gated feature; the rest are open ids.</summary>
+        private static string TabEntry(string caption)
+        {
+            return caption == "GUILD" ? "panel.guild" : "panel.profile." + caption;
         }
 
         private void Detach()
@@ -260,6 +277,9 @@ namespace Emberfall.UI
                     _app.Audio.Tap();
                     Select(index);
                 });
+                // A locked tab keeps its place and goes grey; tapping it says its unlock line.
+                if (button.Caption != null && !FeatureGates.Allows(_app, TabEntry(_tabs[i].Caption)))
+                    button.Caption.color = Emberforge.TextQuiet;
                 _tabButtons.Add(button);
             }
         }

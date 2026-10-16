@@ -1,0 +1,93 @@
+{
+  // ONBOARDING - DESIGN-ONBOARDING.md. The words of the first session and the one table that
+  // says when each feature opens.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, on purpose, for guild-path.json's reason: nothing
+  // here is read by a fight. A rewritten line or a moved unlock must not retire every guild's
+  // replays. ContentDatabase.LoadOnboarding reads it after Load.
+  //
+  // EVERY LINE OF TEXT HERE IS A PLACEHOLDER for the designer's pass. Rewrite freely; no code
+  // reads the wording, only the keys.
+
+  // THE UNLOCK TABLE. The ONLY place a feature's opening is decided. A feature unlocks the moment
+  // its stage is CLEARED; "" means it is open from the first minute. Every entry point to a
+  // feature (hub building, nav cell, rail button, panel tab, hero page button, inventory tab, the
+  // router itself) asks FeatureGate, and FeatureGate reads only this. DevHarness
+  // CheckFeatureUnlockGating enumerates the entry points and proves each one against this table.
+  "unlocks": [
+    { "feature": "campaign", "stage": "" },
+    { "feature": "summon",   "stage": "" },
+    { "feature": "heroes",   "stage": "" },
+    { "feature": "idle",     "stage": "" },
+    { "feature": "friends",  "stage": "ch1_4" },
+    { "feature": "fusion",   "stage": "ch1_6" },
+    { "feature": "talents",  "stage": "ch1_12" },
+    { "feature": "armor",    "stage": "ch1_12" },
+    { "feature": "forge",    "stage": "ch1_12" },
+    { "feature": "guilds",   "stage": "ch2_1" },
+    { "feature": "proving",  "stage": "ch2_4" },
+    { "feature": "recital",  "stage": "ch2_8" },
+    { "feature": "relics",   "stage": "ch3_1" }
+  ],
+
+  // 1. WAKE. One line per entry, shown together on a dark screen over the dimmed hub.
+  "wake": [
+    "Wake up.",
+    "Silence. Birds. Morning.",
+    "And a village that has stopped caring."
+  ],
+
+  // 2. THE CINDER. The first guided tap is a recall. The hero is fixed, the recall is free, and
+  // it never touches the summon pool, pity, rates or counters (Onboarding.Recall).
+  "recall": {
+    "hero": "kael_the_unyielding",
+    "title": "The Cinder remembers.",
+    "body": "Call back someone who once stood here.",
+    "button": "RECALL",
+    "result": "answers the Cinder.",
+    "continue": "CONTINUE"
+  },
+
+  // 3. THE PROLOGUE BATTLE. One of PrologueScript's existing steps (combat, formation, skills,
+  // aspects, fullBattle, boss), fought by its existing squad and left unchanged.
+  "prologue": {
+    "step": "fullBattle",
+    "line": "Your heroes fight on their own."
+  },
+
+  // 4. THE GUIDED CORE LOOP. Five steps, one pip each, in this order. Each line is the caption
+  // under the arrow while that step is the one being taught.
+  "steps": [
+    { "id": "team",       "line": "Kael stands in your line now. Tap to confirm it." },
+    { "id": "campaign",   "line": "The road starts here. Fight stage 1-1." },
+    { "id": "waveResult", "line": "Each wave pays as it falls. Clear the stage." },
+    // "short" is said instead while no hero's next level is affordable, and the arrow then
+    // points at the campaign until one is: a new player holds 780 gold after 1-1 against a
+    // 1070 first level on every starter, and 1235 after 1-2.
+    { "id": "levelUp",    "line": "Gold makes a hero stronger. Level one up.",
+                          "short": "Not enough gold for a level yet. Fight the next stage." },
+    { "id": "idle",       "line": "Your heroes earn while you are away. Collect it." }
+  ],
+
+  "skip": "SKIP",
+
+  // 5. FREE PLAY. One line, the first time each screen opens, dismissed by any tap and never
+  // shown again (PlayerProfile.SeenTips). Keyed by screen name.
+  "tips": {
+    "Campaign":     "Stages unlock in order. A cleared stage can be swept for its spoils.",
+    "Summon":       "Shards call new heroes through the Cinder.",
+    "Formation":    "Slot one is the front. Most enemies swing at whoever stands there.",
+    "Heroes":       "Every hero you have recalled, and every one still waiting.",
+    "HeroDetail":   "Levels cost gold. A hero's star tier sets how high they can go.",
+    "Inventory":    "Armor drops from stages. Wear it to move the numbers.",
+    "Forge":        "Break armor you do not need into slag, and temper what you keep.",
+    "Fusion":       "Spare heroes become stars, and stars raise the level cap.",
+    "Talents":      "A talent changes how a hero fights. Switching is free.",
+    "RelicShop":    "Relics change a rule of battle, not a number.",
+    "Recital":      "An endless climb. Echoes refill with time.",
+    "Proving":      "Fight other lines. Brands refill with time.",
+    "Friends":      "Share your code. Friendly duels cost nothing and pay nothing.",
+    "Guild":        "A guild fights its dungeon together and grows its tech.",
+    "Events":       "Events run for a while and pay for what you already do."
+  }
+}

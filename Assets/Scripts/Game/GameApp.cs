@@ -142,8 +142,20 @@ namespace Emberfall.Game
             bool freshStart = profile == null;
             if (freshStart)
             {
-                BootStage = "GameSession.CreateNewProfile";
-                profile = GameSession.CreateNewProfile(Content, TimeUtil.NowUnix());
+                // A new player is a Keeper: the ordinary new profile with Kael held back for the
+                // Cinder's recall, at the first step of the onboarding flow (DESIGN-ONBOARDING.md).
+                BootStage = "Onboarding.CreateKeeperProfile";
+                profile = Onboarding.CreateKeeperProfile(Content, TimeUtil.NowUnix());
+#if UNITY_EDITOR
+                // The capture tools run on a deliberately fresh scratch profile and photograph the
+                // game, not the first session, unless a target asks for the first session. The
+                // ordinary new profile, complete, is every build before onboarding existed.
+                if (UnityEditor.EditorPrefs.GetBool(SuppressFirstRunKey, false))
+                {
+                    profile = GameSession.CreateNewProfile(Content, TimeUtil.NowUnix());
+                    Onboarding.MarkComplete(profile);
+                }
+#endif
             }
 
             BootStage = "new GameSession";
@@ -225,18 +237,13 @@ namespace Emberfall.Game
             BootStage = "cloud";
             StartCloud(freshStart);
 
-            // The only onboarding this game has, and only ever for a genuinely new install.
-            // Keyed to freshStart rather than a saved flag so the save shape is untouched and an
-            // existing player cannot be shown it - see FirstRun for that trade in full.
-            bool showFirstRun = freshStart;
-#if UNITY_EDITOR
-            // The capture tools run on a deliberately fresh scratch profile, which is exactly the
-            // account FirstRun exists for - so every automated screenshot of the Hub was a
-            // screenshot of a welcome card with the Hub behind it. The opt-out is editor-only and
-            // off unless a tool sets it, so a real first run is untouched.
-            if (UnityEditor.EditorPrefs.GetBool(SuppressFirstRunKey, false)) showFirstRun = false;
-#endif
-            if (showFirstRun) FirstRun.Begin(this);
+            // The first session and the free-play tips (DESIGN-ONBOARDING.md). Installed for every
+            // player: the coach reads PlayerProfile.TutorialStep each frame and shows nothing once
+            // it is complete except a tip the first time each screen opens. A player who quit
+            // mid-flow resumes at the step after the last one they completed, because that step
+            // is all the coach reads; a progressed save from before version 21 loads complete.
+            BootStage = "onboarding";
+            OnboardingCoach.Install(this);
 
             BootStage = "complete";
             BootCompleted = true;
@@ -659,6 +666,10 @@ namespace Emberfall.Game
         /// </summary>
         public bool HandleBack()
         {
+            // The first session's forced steps own input: back is swallowed rather than walking
+            // the player out of a step.
+            if (OnboardingCoach.BlocksBack) return true;
+
             if (Layers != null && Layers.CloseTop())
             {
                 if (Audio != null) Audio.Tap();
@@ -735,7 +746,7 @@ namespace Emberfall.Game
         public void ResetProgress()
         {
             SaveService.DeleteSave();
-            Session = new GameSession(Content, GameSession.CreateNewProfile(Content, TimeUtil.NowUnix()));
+            Session = new GameSession(Content, Onboarding.CreateKeeperProfile(Content, TimeUtil.NowUnix()));
             SaveNow();
             RefreshHud();
             Router.ClearHistory();

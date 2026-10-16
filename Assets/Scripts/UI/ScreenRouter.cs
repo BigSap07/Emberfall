@@ -232,10 +232,24 @@ namespace Emberfall.UI
             Show(id, true);
         }
 
+        /// <summary>Raised after every screen change, with the screen now showing. The onboarding
+        /// coach and the free-play tips listen here rather than in each screen.</summary>
+        public event System.Action<ScreenId> Shown;
+
         public void Show(ScreenId id, bool remember)
         {
             UIScreen next = Find(id);
             if (next == null) return;
+
+            // THE UNLOCK TABLE'S LAST DOOR (DESIGN-ONBOARDING.md). Every screen of a locked
+            // feature is refused here, whoever asked: a hub building, a button on another page or
+            // a deep link. Each drawn door also checks first, so the player sees its lock before
+            // tapping; this is what makes a door nobody drew a lock on safe anyway.
+            if (App != null && !FeatureGates.Allows(App, FeatureGates.ScreenEntry(id)))
+            {
+                FeatureGates.TryEnter(App, FeatureGates.ScreenEntry(id));
+                return;
+            }
 
             // A panel or popup is a layer OVER a screen, so a screen change with one still open
             // would draw it over a page it knows nothing about - and, worse, over a page that may
@@ -245,6 +259,7 @@ namespace Emberfall.UI
             if (Current == next)
             {
                 next.OnShow();
+                if (Shown != null) Shown(id);
                 return;
             }
 
@@ -266,6 +281,8 @@ namespace Emberfall.UI
             App.SetTopBarVisible(!next.HidesTopBar);
             StopAllCoroutines();
             StartCoroutine(FadeIn(next.Group));
+            if (FeatureGates.NoteOpened(App, id)) App.RequestSave();
+            if (Shown != null) Shown(id);
         }
 
         private IEnumerator FadeIn(CanvasGroup group)

@@ -31,6 +31,9 @@ namespace Emberfall.Game
             // fight, so its prices must not retire a guild dungeon replay (ContentDatabase.GuildPath).
             db.LoadGuildPath(ReadTextOptional("guild-path"));
             db.LoadGuildTech(ReadTextOptional("guild-tech"));
+            // Outside ContentVersion too: the first session's words and the unlock table are read
+            // by no fight (ContentDatabase.Onboarding).
+            db.LoadOnboarding(ReadTextOptional("onboarding"));
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

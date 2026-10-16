@@ -1,5 +1,8 @@
 # Emberfall — the first ten minutes
 
+**SUPERSEDED, 2026-10-12, by `DESIGN-ONBOARDING.md`.** This describes the old six-hero 3v3 game
+and must not be used as evidence. It is kept as the record of an argument that was had.
+
 Scope: the opening session only, on a fresh save, with the six heroes, twelve stages and
 systems that exist today.
 
