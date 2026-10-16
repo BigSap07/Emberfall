@@ -1046,19 +1046,37 @@ the only art the roster is still missing, and with every kit authored they are *
 between the roster and being finished**. `Docs/PINOY-LIST.md` section 5 is the list.
 
 **A hero sheet keeps the proportions it was drawn at.** `fit_frame` in `Tools/rewire_sprites.py`,
-which `process_hero` runs on every frame, scales a delivered frame uniformly to 260 tall and
-centres it in a transparent 220 by 260 cell, fitting by width instead only when that would still
-be wider than the cell. It replaced a plain resize to 220 by 260 that stretched the five Ember
+which `process_hero` runs on every frame, scales a delivered frame uniformly to 396 tall and
+centres it in a transparent 336 by 396 cell, fitting by width instead only when that would still
+be wider than the cell. It replaced a plain resize to the cell that stretched the five Ember
 5-stars (Kael, Kiva, Seraphine, Hale and Marrow), delivered at 720 by 1280, to between 1.3 and
-1.65 times their width. Their 35 sheets are re-exported from the original deliveries; the sidecars,
-`.meta` files and `heroes.json` are unchanged, and an 880 by 1040 frame, the usual delivery,
-comes out exactly as the plain resize made it.
+1.65 times their width.
+
+**Every unit sheet is 336 by 396 a frame, imported as BC7 on Windows and ASTC 6x6 on Android.**
+All 334 sheets of the 57 drawn units were re-exported from the original deliveries in
+`D:/Emberfall/import` by `rewire_sprites.py --reexport`, which writes a delivered file only into
+the shipped clip it reproduces pixel for pixel, so no clip mapping was guessed from a file name.
+At the old 220 by 260 cell the median hero was drawn at 1.57 screen pixels per texel and the
+DXT5 blocks showed; it is 1.03 now. The cell is not the plain 1.5x of 330 by 390 because BC7
+needs both sheet dimensions to be multiples of 4 and ASTC 6x6 wants frame edges on 6-pixel block
+edges; `DESIGN-ART-DELIVERY.md` section 2 has the arithmetic. Brenna's square sheets are 360 by
+360. Only the PNGs and each sidecar's `frameWidth` and `frameHeight` changed; no `.meta` guid
+moved, and every fraction in the sidecars and content files holds, re-measured to within 0.003
+(feet) and 0.007 (bodies). A 5v5 battle holds 575 MB of unit texture on Windows and 255 MB on
+Android, from 247 MB and 158 MB, and the sheet PNGs in the repository went from 756 MB to
+1,568 MB.
 
 **Enemies draw from the same sheets, and 26 of Pinoy's 84 have them**: 12 of chapter 1's 14 and all
 14 of chapter 2's, in the five clips the battle plays (idle, basic, skill, hit reaction, death) at
-220 by 260 a frame, the size every hero sheet is. Each carries the measured `spriteBodyFraction`
+336 by 396 a frame, the size every hero sheet is. Each carries the measured `spriteBodyFraction`
 and `spriteFootFraction` in its `visual` block, because `UnitRig.BuildSprite` sizes the quad from
-the first. `lost_villager` and `wild_bear` have no sheet, chapter 3 has none, and the Hollowed
+the first. **Their `scale` is derived from the art**, not set by kind: `BuildSprite` stretches
+every body to its silhouette's height, which throws away how large the figure was drawn, so each
+chapter 1 and 2 enemy's scale is the one that draws it at the median hero's screen pixels per
+texel, and the four named bosses (the Collector, the Shepherd, the Forsaken, the Waykeeper) take
+x1.10 on top. The goblins already matched and are unchanged. The Carrion Vulture's
+`spriteBodyFraction` is 0.308, its body from neck ruff to feet; the 0.85 it carried counted the
+raised wings. `lost_villager` and `wild_bear` have no sheet, chapter 3 has none, and the Hollowed
 Hunter's sheets arrived under the stem `hollowed_archer`. `Docs/PINOY-LIST.md` section 5b has the
 discrepancies.
 
@@ -1109,6 +1127,12 @@ file and shows the file is never read and no client is built; no Play-mode entry
 `Assets/Editor` bypasses the guard; nothing about the switch exists outside `UNITY_EDITOR` in
 `Assets/Scripts`; and `GameApp.StartCloud`, after its `Configured` return, is the only place
 shipped code builds a `SupabaseClient`.
+
+**A battle capture can name its stage.** `PlayModeScreenshot`'s Battle target fights
+`Session.NextStage`, wherever the scratch profile stands, unless the target names a stage:
+`Tools/capture-screen.sh "Battle=ch2_9" out.png` fights `ch2_9` and writes
+`screen_Battle=ch2_9.png`, the stage riding in the file name for the same reason the frame size
+does.
 
 **The arena matrix** (`Tools/DevHarness/ArenaMatrix.cs`) measures every basic, active, passive
 and talent in the roster, 428 rules, by ablation. It fights the same hero in the same room at the
@@ -1562,7 +1586,12 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   sheets. All 214 sheet PNGs are packed - none is missing - 208 of them as DXT5 Crunched and 6 as
   RGBA32, against 3,198.6 MB as raw RGBA. Portraits, badges and HUD pack 126 of 126 PNGs to
   24.8 MB (94 BC7, 32 RGBA32) and the backgrounds 5 of 5 to 19.6 MB. So the art is compressed on
-  the Standalone target and the small zip is the importer's doing, not the zip's. `EmberfallBuild`
+  the Standalone target and the small zip is the importer's doing, not the zip's. **That
+  measurement predates the 336 by 396 sheets**, which import as BC7 and cannot be crunched: by
+  `Tools/texture-import-policy.py`'s model the 338 files in `Sprites/Units` now pack to about
+  3,018 MB on Windows (BC7 is 1 byte per pixel and only DXT can be crunched), against the
+  139.4 MB measured, so the unzipped player grows by close to 2.9 GB. How much of that the zip
+  wins back is unmeasured. Re-measure with `Tools/build-windows.ps1` before quoting a player size. `EmberfallBuild`
   writes this report beside every Windows player, and `Tools/build-windows.ps1` prints it. The APK
   has not been measured: Android reads its own importer overrides, and the 855 MB may still be
   true there. Measure an APK the same way before sizing the work.

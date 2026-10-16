@@ -140,11 +140,12 @@ $wanted = [ordered]@{
 # it, with nobody having to remember.
 #
 # What those settings now are, and why, is Tools/texture-import-policy.py - which is also what
-# wrote them into all 214 existing sheets. The short version: maxTextureSize 4096 and nPOTScale
+# wrote them into all 334 existing sheets. The short version: maxTextureSize 4096 and nPOTScale
 # None so no clamp or power-of-two resize can ever shear the frame grid (notes 3 and 5), no
-# mipmaps because a battle sprite is magnified about 1.6x on screen and never minified, DXT5
-# Crunched at quality 100 on Windows, and ASTC 5x5 on Android because 220, 260, 1980 and 2080 all
-# divide by 5, so no compression block straddles two animation frames.
+# mipmaps because a battle sprite is drawn at about 1:1 on screen and never minified, BC7 on
+# Windows, and ASTC 6x6 on Android because the cell is 336x396 and both divide by 4 and by 6, so
+# no compression block straddles two animation frames. This script still writes 288x512 frames
+# by default and predates that cell; Tools/rewire_sprites.py is the importer that knows it.
 function Write-TextureMeta([string] $pngPath) {
     $metaPath = "$pngPath.meta"
     if (Test-Path $metaPath) { return 'kept' }   # never clobber an existing guid

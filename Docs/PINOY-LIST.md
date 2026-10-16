@@ -738,8 +738,9 @@ clip; it can be deleted once her `skill` arrives.
 
 26 enemies arrived as five clips each (idle, basic, skill, hit reaction, death), 130 sheets, and all
 26 are wired. They are the same 9 by 8 grids as the hero sheets at four times the size, 880 by 1040
-a frame, and were imported by the same per-frame downscale to 220 by 260, so every frame
-keeps the proportions it was drawn at. Enemies have no `basic2` or `controlled`, which the
+a frame, and were imported by the same per-frame downscale, now to 336 by 396 (it was 220 by 260
+until every sheet was re-exported at the larger cell), so every frame keeps the proportions it
+was drawn at. Enemies have no `basic2` or `controlled`, which the
 battle does not ask them for.
 
 **Still owed:**
@@ -761,7 +762,10 @@ battle does not ask them for.
 **Sizes that differ from their siblings, none of them resized:**
 - **Hollowed Mage `skill` is 3897 by 4096, 433 by 512 a frame.** Its other four clips are 880 by
   1040. The aspect matches, so it plays at the right size, but it is a lower-resolution source than
-  its siblings.
+  its siblings. **Flagged for redelivery** (`Docs/PINOY-ART.md` item 12): at the 396-tall cell it
+  is still downscaled (512 to 396, 1.3 source pixels per sheet pixel against 2.6 for its
+  siblings), so it is not magnified today, but it has the least margin of any clip and is the one
+  that would go soft first if the cell grew again.
 - **Four sheets are narrower grids at the usual frame size**: Forest Boar `skill`, Grey Wolf `idle`
   and Hollowed Guard `idle` are 8 by 8, and Carrion Vulture `idle` is 8 by 7 with 55 frames. The
   Forest Boar `skill` manifest names a start section (frame 0) and an end section (frame 63) and no

@@ -12,8 +12,8 @@ DESIGN-BUILD-ORDER.md defines as a regression rather than a reading.
 
 The propagation the postprocessor would have bought already exists for the one group that grows.
 Tools/import-sprite-sheets.ps1 writes every new sheet's .meta by copying ANY existing sheet .meta
-out of Sprites/Units and stamping a fresh guid (its note 5). So the 214 metas this script writes
-ARE the template for every sheet Pinoy delivers from here on, by construction rather than by
+out of Sprites/Units and stamping a fresh guid (its note 5). So the 334 sheet metas this script
+writes ARE the template for every sheet Pinoy delivers from here on, by construction rather than by
 anyone remembering. The other three groups are closed sets.
 
 What the policy is, and what measured it
@@ -67,35 +67,38 @@ GROUPS = [
     Group(
         name="Units (battle sprite sheets)",
         folder="Assets/Resources/Sprites/Units",
-        # 4096, which is what these already import at, stated per platform instead of inherited
-        # from DefaultTexturePlatform. maxTextureSize is the one setting that MUST NOT bite here:
-        # a sheet is a cols x rows grid of frames, and any clamp rescales the whole sheet and
-        # shears that grid, which is the failure import-sprite-sheets.ps1 notes 3 and 5 exist to
-        # prevent. There is also nothing to gain. A frame is 220x260 and its body occupies
-        # bodyFraction (median 0.53) of that, so 138 source pixels; on screen at 1920x1080 the
-        # body spans UnitRig.HumanoidTop (1.71 world units) against BattleStage's
+        # 4096, stated per platform instead of inherited from DefaultTexturePlatform, and at least
+        # the largest sheet (3240 wide). maxTextureSize is the one setting that MUST NOT bite
+        # here: a sheet is a cols x rows grid of frames, and any clamp rescales the whole sheet
+        # and shears that grid, which is the failure import-sprite-sheets.ps1 notes 3 and 5 exist
+        # to prevent.
+        #
+        # The resolution is the cell's, set in Tools/rewire_sprites.py: 336x396. A body occupies
+        # bodyFraction (median 0.55) of the cell, so about 218 sheet pixels; on screen at
+        # 1920x1080 it spans UnitRig.HumanoidTop (1.71 world units) against BattleStage's
         # orthographicSize 3.65, which is 1.71 / 7.3 * 1080 = 253 px, times cos(28) for the
-        # camera's pitch = 219 px. The art is MAGNIFIED about 1.6x before anything is cut.
-        # 2400x1080 asks for no more: an orthographic camera fixes the vertical, so a wider
-        # screen shows more width at the same pixels-per-unit.
+        # camera's pitch = 223 px at a hero's scale. That is about 1.03 screen pixels per texel
+        # for the median hero. The old 220x260 cell put it at 1.57, and a DXT5 block magnified
+        # 1.6x is a visible 6 px blotch. 2400x1080 asks for no more: an orthographic camera fixes
+        # the vertical, so a wider screen shows more width at the same pixels-per-unit.
         max_size=4096,
         npot=0,            # None. A sheet must never be resized to a power of two.
-        mipmap=0,          # Never minified, so a mip chain is 33% of nothing.
-        filter_mode=1,     # Bilinear. Point would alias at a non-integer 1.6x magnification.
-        # DXT5 Crunched. BC7 and DXT5 are both 8 bits per pixel on Windows, so neither moves the
-        # build by a byte; crunch is the only lever that keeps every pixel and every frame.
-        # It stores the same DXT5 blocks entropy-coded on disk and transcodes them at load, so
-        # VRAM is unchanged and only the download shrinks.
-        win_format=DXT5_CRUNCHED,
-        # ASTC 5x5 rather than 6x6, and the block size is chosen by the frame grid rather than by
-        # taste. 220, 260, 1980 and 2080 all divide by 5, so every frame boundary in the sheet is
-        # also a block boundary and no block can straddle two animation frames. 6x6 would:
-        # 220/6 is not an integer, so a block on the seam mixes the end of one frame with the
-        # start of the next, which is bleed across frame boundaries - the same artifact
-        # import-sprite-sheets.ps1 note 3 refuses to let the resampler introduce.
-        android_format=ASTC_5x5,
-        crunch_quality=100,
-        note="214 sheets, 93% of the texture budget",
+        mipmap=0,          # Never minified at 1080p, so a mip chain is 33% of nothing.
+        filter_mode=1,     # Bilinear. Point would alias at a non-integer magnification.
+        # BC7, not crunched. Crunch was the old choice because it shrank the download for free,
+        # but crunch only exists for DXT, and DXT5's two colour endpoints per 4x4 block are the
+        # blotches. BC7 is the same 8 bits per pixel, so VRAM per pixel does not move; the build
+        # grows by the crunch saving. It needs both sheet dimensions to be multiples of 4, which
+        # is half of why the cell is 336x396 (see rewire_sprites.py) and not 330x390.
+        win_format=BC7,
+        # ASTC 6x6, chosen by the frame grid as 5x5 was before it. 336 and 396 both divide by 6,
+        # so every frame boundary is also a block boundary and no block mixes the end of one
+        # frame with the start of the next - the bleed import-sprite-sheets.ps1 note 3 refuses to
+        # let the resampler introduce. At 3.56 bits per pixel it costs 0.69x what 5x5 did per
+        # pixel, which pays back most of the 2.33x the larger cell adds.
+        android_format=ASTC_6x6,
+        crunch_quality=50,  # unused: nothing in this group is crunched
+        note="334 sheets at 336x396 cells, almost the whole texture budget",
     ),
     Group(
         name="Portraits",

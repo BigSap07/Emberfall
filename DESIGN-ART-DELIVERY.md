@@ -112,11 +112,16 @@ look, assembled from primitives. That is what most enemies still do, and it stay
 - Partial transparency is fine and will render correctly (soft edges, semi-transparent effects
   on the character itself), since the game blends the alpha channel properly rather than just
   treating it as on/off.
-- **Keep the working resolution reasonable.** The current import setting caps the image at 1024
-  pixels on its longest edge; anything larger gets shrunk down to fit that on import, so
-  there's no benefit to delivering bigger than that. The shipped placeholder is 256 x 448.
-  There's no required exact size beyond staying at or under that cap; what determines the
+- **Keep the working resolution reasonable.** Everything in `Sprites/Units` imports with a cap of
+  4096 pixels on its longest edge (`Tools/texture-import-policy.py`, the Units group); anything
+  larger gets shrunk down to fit that on import. This line used to say 1024, which no setting in
+  the project has carried since the policy was applied. A character's body stands about 220
+  screen pixels tall at 1920 x 1080, so there is little to gain past roughly 1000 pixels tall.
+  There's no required exact size beyond staying at or under the cap; what determines the
   character's proportions on screen is the width-to-height *ratio* of the canvas, covered next.
+- **A sheet's frames should be at least 396 pixels tall**, because every frame is fitted into a
+  396-tall cell (section 3). A shorter frame is magnified to fit and comes out softer than the
+  rest of its set. The usual delivery, 880 x 1040 a frame, has room to spare.
 
 ### Sprite sheets: two import settings that must not be left at their defaults
 
@@ -152,6 +157,27 @@ downscaled or distorted sheet would still play back at the right timing (the fra
 UV space, which is resolution-independent), just at a visibly lower resolution than the source
 art - so this is a quality issue on an otherwise-working sheet, not a correctness one.
 
+### Sprite sheets: compression, and why the cell is 336 x 396
+
+Nobody delivering art sets these; they are written into every `.meta` in `Sprites/Units` by
+`Tools/texture-import-policy.py`, and a new sheet's `.meta` is copied from an existing one.
+
+- **Windows: BC7, not crunched.** It used to be DXT5 Crunched. DXT5 stores two colours per 4 x 4
+  block, and when a unit was drawn at 1.6 screen pixels per texel those blocks showed as blotches.
+  BC7 costs the same 8 bits per pixel in memory, but it cannot be crunched, and crunch was
+  what kept the sheets small on disk: they packed to 139 MB in the Windows player as DXT5
+  Crunched and are about 3 GB as BC7 at the larger cell, before the zip.
+- **Android: ASTC 6x6**, 3.56 bits per pixel. It was ASTC 5x5.
+- **Max size 4096, no power-of-two resize, no mipmaps, bilinear.**
+
+Both formats constrain the cell. BC7 compresses nothing whose width or height is not a multiple
+of 4 (Unity has refused it since 2021.2; the sheet would ship uncompressed at four times the
+memory), and a sheet is 7 to 9 cells wide and 7 or 8 tall, so the cell itself has to be a
+multiple of 4. ASTC 6x6 wants it a multiple of 6 as well, so that every frame boundary is a block
+boundary and no block mixes two frames. **336 x 396 is the smallest cell at 1.5 times the old
+220 x 260 that is a multiple of 12 both ways and keeps its shape within half a pixel.** A 9 x 8
+sheet is 3024 x 3168.
+
 ## 3. Sizing: fixed height, no fixed box
 
 This is the part most different from drawing a portrait or an icon into a set frame, so it's
@@ -177,25 +203,41 @@ a normal build, and go wider for a deliberately bulky read or narrower for a sli
 ### Sprite sheets: the importer pads every frame to one cell
 
 A sheet does not get the freedom above. `Tools/rewire_sprites.py` turns every delivered sheet
-into a grid of **220 x 260 cells** (aspect 0.846) before the game sees it, and the sidecar
+into a grid of **336 x 396 cells** (aspect 0.8485) before the game sees it, and the sidecar
 records that cell as `frameWidth` and `frameHeight`. The loader reads the character's width off
 that cell, so what decides the on-screen width is what the importer puts inside it. `fit_frame`
 in the script does this for each source frame:
 
-- **Fit by height.** The frame is scaled uniformly (never stretched) to 260 tall.
-- **Pad to the cell.** The scaled frame is centred horizontally in a transparent 220 x 260 cell.
-  A 720 x 1280 frame (aspect 0.5625) becomes 146 x 260 at an x offset of 37; an 880 x 1040
-  frame (0.846) fills the cell exactly and comes out identical to a plain resize.
-- **Fit by width if it does not fit.** If the scaled frame would be wider than 220 (a square
-  944 x 944 frame, for instance), it is scaled to 220 wide instead and centred vertically. The
+- **Fit by height.** The frame is scaled uniformly (never stretched) to 396 tall.
+- **Pad to the cell.** The scaled frame is centred horizontally in a transparent 336 x 396 cell.
+  A 720 x 1280 frame (aspect 0.5625) becomes 223 x 396 at an x offset of 56; an 880 x 1040
+  frame (0.846) becomes 335 x 396 with one transparent column beside it.
+- **Fit by width if it does not fit.** If the scaled frame would be wider than 336 (a square
+  944 x 944 frame, for instance), it is scaled to 336 wide instead and centred vertically. The
   script prints a `NOTE` line for every clip where that happens, so it is never silent.
+- **A frame shorter than 396 is magnified, and said so.** The script prints an `UPSCALED` line.
 
 So an artist can deliver a sheet at any frame aspect and the character keeps its drawn
 proportions, but a slim frame yields a slim character inside empty padding, not a wider cell.
-The earlier importer stretched every frame to 220 x 260 whatever its shape; the five Ember
+The earlier importer stretched every frame to the cell whatever its shape; the five Ember
 5-stars, delivered at 720 x 1280, rendered 1.3x to 1.65x too wide until this was fixed. The
 padding is transparent, so it costs nothing on screen, and the sidecar, the import settings and
 `heroes.json` are unaffected by a frame's aspect.
+
+**The one exception is Brenna**, whose 944 x 944 frames were cut into square cells before
+`fit_frame` existed. Her sheets keep that shape at **360 x 360**, so her fractions hold.
+
+**The cell used to be 220 x 260.** At that size a hero was drawn at about 1.57 screen pixels per
+sheet texel at 1920 x 1080, and elites and bosses at about 2.0, which is what made compression
+blocks visible. At 336 x 396 the median hero is drawn at 1.03. Every sheet was re-exported from
+the original deliveries with `rewire_sprites.py --reexport`, which matches each delivered file to
+the shipped clip it reproduces by comparing pixels, rather than guessing from file names.
+Only the PNG and the sidecar's two pixel fields change; every other number in a sidecar, and both
+fractions in the content files, is a fraction of the cell and holds.
+
+**The memory cost.** A 5v5 battle with five 7-clip heroes against five 5-clip enemies holds 60
+sheets: 575 MB of texture on Windows and 255 MB on Android, against 247 MB and 158 MB at the old
+cell and formats.
 
 One more thing worth knowing: each hero already has an overall size number set in the game's
 data (a general "how big does this character read" multiplier, not something this document
@@ -203,6 +245,22 @@ asks you to touch, and not specific to sprites - the same number also scales the
 procedural look). Orrin's is already set larger than the default, because he's meant to read as
 a heavy tank. That scaling happens automatically after your image is placed at the fixed
 height described above; you don't need to compensate for it by drawing him bigger.
+
+**Enemies are the exception: for them, how big you draw the figure in its frame is kept.** The
+fixed height throws that away, so a goblin drawn small and an elite drawn large came out the same
+height and only the size number told them apart, and those numbers were set before any art
+existed. Chapter 1 and 2's elites and bosses rendered 23 to 34 percent larger than the heroes'
+art scale, and the beasts smaller. Each of those enemies' size number is now derived from its
+art as `scale x (median hero magnification) / (its magnification)`, where a unit's magnification
+is its screen pixels per sheet texel at 1920 x 1080: `SilhouetteTop x scale x 130.6 /
+(spriteBodyFraction x frameHeight)`, 130.6 being BattleStage's pixels per world unit (1080 / 7.3)
+times cos 28 for the camera's pitch. The median hero reads 1.03 at the 396 cell (it was 1.57 at
+260, when the enemies were set). That draws every enemy at the median hero's texel density, so
+they stand in the proportions you drew them in. The four named
+bosses (the Collector, the Shepherd, the Forsaken, the Waykeeper) then get a deliberate 10
+percent on top. **So for an enemy, draw it at the size it should be beside a hero drawn in the
+same frame size.** An enemy delivered later needs the same derivation when it is wired; nothing
+applies it automatically.
 
 ## 4. A raised weapon needs its own headroom reported, or it shrinks the body
 

@@ -58,6 +58,9 @@ namespace Emberfall.EditorTools
         private const string HeightKey = "PlayModeScreenshot.Height";
         private const string SuffixKey = "PlayModeScreenshot.Suffix";
         private const string VerifiedKey = "PlayModeScreenshot.Verified";
+        /// <summary>The campaign stage a Battle target fights instead of Session.NextStage, or
+        /// empty for NextStage. StageKey is the schedule's slot index, not this.</summary>
+        private const string BattleStageKey = "PlayModeScreenshot.BattleStage";
 
         /// <summary>
         /// Every run of this tool is on a scratch identity with the cloud held off, unconditionally:
@@ -272,6 +275,12 @@ namespace Emberfall.EditorTools
         ///
         ///     Screen:Summon                  1920x1080, writes screen_Summon.png
         ///     Screen:Summon@2400x1080        2400x1080, writes screen_Summon@2400x1080.png
+        ///     Screen:Battle=2-6              fights stage 2-6, writes screen_Battle=2-6.png
+        ///
+        /// The stage exists because Battle otherwise fights Session.NextStage, which is wherever
+        /// the scratch profile happens to stand, so a capture of the art on a chosen enemy line
+        /// (chapter 2's elites, a boss) had no way to ask for it. It rides in the file name for
+        /// the size's reason: a shot that does not say what it fought can be filed as another.
         ///
         /// The size rides on the target rather than sitting in a second trigger file because the
         /// trigger is one file with one line in it, and an aspect that had to be set separately
@@ -307,6 +316,15 @@ namespace Emberfall.EditorTools
                 }
             }
 
+            string battleStage = "";
+            int eq = target.IndexOf('=');
+            if (eq > 0)
+            {
+                battleStage = target.Substring(eq + 1);
+                target = target.Substring(0, eq);
+                suffix = "=" + battleStage + suffix;
+            }
+
             if (!EditorScratchIdentity.Enter(ScratchProduct))
             {
                 Debug.LogError("PlayModeScreenshot: could not switch to the scratch identity. "
@@ -327,6 +345,7 @@ namespace Emberfall.EditorTools
             SessionState.SetInt(WidthKey, width);
             SessionState.SetInt(HeightKey, height);
             SessionState.SetString(SuffixKey, suffix);
+            SessionState.SetString(BattleStageKey, battleStage);
             SessionState.SetInt(FrameKey, 0);
             SessionState.SetInt(StageKey, 0);
             // Both of these survive a domain reload, so a second run in the same editor session
@@ -790,10 +809,13 @@ namespace Emberfall.EditorTools
 
                 if (name == "Battle" || name == "Result")
                 {
-                    StageDef next = app.Session.NextStage;
+                    string asked = SessionState.GetString(BattleStageKey, "");
+                    StageDef next = asked.Length > 0 ? app.Session.Content.GetStage(asked) : app.Session.NextStage;
                     if (next == null)
                     {
-                        Debug.LogWarning("PlayModeScreenshot: no campaign stage to fight, skipping Battle.");
+                        Debug.LogWarning("PlayModeScreenshot: no campaign stage to fight"
+                                         + (asked.Length > 0 ? " (no stage '" + asked + "')" : "")
+                                         + ", skipping Battle.");
                         SessionState.SetInt(StageKey, slot + 1);
                         return;
                     }

@@ -27,6 +27,7 @@ makes the game look better without holding anything up.
 | 9 | Missing second-basic and stunned sheets on drawn heroes | no; stuns are rare, see item 9 | thirteen sheets |
 | 10 | Notes for future paintings | no | nothing to draw now |
 | 11 | Three questions about your own deliveries | no | answers only |
+| 12 | The Hollowed Mage's skill sheet at full size | no | one sheet, re-exported |
 
 ---
 
@@ -217,6 +218,16 @@ folder it came in, then checked against the character, and is already in the gam
 | Vespera | **Cyrra**, 5-star Umbra | **Not a spelling.** The icon is a white-winged angel with a staff and a tome, which matches Cyrra's battle art. **Was Cyrra renamed on your side, or is Vespera a different character who landed in Cyrra's slot?** |
 
 A "no" to any of these is a file to re-point, not a file to find.
+
+## 12. The Hollowed Mage's skill sheet at full size
+
+The Hollowed Mage's four other animations arrived at 880 x 1040 a frame, like every enemy. Its
+skill arrived at **433 x 512**, about half the size (the file is `Hollowed_mage_skill.mp4.png`).
+It plays at the right size and shape, so nothing is broken, but it carries half the detail of the
+rest of the set, and the game now draws battle art at a higher resolution than before (frames are
+fitted to 396 pixels tall), so that clip has the least room to spare of anything delivered.
+**If the original is still at 880 x 1040, an export at that size is all that is needed.** No
+redrawing.
 
 ---
 
