@@ -1,7 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using Emberfall.Core.Data;
 using Emberfall.Core.Json;
+using Emberfall.Core.Model;
+using Emberfall.Core.Save;
+using Emberfall.Core.Session;
 using Emberfall.Core.Telemetry;
 
 namespace Emberfall.DevHarness
@@ -74,7 +78,7 @@ namespace Emberfall.DevHarness
             return Path.Combine(dir, "emberfall_telemetry.json");
         }
 
-        private static void CheckTelemetry(Emberfall.Core.Data.ContentDatabase db)
+        private static void CheckTelemetry(ContentDatabase db)
         {
             Line("");
             Line("PLAY STATS (Docs/DESIGN-TELEMETRY.md: consent first, anonymous, a whitelist, insert only)");
@@ -84,6 +88,7 @@ namespace Emberfall.DevHarness
             CheckTelemetryQueueAndCaps();
             CheckTelemetryRobustness();
             CheckTelemetryFlagOff();
+            CheckTelemetryHooks(db);
         }
 
         // ------------------------------------------------------------------ the whitelist
@@ -375,6 +380,207 @@ namespace Emberfall.DevHarness
             }
             catch (Exception) { nullOk = false; }
             Check(nullOk, "a recorder with no store at all does not throw");
+        }
+
+        // ------------------------------------------------------------------ the taps on GameSession
+
+        /// <summary>What the harness's stand-in for the game's TelemetryService does with the five
+        /// taps: the same schema builders, into a real TelemetryRecorder. Counts every call so the
+        /// checks can say what was observed, and every refusal so a stage id the whitelist would not
+        /// accept is a failure rather than a silent drop.</summary>
+        private sealed class HarnessSink : ITelemetrySink
+        {
+            public TelemetryRecorder Recorder;
+            public int Attempts, Losses, Clears, LevelUps, LevelsGained, Summons, Refused, Calls;
+            public readonly List<string> CampaignOrder = new List<string>();
+            public int FirstPower = -1, FirstRecommended = -1, FirstWave = -1, FirstBattle = -1;
+            public string FirstStage = "";
+
+            public void Campaign(string eventName, string stage, int wave, int battle, int teamPower, int recommendedPower)
+            {
+                Calls++;
+                if (eventName == TelemetrySchema.StageAttempt) Attempts++;
+                else if (eventName == TelemetrySchema.WaveLost) Losses++;
+                else if (eventName == TelemetrySchema.StageClear) Clears++;
+                CampaignOrder.Add(eventName);
+                if (FirstStage.Length == 0)
+                {
+                    FirstStage = stage;
+                    FirstPower = teamPower;
+                    FirstRecommended = recommendedPower;
+                    FirstWave = wave;
+                    FirstBattle = battle;
+                }
+                if (Recorder != null && !Recorder.Record(eventName, TelemetrySchema.CampaignPayload(stage, wave, battle, teamPower, recommendedPower))) Refused++;
+            }
+
+            public void HeroLevelUp(int count)
+            {
+                Calls++;
+                LevelUps++;
+                LevelsGained += count;
+                if (Recorder != null && !Recorder.Record(TelemetrySchema.HeroLevelUp, TelemetrySchema.CountPayload(count))) Refused++;
+            }
+
+            public void Summon(int count)
+            {
+                Calls++;
+                Summons += count;
+                if (Recorder != null && !Recorder.Record(TelemetrySchema.Summon, TelemetrySchema.CountPayload(count))) Refused++;
+            }
+        }
+
+        private sealed class ThrowingSink : ITelemetrySink
+        {
+            public void Campaign(string eventName, string stage, int wave, int battle, int teamPower, int recommendedPower)
+            {
+                throw new InvalidOperationException("sink told to fail");
+            }
+            public void HeroLevelUp(int count) { throw new InvalidOperationException("sink told to fail"); }
+            public void Summon(int count) { throw new InvalidOperationException("sink told to fail"); }
+        }
+
+        /// <summary>What a scripted session did, counted from the game's own return values and not
+        /// from the sink, so the two can be compared.</summary>
+        private sealed class TelemetryScript
+        {
+            public string Save = "";
+            public int Resolves, LostWaves, ClearedStages, LevelCalls, LevelsGained, Summons;
+            public int PowerBeforeFirstResolve;
+            public string FirstStageId = "";
+            public int FirstRecommended;
+        }
+
+        /// <summary>A Keeper's profile played through the real calls: the recall, the first two
+        /// stages a wave at a time, three level ups, four summons. Deterministic, so two runs differ
+        /// only in what was listening.</summary>
+        private static TelemetryScript PlayTelemetryScript(ContentDatabase db, HeroDef kael)
+        {
+            TelemetryScript t = new TelemetryScript();
+            PlayerProfile p = Onboarding.CreateKeeperProfile(db, OnboardingNow);
+            GameSession ws = new GameSession(db, p);
+            Onboarding.CompleteStep(p, Onboarding.StepWake);
+            Onboarding.Recall(ws, OnboardingNow);
+            Onboarding.CompleteStep(p, Onboarding.StepPrologue);
+            Onboarding.EnsureRecallHeroDeployed(ws);
+
+            StageDef[] stages = { Onboarding.StageFor(db, Onboarding.StepWaveResult), Onboarding.StageFor(db, Onboarding.StepSecondStage) };
+            t.FirstStageId = stages[0].Id;
+            t.FirstRecommended = stages[0].RecommendedPower;
+            t.PowerBeforeFirstResolve = p.EffectiveTeamPower(db);
+            int seed = 7100;
+            for (int s = 0; s < stages.Length; s++)
+            {
+                for (int n = 0; n < 14 && !p.HasClearedStage(stages[s].Id); n++)
+                {
+                    WaveResolution r = ws.ResolveWave(stages[s], seed, OnboardingNow + t.Resolves);
+                    seed += 101;
+                    if (r.Refused != WaveRefusal.None) break;
+                    t.Resolves++;
+                    if (r.LostBattle > 0) t.LostWaves++;
+                    if (r.StageCleared) t.ClearedStages++;
+                }
+            }
+
+            p.Gold += 100000;
+            HeroInstance hero = p.FindHeroByDefId(Onboarding.RecallHero(db).Id);
+            for (int i = 0; i < 3; i++)
+            {
+                LevelUpResult up = ws.LevelUpHero(hero, 1);
+                if (up.Success) { t.LevelCalls++; t.LevelsGained += up.LevelsGained; }
+            }
+            for (int i = 0; i < 4; i++)
+            {
+                p.Shards = db.Balance.SummonCost;
+                if (ws.Summon(9100 + i, OnboardingNow + 50 + i).Success) t.Summons++;
+            }
+            t.Save = SaveSerializer.Serialize(p);
+            return t;
+        }
+
+        private static void CheckTelemetryHooks(ContentDatabase db)
+        {
+            HeroDef kael = Onboarding.RecallHero(db);
+            if (kael == null) { Check(false, "the recall hero exists, so the telemetry taps can be exercised"); return; }
+
+            // Every campaign stage id the taps will hand over must pass the whitelist, or its events would vanish silently.
+            bool idsOk = db.AllStages.Count > 0;
+            string badId = "";
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                JsonValue payload = TelemetrySchema.CampaignPayload(db.AllStages[i].Id, 12, 12, 999999, db.AllStages[i].RecommendedPower);
+                if (TelemetrySchema.TryBuild("stage_clear", payload, TelemetryBuild) == null) { idsOk = false; badId = db.AllStages[i].Id; }
+            }
+            Check(idsOk, "every one of the " + db.AllStages.Count + " campaign stage ids passes the whitelist as a stage" + (badId.Length > 0 ? " (refused: " + badId + ")" : ""));
+
+            bool wasEnabled = TelemetrySwitch.Enabled;
+            ITelemetrySink wasSink = TelemetryHooks.Sink;
+            try
+            {
+                // ---- A: nothing listening. The session as origin/main plays it.
+                TelemetryHooks.Sink = null;
+                TelemetrySwitch.Enabled = true;
+                TelemetryScript plain = PlayTelemetryScript(db, kael);
+
+                // ---- B: a sink is attached but the switch is off: it must never be called.
+                HarnessSink offSink = new HarnessSink();
+                TelemetryHooks.Sink = offSink;
+                TelemetrySwitch.Enabled = false;
+                TelemetryScript off = PlayTelemetryScript(db, kael);
+                TelemetrySwitch.Enabled = true;
+                Check(offSink.Calls == 0, "with the switch off no tap reaches the sink (" + offSink.Calls + " calls)");
+                Check(off.Save == plain.Save, "and the session with the switch off and a sink attached saves byte for byte what the session with nothing attached saves");
+
+                // ---- C: the switch on, stats on, a recorder behind the sink.
+                MemoryTelemetryStore store = new MemoryTelemetryStore();
+                TelemetryRecorder rec = NewTelemetry(store);
+                rec.SetConsent(true);
+                HarnessSink sink = new HarnessSink();
+                sink.Recorder = rec;
+                TelemetryHooks.Sink = sink;
+                TelemetryScript watched = PlayTelemetryScript(db, kael);
+                Check(watched.Save == plain.Save,
+                      "OBSERVATION CHANGES NOTHING: the session played with the taps live and stats on saves byte for byte what the unobserved session saves");
+
+                Check(sink.Attempts == watched.Resolves && sink.Losses == watched.LostWaves && sink.Clears == watched.ClearedStages
+                      && watched.Resolves > 0 && watched.ClearedStages > 0,
+                      "the taps see exactly what the game did: " + sink.Attempts + " attempts = " + watched.Resolves + " wave resolves, "
+                      + sink.Losses + " lost = " + watched.LostWaves + ", " + sink.Clears + " clears = " + watched.ClearedStages);
+                Check(sink.LevelUps == watched.LevelCalls && sink.LevelsGained == watched.LevelsGained && sink.Summons == watched.Summons
+                      && watched.LevelCalls > 0 && watched.Summons > 0,
+                      "and the level ups (" + sink.LevelsGained + " levels in " + sink.LevelUps + " calls) and the summons (" + sink.Summons + ") are counted as the game did them");
+                Check(sink.FirstStage == watched.FirstStageId && sink.FirstWave == 1 && sink.FirstBattle == 1
+                      && sink.FirstPower == watched.PowerBeforeFirstResolve && sink.FirstRecommended == watched.FirstRecommended,
+                      "the first stage_attempt carries the stage id, wave 1 battle 1, the line's EffectiveTeamPower (" + sink.FirstPower
+                      + ") and the stage's recommendedPower (" + sink.FirstRecommended + ")");
+                Check(sink.CampaignOrder.Count > 0 && sink.CampaignOrder[0] == TelemetrySchema.StageAttempt,
+                      "an attempt is observed before the wave it starts is fought");
+                int expectedQueued = 1 + sink.Calls;
+                Check(sink.Refused == 0 && rec.Queued == expectedQueued,
+                      "every observed moment became one queued event and none was refused by the whitelist (" + rec.Queued + " queued, " + expectedQueued + " expected)");
+
+                // ---- D: a sink behind stats that are OFF records nothing, and the session is still the same one.
+                TelemetryRecorder quiet = NewTelemetry(new MemoryTelemetryStore());
+                quiet.SetConsent(false);
+                HarnessSink quietSink = new HarnessSink();
+                quietSink.Recorder = quiet;
+                TelemetryHooks.Sink = quietSink;
+                TelemetryScript declined = PlayTelemetryScript(db, kael);
+                Check(declined.Save == plain.Save && quiet.Queued == 0 && quiet.TakeBatch() == null && quietSink.Refused == quietSink.Calls,
+                      "with stats off the taps are heard, nothing is queued, and the session is the same session");
+
+                // ---- E: a sink that throws cannot break the game.
+                TelemetryHooks.Sink = new ThrowingSink();
+                bool threw = false;
+                TelemetryScript angry = null;
+                try { angry = PlayTelemetryScript(db, kael); } catch (Exception) { threw = true; }
+                Check(!threw && angry != null && angry.Save == plain.Save, "a sink that throws on every tap is swallowed: the session plays and saves the same");
+            }
+            finally
+            {
+                TelemetryHooks.Sink = wasSink;
+                TelemetrySwitch.Enabled = wasEnabled;
+            }
         }
 
         // ------------------------------------------------------------------ the switch

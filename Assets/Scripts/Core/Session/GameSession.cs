@@ -5,6 +5,7 @@ using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Progression;
+using Emberfall.Core.Telemetry;
 
 namespace Emberfall.Core.Session
 {
@@ -412,6 +413,7 @@ namespace Emberfall.Core.Session
 
             result.NewLevel = hero.Level;
             result.Success = result.LevelsGained > 0;
+            if (result.Success) TelemetryHooks.HeroLevelUp(result.LevelsGained);
             if (!result.Success) result.Message = "Not enough gold.";
             else if (hero.Level >= cap) result.Message = "Level cap reached.";
             return result;
@@ -804,6 +806,7 @@ namespace Emberfall.Core.Session
         /// </summary>
         public void RecordBattleLost(StageDef stage, int wave, int battle)
         {
+            TelemetryHooks.WaveLost(this, stage, wave, battle);
         }
 
         /// <summary>Forgets any in-stage position for this stage. Called when a stage completes,
@@ -895,6 +898,7 @@ namespace Emberfall.Core.Session
             {
                 win.WaveCleared = true;
                 win.StageCleared = true;
+                TelemetryHooks.StageCleared(this, stage, wave, battle);
                 win.Rewards = GrantBattleResult(stage, true, nowUnix,
                                                 paidWaves * WaveDripGold(stage),
                                                 paidWaves * WaveDripAccountXp(stage));
@@ -1006,6 +1010,7 @@ namespace Emberfall.Core.Session
 
             int wave, battle;
             ResumePointFor(stage, out wave, out battle);
+            TelemetryHooks.StageAttempt(this, stage, wave, battle);
             res.Wave = wave;
             res.WaveCount = Math.Max(1, stage.WaveCount);
             res.BattleCount = Math.Max(1, stage.BattleCount);
@@ -2515,6 +2520,7 @@ namespace Emberfall.Core.Session
             outcome.Success = true;
             outcome.Hero = pulled;
             RecordEventActivity(EventActivityKind.SummonPerformed, 1, nowUnix);
+            TelemetryHooks.Summon(1);
 
             HeroInstance existing = Profile.FindHeroByDefId(pulled.Id);
             if (existing == null)
