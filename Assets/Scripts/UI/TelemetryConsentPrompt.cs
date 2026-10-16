@@ -30,6 +30,7 @@ namespace Emberfall.UI
 
         private GameApp _app;
         private RectTransform _root;
+        private RectTransform _panel;
         private UIButton _yes;
         private UIButton _no;
         private bool _showing;
@@ -65,13 +66,21 @@ namespace Emberfall.UI
 
         private void Build()
         {
+            // THE ROOT STAYS ACTIVE, ALWAYS. This component lives on it and its LateUpdate is what
+            // decides when the question comes up, so a root that was switched off would never run
+            // again (the first capture run showed exactly that). Everything that is drawn lives
+            // under _panel, which is the part that is shown and hidden. The root has no graphic,
+            // so while the panel is hidden it takes no tap.
+            _panel = UIBuilder.Node("Panel", _root);
+            UIBuilder.FillParent(_panel, 0f);
+
             // The scrim swallows every tap, so nothing under the question can be pressed.
-            Image scrim = _root.gameObject.AddComponent<Image>();
+            Image scrim = _panel.gameObject.AddComponent<Image>();
             scrim.sprite = TextureLab.White;
             scrim.color = UITheme.WithAlpha(UITheme.BackdropDeep, 0.94f);
             scrim.raycastTarget = true;
 
-            RectTransform card = UIBuilder.Node("Card", _root);
+            RectTransform card = UIBuilder.Node("Card", _panel);
             UIBuilder.Box(card, 0f, 0f, 1100f, 560f, new Vector2(0.5f, 0.5f));
             EmberforgeUI.PanelOn(card, true);
 
@@ -100,7 +109,7 @@ namespace Emberfall.UI
             UIBuilder.Box(_no.Root, 230f, 56f, 380f, 96f, new Vector2(0.5f, 0f));
             _no.OnClick(delegate { Answer(false); });
 
-            _root.gameObject.SetActive(false);
+            _panel.gameObject.SetActive(false);
         }
 
         private void LateUpdate()
@@ -126,14 +135,14 @@ namespace Emberfall.UI
         {
             Debug.Log("Emberfall: the play stats question is up.");
             _showing = true;
-            _root.gameObject.SetActive(true);
+            _panel.gameObject.SetActive(true);
             _root.SetAsLastSibling();
         }
 
         private void Hide()
         {
             _showing = false;
-            _root.gameObject.SetActive(false);
+            _panel.gameObject.SetActive(false);
         }
 
         private void Answer(bool yes)

@@ -729,6 +729,20 @@ namespace Emberfall.DevHarness
             Check(string.Join("\n", settingsLines.ToArray()) == string.Join("\n", DecidedSettingsTelemetryLines),
                   "and the " + settingsLines.Count + " lines of SettingsScreen.cs are exactly the decided list");
 
+            // THE PROMPT'S HOST MUST STAY ACTIVE. The component that decides when the question comes
+            // up sits on the root object, and a MonoBehaviour on an inactive object never runs
+            // LateUpdate: the first capture run photographed no prompt for exactly that reason. So
+            // only the panel under the root may be switched off.
+            string promptPath = Path.Combine(Path.Combine(scripts, "UI"), "TelemetryConsentPrompt.cs");
+            bool hostActive = false;
+            if (File.Exists(promptPath))
+            {
+                string prompt = File.ReadAllText(promptPath);
+                hostActive = !prompt.Contains("_root.gameObject.SetActive(") && prompt.Contains("_panel.gameObject.SetActive(true)")
+                             && prompt.Contains("AddComponent<TelemetryConsentPrompt>()");
+            }
+            Check(hostActive, "the consent prompt switches only its panel on and off, never the root object its component lives on");
+
             // The stats client is built only on a player build with a usable config, by the one file allowed to.
             string gameAppPath = Path.Combine(Path.Combine(scripts, "Game"), "GameApp.cs");
             string servicePath = Path.Combine(Path.Combine(Path.Combine(scripts, "Game"), "Telemetry"), "TelemetryService.cs");
