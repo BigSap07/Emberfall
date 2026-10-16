@@ -102,6 +102,13 @@ namespace Emberfall.EditorTools
             Debug.Log("PlayModeScreenshot: loaded, build marker " + BuildMarker);
             EditorApplication.update += Pump;
             EditorApplication.update += PollTriggerFile;
+            // An interrupted capture must not leave the consent prompt switched on for a manual
+            // editor Play: the key is cleared whenever Play mode ends, whoever ended it.
+            EditorApplication.playModeStateChanged += delegate (PlayModeStateChange change)
+            {
+                if (change == PlayModeStateChange.ExitingPlayMode || change == PlayModeStateChange.EnteredEditMode)
+                    SessionState.SetBool(TelemetryService.PromptInEditorKey, false);
+            };
         }
 
         private static void PollTriggerFile()
@@ -421,11 +428,12 @@ namespace Emberfall.EditorTools
             }
             else EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, true);
 
-            // The play stats' four targets start with no answer on file, so the scratch device
-            // file is removed (scratch only: the real one is never touched), and the consent
-            // prompt is allowed up for the two that photograph it and for no other target.
+            // EVERY target starts with no play-stats answer on file, so the scratch device file is
+            // removed (scratch only: the real one is never touched) and Screen:Settings and
+            // Screen:ALL are the same picture every night. The consent prompt is allowed up for the
+            // two targets that photograph it and for no other.
             bool consentTarget = target == "Screen:OnboardConsent" || target == "Screen:OnboardConsentAnswered";
-            if ((consentTarget || target.StartsWith("Screen:SettingsStats")) && EditorScratchIdentity.IsScratch)
+            if (EditorScratchIdentity.IsScratch)
             {
                 string telemetryFile = Path.Combine(Application.persistentDataPath, TelemetryService.FileName);
                 if (File.Exists(telemetryFile)) File.Delete(telemetryFile);
