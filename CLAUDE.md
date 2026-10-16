@@ -44,9 +44,11 @@ campaign progression, summoning, idle income, local saving. Landscape, touch-fir
 - **Content is JSON** in `Assets/Resources/Content`, eight files: `armor.json`, `balance.json`,
   `campaign.json`, `enemies.json`, `events.json`, `floor-conditions.json`, `heroes.json`,
   `relics.json`. Balance and content changes go there, not into code. All eight are hashed into
-  `ContentDatabase.ContentVersion`, so any edit retires every recorded guild dungeon replay. A
-  ninth, `guild-path.json` (the Guild Path's pay and prices), is deliberately NOT hashed: nothing
-  in it is read by a fight, so it loads through `ContentDatabase.LoadGuildPath` after `Load`.
+  `ContentDatabase.ContentVersion`, so any edit retires every recorded guild dungeon replay. Three
+  more are deliberately NOT hashed, because nothing in them is read by a fight, and each loads
+  after `Load`: `guild-path.json` (the Guild Path's pay and prices) through
+  `ContentDatabase.LoadGuildPath`, `guild-tech.json` through `LoadGuildTech`, and
+  `onboarding.json` (the first session and the feature unlock table) through `LoadOnboarding`.
   `vfx.json` (hit feedback) is NOT part of `ContentVersion` either: `ContentDatabase` never reads
   it, `VfxDirector` loads it through `VfxConfig`, and it is presentation only.
 - **Code goes on branches, never on `main`.** Branch first, commit there, leave `main` alone.

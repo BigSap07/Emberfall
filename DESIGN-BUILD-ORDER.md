@@ -12,7 +12,9 @@ costs its own hero, and ENGINE-GAPS pass 3 said the nine clauses pass 2 left, tu
 and re-solved the campaign once at the end, and the economy model started summoning at the real
 placeholder rates in `balance.json` and the campaign was re-solved against them, and then after the
 fusion and ascension spine (star-gated level caps, conversions, ascension) was built and measured
-against the campaign as committed - against a live `Tools/build-check.ps1` run, a live
+against the campaign as committed, and then after the battle stats, the battle HUD, the 336 by 396
+sprite cell and the first session with its unlock table were merged into one tree and measured
+together - against a live `Tools/build-check.ps1` run, a live
 `validate_heroes.py` run and the files themselves, not against this document's own prior claims.
 Where this file and the archive disagree, this file is right about status and the archive is right
 about reasoning.
@@ -23,6 +25,7 @@ about reasoning.
   it does not exist.
 - **In progress** names live branches. A branch name is only ever cited there, only while it is
   unmerged, and it goes away the moment the work lands and the files can speak for themselves.
+  None is live now.
 - Numbers here are measurements from a real run, not estimates. The two that matter most are the
   harness failure count and the validator failure count, and both are named below.
 
@@ -30,16 +33,17 @@ about reasoning.
 
 Two runs decide whether the tree is healthy, and they measure different things.
 
-- **`Tools/build-check.ps1`: 2 failures on `main`, measured from a clean run.** It lints the docs,
+- **`Tools/build-check.ps1`: 2 failing checks, measured from a clean run of the tree with the
+  unlock table in it.** It lints the docs,
   compiles the core and the Unity-facing code against the shim in `Tools/UnityShim`, checks that
   nothing of the Dev Arena reaches a release build, checks that editor automation cannot reach the
   real cloud (the offline-switch stage, under **Tooling**), and runs `Tools/DevHarness`. Both
   failures are harness checks, and both read the 72-stage campaign against numbers carried by
   position from the shipped 24 (**The campaign power curve**). **The geared CEIL band** fails
-  first at `1-7`, 62.7% against the ordinary band's [78%, 92%]. **The campaign power-band guard**
-  has ten stages over their band, both walls of every chapter from 2 to 6: `2-6`, `2-12`, `3-6`,
-  `3-12`, `4-6`, `4-12`, `5-6`, `5-12`, `6-6` and `6-12`, from x1.097 over x1.091 at `4-12` to
-  x1.189 over x1.135 at `3-12`. The balance line is Kael, Kiva, Isara, Adric and Orelle, and the pinned line the CEIL is read with is
+  first at `1-3`, 100% against the ordinary band's [78%, 92%]. **The campaign power-band guard**
+  has eleven stages out of their band: `1-12` (x0.958 under x1.000), `2-1` (x1.061 under x1.100),
+  and over it `2-6`, `2-12`, `3-6`, `3-12` (x1.207 over x1.135), `4-6`, `5-6`, `5-12`, `6-6` and
+  `6-12`. **A retune is owed** (below, under the unlock table paragraph). The balance line is Kael, Kiva, Isara, Adric and Orelle, and the pinned line the CEIL is read with is
   Kael, Aeron, Nereia, Seraphine and Isolde. ENGINE-GAPS pass 3 turned `buffsOnly` on, which took
   chapter 1's finale CEIL from 68% to 27% and four walls out of the power band, so
   `Tools/solve-recommended-power.ps1` was re-run once, after every other change had landed: 22 of 24
@@ -75,26 +79,31 @@ Two runs decide whether the tree is healthy, and they measure different things.
   **The power-band guard allows 0.005 past either edge** (`BandTolerance`) **and prints ratios to
   three decimals.** `2-1` once failed the build by 0.09% and printed as "x1.1 under x1.1".
   **The unlock table moved both, and nothing was retuned to answer it** (`DESIGN-ONBOARDING.md`).
-  The walks and the pinned lines now spend a feature only once a player arriving at the stage
-  has it: no conversion or ascension before 1-6 is cleared, no armor worn before 1-12, no guild
-  tech before 2-1, and the walks never used relics or talents. Measured against the base run:
+  Before it, the CEIL band failed first at `1-7` (62.7%) and the power band had ten stages out, both
+  walls of every chapter from 2 to 6, from x1.097 over x1.091 at `4-12` to x1.189 over x1.135 at
+  `3-12`. The walks and the pinned lines now spend a feature only once a player arriving at the
+  stage has it (`FeatureGate.IsUnlockedArriving`): no conversion or ascension before 1-6 is
+  cleared, no armor worn before 1-12, no guild tech before 2-1, and the walks never used relics or
+  talents. Measured against the base run:
   **the geared CEIL band now fails first at `1-3`** (100% against [78%, 92%]): 1-3 to 1-5 were
   floor-pinned while the line wore armor and are graded now that it cannot. Chapter 1's CEIL moved
   1-6 86.8% to 71.8%, 1-7 62.7% to 74.1%, 1-8 87.2% to 94.1%, 1-9 83.6% to 71.4%, 1-10 83.8% to
   55.3%, 1-11 42.6% to 1.8% and 1-12 68% to 67.2%; chapter 2 onwards did not move. **The power
-  band has eleven stages out, not ten**: 1-12 x0.958 under x1.000 and 2-1 x1.061 under x1.100
-  are new, 4-12 came back inside (x1.095 within tolerance), and the other nine moved by up to
-  x0.027 (3-12 x1.189 to x1.207, 6-6 x1.168 to x1.195, 2-12 x1.142 to x1.118). The reference
-  walk's 1-12 wall entry fell from x1.074 to x1.003. `CheckFusionNeverGates` still passes (all
-  20 reference walks finish; the 1-6 wall's worst case went from 3 extra sittings to 4),
-  `CheckGuildTechNeverGates` and `CheckStageWinnability` still pass, and
-  `CheckEconomyRespondsToIncome`'s response rose from 0.6 to 0.89. No pinned baseline moved:
-  the recall leaves a new player byte for byte on the profile every walk starts from. A retune is
-  owed and follows this work.
+  band has eleven stages out, not ten**: `1-12` and `2-1` are new, `4-12` came back inside (x1.095
+  within tolerance), and the other nine moved by up to x0.027 (3-12 x1.189 to x1.207, 6-6 x1.168
+  to x1.195, 2-12 x1.142 to x1.118). The reference walk's 1-12 wall entry fell from x1.074 to
+  x1.003. `CheckFusionNeverGates` still passes (all 20 reference walks finish; the 1-6 wall's
+  worst case went from 3 extra sittings to 4), `CheckGuildTechNeverGates` and
+  `CheckStageWinnability` still pass, and `CheckEconomyRespondsToIncome`'s response rose from 0.6
+  to 0.89. No pinned baseline moved: the recall leaves a new player byte for byte on the profile
+  every walk starts from. The merged tree reproduces the same two failures at the same values.
+  **The owner accepted these values as the known failures.** A retune of `recommendedPower` and
+  the stage levels is owed and is left to a later run. Until it is done, the two failures and the
+  values above are the baseline, and a third failure is a regression.
   **A 3rd failure is a regression.** Diagnose it; do not add it to the list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
-- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 60 tracked markdown files and reports 123
+- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 63 tracked markdown files and reports 123
   baselined violations and **0 new**. The baseline is the known debt in
   `Tools/doc-lint-baseline.txt`; the zero is the number that has to stay zero.
 - **`Tools/HeroValidator/validate_heroes.py Assets/Resources/Content/heroes.json`: 0 failures.**
@@ -115,7 +124,8 @@ Two runs decide whether the tree is healthy, and they measure different things.
 Three files in `Tools/DevHarness` hold what the harness compares against, and a moved line in any
 of them needs a stated reason in the commit that moves it.
 
-- **`stage-fingerprint-baseline.txt`: 72 lines.** One per shipped stage per sampled seed, over the
+- **`stage-fingerprint-baseline.txt`: 216 lines.** One per shipped stage per sampled seed (72 stages,
+  three seeds), over the
   stage's opening battle fought by a fresh profile's starting three. The ENGINE-GAPS content pass
   moved all 72, Kael's Unusable Cover and Kiva's Broken Links being in every opening battle.
   **ENGINE-GAPS pass 3 moved all 72 again**, attributed by regenerating at each step: `buffsOnly`
@@ -228,7 +238,12 @@ rather than a defect.
 
 ### Content
 
-Eight JSON files in `Assets/Resources/Content`. Balance and content changes go there, not into code.
+Twelve JSON files in `Assets/Resources/Content`. Balance and content changes go there, not into code.
+**Eight are hashed into `ContentDatabase.ContentVersion`** (heroes, enemies, campaign, balance,
+relics, events, armor and floor conditions), so an edit to any of them retires every recorded guild
+dungeon replay. **Four are not**, because no fight reads them and each loads after `Load`:
+`guild-path.json` (`LoadGuildPath`), `guild-tech.json`, `onboarding.json` (`LoadOnboarding`, read
+through `ContentService`) and `vfx.json` (`VfxConfig`, which `ContentDatabase` never reads).
 
 - `heroes.json`: 94 heroes, **all 94 authored**. 8 one-star, 12 two-star, 18 three-star,
   26 four-star, 30 five-star.
@@ -237,7 +252,10 @@ Eight JSON files in `Assets/Resources/Content`. Balance and content changes go t
   **The ones with a battle sheet in `Assets/Resources/Sprites/Units` carry no `spriteStatus`; the
   rest are `pending`** and draw the mannequin. **The shipped 12 are retired but kept**: no
   stage fields them, so neither the guild dungeon nor the Deep Recital draws them, and they stay in
-  the file because `PrologueScript` spawns seven of them by id.
+  the file because `PrologueScript` spawns seven of them by id. **The visual `scale`,
+  `spriteBodyFraction` and `spriteFootFraction` fields are inside the hash**: the 336 by 396 sprite
+  cell changed the `visual` block of 22 enemies and nothing else in the file, and that retired every
+  recorded guild dungeon replay once. It is presentation only and no fight reads it.
 - `campaign.json`: **Pinoy's six chapters of twelve, 72 stages** (The Forgotten Road, The Abandoned
   Crossing, City of Strangers, Beneath the Old Kingdom, The Divided Realm, The Forgotten Sanctuary),
   fielding only the 84. Stage 6 of each chapter is `"miniboss": true` (`StageDef.IsMiniboss`) and
@@ -761,7 +779,10 @@ at `max_save_version` 19, and `push_save` refuses a version 20 save until that r
 Version 21 records the first session: `tutorialStep` (the onboarding steps completed) and
 `seenTips` (the free-play tips shown and the features opened since they unlocked). A pre-21 save
 with any campaign progress loads tutorial-complete with every tip seen; one with none starts at
-the wake. `CheckOnboarding` proves it, and the server's `save_limits` row has to reach 21 too.
+the wake. `CheckOnboarding` proves it. **The owner must raise the server's `save_limits` row to 21
+before a cloud build is played**: `update save_limits set max_save_version = 21;`, because
+`push_save` refuses a version 21 save while the row says 19 or 20. No saved version 21 exists outside
+development machines.
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -928,6 +949,57 @@ yet.** `ProvingGenerator` builds opponent lines. The events engine is content-dr
 `events.json`, and each milestone carries a permanent `id` that a claim is saved against, so a
 threshold can be retuned freely. Shop screens are wired.
 
+### The first session, and the unlock table
+
+`Onboarding` in `Assets/Scripts/Core/Session` decides the first session and `OnboardingCoach` in
+`Assets/Scripts/UI` draws it. The flow is one counter, `PlayerProfile.TutorialStep`, holding how many
+steps are complete, so quitting mid-tutorial resumes after the last completed step and nothing else
+is stored. The steps are the wake, the Cinder's recall (free and scripted, it gives Kael and never
+touches the summon pool, pity, rates or `TotalSummons`), the existing prologue battle, then the
+guided core loop with a forced arrow and a pip each, then free play. `Onboarding.Skip` ends the flow
+and still gives Kael. Free play shows one tip the first time each screen opens, recorded in
+`PlayerProfile.SeenTips`. `OnboardingConfig` parses `onboarding.json` for the words and the table.
+
+**The guided order is six steps, one pip each:** team (`Onboarding.StepTeam`), stage 1-1
+(`StepCampaign`), the wave result (`StepWaveResult`), stage 1-2 (`StepSecondStage`), the level up
+(`StepLevelUp`) and the idle claim (`StepIdle`), then `Complete`. `GuidedSteps` is 6. The old order
+asked for a level up straight after 1-1, which a new player could not afford, so the coach detoured
+down the campaign (`CanLevelAnyone`). That detour is gone: with the explicit 1-2 step a new player
+holds 1,235 gold at the level up against a 1,070 first level, which `CheckOnboarding` prints and
+asserts. No content number changed.
+
+**The off switch is `OnboardingSwitch.Enabled`, default true.** Defining `EMBERFALL_ONBOARDING_OFF`
+makes it default false. It is read by `Onboarding.IsComplete`, `Onboarding.CreateKeeperProfile`,
+`OnboardingCoach.Install` and `FeatureGate.UnlockStage`. With it off a new save is
+`GameSession.CreateNewProfile`'s profile marked complete, no coach is installed and every feature is
+open. `CheckOnboardingSwitch` in `Tools/DevHarness/OnboardingChecks.cs` proves that profile equal,
+byte for byte, to the one `main` made before onboarding existed, excluding only `tutorialStep` and
+`seenTips`. A fresh start with the switch off runs `FirstRun.Begin` exactly as it did before
+onboarding existed, from the restored `FirstRun.cs`. With it on, `GameApp` installs
+`OnboardingCoach` and `FirstRun` is not shown.
+
+**Locked, not hidden.** Every feature is visible from the first minute and `FeatureGate` says only
+whether it can be entered. A feature opens the moment its stage is cleared, by stage id, so a
+campaign reshape moves an unlock with its stage. A feature with no stage, a stage the content does
+not name, or no table at all is open. `FeatureEntryPoints` lists every door (hub buildings, nav
+cells, rail buttons, panel tabs, hero page buttons, inventory tabs, and the router's own screens),
+the UI asks through `FeatureGates`, and a locked door says "UNLOCKS AT 1-6" and nothing else.
+`ScreenRouter.Show` refuses every locked screen, which covers a door no surface draws.
+`CheckFeatureUnlockGating` enumerates the entry points and proves each against the table.
+
+The table in `onboarding.json` `unlocks`:
+
+| opens at start | friends | fusion | talents, armor, forge | guilds | proving | recital | relics |
+|---|---|---|---|---|---|---|---|
+| campaign, summon, heroes, idle | 1-4 | 1-6 | 1-12 | 2-1 | 2-4 | 2-8 | 3-1 |
+
+`onboarding.json` is not in `ContentVersion`, so a moved unlock or a rewritten line retires no
+replay. Every line of its text is a placeholder for the designer's pass. The harness walks and
+pinned lines read the table through `FeatureGate.IsUnlockedArriving`, which is what moved the two
+failing checks under **The instruments**. `PlayModeScreenshot` has six `Screen:Onboard*` targets;
+a capture of a feature's own screen uses `FeatureGates.CaptureBypass` and the onboarding targets
+clear it.
+
 ### UI, and the Hub's four layers
 
 uGUI, built entirely in code, scene deliberately near-empty. `ScreenRouter` moves between the
@@ -1059,6 +1131,16 @@ carries every `HeroInstance` field, and that replaying leaves the serialized sav
 it was. `PlayModeScreenshot`'s `WaveReplay` target presses WATCH and freezes a frame while a hit
 effect is alive.
 
+**The battle HUD is presentation only and placed by one engine-free layout.** An opaque top bar
+(`BattleHudMetrics.BarHeight`) with the battle camera's viewport stopping under it, so nothing on
+the field is drawn beneath it. One plate per unit under its feet with status icons (`UnitPlate`,
+`StatusIcons.Compose`), the ability callout as a pill under the bar, and the turn order as a NEXT
+pill at the bottom centre (`TurnOrderPill`). Every position comes from `BattleHudLayout` over
+`BattleFraming`, and every size from `BattleHudMetrics`, which has no `UnityEngine` reference so the
+harness compiles the same file. `CheckBattleHud` in `BattleHudChecks` builds every plate, both
+pills and the bar at every formation slot and three phone aspects, and fails if two of them
+overlap. Nothing in it reads or changes a fight.
+
 **31 of 94 heroes have drawn battle art**, and they are the thirty 5-stars plus Celen. The other 63
 carry `visual.spriteStatus: "pending"` and render as an aspect-tinted placeholder mannequin with
 their name under its feet, which makes "not drawn yet" a thing the game can say separately from
@@ -1132,6 +1214,22 @@ the sweep does not. CI runs `build-check.ps1` on every push and pull request.
 `DevHarness.exe --ceil-reconcile [stage [levels]]` is a second development aid: it reads the solver's
 and the guard's CEIL side by side against a 4,000-sample reference, and it is how the `1-12`
 disagreement under **The instruments** was settled.
+
+**The nightly run needs a desktop, and its task now says so.** The 03:30 task was
+registered with an S4U logon, which has no interactive desktop, so since 2026-10-13 the GUI editor
+never wrote its log and every night produced 0 of 43 captures. `Tools/register-nightly.ps1` now
+registers an Interactive logon, which runs only while its user is logged on: with nobody logged on
+at 03:30 there is no report that night, and `StartWhenAvailable` may fire it at the next logon.
+`Tools/nightly.ps1` checks `Test-InteractiveDesktop` and, with no desktop, skips the capture sweep
+with a note and launches nothing. If the editor has written no log within `LogStartMinutes` (5) of
+launch, it stops that Unity by PID instead of waiting out the ceiling.
+
+**The cause is proven and the fix is in; the scheduled run awaits the re-register.** The nightly's
+own capture command line (`ScratchCaptures.Run`, three targets: MainMenu, Campaign and Heroes),
+started by hand from a logged-on desktop against the merged tree, wrote its log and all three PNGs
+in under two minutes and left the real save unchanged. So captures work whenever an interactive
+desktop exists, and the S4U logon was what broke them. The scheduled task itself is proven only
+once the owner re-registers it from a logged-on PowerShell and a night runs.
 
 **Editor captures are offline by construction.** The working tree holds a gitignored
 `supabase.json`, so a Play session that did nothing about it signed in as the real account; a
@@ -1208,24 +1306,19 @@ names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, whi
 
 A branch is named here when it holds work worth naming, and only while it is unmerged.
 
-- **`ui/battle-hud`** reworks the battle HUD, presentation only: an opaque top bar with the battle
-  camera's viewport stopping under it, one plate per unit under its feet with status icons
-  (`UnitPlate`, `StatusIcons.Compose`), the ability callout as a pill under the bar and the turn
-  order as a NEXT pill at the bottom centre (`TurnOrderPill`), all placed through the engine-free
-  `BattleHudLayout` over `BattleFraming`, which `BattleHudChecks` in the harness proves overlap-free
-  at every formation slot.
-- `feature/onboarding` holds the first session and the feature unlock table, built to
-  `DESIGN-ONBOARDING.md`: the wake, the Cinder's scripted recall of Kael, the prologue battle,
-  five guided steps with forced arrows, free-play tips, locked-not-hidden features read from
-  `onboarding.json`, and save version 21. Its "As built" section records what the build decided
-  and one finding for the owner (the level-up step is unaffordable after 1-1). Its harness
-  movement is under **The instruments**. Five of its six onboarding captures still have to be
-  retaken; see its "As built" section.
+None. The battle stats, the battle HUD, the sprite resolution pass and the first session with its
+unlock table are all in the tree and are described under **Campaign and progression**, **Battle
+presentation and art**, **The first session, and the unlock table** and **Tooling**.
 
 ## Next
 
 In order.
 
+0. **The retune the unlock table owes.** `recommendedPower` and the stage levels were solved for a
+   player who wears armor and fuses from the first stage. The walks now spend a feature only once
+   its stage is cleared, and the geared CEIL band and the power band fail at the values under **The
+   instruments**. One more open point for it: the `2-1` walk shows armor 0 although armor unlocks at
+   `1-12`.
 1. **What the fidelity passes left.** Pass 3 closed C13 and every finding pass 2 recorded as left
    for later. What remains is **G1, G2 and G3**, the three proposed primitives not built, which
    would close groups 25, 30 and 23, and one unmeasured suspicion: a counter the per-target budget

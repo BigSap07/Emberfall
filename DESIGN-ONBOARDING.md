@@ -36,15 +36,16 @@ recalling heroes through the Cinder, so the first guided tap is a recall.
    1. set team (Kael is placed automatically if the player does nothing)
    2. campaign 1-1
    3. the wave result screen
-   4. level up a hero once
-   5. collect idle rewards
+   4. campaign 1-2 (added as built, see "As built": the level up is unaffordable after 1-1)
+   5. level up a hero once
+   6. collect idle rewards
 5. **Free play.** From here, light touch only: a one-line tip the first time each major screen
    opens, dismissed by any tap, never shown again.
 
 ## Rules for the forced steps
 
 - Only the highlighted control accepts input. Everything else is dimmed and inert.
-- A five-pip step indicator shows progress through steps 1 to 5.
+- A six-pip step indicator shows progress through steps 1 to 6 (five when this was decided).
 - Each step is saved as completed the moment it finishes, so quitting mid-tutorial resumes at the
   step after the last completed one.
 - This needs a save field. Add the minimum: a tutorial step index and a set of seen tips. Bump the
@@ -103,7 +104,7 @@ Recorded with the code that builds it. Where the build had to decide something t
 open, or found the spec at odds with the content, it is said here.
 
 **Where it lives.** `Onboarding` in `Assets/Scripts/Core/Session` holds the flow: a counter,
-`PlayerProfile.TutorialStep`, of steps COMPLETED (wake, recall, prologue, then the five guided
+`PlayerProfile.TutorialStep`, of steps COMPLETED (wake, recall, prologue, then the six guided
 steps), saved the moment each one finishes. `OnboardingCoach` in `Assets/Scripts/UI` draws
 whichever step the profile is on and notices when it is done; it holds no state of its own, so a
 relaunch shows exactly the step after the last completed one. Every word is in
@@ -126,19 +127,32 @@ another. The old eight-step prologue sequence and its cards are gone.
 
 **The guided steps** light one control per screen and route the player there, screen by screen:
 team (the Hub's HEROES, then back out of the banner), campaign 1-1 (CONTINUE CAMPAIGN, ENTER
-BATTLE), the wave result (NEXT WAVE until 1-1 is cleared), a level up (HOME, HEROES, VIEW ALL
+BATTLE), the wave result (NEXT WAVE until 1-1 is cleared), campaign 1-2 (`Onboarding.StepSecondStage`,
+the same route as 1-1), a level up (HOME, HEROES, VIEW ALL
 HEROES, the first hero, LEVEL UP) and the idle claim (back to the Hub, the chest, CLAIM). Kael
 already stands in the line after the recall, so the team step's "placed automatically" holds
 with nothing done; if he is taken off the banner, he is placed again when the step completes.
 Where a screen has no control on the route, the step says its line and leaves the screen usable
 rather than lock the player out. The back key does nothing during the forced steps.
 
-**FINDING: the level-up step cannot be done when the spec puts it.** All three starters are
+**RESOLVED: the level-up step was unaffordable where the spec put it.** All three starters are
 5-stars whose first level costs 1070 gold. A new player holds 400, and 780 after clearing 1-1.
-Without retuning content, which this work does not do, the step routes on down the campaign while
-no level is affordable (its `short` line in `onboarding.json`, the arrow on CONTINUE), and comes
-back to LEVEL UP once one is: after 1-2 the player holds 1235. This is a decision for the owner:
-keep the detour, cheapen the first level, or move the step.
+The first build routed on down the campaign while no level was affordable (a `short` line in
+`onboarding.json`, the arrow on CONTINUE, `CanLevelAnyone`) and came back to LEVEL UP after 1-2,
+when the player holds 1235. The decision was to move the step, not cheapen the level: the
+second stage is now its own guided step (`Onboarding.StepSecondStage`) between the wave result and
+the level up, the detour and `CanLevelAnyone` are gone, and no content number changed. The order is
+team, 1-1, wave result, 1-2, level up, idle. `CheckOnboarding` prints the gold at the level up step
+(1235 against 1070) and asserts it is enough.
+
+**The off switch.** `OnboardingSwitch.Enabled` is true by default, and the scripting define
+`EMBERFALL_ONBOARDING_OFF` makes it false. `Onboarding.IsComplete`,
+`Onboarding.CreateKeeperProfile`, `OnboardingCoach.Install` and `FeatureGate.UnlockStage` read it.
+Off, a new save is `GameSession.CreateNewProfile`'s profile marked complete, no coach appears and
+every feature is open. `CheckOnboardingSwitch` proves that profile byte for byte equal to the one
+`main` made before onboarding, excluding only `tutorialStep` and `seenTips`. A fresh start with the switch off runs
+`FirstRun.Begin` exactly as before onboarding, from the restored `FirstRun.cs`; with it on,
+`GameApp` installs `OnboardingCoach` and `FirstRun` is not shown.
 
 **SKIP** ends the forced flow from any step, marks it complete and still gives Kael once. It
 leaves the free-play tips to come, since a player who skipped the guided loop is the one a tip is
