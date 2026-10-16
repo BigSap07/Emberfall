@@ -841,6 +841,71 @@ def check_refresh_reuse():
               + " (not 200 means reuse revoked the whole session - the device that lost the response is signed out)")
 
 
+def check_play_events():
+    """Migration 0015. NEEDS 0015 APPLIED; against a project without it every case here fails with
+    404, which is the signal to apply it. Leaves test rows in public.play_events (install ids that
+    start 00000000-0000-4000-8000-) that only the owner can delete, since the anon key cannot:
+        delete from public.play_events where install_id::text like '00000000-0000-4000-8000-%';
+    The table is insert-only for anon and authenticated, so nothing here can read a row back; what
+    is proved is the refusals and the 201/204 on the accepted row."""
+    section("PLAY EVENTS - insert-only for the anon role, shaped by the table (0015)")
+    tag = "".join(random.choice("0123456789abcdef") for _ in range(12))
+    install = "00000000-0000-4000-8000-" + tag
+    path = "/rest/v1/play_events"
+    good = {"install_id": install, "event": "onboarding_step", "payload": {"step": 0}, "build": "rules-test"}
+    minimal = "return=minimal"
+
+    def attempt(changes):
+        row = dict(good)
+        row.update(changes)
+        return request("POST", path, body=row, prefer=minimal)
+
+    status, body = request("POST", path, body=good, prefer=minimal)
+    check(status in (201, 204), "the anon role can INSERT a valid row (return=minimal)", (status, body))
+
+    h = extra_user("H")
+    status, body = request("POST", path, token=h["token"], body=good, prefer=minimal)
+    check(status in (201, 204), "and a signed-in user can too", (status, body))
+
+    status, body = request("GET", path + "?select=id&install_id=eq." + install)
+    readable = status == 200 and isinstance(body, list) and len(body) > 0
+    check(not readable, "the anon role cannot SELECT it back (no grant, no policy)", (status, body))
+
+    status, body = request("GET", path + "?select=id&limit=1", token=h["token"])
+    readable = status == 200 and isinstance(body, list) and len(body) > 0
+    check(not readable, "nor can a signed-in user", (status, body))
+
+    status, body = request("POST", path, body=good, prefer="return=representation")
+    check(status not in (200, 201), "asking for the stored row back is refused, since that is a read", (status, body))
+
+    status, body = request("PATCH", path + "?install_id=eq." + install, body={"build": "tampered"})
+    check(status not in (200, 204), "the anon role cannot UPDATE", (status, body))
+    status, body = request("DELETE", path + "?install_id=eq." + install)
+    check(status not in (200, 204), "the anon role cannot DELETE", (status, body))
+
+    status, body = attempt({"event": "not_an_event"})
+    check(status == 400, "an unknown event is refused (400, the table's check)", (status, body))
+    status, body = attempt({"payload": {"pad": "x" * 3000}})
+    check(status == 400, "a payload over 2048 bytes is refused (400)", (status, body))
+    status, body = attempt({"payload": [1, 2, 3]})
+    check(status == 400, "a payload that is a JSON array is refused (400)", (status, body))
+    status, body = attempt({"payload": "just text"})
+    check(status == 400, "a payload that is a JSON string is refused (400)", (status, body))
+    status, body = attempt({"payload": None})
+    check(status == 400, "a null payload is refused (400)", (status, body))
+    status, body = attempt({"build": ""})
+    check(status == 400, "an empty build is refused (400)", (status, body))
+    status, body = attempt({"build": "b" * 65})
+    check(status == 400, "a build of 65 characters is refused (400)", (status, body))
+    status, body = attempt({"install_id": "not-a-uuid"})
+    check(status == 400, "an install id that is not a uuid is refused (400)", (status, body))
+
+    status, body = attempt({"created_at": "2001-01-01T00:00:00Z"})
+    check(status >= 400, "the client cannot set created_at (column grant, not insertable)", (status, body))
+    status, body = attempt({"id": 1})
+    check(status >= 400, "nor id", (status, body))
+
+
 # ---------------------------------------------------------------- entry point
 
 
@@ -881,6 +946,7 @@ def main():
     check_pending_email_cannot_sign_in()
     check_refresh_reuse()
     check_email_linking(a)
+    check_play_events()
 
     print("")
     print("RESULT: " + str(PASSES) + " ok, " + str(FAILURES) + " FAILED")
