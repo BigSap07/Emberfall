@@ -1,6 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
+using Emberfall.Core.Telemetry;
 using Emberfall.Game.Cloud;
+using Emberfall.Game.Telemetry;
 using Emberfall.UI.Summon;
 
 namespace Emberfall.UI.Screens
@@ -34,6 +36,8 @@ namespace Emberfall.UI.Screens
         private Text _soundNote;
         private UIButton _fastSummonButton;
         private Text _fastSummonNote;
+        private UIButton _statsButton;
+        private Text _statsNote;
         private Text _saveNote;
         private Text _resetNote;
 
@@ -48,6 +52,7 @@ namespace Emberfall.UI.Screens
 
             BuildSoundCard(content);
             BuildSummonCard(content);
+            if (TelemetrySwitch.Enabled) BuildStatsCard(content);
             BuildSaveCard(content);
             BuildResetCard(content);
             BuildStampLine(content);
@@ -117,6 +122,26 @@ namespace Emberfall.UI.Screens
             _fastSummonNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
                                                 TextAnchor.UpperLeft);
             UIBuilder.Box(_fastSummonNote.rectTransform, 380f, -60f, CardWidth - 440f, 80f, new Vector2(0f, 1f));
+        }
+
+        /// <summary>
+        /// Anonymous play stats (Docs/DESIGN-TELEMETRY.md): the same switch the one-time prompt
+        /// sets, here so the answer can be changed at any time. Off deletes the random id and
+        /// anything not yet sent and sends nothing. Stored on the device, never in the save.
+        /// </summary>
+        private void BuildStatsCard(RectTransform parent)
+        {
+            RectTransform card = Card(parent, 230f);
+            Heading(card, TelemetryText.SettingsHeading);
+
+            _statsButton = EmberforgeUI.Button("PlayStats", card, "", HubStyle.FontButton,
+                                               ForgeButtonKind.Secondary);
+            UIBuilder.Box(_statsButton.Root, 30f, -56f, 440f, HubStyle.TouchMin, new Vector2(0f, 1f));
+            _statsButton.OnClick(ToggleStats);
+
+            _statsNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
+                                           TextAnchor.UpperLeft);
+            UIBuilder.Box(_statsNote.rectTransform, 500f, -60f, CardWidth - 560f, 140f, new Vector2(0f, 1f));
         }
 
         private void BuildSaveCard(RectTransform parent)
@@ -263,6 +288,24 @@ namespace Emberfall.UI.Screens
                 : "Each summon builds up in full before the hero is shown. Tap to skip it, or hold to skip them all.";
         }
 
+        private void ToggleStats()
+        {
+            TelemetryService service = TelemetryService.Instance;
+            if (service == null) return;
+            service.Answer(!service.IsOn);
+            App.Audio.Tap();
+            RefreshStats();
+        }
+
+        private void RefreshStats()
+        {
+            if (_statsButton == null) return;
+            TelemetryService service = TelemetryService.Instance;
+            bool on = service != null && service.IsOn;
+            _statsButton.SetText(on ? TelemetryText.SettingsOn : TelemetryText.SettingsOff);
+            _statsNote.text = on ? TelemetryText.SettingsNoteOn : TelemetryText.SettingsNoteOff;
+        }
+
         private void RefreshSave()
         {
             CloudCoordinator cloud = App.Cloud;
@@ -289,6 +332,7 @@ namespace Emberfall.UI.Screens
             RefreshFastSummon();
             RefreshSave();
             _resetNote.text = ResetNote(ResetReachesCloud(App));
+            if (TelemetrySwitch.Enabled) RefreshStats();
         }
 
         // ------------------------------------------------------------------ shared

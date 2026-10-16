@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.RegularExpressions;
 using Emberfall.Core.Data;
 using Emberfall.Core.Json;
 using Emberfall.Core.Model;
@@ -78,7 +79,7 @@ namespace Emberfall.DevHarness
             return Path.Combine(dir, "emberfall_telemetry.json");
         }
 
-        private static void CheckTelemetry(ContentDatabase db)
+        private static void CheckTelemetry(ContentDatabase db, string contentDir)
         {
             Line("");
             Line("PLAY STATS (Docs/DESIGN-TELEMETRY.md: consent first, anonymous, a whitelist, insert only)");
@@ -89,6 +90,7 @@ namespace Emberfall.DevHarness
             CheckTelemetryRobustness();
             CheckTelemetryFlagOff();
             CheckTelemetryHooks(db);
+            CheckTelemetryGuards(contentDir);
         }
 
         // ------------------------------------------------------------------ the whitelist
@@ -589,6 +591,112 @@ namespace Emberfall.DevHarness
                 TelemetryHooks.Sink = wasSink;
                 TelemetrySwitch.Enabled = wasEnabled;
             }
+        }
+
+        // ------------------------------------------------------------------ the source guards
+
+        private static readonly Regex TelemetryWord = new Regex("\\bTelemetry[A-Za-z]*\\b");
+        private static readonly Regex TelemetryAppCalls = new Regex("TelemetryService\\.(Install|OnPause|OnQuit)|TelemetryConsentPrompt\\.Install");
+
+        private static bool TelemetryGuarded(string[] lines, int index)
+        {
+            if (lines[index].Contains("TelemetrySwitch.Enabled")) return true;
+            for (int back = 1; back <= 8 && index - back >= 0; back++)
+                if (lines[index - back].Trim() == "if (TelemetrySwitch.Enabled)") return true;
+            return false;
+        }
+
+        /// <summary>
+        /// FLAG OFF EQUALS origin/main, read from the source: the places outside the telemetry folders
+        /// that mention the play stats are exactly three files, and each mention is behind
+        /// TelemetrySwitch.Enabled (or, in GameSession, inside a hook method that checks it). Nothing
+        /// touches PlayerPrefs for it. Read as text, like the migration scan, so a new reference is
+        /// a red line here until someone decides it belongs.
+        /// </summary>
+        private static void CheckTelemetryGuards(string contentDir)
+        {
+            string root = Path.GetFullPath(Path.Combine(Path.Combine(Path.Combine(contentDir, ".."), ".."), ".."));
+            string scripts = Path.Combine(Path.Combine(root, "Assets"), "Scripts");
+            if (!Directory.Exists(scripts)) { Check(false, "Assets/Scripts is found under " + root); return; }
+
+            List<string> own = new List<string>();
+            List<string> outside = new List<string>();
+            foreach (string file in Directory.GetFiles(scripts, "*.cs", SearchOption.AllDirectories))
+            {
+                string norm = file.Replace('\\', '/');
+                bool isOwn = norm.Contains("/Core/Telemetry/") || norm.Contains("/Game/Telemetry/") || norm.EndsWith("/UI/TelemetryConsentPrompt.cs");
+                if (isOwn) own.Add(file); else outside.Add(file);
+            }
+
+            bool noPrefs = own.Count > 0;
+            foreach (string file in own)
+                foreach (string line in File.ReadAllLines(file))
+                    if (!line.Trim().StartsWith("//") && line.Contains("PlayerPrefs")) noPrefs = false;
+            foreach (string file in outside)
+                foreach (string line in File.ReadAllLines(file))
+                    if (line.Contains("PlayerPrefs") && line.ToLowerInvariant().Contains("telemetry")) noPrefs = false;
+            Check(noPrefs, "the play stats touch no PlayerPrefs key: consent, id and queue live in one device file (" + own.Count + " telemetry files read)");
+
+            SortedDictionary<string, string[]> mentions = new SortedDictionary<string, string[]>();
+            foreach (string file in outside)
+            {
+                string[] lines = File.ReadAllLines(file);
+                bool mentioned = false;
+                foreach (string raw in lines)
+                {
+                    string t = raw.Trim();
+                    if (t.StartsWith("//")) continue;
+                    if (TelemetryWord.IsMatch(t)) mentioned = true;
+                }
+                if (mentioned) mentions[Path.GetFileName(file)] = lines;
+            }
+            string seen = string.Join(", ", new List<string>(mentions.Keys).ToArray());
+            Check(seen == "GameApp.cs, GameSession.cs, SettingsScreen.cs",
+                  "outside its own folders the play stats are mentioned in exactly GameApp.cs, GameSession.cs and SettingsScreen.cs (" + seen + ")");
+
+            bool appGuarded = mentions.ContainsKey("GameApp.cs");
+            int appCalls = 0;
+            if (appGuarded)
+            {
+                string[] lines = mentions["GameApp.cs"];
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    if (lines[i].Trim().StartsWith("//") || !TelemetryAppCalls.IsMatch(lines[i])) continue;
+                    appCalls++;
+                    if (!TelemetryGuarded(lines, i)) appGuarded = false;
+                }
+            }
+            Check(appGuarded && appCalls == 4,
+                  "every call GameApp makes into the play stats is behind TelemetrySwitch.Enabled (" + appCalls + " calls: the service, the prompt, pause, quit)");
+
+            bool settingsGuarded = mentions.ContainsKey("SettingsScreen.cs");
+            if (settingsGuarded)
+            {
+                string[] lines = mentions["SettingsScreen.cs"];
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    string t = lines[i].Trim();
+                    if (t.StartsWith("//") || t.StartsWith("private void") || !(t.Contains("BuildStatsCard(content)") || t.Contains("RefreshStats();"))) continue;
+                    bool afterToggle = i >= 3 && (lines[i - 1].Contains("service.Answer(") || lines[i - 2].Contains("service.Answer(") || lines[i - 3].Contains("service.Answer("));
+                    if (!TelemetryGuarded(lines, i) && !afterToggle) settingsGuarded = false;
+                }
+            }
+            Check(settingsGuarded, "the Settings card is built and refreshed only behind TelemetrySwitch.Enabled (with the switch off the page is the page origin/main has)");
+
+            bool sessionOnlyHooks = mentions.ContainsKey("GameSession.cs");
+            int hookCalls = 0;
+            if (sessionOnlyHooks)
+            {
+                foreach (string raw in mentions["GameSession.cs"])
+                {
+                    string t = raw.Trim();
+                    if (t.StartsWith("//") || t == "using Emberfall.Core.Telemetry;") continue;
+                    if (!TelemetryWord.IsMatch(t)) continue;
+                    if (t.Contains("TelemetryHooks.")) hookCalls++; else sessionOnlyHooks = false;
+                }
+            }
+            Check(sessionOnlyHooks && hookCalls == 5,
+                  "GameSession reaches the play stats only through the five TelemetryHooks calls, which check the switch themselves (" + hookCalls + ")");
         }
 
         // ------------------------------------------------------------------ the switch

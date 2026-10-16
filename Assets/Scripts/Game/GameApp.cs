@@ -274,6 +274,7 @@ namespace Emberfall.Game
                 // recorded or sent until the player says Yes, and Install never throws.
                 BootStage = "telemetry";
                 TelemetryService.Install(this);
+                TelemetryConsentPrompt.Install(this);
             }
 
             BootStage = "complete";
