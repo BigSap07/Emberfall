@@ -124,6 +124,7 @@ namespace Emberfall.UI
 
         private void Show()
         {
+            Debug.Log("Emberfall: the play stats question is up.");
             _showing = true;
             _root.gameObject.SetActive(true);
             _root.SetAsLastSibling();

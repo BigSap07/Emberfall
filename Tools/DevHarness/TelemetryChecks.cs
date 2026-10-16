@@ -747,7 +747,9 @@ namespace Emberfall.DevHarness
                 int editor = svc.IndexOf("if (Application.isEditor) return;");
                 int start = svc.IndexOf("_app.StartCoroutine(Flush());");
                 int made = svc.IndexOf("CreateAnonymousClient()");
-                editorGate = editor >= 0 && start > editor && made > 0 && svc.IndexOf("CreateAnonymousClient()", made + 1) < 0;
+                int flush = svc.IndexOf("private IEnumerator Flush()");
+                editorGate = editor >= 0 && start > editor && flush > start && made > flush
+                             && svc.IndexOf("CreateAnonymousClient()", made + 1) < 0;
             }
             Check(clientGate, "GameApp.CreateAnonymousClient returns null on !Configured before it constructs a SupabaseClient (a forced-offline run builds none)");
             Check(editorGate, "TelemetryService returns in the editor before it starts a flush, and asks for the client in exactly one place, inside that flush");

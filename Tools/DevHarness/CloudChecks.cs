@@ -937,12 +937,21 @@ namespace Emberfall.DevHarness
                   "no grant of select, update, delete or all on play_events to any role: it is insert only"
                   + (playEventsWide.Count > 0 ? " - " + playEventsWide[0] : ""));
 
+            // Every create policy on the table is counted, whether or not it has a FOR clause (no
+            // clause means ALL, which would include select), and the one that is allowed must say
+            // "for insert" in its own statement. An alter policy on the table is refused outright.
             List<string> playEventsPolicies = new List<string>();
-            foreach (Match m in Regex.Matches(sql, "create policy (\\w+)\\s+on (?:public\\.)?play_events\\s+for (\\w+)"))
-                playEventsPolicies.Add(m.Groups[1].Value + " (" + m.Groups[2].Value + ")");
-            Check(playEventsPolicies.Count == 1 && playEventsPolicies[0] == "play_events_insert_any (insert)",
-                  "play_events has exactly one policy, play_events_insert_any for insert (found: "
-                  + (playEventsPolicies.Count == 0 ? "none" : string.Join(", ", playEventsPolicies.ToArray())) + ")");
+            bool onlyInsertPolicy = true;
+            foreach (Match m in Regex.Matches(sql, "create policy (\\w+)\\s+on (?:public\\.)?play_events\\b([^;]*);"))
+            {
+                bool forInsert = Regex.IsMatch(m.Groups[2].Value, "\\bfor\\s+insert\\b");
+                playEventsPolicies.Add(m.Groups[1].Value + (forInsert ? " (insert)" : " (not for insert)"));
+                if (m.Groups[1].Value != "play_events_insert_any" || !forInsert) onlyInsertPolicy = false;
+            }
+            int alteredPolicies = Regex.Matches(sql, "alter policy [^;]*?\\bon (?:public\\.)?play_events\\b").Count;
+            Check(playEventsPolicies.Count == 1 && onlyInsertPolicy && alteredPolicies == 0,
+                  "play_events has exactly one policy, play_events_insert_any for insert, and none is altered (found: "
+                  + (playEventsPolicies.Count == 0 ? "none" : string.Join(", ", playEventsPolicies.ToArray())) + "; altered " + alteredPolicies + ")");
 
             HashSet<string> writes = new HashSet<string>();
             foreach (Match m in Regex.Matches(sql, "grant ([^;]+?) on public\\.(\\w+) to (\\w+(?:, \\w+)*);"))

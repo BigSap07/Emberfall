@@ -88,6 +88,9 @@ namespace Emberfall.Game.Telemetry
 
             if (_rec.IsOn) OpenSession();
             app.StartCoroutine(Loop());
+            // One line at boot, like the cloud's, so a log says whether the stats were installed and
+            // what the player had answered. It says nothing about any event.
+            Debug.Log("Emberfall: play stats installed, answer on file: " + _rec.Consent + ".");
         }
 
         private static string NewInstallId()
