@@ -700,6 +700,8 @@ namespace Emberfall.Game
         {
             // The first session's forced steps own input: back is swallowed rather than walking
             // the player out of a step.
+            // The play-stats question owns input while it is up, like a forced step.
+            if (TelemetrySwitch.Enabled && TelemetryConsentPrompt.Showing) return true;
             if (OnboardingCoach.BlocksBack) return true;
 
             if (Layers != null && Layers.CloseTop())

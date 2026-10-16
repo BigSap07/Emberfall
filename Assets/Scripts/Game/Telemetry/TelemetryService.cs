@@ -80,7 +80,6 @@ namespace Emberfall.Game.Telemetry
             _app = app;
             _rec = new TelemetryRecorder(new FileTelemetryStore(Path.Combine(Application.persistentDataPath, FileName)),
                                          NewInstallId, BuildLabel());
-            _stretchStart = Time.realtimeSinceStartup;
             _lastStep = CurrentStep();
 
             TelemetryHooks.Sink = this;
@@ -229,6 +228,9 @@ namespace Emberfall.Game.Telemetry
         {
             if (_sessionOpen || !_rec.IsOn) return;
             _sessionOpen = true;
+            // The stretch is timed from the moment stats are on (launch with Yes on file, a resume,
+            // or the Yes itself), never from before consent: seconds is time since this event.
+            _stretchStart = Time.realtimeSinceStartup;
             Record(TelemetrySchema.SessionStart,
                    TelemetrySchema.SessionStartPayload(Application.platform.ToString(), SaveSerializer.CurrentVersion));
         }
@@ -255,7 +257,6 @@ namespace Emberfall.Game.Telemetry
                 }
                 else
                 {
-                    self._stretchStart = Time.realtimeSinceStartup;
                     self.OpenSession();
                 }
             }

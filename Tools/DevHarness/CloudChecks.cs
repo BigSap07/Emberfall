@@ -925,6 +925,25 @@ namespace Emberfall.DevHarness
             Check(otherAnonGrants.Count == 0, "no statement grants anything to anon except the play_events insert on its four columns"
                   + (otherAnonGrants.Count > 0 ? " - " + otherAnonGrants[0] : ""));
 
+            // play_events is the one table the anon key may write, so it is held to INSERT and nothing
+            // else, by name: no grant of select, update, delete or all on it to any role, and no
+            // policy on it but the single insert policy. With RLS on, a missing select or update
+            // policy is what keeps every other player's install id unreadable.
+            List<string> playEventsWide = new List<string>();
+            foreach (Match m in Regex.Matches(sql, "grant ([^;]+?) on (?:table )?(?:public\\.)?play_events to ([^;]+);"))
+                if (Regex.IsMatch(m.Groups[1].Value, "\\b(select|update|delete|all|truncate|references|trigger)\\b"))
+                    playEventsWide.Add(Regex.Replace(m.Value, "\\s+", " "));
+            Check(playEventsWide.Count == 0,
+                  "no grant of select, update, delete or all on play_events to any role: it is insert only"
+                  + (playEventsWide.Count > 0 ? " - " + playEventsWide[0] : ""));
+
+            List<string> playEventsPolicies = new List<string>();
+            foreach (Match m in Regex.Matches(sql, "create policy (\\w+)\\s+on (?:public\\.)?play_events\\s+for (\\w+)"))
+                playEventsPolicies.Add(m.Groups[1].Value + " (" + m.Groups[2].Value + ")");
+            Check(playEventsPolicies.Count == 1 && playEventsPolicies[0] == "play_events_insert_any (insert)",
+                  "play_events has exactly one policy, play_events_insert_any for insert (found: "
+                  + (playEventsPolicies.Count == 0 ? "none" : string.Join(", ", playEventsPolicies.ToArray())) + ")");
+
             HashSet<string> writes = new HashSet<string>();
             foreach (Match m in Regex.Matches(sql, "grant ([^;]+?) on public\\.(\\w+) to (\\w+(?:, \\w+)*);"))
             {

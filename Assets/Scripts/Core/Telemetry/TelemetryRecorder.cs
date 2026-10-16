@@ -116,7 +116,14 @@ namespace Emberfall.Core.Telemetry
             _queue.Clear();
             _generation++;
             _attempts = 0;
-            Persist();
+            // THE OPT-OUT MUST NOT SURVIVE A FAILED WRITE. If the one-word No cannot be written (a
+            // full disk, a read-only folder), the old document still holds consent, the id and the
+            // queue, and the next launch would read it and send. So the old document is deleted
+            // instead: gone is better than stale, and at worst the player is asked again.
+            if (!Persist())
+            {
+                try { _store.Delete(); } catch (Exception) { }
+            }
             return true;
         }
 
@@ -247,7 +254,9 @@ namespace Emberfall.Core.Telemetry
             }
         }
 
-        private void Persist()
+        /// <summary>Writes the document. False when the store refused or threw, so the one caller
+        /// that must not leave an old document behind (the opt-out) can act on it.</summary>
+        private bool Persist()
         {
             try
             {
@@ -264,14 +273,16 @@ namespace Emberfall.Core.Telemetry
                 }
                 else
                 {
-                    return;
+                    return true;
                 }
                 _store.Write(root.ToJson(false));
+                return true;
             }
             catch (Exception)
             {
                 // Silent by design: the state in memory is right, and a disk that will not take a
                 // write must not reach the player.
+                return false;
             }
         }
     }

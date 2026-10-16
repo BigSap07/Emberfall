@@ -796,13 +796,13 @@ namespace Emberfall.Core.Session
         }
 
         /// <summary>
-        /// A lost battle. Deliberately does nothing at all.
+        /// A lost battle. Changes no state; it only reports the loss to the play-stats tap.
         ///
         /// "Defeat inside a stage: retry the single battle that was lost, not the wave and not the
         /// stage" (DESIGN-CAMPAIGN-STRUCTURE.md, decided 2026-09-07). Leaving the cursor untouched
         /// IS that behaviour - the next attempt reads the same (wave, battle) back out of
         /// ResumePointFor and re-fights it. This method exists so the call site reads as a
-        /// deliberate no-op rather than a missing branch someone should add later.
+        /// deliberate "nothing moves" rather than a missing branch someone should add later.
         /// </summary>
         public void RecordBattleLost(StageDef stage, int wave, int battle)
         {

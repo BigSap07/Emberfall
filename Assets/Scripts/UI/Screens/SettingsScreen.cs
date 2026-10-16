@@ -141,7 +141,9 @@ namespace Emberfall.UI.Screens
 
             _statsNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
                                            TextAnchor.UpperLeft);
-            UIBuilder.Box(_statsNote.rectTransform, 500f, -60f, CardWidth - 560f, 140f, new Vector2(0f, 1f));
+            UIBuilder.Box(_statsNote.rectTransform, 500f, -60f, CardWidth - 560f, 150f, new Vector2(0f, 1f));
+            // The longest note is about 150 characters in a 620 wide box: fit it rather than trust a size.
+            UIBuilder.BestFit(_statsNote, UITheme.FontTiny - 6, UITheme.FontTiny);
         }
 
         private void BuildSaveCard(RectTransform parent)

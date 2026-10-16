@@ -365,6 +365,19 @@ namespace Emberfall.DevHarness
             catch (Exception) { threw = true; }
             Check(!threw && onBroken.Consent == TelemetryConsent.No, "a store that throws on read and write is swallowed: no exception, the state in memory stays right");
 
+            // ---- an opt-out whose write fails must not leave the old Yes behind
+            MemoryTelemetryStore sticky = new MemoryTelemetryStore();
+            TelemetryRecorder was = NewTelemetry(sticky);
+            was.SetConsent(true);
+            was.Record("summon", TelemetrySample("summon"));
+            string stickyId = was.InstallId;
+            sticky.ThrowOnWrite = true;
+            bool offChanged = was.SetConsent(false);
+            bool docGone = sticky.Text == null || (!sticky.Text.Contains(stickyId) && !sticky.Text.Contains("queue") && !sticky.Text.Contains("\"yes\""));
+            TelemetryRecorder afterRestart = NewTelemetry(sticky);
+            Check(offChanged && !was.IsOn && docGone && sticky.Deletes > 0 && !afterRestart.IsOn && afterRestart.TakeBatch() == null,
+                  "turning stats off when the No cannot be written deletes the old document instead: no id and no queue are left to read, so the next launch sends nothing (deletes " + sticky.Deletes + ")");
+
             MemoryTelemetryStore junk = new MemoryTelemetryStore();
             junk.Text = "{ this is not json";
             bool junkOk;
@@ -486,7 +499,7 @@ namespace Emberfall.DevHarness
             }
 
             // The stages above may be won outright, so a lost battle is also reported to the one
-            // method every loss goes through: RecordBattleLost, a documented no-op for the profile.
+            // method every loss goes through: RecordBattleLost, which moves no state.
             ws.RecordBattleLost(stages[1], 3, 4);
             t.LostWaves++;
 
@@ -596,7 +609,47 @@ namespace Emberfall.DevHarness
         // ------------------------------------------------------------------ the source guards
 
         private static readonly Regex TelemetryWord = new Regex("\\bTelemetry[A-Za-z]*\\b");
-        private static readonly Regex TelemetryAppCalls = new Regex("TelemetryService\\.(Install|OnPause|OnQuit)|TelemetryConsentPrompt\\.Install");
+        private static readonly Regex TelemetryAppCalls = new Regex("TelemetryService\\.(Install|OnPause|OnQuit)|TelemetryConsentPrompt\\.(Install|Showing)");
+
+        /// <summary>Every non-comment line of GameApp.cs that names the play stats, as the owner and
+        /// the reviewer decided them. Pinned whole, in order: a new or edited line is red here until it
+        /// is decided and this copy moves with it.</summary>
+        private static readonly string[] DecidedGameAppTelemetryLines =
+        {
+            "using Emberfall.Core.Telemetry;",
+            "using Emberfall.Game.Telemetry;",
+            "if (TelemetrySwitch.Enabled)",
+            "TelemetryService.Install(this);",
+            "TelemetryConsentPrompt.Install(this);",
+            "if (TelemetrySwitch.Enabled && TelemetryConsentPrompt.Showing) return true;",
+            "if (TelemetrySwitch.Enabled) TelemetryService.OnPause(paused);",
+            "if (TelemetrySwitch.Enabled) TelemetryService.OnQuit();"
+        };
+
+        private static readonly string[] DecidedSettingsTelemetryLines =
+        {
+            "using Emberfall.Core.Telemetry;",
+            "using Emberfall.Game.Telemetry;",
+            "if (TelemetrySwitch.Enabled) BuildStatsCard(content);",
+            "Heading(card, TelemetryText.SettingsHeading);",
+            "TelemetryService service = TelemetryService.Instance;",
+            "TelemetryService service = TelemetryService.Instance;",
+            "_statsButton.SetText(on ? TelemetryText.SettingsOn : TelemetryText.SettingsOff);",
+            "_statsNote.text = on ? TelemetryText.SettingsNoteOn : TelemetryText.SettingsNoteOff;",
+            "if (TelemetrySwitch.Enabled) RefreshStats();"
+        };
+
+        private static List<string> TelemetryLinesOf(string[] lines)
+        {
+            List<string> found = new List<string>();
+            foreach (string raw in lines)
+            {
+                string t = raw.Trim();
+                if (t.StartsWith("//")) continue;
+                if (TelemetryWord.IsMatch(t)) found.Add(t);
+            }
+            return found;
+        }
 
         private static bool TelemetryGuarded(string[] lines, int index)
         {
@@ -666,8 +719,38 @@ namespace Emberfall.DevHarness
                     if (!TelemetryGuarded(lines, i)) appGuarded = false;
                 }
             }
-            Check(appGuarded && appCalls == 4,
-                  "every call GameApp makes into the play stats is behind TelemetrySwitch.Enabled (" + appCalls + " calls: the service, the prompt, pause, quit)");
+            Check(appGuarded && appCalls == 5,
+                  "every call GameApp makes into the play stats is behind TelemetrySwitch.Enabled (" + appCalls + " calls: the service, the prompt, back, pause, quit)");
+
+            List<string> appLines = mentions.ContainsKey("GameApp.cs") ? TelemetryLinesOf(mentions["GameApp.cs"]) : new List<string>();
+            List<string> settingsLines = mentions.ContainsKey("SettingsScreen.cs") ? TelemetryLinesOf(mentions["SettingsScreen.cs"]) : new List<string>();
+            Check(string.Join("\n", appLines.ToArray()) == string.Join("\n", DecidedGameAppTelemetryLines),
+                  "the " + appLines.Count + " lines of GameApp.cs that name the play stats are exactly the decided list: any new or edited line is red until decided");
+            Check(string.Join("\n", settingsLines.ToArray()) == string.Join("\n", DecidedSettingsTelemetryLines),
+                  "and the " + settingsLines.Count + " lines of SettingsScreen.cs are exactly the decided list");
+
+            // The stats client is built only on a player build with a usable config, by the one file allowed to.
+            string gameAppPath = Path.Combine(Path.Combine(scripts, "Game"), "GameApp.cs");
+            string servicePath = Path.Combine(Path.Combine(Path.Combine(scripts, "Game"), "Telemetry"), "TelemetryService.cs");
+            bool clientGate = false, editorGate = false;
+            if (File.Exists(gameAppPath))
+            {
+                string app = File.ReadAllText(gameAppPath);
+                int method = app.IndexOf("public SupabaseClient CreateAnonymousClient()");
+                int gate = method < 0 ? -1 : app.IndexOf("!config.Configured", method);
+                int build = method < 0 ? -1 : app.IndexOf("new SupabaseClient(", method);
+                clientGate = method >= 0 && gate > method && build > gate && app.Substring(gate, build - gate).Contains("return null;");
+            }
+            if (File.Exists(servicePath))
+            {
+                string svc = File.ReadAllText(servicePath);
+                int editor = svc.IndexOf("if (Application.isEditor) return;");
+                int start = svc.IndexOf("_app.StartCoroutine(Flush());");
+                int made = svc.IndexOf("CreateAnonymousClient()");
+                editorGate = editor >= 0 && start > editor && made > 0 && svc.IndexOf("CreateAnonymousClient()", made + 1) < 0;
+            }
+            Check(clientGate, "GameApp.CreateAnonymousClient returns null on !Configured before it constructs a SupabaseClient (a forced-offline run builds none)");
+            Check(editorGate, "TelemetryService returns in the editor before it starts a flush, and asks for the client in exactly one place, inside that flush");
 
             bool settingsGuarded = mentions.ContainsKey("SettingsScreen.cs");
             if (settingsGuarded)

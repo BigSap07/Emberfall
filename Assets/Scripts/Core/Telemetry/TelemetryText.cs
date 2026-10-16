@@ -22,8 +22,8 @@ namespace Emberfall.Core.Telemetry
         public const string SettingsOff = "SHARE PLAY STATS: OFF";
 
         public const string SettingsNoteOn =
-            "Anonymous counts only: which step, stage or wave stops a run, and how strong the team was. "
-            + "No account, no name, no personal data. Turning this off deletes the random id and anything not yet sent.";
+            "Anonymous counts only, such as which stage stops a run. No account, no name, no personal data. "
+            + "Turning this off deletes the random id and anything unsent.";
 
         public const string SettingsNoteOff =
             "Nothing is recorded or sent. Turn this on to share anonymous play stats: no account, no name, no personal data.";

@@ -2195,7 +2195,7 @@ namespace Emberfall.UI.Screens
             // it cannot be reached until the stage is actually finished - calling it per battle
             // would multiply every stage's income by 144 and hand out 144 first clears.
             //
-            // A LOST battle deliberately changes nothing: RecordBattleLost is a documented no-op,
+            // A LOST battle deliberately changes nothing: RecordBattleLost changes no state (it only reports the loss to the play-stats tap),
             // so the cursor still points at the battle that was just lost and the next attempt
             // re-fights exactly that one. Not the wave, not the stage.
             BattleRewards rewards = null;

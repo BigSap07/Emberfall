@@ -18,8 +18,10 @@ namespace Emberfall.Core.Telemetry
         void Delete();
     }
 
-    /// <summary>A file. Written beside itself and moved into place, so a launch that dies mid-write
-    /// leaves the last whole document rather than half of the new one.</summary>
+    /// <summary>A file. Written beside itself and then moved into place, so a launch that dies
+    /// mid-write never leaves half a document. The old file is deleted just before the move, so a
+    /// death between the two leaves NO document, which reads as undecided and asks again: the safe
+    /// side for a consent file, and why File.Replace (not the same on every platform) is not used.</summary>
     public sealed class FileTelemetryStore : ITelemetryStore
     {
         private readonly string _path;
@@ -56,6 +58,9 @@ namespace Emberfall.Core.Telemetry
         public string Text;
         public int Reads, Writes, Deletes;
         public bool Throw;
+        /// <summary>Fails Write only, so a check can model a full or read-only disk where a delete
+        /// still works. Throw fails everything.</summary>
+        public bool ThrowOnWrite;
 
         public string Read()
         {
@@ -67,7 +72,7 @@ namespace Emberfall.Core.Telemetry
         public void Write(string text)
         {
             Writes++;
-            if (Throw) throw new IOException("memory store told to fail");
+            if (Throw || ThrowOnWrite) throw new IOException("memory store told to fail");
             Text = text;
         }
 
