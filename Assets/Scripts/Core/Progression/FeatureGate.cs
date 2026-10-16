@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
+using Emberfall.Core.Session;
 
 namespace Emberfall.Core.Progression
 {
@@ -22,9 +23,12 @@ namespace Emberfall.Core.Progression
     public static class FeatureGate
     {
         /// <summary>The stage whose clear opens this feature, or null when it is open from the
-        /// start (or no table is loaded, or the row names a stage this content lacks).</summary>
+        /// start (or no table is loaded, or the row names a stage this content lacks, or the
+        /// OnboardingSwitch is off: every other member of this class reads this one, so with the
+        /// switch off every feature is open, as it was before the table existed).</summary>
         public static StageDef UnlockStage(ContentDatabase content, Feature feature)
         {
+            if (!OnboardingSwitch.Enabled) return null;
             if (content == null || content.Onboarding == null) return null;
             FeatureUnlockDef row = content.Onboarding.UnlockOf(feature);
             if (row == null || string.IsNullOrEmpty(row.StageId)) return null;

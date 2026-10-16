@@ -21,8 +21,8 @@ namespace Emberfall.UI
     ///   Recall     the Hub dimmed except the Summon obelisk, ringed and lit, and one RECALL card
     ///   result     the recalled hero, then CONTINUE
     ///   Prologue   the existing prologue battle, with one line over it
-    ///   Guided     five steps: everything dimmed and inert except one control, an arrow at it,
-    ///              one line under it and five pips along the top
+    ///   Guided     six steps: everything dimmed and inert except one control, an arrow at it,
+    ///              one line under it and six pips along the top
     ///   free play  one tip the first time each screen opens, gone on any tap
     ///
     /// SKIP sits top right from the wake to the last guided step and ends the flow through
@@ -106,6 +106,7 @@ namespace Emberfall.UI
         /// panel host. Called at boot for every player: the tips need it after the flow is over.</summary>
         public static OnboardingCoach Install(GameApp app)
         {
+            if (!OnboardingSwitch.Enabled) return null;
             if (Instance != null) return Instance;
             RectTransform root = UIBuilder.Node("Onboarding", app.OverlayLayer);
             root.anchorMin = Vector2.zero;
@@ -547,8 +548,7 @@ namespace Emberfall.UI
             }
 
             RectTransform target = TargetFor(step);
-            string line = step == Onboarding.StepLevelUp && !Onboarding.CanLevelAnyone(_app.Session)
-                ? Config.StepShortLine(index) : Config.StepLine(index);
+            string line = Config.StepLine(index);
             Rect rect;
             if (target != null && TryRectOf(target, out rect))
             {
@@ -567,15 +567,19 @@ namespace Emberfall.UI
         }
 
         /// <summary>The completions read by polling the profile, which is the truth of them: a
-        /// level bought, an idle claim made, stage 1-1 cleared.</summary>
+        /// level bought, an idle claim made, stage 1-1 or 1-2 cleared.</summary>
         private bool CheckDone(int step)
         {
             bool done = false;
             switch (step)
             {
                 case Onboarding.StepWaveResult:
-                    StageDef first = FirstStage();
+                    StageDef first = Onboarding.StageFor(_app.Session.Content, step);
                     done = first != null && Profile.HasClearedStage(first.Id);
+                    break;
+                case Onboarding.StepSecondStage:
+                    StageDef second = Onboarding.StageFor(_app.Session.Content, step);
+                    done = second == null || Profile.HasClearedStage(second.Id);
                     break;
                 case Onboarding.StepLevelUp:
                     done = LevelSum() > _levelSnapshot;
@@ -626,12 +630,6 @@ namespace Emberfall.UI
             if (Onboarding.IsComplete(Profile)) ShowOnly(Mode.None);
         }
 
-        private StageDef FirstStage()
-        {
-            List<StageDef> stages = _app.Session.Content.AllStages;
-            return stages.Count > 0 ? stages[0] : null;
-        }
-
         /// <summary>
         /// THE ROUTE: for the step being taught and the screen showing, the one control to light.
         /// Paths are node names under the screen, found depth-first; "a/b" finds b under a. Null
@@ -657,17 +655,13 @@ namespace Emberfall.UI
                 case Onboarding.StepWaveResult:
                     if (id == ScreenId.WaveResult) return FindDeep(root, "NextWave") ?? FindDeep(root, "Retry");
                     break;
+                case Onboarding.StepSecondStage:
+                    if (id == ScreenId.WaveResult)
+                        return FindDeep(root, "Continue") ?? FindDeep(root, "NextWave") ?? FindDeep(root, "Retry");
+                    if (id == ScreenId.MainMenu) return FindDeep(root, "Campaign/Continue");
+                    if (id == ScreenId.Campaign) return FindDeep(root, "Tray/EnterBattle");
+                    return FindDeep(root, "Header/Back") ?? FindDeep(root, "Header/Home");
                 case Onboarding.StepLevelUp:
-                    // No level affordable yet: the arrow points on down the campaign, which is the
-                    // only gold a new player can reach in this session, until one is.
-                    if (!Onboarding.CanLevelAnyone(_app.Session))
-                    {
-                        if (id == ScreenId.WaveResult)
-                            return FindDeep(root, "Continue") ?? FindDeep(root, "NextWave") ?? FindDeep(root, "Retry");
-                        if (id == ScreenId.MainMenu) return FindDeep(root, "Campaign/Continue");
-                        if (id == ScreenId.Campaign) return FindDeep(root, "Tray/EnterBattle");
-                        return FindDeep(root, "Header/Back") ?? FindDeep(root, "Header/Home");
-                    }
                     if (id == ScreenId.WaveResult) return FindDeep(root, "Home");
                     if (id == ScreenId.MainMenu) return FindDeep(root, "NodeHEROES");
                     if (id == ScreenId.Formation) return FindDeep(root, "ViewAll");

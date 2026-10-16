@@ -26,9 +26,9 @@ namespace Emberfall.Core.Session
     ///   0 Wake          the three lines over the dimmed hub
     ///   1 Recall        the Cinder: one free, scripted recall of Kael
     ///   2 Prologue      the existing prologue battle, watched
-    ///   3..7            the guided core loop, one pip each: team, campaign 1-1, the wave
-    ///                   result, a level up, the idle claim
-    ///   8 Complete      free play: one tip the first time each screen opens
+    ///   3..8            the guided core loop, one pip each: team, campaign 1-1, the wave
+    ///                   result, the second stage 1-2, a level up, the idle claim
+    ///   9 Complete      free play: one tip the first time each screen opens
     ///
     /// THE RECALL IS NOT A SUMMON. It costs nothing and never touches TotalSummons, the shards,
     /// the rates or the pity rule. Kael is a starting hero in heroes.json, so a Keeper's profile is
@@ -45,22 +45,23 @@ namespace Emberfall.Core.Session
         public const int StepTeam = 3;
         public const int StepCampaign = 4;
         public const int StepWaveResult = 5;
-        public const int StepLevelUp = 6;
-        public const int StepIdle = 7;
-        public const int Complete = 8;
+        public const int StepSecondStage = 6;
+        public const int StepLevelUp = 7;
+        public const int StepIdle = 8;
+        public const int Complete = 9;
 
-        /// <summary>The guided core loop: five steps, one pip each, starting at StepTeam.</summary>
-        public const int GuidedSteps = 5;
+        /// <summary>The guided core loop: six steps, one pip each, starting at StepTeam.</summary>
+        public const int GuidedSteps = 6;
 
         /// <summary>The SeenTips entry that stands for every tip, including ones added later.</summary>
         public const string AllTipsSeen = PlayerProfile.AllTipsSeenKey;
 
         public static bool IsComplete(PlayerProfile profile)
         {
-            return profile == null || profile.TutorialStep >= Complete;
+            return !OnboardingSwitch.Enabled || profile == null || profile.TutorialStep >= Complete;
         }
 
-        /// <summary>The guided step being taught, 0 to 4, or -1 outside the guided loop.</summary>
+        /// <summary>The guided step being taught, 0 to 5, or -1 outside the guided loop.</summary>
         public static int GuidedIndex(PlayerProfile profile)
         {
             if (profile == null) return -1;
@@ -113,12 +114,13 @@ namespace Emberfall.Core.Session
         /// <summary>
         /// A new player's profile: the ordinary new profile, with the recall hero held back for
         /// the Cinder to give, at step 0. With no onboarding table loaded it is the ordinary new
-        /// profile, complete, which is every build before this one.
+        /// profile, complete, which is every build before this one. So is the same with the
+        /// OnboardingSwitch off.
         /// </summary>
         public static PlayerProfile CreateKeeperProfile(ContentDatabase content, long nowUnix)
         {
             PlayerProfile profile = GameSession.CreateNewProfile(content, nowUnix);
-            if (content == null || content.Onboarding == null || !content.Onboarding.IsUsable)
+            if (!OnboardingSwitch.Enabled || content == null || content.Onboarding == null || !content.Onboarding.IsUsable)
             {
                 MarkComplete(profile);
                 return profile;
@@ -254,16 +256,16 @@ namespace Emberfall.Core.Session
         }
 
         /// <summary>
-        /// Whether the level-up step can be done right now: some owned hero's next level is
-        /// affordable. False for a new player straight after 1-1 (780 gold against a 1070 first
-        /// level on every starter), and the coach then points at the campaign until it is true.
+        /// The stage whose clear completes a guided step, or null for a step that no stage
+        /// completes: the wave result step is the first stage of the campaign (1-1) and the second
+        /// stage step is the one after it (1-2). Read by position, like the rest of the first
+        /// session, so the flow follows the campaign if its ids are ever renamed.
         /// </summary>
-        public static bool CanLevelAnyone(GameSession session)
+        public static StageDef StageFor(ContentDatabase content, int step)
         {
-            if (session == null) return false;
-            for (int i = 0; i < session.Profile.Heroes.Count; i++)
-                if (session.CanLevelUp(session.Profile.Heroes[i])) return true;
-            return false;
+            if (content == null) return null;
+            int index = step == StepWaveResult ? 0 : step == StepSecondStage ? 1 : -1;
+            return index >= 0 && index < content.AllStages.Count ? content.AllStages[index] : null;
         }
 
         /// <summary>The PrologueScript step the opening fights, read from onboarding.json; the

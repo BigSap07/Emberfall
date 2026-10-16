@@ -55,18 +55,17 @@
     "line": "Your heroes fight on their own."
   },
 
-  // 4. THE GUIDED CORE LOOP. Five steps, one pip each, in this order. Each line is the caption
-  // under the arrow while that step is the one being taught.
+  // 4. THE GUIDED CORE LOOP. Six steps, one pip each, in this order. Each line is the caption
+  // under the arrow while that step is the one being taught. The second stage is its own step so
+  // the level up comes after 1-2, when a new player can afford one (780 gold after 1-1 against a
+  // 1070 first level on every starter, 1235 after 1-2).
   "steps": [
-    { "id": "team",       "line": "Kael stands in your line now. Tap to confirm it." },
-    { "id": "campaign",   "line": "The road starts here. Fight stage 1-1." },
-    { "id": "waveResult", "line": "Each wave pays as it falls. Clear the stage." },
-    // "short" is said instead while no hero's next level is affordable, and the arrow then
-    // points at the campaign until one is: a new player holds 780 gold after 1-1 against a
-    // 1070 first level on every starter, and 1235 after 1-2.
-    { "id": "levelUp",    "line": "Gold makes a hero stronger. Level one up.",
-                          "short": "Not enough gold for a level yet. Fight the next stage." },
-    { "id": "idle",       "line": "Your heroes earn while you are away. Collect it." }
+    { "id": "team",        "line": "Kael stands in your line now. Tap to confirm it." },
+    { "id": "campaign",    "line": "The road starts here. Fight stage 1-1." },
+    { "id": "waveResult",  "line": "Each wave pays as it falls. Clear the stage." },
+    { "id": "secondStage", "line": "One more stage. Fight 1-2." },
+    { "id": "levelUp",     "line": "Gold makes a hero stronger. Level one up." },
+    { "id": "idle",        "line": "Your heroes earn while you are away. Collect it." }
   ],
 
   "skip": "SKIP",

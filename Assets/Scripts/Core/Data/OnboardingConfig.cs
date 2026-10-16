@@ -40,8 +40,6 @@ namespace Emberfall.Core.Data
     {
         public string Id = "";
         public string Line = "";
-        /// <summary>The line said while the step cannot be done yet, or empty.</summary>
-        public string Short = "";
     }
 
     /// <summary>
@@ -102,12 +100,6 @@ namespace Emberfall.Core.Data
             return index >= 0 && index < Steps.Count ? Steps[index].Line : "";
         }
 
-        public string StepShortLine(int index)
-        {
-            if (index < 0 || index >= Steps.Count) return "";
-            return Steps[index].Short.Length > 0 ? Steps[index].Short : Steps[index].Line;
-        }
-
         public static OnboardingConfig FromJson(string text)
         {
             OnboardingConfig c = new OnboardingConfig();
@@ -158,7 +150,6 @@ namespace Emberfall.Core.Data
                 OnboardingStepDef s = new OnboardingStepDef();
                 s.Id = steps[i].GetString("id", "");
                 s.Line = steps[i].GetString("line", "");
-                s.Short = steps[i].GetString("short", "");
                 c.Steps.Add(s);
             }
             c.Skip = root.GetString("skip", c.Skip);

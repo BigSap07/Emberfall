@@ -45,7 +45,7 @@ namespace Emberfall.DevHarness
         private static void CheckOnboarding(ContentDatabase db)
         {
             Line("");
-            Line("ONBOARDING (DESIGN-ONBOARDING.md: the Keeper wakes, the Cinder recalls Kael, five guided steps)");
+            Line("ONBOARDING (DESIGN-ONBOARDING.md: the Keeper wakes, the Cinder recalls Kael, six guided steps)");
 
             OnboardingConfig cfg = db.Onboarding;
             Check(cfg.IsUsable && cfg.Warnings.Count == 0,
@@ -54,7 +54,7 @@ namespace Emberfall.DevHarness
             Check(kael != null && kael.Id == "kael_the_unyielding",
                   "the Cinder recalls Kael (" + (kael != null ? kael.Id : "none") + ")");
             Check(cfg.WakeLines.Count == 3 && cfg.Steps.Count == Onboarding.GuidedSteps && cfg.PrologueLine.Length > 0,
-                  "the three wake lines, the five guided steps and the prologue's line are content (" + cfg.WakeLines.Count
+                  "the three wake lines, the six guided steps and the prologue's line are content (" + cfg.WakeLines.Count
                   + " lines, " + cfg.Steps.Count + " steps)");
             if (kael == null) return;
 
@@ -102,46 +102,34 @@ namespace Emberfall.DevHarness
             Onboarding.CompleteStep(walker, Onboarding.StepWake);
             Onboarding.Recall(ws, OnboardingNow);
             Onboarding.CompleteStep(walker, Onboarding.StepPrologue);
-            Check(Onboarding.GuidedIndex(walker) == 0, "the prologue hands over to guided step 1 of 5");
+            Check(Onboarding.GuidedIndex(walker) == 0, "the prologue hands over to guided step 1 of " + Onboarding.GuidedSteps);
             Check(walker.IsDeployed(walker.FindHeroByDefId(kael.Id).Uid),
                   "the team step's default holds: Kael already stands in the line with nothing done");
             walker.ClearTeamSlot(walker.TeamSlotOf(walker.FindHeroByDefId(kael.Id).Uid));
             Check(Onboarding.EnsureRecallHeroDeployed(ws) && walker.IsDeployed(walker.FindHeroByDefId(kael.Id).Uid),
                   "and taken off the banner, he is placed again automatically when the step completes");
-            Onboarding.CompleteStep(walker, Onboarding.StepTeam);
-            StageDef first = db.AllStages[0];
-            int resolves = 0;
-            while (!walker.HasClearedStage(first.Id) && resolves < 12)
-            {
-                ws.ResolveWave(first, 7100 + resolves * 101, OnboardingNow + resolves);
-                if (resolves == 0) Onboarding.CompleteStep(walker, Onboarding.StepCampaign);
-                resolves++;
-            }
-            Check(walker.HasClearedStage(first.Id),
-                  "the recalled line clears " + first.DisplayCode + " wave by wave (" + resolves + " resolves)");
-            Onboarding.CompleteStep(walker, Onboarding.StepWaveResult);
-            HeroInstance kh = walker.FindHeroByDefId(kael.Id);
-            long goldAfterFirst = walker.Gold;
-            int cost = ws.LevelUpCost(kh);
-            Check(!Onboarding.CanLevelAnyone(ws),
-                  "FINDING, not a gate on the flow: after " + first.DisplayCode + " a new player holds " + goldAfterFirst
-                  + " gold against a first level of " + cost + " on every starter, so the level-up step routes on to the next stage first");
-            StageDef second = db.AllStages[1];
-            int more = 0;
-            while (!walker.HasClearedStage(second.Id) && more < 12)
-            {
-                ws.ResolveWave(second, 7900 + more * 101, OnboardingNow + 100 + more);
-                more++;
-            }
-            Check(Onboarding.CanLevelAnyone(ws),
-                  "and after " + second.DisplayCode + " (" + walker.Gold + " gold) a level is affordable, so the step can always be finished");
-            int levelBefore = kh.Level;
-            LevelUpResult up = ws.LevelUpHero(kh, 1);
-            Check(kh.Level > levelBefore, "the level-up step is a real level bought with real gold (Kael " + levelBefore + " to " + kh.Level
-                  + (up.Message != null && up.Message.Length > 0 ? ", " + up.Message : "") + ")");
-            Onboarding.CompleteStep(walker, Onboarding.StepLevelUp);
-            ws.ClaimIdle(OnboardingNow + 3600);
-            Onboarding.CompleteStep(walker, Onboarding.StepIdle);
+            // ---- the guided loop, walked with the coach's own completion rules and the game's own
+            // stage resolution: no detour, and the gold is there when the level up comes
+            StageDef first = Onboarding.StageFor(db, Onboarding.StepWaveResult);
+            StageDef second = Onboarding.StageFor(db, Onboarding.StepSecondStage);
+            GuidedWalk walk = WalkGuidedLoop(db, ws, kael);
+            string expectedOrder = "team, stage " + first.DisplayCode + ", wave result, stage " + second.DisplayCode + ", level up, idle";
+            Line("  guided order: " + string.Join(", ", walk.Order.ToArray()));
+            Check(string.Join(", ", walk.Order.ToArray()) == expectedOrder && walk.EachStepMovedOnce,
+                  "the guided order is exactly " + expectedOrder + ", each step completing on its own cue and moving the counter by one");
+            Check(Onboarding.Complete == Onboarding.StepTeam + Onboarding.GuidedSteps && cfg.Steps.Count == Onboarding.GuidedSteps
+                  && cfg.Steps[0].Id == "team" && cfg.Steps[1].Id == "campaign" && cfg.Steps[2].Id == "waveResult"
+                  && cfg.Steps[3].Id == "secondStage" && cfg.Steps[4].Id == "levelUp" && cfg.Steps[5].Id == "idle",
+                  "onboarding.json words the six steps in that same order, so each pip and each caption is the step it names");
+            Check(walk.FirstClearedAtWaveResult && walk.SecondClearedAtSecondStage && walk.SecondUnclearedBefore,
+                  "the wave result step completes on " + first.DisplayCode + " cleared and the second stage step on " + second.DisplayCode
+                  + " cleared, which was not cleared before it (" + walk.Resolves + " resolves in all)");
+            Line("  gold at the level up step: " + walk.GoldAtLevelUp + "; cheapest next level among owned heroes: " + walk.CheapestLevelCost
+                 + "; dearest: " + walk.DearestLevelCost);
+            Check(walk.GoldAtLevelUp >= walk.CheapestLevelCost && walk.GoldAtLevelUp >= walk.DearestLevelCost,
+                  "at the level up step the profile holds " + walk.GoldAtLevelUp + " gold against a cheapest next level of " + walk.CheapestLevelCost
+                  + " (dearest " + walk.DearestLevelCost + "), so the step needs no detour for gold");
+            Check(walk.LevelBought, "the level-up step is a real level bought with real gold (Kael " + walk.LevelBefore + " to " + walk.LevelAfter + ")");
             Check(Onboarding.IsComplete(walker) && CountOf(walker, kael.Id) == 1 && walker.FindHeroByDefId(kael.Id).Copies == 1,
                   "the whole flow ends complete with Kael owned exactly once");
 
@@ -162,7 +150,7 @@ namespace Emberfall.DevHarness
                     || p.TotalSummons != 0 || PlayerProfile.HasSeen(p, "Summon"))
                     skipAll = false;
             }
-            Check(skipAll, "SKIP from each of the eight steps ends the flow complete, with Kael owned once and deployed, no summon counted, and the free-play tips still to come");
+            Check(skipAll, "SKIP from each of the " + Onboarding.Complete + " steps ends the flow complete, with Kael owned once and deployed, no summon counted, and the free-play tips still to come");
 
             // ---- resume after quitting mid-step
             PlayerProfile quitter = Onboarding.CreateKeeperProfile(db, OnboardingNow);
@@ -176,7 +164,7 @@ namespace Emberfall.DevHarness
             PlayerProfile resumed = SaveSerializer.Deserialize(SaveSerializer.Serialize(quitter), db, out err);
             Check(resumed != null && resumed.TutorialStep == Onboarding.StepCampaign && Onboarding.GuidedIndex(resumed) == 1
                   && CountOf(resumed, kael.Id) == 1 && PlayerProfile.HasSeen(resumed, "Formation") && !PlayerProfile.HasSeen(resumed, "Summon"),
-                  "quitting mid-flow after the team step resumes at the campaign step, guided pip 2 of 5, with Kael and the seen tips kept");
+                  "quitting mid-flow after the team step resumes at the campaign step, guided pip 2 of " + Onboarding.GuidedSteps + ", with Kael and the seen tips kept");
             PlayerProfile atWake = SaveSerializer.Deserialize(SaveSerializer.Serialize(Onboarding.CreateKeeperProfile(db, OnboardingNow)), db, out err);
             Check(atWake != null && atWake.TutorialStep == Onboarding.StepWake && !atWake.Owns(kael.Id),
                   "a player who quits at the wake comes back to the wake, still without Kael");
@@ -218,6 +206,180 @@ namespace Emberfall.DevHarness
             List<HeroInstance> squad = PrologueScript.BuildSquad(db);
             Check(squad != null && squad.Count > 0 && PrologueScript.BuildStage(step).Enemies.Count > 0,
                   "the opening fights PrologueScript's " + step + " step with its own squad of " + (squad != null ? squad.Count : 0));
+        }
+
+        /// <summary>What WalkGuidedLoop saw: the order the steps came in and the facts the checks assert.</summary>
+        private sealed class GuidedWalk
+        {
+            public readonly List<string> Order = new List<string>();
+            public bool EachStepMovedOnce = true;
+            public bool FirstClearedAtWaveResult, SecondClearedAtSecondStage, SecondUnclearedBefore = true;
+            public int Resolves;
+            public long GoldAtLevelUp;
+            public int CheapestLevelCost = int.MaxValue, DearestLevelCost;
+            public bool LevelBought;
+            public int LevelBefore, LevelAfter;
+        }
+
+        private static string GuidedLabel(ContentDatabase db, int step)
+        {
+            switch (step)
+            {
+                case Onboarding.StepTeam: return "team";
+                case Onboarding.StepCampaign: return "stage " + Onboarding.StageFor(db, Onboarding.StepWaveResult).DisplayCode;
+                case Onboarding.StepWaveResult: return "wave result";
+                case Onboarding.StepSecondStage: return "stage " + Onboarding.StageFor(db, Onboarding.StepSecondStage).DisplayCode;
+                case Onboarding.StepLevelUp: return "level up";
+                case Onboarding.StepIdle: return "idle";
+            }
+            return "step " + step;
+        }
+
+        /// <summary>
+        /// Plays the guided loop from the team step to the end the way the coach does: each step is
+        /// completed by its own cue (leaving the formation, the first wave result, a stage cleared, a
+        /// level bought, an idle claim) through Onboarding's calls and GameSession's stage
+        /// resolution, never by setting the counter. Nothing here fights a stage the loop did not ask
+        /// for, so a step that needed gold the player lacks would stall rather than be worked around.
+        /// </summary>
+        private static GuidedWalk WalkGuidedLoop(ContentDatabase db, GameSession ws, HeroDef kael)
+        {
+            GuidedWalk w = new GuidedWalk();
+            PlayerProfile p = ws.Profile;
+            StageDef first = Onboarding.StageFor(db, Onboarding.StepWaveResult);
+            StageDef second = Onboarding.StageFor(db, Onboarding.StepSecondStage);
+            int guard = 0;
+            while (!Onboarding.IsComplete(p) && guard++ < 20)
+            {
+                int step = p.TutorialStep;
+                w.Order.Add(GuidedLabel(db, step));
+                bool done = false;
+                switch (step)
+                {
+                    case Onboarding.StepTeam:
+                        Onboarding.EnsureRecallHeroDeployed(ws);
+                        done = true;
+                        break;
+                    case Onboarding.StepCampaign:
+                        ws.ResolveWave(first, 7100 + w.Resolves * 101, OnboardingNow + w.Resolves);
+                        w.Resolves++;
+                        done = true;
+                        break;
+                    case Onboarding.StepWaveResult:
+                        while (!p.HasClearedStage(first.Id) && w.Resolves < 12)
+                        {
+                            ws.ResolveWave(first, 7100 + w.Resolves * 101, OnboardingNow + w.Resolves);
+                            w.Resolves++;
+                        }
+                        w.FirstClearedAtWaveResult = p.HasClearedStage(first.Id);
+                        done = w.FirstClearedAtWaveResult;
+                        break;
+                    case Onboarding.StepSecondStage:
+                        w.SecondUnclearedBefore = !p.HasClearedStage(second.Id);
+                        int more = 0;
+                        while (!p.HasClearedStage(second.Id) && more < 12)
+                        {
+                            ws.ResolveWave(second, 7900 + more * 101, OnboardingNow + 100 + more);
+                            more++;
+                            w.Resolves++;
+                        }
+                        w.SecondClearedAtSecondStage = p.HasClearedStage(second.Id);
+                        done = w.SecondClearedAtSecondStage;
+                        break;
+                    case Onboarding.StepLevelUp:
+                        w.GoldAtLevelUp = p.Gold;
+                        for (int i = 0; i < p.Heroes.Count; i++)
+                        {
+                            int cost = ws.LevelUpCost(p.Heroes[i]);
+                            w.CheapestLevelCost = Math.Min(w.CheapestLevelCost, cost);
+                            w.DearestLevelCost = Math.Max(w.DearestLevelCost, cost);
+                        }
+                        HeroInstance kh = p.FindHeroByDefId(kael.Id);
+                        w.LevelBefore = kh.Level;
+                        ws.LevelUpHero(kh, 1);
+                        w.LevelAfter = kh.Level;
+                        w.LevelBought = kh.Level > w.LevelBefore;
+                        done = w.LevelBought;
+                        break;
+                    case Onboarding.StepIdle:
+                        ws.ClaimIdle(OnboardingNow + 3600);
+                        done = true;
+                        break;
+                }
+                if (!done) break;
+                if (!Onboarding.CompleteStep(p, step) || p.TutorialStep != step + 1) w.EachStepMovedOnce = false;
+            }
+            if (w.CheapestLevelCost == int.MaxValue) w.CheapestLevelCost = 0;
+            return w;
+        }
+
+        // ------------------------------------------------------------------ the off switch
+
+        /// <summary>A save without the two keys version 21 added. Version 20 and version 21 are
+        /// otherwise the same document, so what is left is the save origin/main wrote.</summary>
+        private static string WithoutV21Keys(string json)
+        {
+            JsonValue root = JsonValue.Parse(json);
+            JsonValue stripped = JsonValue.NewObject();
+            foreach (string key in root.Keys)
+                if (key != "tutorialStep" && key != "seenTips") stripped.Set(key, root[key]);
+            return stripped.ToJson(false);
+        }
+
+        private static void CheckOnboardingSwitch(ContentDatabase db)
+        {
+            Line("");
+            Line("ONBOARDING OFF SWITCH (rollback: the build before onboarding, one switch away)");
+            HeroDef kael = Onboarding.RecallHero(db);
+            bool was = OnboardingSwitch.Enabled;
+            try
+            {
+                Feature[] features = (Feature[])Enum.GetValues(typeof(Feature));
+
+                // ---- on: the Keeper, and a table that locks
+                OnboardingSwitch.Enabled = true;
+                PlayerProfile keeper = Onboarding.CreateKeeperProfile(db, OnboardingNow);
+                bool lockedOn = false;
+                foreach (Feature f in features)
+                    if (FeatureGate.UnlockStage(db, f) != null && !FeatureGate.IsUnlocked(db, keeper, f)) lockedOn = true;
+                Check(!Onboarding.IsComplete(keeper) && keeper.TutorialStep == Onboarding.StepWake && !keeper.Owns(kael.Id) && lockedOn,
+                      "with the switch on a new save is a Keeper at the wake without Kael, and the table locks features (Fusion reads \""
+                      + FeatureGate.LockLine(db, Feature.Fusion) + "\")");
+
+                // ---- off: the ordinary new profile, complete, with nothing locked
+                OnboardingSwitch.Enabled = false;
+                PlayerProfile off = Onboarding.CreateKeeperProfile(db, OnboardingNow);
+                PlayerProfile main = GameSession.CreateNewProfile(db, OnboardingNow);
+                string offJson = SaveSerializer.Serialize(off);
+                Check(WithoutV21Keys(offJson) == WithoutV21Keys(SaveSerializer.Serialize(main)),
+                      "with the switch off a new save is byte for byte the profile origin/main created (GameSession.CreateNewProfile), "
+                      + "compared as the saved document with exactly two keys excluded, tutorialStep and seenTips, which version 21 added and origin/main never wrote ("
+                      + WithoutV21Keys(offJson).Length + " characters compared)");
+                JsonValue offRoot = JsonValue.Parse(offJson);
+                List<JsonValue> offTips = offRoot.GetList("seenTips");
+                Check(off.TutorialStep == Onboarding.Complete && Onboarding.IsComplete(off) && offRoot.GetInt("tutorialStep", -1) == Onboarding.Complete
+                      && offTips.Count == 1 && offTips[0].AsString("") == Onboarding.AllTipsSeen && off.Owns(kael.Id),
+                      "and the two excluded keys read complete and every tip seen (tutorialStep " + offRoot.GetInt("tutorialStep", -1)
+                      + ", seenTips " + offTips.Count + " entry: " + (offTips.Count > 0 ? offTips[0].AsString("") : "none") + "), with Kael already owned");
+                Check(Onboarding.IsComplete(keeper),
+                      "and a profile saved mid-flow with the switch on counts complete once it is loaded with the switch off, so the coach has nothing to show");
+
+                List<string> shut = new List<string>();
+                foreach (Feature f in features)
+                {
+                    if (!FeatureGate.IsUnlocked(db, off, f) || FeatureGate.LockLine(db, f).Length > 0 || FeatureGate.ShowsNewDot(db, off, f)) shut.Add(f.ToString());
+                    for (int st = 0; st < db.AllStages.Count; st++)
+                        if (!FeatureGate.IsUnlockedArriving(db, db.AllStages[st], f)) { shut.Add(f + "@" + db.AllStages[st].DisplayCode); break; }
+                }
+                for (int e = 0; e < FeatureEntryPoints.All.Length; e++)
+                    if (!FeatureEntryPoints.Allows(db, off, FeatureEntryPoints.All[e].Id)) shut.Add(FeatureEntryPoints.All[e].Id);
+                Check(shut.Count == 0,
+                      "and every feature reads unlocked: all " + features.Length + " features, with no lock line and no new dot, for a player arriving at any of "
+                      + db.AllStages.Count + " stages, through all " + FeatureEntryPoints.All.Length + " entry points"
+                      + (shut.Count > 0 ? " - still shut: " + string.Join(", ", shut.ToArray()) : ""));
+            }
+            finally { OnboardingSwitch.Enabled = was; }
+            Check(OnboardingSwitch.Enabled == was, "the switch is put back as the run found it (" + (was ? "on" : "off") + ")");
         }
 
         private static int CountOf(PlayerProfile p, string defId)
