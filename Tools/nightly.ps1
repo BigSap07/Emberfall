@@ -48,6 +48,9 @@ param(
     [int]$CaptureTimeoutMinutes = 90,
     # No new capture for this long, once the capture queue has started, means the editor is stuck.
     [int]$StallMinutes = 10,
+    # Unity creates its -logFile within seconds of starting. None after this long means the editor
+    # never came up (no desktop to open a window on, a licence dialog nobody can answer).
+    [int]$LogStartMinutes = 5,
     # A capture whose pixels differ from the previous night's by at least this percentage is listed
     # as a notable change.
     [double]$ChangeThresholdPercent = 3.0,
@@ -504,6 +507,16 @@ function Get-CaptureTargets {
     return [pscustomobject]@{ Queue = @($queue); Expected = @($expected | Select-Object -Unique); Notes = $notes }
 }
 
+# True when this process can show a window: not the services session, and the user's shell is
+# running in the same session. A task with no desktop fails the second test even when its session
+# id is not 0.
+function Test-InteractiveDesktop {
+    if (-not [Environment]::UserInteractive) { return $false }
+    $session = [System.Diagnostics.Process]::GetCurrentProcess().SessionId
+    if ($session -eq 0) { return $false }
+    return [bool](Get-Process -Name explorer -ErrorAction SilentlyContinue | Where-Object { $_.SessionId -eq $session })
+}
+
 function Invoke-CaptureSweep {
     $c = $R.captures
     $targets = Get-CaptureTargets
@@ -511,6 +524,15 @@ function Invoke-CaptureSweep {
     $c.expected = @($targets.Expected)
     $c.notes += $targets.Notes
     if ($targets.Queue.Count -eq 0) { $c.notes += 'PlayModeScreenshot.cs yielded no targets'; return }
+
+    # The captures need a real desktop: the GUI editor has to open a window and hold the foreground.
+    # A task registered with S4U (or any logon without a desktop) has neither, and Unity then never
+    # even writes its log, so launching it would only wait out the whole ceiling.
+    if (-not (Test-InteractiveDesktop)) {
+        $c.notes += 'no interactive desktop: the task must run as an Interactive logon; captures skipped'
+        Say 'no interactive desktop; skipping the capture sweep without launching Unity'
+        return
+    }
 
     $version = ''
     $pv = Join-Path $Worktree 'ProjectSettings\ProjectVersion.txt'
@@ -550,6 +572,7 @@ function Invoke-CaptureSweep {
     $runStarted = $false
     $marks = -1
     $lastProgress = Get-Date
+    $logSeen = $false
     $tick = 0
     while (-not $proc.WaitForExit(3000)) {
         # The Game view only repaints while the editor holds the foreground; behind another window
@@ -566,6 +589,18 @@ function Invoke-CaptureSweep {
             try { Stop-Process -Id $proc.Id -Force -ErrorAction Stop } catch { Say ('could not stop PID ' + $proc.Id + ': ' + $_.Exception.Message) }
             [void]$proc.WaitForExit(30000)
             break
+        }
+        # Startup watchdog. Unity opens its log almost at once; if it has not by now, no later
+        # check (they all read the log) can ever fire, so stop it here rather than at the ceiling.
+        if (-not $logSeen) {
+            if (Test-Path -LiteralPath $unityLog) { $logSeen = $true }
+            elseif (((Get-Date) - $began).TotalMinutes -ge $LogStartMinutes) {
+                $c.notes += ('Unity wrote no log within ' + $LogStartMinutes + ' minutes of launch, so it was stopped')
+                Say ('Unity PID ' + $proc.Id + ' wrote no log within ' + $LogStartMinutes + ' minutes; stopping it by PID')
+                try { Stop-Process -Id $proc.Id -Force -ErrorAction Stop } catch { Say ('could not stop PID ' + $proc.Id + ': ' + $_.Exception.Message) }
+                [void]$proc.WaitForExit(30000)
+                break
+            }
         }
         # Stall watchdog. Once ScratchCaptures has started its queue, every capture adds a line to
         # the log; ten minutes with none means the editor is stuck (a hung Play session, a modal
