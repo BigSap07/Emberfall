@@ -1019,12 +1019,14 @@ namespace Emberfall.Core.Session
             for (int i = 0; i < live.Count; i++) fighting.Add(live[i].Copy());
 
             BattleResult lastFought = null;
+            res.Stats = new WaveStats();
             for (int b = battle; b <= res.BattleCount; b++)
             {
                 int ordinal = CampaignWaveGenerator.BattleOrdinal(stage, wave, b);
                 int seed = BattleSeed(baseSeed, ordinal);
                 BattleResult result = ResolveLadderBattle(stage, wave, b, seed);
                 lastFought = result;
+                res.Stats.Record(b, result);
 
                 WaveBattleOutcome outcome = new WaveBattleOutcome();
                 outcome.Wave = wave;

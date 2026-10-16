@@ -521,6 +521,18 @@ furthest stage, unlocks, idle income and the count from them, and `stagesCleared
 count kept for the summary readers. `CheckWaveResolve`, `CheckClearedStagesById` and
 `CheckStageResumeAfterWaveResolve` prove it.
 
+**Battle stats.** `WaveResolution.Stats` (a `WaveStats`) holds what each hero dealt, took, healed,
+shielded and killed, per battle and summed over the battles that resolve fought. `GameSession.ResolveWave`
+fills it with `WaveStats.Record` for every battle, won or lost, from the `BattleEvent`s before the
+result leaves scope; `BattleTally.Of` in `BattleStats.cs` is the pure tally, crediting by source over
+Damage, Heal and ShieldGain as `TalentTrial` does. It is memory only: not in the save, no version
+moved, and no fight reads it. `BattleStatsView` is what the panel draws (rows, bar fractions, MVP,
+scope, default scope) and `BattleStatsPanel` only paints it; `WaveResultScreen` opens it from STATS.
+`Docs/ui-specs/BATTLE-STATS.md` is the spec and its two interpretations. `CheckBattleStats` proves
+the totals against a straight sum over the events (`CheckBattleStatsClearedWave`,
+`CheckBattleStatsLostWave`, `CheckBattleStatsStageClear`), the save byte-identical after the view
+(`CheckBattleStatsLeavesSaveAlone`) and determinism (`CheckBattleStatsDeterministic`).
+
 ### Fusion and ascension
 
 `DESIGN-HERO-FUSION.md` holds the rules, F1 to F9, and the reasoning; this is what the files show.
