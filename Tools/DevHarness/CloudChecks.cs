@@ -907,24 +907,33 @@ namespace Emberfall.DevHarness
             string sql = all.ToString().ToLowerInvariant();
 
             HashSet<string> tables = Names(sql, "create table if not exists public\\.(\\w+)");
-            HashSet<string> revokedTables = Names(sql, "revoke all on public\\.(\\w+)\\s+from anon, authenticated");
+            HashSet<string> revokedTables = Names(sql, "revoke all on public\\.(\\w+)\\s+from (?:public, )?anon, authenticated");
             List<string> unrevoked = new List<string>();
             foreach (string t in tables) if (!revokedTables.Contains(t)) unrevoked.Add(t);
             Check(unrevoked.Count == 0, "every table revokes anon and authenticated before granting anything ("
                   + tables.Count + " tables" + (unrevoked.Count > 0 ? ", not: " + string.Join(", ", unrevoked.ToArray()) : "") + ")");
 
             List<string> anonGrants = new List<string>();
-            foreach (Match m in Regex.Matches(sql, "grant [^;]*? to [^;]*\\banon\\b[^;]*;")) anonGrants.Add(m.Value);
-            Check(anonGrants.Count == 0, "no statement grants anything to anon" + (anonGrants.Count > 0 ? " - " + anonGrants[0] : ""));
+            foreach (Match m in Regex.Matches(sql, "grant [^;]*? to [^;]*\\banon\\b[^;]*;")) anonGrants.Add(Regex.Replace(m.Value, "\\s+", " "));
+            // THE ONE DECIDED EXCEPTION (Docs/DESIGN-TELEMETRY.md): the playtest's anonymous play
+            // stats are sent by a build that never signed in, so play_events takes an insert from
+            // anon on four named columns, and nothing else. Any other grant to anon, or a wider
+            // one on this table, still turns this red.
+            const string playEventsGrant = "grant insert (install_id, event, payload, build) on public.play_events to anon, authenticated;";
+            List<string> otherAnonGrants = new List<string>();
+            foreach (string g in anonGrants) if (g != playEventsGrant) otherAnonGrants.Add(g);
+            Check(otherAnonGrants.Count == 0, "no statement grants anything to anon except the play_events insert on its four columns"
+                  + (otherAnonGrants.Count > 0 ? " - " + otherAnonGrants[0] : ""));
 
             HashSet<string> writes = new HashSet<string>();
-            foreach (Match m in Regex.Matches(sql, "grant ([^;]+?) on public\\.(\\w+) to (\\w+);"))
+            foreach (Match m in Regex.Matches(sql, "grant ([^;]+?) on public\\.(\\w+) to (\\w+(?:, \\w+)*);"))
             {
                 if (m.Groups[1].Value.Contains("function")) continue;
                 foreach (Match p in Regex.Matches(m.Groups[1].Value, "(insert|update|delete)(\\s*\\(([^)]*)\\))?"))
                 {
                     string cols = p.Groups[3].Success ? "(" + Regex.Replace(p.Groups[3].Value, "\\s+", "") + ")" : "";
-                    writes.Add(m.Groups[2].Value + ":" + p.Groups[1].Value + cols + ":" + m.Groups[3].Value);
+                    foreach (string role in m.Groups[3].Value.Split(new[] { ", " }, StringSplitOptions.None))
+                        writes.Add(m.Groups[2].Value + ":" + p.Groups[1].Value + cols + ":" + role);
                 }
             }
             string[] allowed =
@@ -935,14 +944,17 @@ namespace Emberfall.DevHarness
                 "team_snapshots:insert:authenticated", "team_snapshots:update:authenticated",
                 "team_snapshots:delete:authenticated",
                 "guilds:update(description,is_open):authenticated", "guilds:delete:authenticated",
-                "guild_members:delete:authenticated", "guild_requests:delete:authenticated"
+                "guild_members:delete:authenticated", "guild_requests:delete:authenticated",
+                // The playtest's play stats: insert only, four columns, no account needed.
+                "play_events:insert(install_id,event,payload,build):anon",
+                "play_events:insert(install_id,event,payload,build):authenticated"
             };
             HashSet<string> expected = new HashSet<string>(allowed);
             List<string> extra = new List<string>(), missing = new List<string>();
             foreach (string w in writes) if (!expected.Contains(w)) extra.Add(w);
             foreach (string w in expected) if (!writes.Contains(w)) missing.Add(w);
             Check(extra.Count == 0 && missing.Count == 0,
-                  "the client write grants are exactly the eleven the design names (" + writes.Count + ")"
+                  "the client write grants are exactly the eleven the design names plus the two insert-only play_events grants (" + writes.Count + ")"
                   + (extra.Count > 0 ? " - UNEXPECTED: " + string.Join(", ", extra.ToArray()) : "")
                   + (missing.Count > 0 ? " - missing: " + string.Join(", ", missing.ToArray()) : ""));
             Check(!writes.Contains("saves:insert:authenticated") && !writes.Contains("saves:update:authenticated")
