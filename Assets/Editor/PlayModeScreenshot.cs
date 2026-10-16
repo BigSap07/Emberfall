@@ -61,6 +61,9 @@ namespace Emberfall.EditorTools
         /// <summary>The campaign stage a Battle target fights instead of Session.NextStage, or
         /// empty for NextStage. StageKey is the schedule's slot index, not this.</summary>
         private const string BattleStageKey = "PlayModeScreenshot.BattleStage";
+        /// <summary>Set once an onboarding target that waits on a screen (a battle's first round, a
+        /// wave result's paint) has seen it ready, so the shot is timed from then.</summary>
+        private const string OnboardReadyKey = "PlayModeScreenshot.OnboardReady";
 
         /// <summary>
         /// Every run of this tool is on a scratch identity with the cloud held off, unconditionally:
@@ -161,6 +164,35 @@ namespace Emberfall.EditorTools
 
         [MenuItem("Emberfall/Capture/Onboarding/First-time tip", false, 95)]
         public static void CaptureOnboardTip() { Begin("Screen:OnboardTip"); }
+
+        // The first session in order, one target per moment, for DESIGN-ONBOARDING.md's walk-through:
+        // wake and recall above, then the prologue, the six guided steps and the locked Hub. Each
+        // sets its player up through Onboarding's own calls and the game's own stage resolution, and
+        // each refuses a profile that is not a new one.
+
+        [MenuItem("Emberfall/Capture/Onboarding/Prologue battle", false, 96)]
+        public static void CaptureOnboardPrologue() { Begin("Screen:OnboardPrologue"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Step 1 team (formation)", false, 97)]
+        public static void CaptureOnboardTeam() { Begin("Screen:OnboardTeam"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Step 2 campaign (enter battle)", false, 98)]
+        public static void CaptureOnboardCampaign() { Begin("Screen:OnboardCampaign"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Step 2 stage 1-1 (battle)", false, 99)]
+        public static void CaptureOnboardStage1() { Begin("Screen:OnboardStage1"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Step 3 wave result", false, 100)]
+        public static void CaptureOnboardWaveResult() { Begin("Screen:OnboardWaveResult"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Step 4 stage 1-2 (battle)", false, 101)]
+        public static void CaptureOnboardStage2() { Begin("Screen:OnboardStage2"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Step 5 level up", false, 102)]
+        public static void CaptureOnboardLevelUp() { Begin("Screen:OnboardLevelUp"); }
+
+        [MenuItem("Emberfall/Capture/Onboarding/Step 6 idle rewards", false, 103)]
+        public static void CaptureOnboardIdle() { Begin("Screen:OnboardIdle"); }
 
         [MenuItem("Emberfall/Capture/Hub (MainMenu)", false, 60)]
         public static void CaptureHubScreen() { Begin("Screen:MainMenu"); }
@@ -385,6 +417,7 @@ namespace Emberfall.EditorTools
             SessionState.SetInt(HeightKey, height);
             SessionState.SetString(SuffixKey, suffix);
             SessionState.SetString(BattleStageKey, battleStage);
+            SessionState.SetBool(OnboardReadyKey, false);
             SessionState.SetInt(FrameKey, 0);
             SessionState.SetInt(StageKey, 0);
             // Both of these survive a domain reload, so a second run in the same editor session
@@ -485,6 +518,41 @@ namespace Emberfall.EditorTools
             if (stage == 1)
             {
                 int armed = SessionState.GetInt(BattleArmKey, 0);
+
+                // A fight and a wave result cannot be timed by a frame count: the shot waits for the
+                // battle's first round, or for the wave result to paint, as the plain Battle and
+                // WaveResult targets do, and is taken the same BattlePaintDelay after.
+                if (OnboardWaitsOnScreen(name))
+                {
+                    const int ceiling = 2400, paintDelay = 20;
+                    if (!SessionState.GetBool(OnboardReadyKey, false))
+                    {
+                        bool ready = name == "OnboardWaveResult"
+                            ? app.Router.WaveResult != null && app.Router.WaveResult.Painted
+                            : app.Router.Current != null && app.Router.Current.Id == ScreenId.Battle && app.Router.Battle.RoundUnderway;
+                        if (ready || frame > armed + ceiling)
+                        {
+                            SessionState.SetBool(OnboardReadyKey, true);
+                            SessionState.SetInt(BattleArmKey, frame);
+                            if (!ready) Debug.LogWarning("PlayModeScreenshot: " + name + " was not ready within " + ceiling + " frames. Shooting anyway.");
+                        }
+                        return;
+                    }
+                    armed = SessionState.GetInt(BattleArmKey, 0);
+                    if (frame == armed + paintDelay - 5) Canvas.ForceUpdateCanvases();
+                    if (frame == armed + paintDelay)
+                    {
+                        PlayerProfile w = app.Session.Profile;
+                        OnboardingCoach wc = OnboardingCoach.Instance;
+                        Debug.Log("PlayModeScreenshot: " + name + " at step " + w.TutorialStep + " on "
+                                  + (app.Router.Current != null ? app.Router.Current.Id.ToString() : "none")
+                                  + ", cleared " + w.ClearedStageIds.Count + ", gold " + w.Gold);
+                        if (wc != null) Debug.Log("PlayModeScreenshot: coach " + wc.DescribeForCapture());
+                        Shoot(name, frame, 1);
+                    }
+                    return;
+                }
+
                 if (name == "OnboardTip" && frame == armed + 20) app.Router.Show(ScreenId.Summon);
                 if (frame == armed + 115) Canvas.ForceUpdateCanvases();
                 if (frame == armed + 120)
@@ -507,6 +575,61 @@ namespace Emberfall.EditorTools
             }
         }
 
+        private static bool OnboardWaitsOnScreen(string name)
+        {
+            return name == "OnboardPrologue" || name == "OnboardStage1" || name == "OnboardStage2" || name == "OnboardWaveResult";
+        }
+
+        /// <summary>
+        /// Walks a new profile up to the guided step asked for with the calls the coach and the
+        /// campaign make, never by setting the counter: the wake, the recall, the prologue, the team
+        /// confirmed, then the real stage resolution (GameSession.ResolveWave, the same call the wave
+        /// result screen makes) for each stage a step needs cleared and a real level bought for the
+        /// level up. Returns at the step; a step past StepCampaign needs 1-1 cleared first, which is
+        /// what the coach's own poll would have completed.
+        /// </summary>
+        private static void WalkOnboardingTo(GameApp app, int step)
+        {
+            GameSession session = app.Session;
+            PlayerProfile profile = session.Profile;
+            long now = TimeUtil.NowUnix();
+            Onboarding.CompleteStep(profile, Onboarding.StepWake);
+            if (step <= Onboarding.StepRecall) return;
+            Onboarding.Recall(session, now);
+            if (step <= Onboarding.StepPrologue) return;
+            Onboarding.CompleteStep(profile, Onboarding.StepPrologue);
+            if (step <= Onboarding.StepTeam) return;
+            Onboarding.EnsureRecallHeroDeployed(session);
+            Onboarding.CompleteStep(profile, Onboarding.StepTeam);
+            if (step <= Onboarding.StepCampaign) return;
+
+            StageDef first = Onboarding.StageFor(session.Content, Onboarding.StepWaveResult);
+            StageDef second = Onboarding.StageFor(session.Content, Onboarding.StepSecondStage);
+            int n = 0;
+            while (first != null && !profile.HasClearedStage(first.Id) && n < 12)
+            {
+                session.ResolveWave(first, 7100 + n * 101, now + n);
+                n++;
+            }
+            Onboarding.CompleteStep(profile, Onboarding.StepCampaign);
+            Onboarding.CompleteStep(profile, Onboarding.StepWaveResult);
+            if (step <= Onboarding.StepSecondStage) return;
+
+            n = 0;
+            while (second != null && !profile.HasClearedStage(second.Id) && n < 12)
+            {
+                session.ResolveWave(second, 7900 + n * 101, now + 100 + n);
+                n++;
+            }
+            Onboarding.CompleteStep(profile, Onboarding.StepSecondStage);
+            if (step <= Onboarding.StepLevelUp) return;
+
+            HeroDef recall = Onboarding.RecallHero(session.Content);
+            HeroInstance hero = recall != null ? profile.FindHeroByDefId(recall.Id) : null;
+            if (hero != null) session.LevelUpHero(hero, 1);
+            Onboarding.CompleteStep(profile, Onboarding.StepLevelUp);
+        }
+
         private static void SetUpOnboarding(GameApp app, string name)
         {
             GameSession session = app.Session;
@@ -523,8 +646,50 @@ namespace Emberfall.EditorTools
                     Onboarding.CompleteStep(profile, Onboarding.StepWake);
                     if (OnboardingCoach.Instance != null) OnboardingCoach.Instance.ShowRecallResultForCapture();
                     break;
+                case "OnboardPrologue":
+                    // The coach starts the prologue battle itself the frame it sees this step.
+                    WalkOnboardingTo(app, Onboarding.StepPrologue);
+                    break;
+                case "OnboardTeam":
+                    WalkOnboardingTo(app, Onboarding.StepTeam);
+                    app.Router.Show(ScreenId.Formation, false);
+                    break;
+                case "OnboardCampaign":
+                    WalkOnboardingTo(app, Onboarding.StepCampaign);
+                    app.Router.Show(ScreenId.Campaign, false);
+                    break;
+                case "OnboardStage1":
+                    WalkOnboardingTo(app, Onboarding.StepCampaign);
+                    app.Router.Battle.SetStage(Onboarding.StageFor(session.Content, Onboarding.StepWaveResult));
+                    app.Router.Show(ScreenId.Battle, false);
+                    break;
+                case "OnboardWaveResult":
+                    // The first wave of 1-1 resolved by the wave result screen itself, launched the
+                    // way the campaign's ENTER BATTLE launches it; showing it is what moves the
+                    // coach on from the campaign step to this one.
+                    WalkOnboardingTo(app, Onboarding.StepCampaign);
+                    CampaignFlow.Launch(app, Onboarding.StageFor(session.Content, Onboarding.StepWaveResult));
+                    break;
+                case "OnboardStage2":
+                    WalkOnboardingTo(app, Onboarding.StepSecondStage);
+                    app.Router.Battle.SetStage(Onboarding.StageFor(session.Content, Onboarding.StepSecondStage));
+                    app.Router.Show(ScreenId.Battle, false);
+                    break;
+                case "OnboardLevelUp":
+                {
+                    WalkOnboardingTo(app, Onboarding.StepLevelUp);
+                    HeroDef levelHero = Onboarding.RecallHero(session.Content);
+                    HeroInstance levelInstance = levelHero != null ? profile.FindHeroByDefId(levelHero.Id) : null;
+                    if (levelInstance != null) app.Router.HeroDetail.SetHero(levelInstance);
+                    app.Router.Show(ScreenId.HeroDetail, false);
+                    break;
+                }
+                case "OnboardIdle":
+                    WalkOnboardingTo(app, Onboarding.StepIdle);
+                    app.Router.GoHome();
+                    break;
                 case "OnboardArrow":
-                    // Guided step 1 of 5 on the Hub: the arrow on HEROES, the line beside it.
+                    // Guided step 1 of 6 on the Hub: the arrow on HEROES, the line beside it.
                     Onboarding.CompleteStep(profile, Onboarding.StepWake);
                     Onboarding.Recall(session, now);
                     Onboarding.CompleteStep(profile, Onboarding.StepPrologue);
