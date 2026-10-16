@@ -326,7 +326,7 @@ namespace Emberfall.DevHarness
             return stripped.ToJson(false);
         }
 
-        private static void CheckOnboardingSwitch(ContentDatabase db)
+        private static void CheckOnboardingSwitch(ContentDatabase db, string contentDir)
         {
             Line("");
             Line("ONBOARDING OFF SWITCH (rollback: the build before onboarding, one switch away)");
@@ -379,6 +379,25 @@ namespace Emberfall.DevHarness
                       + (shut.Count > 0 ? " - still shut: " + string.Join(", ", shut.ToArray()) : ""));
             }
             finally { OnboardingSwitch.Enabled = was; }
+
+            // A WIRING TRIPWIRE, not a behavioural proof: GameApp's boot cannot run in the harness,
+            // so this reads its source. It fails if FirstRun.cs is deleted again or the off branch
+            // stops calling it under the same editor guard; that it then shows is for the Play queue.
+            string appRoot = Path.GetFullPath(Path.Combine(contentDir, "..", "..", ".."));
+            string gameAppPath = Path.Combine(appRoot, "Assets", "Scripts", "Game", "GameApp.cs");
+            string firstRunPath = Path.Combine(appRoot, "Assets", "Scripts", "UI", "FirstRun.cs");
+            if (File.Exists(gameAppPath))
+            {
+                string gameApp = File.ReadAllText(gameAppPath);
+                int offAt = gameApp.IndexOf("if (OnboardingSwitch.Enabled)", StringComparison.Ordinal);
+                Match elseMatch = offAt < 0 ? Match.Empty : Regex.Match(gameApp.Substring(offAt), @"\belse\b");
+                string offBranch = elseMatch.Success ? gameApp.Substring(offAt + elseMatch.Index, Math.Min(1800, gameApp.Length - offAt - elseMatch.Index)) : "";
+                Check(File.Exists(firstRunPath) && offBranch.Contains("showFirstRun = freshStart")
+                      && offBranch.Contains("EditorPrefs.GetBool(SuppressFirstRunKey, false)") && offBranch.Contains("FirstRun.Begin(this)"),
+                      "wiring tripwire (reads source, proves nothing about running): FirstRun.cs exists and GameApp's switch-off branch shows it on a fresh start under the editor suppress guard");
+            }
+            else Check(false, "GameApp.cs is where the harness expects it (" + gameAppPath + ")");
+
             Check(OnboardingSwitch.Enabled == was, "the switch is put back as the run found it (" + (was ? "on" : "off") + ")");
         }
 

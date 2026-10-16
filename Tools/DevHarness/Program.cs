@@ -275,7 +275,7 @@ namespace Emberfall.DevHarness
             CheckProving(content);
             CheckSaveRoundTrip(content);
             CheckOnboarding(content);
-            CheckOnboardingSwitch(content);
+            CheckOnboardingSwitch(content, contentDir);
             CheckFeatureUnlockGating(content, contentDir);
             CheckAccounts(content);
             _failures += CloudChecks.Run(content, contentDir);

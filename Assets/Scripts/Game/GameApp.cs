@@ -237,13 +237,33 @@ namespace Emberfall.Game
             BootStage = "cloud";
             StartCloud(freshStart);
 
-            // The first session and the free-play tips (DESIGN-ONBOARDING.md). Installed for every
-            // player: the coach reads PlayerProfile.TutorialStep each frame and shows nothing once
-            // it is complete except a tip the first time each screen opens. A player who quit
-            // mid-flow resumes at the step after the last one they completed, because that step
-            // is all the coach reads; a progressed save from before version 21 loads complete.
-            BootStage = "onboarding";
-            OnboardingCoach.Install(this);
+            if (OnboardingSwitch.Enabled)
+            {
+                // The first session and the free-play tips (DESIGN-ONBOARDING.md). Installed for
+                // every player: the coach reads PlayerProfile.TutorialStep each frame and shows
+                // nothing once it is complete except a tip the first time each screen opens. A
+                // player who quit mid-flow resumes at the step after the last one they completed,
+                // because that step is all the coach reads; a progressed save from before version
+                // 21 loads complete.
+                BootStage = "onboarding";
+                OnboardingCoach.Install(this);
+            }
+            else
+            {
+                // The OnboardingSwitch is off: the only onboarding this game had before the
+                // Keeper's first session, and only ever for a genuinely new install. Keyed to
+                // freshStart rather than a saved flag so the save shape is untouched and an
+                // existing player cannot be shown it - see FirstRun for that trade in full.
+                bool showFirstRun = freshStart;
+#if UNITY_EDITOR
+                // The capture tools run on a deliberately fresh scratch profile, which is exactly
+                // the account FirstRun exists for - so every automated screenshot of the Hub was a
+                // screenshot of a welcome card with the Hub behind it. The opt-out is editor-only
+                // and off unless a tool sets it, so a real first run is untouched.
+                if (UnityEditor.EditorPrefs.GetBool(SuppressFirstRunKey, false)) showFirstRun = false;
+#endif
+                if (showFirstRun) FirstRun.Begin(this);
+            }
 
             BootStage = "complete";
             BootCompleted = true;

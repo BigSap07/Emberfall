@@ -114,8 +114,9 @@ namespace Emberfall.Core.Session
         /// <summary>
         /// A new player's profile: the ordinary new profile, with the recall hero held back for
         /// the Cinder to give, at step 0. With no onboarding table loaded it is the ordinary new
-        /// profile, complete, which is every build before this one. So is the same with the
-        /// OnboardingSwitch off.
+        /// profile, complete. So is the same with the OnboardingSwitch off, which is the profile
+        /// the build before the Keeper's first session created; GameApp then shows that build's
+        /// FirstRun opening rather than the coach.
         /// </summary>
         public static PlayerProfile CreateKeeperProfile(ContentDatabase content, long nowUnix)
         {
