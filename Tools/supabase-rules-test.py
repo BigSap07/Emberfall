@@ -842,9 +842,9 @@ def check_refresh_reuse():
 
 
 def check_play_events():
-    """Migration 0015. NEEDS 0015 APPLIED; against a project without it every case here fails with
-    404, which is the signal to apply it. Leaves test rows in public.play_events (install ids that
-    start 00000000-0000-4000-8000-) that only the owner can delete, since the anon key cannot:
+    """Migration 0015. NEEDS 0015 APPLIED: against a project without it the first insert answers 404,
+    which is reported as one FAIL and the rest of the section is skipped. Leaves test rows in
+    public.play_events (install ids that start 00000000-0000-4000-8000-) that only the owner can delete, since the anon key cannot:
         delete from public.play_events where install_id::text like '00000000-0000-4000-8000-%';
     The table is insert-only for anon and authenticated, so nothing here can read a row back; what
     is proved is the refusals and the 201/204 on the accepted row."""
@@ -861,6 +861,12 @@ def check_play_events():
         return request("POST", path, body=row, prefer=minimal)
 
     status, body = request("POST", path, body=good, prefer=minimal)
+    # The probe. Without 0015 the refusal cases below (select, update, delete, every 400) would
+    # all "pass" on a 404, so a missing table is one clear FAIL and the rest is skipped.
+    missing = status == 404 or (isinstance(body, dict) and body.get("code") in ("42P01", "PGRST205"))         or (isinstance(body, str) and "does not exist" in body)
+    if missing:
+        check(False, "play_events is missing: apply 0015 first (the rest of this section is skipped)", (status, body))
+        return
     check(status in (201, 204), "the anon role can INSERT a valid row (return=minimal)", (status, body))
 
     h = extra_user("H")
