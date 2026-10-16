@@ -26,6 +26,9 @@ rather than offering buttons that cannot work. The rest of the game plays as nor
    will not run from there.
 2. Double-click **Emberfall.exe**.
 
+The release zip is about 660 MB, and unzipped the game takes about 3.2 GB, so keep about 4 GB
+of disk space free before you unzip. **Extract All...** in Windows works, and so does 7-Zip.
+
 ### "Windows protected your PC"
 
 The first time, Windows will probably show a blue box saying **Windows protected your PC**. It
