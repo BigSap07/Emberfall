@@ -21,6 +21,11 @@ namespace Emberfall.Core.Data
         /// <summary>How many cells of the grid are frames, reading left to right then top to
         /// bottom. 0 means every cell.</summary>
         public int Frames = 0;
+        /// <summary>The first frame played; the frames before it are skipped. 0 plays the whole
+        /// sheet. heal and buff use 4 because frames 0 to 3 of heal_ring.png are the source art's
+        /// core flash: frame 2 is a solid filled circle, and frame 3 still has a solid core, which
+        /// shows as an opaque green disc over a hero's torso. Frames 4 to 7 are the ring.</summary>
+        public int Start = 0;
         public float Fps = 24f;
         /// <summary>World size of the sheet's quad.</summary>
         public float Scale = 1.6f;
@@ -120,6 +125,7 @@ namespace Emberfall.Core.Data
                 e.Columns = j.GetInt("columns", 1);
                 e.Rows = j.GetInt("rows", 1);
                 e.Frames = j.GetInt("frames", 0);
+                e.Start = j.GetInt("start", 0);
                 e.Fps = j.GetFloat("fps", 24f);
                 e.Scale = j.GetFloat("scale", 1.6f);
                 e.TintByAspect = j.GetBool("tintByAspect", true);
@@ -138,6 +144,11 @@ namespace Emberfall.Core.Data
                     e.Rows = 1;
                 }
                 if (e.Fps <= 0f) e.Fps = 24f;
+                if (e.Start < 0 || e.Start >= e.FrameCount)
+                {
+                    c.Warnings.Add("vfx.json: " + key + " starts outside its frames, playing from frame 0");
+                    e.Start = 0;
+                }
                 into[key] = e;
             }
         }

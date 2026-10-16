@@ -603,7 +603,8 @@ namespace Emberfall.Battle
             float size = entry.Scale * power;
             quad.T.localScale = new Vector3(size, size, size);
 
-            int frames = entry.FrameCount;
+            int first = Mathf.Clamp(entry.Start, 0, entry.FrameCount - 1);
+            int frames = entry.FrameCount - first;
             Vector2 cell = new Vector2(1f / entry.Columns, 1f / entry.Rows);
             quad.Material.mainTextureScale = cell;
 
@@ -612,7 +613,7 @@ namespace Emberfall.Battle
             while (t < duration)
             {
                 t += Time.deltaTime;
-                int frame = Mathf.Min(frames - 1, (int)(t / duration * frames));
+                int frame = first + Mathf.Min(frames - 1, (int)(t / duration * frames));
                 int col = frame % entry.Columns;
                 int row = frame / entry.Columns;
                 quad.Material.mainTextureOffset = new Vector2(col * cell.x, 1f - (row + 1) * cell.y);
