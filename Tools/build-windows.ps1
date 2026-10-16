@@ -424,7 +424,12 @@ try {
     $zip = ""
     if (-not $NoZip) {
         $zip = "$folder.zip"
-        Compress-Archive -Path $folder -DestinationPath $zip -CompressionLevel Optimal
+        # Not Compress-Archive: in Windows PowerShell 5.1 it buffers each file in memory and dies
+        # with "Stream was too long" above 2 GB, and resources.assets.resS is past 3 GB now.
+        # ZipFile streams each file. The folder itself is the zip's top entry, as Compress-Archive
+        # -Path <folder> made it.
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::CreateFromDirectory($folder, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
     }
 
     Write-Host ""
