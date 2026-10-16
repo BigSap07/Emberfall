@@ -7,6 +7,7 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using Emberfall.Battle;
 using Emberfall.Game;
+using Emberfall.Game.Telemetry;
 using Emberfall.UI;
 using Emberfall.UI.Screens;
 using Emberfall.Core.Combat;
@@ -193,6 +194,23 @@ namespace Emberfall.EditorTools
 
         [MenuItem("Emberfall/Capture/Onboarding/Step 6 idle rewards", false, 103)]
         public static void CaptureOnboardIdle() { Begin("Screen:OnboardIdle"); }
+
+        // The play stats (Docs/DESIGN-TELEMETRY.md). The consent prompt is held off in the editor so
+        // every target above shows exactly what it always showed; only the first two let it up. All
+        // four run on a scratch identity with no answer on file, and refuse with [FAIL] if they do
+        // not start there.
+
+        [MenuItem("Emberfall/Capture/Telemetry/Consent prompt (over the Recall boundary)", false, 104)]
+        public static void CaptureOnboardConsent() { Begin("Screen:OnboardConsent"); }
+
+        [MenuItem("Emberfall/Capture/Telemetry/Consent answered No (then the Recall card)", false, 105)]
+        public static void CaptureOnboardConsentAnswered() { Begin("Screen:OnboardConsentAnswered"); }
+
+        [MenuItem("Emberfall/Capture/Telemetry/Settings, stats on", false, 106)]
+        public static void CaptureSettingsStatsOn() { Begin("Screen:SettingsStatsOn"); }
+
+        [MenuItem("Emberfall/Capture/Telemetry/Settings, stats off", false, 107)]
+        public static void CaptureSettingsStatsOff() { Begin("Screen:SettingsStatsOff"); }
 
         [MenuItem("Emberfall/Capture/Hub (MainMenu)", false, 60)]
         public static void CaptureHubScreen() { Begin("Screen:MainMenu"); }
@@ -403,6 +421,17 @@ namespace Emberfall.EditorTools
             }
             else EditorPrefs.SetBool(GameApp.SuppressFirstRunKey, true);
 
+            // The play stats' four targets start with no answer on file, so the scratch device
+            // file is removed (scratch only: the real one is never touched), and the consent
+            // prompt is allowed up for the two that photograph it and for no other target.
+            bool consentTarget = target == "Screen:OnboardConsent" || target == "Screen:OnboardConsentAnswered";
+            if ((consentTarget || target.StartsWith("Screen:SettingsStats")) && EditorScratchIdentity.IsScratch)
+            {
+                string telemetryFile = Path.Combine(Application.persistentDataPath, TelemetryService.FileName);
+                if (File.Exists(telemetryFile)) File.Delete(telemetryFile);
+            }
+            SessionState.SetBool(TelemetryService.PromptInEditorKey, consentTarget);
+
             if (!GameViewSize.Apply(width, height))
             {
                 Debug.LogWarning("PlayModeScreenshot: could not pin the Game view to "
@@ -479,6 +508,7 @@ namespace Emberfall.EditorTools
             if (target == "Recital") PumpRecital(frame);
             else if (target == "Proving") PumpProving(frame);
             else if (target.StartsWith(OnboardPrefix)) PumpOnboard(frame, target.Substring(7));
+            else if (target.StartsWith("Screen:SettingsStats")) PumpSettingsStats(frame, target.Substring(7));
             else if (target.StartsWith("Screen:")) PumpScreen(frame, target.Substring(7));
             else PumpEvents(frame);
         }
@@ -527,6 +557,17 @@ namespace Emberfall.EditorTools
                     Stop();
                     return;
                 }
+                if (name.StartsWith("OnboardConsent"))
+                {
+                    TelemetryService stats = TelemetryService.Instance;
+                    if (stats == null || !stats.Pending || !SessionState.GetBool(TelemetryService.PromptInEditorKey, false))
+                    {
+                        Debug.LogError("PlayModeScreenshot: [FAIL] " + name + " needs the play stats installed, with no answer on file and"
+                                       + " the editor prompt switch on. Not shooting.");
+                        Stop();
+                        return;
+                    }
+                }
                 SetUpOnboarding(app, name);
                 SessionState.SetInt(StageKey, 1);
                 SessionState.SetInt(BattleArmKey, frame);
@@ -571,6 +612,7 @@ namespace Emberfall.EditorTools
                 }
 
                 if (name == "OnboardTip" && frame == armed + 20) app.Router.Show(ScreenId.Summon);
+                if (name.StartsWith("OnboardConsent") && !PumpConsentStep(app, name, frame, armed)) return;
                 if (frame == armed + 115) Canvas.ForceUpdateCanvases();
                 if (frame == armed + 120)
                 {
@@ -592,13 +634,116 @@ namespace Emberfall.EditorTools
             }
         }
 
+        /// <summary>
+        /// The consent targets' own steps. At 40 frames the answered target presses NO through the
+        /// button's click, the path a finger takes; at 119 both check the state the picture is meant
+        /// to show, so a prompt that never came up, or an answer that did not land, ends the run with
+        /// [FAIL] instead of a picture of the wrong thing. False means the run was stopped.
+        /// </summary>
+        private static bool PumpConsentStep(GameApp app, string name, int frame, int armed)
+        {
+            TelemetryService stats = TelemetryService.Instance;
+            TelemetryConsentPrompt prompt = TelemetryConsentPrompt.Instance;
+            PlayerProfile profile = app.Session.Profile;
+            if (frame == armed + 40 && name == "OnboardConsentAnswered")
+            {
+                if (prompt == null || !TelemetryConsentPrompt.Showing)
+                {
+                    Debug.LogError("PlayModeScreenshot: [FAIL] " + name + ": the prompt was not up to answer. Not shooting.");
+                    Stop();
+                    return false;
+                }
+                prompt.ClickForCapture(false);
+            }
+            if (frame == armed + 119)
+            {
+                bool shown = TelemetryConsentPrompt.Showing;
+                string coachState = OnboardingCoach.Instance != null ? OnboardingCoach.Instance.DescribeForCapture() : "";
+                bool ok = stats != null && profile.TutorialStep == Onboarding.StepRecall
+                          && (name == "OnboardConsent"
+                              ? shown && stats.Pending
+                              : !shown && !stats.Pending && !stats.IsOn && coachState.Contains("mode Recall"));
+                Debug.Log("PlayModeScreenshot: " + name + " prompt showing " + shown + ", pending " + (stats != null && stats.Pending)
+                          + ", stats on " + (stats != null && stats.IsOn) + ", step " + profile.TutorialStep);
+                if (!ok)
+                {
+                    Debug.LogError("PlayModeScreenshot: [FAIL] " + name + ": the state to photograph is not there. Not shooting.");
+                    Stop();
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// The Settings page with the PLAY STATS card in one state. The answer is given through
+        /// TelemetryService.Answer, the very call the card's button makes, then the page is shown
+        /// and the card must be on it. Refuses a device that already has an answer.
+        /// </summary>
+        private static void PumpSettingsStats(int frame, string name)
+        {
+            GameApp app = GameApp.Instance;
+            if (app == null)
+            {
+                if (frame > 300) { Debug.LogError("PlayModeScreenshot: [FAIL] " + name + ": GameApp.Instance never appeared."); Stop(); }
+                return;
+            }
+            bool wantOn = name == "SettingsStatsOn";
+            int stage = SessionState.GetInt(StageKey, 0);
+            TelemetryService stats = TelemetryService.Instance;
+            if (stage == 0 && frame >= 30)
+            {
+                if (!EditorScratchIdentity.IsScratch)
+                {
+                    Debug.LogError("PlayModeScreenshot: [FAIL] " + name + " is not running on the scratch identity. Not shooting.");
+                    Stop();
+                    return;
+                }
+                if (stats == null || !stats.Pending || stats.IsOn)
+                {
+                    Debug.LogError("PlayModeScreenshot: [FAIL] " + name + " needs the play stats installed with no answer on file. Not shooting.");
+                    Stop();
+                    return;
+                }
+                stats.Answer(wantOn);
+                app.Router.Show(ScreenId.Settings, false);
+                SessionState.SetInt(StageKey, 1);
+                SessionState.SetInt(BattleArmKey, frame);
+                return;
+            }
+            if (stage == 1)
+            {
+                int armed = SessionState.GetInt(BattleArmKey, 0);
+                if (frame == armed + 85) Canvas.ForceUpdateCanvases();
+                if (frame == armed + 90)
+                {
+                    bool onSettings = app.Router.Current != null && app.Router.Current.Id == ScreenId.Settings;
+                    bool cardThere = onSettings && OnboardingCoach.FindDeep(app.Router.Current.Root, "PlayStats") != null;
+                    Debug.Log("PlayModeScreenshot: " + name + " on settings " + onSettings + ", card present " + cardThere + ", stats on " + (stats != null && stats.IsOn));
+                    if (stats == null || stats.IsOn != wantOn || !cardThere)
+                    {
+                        Debug.LogError("PlayModeScreenshot: [FAIL] " + name + ": the card is not on the page in the state asked for. Not shooting.");
+                        Stop();
+                        return;
+                    }
+                    Shoot(name, frame, 1);
+                }
+                return;
+            }
+            if (stage >= 2 && frame > SessionState.GetInt(LastShotKey, 0) + 60)
+            {
+                Debug.Log("PlayModeScreenshot: settings stats capture done.");
+                Stop();
+            }
+        }
+
         /// <summary>Every onboarding target, by the name that follows "Screen:" and is also the
         /// name of the file it writes (screen_{name}.png), which is what Tools/nightly.ps1 expects.</summary>
         private static readonly string[] OnboardTargets =
         {
             "OnboardWake", "OnboardRecall", "OnboardRecallResult", "OnboardArrow", "OnboardLocks", "OnboardTip",
             "OnboardPrologue", "OnboardTeam", "OnboardCampaign", "OnboardStage1", "OnboardWaveResult",
-            "OnboardStage2", "OnboardLevelUp", "OnboardIdle"
+            "OnboardStage2", "OnboardLevelUp", "OnboardIdle", "OnboardConsent", "OnboardConsentAnswered"
         };
 
         private static bool OnboardWaitsOnScreen(string name)
@@ -666,6 +811,12 @@ namespace Emberfall.EditorTools
                 case "OnboardWake":
                     break;
                 case "OnboardRecall":
+                    Onboarding.CompleteStep(profile, Onboarding.StepWake);
+                    break;
+                case "OnboardConsent":
+                case "OnboardConsentAnswered":
+                    // The Wake done: the profile stands on the boundary the prompt belongs to, and
+                    // the prompt is drawn by the game's own rule, not placed here.
                     Onboarding.CompleteStep(profile, Onboarding.StepWake);
                     break;
                 case "OnboardRecallResult":
@@ -742,6 +893,7 @@ namespace Emberfall.EditorTools
             Time.timeScale = 1f;
             SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetBool(ActiveKey, false);
+            SessionState.SetBool(TelemetryService.PromptInEditorKey, false);
             EditorApplication.isPlaying = false;
             EditorScratchIdentity.LeaveWhenIdle();
         }
