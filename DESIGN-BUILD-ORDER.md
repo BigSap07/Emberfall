@@ -1000,6 +1000,22 @@ failing checks under **The instruments**. `PlayModeScreenshot` has six `Screen:O
 a capture of a feature's own screen uses `FeatureGates.CaptureBypass` and the onboarding targets
 clear it.
 
+### Play stats
+
+Opt-in play counts for the playtest, so we can see where players stop. The design is
+`Docs/DESIGN-TELEMETRY.md` and the tester-facing text is `Docs/PRIVACY-PLAYTEST.md`.
+`TelemetrySwitch.Enabled` is on in code and `EMBERFALL_TELEMETRY_OFF` builds it out. Consent
+defaults to No: `TelemetryConsentPrompt` asks once (after Wake, or at the Hub for a save past its first session), and the Settings PLAY STATS card changes it.
+`TelemetrySchema` is the only whitelist of what can be sent. Nothing is sent from the editor or
+from an offline build, and nothing without a cloud config: `GameApp.CreateAnonymousClient` is null
+then. Turning stats off wipes the install id and the unsent queue. Consent and the id live in
+`emberfall_telemetry.json` next to the save, so the save version did not move.
+`0015_play_events.sql` is the owner's to apply by hand. Until it is applied the server refuses the
+inserts and the game stays silent and drops those batches, so counts sent before it is applied
+are lost. Apply 0015 before handing out a cloud build. `TelemetryChecks` and
+`CloudChecks.CheckMigrationGrants` prove
+the schema, the consent rules and the INSERT-only grants.
+
 ### UI, and the Hub's four layers
 
 uGUI, built entirely in code, scene deliberately near-empty. `ScreenRouter` moves between the

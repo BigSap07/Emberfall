@@ -8,7 +8,7 @@ The playtest tells us where players stop. Nothing else. We want to see which onb
 
 ## Rules
 
-- `TelemetryEnabled` is ON by default in code.
+- `TelemetrySwitch.Enabled` is ON by default in code. Defining `EMBERFALL_TELEMETRY_OFF` builds it off: no prompt, no Settings card, no file, no hook, no request.
 - Nothing is sent without consent AND a cloud config (`supabase.json` present). Offline builds, like the R2 playtest zips, send nothing and raise no error.
 - No account, no name, no free text, no device id. Our table holds no IP.
 
@@ -44,7 +44,7 @@ Nothing else is sent.
 
 ## When
 
-Events are written to a local queue as they happen. The queue is sent in batches. Sending is capped per session. A failed send is silent and retried later.
+Events are written to a local queue as they happen. The queue is sent in batches. Sending is capped per session. A send that cannot reach the server (no network, 5xx, 408, 429) is retried up to three times, then the batch is dropped. A batch the server refuses (any other 4xx, such as a 404 before 0015 is applied) is dropped at once. Both are silent.
 
 ## Where it is stored
 
@@ -70,9 +70,22 @@ DEFAULT, the owner can change it: until the playtest ends, then the table is emp
 
 ## Which code sends it
 
-PLACEHOLDER. The builder's class names come later. Fill from the files, not from this note.
+In `Assets/Scripts/Core/Telemetry`:
 
-- consent prompt: TBD
-- queue and sender: TBD
-- event call sites: TBD
-- Settings toggle: TBD
+- `TelemetrySwitch`: the flag and the `EMBERFALL_TELEMETRY_OFF` define.
+- `TelemetrySchema`: the only whitelist of events and payload fields.
+- `TelemetryQueue`: the local queue.
+- `TelemetryRecorder`: the consent state machine and the opt-out wipe.
+- `TelemetryStore`: `FileTelemetryStore` and `MemoryTelemetryStore`. The device file is `emberfall_telemetry.json`, next to the save.
+- `TelemetryText`: the prompt and Settings wording.
+- `TelemetryPromptRule`: when the prompt is due.
+- `TelemetryHooks`: the five taps from `GameSession`.
+
+Elsewhere:
+
+- `TelemetryService` in `Assets/Scripts/Game/Telemetry`: wiring, flush and session timing.
+- `GameApp.CreateAnonymousClient`: the only stats client. It returns null without a cloud config.
+- `TelemetryConsentPrompt` in `Assets/Scripts/UI`: the prompt.
+- `SettingsScreen`: the PLAY STATS card.
+- Server: `0015_play_events.sql` and `queries/play-counts.sql` under `Server/supabase`.
+- Harness: `TelemetryChecks`, and `CloudChecks.CheckMigrationGrants` for the INSERT-only grants.
