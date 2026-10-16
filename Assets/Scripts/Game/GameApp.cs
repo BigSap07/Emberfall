@@ -6,7 +6,9 @@ using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Session;
+using Emberfall.Core.Telemetry;
 using Emberfall.Game.Cloud;
+using Emberfall.Game.Telemetry;
 using Emberfall.UI;
 
 namespace Emberfall.Game
@@ -263,6 +265,15 @@ namespace Emberfall.Game
                 if (UnityEditor.EditorPrefs.GetBool(SuppressFirstRunKey, false)) showFirstRun = false;
 #endif
                 if (showFirstRun) FirstRun.Begin(this);
+            }
+
+            if (TelemetrySwitch.Enabled)
+            {
+                // The playtest's anonymous play stats (Docs/DESIGN-TELEMETRY.md). Installed after
+                // the first screen and the coach, last, because it only watches. Nothing is
+                // recorded or sent until the player says Yes, and Install never throws.
+                BootStage = "telemetry";
+                TelemetryService.Install(this);
             }
 
             BootStage = "complete";
@@ -751,6 +762,7 @@ namespace Emberfall.Game
         /// </summary>
         private void OnApplicationPause(bool paused)
         {
+            if (TelemetrySwitch.Enabled) TelemetryService.OnPause(paused);
             if (!paused) return;
             SaveNow();
             if (Cloud != null) Cloud.SyncOnLeaving();
@@ -758,8 +770,23 @@ namespace Emberfall.Game
 
         private void OnApplicationQuit()
         {
+            if (TelemetrySwitch.Enabled) TelemetryService.OnQuit();
             SaveNow();
             if (Cloud != null) Cloud.SyncOnLeaving();
+        }
+
+        /// <summary>
+        /// A client for the play stats alone: the same transport, the anon key, and NO user token,
+        /// so what it sends cannot be tied to an account. Null whenever there is no usable cloud
+        /// config, which includes every forced-offline editor run. Here, and not in the stats
+        /// code, because this is the one file allowed to build a SupabaseClient (build-check
+        /// holds it to that), and it asks the same question StartCloud asks first.
+        /// </summary>
+        public SupabaseClient CreateAnonymousClient()
+        {
+            SupabaseConfig config = SupabaseConfig.Current;
+            if (config == null || !config.Configured) return null;
+            return new SupabaseClient(config, this);
         }
 
         /// <summary>Wipes progress and rebuilds a starter profile. Exposed on the main menu.</summary>

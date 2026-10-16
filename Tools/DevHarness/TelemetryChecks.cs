@@ -392,6 +392,7 @@ namespace Emberfall.DevHarness
         {
             public TelemetryRecorder Recorder;
             public int Attempts, Losses, Clears, LevelUps, LevelsGained, Summons, Refused, Calls;
+            public int LossWave = -1, LossBattle = -1;
             public readonly List<string> CampaignOrder = new List<string>();
             public int FirstPower = -1, FirstRecommended = -1, FirstWave = -1, FirstBattle = -1;
             public string FirstStage = "";
@@ -400,7 +401,7 @@ namespace Emberfall.DevHarness
             {
                 Calls++;
                 if (eventName == TelemetrySchema.StageAttempt) Attempts++;
-                else if (eventName == TelemetrySchema.WaveLost) Losses++;
+                else if (eventName == TelemetrySchema.WaveLost) { Losses++; LossWave = wave; LossBattle = battle; }
                 else if (eventName == TelemetrySchema.StageClear) Clears++;
                 CampaignOrder.Add(eventName);
                 if (FirstStage.Length == 0)
@@ -482,6 +483,11 @@ namespace Emberfall.DevHarness
                 }
             }
 
+            // The stages above may be won outright, so a lost battle is also reported to the one
+            // method every loss goes through: RecordBattleLost, a documented no-op for the profile.
+            ws.RecordBattleLost(stages[1], 3, 4);
+            t.LostWaves++;
+
             p.Gold += 100000;
             HeroInstance hero = p.FindHeroByDefId(Onboarding.RecallHero(db).Id);
             for (int i = 0; i < 3; i++)
@@ -546,6 +552,8 @@ namespace Emberfall.DevHarness
                       && watched.Resolves > 0 && watched.ClearedStages > 0,
                       "the taps see exactly what the game did: " + sink.Attempts + " attempts = " + watched.Resolves + " wave resolves, "
                       + sink.Losses + " lost = " + watched.LostWaves + ", " + sink.Clears + " clears = " + watched.ClearedStages);
+                Check(sink.Losses >= 1 && sink.LossWave == 3 && sink.LossBattle == 4,
+                      "a lost battle reaches the sink as wave_lost with its own wave and battle (wave " + sink.LossWave + ", battle " + sink.LossBattle + ")");
                 Check(sink.LevelUps == watched.LevelCalls && sink.LevelsGained == watched.LevelsGained && sink.Summons == watched.Summons
                       && watched.LevelCalls > 0 && watched.Summons > 0,
                       "and the level ups (" + sink.LevelsGained + " levels in " + sink.LevelUps + " calls) and the summons (" + sink.Summons + ") are counted as the game did them");
