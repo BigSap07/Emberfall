@@ -45,11 +45,16 @@ project owner:
    missed too many codes, and `guild_request_send` takes only a code the caller has found. The
    limits are the one-row `guild_rate_limits` table. Written, not applied: the operator steps
    are in `Docs/CLOUD-GAPS.md`, under **Fixed, pending apply: 0014**.
+15. `0015_play_events.sql` - the playtest's anonymous play stats (`Docs/DESIGN-TELEMETRY.md`): the
+   `play_events` table, insert-only for `anon` and `authenticated` on four columns, with no
+   select, update or delete. Applied by the owner by hand; nothing else in the project reads or
+   needs it. `Tools/supabase-rules-test.py` `check_play_events` needs it applied. The owner reads
+   the table with `supabase/queries/play-counts.sql` in the SQL editor.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0014` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0015` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
 after a half-finished run, is a no-op rather than a failure to unpick.
 

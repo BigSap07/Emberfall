@@ -6,11 +6,16 @@
 -- THE PAYLOAD KEYS BELOW MUST MATCH WHAT THE CLIENT SENDS. They are the ones named in
 -- Docs/DESIGN-TELEMETRY.md and agreed for this run:
 --
---   onboarding_step   payload ->> 'step'      the onboarding step id (Onboarding.StepWake is 0 ...
---                                             StepIdle is 8, so ids are whole numbers)
---   stage_attempt     payload ->> 'stage'     the stage id, the same text the campaign uses
+--   onboarding_step   payload ->> 'step'      the onboarding step id, a whole number: 0 Wake,
+--                                             1 Recall, 2 Prologue, 3 Team, 4 Campaign, 5 WaveResult,
+--                                             6 SecondStage, 7 LevelUp, 8 Idle, 9 Complete
+--   stage_attempt     payload ->> 'stage'     the campaign stage id, text like ch1_3
+--   stage_clear       payload ->> 'stage'     the same
 --   wave_lost         payload ->> 'stage'     the same
 --   session_end       payload ->> 'seconds'   whole seconds played in the session
+--
+-- These were confirmed by the client builder and the lead; the install id, event, payload and
+-- build are the only columns the client writes (build is a column, not a payload key).
 --
 -- If the client builder changes a key or sends step ids as words, only the ->> names and the
 -- ordering in the funnel query change. A row with the key missing yields NULL and is dropped by
