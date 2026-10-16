@@ -1302,6 +1302,22 @@ editor prints `editor` and a player built through a door that did not stamp it p
 **`EmberfallBuild.Version` is the one version** - the Windows and Android settings and the folder
 names read it, and `ProjectSettings.asset` carries the same `bundleVersion`, which is `0.3.0`.
 
+**A Windows offline playtest package exists.** `Tools/build-windows.ps1` builds a release player
+and, with `-Development`, a development player with the Dev Arena. Both are offline by default and
+each zip carries `Docs/PLAYTEST-README.md` as `READ-ME-FIRST.txt`. `Docs/PLAYTEST-FEEDBACK.md` is
+the form a tester answers after session one and after day two. The package holds the landed state
+of the first session and its unlock table, the battle HUD, the battle stats and the 336 by 396
+sprites, each described above.
+
+**The heal and buff disc is fixed.** Frame 2 of `Art/Vfx/heal_ring.png` is a solid filled circle,
+and the heal and buff effects played the sheet from its first frame, so a hero briefly wore an
+opaque green disc over the torso. `VfxEntry` now has a start frame (`start` in `vfx.json`, default
+0), and the `heal` and `buff` entries, played by `VfxDirector.Flipbook`, start at the ring frames
+of that sheet. The ring is now about a third of a second long.
+
+**Open visual issues:** units with no sheet draw as placeholder figures (63 of 94 heroes, and the
+enemies without sheets), and the battles of chapters 2 to 6 (60 stages) have no painted background, so they use a plain generated dusk gradient (only ashen, ember and hollow, the chapter 1 environments, are painted).
+
 ## In progress
 
 A branch is named here when it holds work worth naming, and only while it is unmerged.

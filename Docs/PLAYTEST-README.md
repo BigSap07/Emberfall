@@ -51,6 +51,33 @@ closing it.
 **Esc** works like a phone's back button: it closes whatever is open on top, or goes back one
 screen. On the main screen and during a battle it does nothing, on purpose.
 
+## Your first ten minutes
+
+A new game walks you through the start. You do not need to know how idle games work.
+
+1. **Wake.** A few lines on a dark screen. Read them, then go on.
+2. **The Cinder remembers.** Press **RECALL**. Kael, your first hero, answers. It is free.
+3. **A short fight.** Your heroes fight on their own. You watch.
+4. **Set your team.** An arrow shows what to press. Kael goes into your line of five.
+5. **Stage 1-1.** Press the arrow's button to fight the first stage.
+6. **The wave result.** A stage is fought in waves. After each one, a screen shows what you won.
+   Press **STATS** to see who did the most damage and healing.
+7. **Stage 1-2.** One more fight.
+8. **Level up.** Spend gold to make one hero stronger.
+9. **Collect idle rewards.** Your heroes earn gold while you are away. Press collect.
+
+Once the short fight is over, a row of six small dots shows how far along you are. If you quit half way, the game picks up
+after the last step you finished. A **SKIP** button ends the guide early, and you still keep Kael.
+
+After that you play freely. The first time you open a screen, a short tip appears once.
+
+**Some things are locked at first.** They are still visible, with a padlock and a gold tag like
+**UNLOCKS AT 1-6**. That means "clear stage 1-6 and this opens". Press a locked button and it
+tells you the same thing. Friends open at 1-4, Fusion at 1-6, and more at later stages.
+
+**HOME.** On the wave result and the battle there is a round **HOME** button in the top-left
+corner. It takes you to the main screen.
+
 ## Your save, and starting over
 
 Your progress is saved on this computer, in:
@@ -139,10 +166,9 @@ The **?** button in the Dev Arena explains the rest. **BACK** returns to the gam
 
 ### The three questions
 
-1. **Nereia may be wearing Celen's body.** Four of her seven animation sheets are byte-for-byte
-   the same file as Celen's: idle, basic attack, hit reaction and controlled. Her second basic
-   attack, her skill and her death are different files. Put Nereia and Celen on the field side by
-   side: does Nereia read as Nereia or as Celen? (She also fights in the opening battle the first
+1. **Nereia may be wearing Celen's body.** All seven of her animation sheets are byte-for-byte
+   the same file as Celen's. Put Nereia and Celen on the field side by side: does Nereia read as
+   Nereia or as Celen? (She also fights in the opening battle the first
    time the game starts, in either build.)
 2. **Rheia's skill has no animation.** Her delivery had a second idle clip (`idle2`) where the
    skill clip should be, so when she uses her active the game keeps playing her idle. Play her
