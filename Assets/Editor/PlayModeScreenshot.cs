@@ -466,7 +466,7 @@ namespace Emberfall.EditorTools
                 SessionState.SetBool(VerifiedKey, true);
                 if (!EditorCaptureGuard.Verify("PlayModeScreenshot", true))
                 {
-                    Debug.LogError("PlayModeScreenshot: the run is not offline on a scratch identity. Stopping without a capture.");
+                    Debug.LogError("PlayModeScreenshot: [FAIL] the run is not offline on a scratch identity. Stopping without a capture.");
                     Stop();
                     return;
                 }
@@ -496,16 +496,33 @@ namespace Emberfall.EditorTools
             GameApp app = GameApp.Instance;
             if (app == null)
             {
-                if (frame > 300) { Debug.LogError("PlayModeScreenshot: GameApp.Instance never appeared."); Stop(); }
+                if (frame > 300) { Debug.LogError("PlayModeScreenshot: [FAIL] " + name + ": GameApp.Instance never appeared."); Stop(); }
                 return;
             }
             int stage = SessionState.GetInt(StageKey, 0);
             if (stage == 0 && frame >= 30)
             {
+                // Every refusal below ends the Play session on the spot and says [FAIL], so a queue
+                // (ScratchCaptures, the nightly) moves on to its next target and the log names the
+                // one that did not shoot, instead of sitting in Play mode until a watchdog fires.
+                // Nothing here may write a save, so a profile that is not the scratch one is
+                // refused before any of the set-up runs.
+                if (!EditorScratchIdentity.IsScratch)
+                {
+                    Debug.LogError("PlayModeScreenshot: [FAIL] " + name + " is not running on the scratch identity. Not shooting.");
+                    Stop();
+                    return;
+                }
+                if (Array.IndexOf(OnboardTargets, name) < 0)
+                {
+                    Debug.LogError("PlayModeScreenshot: [FAIL] '" + name + "' is not an onboarding target. Not shooting.");
+                    Stop();
+                    return;
+                }
                 PlayerProfile profile = app.Session.Profile;
                 if (profile.TutorialStep != Onboarding.StepWake || profile.ClearedStageIds.Count > 0)
                 {
-                    Debug.LogError("PlayModeScreenshot: " + name + " needs a NEW player and this one is at step "
+                    Debug.LogError("PlayModeScreenshot: [FAIL] " + name + " needs a NEW player and this one is at step "
                                    + profile.TutorialStep + " with " + profile.ClearedStageIds.Count + " stages cleared. Not shooting.");
                     Stop();
                     return;
@@ -574,6 +591,15 @@ namespace Emberfall.EditorTools
                 Stop();
             }
         }
+
+        /// <summary>Every onboarding target, by the name that follows "Screen:" and is also the
+        /// name of the file it writes (screen_{name}.png), which is what Tools/nightly.ps1 expects.</summary>
+        private static readonly string[] OnboardTargets =
+        {
+            "OnboardWake", "OnboardRecall", "OnboardRecallResult", "OnboardArrow", "OnboardLocks", "OnboardTip",
+            "OnboardPrologue", "OnboardTeam", "OnboardCampaign", "OnboardStage1", "OnboardWaveResult",
+            "OnboardStage2", "OnboardLevelUp", "OnboardIdle"
+        };
 
         private static bool OnboardWaitsOnScreen(string name)
         {
