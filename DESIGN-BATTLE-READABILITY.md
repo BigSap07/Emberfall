@@ -17,12 +17,12 @@ record it was handed.
    same as one at 80% except for a bar the eye is not pointed at.
 4. **Why that number was big.** Crit, Aspect, or a ward that just broke — three different
    lessons that currently look identical.
-5. **What lasts.** Status tags exist; durations are discarded.
+5. **What lasts.** Status icons exist; durations are discarded.
 
 ## What the screen throws away
 
 - **`TurnStart`** — no case in `Handle`. Adding one costs nothing and fixes priority 1.
-  *Fixed. `BattleScreen.Handle` has a `TurnStart` case: the actor rises and the turn strip advances.*
+  *Fixed. `BattleScreen.Handle` has a `TurnStart` case: the actor rises and the turn order advances.*
 - **The real target.** `BasicAttack` and `AbilityCast` carry `SourceId == TargetId == self`; the
   target is only revealed by the `Damage` event that follows. So the screen guesses with
   `NearestOpponent()` — geometry. That is wrong for Ryn (LowestHpEnemy), Nyx (HighestAttackEnemy),
@@ -33,10 +33,12 @@ record it was handed.
   *Fixed. `LookaheadTargets()` scans forward from `BasicAttack`/`AbilityCast` to the next `TurnStart` and returns the real target set.*
 - **`Death.SourceId`** — the killer. Never used.
   *Partly used. `Debrief.Fallback` names the killer; the playback screen does not show it inline.*
-- **`StatusApplied.Duration`** — the bar stores only the kind.
+- **`StatusApplied.Duration`** - the plate stores only the kind and its depth.
 - **The round's turn order.** Between one `RoundStart` and the next, the `TurnStart` events *are*
   the initiative list. Enough to draw a turn strip with no new data at all.
-  *Fixed. `BuildTurnStrip`/`RebuildTurnStrip`/`AdvanceTurnStrip` in `BattleScreen` read the round's `TurnStart` events and step the strip per turn.*
+  *Fixed. `RebuildTurnStrip`/`AdvanceTurnStrip` in `BattleScreen` read the round's `TurnStart` events and step
+  through them per turn, and `TurnOrderPill` draws the result as a pill at the bottom centre: the acting
+  unit's portrait disc enlarged, then NEXT and up to six units still to act this round.*
 - **Lethal lookahead.** Each unit's `Death` index is knowable up front — use it to *pace*, not
   to spoil: hold the beat before a killing blow rather than flagging it early.
 
@@ -65,9 +67,13 @@ Nothing else. Ward breaks, crits, deaths, rounds and energy are already in the l
 **Round banner** (0.3s) — the number, and the turn strip repopulates in initiative order. Then
 per turn:
 
-1. **Turn pip lights** on the acting unit's bar; the actor rises slightly. *Cause, 0.12s.*
+1. **Turn pip lights** on the acting unit's plate; the actor rises slightly. *Cause, 0.12s.*
 2. **Intent** — the actor turns toward its real target (lookahead) and the target's bar pulses
    once. If the unit is casting, the ability banner appears **now**, before anything moves.
+   *The banner is a slim callout pill centred under the top bar, "Unusable Cover · KAEL" for a
+   cast and "Unusable Cover · KAEL · PASSIVE" for a passive (`BattleScreen.ShowCallout`). The top
+   bar is opaque and the battle camera's viewport stops at its lower edge, so no unit, plate or
+   number is drawn under it.*
 3. **Motion** — lunge or projectile travels. 0.16s minimum; this is the beat that says *this one,
    not that one*.
 4. **Impact** — flash and shake on the target.
@@ -76,7 +82,15 @@ per turn:
    `< 1` a **RESIST** tag, and a crit is prefixed, not merely tinted (the existing
    `(e.Critical ? "" : "")` prefix is a no-op someone meant to fill).
 6. **Bar drains** to the new value; the ghost bar trails behind it. Effect, last.
-7. **Status tag** appears on the bar with its duration; **energy** fills.
+7. **Status icon** appears on the plate with its duration; **energy** fills.
+   *Built without the duration. Each unit has one plate (`UnitPlate`), hung under its feet: the
+   name on one line, the HP bar with the ward over it, a thin energy bar, the turn pip to the left,
+   and above the feet a row of status icons that is empty at rest. One icon per kind, harmful kinds
+   first, then Shield, then buffs, then the inert bookkeeping kinds, three at most and "+N" for the
+   rest, with a stack's depth as a small digit (`StatusIcons.Compose`). The placeholder glyphs are
+   a green chevron up, a red chevron down, the shield and a grey diamond, each reskinnable through
+   `HudSkin`'s `hud_status_<kind>` and `hud_status_<role>` slots. `BattleHudChecks` in the harness
+   proves no two plates overlap at any formation slot at 16:9, 18:9 and 20:9.*
 8. On death: everything else stops, 0.5s, then the fall.
 
 The rule is one sentence long: *the source moves before the target reacts, and the target reacts

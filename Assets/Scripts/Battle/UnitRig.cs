@@ -628,14 +628,13 @@ namespace Emberfall.Battle
         /// element and nothing separates them by name. Real art does not have that problem, which
         /// is why this is not built for every unit.
         ///
-        /// JUDGEMENT CALL, STATED: both screens that show a battle already print the unit's name
-        /// ABOVE its head - BattleScreen's UnitBar and the Dev Arena's own head stack - so an
-        /// undrawn hero now carries its name twice. That is accepted rather than overlooked. The
-        /// bar above is a HUD element that tracks a unit and can be switched off, hidden behind a
-        /// panel, or absent in a view that has no HUD; this one belongs to the rig and is there
-        /// wherever the rig is, which is what "show the name under it in battle and in the Dev
-        /// Arena" needs from one implementation rather than two. When the art lands, both the
-        /// mannequin and the duplication go away on their own.
+        /// The battle screen does not show it. Its unit plate (UnitPlate) hangs under the feet and
+        /// carries the name there, in the same spot this label stands, so BattleScreen.BuildBars
+        /// switches this one off through Nameplate and every unit reads one name. It is still
+        /// built here, on the rig, because the views without a plate need it: the wave result
+        /// screen stands the line that fought with no HUD over it, and the Dev Arena keeps its own
+        /// head stack and shows this label too. It belongs to the rig so it is there wherever the
+        /// rig is, and when the art lands the mannequin and this label go away on their own.
         ///
         /// Built with TextMesh rather than a world-space Canvas on purpose: a Canvas per unit is a
         /// layout rebuild and a draw call group per unit, and this is one word that never changes.

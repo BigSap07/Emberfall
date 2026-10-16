@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using Emberfall.Core.Data;
 
 namespace Emberfall.UI
 {
@@ -67,6 +68,20 @@ namespace Emberfall.UI
 
         public const string IconChest = "hud_chest";
         public const string IconClose = "hud_close";
+
+        /// <summary>The battle plates' status icons, one slot per role. A kind's own slot
+        /// (StatusKindSlot) is tried before its role's; see BattleHudStyle.StatusSprite.</summary>
+        public const string StatusBuff = "hud_status_buff";
+        public const string StatusDebuff = "hud_status_debuff";
+        public const string StatusShield = "hud_status_shield";
+        public const string StatusInert = "hud_status_inert";
+
+        /// <summary>One status kind's own icon slot, hud_status_&lt;kind&gt; in lower case, so
+        /// hud_status_burn.png reskins Burn alone and leaves every other debuff on its role's art.</summary>
+        public static string StatusKindSlot(StatusKind kind)
+        {
+            return "hud_status_" + kind.ToString().ToLowerInvariant();
+        }
 
         // ------------------------------------------------------------------ resolution
 

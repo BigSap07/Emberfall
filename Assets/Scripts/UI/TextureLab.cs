@@ -768,6 +768,23 @@ namespace Emberfall.UI
             });
         }
 
+        /// <summary>
+        /// A chevron, pointing up or down: the battle plates' placeholder for a buff (up) and a
+        /// debuff (down). Two strokes meeting at the point rather than a filled triangle, so it
+        /// still reads as a direction at the 16 units a status icon is drawn at.
+        /// </summary>
+        public static Sprite Chevron(int size, bool up)
+        {
+            float tip = up ? 0.80f : 0.20f;
+            float foot = up ? 0.28f : 0.72f;
+            return Mask("chevron_" + (up ? "up_" : "down_") + size, size, delegate (float u, float v)
+            {
+                float left = OnSegment(u, v, 0.14f, foot, 0.50f, tip, 0.11f);
+                float right = OnSegment(u, v, 0.50f, tip, 0.86f, foot, 0.11f);
+                return Mathf.Max(left, right);
+            });
+        }
+
         /// <summary>A milestone node on the events track.</summary>
         public static Sprite Diamond(int size)
         {

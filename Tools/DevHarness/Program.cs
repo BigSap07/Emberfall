@@ -315,6 +315,9 @@ namespace Emberfall.DevHarness
             // while running - the economy responsiveness probe included.
             CheckInstrumentsSeeTheWholeCurve(content);
             CheckSolverAndGateCompileOneList(contentDir);
+            // The battle HUD's layout (BattleHudChecks.cs): every plate and pill placed through the
+            // screen's own BattleHudLayout at three phone shapes, and none of them meet.
+            CheckBattleHud(contentDir);
             PrintInstrumentComparison();
 
             Line("");

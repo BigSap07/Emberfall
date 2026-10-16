@@ -347,6 +347,10 @@ namespace Emberfall.UI.Screens
         /// the back key takes OnPrimary. A guild dungeon run leaves it false and has neither.</summary>
         public bool Home;
         public string Label = "";
+
+        /// <summary>What the battle HUD's second line says before ROUND, such as a campaign
+        /// replay's wave and battle. Empty leaves the round alone on that line.</summary>
+        public string Progress = "";
         public string Subtitle = "";
         public readonly List<KeyValuePair<string, string>> Rows = new List<KeyValuePair<string, string>>();
         public string PrimaryLabel = "";

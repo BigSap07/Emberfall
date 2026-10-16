@@ -7,6 +7,7 @@ using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Session;
+using Emberfall.UI.Battle;
 
 namespace Emberfall.UI.Screens
 {
@@ -840,9 +841,13 @@ namespace Emberfall.UI.Screens
             run.Result = fight;
             run.IsReplay = true;
             run.Home = true;
-            run.Label = replay.Stage.DisplayCode + "   " + replay.Stage.Name.ToUpperInvariant()
-                        + "   WAVE " + replay.Wave + "/" + replay.Stage.WaveCount
-                        + "   BATTLE " + replay.Battle + "/" + replay.Stage.BattleCount + "   REPLAY";
+            // The battle HUD's two lines, as a live campaign fight draws them: the stage, then the
+            // wave and battle ahead of the round, with REPLAY on the first line so it is never
+            // mistaken for a fight being played for the first time.
+            run.Label = replay.Stage.DisplayCode + BattleHudStyle.Separator + replay.Stage.Name.ToUpperInvariant()
+                        + BattleHudStyle.Separator + "REPLAY";
+            run.Progress = "WAVE " + replay.Wave + " / " + replay.Stage.WaveCount + BattleHudStyle.Separator
+                           + "BATTLE " + replay.Battle + " / " + replay.Stage.BattleCount;
             run.Subtitle = "REPLAY   " + fight.Rounds + " ROUNDS   BANNER AT "
                            + Mathf.RoundToInt(fight.PlayerHpRatio * 100f) + "%";
             run.Rows.Add(new KeyValuePair<string, string>("REWARDS", "NONE"));
