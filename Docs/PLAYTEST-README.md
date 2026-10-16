@@ -18,6 +18,8 @@ There are two builds, and the folder name says which one you have:
 accounts, and your progress lives on this computer and nowhere else. The Account, Friends and
 Guild pages are still there, and each one says **LOCAL ONLY** and that this build has no cloud,
 rather than offering buttons that cannot work. The rest of the game plays as normal.
+A later build may ask whether to share anonymous play stats. The answer is No unless you click or
+tap Yes. These builds never ask and send nothing.
 
 ## Starting the game
 
