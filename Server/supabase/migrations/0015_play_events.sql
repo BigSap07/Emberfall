@@ -120,19 +120,31 @@ create policy play_events_insert_any
 -- ---------------------------------------------------------------- what was applied, said once
 
 do $$
+declare
+  who text;
+  verb text;
 begin
-  if has_table_privilege('anon', 'public.play_events', 'select')
-     or has_table_privilege('authenticated', 'public.play_events', 'select')
-     or has_table_privilege('anon', 'public.play_events', 'update')
-     or has_table_privilege('authenticated', 'public.play_events', 'update')
-     or has_table_privilege('anon', 'public.play_events', 'delete')
-     or has_table_privilege('authenticated', 'public.play_events', 'delete') then
-    raise exception '0015: anon or authenticated can still read, update or delete play_events';
+  if not (select c.relrowsecurity from pg_class c where c.oid = 'public.play_events'::regclass) then
+    raise exception '0015: row level security is not on for play_events';
   end if;
-  if has_column_privilege('anon', 'public.play_events', 'created_at', 'insert')
-     or has_column_privilege('anon', 'public.play_events', 'id', 'insert') then
-    raise exception '0015: anon can insert id or created_at on play_events';
-  end if;
+  -- has_table_privilege sees table-level privileges only; has_any_column_privilege also sees a
+  -- grant on a single column, so between them no read, update or delete path is missed.
+  foreach who in array array['anon', 'authenticated'] loop
+    foreach verb in array array['select', 'update', 'delete'] loop
+      if has_table_privilege(who, 'public.play_events', verb) then
+        raise exception '0015: % can % play_events at table level', who, verb;
+      end if;
+    end loop;
+    foreach verb in array array['select', 'update'] loop
+      if has_any_column_privilege(who, 'public.play_events', verb) then
+        raise exception '0015: % can % a column of play_events', who, verb;
+      end if;
+    end loop;
+    if has_column_privilege(who, 'public.play_events', 'created_at', 'insert')
+       or has_column_privilege(who, 'public.play_events', 'id', 'insert') then
+      raise exception '0015: % can insert id or created_at on play_events', who;
+    end if;
+  end loop;
   raise notice '0015: play_events is insert-only for anon and authenticated, on install_id, event, payload and build';
 end;
 $$;

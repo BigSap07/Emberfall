@@ -867,6 +867,15 @@ def check_play_events():
     status, body = request("POST", path, token=h["token"], body=good, prefer=minimal)
     check(status in (201, 204), "and a signed-in user can too", (status, body))
 
+    # Every event name in the table's check, once, so a typo in that list is caught here. A payload
+    # of about 2000 bytes is the accepted side of the 2048-byte limit.
+    for event in ("session_start", "session_end", "onboarding_step", "stage_attempt", "wave_lost",
+                  "stage_clear", "hero_level_up", "summon", "feature_opened", "stats_opt_change"):
+        status, body = attempt({"event": event})
+        check(status in (201, 204), "the event " + event + " is accepted", (status, body))
+    status, body = attempt({"payload": {"pad": "x" * 1990}})
+    check(status in (201, 204), "a payload of about 2000 bytes is accepted", (status, body))
+
     status, body = request("GET", path + "?select=id&install_id=eq." + install)
     readable = status == 200 and isinstance(body, list) and len(body) > 0
     check(not readable, "the anon role cannot SELECT it back (no grant, no policy)", (status, body))

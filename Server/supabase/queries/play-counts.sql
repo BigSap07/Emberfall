@@ -41,9 +41,10 @@ select (created_at at time zone 'utc')::date as day,
 
 -- ---------------------------------------------------------------- the onboarding funnel
 --
--- Distinct installs that reached each onboarding step, in step order, with the share of the first
+-- Distinct installs that reached each onboarding step, in step order, with the share of the largest
 -- step's installs. A step is "reached" when an onboarding_step event for it exists, whether or not
--- the player went further. Ids that are not whole numbers sort after the numbered ones.
+-- the player went further. Ids that are not whole numbers of up to six digits sort after the numbered ones, so a junk
+-- row cannot break the ordering.
 with reached as (
   select payload ->> 'step' as step, install_id
     from public.play_events
@@ -59,7 +60,7 @@ select step,
        installs,
        round(100.0 * installs / max(installs) over (), 1) as pct_of_largest_step
   from per_step
- order by case when step ~ '^[0-9]+$' then step::integer end nulls last, step;
+ order by case when step ~ '^[0-9]{1,6}$' then step::integer end nulls last, step;
 
 -- ---------------------------------------------------------------- where runs stop
 --
@@ -111,4 +112,4 @@ select count(*)                                                            as se
        round(avg((payload ->> 'seconds')::numeric), 0)                     as mean_seconds
   from public.play_events
  where event = 'session_end'
-   and payload ->> 'seconds' ~ '^[0-9]+(\.[0-9]+)?$';
+   and payload ->> 'seconds' ~ '^[0-9]{1,9}(\.[0-9]+)?$';
