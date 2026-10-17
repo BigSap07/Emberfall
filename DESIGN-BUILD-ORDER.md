@@ -752,7 +752,7 @@ ships on top of that, with `RelicShopScreen` as its storefront.
 
 Summoning with a pity rule that guarantees distinct unowned heroes. Idle income accrues against a
 real clock and is capped. `SaveSerializer` writes the whole document, at
-`SaveSerializer.CurrentVersion` 21, and a save from a newer build is refused rather than read.
+`SaveSerializer.CurrentVersion` 22, and a save from a newer build is refused rather than read.
 Version 15 keeps records this build cannot resolve; version 16 adds each hero's ascension tier;
 version 17 adds the Guild Path's copy of the server's answer and the formation's saved lines, and
 later the guild tech tree's copy of it - deliberately without a further bump, because the server
@@ -783,6 +783,10 @@ the wake. `CheckOnboarding` proves it. **The owner must raise the server's `save
 before a cloud build is played**: `update save_limits set max_save_version = 21;`, because
 `push_save` refuses a version 21 save while the row says 19 or 20. No saved version 21 exists outside
 development machines.
+Version 22 records the daily loop: a `dailyLoop` block, written only when `DailyLoopState` holds
+something. A version 21 save loads with an empty loop. `CheckDailyLoopSave` proves it. **The owner must
+raise the server's `save_limits` row to 22 before a cloud build is played**:
+`update save_limits set max_save_version = 22;`.
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -948,6 +952,22 @@ measure what each change did to the floors. Coda is the Recital's own currency a
 yet.** `ProvingGenerator` builds opponent lines. The events engine is content-driven through
 `events.json`, and each milestone carries a permanent `id` that a claim is saved against, so a
 threshold can be retuned freely. Shop screens are wired.
+
+### The daily loop
+
+Five daily orders from a fixed pool, a daily chest for claiming them all, a weekly chest at five
+days of fully claimed orders in a Monday to Sunday week, and a repeating 7-day login calendar. The
+rules are `DailyLoop` in `Assets/Scripts/Core/Progression`, the saved state is `DailyLoopState`, and
+`GameSession` reports events through `OrderEvent`. Every reward is hours of idle income at the
+frontier, paid by `GameSession.IdleYield` at claim time and not capped by `Balance.IdleCapHours`.
+The day rolls on `GameSession.DayStartUnix` and only moves forward, so a wound-back clock reopens
+nothing. The pool, targets and hours are in `orders.json`, loaded through `ContentDatabase.LoadOrders`
+and not part of `ContentVersion`; `CheckDailyLoopNotHashed` proves it. **It is off by default**:
+`DailyLoopSwitch.Enabled` is true only when the scripting define `EMBERFALL_DAILY_LOOP_ON` is set,
+and with it off no order is generated, no key is written and the hub shows no door. `OrdersScreen`
+is a placeholder, reached from an Orders door on the `MainMenuScreen` rail. All hours in
+`orders.json` are placeholders for the balance pass. The eleven `CheckDailyLoop*` checks are in
+`DailyLoopChecks.cs`. Design: `Docs/DESIGN-DAILY-LOOP.md`.
 
 ### The first session, and the unlock table
 
@@ -1338,9 +1358,9 @@ enemies without sheets), and the battles of chapters 2 to 6 (60 stages) have no 
 
 A branch is named here when it holds work worth naming, and only while it is unmerged.
 
-None. The battle stats, the battle HUD, the sprite resolution pass and the first session with its
+None. The battle stats, the battle HUD, the sprite resolution pass, the daily loop and the first session with its
 unlock table are all in the tree and are described under **Campaign and progression**, **Battle
-presentation and art**, **The first session, and the unlock table** and **Tooling**.
+presentation and art**, **The daily loop**, **The first session, and the unlock table** and **Tooling**.
 
 ## Next
 
