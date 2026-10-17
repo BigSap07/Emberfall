@@ -63,6 +63,11 @@ namespace Emberfall.DevHarness
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], out n)) { wallStudy = n; i++; }
                     continue;
                 }
+                // Measurement flags, not checks and not run by the gate: --wall-modes picks which players
+                // --wall-study walks (a subset of "fuses,noconv,none"); --relevel is lever R2 of
+                // Docs/ECONOMY-PROPOSAL-R4.md, see RunRelevel.
+                if (args[i] == "--wall-modes" && i + 1 < args.Length) { _wallModes = args[++i]; continue; }
+                if (args[i] == "--relevel" && i + 1 < args.Length) { _relevelSpec = args[++i]; continue; }
                 if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
                 if (args[i] == "--guild-path") { guildPath = true; continue; }
                 if (args[i] == "--guild-tech") { guildTech = true; continue; }
@@ -110,6 +115,7 @@ namespace Emberfall.DevHarness
             // Also not a check, and not run by the gate: see RunCeilReconcile.
             if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
             if (wallStudy > 0) return RunWallStudy(contentDir, wallStudy);
+            if (_relevelSpec != null) return RunRelevel(contentDir, _relevelSpec);
             if (lineCalibration) return RunLineCalibration(contentDir);
             // Nor this: the probe study measures the level search and writes nothing.
             if (probeStudy) return RunProbeStudy(contentDir);
@@ -16616,6 +16622,12 @@ namespace Emberfall.DevHarness
         private const float GearedCeilBandLowFinale = 0.55f;
         private const float GearedCeilBandHighFinale = 0.72f;
 
+        /// <summary>The breezy stretch, 1-1 to 1-6: a player is meant to win these, so the band is
+        /// [70%, 100%] and has no upper edge to miss (Docs/ECONOMY-PROPOSAL-R4.md section 5).</summary>
+        private const float GearedCeilBandLowBreezy = 0.70f;
+        private const float GearedCeilBandHighBreezy = 1.00f;
+        private const int CeilBreezyLastStage = 6;
+
         /// <summary>The last stage of its own chapter, found by index rather than assumed to be 12,
         /// so a chapter of a different length still resolves its own finale.</summary>
         private static bool IsChapterFinale(ContentDatabase db, StageDef stage)
@@ -16629,7 +16641,9 @@ namespace Emberfall.DevHarness
 
         private static float TargetCeilRate(ContentDatabase db, StageDef stage)
         {
-            return IsChapterFinale(db, stage) ? CeilTargetFinale : CeilTargetOrdinary;
+            float over;
+            if (_ceilTargetOverride.TryGetValue(stage.Id, out over)) return over;
+            return IsCeilWall(db, stage) ? CeilTargetFinale : CeilTargetOrdinary;
         }
 
         /// <summary>Win rate at the stage's LAST battle for a geared line levelled to one candidate
@@ -16792,14 +16806,16 @@ namespace Emberfall.DevHarness
             Line("  whether a stage is finishable: defeat retries the battle that was lost, so a BLOCK");
             Line("  is a hard stop rather than a hard fight.");
             Line("");
-            Line("  stage  name                        recPwr  teamPwr   FLOOR    CEIL   BLOCK");
+            Line("  stage  name                        recPwr  teamPwr   FLOOR    CEIL   BLOCK"
+                 + "  kind     CEIL band     verdict");
 
             int blocked = 0;
             int softFloors = 0;
             string firstBlocked = null;
             float loCeil = 2f, hiCeil = -1f;
             int outOfBand = 0;
-            string firstOutOfBand = null;
+            int graded = 0;
+            List<string> ceilMisses = new List<string>();
 
             for (int s = 0; s < db.AllStages.Count; s++)
             {
@@ -16842,18 +16858,26 @@ namespace Emberfall.DevHarness
                 // exclusion is for. It is stricter in the other direction too: a stage that reads
                 // 100% while its line SITS at its recommendedPower is now checked, where the proxy
                 // waved it through.
+                //
+                // EVERY STAGE'S VERDICT IS PRINTED on its own line, and every miss is listed in the
+                // check's message. This used to name only the first miss, so a run that fixed it
+                // learned about the next one a full run later.
+                string ceilVerdict;
+                float bandLo = CeilBandLow(db, stage);
+                float bandHi = CeilBandHigh(db, stage);
                 if (!floorPinned)
                 {
-                    float bandLo = CeilBandLow(db, stage);
-                    float bandHi = CeilBandHigh(db, stage);
+                    graded++;
                     if (ceil < bandLo || ceil > bandHi)
                     {
                         outOfBand++;
-                        if (firstOutOfBand == null)
-                            firstOutOfBand = stage.DisplayCode + " CEIL " + Pct(ceil)
-                                + " outside [" + Pct(bandLo) + ", " + Pct(bandHi) + "]";
+                        ceilVerdict = ceil < bandLo ? "UNDER" : "OVER";
+                        ceilMisses.Add(stage.DisplayCode + " " + Pct(ceil) + " " + ceilVerdict.ToLowerInvariant()
+                                       + " [" + Pct(bandLo) + ", " + Pct(bandHi) + "]");
                     }
+                    else ceilVerdict = "ok";
                 }
+                else ceilVerdict = "pinned, not graded";
 
                 Line("  " + stage.DisplayCode.PadRight(6)
                      + " " + Trim(stage.Name, 26).PadRight(26)
@@ -16862,6 +16886,9 @@ namespace Emberfall.DevHarness
                      + Pct(floor).PadLeft(8)
                      + Pct(ceil).PadLeft(8)
                      + (block > 0 ? ("b" + block) : "none").PadLeft(8)
+                     + "  " + CeilKindOf(db, stage).PadRight(9)
+                     + ("[" + Pct(bandLo) + ", " + Pct(bandHi) + "]").PadRight(14)
+                     + ceilVerdict
                      + (InstrumentLineFor(db, stage) == ChapterOneLine ? "   3-star line" : "")
                      + (floorPinned ? "   FLOOR-PINNED (the level-1 geared line is already worth more"
                                       + " than this stage asks for, so CEIL reads the instrument)" : "")
@@ -16884,9 +16911,10 @@ namespace Emberfall.DevHarness
                   + Pct(loCeil) + " to " + Pct(hiCeil) + ")");
 
             Check(outOfBand == 0,
-                  "every stage the instrument can actually be placed at has its CEIL inside the band"
-                  + " (ordinary [78%, 92%], finale [55%, 72%])"
-                  + (firstOutOfBand == null ? "" : " - first miss: " + firstOutOfBand));
+                  "every stage the instrument can actually be placed at has its CEIL inside its band by kind"
+                  + " (breezy [70%, 100%], wall [55%, 72%], everything else [78%, 92%]): "
+                  + (graded - outOfBand) + " of " + graded + " graded stages in band"
+                  + (outOfBand == 0 ? "" : " - out: " + string.Join("; ", ceilMisses.ToArray())));
             Line("");
         }
 
@@ -17888,32 +17916,34 @@ namespace Emberfall.DevHarness
         /// what the build-order doc already calls out as measuring the floor.</summary>
         private const int EconomyTutorialStages = 4;
 
-        private const float OrdinaryBandLow = 1.10f;
-        private const float OrdinaryBandHigh = 1.30f;
-
         /// <summary>
-        /// THE WALL BAND IS PER CHAPTER, and it is not a taste decision - it is read off how long
-        /// a wall at each ratio actually takes to resolve.
+        /// THE POWER BANDS ARE A PER-STAGE TARGET TABLE for the reference player, the owner's curve of
+        /// 2026-10-11 (Docs/ECONOMY-PROPOSAL-R4.md section 5; the target is section 1):
         ///
-        /// x0.90 to x1.00 was one band for the whole campaign, and it was measured to be too harsh
-        /// where it bites hardest. At x0.95, 1-9 cost the simulated player four extra sittings on
-        /// top of the ladder floor - two days of a twice-a-day player's time on one stage, nine
-        /// stages into the game. At x1.01 the same stage cost one. A wall is meant to be a stage
-        /// you do not beat on the day you reach it, not one you are still on two days later, so
-        /// chapter 1 sits at x1.00 to x1.05: an entry power that just fails, and clears on the next
-        /// claim rather than on the fourth.
+        ///   1-1 to 1-6   breezy, x1.00 to x2.00. Stage 6 is no longer a wall in chapter 1.
+        ///   1-7 to 1-11  first friction, falling: x1.05-x1.25, x1.02-x1.20, x0.99-x1.16, x0.96-x1.12,
+        ///                x0.93-x1.08.
+        ///   1-12         the first real wall, x0.88 to x0.99: it needs a levelling or gear session.
+        ///   chapter 2 on x0.97 to x1.25 for ordinary stages and walls alike.
         ///
-        /// Chapter 2 keeps a harder band, x0.95 to x1.02, because by then a player has a roster,
-        /// a gear track and a reason to farm a stage on purpose. The two are different games and a
-        /// single number could only be wrong for one of them.
+        /// ONE BAND FOR ORDINARY STAGES AND WALLS FROM CHAPTER 2, because the reference player is
+        /// level-capped from 2-4 and its ratio cannot tell a wall from its neighbour. A wall from
+        /// chapter 2 on is a CEIL fact (CeilKindOf), not a ratio fact.
         ///
-        /// ORDINARY IS NOT SPLIT. x1.10 to x1.30 is the same demand in both chapters, and nothing
-        /// measured says otherwise.
+        /// The chapter 1 table is read by stage Index, so a chapter of another length keeps its
+        /// stage numbers meaning what they say.
         /// </summary>
-        private const float WallBandLowChapter1 = 1.00f;
-        private const float WallBandHighChapter1 = 1.05f;
-        private const float WallBandLowLater = 0.95f;
-        private const float WallBandHighLater = 1.02f;
+        private const float BreezyBandLow = 1.00f;
+        private const float BreezyBandHigh = 2.00f;
+        private const int BreezyLastStage = 6;
+        private static readonly float[] FallingBandLow = { 1.05f, 1.02f, 0.99f, 0.96f, 0.93f };
+        private static readonly float[] FallingBandHigh = { 1.25f, 1.20f, 1.16f, 1.12f, 1.08f };
+        private const int FallingFirstStage = 7;
+        private const int ChapterOneFinaleStage = 12;
+        private const float ChapterOneWallBandLow = 0.88f;
+        private const float ChapterOneWallBandHigh = 0.99f;
+        private const float LaterBandLow = 0.97f;
+        private const float LaterBandHigh = 1.25f;
 
         /// <summary>
         /// HOW FAR PAST AN EDGE A RATIO MAY SIT BEFORE THE GUARD CALLS IT OUT, on both edges of
@@ -17944,13 +17974,10 @@ namespace Emberfall.DevHarness
         /// the next power source that lands - a relic tier, a Coda sink, guild currency, an aspect
         /// track - fails on the commit that adds it rather than being discovered a year later.
         ///
-        /// The bands:
-        ///   the opening stages  no band, tutorial - EconomyTutorialStages of them;
-        ///   ordinary stages     x1.10 to x1.30, comfortably ahead but not safe;
-        ///   walls               x1.00 to x1.05 in chapter 1, x0.95 to x1.02 from chapter 2 on.
-        /// See WallBandLowChapter1 for why the wall band is per chapter and the ordinary one is not.
-        /// A wall is a chapter finale (StageDef.IsBoss) or the chapter's miniboss stage
-        /// (StageDef.IsMiniboss); see MidChapterWallStageIdsOf.
+        /// The bands are a per-stage table, PowerBandFor: breezy for 1-1 to 1-6, falling for 1-7 to
+        /// 1-11, the first wall at 1-12 and one band from chapter 2 on. Every stage is banded, the
+        /// opening four included. A wall is still a chapter finale (StageDef.IsBoss) or the chapter's
+        /// miniboss stage (StageDef.IsMiniboss); see MidChapterWallStageIdsOf.
         ///
         /// Measured at ENTRY, not at exit. A wall is something a player hits on the way in; the
         /// campaign balance table's teamPwr column is the reading after the stage is already
@@ -17976,14 +18003,17 @@ namespace Emberfall.DevHarness
             Line("CAMPAIGN POWER CURVE (entry power / recommendedPower, against the authored band)");
             Line("  Read on the REFERENCE player - never converts, never ascends - which is the player");
             Line("  recommendedPower is derived for under the wall rule. A player who fuses arrives above it.");
-            Line("  Tutorial = the first " + EconomyTutorialStages + " stages, no band."
-                 + "  Ordinary = x" + Fmt(OrdinaryBandLow) + " to x" + Fmt(OrdinaryBandHigh) + ".");
-            Line("  Wall = x" + Fmt(WallBandLowChapter1) + " to x" + Fmt(WallBandHighChapter1)
-                 + " in chapter 1, x" + Fmt(WallBandLowLater) + " to x" + Fmt(WallBandHighLater)
-                 + " from chapter 2 on - measured off how many extra sittings a wall at each ratio"
-                 + " actually costs.");
+            Line("  Bands per stage (Docs/ECONOMY-PROPOSAL-R4.md section 5): 1-1 to 1-" + BreezyLastStage
+                 + " breezy x" + Ratio3(BreezyBandLow) + " to x" + Ratio3(BreezyBandHigh)
+                 + "; 1-" + FallingFirstStage + " to 1-" + (ChapterOneFinaleStage - 1) + " falling, from x"
+                 + Ratio3(FallingBandLow[0]) + "-x" + Ratio3(FallingBandHigh[0]) + " to x"
+                 + Ratio3(FallingBandLow[FallingBandLow.Length - 1]) + "-x" + Ratio3(FallingBandHigh[FallingBandHigh.Length - 1])
+                 + "; 1-" + ChapterOneFinaleStage + " the first wall x" + Ratio3(ChapterOneWallBandLow)
+                 + " to x" + Ratio3(ChapterOneWallBandHigh) + "; chapter 2 on x" + Ratio3(LaterBandLow)
+                 + " to x" + Ratio3(LaterBandHigh) + ", ordinary stages and walls alike.");
             Line("  A wall is a chapter finale or a chapter's miniboss stage:"
-                 + " " + string.Join(", ", MidChapterWallStageIdsOf(db).ToArray()) + ".");
+                 + " " + string.Join(", ", MidChapterWallStageIdsOf(db).ToArray()) + "."
+                 + " Chapter 1's stage 6 is breezy for the band.");
             Line("  entryPwr is read BEFORE the stage's first sitting. The balance table's teamPwr"
                  + " is the exit reading and cannot show a wall.");
             Line("  entryPwr splits into roster (the deployed five at Lv1), levels (what gold bought)"
@@ -18009,9 +18039,9 @@ namespace Emberfall.DevHarness
                 StageDef stage = o.Stage;
                 if (stage == null || stage.RecommendedPower <= 0) continue;
 
-                string kind = BandKindOf(stage, i);
+                string kind = PowerBandName(stage, BandKindOf(stage, i));
                 float lo, hi;
-                bool banded = BandFor(stage, kind, out lo, out hi);
+                bool banded = PowerBandFor(stage, out lo, out hi);
                 float ratio = o.EntryRatio;
                 float rec = stage.RecommendedPower;
 
@@ -18113,17 +18143,36 @@ namespace Emberfall.DevHarness
             return "ordinary";
         }
 
-        private static bool BandFor(StageDef stage, string kind, out float lo, out float hi)
+        /// <summary>The kind the power table prints for one stage. Chapter 1 is read by stage Index:
+        /// breezy to 1-6, falling to 1-11, then the first wall. From chapter 2 on it is the walk's own
+        /// kind, wall or ordinary, because the two share one band there.</summary>
+        private static string PowerBandName(StageDef stage, string walkKind)
         {
-            if (kind.StartsWith("wall"))
+            if (stage != null && stage.ChapterNumber == 1)
             {
-                bool chapterOne = stage != null && stage.ChapterNumber == 1;
-                lo = chapterOne ? WallBandLowChapter1 : WallBandLowLater;
-                hi = chapterOne ? WallBandHighChapter1 : WallBandHighLater;
+                if (stage.Index <= BreezyLastStage) return "breezy  ";
+                if (stage.Index < ChapterOneFinaleStage) return "falling ";
+                return "wall    ";
+            }
+            return walkKind.StartsWith("wall") ? "wall    " : "ordinary";
+        }
+
+        /// <summary>The band for one stage, from the table in the comment on BreezyBandLow. Every
+        /// stage has one; false only for a null stage.</summary>
+        private static bool PowerBandFor(StageDef stage, out float lo, out float hi)
+        {
+            lo = 0f; hi = 0f;
+            if (stage == null) return false;
+            if (stage.ChapterNumber == 1)
+            {
+                if (stage.Index <= BreezyLastStage) { lo = BreezyBandLow; hi = BreezyBandHigh; return true; }
+                if (stage.Index >= ChapterOneFinaleStage) { lo = ChapterOneWallBandLow; hi = ChapterOneWallBandHigh; return true; }
+                int k = stage.Index - FallingFirstStage;
+                lo = FallingBandLow[k]; hi = FallingBandHigh[k];
                 return true;
             }
-            if (kind.StartsWith("ordinary")) { lo = OrdinaryBandLow; hi = OrdinaryBandHigh; return true; }
-            lo = 0f; hi = 0f; return false;
+            lo = LaterBandLow; hi = LaterBandHigh;
+            return true;
         }
 
         /// <summary>
@@ -19062,6 +19111,9 @@ namespace Emberfall.DevHarness
         // the whole answer is one rounding of one ratio however many walks it takes to settle. See
         // StageBaseline for what re-rounding an already-rounded table did when it was allowed to.
 
+        // THESE FOUR MIDDLES DESCRIBE THE PRE-PROPOSAL BANDS (Docs/ECONOMY-PROPOSAL-R4.md). The shipped table
+        // was moved off them to the per-stage bands of PowerBandFor, and re-running the solver walks it back
+        // toward them and undoes the proposal. Their values are deliberately unchanged.
         private const float SolverMiddleOrdinaryChapter1 = 1.20f;
         private const float SolverMiddleWallChapter1 = 1.025f;
         private const float SolverMiddleOrdinaryLater = 1.15f;
@@ -19800,14 +19852,45 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static readonly int[] SolverProbeGrants = { 60, 120, 240, SolverMaxProbesPerStage };
 
+        /// <summary>
+        /// THE CEIL BAND BY KIND (Docs/ECONOMY-PROPOSAL-R4.md section 5):
+        ///   breezy      1-1 to 1-6                                  [70%, 100%]
+        ///   wall        1-12, and stages 6 and 12 from chapter 2    [55%, 72%]
+        ///   everything else: 1-7 to 1-11, ordinary stages from chapter 2   [78%, 92%]
+        /// A wall is the chapter finale or, from chapter 2 on, the chapter's stage 6. Chapter 1's
+        /// stage 6 is breezy, not a wall.
+        /// </summary>
+        private static bool IsCeilWall(ContentDatabase db, StageDef stage)
+        {
+            if (IsChapterFinale(db, stage)) return true;
+            return stage.ChapterNumber > 1 && stage.IsMiniboss;
+        }
+
+        private static bool IsCeilBreezy(StageDef stage)
+        {
+            return stage.ChapterNumber == 1 && stage.Index <= CeilBreezyLastStage;
+        }
+
+        private static string CeilKindOf(ContentDatabase db, StageDef stage)
+        {
+            if (IsCeilBreezy(stage)) return "breezy";
+            return IsCeilWall(db, stage) ? "wall" : "ordinary";
+        }
+
         private static float CeilBandLow(ContentDatabase db, StageDef stage)
         {
-            return IsChapterFinale(db, stage) ? GearedCeilBandLowFinale : GearedCeilBandLowOrdinary;
+            float over;
+            if (_ceilTargetOverride.TryGetValue(stage.Id, out over)) return over - 0.07f;
+            if (IsCeilBreezy(stage)) return GearedCeilBandLowBreezy;
+            return IsCeilWall(db, stage) ? GearedCeilBandLowFinale : GearedCeilBandLowOrdinary;
         }
 
         private static float CeilBandHigh(ContentDatabase db, StageDef stage)
         {
-            return IsChapterFinale(db, stage) ? GearedCeilBandHighFinale : GearedCeilBandHighOrdinary;
+            float over;
+            if (_ceilTargetOverride.TryGetValue(stage.Id, out over)) return over + 0.07f;
+            if (IsCeilBreezy(stage)) return GearedCeilBandHighBreezy;
+            return IsCeilWall(db, stage) ? GearedCeilBandHighFinale : GearedCeilBandHighOrdinary;
         }
 
         /// <summary>How far inside both edges a reading sits. Negative outside, and the more
@@ -20496,15 +20579,21 @@ namespace Emberfall.DevHarness
         /// looked plausible, and still got quoted.
         ///
         /// So the responsiveness is now asserted rather than assumed. Multiply every gold channel
-        /// on the back half of the campaign by 2.5x, re-run the whole simulation, and require the
-        /// late-campaign power ratio to actually move. If a future structural change re-severs the
-        /// link between authored income and simulated power, this fails on the commit that does it
-        /// instead of years later.
+        /// on the back half of the campaign by 2.5x, re-run the simulation for IncomeProbeSeeds
+        /// matched players, and require the entry ratio of the first IncomeProbeEarlyStages scaled
+        /// stages (4-1 to 4-6) to actually move. That early window is the guard: it is read before
+        /// the hero caps bind, where the response is stable. The late-campaign ratio (the last three
+        /// stages reached) is printed with its per-player spread and is NOT guarded, because a
+        /// level-capped player there shows the draw, not the income. If a future structural change
+        /// re-severs the link between authored income and simulated power, this fails on the commit
+        /// that does it instead of years later.
         ///
         /// It scales the loaded StageDefs in memory and puts them back afterwards. Nothing is
         /// written to campaign.json, and the restore is unconditional.
         /// </summary>
         private const float IncomeProbeMultiplier = 2.5f;
+        private const int IncomeProbeSeeds = 8;
+        private const int IncomeProbeEarlyStages = 6;
 
         private static void CheckEconomyRespondsToIncome(ContentDatabase db)
         {
@@ -20523,18 +20612,28 @@ namespace Emberfall.DevHarness
             // and the gold-only response is still printed beside it as a reading.
 
 
-            // Set from the measured spread, not from a wish. The broken model moved 0.03 on this
-            // input; the fixed one moves about 0.16. The bar sits at 0.10 - more than three times
-            // the broken signature, and well clear of the working value so ordinary content tuning
-            // cannot trip it.
+            // WHAT IS GUARDED IS THE EARLY WINDOW, not the late-campaign ratio, and the reason is a
+            // measurement. The late ratio is read at 6-10 to 6-12, where a player is level-capped and
+            // sits near x17 of recommendedPower; there the extra income has nowhere to go and the
+            // reading is which random 5-star a conversion rolled. Over 8 matched players it read
+            // +0.31 on the content before the R4 economy proposal (spread -0.36 to +0.89) and -0.11
+            // on the content after it (spread -0.89 to +0.65): one standard error is about 0.2, so
+            // neither number differs from zero, from the other, or from the 0.1 bar. The first six
+            // scaled stages are read before the caps bind. There every one of the 8 players moved
+            // the right way, +0.94 on the old content (spread 0.88 to 1.03) and +1.00 on the new
+            // (spread 0.93 to 1.06): about twice the bar of 0.50 below, and a spread of a tenth.
             //
-            // It is not set higher because 0.16 is genuinely the ceiling, for a reason the line
-            // below prints: at 2.5x gold, 49% of sittings end CAP-BLOCKED against 7.3% at 1x. Gold
-            // buys hero levels, and hero levels stop at each hero's own cap, which only an
-            // ascension raises. Past the cap the extra gold has nowhere to go. That is the game's
-            // design working as written, so demanding a bigger response here would be demanding
-            // the model lie.
-            const float MinimumResponse = 0.10f;
+            // THE BAR IS 0.50, a lead decision (R6), and the reasoning is in the readings. All 16 early
+            // readings above (8 players on each content) sit between 0.88 and 1.06, so a bar of 0.10
+            // would still pass a response cut to a third. 0.50 sits at about half the working value
+            // and well under the lowest reading, so ordinary content tuning cannot trip it and a
+            // response cut by half or more does. What a SEVERED link reads in early-window units was not
+            // measured: the 0.03 of the old one-session model was a late-ratio figure, so the bar is
+            // a fraction of the working value, not a multiple of a measured broken one.
+            //
+            // The late reading is still printed, with its per-player spread, because a late reading
+            // that is quiet is information about the caps; it is just not a reading to fail a build on.
+            const float MinimumResponse = 0.50f;
 
             List<StageDef> scaled = new List<StageDef>();
             for (int i = db.AllStages.Count / 2; i < db.AllStages.Count; i++) scaled.Add(db.AllStages[i]);
@@ -20545,8 +20644,14 @@ namespace Emberfall.DevHarness
                 return;
             }
 
-            EconomyRun poor = SimulateEconomy(db, false);
-            float poorRatio = LateCampaignRatio(poor);
+            // EVERY READING IS TAKEN OVER IncomeProbeSeeds PLAYERS, not one. One walk's late ratio is one
+            // draw of which 5-star a conversion rolled (F3), and the same check read -0.62 to +0.89 on
+            // content that differed by one idle multiplier. The poor and rich walks of a seed share
+            // their first seed (WalkSeed), so a seed is a matched pair; the response is the mean over
+            // the pairs and its spread is printed beside it.
+            List<EconomyRun> poorRuns = new List<EconomyRun>();
+            for (int k = 0; k < IncomeProbeSeeds; k++) poorRuns.Add(SimulateEconomy(db, false, WalkSeed(k)));
+            EconomyRun poor = poorRuns[0];
 
             int[] gold = new int[scaled.Count];
             int[] firstClear = new int[scaled.Count];
@@ -20564,8 +20669,8 @@ namespace Emberfall.DevHarness
                 idleShards[i] = scaled[i].IdleShardsPerHour;
             }
 
-            float richRatio, goldOnlyRatio;
-            EconomyRun rich = null;
+            List<EconomyRun> goldRuns = new List<EconomyRun>();
+            List<EconomyRun> richRuns = new List<EconomyRun>();
             try
             {
                 for (int i = 0; i < scaled.Count; i++)
@@ -20574,15 +20679,14 @@ namespace Emberfall.DevHarness
                     scaled[i].FirstClearGold = (int)(firstClear[i] * Multiplier);
                     scaled[i].IdleGoldPerHour = (int)(idle[i] * Multiplier);
                 }
-                goldOnlyRatio = LateCampaignRatio(SimulateEconomy(db, false));
+                for (int k = 0; k < IncomeProbeSeeds; k++) goldRuns.Add(SimulateEconomy(db, false, WalkSeed(k)));
                 for (int i = 0; i < scaled.Count; i++)
                 {
                     scaled[i].RewardShards = (int)(shards[i] * Multiplier);
                     scaled[i].FirstClearShards = (int)(firstShards[i] * Multiplier);
                     scaled[i].IdleShardsPerHour = (int)(idleShards[i] * Multiplier);
                 }
-                rich = SimulateEconomy(db, false);
-                richRatio = LateCampaignRatio(rich);
+                for (int k = 0; k < IncomeProbeSeeds; k++) richRuns.Add(SimulateEconomy(db, false, WalkSeed(k)));
             }
             finally
             {
@@ -20596,29 +20700,51 @@ namespace Emberfall.DevHarness
                     scaled[i].IdleShardsPerHour = idleShards[i];
                 }
             }
+            EconomyRun rich = richRuns[0];
 
-            float response = richRatio - poorRatio;
+            int firstScaled = db.AllStages.Count / 2;
+            float[] lateResponse = new float[IncomeProbeSeeds];
+            float[] earlyResponse = new float[IncomeProbeSeeds];
+            float[] goldOnlyLate = new float[IncomeProbeSeeds];
+            for (int k = 0; k < IncomeProbeSeeds; k++)
+            {
+                lateResponse[k] = LateCampaignRatio(richRuns[k]) - LateCampaignRatio(poorRuns[k]);
+                goldOnlyLate[k] = LateCampaignRatio(goldRuns[k]) - LateCampaignRatio(poorRuns[k]);
+                earlyResponse[k] = EarlyEntryRatio(richRuns[k], firstScaled) - EarlyEntryRatio(poorRuns[k], firstScaled);
+            }
+            float poorRatio = 0f, richRatio = 0f;
+            for (int k = 0; k < IncomeProbeSeeds; k++) { poorRatio += LateCampaignRatio(poorRuns[k]); richRatio += LateCampaignRatio(richRuns[k]); }
+            poorRatio /= IncomeProbeSeeds; richRatio /= IncomeProbeSeeds;
+            float response = Mean(lateResponse);
+            float earlyMean = Mean(earlyResponse);
+
             Line("  " + scaled.Count + " stages (the back half of the campaign) at " + Fmt(Multiplier)
-                 + "x income - gold and shards, reward, first clear and idle rate together.");
-            Line("  late-campaign power ratio: x" + Fmt(poorRatio) + " -> x" + Fmt(richRatio)
-                 + "   response " + Fmt(response));
-            Line("  gold alone, reported: x" + Fmt(poorRatio) + " -> x" + Fmt(goldOnlyRatio)
-                 + "   response " + Fmt(goldOnlyRatio - poorRatio));
+                 + "x income - gold and shards, reward, first clear and idle rate together, "
+                 + IncomeProbeSeeds + " matched players.");
+            Line("  late-campaign power ratio (last three stages reached): x" + Fmt(poorRatio) + " -> x" + Fmt(richRatio)
+                 + "   response " + Fmt(response) + " (mean of " + IncomeProbeSeeds + ", spread "
+                 + Fmt(Min(lateResponse)) + " to " + Fmt(Max(lateResponse)) + ")");
+            Line("  per player, late: " + JoinFloats(lateResponse));
+            Line("  early window (the first " + IncomeProbeEarlyStages + " scaled stages, entry ratio, before the caps bind): response "
+                 + Fmt(earlyMean) + " (spread " + Fmt(Min(earlyResponse)) + " to " + Fmt(Max(earlyResponse)) + ")");
+            Line("  per player, early: " + JoinFloats(earlyResponse));
+            Line("  gold alone, reported: late response " + Fmt(Mean(goldOnlyLate)));
             // Why the response is not larger, stated rather than guessed at: gold buys hero levels,
             // and hero levels stop at each hero's cap, which star tier and ascension tier set and
             // gold cannot move (F7). Past the cap the extra gold has nowhere to go, and the share
             // of sittings that ended holding gold they could not spend says how much of the 2.5x
             // hit that wall.
-            Line("  sittings that ended CAP-BLOCKED: " + Pct(CapBlockedShare(poor))
+            Line("  sittings that ended CAP-BLOCKED (first player): " + Pct(CapBlockedShare(poor))
                  + " at 1x, " + Pct(CapBlockedShare(rich)) + " at " + Fmt(Multiplier) + "x"
                  + "   (gold buys levels; levels stop at each hero's cap, which only ascension raises)");
-            Line("  The old one-session-per-attempt model responded about 0.03 to this same input,");
-            Line("  which is how it was caught. Anything near that means the link is severed again.");
+            Line("  The old one-session-per-attempt model responded about 0.03 to this same input on the late ratio,");
+            Line("  which is how it was caught. Anything near that on the early window means the link is severed again.");
             ReportIncomeAbsorption(db, poor, rich);
 
-            Check(response > MinimumResponse,
+            Check(earlyMean > MinimumResponse,
                   "the economy model responds to a " + Fmt(Multiplier) + "x change in authored income"
-                  + " (moved " + Fmt(response) + ", needs more than " + Fmt(MinimumResponse) + ")");
+                  + " (early window moved " + Fmt(earlyMean) + " over " + IncomeProbeSeeds + " matched players, needs more than "
+                  + Fmt(MinimumResponse) + "; the late reading moved " + Fmt(response) + ", reported only)");
             Line("");
         }
 
@@ -20693,9 +20819,36 @@ namespace Emberfall.DevHarness
             return total > 0 ? run.CapBlockedSessions / (float)total : 0f;
         }
 
+        /// <summary>Mean entry ratio over the IncomeProbeEarlyStages stages from firstStage on, for the
+        /// stages the run reached. The reading taken BEFORE the player saturates: right after the scaled
+        /// half begins, hero levels are not yet at their caps, so income still has somewhere to go.</summary>
+        private static float EarlyEntryRatio(EconomyRun run, int firstStage)
+        {
+            float total = 0f;
+            int counted = 0;
+            for (int i = firstStage; i < run.Stages.Count && i < firstStage + IncomeProbeEarlyStages; i++)
+            {
+                EconomyStageOutcome o = run.Stages[i];
+                if (o.Stage == null || o.Stage.RecommendedPower <= 0) continue;
+                total += o.EntryRatio;
+                counted++;
+            }
+            return counted > 0 ? total / counted : 0f;
+        }
+
+        private static float Mean(float[] v) { float s = 0f; for (int i = 0; i < v.Length; i++) s += v[i]; return v.Length > 0 ? s / v.Length : 0f; }
+        private static float Min(float[] v) { float m = float.MaxValue; for (int i = 0; i < v.Length; i++) if (v[i] < m) m = v[i]; return m; }
+        private static float Max(float[] v) { float m = float.MinValue; for (int i = 0; i < v.Length; i++) if (v[i] > m) m = v[i]; return m; }
+        private static string JoinFloats(float[] v)
+        {
+            string[] s = new string[v.Length];
+            for (int i = 0; i < v.Length; i++) s[i] = Fmt(v[i]);
+            return string.Join(", ", s);
+        }
+
         /// <summary>Mean power-to-recommendedPower ratio over the last three stages reached. This is
-        /// the column the late-chapter underpowered symptom is read off, so it is the one the
-        /// responsiveness guard watches.</summary>
+        /// the column the late-chapter underpowered symptom is read off. The responsiveness check
+        /// prints its response and does not guard it: see CheckEconomyRespondsToIncome.</summary>
         private static float LateCampaignRatio(EconomyRun run)
         {
             float total = 0f;
