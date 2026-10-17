@@ -24,35 +24,36 @@ namespace Emberfall.UI.Screens
     {
         public override ScreenId Id { get { return ScreenId.Orders; } }
 
-        /// <summary>Carries its own CurrencyStrip, like the Events and Relic Shop pages, so the shared
-        /// bar would state the same purses a few pixels above it.</summary>
-        public override bool HidesTopBar { get { return true; } }
+        /// <summary>The shared top bar stays, because it carries the purses a claim pays into and
+        /// the page needs the height a strip of its own would take: at 2400x1080 the logical canvas
+        /// is about 966 tall, and this page is 652 tall under a header that ends at 260.</summary>
+        public override bool HidesTopBar { get { return false; } }
 
         private const float ContentWidth = 1760f;
         private const float OrdersWidth = 1160f;
-        private const float OrdersHeight = 476f;
+        private const float OrdersHeight = 446f;
         private const float SideX = 1180f;
         private const float SideWidth = 580f;
-        private const float CardHeight = 230f;
+        private const float CardHeight = 215f;
         private const float CardGap = 16f;
-        private const float CalendarTop = 492f;
-        private const float CalendarHeight = 220f;
+        private const float CalendarTop = OrdersHeight + 14f;
+        private const float CalendarHeight = 192f;
 
         private const float PanelPad = 28f;
-        private const float TitleBlock = 64f;
-        private const float RowHeight = 72f;
+        private const float TitleBlock = 60f;
+        private const float RowHeight = 68f;
         private const float RowGap = 8f;
         private const float RowPad = 20f;
 
         private const float CellWidth = 234f;
-        private const float CellHeight = 124f;
+        private const float CellHeight = 112f;
+        private const float CellTop = 64f;
         private const float CellGap = 12f;
 
         private static readonly Vector2 TopLeft = new Vector2(0f, 1f);
         private static readonly Vector2 MidLeft = new Vector2(0f, 0.5f);
 
         private Text _headerSubtitle;
-        private readonly CurrencyStrip _currencies = new CurrencyStrip();
 
         private RectTransform _ordersBody;
         private RectTransform _dailyBody;
@@ -63,9 +64,8 @@ namespace Emberfall.UI.Screens
         {
             EmberforgeUI.Ground(Root);
             ScreenChrome.ForgedHeader(Root, "DAILY ORDERS", Router, out _headerSubtitle);
-            _currencies.Build(Root);
 
-            float top = CurrencyStrip.BottomOf(CurrencyStrip.DefaultTop);
+            float top = ScreenChrome.HeaderTop + 108f + UITheme.Space8;
             RectTransform content = UIBuilder.Node("Content", Root);
             UIBuilder.Box(content, 0f, -top, ContentWidth, CalendarTop + CalendarHeight, new Vector2(0.5f, 1f));
 
@@ -97,7 +97,6 @@ namespace Emberfall.UI.Screens
         private void Rebuild()
         {
             long now = TimeUtil.NowUnix();
-            _currencies.Refresh(App.Session, now);
             LoopBoard board = DailyLoop.Board(App.Session, now);
 
             Clear(_ordersBody);
@@ -135,12 +134,12 @@ namespace Emberfall.UI.Screens
 
             Text title = EmberforgeUI.Title("Title", _ordersBody, "TODAY'S ORDERS", UITheme.FontBody,
                                             Emberforge.TextGold, TextAnchor.UpperLeft);
-            UIBuilder.Box(title.rectTransform, PanelPad + 8f, -22f, 600f, 40f, TopLeft);
+            UIBuilder.Box(title.rectTransform, PanelPad + 8f, -16f, 600f, 40f, TopLeft);
             UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
 
             Text count = EmberforgeUI.Label("Count", _ordersBody, claimed + " OF " + board.Orders.Count + " CLAIMED",
                                             UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.UpperRight);
-            UIBuilder.Box(count.rectTransform, OrdersWidth - PanelPad - 8f - 400f, -26f, 400f, 32f, TopLeft);
+            UIBuilder.Box(count.rectTransform, OrdersWidth - PanelPad - 8f - 400f, -20f, 400f, 32f, TopLeft);
 
             for (int i = 0; i < board.Orders.Count; i++) BuildOrderRow(board.Orders[i], i);
         }
@@ -213,30 +212,30 @@ namespace Emberfall.UI.Screens
                                System.Action action)
         {
             Text name = EmberforgeUI.Title("Title", body, title, UITheme.FontBody, Emberforge.TextGold, TextAnchor.UpperLeft);
-            UIBuilder.Box(name.rectTransform, PanelPad + 8f, -22f, 400f, 40f, TopLeft);
+            UIBuilder.Box(name.rectTransform, PanelPad + 8f, -16f, 400f, 40f, TopLeft);
             UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
 
             Text line = EmberforgeUI.Label("Counted", body, counted, UITheme.FontSmall, Emberforge.TextBody, TextAnchor.UpperLeft);
-            UIBuilder.Box(line.rectTransform, PanelPad + 8f, -68f, 230f, 30f, TopLeft);
+            UIBuilder.Box(line.rectTransform, PanelPad + 8f, -58f, 230f, 30f, TopLeft);
             Image bar = EmberforgeUI.ProgressBar("Bar", body);
-            UIBuilder.Box(bar.rectTransform.parent as RectTransform, PanelPad + 250f, -72f, SideWidth - PanelPad * 2f - 258f, 22f, TopLeft);
+            UIBuilder.Box(bar.rectTransform.parent as RectTransform, PanelPad + 250f, -62f, SideWidth - PanelPad * 2f - 258f, 22f, TopLeft);
             EmberforgeUI.SetProgress(bar, ratio);
 
             Text reward = EmberforgeUI.Label("Reward", body, FormatHours(hours) + " OF IDLE INCOME", UITheme.FontSmall,
                                              Emberforge.TextGold, TextAnchor.UpperLeft);
-            UIBuilder.Box(reward.rectTransform, PanelPad + 8f, -106f, SideWidth - PanelPad * 2f, 30f, TopLeft);
+            UIBuilder.Box(reward.rectTransform, PanelPad + 8f, -92f, SideWidth - PanelPad * 2f, 30f, TopLeft);
             Text worth = EmberforgeUI.Label("Worth", body, Worth(gold, shards), UITheme.FontTiny, Emberforge.TextQuiet,
                                             TextAnchor.UpperLeft);
-            UIBuilder.Box(worth.rectTransform, PanelPad + 8f, -138f, SideWidth - PanelPad * 2f, 26f, TopLeft);
+            UIBuilder.Box(worth.rectTransform, PanelPad + 8f, -120f, SideWidth - PanelPad * 2f, 26f, TopLeft);
 
             if (opened)
             {
                 RectTransform chip = EmberforgeUI.Chip("Opened", body, "OPENED", UITheme.Success, UITheme.FontSmall);
-                UIBuilder.Box(chip, PanelPad, -(CardHeight - 18f - 50f), SideWidth - PanelPad * 2f, 50f, TopLeft);
+                UIBuilder.Box(chip, PanelPad, -(CardHeight - 12f - 46f), SideWidth - PanelPad * 2f, 46f, TopLeft);
                 return;
             }
-            UIButton open = EmberforgeUI.Button("Open", body, buttonText, UITheme.FontSmall, ForgeButtonKind.Primary);
-            UIBuilder.Box(open.Root, PanelPad, -(CardHeight - 18f - 54f), SideWidth - PanelPad * 2f, 54f, TopLeft);
+            UIButton open = EmberforgeUI.Button("Open", body, buttonText, UITheme.FontTiny, ForgeButtonKind.Primary);
+            UIBuilder.Box(open.Root, PanelPad, -(CardHeight - 12f - 50f), SideWidth - PanelPad * 2f, 50f, TopLeft);
             open.Interactable = canOpen;
             open.OnClick(action);
         }
@@ -247,19 +246,19 @@ namespace Emberfall.UI.Screens
         {
             Text title = EmberforgeUI.Title("Title", _calendarBody, "LOGIN CALENDAR", UITheme.FontBody,
                                             Emberforge.TextGold, TextAnchor.UpperLeft);
-            UIBuilder.Box(title.rectTransform, PanelPad + 8f, -22f, 420f, 40f, TopLeft);
+            UIBuilder.Box(title.rectTransform, PanelPad + 8f, -16f, 420f, 40f, TopLeft);
             UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
 
             Text note = EmberforgeUI.Label("Note", _calendarBody, "ONE REWARD A DAY. IT REPEATS AFTER DAY 7.",
                                            UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(note.rectTransform, PanelPad + 440f, -30f, 640f, 28f, TopLeft);
+            UIBuilder.Box(note.rectTransform, PanelPad + 440f, -24f, 640f, 28f, TopLeft);
 
             int next = 0;
             for (int i = 0; i < board.Calendar.Count; i++) if (board.Calendar[i].Next) next = board.Calendar[i].Day;
             UIButton claim = EmberforgeUI.Button("ClaimDay", _calendarBody,
                                                  board.CalendarCanClaim ? "CLAIM DAY " + next : "COME BACK TOMORROW",
-                                                 UITheme.FontSmall, ForgeButtonKind.Primary);
-            UIBuilder.Box(claim.Root, ContentWidth - PanelPad - 360f, -14f, 360f, 54f, TopLeft);
+                                                 UITheme.FontTiny, ForgeButtonKind.Primary);
+            UIBuilder.Box(claim.Root, ContentWidth - PanelPad - 360f, -10f, 360f, 50f, TopLeft);
             claim.Interactable = board.CalendarCanClaim;
             claim.OnClick(OnClaimCalendar);
 
@@ -271,7 +270,7 @@ namespace Emberfall.UI.Screens
         private void BuildCalendarCell(CalendarView c, float x)
         {
             RectTransform cell = UIBuilder.Node("Day_" + c.Day, _calendarBody);
-            UIBuilder.Box(cell, x, -78f, CellWidth, CellHeight, TopLeft);
+            UIBuilder.Box(cell, x, -CellTop, CellWidth, CellHeight, TopLeft);
             if (c.Next) EmberforgeUI.PanelOn(cell, false);
             else if (c.Claimed) EmberforgeUI.SunkenOn(cell);
             else EmberforgeUI.PlainPanelOn(cell);
@@ -279,15 +278,15 @@ namespace Emberfall.UI.Screens
             string caption = c.Label.Length > 0 ? c.Label.ToUpper() : "DAY " + c.Day;
             Text day = EmberforgeUI.Label("Day", cell, caption, UITheme.FontTiny,
                                           c.Claimed ? Emberforge.TextQuiet : Emberforge.TextGold, TextAnchor.UpperLeft);
-            UIBuilder.Box(day.rectTransform, 16f, -12f, CellWidth - 32f, 26f, TopLeft);
+            UIBuilder.Box(day.rectTransform, 16f, -10f, CellWidth - 32f, 26f, TopLeft);
 
             Text hours = EmberforgeUI.Title("Hours", cell, FormatHours(c.Hours), UITheme.FontBody,
                                             c.Claimed ? Emberforge.TextQuiet : Emberforge.TextBody, TextAnchor.UpperLeft);
-            UIBuilder.Box(hours.rectTransform, 16f, -40f, CellWidth - 32f, 38f, TopLeft);
+            UIBuilder.Box(hours.rectTransform, 16f, -36f, CellWidth - 32f, 38f, TopLeft);
 
             Text worth = EmberforgeUI.Label("Worth", cell, Worth(c.Gold, c.Shards), UITheme.FontTiny,
                                             Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(worth.rectTransform, 16f, -80f, CellWidth - 32f, 26f, TopLeft);
+            UIBuilder.Box(worth.rectTransform, 16f, -76f, CellWidth - 32f, 26f, TopLeft);
 
             if (c.Claimed || c.Next)
             {
