@@ -678,6 +678,7 @@ decision 4.
 **The economy responds to shards now, not gold.** `CheckEconomyRespondsToIncome` scales gold and
 shards together on the back half of the campaign; the late-campaign ratio responds 0.6. Gold alone,
 still printed, responds 0.22, because gold stops at each hero's cap.
+A pending branch (see **In progress**) re-expresses that check as an instrument.
 
 ### The campaign power curve, and the walls
 
@@ -692,6 +693,9 @@ wall - and fails when a stage leaves its band.
 - A wall is a chapter finale or a chapter's miniboss stage, stage 6 of every chapter, read from
   `StageDef.IsMiniboss` (`MidChapterWallStageIdsOf`). Until Pinoy's campaign landed the two
   mid-chapter walls were a hard-coded `1-9` and `2-6`.
+
+These are the band rules on `main`. A pending branch (see **In progress**) rewrites them as a
+per-stage power band and a CEIL band by kind.
 
 **The simulated player here is the wall rule's reference player, not the one who fuses.**
 FUSION ACCELERATES A WALL, IT NEVER GATES ONE: every wall must be passable with levels at the cap and
@@ -1250,6 +1254,8 @@ the sweep does not. CI runs `build-check.ps1` on every push and pull request.
 `DevHarness.exe --ceil-reconcile [stage [levels]]` is a second development aid: it reads the solver's
 and the guard's CEIL side by side against a 4,000-sample reference, and it is how the `1-12`
 disagreement under **The instruments** was settled.
+A pending branch (see **In progress**) adds `--relevel` and `--wall-modes` beside it, and
+`Tools/solve-recommended-power.ps1` must not be re-run on that branch.
 
 **The nightly run needs a desktop, and its task now says so.** The 03:30 task was
 registered with an S4U logon, which has no interactive desktop, so since 2026-10-13 the GUI editor
@@ -1358,9 +1364,43 @@ enemies without sheets), and the battles of chapters 2 to 6 (60 stages) have no 
 
 A branch is named here when it holds work worth naming, and only while it is unmerged.
 
-None. The battle stats, the battle HUD, the sprite resolution pass, the daily loop and the first session with its
-unlock table are all in the tree and are described under **Campaign and progression**, **Battle
-presentation and art**, **The daily loop**, **The first session, and the unlock table** and **Tooling**.
+**`run/r6-economy`, PENDING THE OWNER'S SIGN-OFF, not merged.** It applies the R4 economy proposal
+(`Docs/ECONOMY-PROPOSAL-R4.md`, candidate F) to `campaign.json`. The band rules, `recommendedPower`
+and solver described elsewhere in this file are those of `main`. Merging is the owner's call: any
+`campaign.json` edit moves `ContentVersion` and retires every recorded guild dungeon replay.
+
+- **Content.** First-clear gold is pulled down from `1-7` to `2-12` (half from `1-12` to `2-3`) and
+  is back on the old curve at `3-1`.
+  Idle gold rises from 0.80 purses an hour to 1.00 by `3-1`. Enemy levels and `recommendedPower` are
+  re-solved from `1-7` on, with chapter 2 on walls at about x1.03 to x1.20 of the reference player.
+  `1-1` to `1-6`, purses, shards, account XP, the per-wave drip and fusion pacing are untouched.
+- **How.** `Tools/economy_r4_rewards.py`, `economy_r4_levers.py`, `economy_r4_ratchet.py` and
+  `economy_r4_lib.py`, from `Tools/economy-r4-candidate-F.txt`, the converged `recommendedPower` of
+  all 72 stages. The ratchet was not re-run. `Tools/solve-recommended-power.ps1` keeps its old
+  `SolverMiddle*` values and re-running it would undo the proposal.
+- **Bands.** In `Tools/DevHarness/Program.cs` the power band is read per stage (`PowerBandFor`) and
+  the CEIL band by kind (`IsCeilWall`, `IsCeilBreezy`, `CeilKindOf`). They were rewritten with the
+  content, so check the result against the owner's target table in the proposal, not against itself.
+- **Flags.** `--wall-modes` picks which players `--wall-study` walks. `--relevel` re-searches enemy
+  levels to the CEIL targets (ordinary 85%, walls 65%) in a content copy. Neither is part of the gate.
+- **Income check.** `CheckEconomyRespondsToIncome` now walks 8 matched players at 1x and 2.5x income
+  and guards the mean entry ratio over `4-1` to `4-6`, before level caps bind, at a bar of 0.50.
+  `main` reads +0.94 and the branch +1.00. The late reading is printed only (`main` +0.31, branch
+  -0.11, per-player spread about 0.5, so draw noise). Fixed as an instrument, not by tuning content.
+- **Gate.** `Tools/build-check.ps1` reads all checks passed. 195 of 216 stage fingerprint lines moved,
+  on 65 stages (`1-7` to `1-12`, and chapters 2 to 6 except `3-1`, whose enemy levels did not
+  change), and were re-baselined. The 470 hero and 450 talent fingerprints are unmoved.
+  `CheckFusionNeverGates` passes: all 20 walks that never convert or ascend finish.
+- **Pace** (8 walks, reference player, entry power over `recommendedPower`). Chapter 1 from `1-7`
+  reads x1.150, 1.110, 1.079, 1.029, 1.000 and x0.936 at `1-12`, against x1.270 to x1.184 and x0.999
+  before. Chapters 2 to 6 read x1.018 to x1.214, and 21 of the 48 stages in chapters 3 to 6 are above x1.1. Walls cost more
+  extra sittings in the tail (worst over 8 walks: `2-12` 28, `2-6` 9, `3-6` 12, `5-6` 8; over the 20
+  walks of `CheckFusionNeverGates`, `2-6` is 12) while the median stays 0 or 1. The fusing player pays no extra sittings from `2-6` on. The
+  pace report's finale target (median 2 to 4 extra sittings) is missed before and after.
+- **Not checked.** Whether the harness reference walk follows the unlock table.
+
+When it merges, this entry moves to **Already done** and its facts move into **The economy curve**
+and **The campaign power curve, and the walls**, stated from the files.
 
 ## Next
 
@@ -1370,7 +1410,9 @@ In order.
    player who wears armor and fuses from the first stage. The walks now spend a feature only once
    its stage is cleared, and the geared CEIL band and the power band fail at the values under **The
    instruments**. One more open point for it: the `2-1` walk shows armor 0 although armor unlocks at
-   `1-12`.
+   `1-12`. The pending economy branch (see **In progress**) sets `recommendedPower` from the
+   reference walk in the harness. Whether that walk follows the unlock table has not been checked;
+   check it before both retunes are settled.
 1. **What the fidelity passes left.** Pass 3 closed C13 and every finding pass 2 recorded as left
    for later. What remains is **G1, G2 and G3**, the three proposed primitives not built, which
    would close groups 25, 30 and 23, and one unmeasured suspicion: a counter the per-target budget
