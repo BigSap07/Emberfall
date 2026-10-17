@@ -102,7 +102,7 @@ def audio_meta(guid, music, mono):
         "    quality: %s\n"
         "    conversionMode: 0\n"
         "    preloadAudioData: %d\n"
-        "  platformSettingsOverride: {}\n"
+        "  platformSettingOverrides: {}\n"
         "  forceToMono: %d\n"
         "  normalize: 1\n"
         "  loadInBackground: %d\n"

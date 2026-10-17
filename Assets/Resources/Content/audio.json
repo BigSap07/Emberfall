@@ -129,7 +129,7 @@
       "id": "ui.tap",
       "channel": "ui",
       "trim": 0.32,
-      "cooldown": 0.03,
+      "cooldown": 0.13,
       "volume": 0.7,
       "files": [
         "sfx/Fantasy Inventory & UI Sounds Pack/WAV/UI_Select_01",
@@ -145,7 +145,7 @@
       "id": "ui.confirm",
       "channel": "ui",
       "trim": 0.55,
-      "cooldown": 0.05,
+      "cooldown": 0.13,
       "volume": 0.65,
       "files": [
         "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Magical_Click_01",
@@ -159,7 +159,7 @@
     {
       "id": "ui.back",
       "channel": "ui",
-      "cooldown": 0.05,
+      "cooldown": 0.13,
       "volume": 0.7,
       "files": [
         "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Close_Book_01",
@@ -175,7 +175,7 @@
       "channel": "ui",
       "pitch": 0.6,
       "trim": 0.3,
-      "cooldown": 0.12,
+      "cooldown": 0.13,
       "volume": 0.8,
       "files": [
         "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_01",
@@ -190,7 +190,7 @@
     {
       "id": "ui.reward",
       "channel": "ui",
-      "cooldown": 0.06,
+      "cooldown": 0.13,
       "volume": 0.8,
       "files": [
         "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_01",
@@ -345,7 +345,7 @@
     {
       "id": "battle.hit",
       "channel": "sfx",
-      "cooldown": 0.04,
+      "cooldown": 0.13,
       "priority": 1,
       "volume": 0.9,
       "files": [
@@ -365,7 +365,7 @@
       "id": "battle.crit",
       "channel": "sfx",
       "pitch": 0.85,
-      "cooldown": 0.06,
+      "cooldown": 0.13,
       "priority": 2,
       "volume": 1.0,
       "files": [
@@ -410,7 +410,7 @@
       "id": "battle.heal",
       "channel": "sfx",
       "trim": 1.1,
-      "cooldown": 0.12,
+      "cooldown": 0.13,
       "priority": 1,
       "volume": 0.7,
       "files": [
@@ -428,7 +428,7 @@
     {
       "id": "battle.buff",
       "channel": "sfx",
-      "cooldown": 0.12,
+      "cooldown": 0.13,
       "priority": 1,
       "volume": 0.7,
       "files": [
@@ -443,7 +443,7 @@
       "id": "battle.debuff",
       "channel": "sfx",
       "trim": 1.1,
-      "cooldown": 0.12,
+      "cooldown": 0.13,
       "priority": 1,
       "volume": 0.7,
       "files": [
@@ -455,7 +455,7 @@
       "id": "battle.shield",
       "channel": "sfx",
       "trim": 1.0,
-      "cooldown": 0.12,
+      "cooldown": 0.13,
       "priority": 1,
       "volume": 0.6,
       "files": [
