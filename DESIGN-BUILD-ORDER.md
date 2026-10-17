@@ -1064,6 +1064,14 @@ are lost. Apply 0015 before handing out a cloud build. `TelemetryChecks` and
 `CloudChecks.CheckMigrationGrants` prove
 the schema, the consent rules and the INSERT-only grants.
 
+### Real audio
+
+`Assets/Resources/Content/audio.json` maps 49 cues to 113 of the owner's wav files through
+`AudioService` behind the `Sfx` door. Music cues are empty because no music was supplied. The
+settings screen has music, effects and interface sliders plus a mute (`AudioPrefs`, `PlayerPrefs`,
+60/80/70), and `credits.txt` names the packs. The rollback is `realAudio` false in `audio.json`.
+See `Docs/DESIGN-AUDIO.md`.
+
 ### UI, and the Hub's four layers
 
 uGUI, built entirely in code, scene deliberately near-empty. `ScreenRouter` moves between the
