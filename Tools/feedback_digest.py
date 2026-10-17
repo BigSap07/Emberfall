@@ -69,7 +69,9 @@ EVENTS FILE (optional)
     a blank. Small numbers are indications, not statistics.
 
 EXIT CODE
-    0 digest written, 2 bad arguments or unreadable inbox or events file.
+    0 digest written, 2 bad arguments, unreadable inbox or events file, or --out naming a file
+    that is not a digest. --out refuses a file that is not a digest: only a missing file, an empty
+    file or an earlier digest (first line "# Playtest feedback digest") is overwritten.
 """
 
 import argparse
@@ -84,6 +86,7 @@ import sys
 from collections import Counter, OrderedDict, defaultdict
 
 DEFAULT_INBOX = r"D:\Emberfall\playtest-feedback"
+DIGEST_HEADING = "# Playtest feedback digest"
 
 # ---------------------------------------------------------------------------- the questions
 
@@ -698,7 +701,7 @@ def one_line(text, limit=None):
 def build_digest(inbox, feedbacks, skipped, rows, events_name, generated):
     out = []
     w = out.append
-    w("# Playtest feedback digest")
+    w(DIGEST_HEADING)
     w("")
     if not feedbacks:
         w("No tester feedback has been dropped in the inbox yet (`%s` holds no tester files)." % inbox)
@@ -872,6 +875,16 @@ def main(argv=None):
     generated = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     lines = build_digest(inbox, feedbacks, skipped, rows, events_name, generated)
     body = sanitize("\n".join(lines).rstrip() + "\n")
+
+    if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+        try:
+            with io.open(out_path, "r", encoding="utf-8-sig", errors="replace") as f:
+                first = f.readline().strip()
+        except OSError:
+            first = None
+        if first != DIGEST_HEADING:
+            sys.stderr.write("refusing to overwrite %s: it is not a digest\n" % out_path)
+            return 2
 
     parent = os.path.dirname(os.path.abspath(out_path))
     if not os.path.isdir(parent):
