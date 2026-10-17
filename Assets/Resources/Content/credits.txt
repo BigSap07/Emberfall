@@ -1,6 +1,4 @@
 SOUND
-Spell and summon sound effects by UNKAI SOUND.
-Interface and inventory sounds from the Fantasy Inventory & UI Sounds Pack.
-Sound packs used: Fantasy Inventory & UI Sounds Pack, ArcaneSpell, CastOnly, CrystalSpell, DarkCrystal, DarkSpell, EarthSpellCast, FireSpell, FrostSpell, HolySpell, LightSpell, RaySpell, SlowSpell, SpiritSpell, SummonCreature, SummonFireCreature, SummonSpirit, SummonThunderCreature, WaterSpell, WindSpell.
+Spell and summon sound effects: "Combat Magic Spells" by AD Sounds.
+Interface, coin and hit sounds: "Fantasy Inventory & UI Sounds Pack" by Daydream Sound.
 There is no music in this version.
-License files were not supplied with the audio; credits to be confirmed by the owner.

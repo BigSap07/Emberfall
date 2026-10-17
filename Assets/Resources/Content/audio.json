@@ -543,11 +543,13 @@
       "priority": 2,
       "volume": 0.7,
       "files": [
-        "sfx/FrostSpellv4/SFX_FrostSpellCastv4",
-        "sfx/FrostSpellv5/SFX_FrostSpellCastv5",
-        "sfx/WaterSpellv1/SFX_WaterSpellv1"
+        "sfx/WaterSpellv1/SFX_WaterSpellv1",
+        "sfx/WaterSpellv1/SFX_WaterSpellBubblesv1"
       ],
-      "note": "DEFAULT TAKEN: Tide has one water pack with no cast; frost casts, and the water body is a trimmed cast variant; the skill cast"
+      "layers": [
+        { "files": ["sfx/FrostSpellv4/SFX_FrostSpellCastv4", "sfx/FrostSpellv5/SFX_FrostSpellCastv5"], "volume": 0.35 }
+      ],
+      "note": "Tide: WaterSpell pack (owner); frost only as a quiet second layer; the skill cast"
     },
     {
       "id": "battle.impact.tide",
@@ -557,14 +559,13 @@
       "priority": 2,
       "volume": 0.8,
       "files": [
-        "sfx/FrostSpellv5/SFX_FrostSpellExplodev5",
-        "sfx/FrostSpellv2/SFX_FrostSpellReleasev2",
-        "sfx/FrostSpellv4/SFX_FrostSpellReleasev4"
+        "sfx/WaterSpellv1/SFX_WaterSpellOnlyBubblesv1",
+        "sfx/WaterSpellv1/SFX_WaterSpellBubblesv1"
       ],
       "layers": [
-        { "files": ["sfx/WaterSpellv1/SFX_WaterSpellOnlyBubblesv1"], "volume": 0.4 }
+        { "files": ["sfx/FrostSpellv5/SFX_FrostSpellExplodev5", "sfx/FrostSpellv2/SFX_FrostSpellReleasev2", "sfx/FrostSpellv4/SFX_FrostSpellReleasev4"], "volume": 0.35 }
       ],
-      "note": "DEFAULT TAKEN: Tide has one water pack with no impact; frost impacts with water bubbles layered under them; the skill impact"
+      "note": "Tide: WaterSpell pack (owner); frost only as a quiet second layer; the skill impact"
     },
     {
       "id": "battle.cast.verdant",

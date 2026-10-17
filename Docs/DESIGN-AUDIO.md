@@ -162,15 +162,17 @@ original name plus `_loop`.
 
 - No music was supplied, so music cues are empty. The victory and defeat stingers are music, so
   `battle.victory` and `battle.defeat` are separate sound effects (a loot chime, a dark thud).
-- The packs have no water, error, back, level up, unlock or death sound. The closest sound is used
-  and the cue's `note` in `audio.json` says which. Tide uses frost for its cast and impact with water
-  bubbles under the impact.
+- The packs have no error, back, level up, unlock or death sound. The closest sound is used and the
+  cue's `note` in `audio.json` says which.
+- Tide uses the WaterSpell pack for its cast and impact, as the owner asked. Frost is only a quiet
+  second layer under the water.
 - `ui.unlock` plays the first time a newly unlocked feature's screen is opened.
 - One master mute, not one per channel.
 - Only the files a cue uses are copied, not all 653.
-- No license or readme came with the packs. `credits.txt` names UNKAI SOUND, as the run prompt
-  does, lists the pack folders, and says plainly that license files were not supplied. No author
-  or link was invented. The owner should confirm the wording against the licenses.
+- `credits.txt` names exactly the two packs the owner bought: "Combat Magic Spells" by AD Sounds
+  (spells and summons) and "Fantasy Inventory & UI Sounds Pack" by Daydream Sound (interface,
+  coins, hits). Every spell and summon folder is part of the first pack. No license files came
+  with the audio.
 
 ## What to listen for
 

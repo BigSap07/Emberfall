@@ -561,8 +561,11 @@ namespace Emberfall.DevHarness
         {
             string creditsPath = Path.Combine(contentDir, "credits.txt");
             string credits = File.Exists(creditsPath) ? File.ReadAllText(creditsPath) : "";
-            Check(credits.Length > 0 && credits.Contains("UNKAI SOUND"), "credits.txt exists and credits UNKAI SOUND");
-            Check(credits.Contains("License files were not supplied"), "credits.txt says the license files were not supplied (nothing invented about authors or links)");
+            // The owner named exactly two packs: every spell and summon folder is Combat Magic Spells, the UI folder is the other.
+            const string spellPack = "\"Combat Magic Spells\" by AD Sounds";
+            const string uiPack = "\"Fantasy Inventory & UI Sounds Pack\" by Daydream Sound";
+            Check(credits.Contains(spellPack) && credits.Contains(uiPack), "credits.txt names the two packs and their makers: Combat Magic Spells by AD Sounds, Fantasy Inventory & UI Sounds Pack by Daydream Sound");
+            Check(credits.IndexOf("UNKAI", StringComparison.OrdinalIgnoreCase) < 0, "credits.txt does not credit UNKAI SOUND (never bought)");
 
             List<string> uncredited = new List<string>();
             string sfxRoot = Path.Combine(audioRoot, "sfx");
@@ -571,11 +574,12 @@ namespace Emberfall.DevHarness
                 foreach (string dir in Directory.GetDirectories(sfxRoot))
                 {
                     string pack = Path.GetFileName(dir);
-                    string family = Regex.Replace(pack, @"v\d+$", "");
-                    if (!credits.Contains(family)) uncredited.Add(pack);
+                    bool ui = pack == "Fantasy Inventory & UI Sounds Pack";
+                    bool spell = Regex.IsMatch(pack, @"(Spell|Summon|Cast|Crystal|Frost|Thunder)[A-Za-z]*v\d+$");
+                    if (!ui && !spell) uncredited.Add(pack);
                 }
             }
-            Check(uncredited.Count == 0, "every sound pack folder in use is named in credits.txt" + (uncredited.Count > 0 ? ": NOT NAMED " + string.Join(", ", uncredited.ToArray()) : ""));
+            Check(uncredited.Count == 0, "every sound folder in use belongs to one of the two credited packs" + (uncredited.Count > 0 ? ": UNKNOWN " + string.Join(", ", uncredited.ToArray()) : ""));
 
             string settingsPath = Path.Combine(root, "Assets", "Scripts", "UI", "Screens", "SettingsScreen.cs");
             string settings = File.Exists(settingsPath) ? File.ReadAllText(settingsPath) : "";
