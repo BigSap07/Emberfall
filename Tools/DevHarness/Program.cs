@@ -20585,6 +20585,8 @@ namespace Emberfall.DevHarness
         /// written to campaign.json, and the restore is unconditional.
         /// </summary>
         private const float IncomeProbeMultiplier = 2.5f;
+        private const int IncomeProbeSeeds = 8;
+        private const int IncomeProbeEarlyStages = 6;
 
         private static void CheckEconomyRespondsToIncome(ContentDatabase db)
         {
@@ -20603,17 +20605,24 @@ namespace Emberfall.DevHarness
             // and the gold-only response is still printed beside it as a reading.
 
 
-            // Set from the measured spread, not from a wish. The broken model moved 0.03 on this
-            // input; the fixed one moves about 0.16. The bar sits at 0.10 - more than three times
-            // the broken signature, and well clear of the working value so ordinary content tuning
-            // cannot trip it.
+            // WHAT IS GUARDED IS THE EARLY WINDOW, not the late-campaign ratio, and the reason is a
+            // measurement. The late ratio is read at 6-10 to 6-12, where a player is level-capped and
+            // sits near x17 of recommendedPower; there the extra income has nowhere to go and the
+            // reading is which random 5-star a conversion rolled. Over 8 matched players it read
+            // +0.31 on the content before the R4 economy proposal (spread -0.36 to +0.89) and -0.11
+            // on the content after it (spread -0.89 to +0.65): one standard error is about 0.2, so
+            // neither number differs from zero, from the other, or from the 0.1 bar. The first six
+            // scaled stages are read before the caps bind. There every one of the 8 players moved
+            // the right way, +0.94 on the old content (spread 0.88 to 1.03) and +1.00 on the new
+            // (spread 0.93 to 1.06), nine times the bar and a spread of a tenth.
             //
-            // It is not set higher because 0.16 is genuinely the ceiling, for a reason the line
-            // below prints: at 2.5x gold, 49% of sittings end CAP-BLOCKED against 7.3% at 1x. Gold
-            // buys hero levels, and hero levels stop at each hero's own cap, which only an
-            // ascension raises. Past the cap the extra gold has nowhere to go. That is the game's
-            // design working as written, so demanding a bigger response here would be demanding
-            // the model lie.
+            // The bar stays 0.10. The broken model moved 0.03 on this input; the early window of a
+            // working one moves about 1.0, so the bar sits more than three times the broken
+            // signature and a tenth of the working value. An early window near 0.03 means the link
+            // is severed again.
+            //
+            // The late reading is still printed, with its per-player spread, because a late reading
+            // that is quiet is information about the caps; it is just not a reading to fail a build on.
             const float MinimumResponse = 0.10f;
 
             List<StageDef> scaled = new List<StageDef>();
@@ -20625,8 +20634,14 @@ namespace Emberfall.DevHarness
                 return;
             }
 
-            EconomyRun poor = SimulateEconomy(db, false);
-            float poorRatio = LateCampaignRatio(poor);
+            // EVERY READING IS TAKEN OVER IncomeProbeSeeds PLAYERS, not one. One walk's late ratio is one
+            // draw of which 5-star a conversion rolled (F3), and the same check read -0.62 to +0.89 on
+            // content that differed by one idle multiplier. The poor and rich walks of a seed share
+            // their first seed (WalkSeed), so a seed is a matched pair; the response is the mean over
+            // the pairs and its spread is printed beside it.
+            List<EconomyRun> poorRuns = new List<EconomyRun>();
+            for (int k = 0; k < IncomeProbeSeeds; k++) poorRuns.Add(SimulateEconomy(db, false, WalkSeed(k)));
+            EconomyRun poor = poorRuns[0];
 
             int[] gold = new int[scaled.Count];
             int[] firstClear = new int[scaled.Count];
@@ -20644,8 +20659,8 @@ namespace Emberfall.DevHarness
                 idleShards[i] = scaled[i].IdleShardsPerHour;
             }
 
-            float richRatio, goldOnlyRatio;
-            EconomyRun rich = null;
+            List<EconomyRun> goldRuns = new List<EconomyRun>();
+            List<EconomyRun> richRuns = new List<EconomyRun>();
             try
             {
                 for (int i = 0; i < scaled.Count; i++)
@@ -20654,15 +20669,14 @@ namespace Emberfall.DevHarness
                     scaled[i].FirstClearGold = (int)(firstClear[i] * Multiplier);
                     scaled[i].IdleGoldPerHour = (int)(idle[i] * Multiplier);
                 }
-                goldOnlyRatio = LateCampaignRatio(SimulateEconomy(db, false));
+                for (int k = 0; k < IncomeProbeSeeds; k++) goldRuns.Add(SimulateEconomy(db, false, WalkSeed(k)));
                 for (int i = 0; i < scaled.Count; i++)
                 {
                     scaled[i].RewardShards = (int)(shards[i] * Multiplier);
                     scaled[i].FirstClearShards = (int)(firstShards[i] * Multiplier);
                     scaled[i].IdleShardsPerHour = (int)(idleShards[i] * Multiplier);
                 }
-                rich = SimulateEconomy(db, false);
-                richRatio = LateCampaignRatio(rich);
+                for (int k = 0; k < IncomeProbeSeeds; k++) richRuns.Add(SimulateEconomy(db, false, WalkSeed(k)));
             }
             finally
             {
@@ -20676,29 +20690,51 @@ namespace Emberfall.DevHarness
                     scaled[i].IdleShardsPerHour = idleShards[i];
                 }
             }
+            EconomyRun rich = richRuns[0];
 
-            float response = richRatio - poorRatio;
+            int firstScaled = db.AllStages.Count / 2;
+            float[] lateResponse = new float[IncomeProbeSeeds];
+            float[] earlyResponse = new float[IncomeProbeSeeds];
+            float[] goldOnlyLate = new float[IncomeProbeSeeds];
+            for (int k = 0; k < IncomeProbeSeeds; k++)
+            {
+                lateResponse[k] = LateCampaignRatio(richRuns[k]) - LateCampaignRatio(poorRuns[k]);
+                goldOnlyLate[k] = LateCampaignRatio(goldRuns[k]) - LateCampaignRatio(poorRuns[k]);
+                earlyResponse[k] = EarlyEntryRatio(richRuns[k], firstScaled) - EarlyEntryRatio(poorRuns[k], firstScaled);
+            }
+            float poorRatio = 0f, richRatio = 0f;
+            for (int k = 0; k < IncomeProbeSeeds; k++) { poorRatio += LateCampaignRatio(poorRuns[k]); richRatio += LateCampaignRatio(richRuns[k]); }
+            poorRatio /= IncomeProbeSeeds; richRatio /= IncomeProbeSeeds;
+            float response = Mean(lateResponse);
+            float earlyMean = Mean(earlyResponse);
+
             Line("  " + scaled.Count + " stages (the back half of the campaign) at " + Fmt(Multiplier)
-                 + "x income - gold and shards, reward, first clear and idle rate together.");
-            Line("  late-campaign power ratio: x" + Fmt(poorRatio) + " -> x" + Fmt(richRatio)
-                 + "   response " + Fmt(response));
-            Line("  gold alone, reported: x" + Fmt(poorRatio) + " -> x" + Fmt(goldOnlyRatio)
-                 + "   response " + Fmt(goldOnlyRatio - poorRatio));
+                 + "x income - gold and shards, reward, first clear and idle rate together, "
+                 + IncomeProbeSeeds + " matched players.");
+            Line("  late-campaign power ratio (last three stages reached): x" + Fmt(poorRatio) + " -> x" + Fmt(richRatio)
+                 + "   response " + Fmt(response) + " (mean of " + IncomeProbeSeeds + ", spread "
+                 + Fmt(Min(lateResponse)) + " to " + Fmt(Max(lateResponse)) + ")");
+            Line("  per player, late: " + JoinFloats(lateResponse));
+            Line("  early window (the first " + IncomeProbeEarlyStages + " scaled stages, entry ratio, before the caps bind): response "
+                 + Fmt(earlyMean) + " (spread " + Fmt(Min(earlyResponse)) + " to " + Fmt(Max(earlyResponse)) + ")");
+            Line("  per player, early: " + JoinFloats(earlyResponse));
+            Line("  gold alone, reported: late response " + Fmt(Mean(goldOnlyLate)));
             // Why the response is not larger, stated rather than guessed at: gold buys hero levels,
             // and hero levels stop at each hero's cap, which star tier and ascension tier set and
             // gold cannot move (F7). Past the cap the extra gold has nowhere to go, and the share
             // of sittings that ended holding gold they could not spend says how much of the 2.5x
             // hit that wall.
-            Line("  sittings that ended CAP-BLOCKED: " + Pct(CapBlockedShare(poor))
+            Line("  sittings that ended CAP-BLOCKED (first player): " + Pct(CapBlockedShare(poor))
                  + " at 1x, " + Pct(CapBlockedShare(rich)) + " at " + Fmt(Multiplier) + "x"
                  + "   (gold buys levels; levels stop at each hero's cap, which only ascension raises)");
             Line("  The old one-session-per-attempt model responded about 0.03 to this same input,");
             Line("  which is how it was caught. Anything near that means the link is severed again.");
             ReportIncomeAbsorption(db, poor, rich);
 
-            Check(response > MinimumResponse,
+            Check(earlyMean > MinimumResponse,
                   "the economy model responds to a " + Fmt(Multiplier) + "x change in authored income"
-                  + " (moved " + Fmt(response) + ", needs more than " + Fmt(MinimumResponse) + ")");
+                  + " (early window moved " + Fmt(earlyMean) + " over " + IncomeProbeSeeds + " matched players, needs more than "
+                  + Fmt(MinimumResponse) + "; the late reading moved " + Fmt(response) + ", reported only)");
             Line("");
         }
 
@@ -20776,6 +20812,33 @@ namespace Emberfall.DevHarness
         /// <summary>Mean power-to-recommendedPower ratio over the last three stages reached. This is
         /// the column the late-chapter underpowered symptom is read off, so it is the one the
         /// responsiveness guard watches.</summary>
+        /// <summary>Mean entry ratio over the IncomeProbeEarlyStages stages from firstStage on, for the
+        /// stages the run reached. The reading taken BEFORE the player saturates: right after the scaled
+        /// half begins, hero levels are not yet at their caps, so income still has somewhere to go.</summary>
+        private static float EarlyEntryRatio(EconomyRun run, int firstStage)
+        {
+            float total = 0f;
+            int counted = 0;
+            for (int i = firstStage; i < run.Stages.Count && i < firstStage + IncomeProbeEarlyStages; i++)
+            {
+                EconomyStageOutcome o = run.Stages[i];
+                if (o.Stage == null || o.Stage.RecommendedPower <= 0) continue;
+                total += o.EntryRatio;
+                counted++;
+            }
+            return counted > 0 ? total / counted : 0f;
+        }
+
+        private static float Mean(float[] v) { float s = 0f; for (int i = 0; i < v.Length; i++) s += v[i]; return v.Length > 0 ? s / v.Length : 0f; }
+        private static float Min(float[] v) { float m = float.MaxValue; for (int i = 0; i < v.Length; i++) if (v[i] < m) m = v[i]; return m; }
+        private static float Max(float[] v) { float m = float.MinValue; for (int i = 0; i < v.Length; i++) if (v[i] > m) m = v[i]; return m; }
+        private static string JoinFloats(float[] v)
+        {
+            string[] s = new string[v.Length];
+            for (int i = 0; i < v.Length; i++) s[i] = Fmt(v[i]);
+            return string.Join(", ", s);
+        }
+
         private static float LateCampaignRatio(EconomyRun run)
         {
             float total = 0f;
