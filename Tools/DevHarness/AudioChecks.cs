@@ -521,6 +521,15 @@ namespace Emberfall.DevHarness
                   && prefs.Contains("PlayerPrefs") && !prefs.Contains("Profile") && !prefs.Contains("SaveService"),
                   "WIRING (reads source): the volumes default to 60, 80 and 70 and live in PlayerPrefs, not in the save");
 
+            // A script or content file without a .meta gets a fresh guid on every machine's import.
+            List<string> noMeta = new List<string>();
+            foreach (string cs in Directory.GetFiles(scripts, "Audio*.cs", SearchOption.AllDirectories))
+                if (!File.Exists(cs + ".meta")) noMeta.Add(Path.GetFileName(cs));
+            foreach (string name in new string[] { "audio.json", "credits.txt" })
+                if (!File.Exists(Path.Combine(root, "Assets", "Resources", "Content", name + ".meta"))) noMeta.Add(name);
+            Check(noMeta.Count == 0, "every Audio*.cs under Assets/Scripts, audio.json and credits.txt has a .meta"
+                  + (noMeta.Count == 0 ? "" : ": missing for " + string.Join(", ", noMeta.ToArray())));
+
             // Saved to disk when it is changed, not only when the page is left.
             int mutedAt = prefs.IndexOf("public static bool Muted", StringComparison.Ordinal);
             int mutedEnd = mutedAt < 0 ? -1 : prefs.IndexOf("/// <summary>0 to 1", mutedAt, StringComparison.Ordinal);
