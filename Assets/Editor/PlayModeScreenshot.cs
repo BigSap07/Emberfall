@@ -560,12 +560,45 @@ namespace Emberfall.EditorTools
             return name == "HubLoopOff" ? 2 : 0;
         }
 
+        // A HEARTBEAT, because a run that goes quiet after Play mode starts cannot tell "the editor
+        // stopped ticking" from "ticking but not playing" from "ticking, playing, and the pump
+        // returning early". One line the first time the pump sees an active run in this domain, then
+        // one every 600 ticks while the run is active.
+        private static bool _beatSeen;
+        private static int _beatTicks;
+
+        // The first ForceGameViewRepaint of a domain is bracketed by two lines. A log with "repaint call
+        // start" and no "repaint call returned" means the call blocked. Both static flags reset with the
+        // domain, so each domain prints its own pair.
+        private static bool _repaintLogged;
+
         private static void Pump()
         {
-            if (!SessionState.GetBool(ActiveKey, false)) return;
+            bool runActive = SessionState.GetBool(ActiveKey, false);
+            if (runActive && (!_beatSeen || ++_beatTicks % 600 == 0))
+            {
+                _beatSeen = true;
+                Debug.Log("PlayModeScreenshot: heartbeat, run active, playing " + EditorApplication.isPlaying
+                          + ", playing or about to " + EditorApplication.isPlayingOrWillChangePlaymode
+                          + ", frame " + SessionState.GetInt(FrameKey, 0) + ", GameApp " + (GameApp.Instance != null));
+            }
+            if (!runActive) return;
             if (!EditorApplication.isPlaying) return; // still transitioning in, or already stopped
 
-            ForceGameViewRepaint();
+            if (!_repaintLogged)
+            {
+                _repaintLogged = true;
+                double startedAt = EditorApplication.timeSinceStartup;
+                Debug.Log("PlayModeScreenshot: repaint call start, editor time " + startedAt.ToString("F3") + " s");
+                ForceGameViewRepaint();
+                Debug.Log("PlayModeScreenshot: repaint call returned, editor time "
+                          + EditorApplication.timeSinceStartup.ToString("F3") + " s, took "
+                          + ((EditorApplication.timeSinceStartup - startedAt) * 1000.0).ToString("F1") + " ms");
+            }
+            else
+            {
+                ForceGameViewRepaint();
+            }
 
             int frame = SessionState.GetInt(FrameKey, 0) + 1;
             SessionState.SetInt(FrameKey, frame);

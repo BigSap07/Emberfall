@@ -203,9 +203,16 @@ namespace Emberfall.Game.Telemetry
             WaitForSecondsRealtime wait = new WaitForSecondsRealtime(PollSeconds);
             // The first send comes a few seconds after launch, then once a minute.
             float sinceFlush = FlushSeconds - 5f;
+            bool firstTick = true;
             while (true)
             {
                 yield return wait;
+                if (firstTick)
+                {
+                    // Proves the player loop is running frames at all, for a log that otherwise goes quiet.
+                    firstTick = false;
+                    Debug.Log("Emberfall: play stats loop is ticking.");
+                }
                 try
                 {
                     Poll();
