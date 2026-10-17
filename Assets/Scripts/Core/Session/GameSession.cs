@@ -332,6 +332,17 @@ namespace Emberfall.Core.Session
             return h;
         }
 
+        /// <summary>
+        /// Tells the daily loop that something it counts just happened. The one door every rule in
+        /// this class uses, and a no-op unless DailyLoopSwitch is on, so with the switch off the
+        /// profile is never touched.
+        /// </summary>
+        private void OrderEvent(OrderKind kind, int amount, long nowUnix)
+        {
+            if (!DailyLoopSwitch.Enabled) return;
+            DailyLoop.Record(this, kind, amount, nowUnix);
+        }
+
         // ------------------------------------------------------------------ hero levelling
 
         /// <summary>
@@ -385,6 +396,14 @@ namespace Emberfall.Core.Session
 
         public LevelUpResult LevelUpHero(HeroInstance hero, int times)
         {
+            return LevelUpHero(hero, times, TimeUtil.NowUnix());
+        }
+
+        /// <summary>The level-up with the clock handed in, so the daily orders it counts toward
+        /// are dated by the caller's clock like every other rule here. The two-argument form reads
+        /// the device clock for it.</summary>
+        public LevelUpResult LevelUpHero(HeroInstance hero, int times, long nowUnix)
+        {
             LevelUpResult result = new LevelUpResult();
             if (hero == null) { result.Message = "No hero selected."; return result; }
             result.NewLevel = hero.Level;
@@ -414,6 +433,7 @@ namespace Emberfall.Core.Session
             result.NewLevel = hero.Level;
             result.Success = result.LevelsGained > 0;
             if (result.Success) TelemetryHooks.HeroLevelUp(result.LevelsGained);
+            if (result.Success) OrderEvent(OrderKind.Level, result.LevelsGained, nowUnix);
             if (!result.Success) result.Message = "Not enough gold.";
             else if (hero.Level >= cap) result.Message = "Level cap reached.";
             return result;
@@ -902,6 +922,7 @@ namespace Emberfall.Core.Session
                 win.Rewards = GrantBattleResult(stage, true, nowUnix,
                                                 paidWaves * WaveDripGold(stage),
                                                 paidWaves * WaveDripAccountXp(stage));
+                OrderEvent(OrderKind.Waves, 1, nowUnix);
                 return win;
             }
 
@@ -910,6 +931,7 @@ namespace Emberfall.Core.Session
             if (nextWave == wave) return win;
 
             win.WaveCleared = true;
+            OrderEvent(OrderKind.Waves, 1, nowUnix);
             if (!firstClear || wave != cursorWave) return win;
             win.Gold = WaveDripGold(stage);
             win.AccountXp = WaveDripAccountXp(stage);
@@ -945,7 +967,11 @@ namespace Emberfall.Core.Session
                 rewards.StageId = stage.Id;
                 return rewards;
             }
-            return GrantBattleResult(stage, true, nowUnix);
+            BattleRewards swept = GrantBattleResult(stage, true, nowUnix);
+            // A sweep stands for the stage's whole ladder, so it counts the waves the stage has: a player with nothing left to fight the long way can still
+            // finish a wave order, which is the one place it differs from RecordLadderWin.
+            OrderEvent(OrderKind.Waves, Math.Max(1, stage.WaveCount), nowUnix);
+            return swept;
         }
 
         /// <summary>
@@ -1234,6 +1260,7 @@ namespace Emberfall.Core.Session
 
             bool firstClear = !Profile.HasClearedStage(stage.Id);
             rewards.FirstClear = firstClear;
+            OrderEvent(OrderKind.Stage, 1, nowUnix);
 
             int gold = stage.RewardGold + (firstClear ? stage.FirstClearGold : 0);
             int shards = stage.RewardShards + (firstClear ? stage.FirstClearShards : 0);
@@ -2306,6 +2333,7 @@ namespace Emberfall.Core.Session
             ProvingRewards rewards = new ProvingRewards();
             rewards.Victory = victory;
             rewards.Standing = Profile.ProvingStanding;
+            OrderEvent(OrderKind.Arena, 1, nowUnix);
 
             // Counted for every attempt, won or lost, before anything else moves - it drives both
             // the ghost bootstrap and the opponent seed, and both need it to advance unconditionally.
@@ -2355,6 +2383,7 @@ namespace Emberfall.Core.Session
             RecitalRewards rewards = new RecitalRewards();
             rewards.Victory = victory;
             rewards.Floor = floor;
+            OrderEvent(OrderKind.Arena, 1, nowUnix);
             if (!victory) return rewards;
 
             Profile.TotalBattlesWon++;
@@ -2451,9 +2480,25 @@ namespace Emberfall.Core.Session
             if (elapsed > report.CapSeconds) { elapsed = (long)report.CapSeconds; report.Capped = true; }
             report.Seconds = elapsed;
 
+            IdleReport yield = IdleYield(elapsed);
+            report.Gold = yield.Gold;
+            report.Shards = yield.Shards;
+            return report;
+        }
+
+        /// <summary>
+        /// What this many seconds of idle income are worth at the frontier as it stands: the one
+        /// formula behind the idle chest (PeekIdle) and behind every daily-loop reward, which are
+        /// priced in hours of this and nowhere else. Reads the profile, writes nothing, and ignores
+        /// the idle cap and the claim clock: only the rate is asked for.
+        /// </summary>
+        public IdleReport IdleYield(long seconds)
+        {
+            IdleReport report = new IdleReport();
+            report.Seconds = seconds;
             StageDef idleStage = FurthestClearedStage;
-            report.Gold = (int)Math.Floor(StatMath.IdleGoldPerSecond(Balance, idleStage) * elapsed);
-            report.Shards = (int)Math.Floor(StatMath.IdleShardsPerSecond(Balance, idleStage) * elapsed);
+            report.Gold = (int)Math.Floor(StatMath.IdleGoldPerSecond(Balance, idleStage) * seconds);
+            report.Shards = (int)Math.Floor(StatMath.IdleShardsPerSecond(Balance, idleStage) * seconds);
             return report;
         }
 
@@ -2521,6 +2566,7 @@ namespace Emberfall.Core.Session
             outcome.Hero = pulled;
             RecordEventActivity(EventActivityKind.SummonPerformed, 1, nowUnix);
             TelemetryHooks.Summon(1);
+            OrderEvent(OrderKind.Summon, 1, nowUnix);
 
             HeroInstance existing = Profile.FindHeroByDefId(pulled.Id);
             if (existing == null)

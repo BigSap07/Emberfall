@@ -447,6 +447,14 @@ namespace Emberfall.Core.Model
         /// </summary>
         public readonly List<string> SeenTips = new List<string>();
 
+        /// <summary>
+        /// The daily loop's memory: today's orders and their progress, the chests, the week's count
+        /// and the login calendar (DESIGN-DAILY-LOOP.md). NEVER NULL. Empty for every profile that
+        /// never had DailyLoopSwitch on, and an empty one is not written to the save. Saved from
+        /// version 22.
+        /// </summary>
+        public DailyLoopState DailyLoop = new DailyLoopState();
+
         /// <summary>Whether this tip or opening is recorded. Null-safe so a caller with no profile
         /// reads "not seen".</summary>
         public static bool HasSeen(PlayerProfile profile, string key)

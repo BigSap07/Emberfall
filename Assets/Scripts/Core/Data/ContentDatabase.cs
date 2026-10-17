@@ -98,6 +98,23 @@ namespace Emberfall.Core.Data
         }
 
         /// <summary>
+        /// The daily orders, the two chests and the login calendar (orders.json,
+        /// DESIGN-DAILY-LOOP.md). Loaded after Load for guild-path.json's reason and NOT part of
+        /// ContentVersion: no fight reads it, so retuning a reward must not retire a guild replay.
+        /// Empty (IsUsable false) on a database that never had it loaded, which the daily loop
+        /// reads as "nothing to offer".
+        /// </summary>
+        public OrdersConfig Orders = new OrdersConfig();
+
+        /// <summary>Parses orders.json into Orders, adding its warnings to Warnings. Does not touch
+        /// ContentVersion; see Orders.</summary>
+        public void LoadOrders(string ordersJson)
+        {
+            Orders = OrdersConfig.FromJson(ordersJson);
+            for (int i = 0; i < Orders.Warnings.Count; i++) Warnings.Add(Orders.Warnings[i]);
+        }
+
+        /// <summary>
         /// Which content this database was built from, as one short string: a hash of the text of
         /// every file handed to Load, in a fixed order.
         ///

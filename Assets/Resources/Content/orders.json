@@ -1,0 +1,69 @@
+{
+  // THE DAILY LOOP - DESIGN-DAILY-LOOP.md. The daily orders, the daily and weekly chests and the
+  // seven day login calendar.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, on purpose, for guild-path.json's reason: nothing
+  // here is read by a fight. Retuning a reward must not retire every guild's replays.
+  // ContentDatabase.LoadOrders reads it after Load. The whole loop is behind DailyLoopSwitch and
+  // stays dark with it off, whatever this file says.
+  //
+  // EVERY REWARD IS HOURS OF IDLE INCOME at the player's frontier, paid by the one idle formula
+  // (GameSession.IdleYield). There is no gold or shard amount in this file on purpose: a fixed
+  // amount is generous in chapter 1 and worthless by chapter 4, and hours scale by themselves.
+  //
+  // EVERY NUMBER BELOW IS A PLACEHOLDER for the balance pass. As set, a player who finishes the
+  // loop every day earns about 2.4 hours of idle income a day from it, 17 hours a week, plus 4
+  // for the weekly chest and 6.5 for one lap of the calendar: roughly a fifth of the 140 hours
+  // a week the idle chest pays at its cap. Raise or lower freely; no code reads the size of a
+  // number.
+
+  // THE POOL. A day's board takes ONE entry of each slot, chosen by the day alone, so the same
+  // day is the same board for everyone with the same unlocks.
+  //   slot      the group. Slots are taken in ascending order.
+  //   kind      waves | stage | level | summon | arena
+  //   target    how many of the kind completes it
+  //   hours     the reward
+  //   text      what the player reads; {0} is the target
+  //   requires  features of which at least one must be unlocked (onboarding.json's names). An
+  //             entry whose features are all locked is NEVER offered.
+  //   fallback  offered only when the slot has no eligible entry of its own, so a slot whose
+  //             feature is still locked is filled with something else instead of left empty
+  "orders": [
+    { "id": "waves_3",   "slot": 0, "kind": "waves",  "target": 3, "hours": 0.25, "text": "Clear {0} waves" },
+    { "id": "waves_5",   "slot": 0, "kind": "waves",  "target": 5, "hours": 0.35, "text": "Clear {0} waves" },
+    { "id": "waves_8",   "slot": 0, "kind": "waves",  "target": 8, "hours": 0.5,  "text": "Clear {0} waves" },
+
+    { "id": "stage_1",   "slot": 1, "kind": "stage",  "target": 1, "hours": 0.25, "text": "Win a stage" },
+    { "id": "stage_2",   "slot": 1, "kind": "stage",  "target": 2, "hours": 0.4,  "text": "Win {0} stages" },
+
+    { "id": "level_1",   "slot": 2, "kind": "level",  "target": 1, "hours": 0.25, "text": "Level a hero up" },
+    { "id": "level_3",   "slot": 2, "kind": "level",  "target": 3, "hours": 0.35, "text": "Level heroes up {0} times" },
+
+    { "id": "summon_1",  "slot": 3, "kind": "summon", "target": 1, "hours": 0.25, "text": "Summon once" },
+
+    { "id": "arena_1",   "slot": 4, "kind": "arena",  "target": 1, "hours": 0.3,  "text": "Fight in the Proving or the Recital",
+      "requires": ["proving", "recital"] },
+    { "id": "arena_2",   "slot": 4, "kind": "arena",  "target": 2, "hours": 0.5,  "text": "Fight {0} times in the Proving or the Recital",
+      "requires": ["proving", "recital"] },
+    { "id": "waves_6f",  "slot": 4, "kind": "waves",  "target": 6, "hours": 0.3,  "text": "Clear {0} waves", "fallback": true }
+  ],
+
+  // Opens when every order on the day's board has been claimed.
+  "dailyChest": { "hours": 0.75 },
+
+  // Opens once every order has been claimed on this many days of one week (Monday to Sunday by
+  // reward day). A chest not opened by the end of its week is gone.
+  "weeklyChest": { "hours": 4, "days": 5 },
+
+  // The login calendar: exactly seven days, repeating. Claim at most one a reward day; a missed
+  // day delays the next reward and skips none. Every reward is shown in advance.
+  "calendar": [
+    { "hours": 0.5 },
+    { "hours": 0.5 },
+    { "hours": 0.5 },
+    { "hours": 1 },
+    { "hours": 1 },
+    { "hours": 1 },
+    { "hours": 2, "label": "Day 7 bonus" }
+  ]
+}

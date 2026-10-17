@@ -277,6 +277,7 @@ namespace Emberfall.DevHarness
             CheckOnboarding(content);
             CheckOnboardingSwitch(content, contentDir);
             CheckTelemetry(content, contentDir);
+            CheckDailyLoop(content, contentDir);
             CheckFeatureUnlockGating(content, contentDir);
             CheckAccounts(content);
             _failures += CloudChecks.Run(content, contentDir);
@@ -4735,6 +4736,8 @@ namespace Emberfall.DevHarness
                 db.LoadGuildTech(File.Exists(techPath) ? File.ReadAllText(techPath) : null);
                 string onboardingPath = Path.Combine(dir, "onboarding.json");
                 db.LoadOnboarding(File.Exists(onboardingPath) ? File.ReadAllText(onboardingPath) : null);
+                string ordersPath = Path.Combine(dir, "orders.json");
+                db.LoadOrders(File.Exists(ordersPath) ? File.ReadAllText(ordersPath) : null);
                 return db;
             }
             catch (Exception ex)
