@@ -96,8 +96,20 @@ namespace Emberfall.Game
         public void Init()
         {
             TextAsset asset = Resources.Load<TextAsset>(ConfigResource);
-            Init(AudioCueConfig.FromJson(asset != null ? asset.text : null));
+            AudioCueConfig config = AudioCueConfig.FromJson(asset != null ? asset.text : null);
+            // One launch with the rollback on, without editing audio.json: set EMBERFALL_REAL_AUDIO=0.
+            // Editor and development builds only; a release build reads the file alone.
+            if ((Application.isEditor || Debug.isDebugBuild)
+                && System.Environment.GetEnvironmentVariable(RealAudioEnvVar) == "0")
+            {
+                config.RealAudio = false;
+                Debug.Log("Emberfall audio: " + RealAudioEnvVar + "=0, real audio is OFF for this run (the original tones play).");
+            }
+            Init(config);
         }
+
+        /// <summary>Set to 0 to force the rollback for one run. See Init.</summary>
+        public const string RealAudioEnvVar = "EMBERFALL_REAL_AUDIO";
 
         /// <summary>Test and capture seam: start from a config the caller built.</summary>
         public void Init(AudioCueConfig config)
@@ -183,6 +195,8 @@ namespace Emberfall.Game
                 return false;
             }
 
+            // layers= counts the EXTRA sources a cue started under its main one (battle.hit carries one:
+            // layers=1 is two sounds playing, the stone hit and the arcane snap). sources= is the sum.
             int layersStarted = 0;
             for (int l = 0; l < def.Layers.Count; l++)
             {
@@ -217,7 +231,7 @@ namespace Emberfall.Game
             AudioCueLog.Record("PLAY", cueId, "ch=" + ChannelName(def.Channel) + " file=" + file
                                + " vol=" + volume.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
                                + " pitch=" + pitch.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)
-                               + " layers=" + layersStarted);
+                               + " layers=" + layersStarted + " sources=" + (1 + layersStarted));
             return true;
         }
 
@@ -312,6 +326,10 @@ namespace Emberfall.Game
         public void ScreenShown(string screenName)
         {
             if (!Enabled) return;
+            // A safety net: no loop (the summon charge) outlives the screen that started it, whatever
+            // way that screen was left.
+            foreach (KeyValuePair<string, Fader> pair in _loops)
+                if (pair.Value.Target > 0.5f) StopLoop(pair.Key, 0.1f);
             string cue;
             if (_config.MusicByScreen.TryGetValue(screenName, out cue)) SetMusic(cue);
         }

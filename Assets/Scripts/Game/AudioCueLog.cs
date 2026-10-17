@@ -16,12 +16,17 @@ namespace Emberfall.Game
     /// variable EMBERFALL_CUE_LOG names one, or when the player was started with -cuelog (the file
     /// is then audio-cue-log.txt in the persistent data path). When a file is on, each line is also
     /// written to the Unity log behind an [AudioCue] prefix. Nothing here changes what plays.
+    ///
+    /// FILE WRITING IS FOR THE EDITOR AND DEVELOPMENT BUILDS ONLY (a release build never touches the
+    /// disk for this), and stops at MaxFileBytes with one closing line, so a forgotten variable
+    /// cannot fill a disk.
     /// </summary>
     public static class AudioCueLog
     {
         public const string EnvVar = "EMBERFALL_CUE_LOG";
         public const int MaxLines = 4000;
         public const int RateLimitPerSecond = 8;
+        public const long MaxFileBytes = 5L * 1024 * 1024;
 
         public static readonly List<string> Lines = new List<string>();
 
@@ -31,6 +36,8 @@ namespace Emberfall.Game
         private static readonly Dictionary<string, Queue<float>> Recent = new Dictionary<string, Queue<float>>();
         private static string _path;
         private static bool _pathResolved;
+        private static long _written;
+        private static bool _capped;
 
         public static string FilePath
         {
@@ -95,9 +102,19 @@ namespace Emberfall.Game
             if (Lines.Count >= MaxLines) Lines.RemoveAt(0);
             Lines.Add(line);
             Resolve();
-            if (string.IsNullOrEmpty(_path)) return;
+            if (string.IsNullOrEmpty(_path) || _capped) return;
             Debug.Log("[AudioCue] " + line);
-            try { File.AppendAllText(_path, line + "\n"); }
+            try
+            {
+                if (_written + line.Length + 1 > MaxFileBytes)
+                {
+                    _capped = true;
+                    File.AppendAllText(_path, "log stopped: it reached " + MaxFileBytes + " bytes\n");
+                    return;
+                }
+                File.AppendAllText(_path, line + "\n");
+                _written += line.Length + 1;
+            }
             catch (Exception) { /* a log that cannot be written must never stop a sound */ }
         }
 
@@ -105,6 +122,7 @@ namespace Emberfall.Game
         {
             if (_pathResolved) return;
             _pathResolved = true;
+            if (!Application.isEditor && !Debug.isDebugBuild) return;
             try
             {
                 string env = Environment.GetEnvironmentVariable(EnvVar);

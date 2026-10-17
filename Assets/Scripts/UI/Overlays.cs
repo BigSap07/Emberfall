@@ -226,6 +226,7 @@ namespace Emberfall.UI
             _onConfirm = null;
             _onCancel = null;
             Close();
+            if (Game.GameApp.Instance != null && Game.GameApp.Instance.Audio != null) Game.GameApp.Instance.Audio.Confirm();
             if (action != null) action();
         }
 

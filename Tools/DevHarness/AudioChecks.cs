@@ -235,6 +235,7 @@ namespace Emberfall.DevHarness
                         int loadType = music ? 2 : 0;
                         int format = music ? 1 : 2;
                         if (!meta.Contains("AudioImporter:")) problem = "not an AudioImporter";
+                        else if (!meta.Contains("platformSettingOverrides:") || meta.Contains("platformSettingsOverride")) problem = "wrong platform override key (Unity 6 writes platformSettingOverrides)";
                         else if (MetaInt(meta, "loadType") != loadType) problem = "loadType " + MetaInt(meta, "loadType") + " not " + loadType;
                         else if (MetaInt(meta, "compressionFormat") != format) problem = "compressionFormat " + MetaInt(meta, "compressionFormat") + " not " + format;
                         else if (MetaInt(meta, "forceToMono") != expectMono) problem = "forceToMono " + MetaInt(meta, "forceToMono") + " not " + expectMono + " at " + seconds.ToString("0.0") + " s";
@@ -485,6 +486,28 @@ namespace Emberfall.DevHarness
                   && battle.Contains("App.Audio.SkillImpact(source.Snapshot.Aspect)"),
                   "WIRING (reads source): the hit sound is played in the Damage event itself, before the number floats, so it lands on the strike; casts and skill impacts key off the caster's aspect; the old tones keep their one-sound-per-hit rule");
 
+            // Sounds that outlive their screen, and sounds the old game never made.
+            string summonPath = Path.Combine(scripts, "UI", "Screens", "SummonScreen.cs");
+            string summon = File.Exists(summonPath) ? File.ReadAllText(summonPath) : "";
+            int hideAt = summon.IndexOf("public override void OnHide()", StringComparison.Ordinal);
+            int hideEnd = hideAt < 0 ? -1 : summon.IndexOf("}", hideAt, StringComparison.Ordinal);
+            string servicePath = Path.Combine(scripts, "Game", "AudioService.cs");
+            string service = File.Exists(servicePath) ? File.ReadAllText(servicePath) : "";
+            int shownAt = service.IndexOf("public void ScreenShown(", StringComparison.Ordinal);
+            int shownEnd = shownAt < 0 ? -1 : service.IndexOf("SetMusic(cue);", shownAt, StringComparison.Ordinal);
+            Check(hideAt >= 0 && hideEnd > hideAt && summon.Substring(hideAt, hideEnd - hideAt).Contains("StopLoop(\"summon.charge\"")
+                  && shownEnd > shownAt && service.Substring(shownAt, shownEnd - shownAt).Contains("StopLoop("),
+                  "WIRING (reads source): the summon charge loop is stopped when the summon screen is left (an abort fires no beat), and every screen change stops any running loop");
+            Check(sfx.Contains("public void Unlock() { Cue(\"ui.unlock\"); }") && sfx.Contains("public void Confirm() { Cue(\"ui.confirm\"); }"),
+                  "WIRING (reads source): unlock and confirm have no old sound, so they are silent with the flag off, as the original game was");
+            string overlayPath = Path.Combine(scripts, "UI", "Overlays.cs");
+            string overlays = File.Exists(overlayPath) ? File.ReadAllText(overlayPath) : "";
+            Check(overlays.Contains(".Audio.Confirm()"), "WIRING (reads source): ui.confirm is played by a dialog's confirm button");
+            string logPath = Path.Combine(scripts, "Game", "AudioCueLog.cs");
+            string log = File.Exists(logPath) ? File.ReadAllText(logPath) : "";
+            Check(log.Contains("Application.isEditor && !Debug.isDebugBuild") && log.Contains("MaxFileBytes"),
+                  "WIRING (reads source): the cue log writes a file only in the editor or a development build, and stops at a size cap");
+
             // The screen holds no audio decisions: it names cues and calls the service.
             string cardPath = Path.Combine(scripts, "UI", "Screens", "AudioSettingsCard.cs");
             string card = File.Exists(cardPath) ? File.ReadAllText(cardPath) : "";
@@ -497,6 +520,30 @@ namespace Emberfall.DevHarness
             Check(prefs.Contains("DefaultMusic = 60") && prefs.Contains("DefaultSfx = 80") && prefs.Contains("DefaultUi = 70")
                   && prefs.Contains("PlayerPrefs") && !prefs.Contains("Profile") && !prefs.Contains("SaveService"),
                   "WIRING (reads source): the volumes default to 60, 80 and 70 and live in PlayerPrefs, not in the save");
+
+            // Saved to disk when it is changed, not only when the page is left.
+            int mutedAt = prefs.IndexOf("public static bool Muted", StringComparison.Ordinal);
+            int mutedEnd = mutedAt < 0 ? -1 : prefs.IndexOf("/// <summary>0 to 1", mutedAt, StringComparison.Ordinal);
+            Check(mutedAt >= 0 && mutedEnd > mutedAt && prefs.Substring(mutedAt, mutedEnd - mutedAt).Contains("Flush();")
+                  && card.Contains("AudioPrefs.Flush()") && card.Contains("IPointerUpHandler") && card.Contains("AddComponent<SliderRelease>()"),
+                  "WIRING (reads source): the mute switch writes to disk when flipped and each slider writes when it is let go");
+
+            // The slider fill: Unity's Slider resets the anchors of the fill and the handle to the full
+            // height of their parent, so the parents carry the thickness and the fill has no offsets.
+            Check(card.Contains("Band(fillArea, trackHeight") && card.Contains("Band(handleArea, HandleSize")
+                  && card.Contains("fr.anchorMax = Vector2.one;") && !card.Contains("fr.offsetMin = new Vector2(0f, -9f)"),
+                  "WIRING (reads source): each slider fill stretches inside a fill area exactly as thick as the track, so it cannot draw as a block");
+
+            // The one-launch rollback, and the play-proof targets that are never swept by the nightly.
+            string serviceText = File.Exists(Path.Combine(scripts, "Game", "AudioService.cs"))
+                ? File.ReadAllText(Path.Combine(scripts, "Game", "AudioService.cs")) : "";
+            Check(serviceText.Contains("EMBERFALL_REAL_AUDIO") && serviceText.Contains("Application.isEditor || Debug.isDebugBuild"),
+                  "WIRING (reads source): EMBERFALL_REAL_AUDIO=0 turns real audio off for one launch, in the editor and development builds only");
+            string shotsPath = Path.Combine(root, "Assets", "Editor", "PlayModeScreenshot.cs");
+            string shots = File.Exists(shotsPath) ? File.ReadAllText(shotsPath) : "";
+            Check(shots.Contains("name == \"AudioSummon\"") && shots.Contains("name == \"AudioFight\"")
+                  && !shots.Contains("Begin(\"Screen:AudioSummon\")") && !shots.Contains("Begin(\"Screen:AudioFight"),
+                  "WIRING (reads source): the AudioSummon and AudioFight capture targets exist and have no literal Begin call, so the nightly does not sweep them");
         }
 
         // ------------------------------------------------------------------ credits
@@ -506,6 +553,7 @@ namespace Emberfall.DevHarness
             string creditsPath = Path.Combine(contentDir, "credits.txt");
             string credits = File.Exists(creditsPath) ? File.ReadAllText(creditsPath) : "";
             Check(credits.Length > 0 && credits.Contains("UNKAI SOUND"), "credits.txt exists and credits UNKAI SOUND");
+            Check(credits.Contains("License files were not supplied"), "credits.txt says the license files were not supplied (nothing invented about authors or links)");
 
             List<string> uncredited = new List<string>();
             string sfxRoot = Path.Combine(audioRoot, "sfx");

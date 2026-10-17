@@ -410,6 +410,7 @@ namespace UnityEngine
         /// <summary>Test seam, not in the real API: the last Log message, so a check can see which
         /// branch of a method ran.</summary>
         public static string LastLog;
+        public static bool isDebugBuild { get { return true; } }
         public static void Log(object message) { LastLog = message == null ? null : message.ToString(); }
         public static void Log(object message, Object context) { }
         public static void LogWarning(object message) { }

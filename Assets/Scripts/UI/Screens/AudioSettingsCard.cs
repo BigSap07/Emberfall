@@ -152,6 +152,13 @@ namespace Emberfall.UI.Screens
         /// <summary>
         /// A sunken track, an ember fill and a gold handle, with a transparent full-height hit
         /// area behind them so the touch target is the row, not the thin track.
+        ///
+        /// THE SLIDER OWNS THE ANCHORS OF ITS FILL AND HANDLE. Unity's Slider resets both rects'
+        /// anchors to the full height of their parent and moves only the horizontal pair, so a fill
+        /// given its own thin offsets inside a tall parent came out as a block the height of the
+        /// row (the first capture showed it). The fix is to make the PARENTS the right height:
+        /// the fill area is exactly the track's thickness, the handle area exactly the handle's,
+        /// and the fill and the handle stretch to fill them with no offsets of their own.
         /// </summary>
         private static Slider MakeSlider(RectTransform parent, float x, float width)
         {
@@ -163,33 +170,32 @@ namespace Emberfall.UI.Screens
             hit.color = new Color(0f, 0f, 0f, 0f);
             hit.raycastTarget = true;
 
+            const float trackHeight = 18f;
             Image track = UIBuilder.Panel("Track", root, Emberforge.SunkenMid, 0);
             track.raycastTarget = false;
-            RectTransform tr = track.rectTransform;
-            tr.anchorMin = new Vector2(0f, 0.5f);
-            tr.anchorMax = new Vector2(1f, 0.5f);
-            tr.offsetMin = new Vector2(0f, -9f);
-            tr.offsetMax = new Vector2(0f, 9f);
+            Band(track.rectTransform, trackHeight, 0f);
 
             RectTransform fillArea = UIBuilder.Node("FillArea", root);
-            Stretch(fillArea, HandleSize * 0.5f);
+            Band(fillArea, trackHeight, HandleSize * 0.5f);
             Image fill = UIBuilder.Panel("Fill", fillArea, Emberforge.PrimaryMid, 0);
             fill.raycastTarget = false;
             RectTransform fr = fill.rectTransform;
-            fr.anchorMin = new Vector2(0f, 0.5f);
-            fr.anchorMax = new Vector2(1f, 0.5f);
-            fr.offsetMin = new Vector2(0f, -9f);
-            fr.offsetMax = new Vector2(0f, 9f);
+            fr.anchorMin = Vector2.zero;
+            fr.anchorMax = Vector2.one;
+            fr.offsetMin = Vector2.zero;
+            fr.offsetMax = Vector2.zero;
 
             RectTransform handleArea = UIBuilder.Node("HandleArea", root);
-            Stretch(handleArea, HandleSize * 0.5f);
+            Band(handleArea, HandleSize, HandleSize * 0.5f);
             Image handle = UIBuilder.Img("Handle", handleArea, TextureLab.Circle(64), Emberforge.GoldMid);
             handle.raycastTarget = true;
             RectTransform hr = handle.rectTransform;
-            hr.anchorMin = new Vector2(0f, 0.5f);
-            hr.anchorMax = new Vector2(0f, 0.5f);
+            hr.anchorMin = Vector2.zero;
+            hr.anchorMax = new Vector2(0f, 1f);
             hr.pivot = new Vector2(0.5f, 0.5f);
-            hr.sizeDelta = new Vector2(HandleSize, HandleSize);
+            hr.offsetMin = Vector2.zero;
+            hr.offsetMax = Vector2.zero;
+            hr.sizeDelta = new Vector2(HandleSize, 0f);
 
             Slider slider = root.gameObject.AddComponent<Slider>();
             slider.fillRect = fr;
@@ -197,15 +203,29 @@ namespace Emberfall.UI.Screens
             slider.minValue = 0f;
             slider.maxValue = 100f;
             slider.value = 0f;
+            root.gameObject.AddComponent<SliderRelease>();
             return slider;
         }
 
-        private static void Stretch(RectTransform rt, float sideInset)
+        /// <summary>A horizontal band across the middle of its parent: full width less the side
+        /// inset, exactly this tall.</summary>
+        private static void Band(RectTransform rt, float height, float sideInset)
         {
-            rt.anchorMin = new Vector2(0f, 0f);
-            rt.anchorMax = new Vector2(1f, 1f);
-            rt.offsetMin = new Vector2(sideInset, 0f);
-            rt.offsetMax = new Vector2(-sideInset, 0f);
+            rt.anchorMin = new Vector2(0f, 0.5f);
+            rt.anchorMax = new Vector2(1f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.offsetMin = new Vector2(sideInset, -height * 0.5f);
+            rt.offsetMax = new Vector2(-sideInset, height * 0.5f);
+        }
+    }
+
+    /// <summary>Writes the volumes to disk when a slider is let go, so a drag costs one disk write and
+    /// a kill right after it loses nothing. The settings page flushes again when it is left.</summary>
+    internal sealed class SliderRelease : MonoBehaviour, UnityEngine.EventSystems.IPointerUpHandler
+    {
+        public void OnPointerUp(UnityEngine.EventSystems.PointerEventData eventData)
+        {
+            AudioPrefs.Flush();
         }
     }
 }

@@ -328,6 +328,8 @@ namespace Emberfall.UI.Screens
             _busy = false;
             // Whatever a previous visit left in the reveal goes, before anything is drawn.
             _sequence.Abort();
+            // An abort fires no beat, so a charge loop left running by it is stopped here.
+            App.Audio.StopLoop("summon.charge", 0.1f);
             Refresh();
         }
 
@@ -549,6 +551,8 @@ namespace Emberfall.UI.Screens
         {
             // Everything is already banked, so leaving mid-summon loses nothing but the show.
             if (_sequence != null) _sequence.Abort();
+            // Abort fires no beat, so the charge loop would play on over the next screen.
+            App.Audio.StopLoop("summon.charge", 0.1f);
             _busy = false;
 #if UNITY_EDITOR
             _previewing = false;

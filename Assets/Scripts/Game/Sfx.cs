@@ -55,14 +55,16 @@ namespace Emberfall.Game
         // ------------------------------------------------------------------ ui
 
         public void Tap() { Cue("ui.tap", Old.Tap, 0.5f); }
-        public void Confirm() { Cue("ui.confirm", Old.Tap, 0.5f); }
+        /// <summary>A dialog's yes. No old sound: the original game made none, so silent with the flag off.</summary>
+        public void Confirm() { Cue("ui.confirm"); }
         public void Back() { Cue("ui.back", Old.Tap, 0.5f); }
         /// <summary>A locked door or a refused action.</summary>
         public void Locked() { Cue("ui.locked", Old.Tap, 0.5f); }
         /// <summary>A coin or a reward landing.</summary>
         public void Reward() { Cue("ui.reward", Old.Reward, 0.7f); }
         public void LevelUp() { Cue("ui.levelup", Old.Reward, 0.7f); }
-        public void Unlock() { Cue("ui.unlock", Old.Reward, 0.7f); }
+        /// <summary>No old sound: the original game made none here, so it is silent with the flag off.</summary>
+        public void Unlock() { Cue("ui.unlock"); }
 
         // ------------------------------------------------------------------ battle
 

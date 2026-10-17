@@ -83,6 +83,18 @@ dropped.
 old synthesised tones, exactly as before: one hit sound, one crit sound, no sounds for buffs,
 shields or skills. The harness proves both directions parse. Nothing else needs to change.
 
+Unlock and confirm have no old tone (the original game made none), so with the flag off they are
+silent.
+
+### Running once with real audio off
+
+To compare against the old tones without committing anything, use either of these:
+
+- Set the environment variable `EMBERFALL_REAL_AUDIO=0` before starting the editor or a development
+  build. `AudioService.Init` then forces `realAudio` false for that launch and logs it. A release
+  build ignores the variable and reads `audio.json` alone, so it cannot be switched off by accident.
+- Or edit `"realAudio"` in `audio.json` to `false`, run, and `git checkout` the file afterwards.
+
 ## Settings
 
 The settings page has a SOUND card: a mute switch and three sliders, music, effects, interface.
@@ -90,17 +102,41 @@ Defaults are 60, 80 and 70 percent. They are stored in `PlayerPrefs` on the devi
 summon switch, and are never part of the save. The effects slider previews with a hit and the
 interface slider with a tap. The page also has a CREDITS card that shows `credits.txt`.
 
+A slider writes its value to disk when it is let go, the mute switch when it is flipped, and the
+page flushes once more when it is left, so a kill right after a change loses nothing.
+
 ## Seeing every cue that fired
 
-Start Unity or a player with the environment variable `EMBERFALL_CUE_LOG` set to a file path, or
-start a player with `-cuelog`. Each cue writes one line:
+Start Unity or a development player with the environment variable `EMBERFALL_CUE_LOG` set to a
+file path, or start a development player with `-cuelog`. A release build never writes the file. The
+file stops at about 5 MB with one closing line. Each cue writes one line:
 
-`t=12.345 PLAY ui.tap ch=ui file=sfx/.../UI_Select_03 vol=0.55 pitch=1.021 layers=0`
+`t=12.345 PLAY ui.tap ch=ui file=sfx/.../UI_Select_03 vol=0.55 pitch=1.021 layers=0 sources=1`
+
+`layers` is the number of extra sources the cue started under its main sound, and `sources` is the
+total. `battle.hit` logs `layers=1 sources=2`: the stone hit and the arcane snap under it, two
+sounds at once.
 
 Other line kinds: `SILENT` (a music cue with no files, by design), `NOFILE` (a sound cue with no
 usable file, a defect), `UNKNOWN` (a cue id the map does not hold, a defect), `MUTED`, `DROP`
 (pool full), `MUSIC`, `LOOP+` and `LOOP-`, and `RATE` (a cue fired more than eight times in one
 second, a defect). A summary line is written when the service is destroyed.
+
+### Play proof targets
+
+Two capture targets run a whole thing in real time so the cue log sees every cue. Start them with
+the capture trigger file (`Tools/Screenshots/.trigger`) and `EMBERFALL_CUE_LOG` set. They have no
+menu item and no literal `Begin` call in `PlayModeScreenshot`, so the nightly sweep never runs them.
+
+- `Screen:AudioSummon` plays a seeded summon of a 1-star, a 3-star and a 5-star through its press,
+  charge, flash, reveals, star pings and summary (`SummonScreen.DebugPreview`, so nothing is rolled
+  or spent), taps each hero when it settles, and ends by aborting the summary. The log must show
+  `summon.start`, `LOOP+ summon.charge`, `LOOP-` before the first reveal, `summon.reveal.1`, `.3`
+  and `.5`, and five `summon.star` for the 5-star.
+- `Screen:AudioFight=<stage id>` plays one whole fight on the battle screen at the speed the player
+  has set and waits for the result, so hits, crits, casts, skill impacts, heals, shields, deaths and
+  the victory or defeat cue all fire. A longer stage has more of each: `ch1_6` (a miniboss) and
+  `ch2_6` are good picks.
 
 ## How to add a sound
 
@@ -131,7 +167,8 @@ original name plus `_loop`.
 - One master mute, not one per channel.
 - Only the files a cue uses are copied, not all 653.
 - No license or readme came with the packs. `credits.txt` names UNKAI SOUND, as the run prompt
-  does, and lists the pack folders. The owner should confirm the wording against the licenses.
+  does, lists the pack folders, and says plainly that license files were not supplied. No author
+  or link was invented. The owner should confirm the wording against the licenses.
 
 ## What to listen for
 

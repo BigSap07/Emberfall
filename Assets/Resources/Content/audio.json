@@ -76,7 +76,7 @@
       "fade": 1.2,
       "volume": 1.0,
       "files": [],
-      "note": "recital screen and recital fights; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "note": "recital screen; the recital fights play music.battle; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
     },
     {
       "id": "music.proving",
@@ -85,7 +85,7 @@
       "fade": 1.2,
       "volume": 1.0,
       "files": [],
-      "note": "proving screen and proving fights; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "note": "proving screen; the proving fights play music.battle; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
     },
     {
       "id": "music.guild",
@@ -547,7 +547,7 @@
         "sfx/FrostSpellv5/SFX_FrostSpellCastv5",
         "sfx/WaterSpellv1/SFX_WaterSpellv1"
       ],
-      "note": "DEFAULT TAKEN: Tide has one water pack; frost carries the cast and impact, water bubbles sit under the impact; the skill cast"
+      "note": "DEFAULT TAKEN: Tide has one water pack with no cast; frost casts, and the water body is a trimmed cast variant; the skill cast"
     },
     {
       "id": "battle.impact.tide",
@@ -564,7 +564,7 @@
       "layers": [
         { "files": ["sfx/WaterSpellv1/SFX_WaterSpellOnlyBubblesv1"], "volume": 0.4 }
       ],
-      "note": "DEFAULT TAKEN: Tide has one water pack; frost carries the cast and impact, water bubbles sit under the impact; the skill impact with a physical hit under it"
+      "note": "DEFAULT TAKEN: Tide has one water pack with no impact; frost impacts with water bubbles layered under them; the skill impact"
     },
     {
       "id": "battle.cast.verdant",
