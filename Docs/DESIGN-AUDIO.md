@@ -136,9 +136,11 @@ menu item and no literal `Begin` call in `PlayModeScreenshot`, so the nightly sw
   `summon.start`, `LOOP+ summon.charge`, `LOOP-` before the first reveal, `summon.reveal.1`, `.3`
   and `.5`, and five `summon.star` for the 5-star.
 - `Screen:AudioFight=<stage id>` plays one whole fight on the battle screen at the speed the player
-  has set and waits for the result, so hits, crits, casts, skill impacts, heals, shields, deaths and
-  the victory or defeat cue all fire. A longer stage has more of each: `ch1_6` (a miniboss) and
-  `ch2_6` are good picks.
+  has set and waits for the result, so hits, crits, casts, skill impacts, heals, shields and deaths
+  fire. A longer stage has more of each: `ch1_6` (a miniboss) and `ch2_6` are good picks. These are
+  wave stages: a won battle mid-stage shows the wave progress and plays no victory cue. The victory
+  and defeat cues play on a stage clear or a lost wave, which the `Screen:WaveResultCleared` and
+  `Screen:WaveResultLost` targets show.
 
 ## How to add a sound
 
