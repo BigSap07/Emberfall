@@ -16622,6 +16622,12 @@ namespace Emberfall.DevHarness
         private const float GearedCeilBandLowFinale = 0.55f;
         private const float GearedCeilBandHighFinale = 0.72f;
 
+        /// <summary>The breezy stretch, 1-1 to 1-6: a player is meant to win these, so the band is
+        /// [70%, 100%] and has no upper edge to miss (Docs/ECONOMY-PROPOSAL-R4.md section 5).</summary>
+        private const float GearedCeilBandLowBreezy = 0.70f;
+        private const float GearedCeilBandHighBreezy = 1.00f;
+        private const int CeilBreezyLastStage = 6;
+
         /// <summary>The last stage of its own chapter, found by index rather than assumed to be 12,
         /// so a chapter of a different length still resolves its own finale.</summary>
         private static bool IsChapterFinale(ContentDatabase db, StageDef stage)
@@ -16637,7 +16643,7 @@ namespace Emberfall.DevHarness
         {
             float over;
             if (_ceilTargetOverride.TryGetValue(stage.Id, out over)) return over;
-            return IsChapterFinale(db, stage) ? CeilTargetFinale : CeilTargetOrdinary;
+            return IsCeilWall(db, stage) ? CeilTargetFinale : CeilTargetOrdinary;
         }
 
         /// <summary>Win rate at the stage's LAST battle for a geared line levelled to one candidate
@@ -16800,14 +16806,16 @@ namespace Emberfall.DevHarness
             Line("  whether a stage is finishable: defeat retries the battle that was lost, so a BLOCK");
             Line("  is a hard stop rather than a hard fight.");
             Line("");
-            Line("  stage  name                        recPwr  teamPwr   FLOOR    CEIL   BLOCK");
+            Line("  stage  name                        recPwr  teamPwr   FLOOR    CEIL   BLOCK"
+                 + "  kind     CEIL band     verdict");
 
             int blocked = 0;
             int softFloors = 0;
             string firstBlocked = null;
             float loCeil = 2f, hiCeil = -1f;
             int outOfBand = 0;
-            string firstOutOfBand = null;
+            int graded = 0;
+            List<string> ceilMisses = new List<string>();
 
             for (int s = 0; s < db.AllStages.Count; s++)
             {
@@ -16850,18 +16858,26 @@ namespace Emberfall.DevHarness
                 // exclusion is for. It is stricter in the other direction too: a stage that reads
                 // 100% while its line SITS at its recommendedPower is now checked, where the proxy
                 // waved it through.
+                //
+                // EVERY STAGE'S VERDICT IS PRINTED on its own line, and every miss is listed in the
+                // check's message. This used to name only the first miss, so a run that fixed it
+                // learned about the next one a full run later.
+                string ceilVerdict;
+                float bandLo = CeilBandLow(db, stage);
+                float bandHi = CeilBandHigh(db, stage);
                 if (!floorPinned)
                 {
-                    float bandLo = CeilBandLow(db, stage);
-                    float bandHi = CeilBandHigh(db, stage);
+                    graded++;
                     if (ceil < bandLo || ceil > bandHi)
                     {
                         outOfBand++;
-                        if (firstOutOfBand == null)
-                            firstOutOfBand = stage.DisplayCode + " CEIL " + Pct(ceil)
-                                + " outside [" + Pct(bandLo) + ", " + Pct(bandHi) + "]";
+                        ceilVerdict = ceil < bandLo ? "UNDER" : "OVER";
+                        ceilMisses.Add(stage.DisplayCode + " " + Pct(ceil) + " " + ceilVerdict.ToLowerInvariant()
+                                       + " [" + Pct(bandLo) + ", " + Pct(bandHi) + "]");
                     }
+                    else ceilVerdict = "ok";
                 }
+                else ceilVerdict = "pinned, not graded";
 
                 Line("  " + stage.DisplayCode.PadRight(6)
                      + " " + Trim(stage.Name, 26).PadRight(26)
@@ -16870,6 +16886,9 @@ namespace Emberfall.DevHarness
                      + Pct(floor).PadLeft(8)
                      + Pct(ceil).PadLeft(8)
                      + (block > 0 ? ("b" + block) : "none").PadLeft(8)
+                     + "  " + CeilKindOf(db, stage).PadRight(9)
+                     + ("[" + Pct(bandLo) + ", " + Pct(bandHi) + "]").PadRight(14)
+                     + ceilVerdict
                      + (InstrumentLineFor(db, stage) == ChapterOneLine ? "   3-star line" : "")
                      + (floorPinned ? "   FLOOR-PINNED (the level-1 geared line is already worth more"
                                       + " than this stage asks for, so CEIL reads the instrument)" : "")
@@ -16892,9 +16911,10 @@ namespace Emberfall.DevHarness
                   + Pct(loCeil) + " to " + Pct(hiCeil) + ")");
 
             Check(outOfBand == 0,
-                  "every stage the instrument can actually be placed at has its CEIL inside the band"
-                  + " (ordinary [78%, 92%], finale [55%, 72%])"
-                  + (firstOutOfBand == null ? "" : " - first miss: " + firstOutOfBand));
+                  "every stage the instrument can actually be placed at has its CEIL inside its band by kind"
+                  + " (breezy [70%, 100%], wall [55%, 72%], everything else [78%, 92%]): "
+                  + (graded - outOfBand) + " of " + graded + " graded stages in band"
+                  + (outOfBand == 0 ? "" : " - out: " + string.Join("; ", ceilMisses.ToArray())));
             Line("");
         }
 
@@ -17896,32 +17916,34 @@ namespace Emberfall.DevHarness
         /// what the build-order doc already calls out as measuring the floor.</summary>
         private const int EconomyTutorialStages = 4;
 
-        private const float OrdinaryBandLow = 1.10f;
-        private const float OrdinaryBandHigh = 1.30f;
-
         /// <summary>
-        /// THE WALL BAND IS PER CHAPTER, and it is not a taste decision - it is read off how long
-        /// a wall at each ratio actually takes to resolve.
+        /// THE POWER BANDS ARE A PER-STAGE TARGET TABLE for the reference player, the owner's curve of
+        /// 2026-10-11 (Docs/ECONOMY-PROPOSAL-R4.md section 5; the target is section 1):
         ///
-        /// x0.90 to x1.00 was one band for the whole campaign, and it was measured to be too harsh
-        /// where it bites hardest. At x0.95, 1-9 cost the simulated player four extra sittings on
-        /// top of the ladder floor - two days of a twice-a-day player's time on one stage, nine
-        /// stages into the game. At x1.01 the same stage cost one. A wall is meant to be a stage
-        /// you do not beat on the day you reach it, not one you are still on two days later, so
-        /// chapter 1 sits at x1.00 to x1.05: an entry power that just fails, and clears on the next
-        /// claim rather than on the fourth.
+        ///   1-1 to 1-6   breezy, x1.00 to x2.00. Stage 6 is no longer a wall in chapter 1.
+        ///   1-7 to 1-11  first friction, falling: x1.05-x1.25, x1.02-x1.20, x0.99-x1.16, x0.96-x1.12,
+        ///                x0.93-x1.08.
+        ///   1-12         the first real wall, x0.88 to x0.99: it needs a levelling or gear session.
+        ///   chapter 2 on x0.97 to x1.25 for ordinary stages and walls alike.
         ///
-        /// Chapter 2 keeps a harder band, x0.95 to x1.02, because by then a player has a roster,
-        /// a gear track and a reason to farm a stage on purpose. The two are different games and a
-        /// single number could only be wrong for one of them.
+        /// ONE BAND FOR ORDINARY STAGES AND WALLS FROM CHAPTER 2, because the reference player is
+        /// level-capped from 2-4 and its ratio cannot tell a wall from its neighbour. A wall from
+        /// chapter 2 on is a CEIL fact (CeilKindOf), not a ratio fact.
         ///
-        /// ORDINARY IS NOT SPLIT. x1.10 to x1.30 is the same demand in both chapters, and nothing
-        /// measured says otherwise.
+        /// The chapter 1 table is read by stage Index, so a chapter of another length keeps its
+        /// stage numbers meaning what they say.
         /// </summary>
-        private const float WallBandLowChapter1 = 1.00f;
-        private const float WallBandHighChapter1 = 1.05f;
-        private const float WallBandLowLater = 0.95f;
-        private const float WallBandHighLater = 1.02f;
+        private const float BreezyBandLow = 1.00f;
+        private const float BreezyBandHigh = 2.00f;
+        private const int BreezyLastStage = 6;
+        private static readonly float[] FallingBandLow = { 1.05f, 1.02f, 0.99f, 0.96f, 0.93f };
+        private static readonly float[] FallingBandHigh = { 1.25f, 1.20f, 1.16f, 1.12f, 1.08f };
+        private const int FallingFirstStage = 7;
+        private const int ChapterOneFinaleStage = 12;
+        private const float ChapterOneWallBandLow = 0.88f;
+        private const float ChapterOneWallBandHigh = 0.99f;
+        private const float LaterBandLow = 0.97f;
+        private const float LaterBandHigh = 1.25f;
 
         /// <summary>
         /// HOW FAR PAST AN EDGE A RATIO MAY SIT BEFORE THE GUARD CALLS IT OUT, on both edges of
@@ -17952,13 +17974,10 @@ namespace Emberfall.DevHarness
         /// the next power source that lands - a relic tier, a Coda sink, guild currency, an aspect
         /// track - fails on the commit that adds it rather than being discovered a year later.
         ///
-        /// The bands:
-        ///   the opening stages  no band, tutorial - EconomyTutorialStages of them;
-        ///   ordinary stages     x1.10 to x1.30, comfortably ahead but not safe;
-        ///   walls               x1.00 to x1.05 in chapter 1, x0.95 to x1.02 from chapter 2 on.
-        /// See WallBandLowChapter1 for why the wall band is per chapter and the ordinary one is not.
-        /// A wall is a chapter finale (StageDef.IsBoss) or the chapter's miniboss stage
-        /// (StageDef.IsMiniboss); see MidChapterWallStageIdsOf.
+        /// The bands are a per-stage table, PowerBandFor: breezy for 1-1 to 1-6, falling for 1-7 to
+        /// 1-11, the first wall at 1-12 and one band from chapter 2 on. Every stage is banded, the
+        /// opening four included. A wall is still a chapter finale (StageDef.IsBoss) or the chapter's
+        /// miniboss stage (StageDef.IsMiniboss); see MidChapterWallStageIdsOf.
         ///
         /// Measured at ENTRY, not at exit. A wall is something a player hits on the way in; the
         /// campaign balance table's teamPwr column is the reading after the stage is already
@@ -17984,14 +18003,17 @@ namespace Emberfall.DevHarness
             Line("CAMPAIGN POWER CURVE (entry power / recommendedPower, against the authored band)");
             Line("  Read on the REFERENCE player - never converts, never ascends - which is the player");
             Line("  recommendedPower is derived for under the wall rule. A player who fuses arrives above it.");
-            Line("  Tutorial = the first " + EconomyTutorialStages + " stages, no band."
-                 + "  Ordinary = x" + Fmt(OrdinaryBandLow) + " to x" + Fmt(OrdinaryBandHigh) + ".");
-            Line("  Wall = x" + Fmt(WallBandLowChapter1) + " to x" + Fmt(WallBandHighChapter1)
-                 + " in chapter 1, x" + Fmt(WallBandLowLater) + " to x" + Fmt(WallBandHighLater)
-                 + " from chapter 2 on - measured off how many extra sittings a wall at each ratio"
-                 + " actually costs.");
+            Line("  Bands per stage (Docs/ECONOMY-PROPOSAL-R4.md section 5): 1-1 to 1-" + BreezyLastStage
+                 + " breezy x" + Ratio3(BreezyBandLow) + " to x" + Ratio3(BreezyBandHigh)
+                 + "; 1-" + FallingFirstStage + " to 1-" + (ChapterOneFinaleStage - 1) + " falling, from x"
+                 + Ratio3(FallingBandLow[0]) + "-x" + Ratio3(FallingBandHigh[0]) + " to x"
+                 + Ratio3(FallingBandLow[FallingBandLow.Length - 1]) + "-x" + Ratio3(FallingBandHigh[FallingBandHigh.Length - 1])
+                 + "; 1-" + ChapterOneFinaleStage + " the first wall x" + Ratio3(ChapterOneWallBandLow)
+                 + " to x" + Ratio3(ChapterOneWallBandHigh) + "; chapter 2 on x" + Ratio3(LaterBandLow)
+                 + " to x" + Ratio3(LaterBandHigh) + ", ordinary stages and walls alike.");
             Line("  A wall is a chapter finale or a chapter's miniboss stage:"
-                 + " " + string.Join(", ", MidChapterWallStageIdsOf(db).ToArray()) + ".");
+                 + " " + string.Join(", ", MidChapterWallStageIdsOf(db).ToArray()) + "."
+                 + " Chapter 1's stage 6 is breezy for the band.");
             Line("  entryPwr is read BEFORE the stage's first sitting. The balance table's teamPwr"
                  + " is the exit reading and cannot show a wall.");
             Line("  entryPwr splits into roster (the deployed five at Lv1), levels (what gold bought)"
@@ -18017,9 +18039,9 @@ namespace Emberfall.DevHarness
                 StageDef stage = o.Stage;
                 if (stage == null || stage.RecommendedPower <= 0) continue;
 
-                string kind = BandKindOf(stage, i);
+                string kind = PowerBandName(stage, BandKindOf(stage, i));
                 float lo, hi;
-                bool banded = BandFor(stage, kind, out lo, out hi);
+                bool banded = PowerBandFor(stage, out lo, out hi);
                 float ratio = o.EntryRatio;
                 float rec = stage.RecommendedPower;
 
@@ -18121,17 +18143,36 @@ namespace Emberfall.DevHarness
             return "ordinary";
         }
 
-        private static bool BandFor(StageDef stage, string kind, out float lo, out float hi)
+        /// <summary>The kind the power table prints for one stage. Chapter 1 is read by stage Index:
+        /// breezy to 1-6, falling to 1-11, then the first wall. From chapter 2 on it is the walk's own
+        /// kind, wall or ordinary, because the two share one band there.</summary>
+        private static string PowerBandName(StageDef stage, string walkKind)
         {
-            if (kind.StartsWith("wall"))
+            if (stage != null && stage.ChapterNumber == 1)
             {
-                bool chapterOne = stage != null && stage.ChapterNumber == 1;
-                lo = chapterOne ? WallBandLowChapter1 : WallBandLowLater;
-                hi = chapterOne ? WallBandHighChapter1 : WallBandHighLater;
+                if (stage.Index <= BreezyLastStage) return "breezy  ";
+                if (stage.Index < ChapterOneFinaleStage) return "falling ";
+                return "wall    ";
+            }
+            return walkKind.StartsWith("wall") ? "wall    " : "ordinary";
+        }
+
+        /// <summary>The band for one stage, from the table in the comment on BreezyBandLow. Every
+        /// stage has one; false only for a null stage.</summary>
+        private static bool PowerBandFor(StageDef stage, out float lo, out float hi)
+        {
+            lo = 0f; hi = 0f;
+            if (stage == null) return false;
+            if (stage.ChapterNumber == 1)
+            {
+                if (stage.Index <= BreezyLastStage) { lo = BreezyBandLow; hi = BreezyBandHigh; return true; }
+                if (stage.Index >= ChapterOneFinaleStage) { lo = ChapterOneWallBandLow; hi = ChapterOneWallBandHigh; return true; }
+                int k = stage.Index - FallingFirstStage;
+                lo = FallingBandLow[k]; hi = FallingBandHigh[k];
                 return true;
             }
-            if (kind.StartsWith("ordinary")) { lo = OrdinaryBandLow; hi = OrdinaryBandHigh; return true; }
-            lo = 0f; hi = 0f; return false;
+            lo = LaterBandLow; hi = LaterBandHigh;
+            return true;
         }
 
         /// <summary>
@@ -19808,18 +19849,45 @@ namespace Emberfall.DevHarness
         /// </summary>
         private static readonly int[] SolverProbeGrants = { 60, 120, 240, SolverMaxProbesPerStage };
 
+        /// <summary>
+        /// THE CEIL BAND BY KIND (Docs/ECONOMY-PROPOSAL-R4.md section 5):
+        ///   breezy      1-1 to 1-6                                  [70%, 100%]
+        ///   wall        1-12, and stages 6 and 12 from chapter 2    [55%, 72%]
+        ///   everything else: 1-7 to 1-11, ordinary stages from chapter 2   [78%, 92%]
+        /// A wall is the chapter finale or, from chapter 2 on, the chapter's stage 6. Chapter 1's
+        /// stage 6 is breezy, not a wall.
+        /// </summary>
+        private static bool IsCeilWall(ContentDatabase db, StageDef stage)
+        {
+            if (IsChapterFinale(db, stage)) return true;
+            return stage.ChapterNumber > 1 && stage.IsMiniboss;
+        }
+
+        private static bool IsCeilBreezy(StageDef stage)
+        {
+            return stage.ChapterNumber == 1 && stage.Index <= CeilBreezyLastStage;
+        }
+
+        private static string CeilKindOf(ContentDatabase db, StageDef stage)
+        {
+            if (IsCeilBreezy(stage)) return "breezy";
+            return IsCeilWall(db, stage) ? "wall" : "ordinary";
+        }
+
         private static float CeilBandLow(ContentDatabase db, StageDef stage)
         {
             float over;
             if (_ceilTargetOverride.TryGetValue(stage.Id, out over)) return over - 0.07f;
-            return IsChapterFinale(db, stage) ? GearedCeilBandLowFinale : GearedCeilBandLowOrdinary;
+            if (IsCeilBreezy(stage)) return GearedCeilBandLowBreezy;
+            return IsCeilWall(db, stage) ? GearedCeilBandLowFinale : GearedCeilBandLowOrdinary;
         }
 
         private static float CeilBandHigh(ContentDatabase db, StageDef stage)
         {
             float over;
             if (_ceilTargetOverride.TryGetValue(stage.Id, out over)) return over + 0.07f;
-            return IsChapterFinale(db, stage) ? GearedCeilBandHighFinale : GearedCeilBandHighOrdinary;
+            if (IsCeilBreezy(stage)) return GearedCeilBandHighBreezy;
+            return IsCeilWall(db, stage) ? GearedCeilBandHighFinale : GearedCeilBandHighOrdinary;
         }
 
         /// <summary>How far inside both edges a reading sits. Negative outside, and the more
