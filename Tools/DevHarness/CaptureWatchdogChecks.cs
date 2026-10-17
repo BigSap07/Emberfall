@@ -169,6 +169,21 @@ namespace Emberfall.DevHarness
                   && batchLoop.Contains("Start-Sleep -Seconds 10") && batchLoop.Contains("ScratchCaptures: identity restored"),
                   "WIRING (reads source): capture-batch.ps1 relaunches once, after 10 s, when the editor exits by itself before its queue is done");
 
+            // ---- the editor log is only ever read through the shared-read helper
+            List<string> plainReads = new List<string>();
+            string[] batchLines = batchLoop.Split('\n');
+            for (int i = 0; i < batchLines.Length; i++)
+            {
+                string line = batchLines[i];
+                if (line.TrimStart().StartsWith("#")) continue;
+                bool readsFile = line.Contains("ReadAllLines") || line.Contains("ReadAllText") || line.Contains("Get-Content") || line.Contains("ReadLines");
+                bool onLog = line.Contains(".Log") || line.Contains("$log") || line.Contains("$Log");
+                if (readsFile && onLog) plainReads.Add("line " + (i + 1) + ": " + line.Trim());
+            }
+            Check(plainReads.Count == 0 && batchLoop.Contains("[IO.FileShare]::ReadWrite") && batchLoop.Contains("function Wait-EditorGone"),
+                  "WIRING (reads source): capture-batch.ps1 reads the editor log only through Read-SharedText (FileShare.ReadWrite, retried) after the editor is gone"
+                  + (plainReads.Count > 0 ? ": PLAIN READ " + string.Join(" | ", plainReads.ToArray()) : ""));
+
             // Pump must stand down while a Recover is under way: the guard sits after the isPlaying
             // check and before the force-miss hook and the heartbeat.
             int playingCheck = pms.IndexOf("if (!EditorApplication.isPlaying) return;", StringComparison.Ordinal);

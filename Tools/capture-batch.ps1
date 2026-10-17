@@ -201,13 +201,33 @@ function Get-UnityOnProject {
     return $ids
 }
 
-# Unity holds its log open for writing, so a plain read can be refused.
-function Read-SharedText([string]$path) {
+# THE ONE WAY THIS SCRIPT READS THE EDITOR LOG. Unity holds its log open for writing, and keeps it open
+# for a moment after the editor exits, so a plain ReadAllLines/ReadAllText/Get-Content (which ask for
+# read-only sharing) is refused with "being used by another process". This opens it with
+# FileShare.ReadWrite and tries again a few times, a second apart. Returns '' when the file does not
+# exist and $null when it still could not be read after every try.
+function Read-SharedText([string]$path, [int]$tries = 1) {
     if (-not (Test-Path -LiteralPath $path)) { return '' }
-    try {
-        $fs = New-Object IO.FileStream($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
-        try { $sr = New-Object IO.StreamReader($fs); return $sr.ReadToEnd() } finally { $fs.Dispose() }
-    } catch { return '' }
+    for ($i = 1; $i -le $tries; $i++) {
+        try {
+            $fs = [IO.File]::Open($path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+            try { $sr = New-Object IO.StreamReader($fs); return $sr.ReadToEnd() } finally { $fs.Dispose() }
+        } catch {
+            if ($i -lt $tries) { Start-Sleep -Seconds 1 }
+        }
+    }
+    return $null
+}
+
+# After the editor has exited: wait (never kill) until its PID, and anything else naming the project, is
+# really gone, so the log is closed before it is read for the last time. At most 20 s.
+function Wait-EditorGone($proc) {
+    for ($i = 0; $i -lt 20; $i++) {
+        $alive = -not $proc.HasExited
+        if (-not $alive -and @(Get-UnityOnProject).Count -eq 0) { return }
+        Start-Sleep -Seconds 1
+    }
+    Say ('WARNING: Unity PID ' + $proc.Id + ' or a Unity process on the project was still alive 20 s after the editor ended; reading its log anyway')
 }
 
 function Test-InteractiveDesktop {
@@ -447,15 +467,19 @@ while ($true) {
     $reason = Watch-Editor $editor.Proc $editor.Log
     if ($reason) { Stop-Editor $editor.Proc $reason }
     $exitCode = if ($editor.Proc.HasExited) { $editor.Proc.ExitCode } else { $null }
-    $text = Read-SharedText $editor.Log
+    Wait-EditorGone $editor.Proc
+    $text = Read-SharedText $editor.Log 5
     # ScratchCaptures logs "identity restored" when its queue is done and the real identity is back.
+    # A log that could not be read at all says nothing about that, so it never counts as an early exit.
+    $unreadable = ($null -eq $text)
+    if ($unreadable) { Say ('WARNING: could not read ' + $editor.Log + ' after 5 tries; not treating this launch as an early exit'); $text = '' }
     $finished = ($text -match 'ScratchCaptures: identity restored')
-    $logs += [pscustomobject]@{ Log = $editor.Log; Offset = $offset; Reason = $reason; Exit = $exitCode; Launch = $launch; Finished = $finished }
+    $logs += [pscustomobject]@{ Log = $editor.Log; Offset = $offset; Reason = $reason; Exit = $exitCode; Launch = $launch; Finished = ($finished -or $unreadable) }
     Say ('launch ' + $launch + ' ended: ' + $(if ($reason) { $reason } else { 'exited by itself, code ' + $exitCode }))
 
     # Two reasons to relaunch, sharing ONE relaunch for the whole batch: the outer watchdog killed a
     # hung editor, or the editor exited by itself (any code) before ScratchCaptures finished its queue.
-    $early = ((-not $reason) -and (-not $finished))
+    $early = ((-not $reason) -and (-not $finished) -and (-not $unreadable))
     if (($reason -ne 'outer-hang' -and -not $early) -or $launch -ge 2) { break }
 
     $triggered = ([regex]::Matches($text, "ScratchCaptures: triggered '")).Count
@@ -525,7 +549,12 @@ foreach ($l in $logs) {
     if (-not (Test-Path -LiteralPath $l.Log)) { continue }
     $cur = -1
     $n = 0
-    foreach ($line in [IO.File]::ReadAllLines($l.Log)) {
+    $content = Read-SharedText $l.Log 5
+    if ($null -eq $content) {
+        $out += ('NOTE launch ' + $l.Launch + ' log ' + $l.Log + ' could not be read; its targets are reported from nothing')
+        $content = ''
+    }
+    foreach ($line in ($content -split "\r?\n")) {
         if ($line -match "ScratchCaptures: triggered '") {
             $cur = $l.Offset + $n; $n++
             if ($cur -lt $r.Count) { $r[$cur].Triggered = $true }
