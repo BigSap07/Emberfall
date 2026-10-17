@@ -70,7 +70,7 @@ follows as a skill's. The sound never decides anything about the fight.
 A big turn must not stack twenty sounds. Three limits hold it:
 
 - the pool: ten sfx voices and four ui voices (`defaults` in `audio.json`);
-- a cap on one cue (`perCueVoices`, three); the oldest play of that cue is cut;
+- a cap on one cue (`perCueVoices`, six, which is three plays of a cue that carries a layer); the oldest play of that cue is cut;
 - a cooldown per cue. The repeating battle cues and the ui cues use 0.13 seconds, which can never
   produce nine plays in one second.
 

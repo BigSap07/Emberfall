@@ -62,6 +62,7 @@ namespace Emberfall.DevHarness
             CheckAudioNotHashed(db, contentDir);
             CheckAudioRollback(jsonText);
             CheckAudioPlayback(cfg);
+            CheckAudioVoiceRules(cfg);
             CheckAudioWiring(cfg, root);
             CheckAudioCredits(root, audioRoot, contentDir, jsonText);
         }
@@ -295,7 +296,7 @@ namespace Emberfall.DevHarness
             }
             Check(loud.Count == 0, "no cue overrides the pitch variation above 4 percent" + (loud.Count > 0 ? ": " + string.Join(", ", loud.ToArray()) : ""));
             Check(cfg.DefaultVolumeJitter > 0f && cfg.DefaultVolumeJitter <= 0.2f, "and a small volume variation (" + cfg.DefaultVolumeJitter + ")");
-            Check(cfg.SfxVoices <= 12 && cfg.UiVoices <= 6 && cfg.PerCueVoices <= 4,
+            Check(cfg.SfxVoices <= 12 && cfg.UiVoices <= 6 && cfg.PerCueVoices <= 8,
                   "overlap is capped: " + cfg.SfxVoices + " sfx voices, " + cfg.UiVoices + " ui voices, " + cfg.PerCueVoices + " of one cue");
 
             List<string> noCooldown = new List<string>();
@@ -328,6 +329,109 @@ namespace Emberfall.DevHarness
                   "musicByScreen names a looping music cue for each of its " + cfg.MusicByScreen.Count + " screens"
                   + (badTargets.Count > 0 ? ": BAD " + string.Join(", ", badTargets.ToArray()) : ""));
         }
+
+        // ------------------------------------------------------------------ the overlap cap, executed
+
+        /// <summary>
+        /// AudioVoicePool and CueCooldowns are the rules AudioService plays by, run here on their own
+        /// with the numbers audio.json holds. A worst-case turn is thrown at them: every battle cue,
+        /// every 20 ms for two seconds, far faster than a fight produces events.
+        /// </summary>
+        private static void CheckAudioVoiceRules(AudioCueConfig cfg)
+        {
+            // A. one cue, hammered every 20 ms for 3 s, plays at most 8 times in any second.
+            string[] hammer = { "ui.tap", "battle.hit", "battle.crit", "battle.heal", "battle.buff", "battle.debuff", "battle.shield",
+                                "battle.impact.ember", "battle.cast.gale", "battle.dot", "ui.reward" };
+            int worstWindow = 0;
+            string worstCue = "";
+            for (int c = 0; c < hammer.Length; c++)
+            {
+                AudioCueDef def = cfg.Cue(hammer[c]);
+                CueCooldowns gaps = new CueCooldowns();
+                List<float> fired = new List<float>();
+                for (int step = 0; step < 150; step++)
+                {
+                    float t = step * 0.02f;
+                    if (gaps.TryFire(hammer[c], t, def == null ? 0f : def.Cooldown)) fired.Add(t);
+                }
+                for (int i = 0; i < fired.Count; i++)
+                {
+                    int inWindow = 0;
+                    for (int k = i; k < fired.Count && fired[k] - fired[i] <= 1.0f; k++) inWindow++;
+                    if (inWindow > worstWindow) { worstWindow = inWindow; worstCue = hammer[c]; }
+                }
+            }
+            Check(worstWindow <= AudioCueLog_RateLimit,
+                  "a cue hammered every 20 ms for 3 seconds sounds at most " + AudioCueLog_RateLimit + " times in any second (worst " + worstWindow + ", " + worstCue + ")");
+
+            // B. a worst-case turn never has more voices sounding than the pool holds, and no cue holds more than its share.
+            List<VoiceSlot> pool = new List<VoiceSlot>();
+            for (int i = 0; i < cfg.SfxVoices; i++) pool.Add(new VoiceSlot());
+            string[] turn = { "battle.hit", "battle.crit", "battle.impact.ember", "battle.impact.tide", "battle.impact.gale",
+                              "battle.impact.umbra", "battle.impact.lumen", "battle.impact.verdant", "battle.cast.ember", "battle.heal",
+                              "battle.buff", "battle.debuff", "battle.shield", "battle.death", "battle.dot" };
+            CueCooldowns turnGaps = new CueCooldowns();
+            int mostSounding = 0, mostOfOne = 0, played = 0, dropped = 0, asked = 0;
+            for (int step = 0; step < 100; step++)
+            {
+                float now = step * 0.02f;
+                for (int k = 0; k < turn.Length; k++)
+                {
+                    AudioCueDef def = cfg.Cue(turn[k]);
+                    if (def == null) continue;
+                    asked++;
+                    if (!turnGaps.TryFire(turn[k], now, def.Cooldown)) continue;
+                    // The main file and each layer, as AudioService starts them.
+                    int voices = 1 + def.Layers.Count;
+                    for (int v = 0; v < voices; v++)
+                    {
+                        int slot = AudioVoicePool.Choose(pool, turn[k], def.Priority, cfg.PerCueVoices, now);
+                        if (slot < 0) { dropped++; continue; }
+                        pool[slot].Cue = turn[k];
+                        pool[slot].Priority = def.Priority;
+                        pool[slot].Started = now;
+                        pool[slot].BusyUntil = now + (def.Trim > 0f ? def.Trim : 1.5f);
+                        played++;
+                    }
+                    int sounding = AudioVoicePool.Busy(pool, now);
+                    if (sounding > mostSounding) mostSounding = sounding;
+                    int ofOne = 0;
+                    for (int s = 0; s < pool.Count; s++) if (now < pool[s].BusyUntil && pool[s].Cue == turn[k]) ofOne++;
+                    if (ofOne > mostOfOne) mostOfOne = ofOne;
+                }
+            }
+            Check(mostSounding <= cfg.SfxVoices && mostOfOne <= cfg.PerCueVoices && played > 0,
+                  "a worst-case turn (" + turn.Length + " cues asked every 20 ms for 2 s, " + asked + " requests) never sounds more than "
+                  + mostSounding + " voices of " + cfg.SfxVoices + " or more than " + mostOfOne + " of one cue (cap " + cfg.PerCueVoices + "); "
+                  + played + " sounded, " + dropped + " dropped");
+
+            // C. priority: a full pool of priority 1 gives way to priority 2, a full pool of priority 2 does not give way to priority 1.
+            List<VoiceSlot> small = new List<VoiceSlot>();
+            for (int i = 0; i < 4; i++)
+            {
+                VoiceSlot s = new VoiceSlot();
+                s.Cue = "c" + i; s.Priority = 1; s.Started = i; s.BusyUntil = 10f;
+                small.Add(s);
+            }
+            int steals = AudioVoicePool.Choose(small, "new", 2, 3, 5f);
+            for (int i = 0; i < small.Count; i++) small[i].Priority = 2;
+            int refused = AudioVoicePool.Choose(small, "new", 1, 3, 5f);
+            Check(steals == 0 && refused == -1,
+                  "a full pool gives its oldest weaker voice to a more important sound and drops a less important one (took " + steals + ", then " + refused + ")");
+
+            // D. a cue at its share takes its own oldest voice back, not somebody else's.
+            List<VoiceSlot> own = new List<VoiceSlot>();
+            for (int i = 0; i < 4; i++)
+            {
+                VoiceSlot s = new VoiceSlot();
+                s.Cue = i < 3 ? "x" : "y"; s.Priority = 1; s.Started = 3 - i; s.BusyUntil = 10f;
+                own.Add(s);
+            }
+            int took = AudioVoicePool.Choose(own, "x", 1, 3, 5f);
+            Check(took == 2, "a cue holding its whole share takes back its own oldest voice (slot " + took + ")");
+        }
+
+        private const int AudioCueLog_RateLimit = 8;
 
         // ------------------------------------------------------------------ wiring tripwires
 

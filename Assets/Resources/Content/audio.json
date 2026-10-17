@@ -1,6 +1,6 @@
 {
   "realAudio": true,
-  "defaults": { "pitchJitter": 0.04, "volumeJitter": 0.1, "musicFade": 1.2, "sfxVoices": 10, "uiVoices": 4, "perCueVoices": 3 },
+  "defaults": { "pitchJitter": 0.04, "volumeJitter": 0.1, "musicFade": 1.2, "sfxVoices": 10, "uiVoices": 4, "perCueVoices": 6 },
   "volumes": { "music": 0.6, "sfx": 0.8, "ui": 0.7 },
   "musicByScreen": {
     "MainMenu": "music.hub",

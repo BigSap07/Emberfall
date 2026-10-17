@@ -32,15 +32,11 @@ namespace Emberfall.Game
     /// </summary>
     public sealed class AudioService : MonoBehaviour
     {
-        private sealed class Voice
+        private sealed class Voice : VoiceSlot
         {
             public AudioSource Source;
-            public float BusyUntil;
             public float StopAt;
             public float Volume;
-            public float Started;
-            public string Cue = "";
-            public int Priority;
         }
 
         private sealed class Pending
@@ -70,7 +66,7 @@ namespace Emberfall.Game
         private AudioCueConfig _config = new AudioCueConfig();
         private readonly Dictionary<string, AudioClip> _clips = new Dictionary<string, AudioClip>();
         private readonly HashSet<string> _missing = new HashSet<string>();
-        private readonly Dictionary<string, float> _lastPlay = new Dictionary<string, float>();
+        private readonly CueCooldowns _cooldowns = new CueCooldowns();
         private readonly Dictionary<string, int> _lastPick = new Dictionary<string, int>();
         private readonly List<Voice> _sfxVoices = new List<Voice>();
         private readonly List<Voice> _uiVoices = new List<Voice>();
@@ -150,9 +146,7 @@ namespace Emberfall.Game
             if (def.Channel == AudioChannel.Music && def.Loop) { SetMusic(cueId); return false; }
 
             float now = Time.unscaledTime;
-            float last;
-            if (def.Cooldown > 0f && _lastPlay.TryGetValue(cueId, out last) && now - last < def.Cooldown) return false;
-            _lastPlay[cueId] = now;
+            if (!_cooldowns.TryFire(cueId, now, def.Cooldown)) return false;
 
             if (def.StopMusic >= 0f) StopMusic(def.StopMusic);
 
@@ -235,32 +229,9 @@ namespace Emberfall.Game
             if (pool.Count == 0) return false;
             float now = Time.unscaledTime;
 
-            Voice free = null;
-            Voice oldestSame = null;
-            Voice weakest = null;
-            int sameCount = 0;
-            for (int i = 0; i < pool.Count; i++)
-            {
-                Voice v = pool[i];
-                if (now >= v.BusyUntil) { if (free == null) free = v; continue; }
-                if (v.Cue == cueId)
-                {
-                    sameCount++;
-                    if (oldestSame == null || v.Started < oldestSame.Started) oldestSame = v;
-                }
-                if (v.Priority <= priority)
-                {
-                    bool weaker = weakest == null || v.Priority < weakest.Priority
-                                  || (v.Priority == weakest.Priority && v.Started < weakest.Started);
-                    if (weaker) weakest = v;
-                }
-            }
-
-            Voice use;
-            if (sameCount >= _config.PerCueVoices && oldestSame != null) use = oldestSame;
-            else if (free != null) use = free;
-            else if (weakest != null) use = weakest;
-            else return false;
+            int chosen = AudioVoicePool.Choose(pool, cueId, priority, _config.PerCueVoices, now);
+            if (chosen < 0) return false;
+            Voice use = pool[chosen];
 
             if (use.Source.clip != null && now < use.BusyUntil) use.Source.Stop();
             use.Source.clip = clip;
