@@ -10,8 +10,10 @@ since it was moved here from the R4 simulation; expect to fix paths.
 The rule (proposal section 4): after each reading of 20 walks, every stage a walk stuck on has its target
 ratio T raised by x1.04 (x1.08 if 3 or more walks stuck), and by x1.05 and x1.10 from round 6. This code
 applies exactly that schedule (RAISE_EARLY, RAISE_LATE). The R4 simulation's script applied x1.05 and x1.10
-in every round, so a rerun from round 1 is not bit for bit the simulation's path. Its recommendedPower is derived again as round(median reference entry power / T), its
-levels are inverted (economy_r4_lib.inversion) and searched again to CEIL 85 percent (ordinary) and
+in every round, so a rerun from round 1 is not bit for bit the simulation's path.
+
+For each raised stage, recommendedPower is then derived again as round(median reference entry power / T),
+its levels are inverted (economy_r4_lib.inversion) and searched again to CEIL 85 percent (ordinary) and
 65 percent (walls) through the harness's --relevel.
 
 The state file holds {"T": {stage_id: ratio}, "round": n}. T starts as median entry power over the

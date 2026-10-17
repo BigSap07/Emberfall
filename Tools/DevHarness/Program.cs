@@ -20621,7 +20621,7 @@ namespace Emberfall.DevHarness
             // neither number differs from zero, from the other, or from the 0.1 bar. The first six
             // scaled stages are read before the caps bind. There every one of the 8 players moved
             // the right way, +0.94 on the old content (spread 0.88 to 1.03) and +1.00 on the new
-            // (spread 0.93 to 1.06), nine times the bar and a spread of a tenth.
+            // (spread 0.93 to 1.06): about twice the bar of 0.50 below, and a spread of a tenth.
             //
             // THE BAR IS 0.50, a lead decision (R6), and the reasoning is in the readings. All 16 early
             // readings above (8 players on each content) sit between 0.88 and 1.06, so a bar of 0.10
