@@ -30,6 +30,10 @@
 #   SUMMARY wall=..s targets=.. captured=.. FAILED=.. not_reached=.. play_entries=.. heartbeats=..
 #           watchdog_recoveries=.. outer_relaunches=.. launches=.. real_save=unchanged|CHANGED
 #
+# EMBERFALL_CAPTURE_SKIP_RELOAD=1 runs the session with domain reload off (ScratchCaptures sets and
+# restores the Enter Play Mode options); this script also keeps a copy of EditorSettings.asset and puts
+# it back if it changed, after the run and after any kill or crash cleanup.
+#
 # SWITCHES: EMBERFALL_CAPTURE_WATCHDOG=0 switches off the in-editor watchdog AND the outer one (the
 # stall and ceiling nets below stay). EMBERFALL_CAPTURE_FORCE_MISS=<target> makes that target's first
 # play entry send no heartbeat, to show the recovery on demand.
@@ -285,6 +289,24 @@ $settingsFile = Join-Path $Project 'ProjectSettings\ProjectSettings.asset'
 $settingsBackup = Join-Path $LogDir ('ProjectSettings.asset.' + $Tag + '.before')
 Copy-Item -LiteralPath $settingsFile -Destination $settingsBackup -Force
 $settingsBefore = Get-FileHashOrAbsent $settingsFile
+# EditorSettings.asset holds the Enter Play Mode options. EMBERFALL_CAPTURE_SKIP_RELOAD=1 changes them
+# for one session; they must never be left changed, so the file is copied aside like the one above.
+$editorSettingsFile = Join-Path $Project 'ProjectSettings\EditorSettings.asset'
+$editorSettingsBackup = Join-Path $LogDir ('EditorSettings.asset.' + $Tag + '.before')
+$editorSettingsBefore = Get-FileHashOrAbsent $editorSettingsFile
+if (Test-Path -LiteralPath $editorSettingsFile) { Copy-Item -LiteralPath $editorSettingsFile -Destination $editorSettingsBackup -Force }
+if ($env:EMBERFALL_CAPTURE_SKIP_RELOAD -and $env:EMBERFALL_CAPTURE_SKIP_RELOAD.Trim() -eq '1') {
+    Say 'EMBERFALL_CAPTURE_SKIP_RELOAD=1: this session enters Play without a domain reload (the project setting is restored afterwards)'
+}
+
+# Puts EditorSettings.asset back from the copy, only if it changed. Returns $true when it had to.
+function Restore-EditorSettings {
+    if (-not (Test-Path -LiteralPath $editorSettingsBackup)) { return $false }
+    if ((Get-FileHashOrAbsent $editorSettingsFile) -eq $editorSettingsBefore) { return $false }
+    Copy-Item -LiteralPath $editorSettingsBackup -Destination $editorSettingsFile -Force
+    Say 'ProjectSettings\EditorSettings.asset had changed; the copy taken before launch 1 was put back'
+    return $true
+}
 $realCompany = Get-CompanyName
 $pref = Get-FirstRunPref
 $shots = Join-Path $Project 'Tools\Screenshots'
@@ -400,6 +422,7 @@ function Clear-AfterKill([int]$launch) {
         Copy-Item -LiteralPath $settingsBackup -Destination $settingsFile -Force
         Say ('ProjectSettings.asset held company "' + $now + '"; the copy taken before launch 1 was put back (company "' + $realCompany + '")')
     }
+    [void](Restore-EditorSettings)
     Restore-FirstRunPref $pref
     # A relaunch over a leftover Temp\__Backupscenes would stop on the recovery dialog.
     return (-not (Test-Path -LiteralPath $backupScenes))
@@ -459,6 +482,8 @@ Restore-FirstRunPref $pref
 $saveAfter = Get-FileHashOrAbsent $savePath
 $saveSame = ($saveBefore -eq $saveAfter)
 $settingsAfter = Get-FileHashOrAbsent $settingsFile
+$editorSettingsRestored = Restore-EditorSettings
+$editorSettingsNote = if ($editorSettingsRestored) { 'had CHANGED during the run and was restored from the copy taken before launch 1' } else { 'unchanged' }
 $settingsNote = if ($settingsAfter -eq $settingsBefore) { 'unchanged' } else { 'DIFFERENT (company "' + (Get-CompanyName) + '"; check git diff ProjectSettings/ProjectSettings.asset)' }
 
 $r = @()
@@ -533,6 +558,7 @@ foreach ($l in $logs) {
     elseif ($l.Exit -ne 0) { $out += ('NOTE launch ' + $l.Launch + ' exited with code ' + $l.Exit) }
 }
 $out += ('NOTE ProjectSettings.asset ' + $settingsNote)
+$out += ('NOTE EditorSettings.asset ' + $editorSettingsNote)
 $out += ('SUMMARY wall=' + $wall + 's targets=' + $r.Count + ' captured=' + $captured + ' FAILED=' + $failed + ' not_reached=' + $notReached +
          ' play_entries=' + $entries + ' heartbeats=' + $beats + ' watchdog_recoveries=' + $recoveries + ' outer_relaunches=' + $relaunches +
          ' launches=' + $logs.Count + ' real_save=' + $(if ($saveSame) { 'unchanged' } else { 'CHANGED' }))

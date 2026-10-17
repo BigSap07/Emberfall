@@ -76,6 +76,12 @@ PlayModeScreenshot: play heartbeat, target Screen:Summon, attempt 2, ...
 
 and `RESULT Screen:Summon captured (after 1 watchdog recovery)`. The hook never fires on attempt 2, so it cannot make a target FAILED.
 
+### Skipping the domain reload (an A/B, off by default)
+
+Set `EMBERFALL_CAPTURE_SKIP_RELOAD=1` in the environment of the launching shell and `ScratchCaptures.Run` enters Play without a domain reload for that session only (scene reload stays on). It remembers the project's Enter Play Mode options in `SessionState`, sets `DisableDomainReload`, and logs it; when the queue finishes it puts the exact previous values back and logs `Enter Play Mode options restored`, then reads `ProjectSettings/EditorSettings.asset` back from disk. `capture-batch.ps1` also keeps its own copy of that file and restores it if it changed, after the run and after any kill or crash cleanup, and prints a `NOTE EditorSettings.asset` line either way. Unset, or any other value, changes nothing.
+
+The catch: with no reload, static state in the game and in the capture tools is not reset between play entries. The ones worth knowing: `GameApp.Instance`, `GameApp.BootStage`, `BootCompleted` and `BootFailed`; the `Instance` statics of `TelemetryService`, `OnboardingCoach` and `TelemetryConsentPrompt`; `AudioPrefs` (its cached values and its `Changed` event, whose handlers stay subscribed); `AudioCueLog` (its byte cap and path); `SupabaseConfig` (the cached config and `ClientsConstructed`); `SummonAudio.Hook`; the static overrides of the guild services; `FirstRun`'s squad; the capture statics of `WaveResultScreen`; the cached fonts, sprites and textures in `Emberforge`, `UITheme`, `TextureLab`, `BattleAssets` and `VfxDirector`; and in `PlayModeScreenshot` the per-domain heartbeat and repaint flags and the audio summon counters. None of this was fixed; an A/B that shows odd captures should look here first.
+
 ## Reading a hung log
 
 Look at the last lines of the editor log and match them to a row. The lines are all printed by `PlayModeScreenshot` unless noted.

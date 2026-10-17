@@ -140,6 +140,23 @@ namespace Emberfall.DevHarness
                   "WIRING (reads source): the three lines the batch launcher reads (entry, heartbeat, recover) are printed");
             Check(pms.Contains("SessionState.SetString(WdEntryAtKey") && pms.Contains("PlayModeStateChange.EnteredPlayMode"),
                   "WIRING (reads source): the entry time is kept in SessionState and the entered-play event is logged");
+            // ---- the skip-reload A/B switch (task 5)
+            Check(CaptureWatchdog.SkipReloadOn("1") && CaptureWatchdog.SkipReloadOn(" 1 "),
+                  "EMBERFALL_CAPTURE_SKIP_RELOAD=1: skipping the domain reload is ON for the session");
+            Check(!CaptureWatchdog.SkipReloadOn(null) && !CaptureWatchdog.SkipReloadOn("") && !CaptureWatchdog.SkipReloadOn("0")
+                  && !CaptureWatchdog.SkipReloadOn("true"), "EMBERFALL_CAPTURE_SKIP_RELOAD unset, empty, 0 or anything but 1: nothing changes");
+            Check(CaptureWatchdog.SkipReloadVariable == "EMBERFALL_CAPTURE_SKIP_RELOAD", "the skip-reload variable is spelled as the doc says");
+            Check(scratch.Contains("CaptureWatchdog.SkipReloadOn(") && scratch.Contains("EnterPlayModeOptions.DisableDomainReload")
+                  && scratch.Contains("SessionState.SetBool(OrigPlayOptionsEnabledKey, EditorSettings.enterPlayModeOptionsEnabled)"),
+                  "WIRING (reads source): ScratchCaptures remembers the Enter Play Mode options before it turns the domain reload off");
+            Check(scratch.Contains("EditorSettings.enterPlayModeOptionsEnabled = enabled;")
+                  && scratch.Contains("EditorSettings.enterPlayModeOptions = (EnterPlayModeOptions)options;")
+                  && scratch.Contains("Enter Play Mode options restored") && scratch.Contains("RestorePlayOptions();"),
+                  "WIRING (reads source): ScratchCaptures puts the exact previous Enter Play Mode options back and says so");
+            string batchSrc = ReadIfThere(Path.Combine(root, "Tools", "capture-batch.ps1"));
+            Check(batchSrc.Contains("EditorSettings.asset") && batchSrc.Contains("Restore-EditorSettings") && !batchSrc.Contains("Remove-Item"),
+                  "WIRING (reads source): capture-batch.ps1 copies EditorSettings.asset aside and restores it if it changed");
+
             // Pump must stand down while a Recover is under way: the guard sits after the isPlaying
             // check and before the force-miss hook and the heartbeat.
             int playingCheck = pms.IndexOf("if (!EditorApplication.isPlaying) return;", StringComparison.Ordinal);

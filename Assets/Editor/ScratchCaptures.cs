@@ -37,6 +37,9 @@ namespace Emberfall.EditorTools
     /// per target, and marks the target FAILED when the second entry misses too; this class then
     /// carries on with the next target. EMBERFALL_CAPTURE_WATCHDOG=0 switches it off.
     ///
+    /// EMBERFALL_CAPTURE_SKIP_RELOAD=1 enters Play mode without a domain reload for this session only (the
+    /// task 5 A/B) and puts the project's Enter Play Mode options back when the queue finishes.
+    ///
     /// SuppressFirstRunKey is an EditorPref, which every editor on this machine shares. It is held
     /// for the length of the run and restored to what it was.
     /// </summary>
@@ -53,6 +56,9 @@ namespace Emberfall.EditorTools
         private const string LiveHashKey = "ScratchCaptures.LiveHash";
         private const string ExitAtKey = "ScratchCaptures.ExitAt";
         private const string IdleKey = "ScratchCaptures.Idle";
+        private const string SkipActiveKey = "ScratchCaptures.SkipReloadActive";
+        private const string OrigPlayOptionsEnabledKey = "ScratchCaptures.OrigPlayOptionsEnabled";
+        private const string OrigPlayOptionsKey = "ScratchCaptures.OrigPlayOptions";
 
         /// <summary>
         /// Editor ticks with Play mode fully off before the identity is put back. Not zero: when
@@ -102,6 +108,7 @@ namespace Emberfall.EditorTools
             string save = Path.Combine(scratch, SaveService.FileName);
             if (File.Exists(save)) File.Delete(save);
             PlayerPrefs.DeleteAll();
+            ApplySkipReload();
 
             // A relaunched batch (capture-batch.ps1 after killing a hung editor) starts with the target
             // that was lost, and that target has already used its first play entry.
@@ -201,6 +208,7 @@ namespace Emberfall.EditorTools
             if (HashOf(live) == before) Debug.Log("ScratchCaptures: [ok] the real save is byte for byte what it was before the run");
             else Debug.LogError("ScratchCaptures: [FAIL] the real save CHANGED during the run");
             Debug.Log("ScratchCaptures: identity restored to '" + company + "/" + product + "'");
+            RestorePlayOptions();
 
             // Read back from the FILE, not from PlayerSettings: the in-memory value was right the
             // first time this ran too, and the file was not.
@@ -209,6 +217,48 @@ namespace Emberfall.EditorTools
                 Debug.Log("ScratchCaptures: [ok] ProjectSettings.asset holds the real identity again");
             else
                 Debug.LogError("ScratchCaptures: [FAIL] ProjectSettings.asset still holds the scratch identity - restore it with git");
+        }
+
+        /// <summary>
+        /// The A/B switch (EMBERFALL_CAPTURE_SKIP_RELOAD=1): this session only, Play mode is entered
+        /// without a domain reload (scene reload stays on). The project's own Enter Play Mode
+        /// options are remembered in SessionState and put back, exactly, by RestorePlayOptions when
+        /// the queue finishes. Unset, or any other value, changes nothing.
+        /// </summary>
+        private static void ApplySkipReload()
+        {
+            if (!CaptureWatchdog.SkipReloadOn(Environment.GetEnvironmentVariable(CaptureWatchdog.SkipReloadVariable))) return;
+            SessionState.SetBool(OrigPlayOptionsEnabledKey, EditorSettings.enterPlayModeOptionsEnabled);
+            SessionState.SetInt(OrigPlayOptionsKey, (int)EditorSettings.enterPlayModeOptions);
+            SessionState.SetBool(SkipActiveKey, true);
+            EditorSettings.enterPlayModeOptionsEnabled = true;
+            EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload;
+            Debug.LogWarning("ScratchCaptures: SKIP-RELOAD mode (" + CaptureWatchdog.SkipReloadVariable + "=1): Enter Play Mode options were enabled "
+                             + SessionState.GetBool(OrigPlayOptionsEnabledKey, false) + " / " + SessionState.GetInt(OrigPlayOptionsKey, 0)
+                             + ", now enabled with DisableDomainReload for this session only.");
+        }
+
+        private static void RestorePlayOptions()
+        {
+            if (!SessionState.GetBool(SkipActiveKey, false)) return;
+            SessionState.SetBool(SkipActiveKey, false);
+            bool enabled = SessionState.GetBool(OrigPlayOptionsEnabledKey, false);
+            int options = SessionState.GetInt(OrigPlayOptionsKey, 0);
+            EditorSettings.enterPlayModeOptionsEnabled = enabled;
+            EditorSettings.enterPlayModeOptions = (EnterPlayModeOptions)options;
+            UnityEngine.Object[] editorSettings = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/EditorSettings.asset");
+            if (editorSettings.Length > 0) EditorUtility.SetDirty(editorSettings[0]);
+            AssetDatabase.SaveAssets();
+            Debug.Log("ScratchCaptures: Enter Play Mode options restored (enabled " + enabled + ", options " + options + ")");
+
+            // Read back from the FILE, as the identity is.
+            string file = File.ReadAllText(Path.Combine(Application.dataPath, "../ProjectSettings/EditorSettings.asset"));
+            string wantEnabled = "m_EnterPlayModeOptionsEnabled: " + (enabled ? 1 : 0);
+            string wantOptions = "m_EnterPlayModeOptions: " + options;
+            if (file.Contains(wantEnabled) && file.Contains(wantOptions))
+                Debug.Log("ScratchCaptures: [ok] EditorSettings.asset holds the project's Enter Play Mode options again");
+            else
+                Debug.LogError("ScratchCaptures: [FAIL] EditorSettings.asset does not hold the original Enter Play Mode options (" + wantEnabled + ", " + wantOptions + ")");
         }
 
         private static string SettingsPath()

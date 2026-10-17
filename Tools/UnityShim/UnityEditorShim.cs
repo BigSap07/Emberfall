@@ -107,6 +107,15 @@ namespace UnityEditor
 
     public delegate void CallbackFunction();
 
+    [Flags]
+    public enum EnterPlayModeOptions { None = 0, DisableDomainReload = 1, DisableSceneReload = 2, DisableSceneBackup = 4 }
+
+    public static class EditorSettings
+    {
+        public static bool enterPlayModeOptionsEnabled { get; set; }
+        public static EnterPlayModeOptions enterPlayModeOptions { get; set; }
+    }
+
     public enum PlayModeStateChange { EnteredEditMode = 0, ExitingEditMode = 1, EnteredPlayMode = 2, ExitingPlayMode = 3 }
 
     public static class EditorApplication

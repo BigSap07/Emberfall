@@ -43,6 +43,11 @@ namespace Emberfall.EditorTools
         /// missed once in the killed editor counts that as its first miss.</summary>
         public const string FirstAttemptVariable = "EMBERFALL_CAPTURE_FIRST_ATTEMPT";
 
+        /// <summary>Set to 1 for ONE capture session to enter Play without a domain reload (task 5
+        /// A/B). Read by ScratchCaptures.Run, which puts the project's Enter Play Mode options back
+        /// when the queue finishes.</summary>
+        public const string SkipReloadVariable = "EMBERFALL_CAPTURE_SKIP_RELOAD";
+
         public const double FirstEntryLimitSeconds = 90.0;
         public const double RetryEntryLimitSeconds = 60.0;
         public const double EditModeWaitSeconds = 5.0;
@@ -52,6 +57,12 @@ namespace Emberfall.EditorTools
         public static bool SwitchOn(string value)
         {
             return value == null || value.Trim() != "0";
+        }
+
+        /// <summary>Skipping the domain reload is OFF unless the variable is exactly "1".</summary>
+        public static bool SkipReloadOn(string value)
+        {
+            return value != null && value.Trim() == "1";
         }
 
         /// <summary>True when the force-miss hook names this target and this is its first entry.
