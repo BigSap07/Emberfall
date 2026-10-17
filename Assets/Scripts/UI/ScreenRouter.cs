@@ -36,7 +36,8 @@ namespace Emberfall.UI
         GuildDungeonBoards,
         GuildTech,
         Fusion,
-        WaveResult
+        WaveResult,
+        Orders
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -138,6 +139,10 @@ namespace Emberfall.UI
         public Screens.FusionScreen Fusion;
         public Screens.WaveResultScreen WaveResult;
 
+        /// <summary>The daily orders page. Null unless DailyLoopSwitch is on, so a build with the
+        /// switch off has no such screen, and Show(ScreenId.Orders) is a no-op.</summary>
+        public Screens.OrdersScreen Orders;
+
         public UIScreen Current { get; private set; }
 
         public void Build(GameApp app, RectTransform screenLayer, RectTransform overlayLayer)
@@ -202,6 +207,10 @@ namespace Emberfall.UI
             // One result screen per resolved wave. Reached through CampaignFlow.Launch, never by
             // routing to it directly: it resolves the wave as it opens, so it needs a stage.
             WaveResult = Create<Screens.WaveResultScreen>();
+
+            // The daily orders, orders.json's chests and the login calendar (DESIGN-DAILY-LOOP.md).
+            // Built only with the switch on: off, this build has no such screen at all.
+            if (Emberfall.Core.Session.DailyLoopSwitch.Enabled) Orders = Create<Screens.OrdersScreen>();
         }
 
         /// <summary>

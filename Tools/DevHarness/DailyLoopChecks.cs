@@ -46,6 +46,7 @@ namespace Emberfall.DevHarness
                 CheckDailyLoopSave(db);
                 CheckDailyLoopNotHashed(db, contentDir);
                 CheckDailyLoopOff(db);
+                CheckDailyLoopWiring(contentDir);
             }
             finally
             {
@@ -690,6 +691,68 @@ namespace Emberfall.DevHarness
                 withoutOrders.BuildBattleRequest(CampaignWaveGenerator.BuildBattle(other.AllStages[0], 1, 1), 4242)));
             Check(!other.Orders.IsUsable && other.ContentVersion == before && fightWith == fightWithout,
                   "and a fight is the same event for event with the whole file removed: nothing a fight reads is in it");
+        }
+
+        // ------------------------------------------------------------------ the screen and the hub
+
+        /// <summary>
+        /// WIRING TRIPWIRES, not behavioural proof: the screen and the hub cannot run in the harness,
+        /// so this reads their source. It fails if the door stops being behind the switch, if the
+        /// screen starts to decide anything, or if the capture targets lose their forced switch. What
+        /// the screen then looks like is for the Play queue.
+        /// </summary>
+        private static void CheckDailyLoopWiring(string contentDir)
+        {
+            string root = Path.GetFullPath(Path.Combine(contentDir, "..", "..", ".."));
+            string ui = Path.Combine(root, "Assets", "Scripts", "UI");
+            string screenPath = Path.Combine(ui, "Screens", "OrdersScreen.cs");
+            string hubPath = Path.Combine(ui, "Screens", "MainMenuScreen.cs");
+            string routerPath = Path.Combine(ui, "ScreenRouter.cs");
+            string shotsPath = Path.Combine(root, "Assets", "Editor", "PlayModeScreenshot.cs");
+            if (!File.Exists(screenPath) || !File.Exists(hubPath) || !File.Exists(routerPath) || !File.Exists(shotsPath))
+            {
+                Check(false, "the daily loop's screen, hub, router and capture files are where the harness expects them");
+                return;
+            }
+            string screen = File.ReadAllText(screenPath), hub = File.ReadAllText(hubPath);
+            string router = File.ReadAllText(routerPath), shots = File.ReadAllText(shotsPath);
+
+            int doorAt = hub.IndexOf("if (DailyLoopSwitch.Enabled)", StringComparison.Ordinal);
+            int orderAt = hub.IndexOf("RailButton(\"Orders\"", StringComparison.Ordinal);
+            int moreAt = hub.IndexOf("RailButton(\"More\"", StringComparison.Ordinal);
+            Check(doorAt >= 0 && orderAt > doorAt && orderAt < moreAt && hub.Contains("int slot = 3;")
+                  && hub.Contains("_overflowButtonTop = top + step * slot;"),
+                  "WIRING (reads source): the hub's Orders door is built only inside 'if (DailyLoopSwitch.Enabled)', and More keeps slot 3 when it is off, so the rail is the four it always was");
+            Check(router.Contains("if (Emberfall.Core.Session.DailyLoopSwitch.Enabled) Orders = Create<Screens.OrdersScreen>();"),
+                  "WIRING (reads source): the router builds the Orders page only with the switch on, so a build without it has no such screen");
+
+            bool thinScreen = !screen.Contains(".Profile") && !screen.Contains("Content.Orders") && !screen.Contains("Balance")
+                              && screen.Contains("DailyLoop.ClaimOrder(") && screen.Contains("DailyLoop.ClaimDailyChest(")
+                              && screen.Contains("DailyLoop.ClaimWeeklyChest(") && screen.Contains("DailyLoop.ClaimCalendar(")
+                              && screen.Contains("DailyLoop.Board(");
+            Check(thinScreen,
+                  "WIRING (reads source): the Orders page reads only DailyLoop.Board and calls only DailyLoop's four claims - it touches no profile, no content and no balance, so it decides nothing");
+
+            List<string> others = new List<string>();
+            foreach (string file in Directory.GetFiles(ui, "*.cs", SearchOption.AllDirectories))
+            {
+                string name = Path.GetFileName(file);
+                if (name == "OrdersScreen.cs") continue;
+                string text = File.ReadAllText(file);
+                if (text.Contains("OrderView") || text.Contains("CalendarView")) others.Add(name);
+            }
+            Check(others.Count == 0,
+                  "WIRING (reads source): all of the loop's layout is in the one screen file; no other UI file draws an order or a calendar day"
+                  + (others.Count > 0 ? " - found in " + string.Join(", ", others.ToArray()) : ""));
+
+            string[] targets = { "Orders", "OrdersHalf", "OrdersClaimed", "OrdersCalendar1", "OrdersCalendar4", "HubLoopOn", "HubLoopOff" };
+            List<string> missing = new List<string>();
+            for (int i = 0; i < targets.Length; i++)
+                if (!shots.Contains("Begin(\"Screen:" + targets[i] + "\")")) missing.Add(targets[i]);
+            Check(missing.Count == 0 && shots.Contains("LoopForceKey") && shots.Contains("DailyLoopSwitch.Enabled = true;")
+                  && shots.Contains("DailyLoopSwitch.Enabled = false;") && shots.Contains("EditorCaptureGuard.EnterPlayMode();"),
+                  "WIRING (reads source): the seven daily-loop capture targets exist, each forces the switch for its run, and Begin still enters Play mode through the offline guard"
+                  + (missing.Count > 0 ? " - missing: " + string.Join(", ", missing.ToArray()) : ""));
         }
 
         // ------------------------------------------------------------------ the switch

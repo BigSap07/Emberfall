@@ -52,6 +52,10 @@ namespace Emberfall.Core.Progression
     public sealed class LoopBoard
     {
         public bool Active;
+
+        /// <summary>Seconds until the reward day turns over and the board is replaced.</summary>
+        public long ResetInSeconds;
+
         public readonly List<OrderView> Orders = new List<OrderView>();
         public bool AllClaimed;
 
@@ -359,6 +363,7 @@ namespace Emberfall.Core.Progression
             b.Active = true;
             DailyLoopState st = session.Profile.DailyLoop;
             OrdersConfig cfg = session.Content.Orders;
+            b.ResetInSeconds = Math.Max(0L, session.DayStartUnix(nowUnix) + 86400L - nowUnix);
 
             for (int i = 0; i < st.Orders.Count; i++)
             {

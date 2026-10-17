@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
+using Emberfall.Core.Progression;
 using Emberfall.Core.Session;
 using Emberfall.Game.Cloud;
 
@@ -68,6 +69,7 @@ namespace Emberfall.UI.Screens
         private RectTransform _hud;
         private HudElement _chest;
         private HudElement _friendsButton;
+        private HudElement _ordersButton;
         private float _overflowButtonTop;
 
         // ---------- the campaign card ----------
@@ -493,10 +495,23 @@ namespace Emberfall.UI.Screens
                                                       OpenEvents);
             Place(events.Root, top + step * 2f);
 
+            // THE DAILY ORDERS DOOR, present only with DailyLoopSwitch on. It takes the slot above
+            // More and pushes More one slot down; with the switch off there is no fifth button,
+            // nothing moves, and the rail is the four it always was. A dot says something is ready.
+            int slot = 3;
+            if (DailyLoopSwitch.Enabled)
+            {
+                _ordersButton = HudWidgets.RailButton("Orders", _hud, "", TextureLab.Check(64),
+                                                      Emberforge.TextGold, OpenOrders);
+                Place(_ordersButton.Root, top + step * slot);
+                slot++;
+                RefreshOrdersBadge();
+            }
+
             HudElement more = HudWidgets.RailButton("More", _hud, HudSkin.IconMore,
                                                     TextureLab.Ellipsis(64), HubStyle.LabelText,
                                                     OpenOverflow);
-            _overflowButtonTop = top + step * 3f;
+            _overflowButtonTop = top + step * slot;
             Place(more.Root, _overflowButtonTop);
         }
 
@@ -606,6 +621,7 @@ namespace Emberfall.UI.Screens
             App.SetTopBarBackingVisible(false);
 
             RefreshFriendBadge();
+            RefreshOrdersBadge();
             FeatureLockView.RefreshAll(App, Root);
             _tick = 0f;
         }
@@ -644,6 +660,7 @@ namespace Emberfall.UI.Screens
             if (_tick < 1f) return;
             _tick = 0f;
             RefreshIdle();
+            RefreshOrdersBadge();
             // The popup is not a MonoBehaviour and does not tick itself: while it is open, this is
             // what keeps its stored time honest under the player's eyes.
             if (_claimPopup != null && _claimPopup.IsOpen) _claimPopup.Refresh();
@@ -697,6 +714,15 @@ namespace Emberfall.UI.Screens
             // stop finding. It is the NUMBER that goes quiet, which is the honest signal: gold
             // when there is something to collect, the muted tone when there is not.
             _chest.Caption.color = report.HasAnything ? HubStyle.ValueGold : HubStyle.TextTertiary;
+        }
+
+        /// <summary>The dot on the Orders rail button: lit while anything on the board can be
+        /// claimed, read from the same LoopBoard the Orders page draws, so it cannot disagree.
+        /// There is no button, and so nothing to do, with the switch off.</summary>
+        private void RefreshOrdersBadge()
+        {
+            if (_ordersButton == null || !SessionReady("RefreshOrdersBadge")) return;
+            _ordersButton.SetBadge(DailyLoop.Board(App.Session, TimeUtil.NowUnix()).AnythingToClaim ? 1 : 0);
         }
 
         private void RefreshContinue()
@@ -805,6 +831,12 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.Events);
+        }
+
+        private void OpenOrders()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Orders);
         }
 
         private void OpenProving()

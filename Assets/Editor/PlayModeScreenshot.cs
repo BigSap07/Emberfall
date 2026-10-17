@@ -67,6 +67,17 @@ namespace Emberfall.EditorTools
         private const string OnboardReadyKey = "PlayModeScreenshot.OnboardReady";
 
         /// <summary>
+        /// The daily loop's switch for this run: 0 leaves it as the build has it, 1 forces it ON for
+        /// the daily orders and the hub-with-entry targets, 2 forces it OFF for the hub-without-entry
+        /// target. It survives the domain reload that entering Play mode triggers, which resets the
+        /// switch to the build's default, so the static constructor below re-applies it before the
+        /// game boots and the router decides whether to build the Orders page. LoopWasKey is what
+        /// the switch was before the run, put back by Stop.
+        /// </summary>
+        private const string LoopForceKey = "PlayModeScreenshot.DailyLoopForce";
+        private const string LoopWasKey = "PlayModeScreenshot.DailyLoopWas";
+
+        /// <summary>
         /// Every run of this tool is on a scratch identity with the cloud held off, unconditionally:
         /// Begin swaps to it (unless a tool above, ScratchCaptures, already did) and enters Play
         /// mode through EditorCaptureGuard, which arms the forced-offline switch. The real save is
@@ -100,6 +111,7 @@ namespace Emberfall.EditorTools
         static PlayModeScreenshot()
         {
             Debug.Log("PlayModeScreenshot: loaded, build marker " + BuildMarker);
+            ApplyLoopForce();
             EditorApplication.update += Pump;
             EditorApplication.update += PollTriggerFile;
             // An interrupted capture must not leave the consent prompt switched on for a manual
@@ -109,6 +121,16 @@ namespace Emberfall.EditorTools
                 if (change == PlayModeStateChange.ExitingPlayMode || change == PlayModeStateChange.EnteredEditMode)
                     SessionState.SetBool(TelemetryService.PromptInEditorKey, false);
             };
+        }
+
+        /// <summary>Applies the run's daily-loop switch. Called on every domain load and again from
+        /// Begin, because with domain reload off the static constructor does not run again.</summary>
+        private static void ApplyLoopForce()
+        {
+            if (!SessionState.GetBool(ActiveKey, false)) return;
+            int force = SessionState.GetInt(LoopForceKey, 0);
+            if (force == 1) DailyLoopSwitch.Enabled = true;
+            else if (force == 2) DailyLoopSwitch.Enabled = false;
         }
 
         private static void PollTriggerFile()
@@ -221,6 +243,30 @@ namespace Emberfall.EditorTools
 
         [MenuItem("Emberfall/Capture/Hub (MainMenu)", false, 60)]
         public static void CaptureHubScreen() { Begin("Screen:MainMenu"); }
+
+        // THE DAILY LOOP (DESIGN-DAILY-LOOP.md). Each of these forces DailyLoopSwitch ON for its run,
+        // seeds the state through DailyLoop's own calls, and photographs the Orders page or the Hub.
+        // HubLoopOff forces it OFF and photographs the Hub the way a build without the loop draws it.
+        [MenuItem("Emberfall/Capture/Daily loop/Orders, fresh", false, 90)]
+        public static void CaptureOrders() { Begin("Screen:Orders"); }
+
+        [MenuItem("Emberfall/Capture/Daily loop/Orders, half done", false, 91)]
+        public static void CaptureOrdersHalf() { Begin("Screen:OrdersHalf"); }
+
+        [MenuItem("Emberfall/Capture/Daily loop/Orders, all claimed with the chest", false, 92)]
+        public static void CaptureOrdersClaimed() { Begin("Screen:OrdersClaimed"); }
+
+        [MenuItem("Emberfall/Capture/Daily loop/Calendar, day 1", false, 93)]
+        public static void CaptureOrdersCalendar1() { Begin("Screen:OrdersCalendar1"); }
+
+        [MenuItem("Emberfall/Capture/Daily loop/Calendar, day 4", false, 94)]
+        public static void CaptureOrdersCalendar4() { Begin("Screen:OrdersCalendar4"); }
+
+        [MenuItem("Emberfall/Capture/Daily loop/Hub with the entry", false, 95)]
+        public static void CaptureHubLoopOn() { Begin("Screen:HubLoopOn"); }
+
+        [MenuItem("Emberfall/Capture/Daily loop/Hub with the loop off", false, 96)]
+        public static void CaptureHubLoopOff() { Begin("Screen:HubLoopOff"); }
 
         [MenuItem("Emberfall/Capture/Heroes", false, 61)]
         public static void CaptureHeroes() { Begin("Screen:Heroes"); }
@@ -448,6 +494,9 @@ namespace Emberfall.EditorTools
             }
             EditorSceneManager.OpenScene("Assets/Scenes/Main.unity");
             SessionState.SetBool(ActiveKey, true);
+            SessionState.SetInt(LoopForceKey, LoopForceFor(target));
+            SessionState.SetBool(LoopWasKey, DailyLoopSwitch.Enabled);
+            ApplyLoopForce();
             SessionState.SetBool(VerifiedKey, false);
             SessionState.SetString(TargetKey, target);
             SessionState.SetInt(WidthKey, width);
@@ -483,6 +532,31 @@ namespace Emberfall.EditorTools
             if (window == null) return;
             window.Focus();
             window.Repaint();
+        }
+
+        /// <summary>The daily-loop targets: the Orders page in its five states and the Hub with the
+        /// loop on. Their names are matched whole so no other target can pick the switch up.</summary>
+        private static bool IsLoopScreen(string name)
+        {
+            switch (name)
+            {
+                case "Orders":
+                case "OrdersHalf":
+                case "OrdersClaimed":
+                case "OrdersCalendar1":
+                case "OrdersCalendar4":
+                case "HubLoopOn":
+                    return true;
+            }
+            return false;
+        }
+
+        private static int LoopForceFor(string target)
+        {
+            if (!target.StartsWith("Screen:")) return 0;
+            string name = target.Substring(7);
+            if (IsLoopScreen(name)) return 1;
+            return name == "HubLoopOff" ? 2 : 0;
         }
 
         private static void Pump()
@@ -899,6 +973,13 @@ namespace Emberfall.EditorTools
         private static void Stop()
         {
             Time.timeScale = 1f;
+            // Put the daily loop's switch back as the run found it, so a forced run cannot leave it
+            // forced for the next one in the same editor.
+            if (SessionState.GetInt(LoopForceKey, 0) != 0)
+            {
+                DailyLoopSwitch.Enabled = SessionState.GetBool(LoopWasKey, false);
+                SessionState.SetInt(LoopForceKey, 0);
+            }
             SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetBool(ActiveKey, false);
             SessionState.SetBool(TelemetryService.PromptInEditorKey, false);
@@ -1182,6 +1263,11 @@ namespace Emberfall.EditorTools
                     case "GuildRequests": id = ScreenId.GuildRequests; break;
                     case "GuildChat": id = ScreenId.GuildChat; break;
                     case "Battle": id = ScreenId.Battle; break;
+                    case "Orders":
+                    case "OrdersHalf":
+                    case "OrdersClaimed":
+                    case "OrdersCalendar1":
+                    case "OrdersCalendar4": id = ScreenId.Orders; break;
                     case "Result": id = ScreenId.Battle; break;
                     case "WaveResult":
                     case "WaveResultAuto":
@@ -1297,6 +1383,13 @@ namespace Emberfall.EditorTools
                 // calls rather than poking the profile: a screenshot of state no code path
                 // produces is evidence of nothing.
                 if (name == "Inventory" || name == "Forge") PopulateItems(app);
+
+                // THE DAILY LOOP'S STATES are seeded through DailyLoop's own calls, on the same
+                // clock the page reads, never by writing the state. HubLoopOff seeds nothing: it
+                // photographs the Hub as a build without the loop draws it, and says so loudly if
+                // the switch is on or the page exists, since a shot of the wrong build is not evidence.
+                if (IsLoopScreen(name)) SeedLoop(app, name);
+                if (name == "HubLoopOff") CheckLoopIsOff(app);
 
                 if (name == "Battle" || name == "Result")
                 {
@@ -1473,6 +1566,73 @@ namespace Emberfall.EditorTools
 
             if (frame == shotAt - 20) Canvas.ForceUpdateCanvases();
             if (frame == shotAt) Shoot(name, frame, slot);
+        }
+
+        // ------------------------------------------------------------------ the daily loop
+
+        /// <summary>
+        /// Puts the scratch profile at a frontier worth showing (the first sixteen stages, which
+        /// opens the Proving) and the loop in the state the target names. The stages are cleared
+        /// FIRST through GrantBattleResult and the loop's record of them is then discarded, so the
+        /// board starts at zero whatever the clears counted.
+        /// </summary>
+        private static void SeedLoop(GameApp app, string name)
+        {
+            GameSession session = app.Session;
+            long now = TimeUtil.NowUnix();
+            List<StageDef> stages = session.Content.AllStages;
+            for (int i = 0; i < stages.Count && i < 16; i++) session.GrantBattleResult(stages[i], true, now);
+            session.Profile.DailyLoop = new DailyLoopState();
+            session.Profile.Gold += 5000;
+
+            switch (name)
+            {
+                case "OrdersHalf":
+                case "HubLoopOn":
+                    // One claimed, one finished and waiting, one part way, two untouched.
+                    DailyLoop.Roll(session, now);
+                    FinishOrder(session, 0, now, 1f, true);
+                    FinishOrder(session, 1, now, 1f, false);
+                    FinishOrder(session, 2, now, 0.5f, false);
+                    break;
+                case "OrdersClaimed":
+                    // The last four days all finished, so the week's counter and the chest show.
+                    for (int d = 3; d >= 0; d--)
+                    {
+                        long t = now - d * 86400L;
+                        DailyLoop.Roll(session, t);
+                        for (int i = 0; i < 5; i++) FinishOrder(session, i, t, 1f, true);
+                    }
+                    break;
+                case "OrdersCalendar4":
+                    // Three days already taken: the next claim is day 4.
+                    for (int d = 3; d >= 1; d--) DailyLoop.ClaimCalendar(session, now - d * 86400L);
+                    break;
+            }
+            app.RefreshHud();
+            Debug.Log("PlayModeScreenshot: seeded the daily loop for " + name);
+        }
+
+        /// <summary>Counts a fraction of an order's target through the rules (the kind's own counter,
+        /// as a played wave or summon would) and optionally claims it.</summary>
+        private static void FinishOrder(GameSession session, int index, long now, float fraction, bool claim)
+        {
+            DailyLoopState st = session.Profile.DailyLoop;
+            if (index < 0 || index >= st.Orders.Count) return;
+            OrderDef def = session.Content.Orders.Order(st.Orders[index].Id);
+            if (def == null) return;
+            int amount = Mathf.RoundToInt(def.Target * fraction);
+            if (amount > 0) DailyLoop.Record(session, def.Kind, amount, now);
+            if (claim) DailyLoop.ClaimOrder(session, def.Id, now);
+        }
+
+        private static void CheckLoopIsOff(GameApp app)
+        {
+            bool off = !DailyLoopSwitch.Enabled && app.Router.Orders == null && app.Session.Profile.DailyLoop.IsEmpty;
+            Debug.Log(off
+                ? "PlayModeScreenshot: [ok] the daily loop is off: no Orders page, no loop state, so the Hub below is the Hub without it."
+                : "PlayModeScreenshot: [FAIL] the daily loop is NOT off (switch " + DailyLoopSwitch.Enabled + ", Orders page "
+                  + (app.Router.Orders != null) + "). This capture is not the Hub without the loop.");
         }
 
         /// <summary>
