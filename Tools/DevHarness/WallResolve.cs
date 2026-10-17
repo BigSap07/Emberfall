@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Text;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
@@ -29,6 +30,75 @@ namespace Emberfall.DevHarness
             _walkAscends = ascends;
             try { return SimulateEconomy(db, false, firstSeed); }
             finally { _walkConverts = c; _walkAscends = a; }
+        }
+
+        private static string _wallModes = null;
+        private static string _relevelSpec = null;
+        /// <summary>Per-stage CEIL target set by --relevel (Docs/ECONOMY-PROPOSAL-R4.md, lever R2), consulted by
+        /// TargetCeilRate and the CEIL band readers. Empty in every other run.</summary>
+        private static Dictionary<string, float> _ceilTargetOverride = new Dictionary<string, float>();
+
+        /// <summary>
+        /// Lever R2 of Docs/ECONOMY-PROPOSAL-R4.md: the level search alone, at the recommendedPower the content already carries, with
+        /// a per-kind CEIL target, written back into the content directory's campaign.json.
+        /// Spec: key=value pairs, comma separated: ord (ordinary target), wall (stage 6 and 12 target),
+        /// ch1wall (1-12 target), skipto (first global 1-based stage index to level, default 7),
+        /// only (a stage code such as 2-5 to level alone).
+        /// </summary>
+        private static int RunRelevel(string contentDir, string spec)
+        {
+            Console.OutputEncoding = Encoding.UTF8;
+            ContentDatabase db = LoadContent(contentDir);
+            if (db == null) return 1;
+            float ord = 0.85f, wall = 0.65f, ch1wall = 0.65f; int skipTo = 7, upTo = 72; string only = null; bool wallsOnly = false;
+            foreach (string kv in spec.Split(','))
+            {
+                string[] p = kv.Split('=');
+                if (p.Length != 2) continue;
+                if (p[0] == "ord") ord = float.Parse(p[1], CultureInfo.InvariantCulture);
+                else if (p[0] == "wall") wall = float.Parse(p[1], CultureInfo.InvariantCulture);
+                else if (p[0] == "ch1wall") ch1wall = float.Parse(p[1], CultureInfo.InvariantCulture);
+                else if (p[0] == "skipto") skipTo = int.Parse(p[1]);
+                else if (p[0] == "upto") upTo = int.Parse(p[1]);
+                else if (p[0] == "wallsonly") wallsOnly = p[1] == "1";
+                else if (p[0] == "only") only = p[1];
+            }
+            Line("RELEVEL (scratch): ordinary " + Pct(ord) + ", walls " + Pct(wall) + ", 1-12 " + Pct(ch1wall) + ", from stage " + skipTo);
+            Line("  stage   recPwr   was levels            landed levels         CEIL@rec  probes  moved");
+            int totalProbes = 0, graded = 0, inBand = 0;
+            System.Diagnostics.Stopwatch sw = System.Diagnostics.Stopwatch.StartNew();
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef s = db.AllStages[i];
+                if (i + 1 < skipTo || i + 1 > upTo) continue;
+                if (only != null && Array.IndexOf(only.Split(';'), s.DisplayCode) < 0) continue;
+                bool isWall = s.Index == 6 || s.Index == 12;
+                if (wallsOnly && !(isWall && !(s.ChapterNumber == 1 && s.Index == 6))) continue;
+                float target = s.ChapterNumber == 1 ? (s.Index == 12 ? ch1wall : ord) : (isWall ? wall : ord);
+                _ceilTargetOverride[s.Id] = target;
+                if (IsFloorPinned(db, s)) { Line("  " + s.DisplayCode + "  PINNED"); continue; }
+                int[] roster = new int[s.Enemies.Count];
+                for (int e = 0; e < roster.Length; e++) roster[e] = s.Enemies[e].Level;
+                string was = SolverRosterText(s) + " (" + s.FloorLevel + "/" + s.CeilingLevel + ")";
+                int ramp = s.CeilingLevel - s.FloorLevel;
+                int probes = 0;
+                LevelConfig landed = SolveStageLevelsAt(db, s, roster, ramp, SolverMaxProbesPerStage, ref probes);
+                totalProbes += probes;
+                graded++;
+                bool ok = CeilBandMargin(db, s, landed.Rate) >= 0f;
+                if (ok) inBand++;
+                Line("  " + s.DisplayCode.PadRight(6) + s.RecommendedPower.ToString().PadLeft(8) + "   " + was.PadRight(22)
+                     + (SolverRosterText(s) + " (" + s.FloorLevel + "/" + s.CeilingLevel + ")").PadRight(22)
+                     + Pct(landed.Rate).PadLeft(8) + probes.ToString().PadLeft(8) + landed.UnitsMoved.ToString().PadLeft(7)
+                     + (ok ? "" : "   OUT") + (landed.Truncated ? "  BUDGET" : ""));
+            }
+            Line("  " + graded + " stages levelled, " + inBand + " inside the +-7 band, " + totalProbes + " probes, "
+                 + (sw.ElapsedMilliseconds / 1000) + " s");
+            string error;
+            if (!WriteCampaignJson(db, Path.Combine(contentDir, "campaign.json"), out error))
+            { Line("  ABORT: " + error); return 1; }
+            Line("  wrote " + Path.Combine(contentDir, "campaign.json"));
+            return 0;
         }
 
         private static int WalkSeed(int k) { return 1 + k * 1000003; }
@@ -362,6 +432,8 @@ namespace Emberfall.DevHarness
             bool[,] modes = { { true, true }, { false, true }, { false, false } };
             for (int m = 0; m < 3; m++)
             {
+                string[] keys = { "fuses", "noconv", "none" };
+                if (_wallModes != null && Array.IndexOf(_wallModes.Split(','), keys[m]) < 0) continue;
                 Line("");
                 Line("WALL STUDY - " + names[m] + ", " + walks + " walks");
                 List<EconomyRun> runs = new List<EconomyRun>();

@@ -63,6 +63,11 @@ namespace Emberfall.DevHarness
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], out n)) { wallStudy = n; i++; }
                     continue;
                 }
+                // Measurement flags, not checks and not run by the gate: --wall-modes picks which players
+                // --wall-study walks (a subset of "fuses,noconv,none"); --relevel is lever R2 of
+                // Docs/ECONOMY-PROPOSAL-R4.md, see RunRelevel.
+                if (args[i] == "--wall-modes" && i + 1 < args.Length) { _wallModes = args[++i]; continue; }
+                if (args[i] == "--relevel" && i + 1 < args.Length) { _relevelSpec = args[++i]; continue; }
                 if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
                 if (args[i] == "--guild-path") { guildPath = true; continue; }
                 if (args[i] == "--guild-tech") { guildTech = true; continue; }
@@ -110,6 +115,7 @@ namespace Emberfall.DevHarness
             // Also not a check, and not run by the gate: see RunCeilReconcile.
             if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
             if (wallStudy > 0) return RunWallStudy(contentDir, wallStudy);
+            if (_relevelSpec != null) return RunRelevel(contentDir, _relevelSpec);
             if (lineCalibration) return RunLineCalibration(contentDir);
             // Nor this: the probe study measures the level search and writes nothing.
             if (probeStudy) return RunProbeStudy(contentDir);
@@ -16629,6 +16635,8 @@ namespace Emberfall.DevHarness
 
         private static float TargetCeilRate(ContentDatabase db, StageDef stage)
         {
+            float over;
+            if (_ceilTargetOverride.TryGetValue(stage.Id, out over)) return over;
             return IsChapterFinale(db, stage) ? CeilTargetFinale : CeilTargetOrdinary;
         }
 
@@ -19802,11 +19810,15 @@ namespace Emberfall.DevHarness
 
         private static float CeilBandLow(ContentDatabase db, StageDef stage)
         {
+            float over;
+            if (_ceilTargetOverride.TryGetValue(stage.Id, out over)) return over - 0.07f;
             return IsChapterFinale(db, stage) ? GearedCeilBandLowFinale : GearedCeilBandLowOrdinary;
         }
 
         private static float CeilBandHigh(ContentDatabase db, StageDef stage)
         {
+            float over;
+            if (_ceilTargetOverride.TryGetValue(stage.Id, out over)) return over + 0.07f;
             return IsChapterFinale(db, stage) ? GearedCeilBandHighFinale : GearedCeilBandHighOrdinary;
         }
 
