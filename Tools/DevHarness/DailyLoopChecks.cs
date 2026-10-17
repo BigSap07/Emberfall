@@ -303,6 +303,46 @@ namespace Emberfall.DevHarness
             OrderProgress claimed = s.Profile.DailyLoop.Find("arena_2");
             Check(claimed.Progress == 2 && claimed.Claimed, "progress stops at the target, and a claimed order counts nothing more");
 
+            // ---- a LOST fight counts nothing: a wave lost, a stage not won, a sweep lost
+            GameSession weak = LoopSession(db, 11);
+            long tw = LoopAt(weak, 1, 6);
+            LoopSetBoard(weak, tw, "waves_8", "stage_2", "level_3", "summon_1", "arena_2");
+            StageDef hard = db.AllStages[11];
+            WaveResolution lostRes = weak.ResolveWave(hard, 4242, tw + 1);
+            Check(lostRes.LostBattle > 0 && !lostRes.WaveCleared && !lostRes.StageCleared
+                  && LoopProgress(weak, "waves_8") == 0 && LoopProgress(weak, "stage_2") == 0,
+                  "A LOST WAVE COUNTS NOTHING: a level 1 line fought " + hard.DisplayCode + " and lost battle " + lostRes.LostBattle
+                  + ", and the wave and stage orders read " + LoopProgress(weak, "waves_8") + " and " + LoopProgress(weak, "stage_2"));
+
+            BattleRewards lostSweep = weak.SweepClearedStage(hard, 4343, tw + 2);
+            Check(!lostSweep.Victory && LoopProgress(weak, "waves_8") == 0 && LoopProgress(weak, "stage_2") == 0,
+                  "A LOST SWEEP COUNTS NOTHING: the sweep of " + hard.DisplayCode + " was lost (victory " + lostSweep.Victory + ") and moved no order");
+
+            // ---- a sweep past the repeat cap pays nothing, so it counts nothing
+            GameSession capped = LoopSession(db, 1);
+            long tc = LoopAt(capped, 1, 6);
+            LoopSetBoard(capped, tc, "waves_8", "stage_2", "level_3", "summon_1", "arena_2");
+            capped.RollDailyReset(tc);
+            capped.Profile.StageClearsToday[first.Id] = capped.RepeatFullClearsPerDay;
+            long goldBefore = capped.Profile.Gold;
+            BattleRewards cappedSweep = capped.SweepClearedStage(first, 8800, tc + 1);
+            Check(cappedSweep.Victory && cappedSweep.RepeatCapped && capped.Profile.Gold == goldBefore
+                  && LoopProgress(capped, "waves_8") == 0 && LoopProgress(capped, "stage_2") == 0,
+                  "A SWEEP PAST THE REPEAT CAP COUNTS NOTHING: it paid " + (capped.Profile.Gold - goldBefore)
+                  + " gold and the wave and stage orders read " + LoopProgress(capped, "waves_8") + " and " + LoopProgress(capped, "stage_2"));
+
+            // ---- watching a replay is free and counts nothing
+            GameSession watcher = LoopSession(db, 0);
+            long tr = LoopAt(watcher, 1, 6);
+            LoopSetBoard(watcher, tr, "waves_8", "stage_2", "level_3", "summon_1", "arena_2");
+            WaveResolution played = watcher.ResolveWave(first, 7100, tr + 1);
+            string beforeReplay = SaveSerializer.Serialize(watcher.Profile);
+            if (played.Replay != null) watcher.ReplayBattle(played.Replay);
+            Check(played.Replay != null && SaveSerializer.Serialize(watcher.Profile) == beforeReplay
+                  && LoopProgress(watcher, "waves_8") > 0,
+                  "A WATCHED REPLAY COUNTS NOTHING: replaying a fought wave leaves the saved profile, the loop key included, byte for byte as it was ("
+                  + beforeReplay.Length + " characters)");
+
             // ---- kinds do not bleed into each other
             GameSession lone = LoopSession(db, 0);
             LoopSetBoard(lone, t0, "stage_1", "summon_1");
@@ -818,8 +858,8 @@ namespace Emberfall.DevHarness
                 JsonValue root = JsonValue.Parse(offJson);
                 List<string> keys = new List<string>();
                 foreach (string key in root.Keys) keys.Add(key);
-                Check(!keys.Contains("dailyLoop") && keys.Contains("tutorialStep") && keys.Contains("seenTips") && keys.Contains("dailyResetUnix"),
-                      "the off save carries exactly the keys version 21 wrote (" + keys.Count + " keys), so only the version number differs from origin/main's save");
+                Check(!keys.Contains("dailyLoop") && keys.Count == 40 && keys.Contains("tutorialStep") && keys.Contains("seenTips") && keys.Contains("dailyResetUnix"),
+                      "the off save carries the 40 keys version 21 wrote and no more (" + keys.Count + " keys), so only the version number differs from origin/main's save");
             }
             finally { DailyLoopSwitch.Enabled = was; }
         }

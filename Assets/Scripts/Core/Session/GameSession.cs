@@ -968,9 +968,12 @@ namespace Emberfall.Core.Session
                 return rewards;
             }
             BattleRewards swept = GrantBattleResult(stage, true, nowUnix);
-            // A sweep stands for the stage's whole ladder, so it counts the waves the stage has: a player with nothing left to fight the long way can still
-            // finish a wave order, which is the one place it differs from RecordLadderWin.
-            OrderEvent(OrderKind.Waves, Math.Max(1, stage.WaveCount), nowUnix);
+            // A sweep stands for the stage's whole ladder, so it counts the waves the stage has:
+            // a player with nothing left to fight the long way can still finish a wave order,
+            // which is the one place it differs from RecordLadderWin. A sweep past the repeat cap
+            // pays nothing, so it counts nothing either: one free tap must not finish two paid
+            // orders. (GrantBattleResult holds back the stage win for the same reason.)
+            if (!swept.RepeatCapped) OrderEvent(OrderKind.Waves, Math.Max(1, stage.WaveCount), nowUnix);
             return swept;
         }
 
@@ -1260,7 +1263,6 @@ namespace Emberfall.Core.Session
 
             bool firstClear = !Profile.HasClearedStage(stage.Id);
             rewards.FirstClear = firstClear;
-            OrderEvent(OrderKind.Stage, 1, nowUnix);
 
             int gold = stage.RewardGold + (firstClear ? stage.FirstClearGold : 0);
             int shards = stage.RewardShards + (firstClear ? stage.FirstClearShards : 0);
@@ -1315,6 +1317,7 @@ namespace Emberfall.Core.Session
             Profile.Shards += rewards.Shards;
             Profile.RelicDust += rewards.RelicDust;
             Profile.TotalBattlesWon++;
+            if (!rewards.RepeatCapped) OrderEvent(OrderKind.Stage, 1, nowUnix);
 
             if (firstClear)
             {
