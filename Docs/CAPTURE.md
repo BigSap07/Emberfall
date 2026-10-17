@@ -58,7 +58,7 @@ The outer watchdog, in `capture-batch.ps1`, is for an editor whose update loop i
 
 ### Switching it off
 
-Set `EMBERFALL_CAPTURE_WATCHDOG=0` in the environment of the shell that launches the batch. `PlayModeScreenshot` reads it when a run begins and logs `watchdog mode ON` or `watchdog mode OFF`. Off switches off both watchdogs (a lost play entry then waits for the 10 minute stall net). Unset, or any other value, is ON.
+Set `EMBERFALL_CAPTURE_WATCHDOG=0` in the environment of the shell that launches the batch. `PlayModeScreenshot` reads it when a run begins and logs `watchdog mode ON` or `watchdog mode OFF`. Off switches off both watchdogs (a lost play entry then waits for the 10 minute stall net). Unset, or any other value, is ON. Never combine `EMBERFALL_CAPTURE_WATCHDOG=0` with `EMBERFALL_CAPTURE_FORCE_MISS`: the target then hangs on purpose with no recovery.
 
 ### Showing the recovery on demand
 

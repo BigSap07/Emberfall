@@ -140,6 +140,13 @@ namespace Emberfall.DevHarness
                   "WIRING (reads source): the three lines the batch launcher reads (entry, heartbeat, recover) are printed");
             Check(pms.Contains("SessionState.SetString(WdEntryAtKey") && pms.Contains("PlayModeStateChange.EnteredPlayMode"),
                   "WIRING (reads source): the entry time is kept in SessionState and the entered-play event is logged");
+            // Pump must stand down while a Recover is under way: the guard sits after the isPlaying
+            // check and before the force-miss hook and the heartbeat.
+            int playingCheck = pms.IndexOf("if (!EditorApplication.isPlaying) return;", StringComparison.Ordinal);
+            int recoverGuard = pms.IndexOf("if (SessionState.GetBool(WdRecoveringKey, false)) return;", StringComparison.Ordinal);
+            int heartbeatMark = pms.IndexOf("SessionState.SetBool(WdBeatKey, true);", StringComparison.Ordinal);
+            Check(playingCheck >= 0 && recoverGuard > playingCheck && heartbeatMark > recoverGuard,
+                  "WIRING (reads source): Pump records no heartbeat and does no work while a Recover is under way");
             Check(scratch.Contains("PlayModeScreenshot.FailedKey") && scratch.Contains("CaptureWatchdog.FirstAttemptVariable"),
                   "WIRING (reads source): ScratchCaptures carries on after a FAILED target and honours a relaunch's first attempt");
 

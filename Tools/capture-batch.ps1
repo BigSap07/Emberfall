@@ -436,10 +436,15 @@ while ($true) {
     Say ('relaunching once with ' + $queue.Count + ' target(s), starting at the stuck one: ' + $targetList[$stuck])
 }
 [Environment]::SetEnvironmentVariable('EMBERFALL_CAPTURE_FIRST_ATTEMPT', $null, 'Process')
-# The last editor was stopped by this script: leave the project as a normal run would, so the next
-# batch does not refuse or stop on the recovery dialog.
-if ($logs.Count -gt 0 -and $logs[$logs.Count - 1].Reason) {
-    [void](Clear-AfterKill $logs[$logs.Count - 1].Launch)
+# The last editor was stopped by this script, or exited by itself with a nonzero code (a crash): leave
+# the project as a normal run would, so the next batch does not refuse or stop on the recovery dialog.
+if ($logs.Count -gt 0) {
+    $lastLaunch = $logs[$logs.Count - 1]
+    $crashed = (-not $lastLaunch.Reason) -and ($null -ne $lastLaunch.Exit) -and ($lastLaunch.Exit -ne 0)
+    if ($lastLaunch.Reason -or $crashed) {
+        if ($crashed) { Say ('launch ' + $lastLaunch.Launch + ' exited with code ' + $lastLaunch.Exit + ': running the same cleanup as after a kill') }
+        [void](Clear-AfterKill $lastLaunch.Launch)
+    }
 }
 $wall = [int]((Get-Date) - $began).TotalSeconds
 

@@ -756,6 +756,11 @@ namespace Emberfall.EditorTools
             if (!runActive) return;
             if (!EditorApplication.isPlaying) return; // still transitioning in, or already stopped
 
+            // A Recover is under way: the watchdog has asked Play to end. A slow entry that reaches
+            // isPlaying now must record no heartbeat and do no work, or the run would stay Active
+            // with no Play left to finish it.
+            if (SessionState.GetBool(WdRecoveringKey, false)) return;
+
             // The test hook: this play entry sends no heartbeat and does no work, so the watchdog has
             // a lost entry to recover. The second entry for the target is not forced.
             if (SessionState.GetBool(WdForceKey, false))
