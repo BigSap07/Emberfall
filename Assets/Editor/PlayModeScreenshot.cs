@@ -10,6 +10,7 @@ using Emberfall.Game;
 using Emberfall.Game.Telemetry;
 using Emberfall.UI;
 using Emberfall.UI.Screens;
+using Emberfall.UI.Summon;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
@@ -106,7 +107,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV22-onboarding";
+        private const string BuildMarker = "FIXV23-audio-targets";
 
         static PlayModeScreenshot()
         {
@@ -1271,6 +1272,8 @@ namespace Emberfall.EditorTools
                     case "OrdersCalendar1":
                     case "OrdersCalendar4": id = ScreenId.Orders; break;
                     case "Result": id = ScreenId.Battle; break;
+                    case "AudioFight": id = ScreenId.Battle; break;
+                    case "AudioSummon": id = ScreenId.Summon; break;
                     case "WaveResult":
                     case "WaveResultAuto":
                     case "WaveResultCleared":
@@ -1393,7 +1396,7 @@ namespace Emberfall.EditorTools
                 if (IsLoopScreen(name)) SeedLoop(app, name);
                 if (name == "HubLoopOff") CheckLoopIsOff(app);
 
-                if (name == "Battle" || name == "Result")
+                if (name == "Battle" || name == "Result" || name == "AudioFight")
                 {
                     string asked = SessionState.GetString(BattleStageKey, "");
                     StageDef next = asked.Length > 0 ? app.Session.Content.GetStage(asked) : app.Session.NextStage;
@@ -1500,6 +1503,44 @@ namespace Emberfall.EditorTools
 
                 if (frame == armed + BattlePaintDelay - 5) Canvas.ForceUpdateCanvases();
                 if (frame == armed + BattlePaintDelay) Shoot(name, frame, slot);
+                return;
+            }
+
+            // AUDIO PLAY PROOF, THE SUMMON (R10-AUDIO): a pull played through its reveal. See
+            // PumpAudioSummon. Has no menu item and no literal Begin call on purpose, so the nightly
+            // sweep (which reads those) does not run it: it is long and its point is the cue log.
+            if (name == "AudioSummon")
+            {
+                PumpAudioSummon(app, name, frame, showAt, slot);
+                return;
+            }
+
+            // AUDIO PLAY PROOF (R10-AUDIO): one whole fight in the battle screen at the speed the
+            // player has set, in real time and untouched, so the cue log (EMBERFALL_CUE_LOG) records
+            // every sound a fight makes: hits, crits, casts, impacts, heals, shields, deaths and the
+            // result. It waits for the result panel instead of skipping, which is the opposite of
+            // Result below. Pick the stage like Battle does (Screen:AudioFight=<stage id>); a later
+            // stage has more skills, crits, deaths and heals in it. The ceiling is generous because
+            // a fight can run a minute or two at 1x. No menu item and no literal Begin call, like
+            // AudioSummon, so the nightly sweep does not run it.
+            if (name == "AudioFight")
+            {
+                if (frame <= showAt) return;
+                BattleScreen fight = app.Router.Battle;
+                const int FightCeiling = 14400;
+                int fightArmed = SessionState.GetInt(BattleArmKey, 0);
+                if (fightArmed == 0)
+                {
+                    if (fight != null && fight.Finished) { SessionState.SetInt(BattleArmKey, frame); return; }
+                    if (frame > showAt + FightCeiling)
+                    {
+                        SessionState.SetInt(BattleArmKey, frame);
+                        Debug.LogWarning("PlayModeScreenshot: the fight did not finish within " + FightCeiling + " frames. Shooting anyway.");
+                    }
+                    return;
+                }
+                if (frame == fightArmed + BattlePaintDelay - 5) Canvas.ForceUpdateCanvases();
+                if (frame == fightArmed + BattlePaintDelay) Shoot(name, frame, slot);
                 return;
             }
 
@@ -1891,6 +1932,108 @@ namespace Emberfall.EditorTools
             for (int i = 0; i < ability.Effects.Count; i++)
                 if (AbilityMath.Carries(ability.Effects[i])) n++;
             return n;
+        }
+
+        // ------------------------------------------------------------------ audio play proof
+
+        /// <summary>The tiers the audio summon plays: a 1-star (the flat reveal), a 3-star and a
+        /// 5-star (the biggest reveal and its five star pings), so every summon.reveal.N a batch can
+        /// hit that matters fires once.</summary>
+        private static readonly int[] AudioSummonTiers = { 1, 3, 5 };
+
+        private static int _audioSummonStart;
+        private static int _audioSummonSettledAt;
+        private static int _audioSummonSettledIndex;
+        private static int _audioSummonSummaryAt;
+        private static int _audioSummonDoneAt;
+
+        /// <summary>
+        /// AudioSummon: plays a summon through its press, buildup, tell, flash, reveals, star pings
+        /// and summary, in real time, so the cue log (EMBERFALL_CUE_LOG) records summon.start,
+        /// summon.charge (LOOP+ and LOOP-), summon.reveal.1, .3 and .5, and summon.star.
+        ///
+        /// It uses SummonScreen.DebugPreview, so the tiers are SEEDED: nothing is rolled, no shard
+        /// is spent and no hero is granted (a real pull cannot be made to land a 5-star). The sound
+        /// path is the real one: the sequence fires the same SummonBeat calls either way. Each
+        /// settled hero is tapped after a short wait, the way a player taps TAP TO CONTINUE; the
+        /// summary is held for a moment and then the sequence is aborted, which also exercises the
+        /// abort path that used to leave the charge loop running (the log must show LOOP- before it).
+        /// </summary>
+        private static void PumpAudioSummon(GameApp app, string name, int frame, int showAt, int slot)
+        {
+            const int Ceiling = 9000;
+            const int SettleHold = 90;
+            const int SummaryHold = 150;
+            const int PaintDelay = 20;
+
+            if (frame == showAt)
+            {
+                _audioSummonStart = 0;
+                _audioSummonSettledAt = 0;
+                _audioSummonSettledIndex = -1;
+                _audioSummonSummaryAt = 0;
+                _audioSummonDoneAt = 0;
+                return;
+            }
+            if (frame < showAt) return;
+
+            SummonScreen summon = app.Router.Summon;
+            SummonSequence seq = summon != null ? summon.DebugSequence : null;
+            if (seq == null)
+            {
+                Debug.LogWarning("PlayModeScreenshot: no summon screen or sequence, skipping AudioSummon.");
+                SessionState.SetInt(StageKey, slot + 1);
+                return;
+            }
+
+            if (_audioSummonStart == 0)
+            {
+                if (frame < showAt + 30) return;
+                summon.DebugPreview(AudioSummonTiers);
+                _audioSummonStart = frame;
+                Debug.Log("PlayModeScreenshot: AudioSummon started a seeded preview of tiers 1, 3 and 5 at frame " + frame + ".");
+                return;
+            }
+
+            if (_audioSummonDoneAt == 0)
+            {
+                bool timedOut = frame > _audioSummonStart + Ceiling;
+                if (!seq.Running || timedOut)
+                {
+                    if (timedOut)
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: the summon did not finish within " + Ceiling + " frames. Aborting it.");
+                        seq.Abort();
+                    }
+                    _audioSummonDoneAt = frame;
+                    return;
+                }
+
+                if (seq.Current == SummonSequence.Phase.Summary)
+                {
+                    if (_audioSummonSummaryAt == 0) _audioSummonSummaryAt = frame;
+                    else if (frame - _audioSummonSummaryAt >= SummaryHold)
+                    {
+                        seq.Abort();
+                        _audioSummonDoneAt = frame;
+                    }
+                    return;
+                }
+
+                if (seq.IsSettled)
+                {
+                    if (_audioSummonSettledIndex != seq.Index) { _audioSummonSettledIndex = seq.Index; _audioSummonSettledAt = frame; }
+                    else if (frame - _audioSummonSettledAt >= SettleHold)
+                    {
+                        _audioSummonSettledAt = frame;
+                        seq.Tap();
+                    }
+                }
+                return;
+            }
+
+            if (frame == _audioSummonDoneAt + PaintDelay - 5) Canvas.ForceUpdateCanvases();
+            if (frame == _audioSummonDoneAt + PaintDelay) Shoot(name, frame, slot);
         }
 
         /// <summary>Requests one screen's PNG and advances the schedule to the next screen.
