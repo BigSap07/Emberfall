@@ -154,6 +154,8 @@ namespace Emberfall.DevHarness
                   && scratch.Contains("Enter Play Mode options restored") && scratch.Contains("RestorePlayOptions();"),
                   "WIRING (reads source): ScratchCaptures puts the exact previous Enter Play Mode options back and says so");
             string batchSrc = ReadIfThere(Path.Combine(root, "Tools", "capture-batch.ps1"));
+            Check(scratch.Contains("EXPERIMENTAL") && scratch.Contains("EditorSettingsHashKey") && scratch.Contains("byte for byte what it was before the session"),
+                  "WIRING (reads source): the skip-reload switch warns that it is experimental and checks the restore against the bytes taken at session start");
             Check(batchSrc.Contains("EditorSettings.asset") && batchSrc.Contains("Restore-EditorSettings") && !batchSrc.Contains("Remove-Item"),
                   "WIRING (reads source): capture-batch.ps1 copies EditorSettings.asset aside and restores it if it changed");
 

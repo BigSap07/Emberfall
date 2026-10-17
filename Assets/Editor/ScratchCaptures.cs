@@ -59,6 +59,7 @@ namespace Emberfall.EditorTools
         private const string SkipActiveKey = "ScratchCaptures.SkipReloadActive";
         private const string OrigPlayOptionsEnabledKey = "ScratchCaptures.OrigPlayOptionsEnabled";
         private const string OrigPlayOptionsKey = "ScratchCaptures.OrigPlayOptions";
+        private const string EditorSettingsHashKey = "ScratchCaptures.EditorSettingsHash";
 
         /// <summary>
         /// Editor ticks with Play mode fully off before the identity is put back. Not zero: when
@@ -228,11 +229,17 @@ namespace Emberfall.EditorTools
         private static void ApplySkipReload()
         {
             if (!CaptureWatchdog.SkipReloadOn(Environment.GetEnvironmentVariable(CaptureWatchdog.SkipReloadVariable))) return;
+            // The file as it stands before anything is changed. The API's idea of "enabled" does not
+            // match the file's m_EnterPlayModeOptionsEnabled in Unity 6 (it read False over a file that
+            // says 1), so the restore is checked against these bytes and not against a parsed value.
+            SessionState.SetString(EditorSettingsHashKey, HashOf(EditorSettingsPath()));
             SessionState.SetBool(OrigPlayOptionsEnabledKey, EditorSettings.enterPlayModeOptionsEnabled);
             SessionState.SetInt(OrigPlayOptionsKey, (int)EditorSettings.enterPlayModeOptions);
             SessionState.SetBool(SkipActiveKey, true);
             EditorSettings.enterPlayModeOptionsEnabled = true;
             EditorSettings.enterPlayModeOptions = EnterPlayModeOptions.DisableDomainReload;
+            Debug.LogWarning("ScratchCaptures: EXPERIMENTAL. Skipping the domain reload broke captures when it was measured (destroyed cached "
+                             + "textures and sprites: MissingReferenceException, flat squares on the summon screen). Do not use it for proof captures.");
             Debug.LogWarning("ScratchCaptures: SKIP-RELOAD mode (" + CaptureWatchdog.SkipReloadVariable + "=1): Enter Play Mode options were enabled "
                              + SessionState.GetBool(OrigPlayOptionsEnabledKey, false) + " / " + SessionState.GetInt(OrigPlayOptionsKey, 0)
                              + ", now enabled with DisableDomainReload for this session only.");
@@ -251,14 +258,19 @@ namespace Emberfall.EditorTools
             AssetDatabase.SaveAssets();
             Debug.Log("ScratchCaptures: Enter Play Mode options restored (enabled " + enabled + ", options " + options + ")");
 
-            // Read back from the FILE, as the identity is.
-            string file = File.ReadAllText(Path.Combine(Application.dataPath, "../ProjectSettings/EditorSettings.asset"));
-            string wantEnabled = "m_EnterPlayModeOptionsEnabled: " + (enabled ? 1 : 0);
-            string wantOptions = "m_EnterPlayModeOptions: " + options;
-            if (file.Contains(wantEnabled) && file.Contains(wantOptions))
-                Debug.Log("ScratchCaptures: [ok] EditorSettings.asset holds the project's Enter Play Mode options again");
+            // Checked against the bytes taken before the session, not against a parsed value.
+            string before = SessionState.GetString(EditorSettingsHashKey, "");
+            string after = HashOf(EditorSettingsPath());
+            if (before.Length > 0 && before == after)
+                Debug.Log("ScratchCaptures: [ok] EditorSettings.asset is byte for byte what it was before the session");
             else
-                Debug.LogError("ScratchCaptures: [FAIL] EditorSettings.asset does not hold the original Enter Play Mode options (" + wantEnabled + ", " + wantOptions + ")");
+                Debug.LogError("ScratchCaptures: [FAIL] EditorSettings.asset differs from the copy hashed at session start (" + before + " then " + after
+                               + "); capture-batch.ps1 restores it from its own copy, or run git checkout -- ProjectSettings/EditorSettings.asset");
+        }
+
+        private static string EditorSettingsPath()
+        {
+            return Path.Combine(Application.dataPath, "../ProjectSettings/EditorSettings.asset");
         }
 
         private static string SettingsPath()
