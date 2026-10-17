@@ -1307,6 +1307,24 @@ in under two minutes and left the real save unchanged. So captures work whenever
 desktop exists, and the S4U logon was what broke them. The scheduled task itself is proven only
 once the owner re-registers it from a logged-on PowerShell and a night runs.
 
+**Captures run in batches, and a stuck play entry recovers by itself.** `Tools/capture-batch.ps1`
+takes a list of targets and runs all of them in one editor session through `ScratchCaptures.Run`,
+with the real save hashed before and after and one RESULT line per target. A run captures its
+targets in batches, never one launch per target; a single launch is only for retrying a target.
+`CaptureWatchdog` decides and `PlayModeScreenshot` acts: with no Pump heartbeat 90 seconds after a
+play entry it logs the editor state, leaves Play (which is how Unity removes its own scene backup)
+and re-enters once; a second miss marks the target FAILED and the batch moves on, inside three
+minutes. If the editor stops answering, or quits by itself with targets left, the batch script
+kills or waits out only the editor it started, moves the scene backup aside, restores the project
+settings files from its own copies if they changed, and relaunches once with the targets left.
+`EMBERFALL_CAPTURE_WATCHDOG=0` switches the watchdog off, and `EMBERFALL_CAPTURE_FORCE_MISS` forces
+one miss to show the recovery. Measured on one evening: about 90 batch play entries without a
+natural hang, a forced miss recovered after 90 seconds and then captured, and about 11 to 17
+seconds per target in a batch against about 24 seconds for a single launch. Entering Play without
+a domain reload (`EMBERFALL_CAPTURE_SKIP_RELOAD=1`) made entries eleven times faster but broke
+captures through destroyed cached textures, so it is marked experimental and not used. The
+nightly still runs its own one-session sweep. See `Docs/CAPTURE.md`.
+
 **Editor captures are offline by construction.** The working tree holds a gitignored
 `supabase.json`, so a Play session that did nothing about it signed in as the real account; a
 capture once came back covered by the save-conflict chooser. `SupabaseConfig.ForcedOffline`, a
