@@ -13,9 +13,9 @@
   //
   // EVERY NUMBER BELOW IS A PLACEHOLDER for the balance pass. As set, a player who finishes the
   // loop every day earns about 2.4 hours of idle income a day from it, 17 hours a week, plus 4
-  // for the weekly chest and 6.5 for one lap of the calendar: roughly a fifth of the 140 hours
-  // a week the idle chest pays at its cap. Raise or lower freely; no code reads the size of a
-  // number.
+  // for the weekly chest and 6.5 for one lap of the calendar: about 27.5 hours a week, roughly
+  // two fifths of the 70 hours a week that one full idle chest a day pays at its 10 hour cap
+  // (balance.json idleCapHours). Raise or lower freely; no code reads the size of a number.
 
   // THE POOL. A day's board takes ONE entry of each slot, chosen by the day alone, so the same
   // day is the same board for everyone with the same unlocks.
