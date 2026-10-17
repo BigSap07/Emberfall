@@ -134,6 +134,8 @@ namespace UnityEditor
         /// it so an unfocused editor still advances game frames.</summary>
         public static void QueuePlayerLoopUpdate() { }
         public static void Exit(int returnValue) { }
+        /// <summary>Real API: leaves Play mode, the same as setting isPlaying to false.</summary>
+        public static void ExitPlaymode() { }
         public static bool isCompiling { get { return false; } }
         public static bool isUpdating { get { return false; } }
     }

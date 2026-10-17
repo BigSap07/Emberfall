@@ -27,6 +27,16 @@ namespace Emberfall.EditorTools
     ///
     ///   Unity -projectPath . -executeMethod Emberfall.EditorTools.ScratchCaptures.Run -captures "Screen:Result;Screen:Toast@2400x1080"
     ///
+    /// TESTER RULE: a run captures its targets in batches in one editor session, never one launch
+    /// per target. A single launch is only for retrying a target. -captures takes the whole list,
+    /// ';' separated, and Tools/capture-batch.ps1 is the command that runs it (it raises the editor
+    /// window, checks the real save before and after, watches for a lost play entry and prints one
+    /// RESULT line per target). Docs/CAPTURE.md has the how-to.
+    ///
+    /// WATCHDOG: PlayModeScreenshot recovers a play entry that sends no heartbeat within 90 s, once
+    /// per target, and marks the target FAILED when the second entry misses too; this class then
+    /// carries on with the next target. EMBERFALL_CAPTURE_WATCHDOG=0 switches it off.
+    ///
     /// SuppressFirstRunKey is an EditorPref, which every editor on this machine shares. It is held
     /// for the length of the run and restored to what it was.
     /// </summary>
@@ -93,6 +103,16 @@ namespace Emberfall.EditorTools
             if (File.Exists(save)) File.Delete(save);
             PlayerPrefs.DeleteAll();
 
+            // A relaunched batch (capture-batch.ps1 after killing a hung editor) starts with the target
+            // that was lost, and that target has already used its first play entry.
+            int firstAttempt;
+            if (int.TryParse(Environment.GetEnvironmentVariable(CaptureWatchdog.FirstAttemptVariable), out firstAttempt) && firstAttempt > 1)
+            {
+                SessionState.SetInt(PlayModeScreenshot.NextAttemptKey, firstAttempt);
+                Debug.Log("ScratchCaptures: the first target starts as play entry attempt " + firstAttempt + " (" + CaptureWatchdog.FirstAttemptVariable + ")");
+            }
+            SessionState.SetString(PlayModeScreenshot.FailedKey, "");
+
             SessionState.SetString(QueueKey, captures);
             SessionState.SetBool(WaitingKey, false);
             SessionState.SetBool(ActiveKey, true);
@@ -131,6 +151,12 @@ namespace Emberfall.EditorTools
                 // Wait for PlayModeScreenshot to take the trigger and finish its run.
                 if (File.Exists(trigger) || SessionState.GetBool("PlayModeScreenshot.Active", false)) return;
                 SessionState.SetBool(WaitingKey, false);
+                string failed = SessionState.GetString(PlayModeScreenshot.FailedKey, "");
+                if (failed.Length > 0)
+                {
+                    SessionState.SetString(PlayModeScreenshot.FailedKey, "");
+                    Debug.LogWarning("ScratchCaptures: '" + failed + "' was marked FAILED by the watchdog, carrying on with the next target");
+                }
             }
 
             string queue = SessionState.GetString(QueueKey, "");

@@ -1,6 +1,7 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -109,18 +110,42 @@ namespace Emberfall.EditorTools
         /// </summary>
         private const string BuildMarker = "FIXV23-audio-targets";
 
+        // THE WATCHDOG's state (CaptureWatchdog decides, this class acts). All of it lives in
+        // SessionState because the domain reload that entering or leaving Play triggers wipes statics.
+        // A "stamp" is EditorApplication.timeSinceStartup, which keeps counting across a reload.
+        private const string RequestedKey = "PlayModeScreenshot.Requested";
+        private const string WdEnabledKey = "PlayModeScreenshot.WdEnabled";
+        private const string WdAttemptKey = "PlayModeScreenshot.WdAttempt";
+        private const string WdEntryAtKey = "PlayModeScreenshot.WdEntryAt";
+        private const string WdBeatKey = "PlayModeScreenshot.WdBeat";
+        private const string WdForceKey = "PlayModeScreenshot.WdForce";
+        private const string WdRecoveringKey = "PlayModeScreenshot.WdRecovering";
+        private const string WdEditSinceKey = "PlayModeScreenshot.WdEditSince";
+
+        /// <summary>The attempt number the next Begin starts at (1 when unset). ScratchCaptures sets
+        /// it to 2 for the first target of a relaunched batch; Begin reads it and puts it back.</summary>
+        public const string NextAttemptKey = "PlayModeScreenshot.NextAttempt";
+
+        /// <summary>Set to the target when the watchdog marks it FAILED, so ScratchCaptures can say
+        /// it is moving on. ScratchCaptures clears it.</summary>
+        public const string FailedKey = "PlayModeScreenshot.FailedTarget";
+
         static PlayModeScreenshot()
         {
             Debug.Log("PlayModeScreenshot: loaded, build marker " + BuildMarker);
             ApplyLoopForce();
             EditorApplication.update += Pump;
             EditorApplication.update += PollTriggerFile;
+            EditorApplication.update += WatchdogTick;
             // An interrupted capture must not leave the consent prompt switched on for a manual
             // editor Play: the key is cleared whenever Play mode ends, whoever ended it.
             EditorApplication.playModeStateChanged += delegate (PlayModeStateChange change)
             {
                 if (change == PlayModeStateChange.ExitingPlayMode || change == PlayModeStateChange.EnteredEditMode)
                     SessionState.SetBool(TelemetryService.PromptInEditorKey, false);
+                if (change == PlayModeStateChange.EnteredPlayMode && SessionState.GetBool(ActiveKey, false))
+                    Debug.Log("PlayModeScreenshot: entered play mode, " + SecondsSinceEntry().ToString("F1")
+                              + " s after the entry request");
             };
         }
 
@@ -417,6 +442,14 @@ namespace Emberfall.EditorTools
         /// </summary>
         private static void Begin(string target)
         {
+            Begin(target, 0);
+        }
+
+        /// <summary>attemptOverride is 0 for "read NextAttemptKey" (1 when unset); the watchdog
+        /// passes 2 for its one re-entry.</summary>
+        private static void Begin(string target, int attemptOverride)
+        {
+            string requested = target;
             int width = CaptureWidth;
             int height = CaptureHeight;
             string suffix = "";
@@ -511,7 +544,41 @@ namespace Emberfall.EditorTools
             // would inherit the first run's arming frame and shoot immediately if they were left.
             SessionState.SetInt(LastShotKey, 0);
             SessionState.SetInt(BattleArmKey, 0);
+            StartEntry(requested, target, attemptOverride);
             EditorCaptureGuard.EnterPlayMode();
+        }
+
+        /// <summary>Records one play entry for the watchdog and logs it. The line "play entry
+        /// requested" is printed in the edit-mode domain before Play starts, so a log that ends right
+        /// after it (and after Unity's backup-scene load) is a lost entry, and capture-batch.ps1 reads
+        /// it as such.</summary>
+        private static void StartEntry(string requested, string target, int attemptOverride)
+        {
+            int attempt = attemptOverride > 0 ? attemptOverride : SessionState.GetInt(NextAttemptKey, 1);
+            SessionState.SetInt(NextAttemptKey, 1);
+            bool enabled = CaptureWatchdog.SwitchOn(Environment.GetEnvironmentVariable(CaptureWatchdog.SwitchVariable));
+            bool forced = CaptureWatchdog.ForcesMiss(
+                Environment.GetEnvironmentVariable(CaptureWatchdog.ForceMissVariable), requested, target, attempt);
+
+            SessionState.SetString(RequestedKey, requested);
+            SessionState.SetBool(WdEnabledKey, enabled);
+            SessionState.SetInt(WdAttemptKey, attempt);
+            SessionState.SetString(WdEntryAtKey, Stamp(EditorApplication.timeSinceStartup));
+            SessionState.SetBool(WdBeatKey, false);
+            SessionState.SetBool(WdForceKey, forced);
+            SessionState.SetBool(WdRecoveringKey, false);
+            SessionState.SetString(WdEditSinceKey, "");
+
+            if (enabled)
+                Debug.Log("PlayModeScreenshot: watchdog mode ON (no heartbeat after " + CaptureWatchdog.FirstEntryLimitSeconds
+                          + " s recovers; " + CaptureWatchdog.SwitchVariable + "=0 switches it off)");
+            else
+                Debug.LogWarning("PlayModeScreenshot: watchdog mode OFF (" + CaptureWatchdog.SwitchVariable + "=0); a lost play entry will not be recovered");
+            if (forced)
+                Debug.LogWarning("PlayModeScreenshot: FORCE-MISS hook active for " + requested + " (" + CaptureWatchdog.ForceMissVariable
+                                 + "): this first play entry will send no heartbeat and do no work");
+            Debug.Log("PlayModeScreenshot: play entry requested, target " + requested + ", attempt " + attempt
+                      + ", watchdog " + (enabled ? "on" : "off"));
         }
 
         /// <summary>
@@ -571,6 +638,110 @@ namespace Emberfall.EditorTools
         // start" and no "repaint call returned" means the call blocked. Both static flags reset with the
         // domain, so each domain prints its own pair.
         private static bool _repaintLogged;
+        private static bool _repaintReturned;
+        private static bool _forceMissLogged;
+
+        private static string Stamp(double seconds)
+        {
+            return seconds.ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        private static double ReadStamp(string key, double fallback)
+        {
+            double value;
+            if (double.TryParse(SessionState.GetString(key, ""), NumberStyles.Float, CultureInfo.InvariantCulture, out value))
+                return value;
+            return fallback;
+        }
+
+        private static double SecondsSinceEntry()
+        {
+            double now = EditorApplication.timeSinceStartup;
+            return now - ReadStamp(WdEntryAtKey, now);
+        }
+
+        private static string StateLine()
+        {
+            return "isPlaying " + EditorApplication.isPlaying
+                   + ", isPlayingOrWillChangePlaymode " + EditorApplication.isPlayingOrWillChangePlaymode
+                   + ", frame " + SessionState.GetInt(FrameKey, 0)
+                   + ", repaint call start printed " + _repaintLogged
+                   + ", repaint call returned printed " + _repaintReturned
+                   + ", GameApp present " + (GameApp.Instance != null);
+        }
+
+        /// <summary>
+        /// Runs on every editor tick while a run is active. Asks CaptureWatchdog what to do and does
+        /// it: Recover logs the state and exits Play (Unity removes its own backup-scene folder when
+        /// Play ends normally; this never touches those files), ReEnter begins the same target again,
+        /// MarkFailed gives up on the target so ScratchCaptures moves to the next one.
+        /// If the editor's update loop itself is dead this never runs, which is what the batch
+        /// launcher's outer watchdog is for.
+        /// </summary>
+        private static void WatchdogTick()
+        {
+            if (!SessionState.GetBool(ActiveKey, false)) return;
+            if (!SessionState.GetBool(WdEnabledKey, false)) return;
+            bool beat = SessionState.GetBool(WdBeatKey, false);
+            if (beat) return;
+
+            double now = EditorApplication.timeSinceStartup;
+            bool recovering = SessionState.GetBool(WdRecoveringKey, false);
+            double sinceEntry = now - ReadStamp(WdEntryAtKey, now);
+            double inEditMode = -1.0;
+            if (recovering)
+            {
+                // Time is counted only while the editor is out of Play, so Unity's own exit is not
+                // part of the 5 s.
+                if (EditorApplication.isPlayingOrWillChangePlaymode)
+                {
+                    SessionState.SetString(WdEditSinceKey, "");
+                }
+                else
+                {
+                    if (SessionState.GetString(WdEditSinceKey, "").Length == 0)
+                        SessionState.SetString(WdEditSinceKey, Stamp(now));
+                    inEditMode = now - ReadStamp(WdEditSinceKey, now);
+                }
+            }
+
+            int attempt = SessionState.GetInt(WdAttemptKey, 1);
+            string requested = SessionState.GetString(RequestedKey, SessionState.GetString(TargetKey, ""));
+            switch (CaptureWatchdog.Decide(true, beat, attempt, recovering, sinceEntry, inEditMode))
+            {
+                case WatchdogAction.Recover:
+                    Debug.LogWarning("PlayModeScreenshot: watchdog RECOVER " + requested + " attempt " + attempt
+                                     + ": no play heartbeat " + sinceEntry.ToString("F1") + " s after the entry request. State: "
+                                     + StateLine() + ". Exiting Play mode.");
+                    SessionState.SetBool(WdRecoveringKey, true);
+                    SessionState.SetString(WdEditSinceKey, "");
+                    EditorApplication.ExitPlaymode();
+                    break;
+
+                case WatchdogAction.ReEnter:
+                    Debug.Log("PlayModeScreenshot: watchdog re-entering " + requested + " as attempt " + (attempt + 1)
+                              + " after " + inEditMode.ToString("F1") + " s in edit mode");
+                    SessionState.SetBool(WdRecoveringKey, false);
+                    Begin(requested, attempt + 1);
+                    // Begin returns without starting when it cannot reach the scratch identity.
+                    if (SessionState.GetInt(WdAttemptKey, 1) <= attempt) FailTarget(requested, "the re-entry could not start");
+                    break;
+
+                case WatchdogAction.MarkFailed:
+                    Debug.LogWarning("PlayModeScreenshot: watchdog gives up on " + requested + " attempt " + attempt
+                                     + ": no play heartbeat " + sinceEntry.ToString("F1") + " s after the entry request. State: " + StateLine());
+                    FailTarget(requested, "a missed heartbeat on two play entries");
+                    break;
+            }
+        }
+
+        private static void FailTarget(string requested, string why)
+        {
+            Debug.LogError("PlayModeScreenshot: FAILED " + requested + " after " + why);
+            SessionState.SetString(FailedKey, requested);
+            SessionState.SetBool(WdRecoveringKey, false);
+            Stop();
+        }
 
         private static void Pump()
         {
@@ -585,6 +756,28 @@ namespace Emberfall.EditorTools
             if (!runActive) return;
             if (!EditorApplication.isPlaying) return; // still transitioning in, or already stopped
 
+            // The test hook: this play entry sends no heartbeat and does no work, so the watchdog has
+            // a lost entry to recover. The second entry for the target is not forced.
+            if (SessionState.GetBool(WdForceKey, false))
+            {
+                if (!_forceMissLogged)
+                {
+                    _forceMissLogged = true;
+                    Debug.LogWarning("PlayModeScreenshot: FORCE-MISS hook, Pump returns without a heartbeat for this play entry");
+                }
+                return;
+            }
+
+            // The heartbeat the watchdog waits for: the first tick of this play entry that finds the
+            // editor really playing. WatchdogTick stops counting once it is set.
+            if (!SessionState.GetBool(WdBeatKey, false))
+            {
+                SessionState.SetBool(WdBeatKey, true);
+                Debug.Log("PlayModeScreenshot: play heartbeat, target " + SessionState.GetString(RequestedKey, SessionState.GetString(TargetKey, ""))
+                          + ", attempt " + SessionState.GetInt(WdAttemptKey, 1) + ", " + SecondsSinceEntry().ToString("F1")
+                          + " s after the entry request");
+            }
+
             if (!_repaintLogged)
             {
                 _repaintLogged = true;
@@ -594,6 +787,7 @@ namespace Emberfall.EditorTools
                 Debug.Log("PlayModeScreenshot: repaint call returned, editor time "
                           + EditorApplication.timeSinceStartup.ToString("F3") + " s, took "
                           + ((EditorApplication.timeSinceStartup - startedAt) * 1000.0).ToString("F1") + " ms");
+                _repaintReturned = true;
             }
             else
             {

@@ -285,6 +285,7 @@ namespace Emberfall.DevHarness
             CheckTelemetry(content, contentDir);
             CheckDailyLoop(content, contentDir);
             CheckAudio(content, contentDir);
+            CheckCaptureWatchdog(content, contentDir);
             CheckFeatureUnlockGating(content, contentDir);
             CheckAccounts(content);
             _failures += CloudChecks.Run(content, contentDir);
