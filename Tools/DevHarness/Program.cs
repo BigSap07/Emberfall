@@ -19111,6 +19111,9 @@ namespace Emberfall.DevHarness
         // the whole answer is one rounding of one ratio however many walks it takes to settle. See
         // StageBaseline for what re-rounding an already-rounded table did when it was allowed to.
 
+        // THESE FOUR MIDDLES DESCRIBE THE PRE-PROPOSAL BANDS (Docs/ECONOMY-PROPOSAL-R4.md). The shipped table
+        // was moved off them to the per-stage bands of PowerBandFor, and re-running the solver walks it back
+        // toward them and undoes the proposal. Their values are deliberately unchanged.
         private const float SolverMiddleOrdinaryChapter1 = 1.20f;
         private const float SolverMiddleWallChapter1 = 1.025f;
         private const float SolverMiddleOrdinaryLater = 1.15f;
@@ -20576,10 +20579,14 @@ namespace Emberfall.DevHarness
         /// looked plausible, and still got quoted.
         ///
         /// So the responsiveness is now asserted rather than assumed. Multiply every gold channel
-        /// on the back half of the campaign by 2.5x, re-run the whole simulation, and require the
-        /// late-campaign power ratio to actually move. If a future structural change re-severs the
-        /// link between authored income and simulated power, this fails on the commit that does it
-        /// instead of years later.
+        /// on the back half of the campaign by 2.5x, re-run the simulation for IncomeProbeSeeds
+        /// matched players, and require the entry ratio of the first IncomeProbeEarlyStages scaled
+        /// stages (4-1 to 4-6) to actually move. That early window is the guard: it is read before
+        /// the hero caps bind, where the response is stable. The late-campaign ratio (the last three
+        /// stages reached) is printed with its per-player spread and is NOT guarded, because a
+        /// level-capped player there shows the draw, not the income. If a future structural change
+        /// re-severs the link between authored income and simulated power, this fails on the commit
+        /// that does it instead of years later.
         ///
         /// It scales the loaded StageDefs in memory and puts them back afterwards. Nothing is
         /// written to campaign.json, and the restore is unconditional.
@@ -20616,14 +20623,17 @@ namespace Emberfall.DevHarness
             // the right way, +0.94 on the old content (spread 0.88 to 1.03) and +1.00 on the new
             // (spread 0.93 to 1.06), nine times the bar and a spread of a tenth.
             //
-            // The bar stays 0.10. The broken model moved 0.03 on this input; the early window of a
-            // working one moves about 1.0, so the bar sits more than three times the broken
-            // signature and a tenth of the working value. An early window near 0.03 means the link
-            // is severed again.
+            // THE BAR IS 0.50, a lead decision (R6), and the reasoning is in the readings. All 16 early
+            // readings above (8 players on each content) sit between 0.88 and 1.06, so a bar of 0.10
+            // would still pass a response cut to a third. 0.50 sits at about half the working value
+            // and well under the lowest reading, so ordinary content tuning cannot trip it and a
+            // response cut by half or more does. What a SEVERED link reads in early-window units was not
+            // measured: the 0.03 of the old one-session model was a late-ratio figure, so the bar is
+            // a fraction of the working value, not a multiple of a measured broken one.
             //
             // The late reading is still printed, with its per-player spread, because a late reading
             // that is quiet is information about the caps; it is just not a reading to fail a build on.
-            const float MinimumResponse = 0.10f;
+            const float MinimumResponse = 0.50f;
 
             List<StageDef> scaled = new List<StageDef>();
             for (int i = db.AllStages.Count / 2; i < db.AllStages.Count; i++) scaled.Add(db.AllStages[i]);
@@ -20727,8 +20737,8 @@ namespace Emberfall.DevHarness
             Line("  sittings that ended CAP-BLOCKED (first player): " + Pct(CapBlockedShare(poor))
                  + " at 1x, " + Pct(CapBlockedShare(rich)) + " at " + Fmt(Multiplier) + "x"
                  + "   (gold buys levels; levels stop at each hero's cap, which only ascension raises)");
-            Line("  The old one-session-per-attempt model responded about 0.03 to this same input,");
-            Line("  which is how it was caught. Anything near that means the link is severed again.");
+            Line("  The old one-session-per-attempt model responded about 0.03 to this same input on the late ratio,");
+            Line("  which is how it was caught. Anything near that on the early window means the link is severed again.");
             ReportIncomeAbsorption(db, poor, rich);
 
             Check(earlyMean > MinimumResponse,
@@ -20809,9 +20819,6 @@ namespace Emberfall.DevHarness
             return total > 0 ? run.CapBlockedSessions / (float)total : 0f;
         }
 
-        /// <summary>Mean power-to-recommendedPower ratio over the last three stages reached. This is
-        /// the column the late-chapter underpowered symptom is read off, so it is the one the
-        /// responsiveness guard watches.</summary>
         /// <summary>Mean entry ratio over the IncomeProbeEarlyStages stages from firstStage on, for the
         /// stages the run reached. The reading taken BEFORE the player saturates: right after the scaled
         /// half begins, hero levels are not yet at their caps, so income still has somewhere to go.</summary>
@@ -20839,6 +20846,9 @@ namespace Emberfall.DevHarness
             return string.Join(", ", s);
         }
 
+        /// <summary>Mean power-to-recommendedPower ratio over the last three stages reached. This is
+        /// the column the late-chapter underpowered symptom is read off. The responsiveness check
+        /// prints its response and does not guard it: see CheckEconomyRespondsToIncome.</summary>
         private static float LateCampaignRatio(EconomyRun run)
         {
             float total = 0f;

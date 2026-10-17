@@ -8,8 +8,9 @@ is repeatable, and so a future retune of chapter 2 and later has the rule in cod
 since it was moved here from the R4 simulation; expect to fix paths.
 
 The rule (proposal section 4): after each reading of 20 walks, every stage a walk stuck on has its target
-ratio T raised by x1.04 (x1.08 if 3 or more walks stuck; x1.05 and x1.10 from round 6, which is what this
-code applies). Its recommendedPower is derived again as round(median reference entry power / T), its
+ratio T raised by x1.04 (x1.08 if 3 or more walks stuck), and by x1.05 and x1.10 from round 6. This code
+applies exactly that schedule (RAISE_EARLY, RAISE_LATE). The R4 simulation's script applied x1.05 and x1.10
+in every round, so a rerun from round 1 is not bit for bit the simulation's path. Its recommendedPower is derived again as round(median reference entry power / T), its
 levels are inverted (economy_r4_lib.inversion) and searched again to CEIL 85 percent (ordinary) and
 65 percent (walls) through the harness's --relevel.
 
@@ -30,6 +31,8 @@ import economy_r4_lib as lib
 ORDINARY_CEIL = 0.85
 WALL_CEIL = 0.65
 WALKS = 20
+RAISE_EARLY = (1.04, 1.08)   # rounds 1 to 5: fewer than 3 walks stuck, 3 or more
+RAISE_LATE = (1.05, 1.10)    # round 6 on
 
 
 def state_path(work):
@@ -74,7 +77,8 @@ def step(work, anchor_dir=None):
     overrides = {}
     changed = []
     for sid, walks_stuck in stuck.items():
-        targets[sid] *= 1.10 if walks_stuck >= 3 else 1.05
+        schedule = RAISE_LATE if st["round"] >= 6 else RAISE_EARLY
+        targets[sid] *= schedule[1] if walks_stuck >= 3 else schedule[0]
         rec = int(round(study[lib.code_of(sid)]["med"] / targets[sid]))
         floor, ceil, levels = lib.inversion(anchor[sid], rec)
         overrides[sid] = dict(recommendedPower=rec, floorLevel=floor, ceilingLevel=ceil, enemy_levels=levels)

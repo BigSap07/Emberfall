@@ -15,7 +15,7 @@ The law, with the proposal line each constant comes from:
                percent, from the generator's rounding), so it cannot drop at once after 610 at 1-6".
                That is what makes 1-7 x0.87, 1-8 x0.76, 1-9 x0.67, 1-10 x0.60 and 1-11 x0.54 instead of
                x0.50: each ordinary first clear must clear the one before by this step. Finales keep
-               leading their neighbours (x1.10 over the larger) and the next opener (whole payout).
+               leading their neighbours and the next opener (whole payout); see FINALE_LEAD.
   IDLE         (1.25, 14, 24)     "Idle income rises from 0.80 purses an hour to 1.00 by 3-1 and holds".
                1.00 / 0.80 = 1.25. Multiplier 1.00 up to index 14, linear to 1.25 at index 24, 1.25 on.
 
@@ -34,6 +34,8 @@ import economy_r4_lib as lib
 FIRST_CLEAR = (0.50, 6, 14, 24)
 RISING_STEP = 1.02
 IDLE = (1.25, 14, 24)
+# Not in the proposal: a simulation choice carried over from r4law.py. It is inert on the shipped law (the
+# output is identical at 1.0, 1.01 and 1.05), because the finales already lead their neighbours.
 FINALE_LEAD = 1.10
 STAGES = 72
 

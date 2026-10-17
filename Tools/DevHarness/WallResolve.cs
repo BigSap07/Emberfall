@@ -43,7 +43,9 @@ namespace Emberfall.DevHarness
         /// a per-kind CEIL target, written back into the content directory's campaign.json.
         /// Spec: key=value pairs, comma separated: ord (ordinary target), wall (stage 6 and 12 target),
         /// ch1wall (1-12 target), skipto (first global 1-based stage index to level, default 7),
-        /// only (a stage code such as 2-5 to level alone).
+        /// upto (last global 1-based stage index to level, default 72), wallsonly (1 to level only the
+        /// walls: 1-12 and stages 6 and 12 from chapter 2), only (stage codes such as 2-5, separated by
+        /// semicolons, to level alone).
         /// </summary>
         private static int RunRelevel(string contentDir, string spec)
         {

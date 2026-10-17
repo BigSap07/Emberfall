@@ -1,4 +1,4 @@
-R4 CANDIDATE TABLE (scratch/r4-sim, variant F). Old = origin/main b394f8f. Ratio = reference player median entry power / new recommendedPower, 8 walks.
+R4 CANDIDATE TABLE (scratch/r4-sim, variant F). Old = origin/main before the proposal. Ratio = reference player median entry power / new recommendedPower, 8 walks.
 stage  recPwr old->new        floor/ceil old->new      firstClear gold old->new   idleGold/h old->new   ratio(8 walks)
 1-1   2977 -> 2977         2/6 -> 2/6             260 -> 260           96 -> 96           x1.200
 1-2   3797 -> 3797         6/10 -> 6/10           305 -> 305           120 -> 120         x1.246
