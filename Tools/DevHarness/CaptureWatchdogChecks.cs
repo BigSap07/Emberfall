@@ -157,6 +157,16 @@ namespace Emberfall.DevHarness
             Check(batchSrc.Contains("EditorSettings.asset") && batchSrc.Contains("Restore-EditorSettings") && !batchSrc.Contains("Remove-Item"),
                   "WIRING (reads source): capture-batch.ps1 copies EditorSettings.asset aside and restores it if it changed");
 
+            // ---- the quit log and the early-exit relaunch
+            Check(pms.Contains("EditorApplication.wantsToQuit += delegate { LogQuit(\"wantsToQuit\"); return true; };")
+                  && pms.Contains("EditorApplication.quitting += delegate { LogQuit(\"quitting\"); };")
+                  && pms.Contains("Environment.StackTrace") && pms.Contains("editor QUIT"),
+                  "WIRING (reads source): PlayModeScreenshot logs the quit with its stack while a capture run is active, and never blocks it");
+            string batchLoop = ReadIfThere(Path.Combine(root, "Tools", "capture-batch.ps1"));
+            Check(batchLoop.Contains("editor exited by itself with ") && batchLoop.Contains("targets left: relaunching once")
+                  && batchLoop.Contains("Start-Sleep -Seconds 10") && batchLoop.Contains("ScratchCaptures: identity restored"),
+                  "WIRING (reads source): capture-batch.ps1 relaunches once, after 10 s, when the editor exits by itself before its queue is done");
+
             // Pump must stand down while a Recover is under way: the guard sits after the isPlaying
             // check and before the force-miss hook and the heartbeat.
             int playingCheck = pms.IndexOf("if (!EditorApplication.isPlaying) return;", StringComparison.Ordinal);

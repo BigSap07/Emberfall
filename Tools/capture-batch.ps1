@@ -15,6 +15,9 @@
 #   3. Starts ONE editor with ScratchCaptures.Run and every target (scratch identity, cloud held off),
 #      records its PID, raises its window every few seconds (a backgrounded Game view photographs
 #      stale frames), and kills only that PID if it has to.
+#   3b. An editor that exits BY ITSELF (any exit code) before ScratchCaptures logs "identity restored" is
+#      treated like a hung one: the same cleanup, a 10 s wait, then ONE relaunch with the targets not
+#      yet captured. The outer watchdog and this share that one relaunch.
 #   4. OUTER WATCHDOG, for an editor whose update loop is dead so the in-editor watchdog cannot run:
 #      the log shows "play entry requested", no "play heartbeat" follows it, and the in-editor
 #      watchdog printed nothing, for 150 s. The editor is killed by its PID and started ONCE more
@@ -433,30 +436,55 @@ function Clear-AfterKill([int]$launch) {
 $offset = 0
 $queue = @($targetList)
 $launch = 1
+$retryFirst = $false
 while ($true) {
-    if ($launch -gt 1) {
+    if ($retryFirst) {
         [Environment]::SetEnvironmentVariable('EMBERFALL_CAPTURE_FIRST_ATTEMPT', '2', 'Process')
+    } else {
+        [Environment]::SetEnvironmentVariable('EMBERFALL_CAPTURE_FIRST_ATTEMPT', $null, 'Process')
     }
     $editor = Start-Editor $queue $launch
     $reason = Watch-Editor $editor.Proc $editor.Log
     if ($reason) { Stop-Editor $editor.Proc $reason }
     $exitCode = if ($editor.Proc.HasExited) { $editor.Proc.ExitCode } else { $null }
-    $logs += [pscustomobject]@{ Log = $editor.Log; Offset = $offset; Reason = $reason; Exit = $exitCode; Launch = $launch }
+    $text = Read-SharedText $editor.Log
+    # ScratchCaptures logs "identity restored" when its queue is done and the real identity is back.
+    $finished = ($text -match 'ScratchCaptures: identity restored')
+    $logs += [pscustomobject]@{ Log = $editor.Log; Offset = $offset; Reason = $reason; Exit = $exitCode; Launch = $launch; Finished = $finished }
     Say ('launch ' + $launch + ' ended: ' + $(if ($reason) { $reason } else { 'exited by itself, code ' + $exitCode }))
 
-    if ($reason -ne 'outer-hang' -or $launch -ge 2) { break }
+    # Two reasons to relaunch, sharing ONE relaunch for the whole batch: the outer watchdog killed a
+    # hung editor, or the editor exited by itself (any code) before ScratchCaptures finished its queue.
+    $early = ((-not $reason) -and (-not $finished))
+    if (($reason -ne 'outer-hang' -and -not $early) -or $launch -ge 2) { break }
 
-    # Relaunch ONCE with what is not captured yet: the stuck target first (its second attempt).
-    $text = Read-SharedText $editor.Log
     $triggered = ([regex]::Matches($text, "ScratchCaptures: triggered '")).Count
-    if ($triggered -lt 1) { Say 'the log shows no triggered target, so there is nothing to relaunch from'; break }
-    $stuck = $offset + $triggered - 1
+    if ($reason -eq 'outer-hang') {
+        if ($triggered -lt 1) { Say 'the log shows no triggered target, so there is nothing to relaunch from'; break }
+        $stuck = $offset + $triggered - 1
+        $retryFirst = $true
+    } elseif ($triggered -lt 1) {
+        $stuck = $offset
+        $retryFirst = $false
+    } else {
+        # The last triggered target is unfinished unless the log shows its PNG or its FAILED line.
+        $tail = $text.Substring($text.LastIndexOf("ScratchCaptures: triggered '"))
+        $lastDone = ($tail -match 'PlayModeScreenshot: requested \S+\.png') -or ($tail -match 'PlayModeScreenshot: FAILED ')
+        if ($lastDone) { $stuck = $offset + $triggered; $retryFirst = $false }
+        else { $stuck = $offset + $triggered - 1; $retryFirst = $true }
+    }
+    if ($stuck -ge $targetList.Count) { Say 'the editor exited early, but every target had been reached'; break }
+    $left = $targetList.Count - $stuck
+    if ($early) { Say ('editor exited by itself with ' + $left + ' targets left: relaunching once') }
     if (-not (Clear-AfterKill $launch)) { Say 'Temp\__Backupscenes could not be moved aside, so the editor is not relaunched'; break }
+    # A new editor started seconds after the last one showed licensing initialisation lines and then quit
+    # (the single-launch run that exited early); give the machine time before the next one.
+    Start-Sleep -Seconds 10
     $queue = @($targetList[$stuck..($targetList.Count - 1)])
     $offset = $stuck
     $launch++
     $relaunches++
-    Say ('relaunching once with ' + $queue.Count + ' target(s), starting at the stuck one: ' + $targetList[$stuck])
+    Say ('relaunching once with ' + $queue.Count + ' target(s), starting at ' + $targetList[$stuck] + $(if ($retryFirst) { ' (the stuck one, its second attempt)' } else { '' }))
 }
 [Environment]::SetEnvironmentVariable('EMBERFALL_CAPTURE_FIRST_ATTEMPT', $null, 'Process')
 # The last editor was stopped by this script, or exited by itself with a nonzero code (a crash): leave
@@ -464,8 +492,10 @@ while ($true) {
 if ($logs.Count -gt 0) {
     $lastLaunch = $logs[$logs.Count - 1]
     $crashed = (-not $lastLaunch.Reason) -and ($null -ne $lastLaunch.Exit) -and ($lastLaunch.Exit -ne 0)
-    if ($lastLaunch.Reason -or $crashed) {
+    $unfinished = (-not $lastLaunch.Reason) -and (-not $lastLaunch.Finished)
+    if ($lastLaunch.Reason -or $crashed -or $unfinished) {
         if ($crashed) { Say ('launch ' + $lastLaunch.Launch + ' exited with code ' + $lastLaunch.Exit + ': running the same cleanup as after a kill') }
+        elseif ($unfinished) { Say ('launch ' + $lastLaunch.Launch + ' exited by itself before its queue finished: running the same cleanup as after a kill') }
         [void](Clear-AfterKill $lastLaunch.Launch)
     }
 }
@@ -556,6 +586,7 @@ foreach ($b in $batchFails) { $out += ('NOTE ' + $b) }
 foreach ($l in $logs) {
     if ($l.Reason) { $out += ('NOTE launch ' + $l.Launch + ' was stopped by this script: ' + $l.Reason) }
     elseif ($l.Exit -ne 0) { $out += ('NOTE launch ' + $l.Launch + ' exited with code ' + $l.Exit) }
+    elseif (-not $l.Finished) { $out += ('NOTE launch ' + $l.Launch + ' exited by itself (code ' + $l.Exit + ') before ScratchCaptures finished its queue; see the "editor QUIT" lines in its log') }
 }
 $out += ('NOTE ProjectSettings.asset ' + $settingsNote)
 $out += ('NOTE EditorSettings.asset ' + $editorSettingsNote)

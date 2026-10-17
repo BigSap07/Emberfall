@@ -137,6 +137,9 @@ namespace Emberfall.EditorTools
             EditorApplication.update += Pump;
             EditorApplication.update += PollTriggerFile;
             EditorApplication.update += WatchdogTick;
+            // Log-only quit instrumentation (see LogQuit): never blocks a quit.
+            EditorApplication.wantsToQuit += delegate { LogQuit("wantsToQuit"); return true; };
+            EditorApplication.quitting += delegate { LogQuit("quitting"); };
             // An interrupted capture must not leave the consent prompt switched on for a manual
             // editor Play: the key is cleared whenever Play mode ends, whoever ended it.
             EditorApplication.playModeStateChanged += delegate (PlayModeStateChange change)
@@ -658,6 +661,29 @@ namespace Emberfall.EditorTools
         {
             double now = EditorApplication.timeSinceStartup;
             return now - ReadStamp(WdEntryAtKey, now);
+        }
+
+        /// <summary>
+        /// Says that the editor is quitting while a capture run is active, with the managed stack
+        /// and the run's state. A single launch of Screen:Events once exited cleanly (code 0) right
+        /// after "entered play mode", with no Pump tick and none of our own exit lines; the next time
+        /// this tells the two kinds of quit apart. A quit that our code asked for (EditorApplication.Exit)
+        /// shows the caller in the stack; one asked for from outside (a window close, a signal)
+        /// shows engine frames only. Silent when no capture run is active, so ordinary editor use
+        /// is not noisy, and it never blocks the quit.
+        /// </summary>
+        private static void LogQuit(string which)
+        {
+            bool capture = SessionState.GetBool(ActiveKey, false) || SessionState.GetBool("ScratchCaptures.Active", false);
+            if (!capture) return;
+            Debug.LogWarning("PlayModeScreenshot: editor QUIT (" + which + ") while a capture run is active. isPlaying " + EditorApplication.isPlaying
+                             + ", PlayModeScreenshot.Active " + SessionState.GetBool(ActiveKey, false)
+                             + ", ScratchCaptures.Active " + SessionState.GetBool("ScratchCaptures.Active", false)
+                             + ", ScratchCaptures.Waiting " + SessionState.GetBool("ScratchCaptures.Waiting", false)
+                             + ", ScratchCaptures.ExitAt " + SessionState.GetInt("ScratchCaptures.ExitAt", 0)
+                             + ", target " + SessionState.GetString(RequestedKey, SessionState.GetString(TargetKey, ""))
+                             + ", heartbeat seen " + SessionState.GetBool(WdBeatKey, false)
+                             + ". Stack: " + Environment.StackTrace);
         }
 
         private static string StateLine()
