@@ -199,7 +199,7 @@ namespace Emberfall.DevHarness
             PlayerProfile v21Loaded = SaveSerializer.Deserialize(SaveSerializer.Serialize(v21), db, out err);
             Check(v21Loaded != null && v21Loaded.TutorialStep == Onboarding.StepLevelUp,
                   "the migration is conditioned on the version: a version 21 save mid-flow with a cleared stage keeps its step");
-            Check(SaveSerializer.CurrentVersion == 21, "the save is at version 21 (" + SaveSerializer.CurrentVersion + ")");
+            Check(SaveSerializer.CurrentVersion >= 21, "the save is at version 21 or later, where onboarding bumped it (" + SaveSerializer.CurrentVersion + ")");
 
             // ---- the prologue step is the existing battle, unchanged
             PrologueScript.Step step = Onboarding.PrologueStep(db);

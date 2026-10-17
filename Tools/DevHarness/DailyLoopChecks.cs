@@ -43,6 +43,7 @@ namespace Emberfall.DevHarness
                 CheckDailyLoopChests(db);
                 CheckDailyLoopCalendar(db);
                 CheckDailyLoopClock(db);
+                CheckDailyLoopSave(db);
                 CheckDailyLoopNotHashed(db, contentDir);
                 CheckDailyLoopOff(db);
             }
@@ -569,6 +570,90 @@ namespace Emberfall.DevHarness
             DailyLoop.Roll(wk, LoopAt(wk, 3, 7));
             Check(wk.Profile.DailyLoop.WeekIndex == weekHeld && wk.Profile.DailyLoop.WeekDays == daysHeld,
                   "and the week's stamp and count stay where they were when the clock goes back a long way");
+        }
+
+        // ------------------------------------------------------------------ the save
+
+        private static void CheckDailyLoopSave(ContentDatabase db)
+        {
+            // ---- a rich state, round trip
+            GameSession s = LoopSession(db, 12);
+            long t0 = LoopAt(s, 4, 6);
+            LoopSetBoard(s, t0, "waves_5", "stage_2", "level_3", "summon_1", "waves_6f");
+            s.Profile.DailyLoop.Find("waves_5").Progress = 5;
+            DailyLoop.ClaimOrder(s, "waves_5", t0);
+            s.Profile.DailyLoop.Find("stage_2").Progress = 1;
+            DailyLoop.ClaimCalendar(s, t0);
+            DailyLoop.ClaimCalendar(s, LoopAt(s, 5, 6));
+            s.Profile.DailyLoop.WeekDays = 3;
+            string json = SaveSerializer.Serialize(s.Profile);
+            string error;
+            PlayerProfile back = SaveSerializer.Deserialize(json, db, out error);
+            DailyLoopState a = s.Profile.DailyLoop, b = back == null ? null : back.DailyLoop;
+            bool same = b != null && a.DayUnix == b.DayUnix && a.ChestClaimed == b.ChestClaimed && a.WeekIndex == b.WeekIndex
+                        && a.WeekDays == b.WeekDays && a.WeekChestClaimed == b.WeekChestClaimed && a.CalendarNext == b.CalendarNext
+                        && a.CalendarDayUnix == b.CalendarDayUnix && a.Orders.Count == b.Orders.Count;
+            for (int i = 0; same && i < a.Orders.Count; i++)
+                same = a.Orders[i].Id == b.Orders[i].Id && a.Orders[i].Progress == b.Orders[i].Progress && a.Orders[i].Claimed == b.Orders[i].Claimed;
+            Check(error == null && same && SaveSerializer.Serialize(back) == json,
+                  "SAVE 22 ROUND TRIP: a board with progress and a claim, a calendar at day 3 and a week at 3 days saves and loads back identical, "
+                  + "and saves again byte for byte (" + json.Length + " characters)");
+            Check(JsonValue.Parse(json).GetInt("version", 0) == SaveSerializer.CurrentVersion && SaveSerializer.CurrentVersion == 22 && json.Contains("\"dailyLoop\""),
+                  "and it is stamped version 22, with the loop under its own key");
+
+            bool was = DailyLoopSwitch.Enabled;
+            try
+            {
+                DailyLoopSwitch.Enabled = false;
+                PlayerProfile off = SaveSerializer.Deserialize(json, db, out error);
+                Check(off != null && SaveSerializer.Serialize(off) == json,
+                      "with the switch off the loop's state is still read and written back untouched: turning it off costs a player nothing");
+            }
+            finally { DailyLoopSwitch.Enabled = was; }
+
+            // ---- the pre-bump load: a version 21 save
+            // Played with the switch off, so its loop is empty the way a save written by version 21 is.
+            DailyLoopSwitch.Enabled = false;
+            GameSession played = LoopSession(db, 5);
+            HeroInstance hero = played.Profile.Heroes[0];
+            played.Profile.Gold = 777777;
+            played.LevelUpHero(hero, 3, LoopBase);
+            played.Profile.Shards = 4321;
+            played.Profile.TutorialStep = 3;
+            played.Profile.SeenTips.Add("Summon");
+            string v22 = SaveSerializer.Serialize(played.Profile);
+            DailyLoopSwitch.Enabled = was;
+            Check(!v22.Contains("\"dailyLoop\""), "a profile whose loop is empty writes no dailyLoop key at all");
+
+            string v21 = v22.Replace("\"version\": " + SaveSerializer.CurrentVersion, "\"version\": 21");
+            PlayerProfile old = SaveSerializer.Deserialize(v21, db, out error);
+            bool kept = old != null && old.Gold == played.Profile.Gold && old.Shards == played.Profile.Shards
+                        && old.Heroes.Count == played.Profile.Heroes.Count && old.Heroes[0].Level == hero.Level
+                        && old.ClearedStageIds.Count == played.Profile.ClearedStageIds.Count && old.TutorialStep == 3
+                        && old.SeenTips.Count == played.Profile.SeenTips.Count;
+            Check(error == null && kept && old.DailyLoop.IsEmpty,
+                  "A VERSION 21 SAVE LOADS WITH EVERYTHING KEPT and an empty loop: gold " + (old == null ? -1 : old.Gold) + ", " + (old == null ? -1 : old.Heroes.Count)
+                  + " heroes, level " + (old == null ? -1 : old.Heroes[0].Level) + ", " + (old == null ? -1 : old.ClearedStageIds.Count) + " cleared stages, the tutorial step and tips");
+            Check(old != null && SaveSerializer.Serialize(old) == v22,
+                  "and saves again as exactly the same document at version 22: the migration invents and drops nothing");
+
+            // ---- damaged blocks read as empty rather than failing the load
+            string[] damaged = { "\"dailyLoop\": \"x\"", "\"dailyLoop\": 7", "\"dailyLoop\": []", "\"dailyLoop\": { \"orders\": 3, \"day\": \"x\" }" };
+            int fine = 0;
+            for (int i = 0; i < damaged.Length; i++)
+            {
+                string bad = v22.Substring(0, v22.LastIndexOf('}')).TrimEnd() + ",\n  " + damaged[i] + "\n}";
+                PlayerProfile loaded = SaveSerializer.Deserialize(bad, db, out error);
+                if (loaded != null && error == null && loaded.DailyLoop != null && loaded.DailyLoop.IsEmpty && loaded.Gold == played.Profile.Gold) fine++;
+            }
+            Check(fine == damaged.Length, "a damaged dailyLoop block (a string, a number, an array, wrong field types) loads as an empty loop, " + fine + " of " + damaged.Length);
+
+            string negative = v22.Substring(0, v22.LastIndexOf('}')).TrimEnd()
+                + ",\n  \"dailyLoop\": { \"day\": -5, \"weekDays\": 99, \"calendarNext\": 40, \"orders\": [ { \"id\": \"x\", \"progress\": -3 } ] }\n}";
+            PlayerProfile clamped = SaveSerializer.Deserialize(negative, db, out error);
+            Check(clamped != null && clamped.DailyLoop.DayUnix == 0 && clamped.DailyLoop.WeekDays == 7 && clamped.DailyLoop.CalendarNext == 6
+                  && clamped.DailyLoop.Orders.Count == 1 && clamped.DailyLoop.Orders[0].Progress == 0,
+                  "and out-of-range numbers are clamped to what the game could have written");
         }
 
         // ------------------------------------------------------------------ orders.json is not hashed

@@ -421,7 +421,22 @@ namespace Emberfall.Core.Save
         /// it mid-tutorial would come back to a save with no step and be walked through the flow
         /// again from the wake. The bump refuses that. The server's save_limits row must be raised
         /// to 21 before a cloud player ships this, as it had to be for 20.
-        public const int CurrentVersion = 21;
+        ///
+        /// 22: the daily loop (DESIGN-DAILY-LOOP.md). One key, `dailyLoop`: today's orders and their
+        /// progress, whether the daily chest is open, the week's count and whether the weekly chest
+        /// is open, and the login calendar's place (DailyLoopState). Written only once it holds
+        /// something, so a profile that never had DailyLoopSwitch on serialises as it did at 21
+        /// apart from the version number.
+        ///
+        /// Upgrade needs NO migration step: the key's absence IS the empty loop, and a version 21
+        /// save loads with everything it had and an empty one. Read on every load whatever the
+        /// switch says, so turning the switch off keeps what a player earned with it on.
+        ///
+        /// WHY THIS IS A BUMP. A version 21 build drops the key on write, so a player who opened it
+        /// mid-day would come back to a board with its progress and its claims erased, and could
+        /// claim the same order again. The bump refuses that. The server's save_limits row must be
+        /// raised to 22 before a cloud player ships this, as it had to be for 21.
+        public const int CurrentVersion = 22;
 
         /// <summary>
         /// The campaign's stage ids in campaign.json order as they stood when version 20 moved
@@ -969,6 +984,10 @@ namespace Emberfall.Core.Save
             if (profile.GuildTech != null && (profile.GuildTech.Level > 0 || !profile.GuildTech.IsEmpty))
                 root.Set("guildTech", profile.GuildTech.Write());
 
+            // Version 22: the daily loop, only once it holds something - see CurrentVersion.
+            if (profile.DailyLoop != null && !profile.DailyLoop.IsEmpty)
+                root.Set("dailyLoop", profile.DailyLoop.Write());
+
             return root.ToJson(true);
         }
 
@@ -1315,6 +1334,10 @@ namespace Emberfall.Core.Save
             // written before the tree and of every player who has never joined a guild.
             JsonValue tech = root["guildTech"];
             if (!tech.IsNull) profile.GuildTech = GuildTechState.Read(tech);
+
+            // Version 22. Absent reads as the empty loop, which is true of every save written
+            // before it and of every player who never had the switch on.
+            profile.DailyLoop = DailyLoopState.Read(root["dailyLoop"]);
 
             List<JsonValue> lines = root.GetList("lines");
             for (int l = 0; l < lines.Count; l++) profile.Lines.Add(ReadLine(lines[l]));

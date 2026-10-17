@@ -3514,12 +3514,12 @@ namespace Emberfall.DevHarness
             // ---- the save. No version moved, and none needed to: the gate is derived from a tier
             // the format has carried since long before talents existed. The gate landed at 17;
             // 18 is the level clamp's, 19 the milestone claims', 20 the cleared-stage ids' (with
-            // the Echo and Brand bank clamp) and 21 the onboarding step and seen tips' - see
-            // SaveSerializer.CurrentVersion, not the gate's.
-            Check(SaveSerializer.CurrentVersion == 21,
+            // the Echo and Brand bank clamp), 21 the onboarding step and seen tips' and 22 the daily
+            // loop's - see SaveSerializer.CurrentVersion, not the gate's.
+            Check(SaveSerializer.CurrentVersion == 22,
                   "the ascension gate moved no save version - it is derived from Ascension, which is already "
                   + "stored, and a persisted 'unlocked' could only ever disagree with the tier (version "
-                  + SaveSerializer.CurrentVersion + ", which the level clamp, the milestone claims, the cleared-stage ids and onboarding moved from 17)");
+                  + SaveSerializer.CurrentVersion + ", which the level clamp, the milestone claims, the cleared-stage ids, onboarding and the daily loop moved from 17)");
             hero.Ascension = 0;
             string json = SaveSerializer.Serialize(profile);
             string error;
