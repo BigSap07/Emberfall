@@ -99,7 +99,7 @@ namespace Emberfall.UI
             ForgeDisc disc = EmberforgeUI.IconButton(name, parent, "", TextureLab.Sigil(0, 64),
                                                      Emberforge.TextGold, 84f, delegate
             {
-                if (Game.GameApp.Instance != null) Game.GameApp.Instance.Audio.Tap();
+                if (Game.GameApp.Instance != null) Game.GameApp.Instance.Audio.Back();
                 action();
             });
 

@@ -60,7 +60,7 @@ namespace Emberfall.UI
         public static bool TryEnter(GameApp app, string entryId)
         {
             if (Allows(app, entryId)) return true;
-            if (app.Audio != null) app.Audio.Tap();
+            if (app.Audio != null) app.Audio.Locked();
             app.Notify(LockLine(app, entryId));
             return false;
         }

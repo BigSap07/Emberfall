@@ -1286,7 +1286,7 @@ namespace Emberfall.UI.Screens
                 App.Notify(result.Message);
                 return;
             }
-            App.Audio.Reward();
+            App.Audio.LevelUp();
             App.Notify(_hero.Def.Name + " reached level " + result.NewLevel + ".");
             App.RefreshHud();
             App.RequestSave();

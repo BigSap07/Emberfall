@@ -1,3 +1,4 @@
+using UnityEngine;
 using Emberfall.Game;
 
 namespace Emberfall.UI.Summon
@@ -59,9 +60,11 @@ namespace Emberfall.UI.Summon
     }
 
     /// <summary>
-    /// The stand-in sound set: the game's existing synthesised tones mapped onto the beats. It
-    /// adds no audio asset and no new tone; it exists so the beats are audibly wired while the
-    /// real set is owed. Beats with no fitting tone are deliberately silent.
+    /// The summon's sound set, through the one Sfx door. With real audio on (audio.json's
+    /// realAudio, the default) each beat is a cue: summon.start on the press, the summon.charge
+    /// loop while the light builds, summon.reveal.N for the tier on the reveal, summon.star per
+    /// star. With it off the beats play the game's original synthesised tones, as they did before
+    /// the real set existed; beats with no fitting tone are deliberately silent there.
     /// </summary>
     public sealed class SfxSummonAudio : ISummonAudio
     {
@@ -75,6 +78,7 @@ namespace Emberfall.UI.Summon
         public void Play(SummonBeat beat, int stars, int index)
         {
             if (_sfx == null) return;
+            if (_sfx.RealAudio) { PlayCue(beat, stars); return; }
             switch (beat)
             {
                 case SummonBeat.Press: _sfx.Tap(); break;
@@ -84,6 +88,24 @@ namespace Emberfall.UI.Summon
                     else _sfx.Reward();
                     break;
                 case SummonBeat.Summary: _sfx.Reward(); break;
+            }
+        }
+
+        private void PlayCue(SummonBeat beat, int stars)
+        {
+            switch (beat)
+            {
+                case SummonBeat.Press: _sfx.Play("summon.start"); break;
+                case SummonBeat.BuildupStart: _sfx.StartLoop("summon.charge"); break;
+                // The flash hides the cut to the hero: the charge ends under it, the reveal starts on it.
+                case SummonBeat.Flash: _sfx.StopLoop("summon.charge", 0.12f); break;
+                case SummonBeat.Reveal:
+                    _sfx.StopLoop("summon.charge", 0.05f);
+                    _sfx.Play("summon.reveal." + Mathf.Clamp(stars, 1, 5));
+                    break;
+                case SummonBeat.StarPing: _sfx.Play("summon.star"); break;
+                case SummonBeat.Summary: _sfx.Reward(); break;
+                case SummonBeat.Skip: _sfx.StopLoop("summon.charge", 0.05f); break;
             }
         }
     }

@@ -1259,6 +1259,8 @@ namespace Emberfall.EditorTools
                     case "Friends": id = ScreenId.Friends; break;
                     case "FriendTeam": id = ScreenId.FriendTeam; break;
                     case "Settings": id = ScreenId.Settings; break;
+                    // The same page scrolled to its foot: the Credits card is below the fold.
+                    case "SettingsCredits": id = ScreenId.Settings; break;
                     case "Guild": id = ScreenId.Guild; break;
                     case "GuildRequests": id = ScreenId.GuildRequests; break;
                     case "GuildChat": id = ScreenId.GuildChat; break;
@@ -1903,6 +1905,7 @@ namespace Emberfall.EditorTools
             // The talent page measures on its own frames, and a capture that fired mid-trial
             // would photograph "Measuring..." or a reading still on its first batch.
             if (name == "Talents" && GameApp.Instance != null) GameApp.Instance.Router.Talents.FinishTrialForCapture();
+            if (name == "SettingsCredits" && GameApp.Instance != null) GameApp.Instance.Router.Settings.ScrollToEndForCapture();
             ScreenCapture.CaptureScreenshot(OutputPath(file), 1);
             Debug.Log("PlayModeScreenshot: requested " + file);
             SessionState.SetInt(LastShotKey, frame);

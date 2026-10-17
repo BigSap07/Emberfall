@@ -1,0 +1,694 @@
+{
+  "realAudio": true,
+  "defaults": { "pitchJitter": 0.04, "volumeJitter": 0.1, "musicFade": 1.2, "sfxVoices": 10, "uiVoices": 4, "perCueVoices": 3 },
+  "volumes": { "music": 0.6, "sfx": 0.8, "ui": 0.7 },
+  "musicByScreen": {
+    "MainMenu": "music.hub",
+    "Campaign": "music.map",
+    "Summon": "music.summon",
+    "Recital": "music.recital",
+    "Proving": "music.proving",
+    "Guild": "music.guild",
+    "GuildRequests": "music.guild",
+    "GuildChat": "music.guild",
+    "GuildDungeon": "music.guild",
+    "GuildFloor": "music.guild",
+    "GuildDungeonResult": "music.guild",
+    "GuildDungeonBoards": "music.guild",
+    "GuildTech": "music.guild",
+    "Battle.campaign": "music.battle",
+    "Battle.boss": "music.battle.boss",
+    "Battle.recital": "music.battle",
+    "Battle.proving": "music.battle",
+    "Battle.prologue": "music.prologue",
+    "Battle.guild": "music.battle"
+  },
+  "cues": [
+    {
+      "id": "music.hub",
+      "channel": "music",
+      "loop": true,
+      "fade": 1.2,
+      "volume": 1.0,
+      "files": [],
+      "note": "main menu / hub; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+    },
+    {
+      "id": "music.map",
+      "channel": "music",
+      "loop": true,
+      "fade": 1.2,
+      "volume": 1.0,
+      "files": [],
+      "note": "campaign map; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+    },
+    {
+      "id": "music.battle",
+      "channel": "music",
+      "loop": true,
+      "fade": 1.2,
+      "volume": 1.0,
+      "files": [],
+      "note": "campaign battles; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+    },
+    {
+      "id": "music.battle.boss",
+      "channel": "music",
+      "loop": true,
+      "fade": 1.2,
+      "volume": 1.0,
+      "files": [],
+      "note": "battle at a wall or boss stage (miniboss stage 6, boss stage 12); silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+    },
+    {
+      "id": "music.summon",
+      "channel": "music",
+      "loop": true,
+      "fade": 1.2,
+      "volume": 1.0,
+      "files": [],
+      "note": "summon screen; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+    },
+    {
+      "id": "music.recital",
+      "channel": "music",
+      "loop": true,
+      "fade": 1.2,
+      "volume": 1.0,
+      "files": [],
+      "note": "recital screen and recital fights; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+    },
+    {
+      "id": "music.proving",
+      "channel": "music",
+      "loop": true,
+      "fade": 1.2,
+      "volume": 1.0,
+      "files": [],
+      "note": "proving screen and proving fights; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+    },
+    {
+      "id": "music.guild",
+      "channel": "music",
+      "loop": true,
+      "fade": 1.2,
+      "volume": 1.0,
+      "files": [],
+      "note": "guild screens and guild dungeon; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+    },
+    {
+      "id": "music.prologue",
+      "channel": "music",
+      "loop": true,
+      "fade": 1.2,
+      "volume": 1.0,
+      "files": [],
+      "note": "prologue fight; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+    },
+    {
+      "id": "music.stinger.victory",
+      "channel": "music",
+      "loop": false,
+      "stopMusic": 0.8,
+      "cooldown": 2.5,
+      "volume": 1.0,
+      "files": [],
+      "note": "victory stinger; ends the battle track; silent by design, no music supplied"
+    },
+    {
+      "id": "music.stinger.defeat",
+      "channel": "music",
+      "loop": false,
+      "stopMusic": 0.8,
+      "cooldown": 2.5,
+      "volume": 1.0,
+      "files": [],
+      "note": "defeat stinger; ends the battle track; silent by design, no music supplied"
+    },
+    {
+      "id": "ui.tap",
+      "channel": "ui",
+      "trim": 0.32,
+      "cooldown": 0.03,
+      "volume": 0.7,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/UI_Select_01",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/UI_Select_02",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/UI_Select_03",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/UI_Select_04",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/UI_Select_05",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/UI_Select_06"
+      ],
+      "note": "Fantasy UI pack UI_Select, cut short"
+    },
+    {
+      "id": "ui.confirm",
+      "channel": "ui",
+      "trim": 0.55,
+      "cooldown": 0.05,
+      "volume": 0.65,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Magical_Click_01",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Magical_Click_02",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Magical_Click_03",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Magical_Click_04",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Magical_Click_05"
+      ],
+      "note": "Fantasy UI pack Magical_Click, cut short"
+    },
+    {
+      "id": "ui.back",
+      "channel": "ui",
+      "cooldown": 0.05,
+      "volume": 0.7,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Close_Book_01",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Close_Book_02",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Close_Book_03",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Close_Book_04",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Close_Book_05"
+      ],
+      "note": "Fantasy UI pack Close_Book"
+    },
+    {
+      "id": "ui.locked",
+      "channel": "ui",
+      "pitch": 0.6,
+      "trim": 0.3,
+      "cooldown": 0.12,
+      "volume": 0.8,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_01",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_02",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_03"
+      ],
+      "layers": [
+        { "files": ["sfx/Fantasy Inventory & UI Sounds Pack/WAV/Close_Book_01", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Close_Book_02"], "volume": 0.5, "delay": 0.04, "pitch": 0.7 }
+      ],
+      "note": "DEFAULT TAKEN: no error sound in the packs; Stone_Hit pitched down plus Close_Book"
+    },
+    {
+      "id": "ui.reward",
+      "channel": "ui",
+      "cooldown": 0.06,
+      "volume": 0.8,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_01",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_02",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_03",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_04",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_05",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_06",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_07",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_08"
+      ],
+      "layers": [
+        { "files": ["sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_And_Purse_01", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_And_Purse_02", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_And_Purse_03"], "volume": 0.45, "delay": 0.05 }
+      ],
+      "note": "Fantasy UI pack Coins with a purse under it"
+    },
+    {
+      "id": "ui.levelup",
+      "channel": "ui",
+      "trim": 1.4,
+      "cooldown": 0.3,
+      "volume": 0.6,
+      "files": [
+        "sfx/LightSpellv1/SFX_LightSpellCastv1"
+      ],
+      "layers": [
+        { "files": ["sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_And_Purse_04", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_And_Purse_05", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_And_Purse_06"], "volume": 0.6, "delay": 0.25 }
+      ],
+      "note": "DEFAULT TAKEN: no level-up sound in the packs; a light cast with coins"
+    },
+    {
+      "id": "ui.unlock",
+      "channel": "ui",
+      "trim": 0.9,
+      "cooldown": 0.3,
+      "volume": 0.65,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Sword_Shing_01",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Sword_Shing_02",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Sword_Shing_03",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Sword_Shing_04"
+      ],
+      "layers": [
+        { "files": ["sfx/Fantasy Inventory & UI Sounds Pack/WAV/Magical_Click_06", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Magical_Click_07"], "volume": 0.5, "delay": 0.1, "trim": 0.6 }
+      ],
+      "note": "DEFAULT TAKEN: no unlock sound in the packs; a blade drawn with a magic click"
+    },
+    {
+      "id": "summon.start",
+      "channel": "sfx",
+      "cooldown": 0.3,
+      "priority": 3,
+      "volume": 0.8,
+      "files": [
+        "sfx/SummonSpiritv1/SFX_SummonSpiritCastv1"
+      ],
+      "note": "SummonSpirit Cast"
+    },
+    {
+      "id": "summon.charge",
+      "channel": "sfx",
+      "loop": true,
+      "fade": 0.25,
+      "priority": 3,
+      "volume": 0.55,
+      "files": [
+        "sfx/SummonSpiritv1/SFX_SummonSpiritLoopv1"
+      ],
+      "note": "SummonSpirit Loop while the reveal builds; stopped on the flash or a skip"
+    },
+    {
+      "id": "summon.reveal.1",
+      "channel": "sfx",
+      "priority": 3,
+      "cooldown": 0.2,
+      "volume": 0.75,
+      "files": [
+        "sfx/SummonCreaturev1/SFX_SpiritSpellv1"
+      ],
+      "note": "1 star: SummonCreature SpiritSpell, the smallest reveal"
+    },
+    {
+      "id": "summon.reveal.2",
+      "channel": "sfx",
+      "priority": 3,
+      "cooldown": 0.2,
+      "volume": 0.8,
+      "files": [
+        "sfx/SummonSpiritv1/SFX_SummonSpiritReleasev1"
+      ],
+      "note": "2 star: SummonSpirit Release"
+    },
+    {
+      "id": "summon.reveal.3",
+      "channel": "sfx",
+      "priority": 3,
+      "cooldown": 0.2,
+      "volume": 0.85,
+      "files": [
+        "sfx/SummonFireCreaturev1/SFX_SummonFireCreatureReleasev1"
+      ],
+      "layers": [
+        { "files": ["sfx/SummonSpiritv1/SFX_SummonSpiritReleasev1"], "volume": 0.4, "delay": 0.08 }
+      ],
+      "note": "3 star: SummonFireCreature Release under a SummonSpirit Release"
+    },
+    {
+      "id": "summon.reveal.4",
+      "channel": "sfx",
+      "trim": 3.2,
+      "priority": 3,
+      "cooldown": 0.2,
+      "volume": 0.9,
+      "files": [
+        "sfx/SummonSpiritv1/SFX_SummonSpiritCompletev1"
+      ],
+      "layers": [
+        { "files": ["sfx/SummonFireCreaturev1/SFX_SummonFireCreatureReleasev1"], "volume": 0.5 }
+      ],
+      "note": "4 star: SummonSpirit Complete, cut to 3.2 seconds"
+    },
+    {
+      "id": "summon.reveal.5",
+      "channel": "sfx",
+      "priority": 4,
+      "cooldown": 0.2,
+      "volume": 1.0,
+      "files": [
+        "sfx/SummonThunderCreaturev1/SFX_SummonThunderCompletev1",
+        "sfx/SummonThunderCreaturev1/SFX_SummonThunderCompletev2"
+      ],
+      "layers": [
+        { "files": ["sfx/SummonSpiritv1/SFX_SummonSpiritCompletev1"], "volume": 0.6, "trim": 3.5 }
+      ],
+      "note": "5 star: SummonThunder Complete over SummonSpirit Complete, the biggest reveal"
+    },
+    {
+      "id": "summon.star",
+      "channel": "ui",
+      "cooldown": 0.05,
+      "pitch": 1.15,
+      "volume": 0.55,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_09",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_10",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_11",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_12",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_13"
+      ],
+      "note": "one star stamping in; a 5 star fires it five times"
+    },
+    {
+      "id": "battle.hit",
+      "channel": "sfx",
+      "cooldown": 0.04,
+      "priority": 1,
+      "volume": 0.9,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_01",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_02",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_03",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_04",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_05",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_06"
+      ],
+      "layers": [
+        { "files": ["sfx/ArcaneSpellv6/SFX_ArcaneSpellFasterv6"], "volume": 0.35 }
+      ],
+      "note": "basic hit: Stone_Hit with a short arcane snap under it"
+    },
+    {
+      "id": "battle.crit",
+      "channel": "sfx",
+      "pitch": 0.85,
+      "cooldown": 0.06,
+      "priority": 2,
+      "volume": 1.0,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_07",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_08",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_09",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_10"
+      ],
+      "layers": [
+        { "files": ["sfx/ArcaneSpellv2/SFX_ArcaneSpellHitv2"], "volume": 0.6 }
+      ],
+      "note": "critical hit: Stone_Hit lower and heavier with an arcane hit under it"
+    },
+    {
+      "id": "battle.dot",
+      "channel": "sfx",
+      "pitch": 1.3,
+      "cooldown": 0.15,
+      "priority": 0,
+      "volume": 0.35,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_08",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_09"
+      ],
+      "note": "burn and other damage-over-time ticks; quiet"
+    },
+    {
+      "id": "battle.death",
+      "channel": "sfx",
+      "priority": 3,
+      "cooldown": 0.15,
+      "volume": 0.8,
+      "files": [
+        "sfx/DarkSpellv2/SFX_DarkSpellReleasev2"
+      ],
+      "layers": [
+        { "files": ["sfx/SpiritSpellv1/SFX_SpiritSpellLowv1"], "volume": 0.5, "trim": 1.2 }
+      ],
+      "note": "DEFAULT TAKEN: no death sound in the packs; a dark release over a low spirit"
+    },
+    {
+      "id": "battle.heal",
+      "channel": "sfx",
+      "trim": 1.1,
+      "cooldown": 0.12,
+      "priority": 1,
+      "volume": 0.7,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Potion_01",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Potion_02",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Potion_03",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Potion_04",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Potion_05"
+      ],
+      "layers": [
+        { "files": ["sfx/LightSpellv3/SFX_LightSpellCastv3"], "volume": 0.3, "trim": 0.9 }
+      ],
+      "note": "heal: Potion with a soft light cast"
+    },
+    {
+      "id": "battle.buff",
+      "channel": "sfx",
+      "cooldown": 0.12,
+      "priority": 1,
+      "volume": 0.7,
+      "files": [
+        "sfx/RaySpellv2/SFX_RaySpellLightUpv2"
+      ],
+      "layers": [
+        { "files": ["sfx/ArcaneSpellv5/SFX_ArcaneSpellReleasev5"], "volume": 0.4 }
+      ],
+      "note": "buff: RaySpell LightUp"
+    },
+    {
+      "id": "battle.debuff",
+      "channel": "sfx",
+      "trim": 1.1,
+      "cooldown": 0.12,
+      "priority": 1,
+      "volume": 0.7,
+      "files": [
+        "sfx/SlowSpellv1/SFX_SlowSpellCastv1"
+      ],
+      "note": "debuff: SlowSpell Cast"
+    },
+    {
+      "id": "battle.shield",
+      "channel": "sfx",
+      "trim": 1.0,
+      "cooldown": 0.12,
+      "priority": 1,
+      "volume": 0.6,
+      "files": [
+        "sfx/CrystalSpellv1/SFX_CrystalSpellCastv1"
+      ],
+      "note": "shield gained: CrystalSpell Cast"
+    },
+    {
+      "id": "battle.cast",
+      "channel": "sfx",
+      "trim": 1.0,
+      "cooldown": 0.2,
+      "priority": 2,
+      "volume": 0.7,
+      "files": [
+        "sfx/CastOnlyv1/SFX_CastOnlyv1",
+        "sfx/CastOnlyv1/SFX_CastOnlyv2"
+      ],
+      "note": "a cast with no aspect to key off; CastOnly"
+    },
+    {
+      "id": "battle.victory",
+      "channel": "sfx",
+      "cooldown": 2.5,
+      "priority": 4,
+      "volume": 0.8,
+      "files": [
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_And_Purse_04",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_And_Purse_05",
+        "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Coins_And_Purse_06"
+      ],
+      "layers": [
+        { "files": ["sfx/LightSpellv4/SFX_LightSpellCompletev4"], "volume": 0.45 }
+      ],
+      "note": "DEFAULT TAKEN: victory stinger is music and none was supplied; this is a loot sound effect, not a music substitute"
+    },
+    {
+      "id": "battle.defeat",
+      "channel": "sfx",
+      "trim": 1.6,
+      "cooldown": 2.5,
+      "priority": 4,
+      "volume": 0.6,
+      "files": [
+        "sfx/DarkSpellv1/SFX_DarkSpellCompletev1"
+      ],
+      "note": "DEFAULT TAKEN: defeat stinger is music and none was supplied; this is a dark sound effect, not a music substitute"
+    },
+    {
+      "id": "battle.cast.ember",
+      "channel": "sfx",
+      "trim": 1.1,
+      "cooldown": 0.2,
+      "priority": 2,
+      "volume": 0.7,
+      "files": [
+        "sfx/FireSpellv5/SFX_FireSpellCastv5",
+        "sfx/FireSpellv4/SFX_FireSpellCastv4",
+        "sfx/FireSpellv1/SFX_FireSpellCastv1"
+      ],
+      "note": "Ember: FireSpell packs; the skill cast"
+    },
+    {
+      "id": "battle.impact.ember",
+      "channel": "sfx",
+      "trim": 1.2,
+      "cooldown": 0.15,
+      "priority": 2,
+      "volume": 0.8,
+      "files": [
+        "sfx/FireSpellv5/SFX_FireSpellImpactv5",
+        "sfx/FireSpellv1/SFX_FireSpellExplodev1",
+        "sfx/FireSpellv6/SFX_FireSpellImpactv6"
+      ],
+      "layers": [
+        { "files": ["sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_01", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_02"], "volume": 0.7, "pitch": 0.8 }
+      ],
+      "note": "Ember: FireSpell packs; the skill impact with a physical hit under it"
+    },
+    {
+      "id": "battle.cast.tide",
+      "channel": "sfx",
+      "trim": 1.2,
+      "cooldown": 0.2,
+      "priority": 2,
+      "volume": 0.7,
+      "files": [
+        "sfx/FrostSpellv4/SFX_FrostSpellCastv4",
+        "sfx/FrostSpellv5/SFX_FrostSpellCastv5",
+        "sfx/WaterSpellv1/SFX_WaterSpellv1"
+      ],
+      "note": "DEFAULT TAKEN: Tide has one water pack; frost carries the cast and impact, water bubbles sit under the impact; the skill cast"
+    },
+    {
+      "id": "battle.impact.tide",
+      "channel": "sfx",
+      "trim": 1.2,
+      "cooldown": 0.15,
+      "priority": 2,
+      "volume": 0.8,
+      "files": [
+        "sfx/FrostSpellv5/SFX_FrostSpellExplodev5",
+        "sfx/FrostSpellv2/SFX_FrostSpellReleasev2",
+        "sfx/FrostSpellv4/SFX_FrostSpellReleasev4"
+      ],
+      "layers": [
+        { "files": ["sfx/WaterSpellv1/SFX_WaterSpellOnlyBubblesv1"], "volume": 0.4 }
+      ],
+      "note": "DEFAULT TAKEN: Tide has one water pack; frost carries the cast and impact, water bubbles sit under the impact; the skill impact with a physical hit under it"
+    },
+    {
+      "id": "battle.cast.verdant",
+      "channel": "sfx",
+      "trim": 1.3,
+      "cooldown": 0.2,
+      "priority": 2,
+      "volume": 0.7,
+      "files": [
+        "sfx/EarthSpellCastv1/SFX_EarthSpellCastv1",
+        "sfx/EarthSpellCastv1/SFX_EarthSpellCastOnlyStonesv1"
+      ],
+      "note": "Verdant: EarthSpell (earth stands for earth or nature); the skill cast"
+    },
+    {
+      "id": "battle.impact.verdant",
+      "channel": "sfx",
+      "trim": 1.4,
+      "cooldown": 0.15,
+      "priority": 2,
+      "volume": 0.8,
+      "files": [
+        "sfx/EarthSpellCastv1/SFX_EarthSpellImpactv1",
+        "sfx/EarthSpellCastv1/SFX_EarthSpellCompleteOnlyStonesv1"
+      ],
+      "layers": [
+        { "files": ["sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_03", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_04"], "volume": 0.7, "pitch": 0.7 }
+      ],
+      "note": "Verdant: EarthSpell (earth stands for earth or nature); the skill impact with a physical hit under it"
+    },
+    {
+      "id": "battle.cast.gale",
+      "channel": "sfx",
+      "trim": 1.2,
+      "cooldown": 0.2,
+      "priority": 2,
+      "volume": 0.7,
+      "files": [
+        "sfx/WindSpellv1/SFX_WindSpellv1Cast",
+        "sfx/WindSpellv2/SFX_WindSpellv2",
+        "sfx/WindSpellv2/SFX_WindSpellHighv2"
+      ],
+      "note": "Gale: WindSpell packs; the skill cast"
+    },
+    {
+      "id": "battle.impact.gale",
+      "channel": "sfx",
+      "trim": 1.2,
+      "cooldown": 0.15,
+      "priority": 2,
+      "volume": 0.8,
+      "files": [
+        "sfx/WindSpellv1/SFX_WindSpellv1Impact",
+        "sfx/WindSpellv2/SFX_WindSpellNoChimev2",
+        "sfx/RaySpellv5/SFX_RaySpellWindyv5"
+      ],
+      "layers": [
+        { "files": ["sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_05", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_06"], "volume": 0.5, "pitch": 1.2 }
+      ],
+      "note": "Gale: WindSpell packs; the skill impact with a physical hit under it"
+    },
+    {
+      "id": "battle.cast.umbra",
+      "channel": "sfx",
+      "trim": 1.2,
+      "cooldown": 0.2,
+      "priority": 2,
+      "volume": 0.7,
+      "files": [
+        "sfx/DarkSpellv1/SFX_DarkSpellCastv1",
+        "sfx/DarkSpellv3/SFX_DarkSpellCastv3",
+        "sfx/DarkSpellv2/SFX_DarkSpellCastv2"
+      ],
+      "note": "Umbra: DarkSpell and DarkCrystal packs; the skill cast"
+    },
+    {
+      "id": "battle.impact.umbra",
+      "channel": "sfx",
+      "trim": 1.2,
+      "cooldown": 0.15,
+      "priority": 2,
+      "volume": 0.8,
+      "files": [
+        "sfx/DarkSpellv1/SFX_DarkSpellImpactv1",
+        "sfx/DarkSpellv3/SFX_DarkSpellImpactv3",
+        "sfx/DarkCrystalv1/SFX_DarkCrystalImpactv1"
+      ],
+      "layers": [
+        { "files": ["sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_07", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_08"], "volume": 0.7, "pitch": 0.6 }
+      ],
+      "note": "Umbra: DarkSpell and DarkCrystal packs; the skill impact with a physical hit under it"
+    },
+    {
+      "id": "battle.cast.lumen",
+      "channel": "sfx",
+      "trim": 1.2,
+      "cooldown": 0.2,
+      "priority": 2,
+      "volume": 0.7,
+      "files": [
+        "sfx/LightSpellv1/SFX_LightSpellCastv1",
+        "sfx/LightSpellv3/SFX_LightSpellCastv3",
+        "sfx/LightSpellv4/SFX_LightSpellCastv4",
+        "sfx/HolySpellv2/SFX_HolySpellCastv2"
+      ],
+      "note": "Lumen: LightSpell and HolySpell packs; the skill cast"
+    },
+    {
+      "id": "battle.impact.lumen",
+      "channel": "sfx",
+      "trim": 1.2,
+      "cooldown": 0.15,
+      "priority": 2,
+      "volume": 0.8,
+      "files": [
+        "sfx/LightSpellv1/SFX_LightSpellImpactv1",
+        "sfx/LightSpellv3/SFX_LightSpellImpactv3",
+        "sfx/LightSpellv4/SFX_LightSpellImpactv4",
+        "sfx/HolySpellv2/SFX_HolySpellImpactv2"
+      ],
+      "layers": [
+        { "files": ["sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_09", "sfx/Fantasy Inventory & UI Sounds Pack/WAV/Stone_Hit_10"], "volume": 0.5, "pitch": 1.1 }
+      ],
+      "note": "Lumen: LightSpell and HolySpell packs; the skill impact with a physical hit under it"
+    }
+  ]
+}

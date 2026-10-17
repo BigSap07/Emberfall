@@ -96,6 +96,13 @@ namespace Emberfall.UI.Screens
         private const string SpeedPrefKey = "Emberfall.Battle.Speed";
         private bool _finished;
 
+        /// <summary>
+        /// True from a skill's AbilityCast until the next BasicAttack or TurnStart: the Damage
+        /// events in between are the skill landing, which sounds different from a basic hit. Read
+        /// off the record in the order it plays; nothing is recomputed.
+        /// </summary>
+        private bool _skillActive;
+
         /// <summary>True once ShowResult has run - the fight is fully resolved and the result
         /// panel is up. Exists for external observers (editor automation, tests driving a real
         /// Play mode session) that need to know when to stop waiting; nothing in-game reads it.</summary>
@@ -837,6 +844,7 @@ namespace Emberfall.UI.Screens
 
             BuildWorld();
             RunSimulation();
+            App.Audio.EnterBattle(BattleMusicKind());
 
             if (_playback != null) StopCoroutine(_playback);
             _playback = StartCoroutine(Playback());
@@ -947,6 +955,21 @@ namespace Emberfall.UI.Screens
 
             if (_callout.gameObject.activeSelf) PlaceCallout(scale);
             PlaceTurnPill(scale);
+        }
+
+        /// <summary>
+        /// Which battle track this fight asks for, as a key into audio.json's musicByScreen
+        /// ("Battle.kind"). Only reads which mode the screen was entered in; the track itself, and
+        /// whether one exists, is the cue map's business.
+        /// </summary>
+        private string BattleMusicKind()
+        {
+            if (_prologueSquad != null) return "prologue";
+            if (_guildRun != null) return "guild";
+            if (_duelOpponent != null || _provingOpponent != null) return "proving";
+            if (_recitalFloor >= 0) return "recital";
+            if (_stage != null && (_stage.IsBoss || _stage.IsMiniboss)) return "boss";
+            return "campaign";
         }
 
         private void RunSimulation()
@@ -1186,12 +1209,14 @@ namespace Emberfall.UI.Screens
                         SettleTurnBar(_activeTurnBar);
                     _activeTurnBar = bar;
                     AdvanceTurnStrip(e.SourceId);
+                    _skillActive = false;
                     if (bar != null) yield return TurnCue(bar);
                     break;
                 }
 
                 case BattleEventType.BasicAttack:
                 {
+                    _skillActive = false;
                     UnitActor source = ActorOf(e.SourceId);
                     List<int> targetIds = LookaheadTargets(index);
                     UnitActor focus = targetIds.Count > 0 ? ActorOf(targetIds[0]) : null;
@@ -1258,7 +1283,8 @@ namespace Emberfall.UI.Screens
                     if (source != null)
                     {
                         source.PlayCast(_speed);
-                        App.Audio.Cast();
+                        _skillActive = true;
+                        App.Audio.Cast(source.Snapshot.Aspect);
                         ShowCallout(e.AbilityName, source.Snapshot.Name, false);
                         _world.Vfx.Aura(source.transform.position, AspectTint(source), 2.2f);
                     }
@@ -1310,8 +1336,8 @@ namespace Emberfall.UI.Screens
                         // impact: flash, shake, sound - immediate
                         target.PlayHit(e.Critical);
                         if (source != null && e.Status == StatusKind.None) _world.Vfx.Impact(target.CenterPosition, AspectTint(source), e.Critical ? 1.3f : 0.9f);
-                        if (e.Critical) { App.Audio.Crit(); _world.Shake(0.14f, 0.2f); }
-                        else App.Audio.Hit();
+                        if (e.Critical) _world.Shake(0.14f, 0.2f);
+                        PlayDamageSound(e, source);
 
                         yield return null; // number floats one frame after impact, never simultaneously
 
@@ -1353,6 +1379,7 @@ namespace Emberfall.UI.Screens
                         UpdateHp(target, false);
                         SpawnFloatingText(target.HeadPosition, "+" + e.Value + " ward", UITheme.Shield, 0.9f);
                         _world.Vfx.Aura(target.transform.position, UITheme.Shield, 2f);
+                        App.Audio.Shield();
                     }
                     yield return Wait(0.06f);
                     break;
@@ -1381,6 +1408,12 @@ namespace Emberfall.UI.Screens
                     {
                         Color tint = StatusInfo.IsHarmful(e.Status) ? UITheme.Danger : UITheme.Success;
                         _world.Vfx.Aura(target.transform.position, tint, 1.8f);
+                        // A ward has its own sound, from ShieldGain; every other status is a buff or a debuff.
+                        if (e.Status != StatusKind.Shield)
+                        {
+                            if (StatusInfo.IsHarmful(e.Status)) App.Audio.Debuff();
+                            else App.Audio.Buff();
+                        }
                     }
                     yield return Wait(0.05f);
                     break;
@@ -1621,6 +1654,34 @@ namespace Emberfall.UI.Screens
             _turnStripCursor = 0;
             _turnActing = -1;
             if (_turnPill != null) _turnPill.Hide();
+        }
+
+        /// <summary>
+        /// The sound of a Damage event, chosen from what the record says about it and played the
+        /// moment the event lands, which is the strike: the wait for ImpactFraction happens before
+        /// the Damage event is handled, not after. A skill's damage is the skill's aspect landing
+        /// (and a critical one adds the critical thump); a basic hit is a hit or a crit; a tick
+        /// from a status is a quiet dot.
+        /// </summary>
+        private void PlayDamageSound(BattleEvent e, UnitActor source)
+        {
+            // The original tones (audio.json's realAudio off) had one sound per hit and crit and
+            // knew nothing of skills or ticks: keep exactly that.
+            if (!App.Audio.RealAudio)
+            {
+                if (e.Critical) App.Audio.Crit();
+                else App.Audio.Hit();
+                return;
+            }
+            if (e.Status != StatusKind.None) { App.Audio.Play("battle.dot"); return; }
+            if (_skillActive && source != null)
+            {
+                App.Audio.SkillImpact(source.Snapshot.Aspect);
+                if (e.Critical) App.Audio.Crit();
+                return;
+            }
+            if (e.Critical) App.Audio.Crit();
+            else App.Audio.Hit();
         }
 
         private Color AspectTint(UnitActor actor)

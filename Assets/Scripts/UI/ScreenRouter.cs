@@ -290,7 +290,12 @@ namespace Emberfall.UI
             App.SetTopBarVisible(!next.HidesTopBar);
             StopAllCoroutines();
             StartCoroutine(FadeIn(next.Group));
-            if (FeatureGates.NoteOpened(App, id)) App.RequestSave();
+            if (FeatureGates.NoteOpened(App, id))
+            {
+                // The first time a newly unlocked feature's door is walked through.
+                if (App.Audio != null) App.Audio.Unlock();
+                App.RequestSave();
+            }
             if (Shown != null) Shown(id);
         }
 

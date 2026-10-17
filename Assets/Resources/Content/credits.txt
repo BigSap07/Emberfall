@@ -1,0 +1,4 @@
+SOUND
+Sound effects and interface sounds by UNKAI SOUND.
+Sound packs used: Fantasy Inventory & UI Sounds Pack, ArcaneSpell, CastOnly, CrystalSpell, DarkCrystal, DarkSpell, EarthSpellCast, FireSpell, FrostSpell, HolySpell, LightSpell, RaySpell, SlowSpell, SpiritSpell, SummonCreature, SummonFireCreature, SummonSpirit, SummonThunderCreature, WaterSpell, WindSpell.
+There is no music in this version.

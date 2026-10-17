@@ -209,6 +209,9 @@ namespace Emberfall.Game
             routerHost.transform.SetParent(transform, false);
             Router = routerHost.AddComponent<ScreenRouter>();
             Router.Build(this, ScreenLayer, OverlayLayer);
+            // Music follows the screen: audio.json's musicByScreen names the track for a ScreenId,
+            // and a screen it does not name leaves the music alone. A no-op with real audio off.
+            Router.Shown += delegate(ScreenId shown) { if (Audio != null) Audio.ScreenShown(shown.ToString()); };
 
             BootStage = "panels";
             Panels = new PanelHost(this, PanelLayer);
@@ -706,7 +709,7 @@ namespace Emberfall.Game
 
             if (Layers != null && Layers.CloseTop())
             {
-                if (Audio != null) Audio.Tap();
+                if (Audio != null) Audio.Back();
                 return true;
             }
 
@@ -717,13 +720,13 @@ namespace Emberfall.Game
             // replay were shown without being remembered, so the history cannot name them.
             if (Router.Current.TryStepBack())
             {
-                if (Audio != null) Audio.Tap();
+                if (Audio != null) Audio.Back();
                 return true;
             }
 
             if (Router.Current.Id == ScreenId.Battle) return false;
 
-            if (Audio != null) Audio.Tap();
+            if (Audio != null) Audio.Back();
             Router.Back();
             return true;
         }

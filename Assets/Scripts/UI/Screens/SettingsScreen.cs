@@ -11,8 +11,9 @@ namespace Emberfall.UI.Screens
     /// The settings tab of the player panel: the handful of switches this game actually has, in
     /// one place, instead of one reset dialog hiding behind a "..." button on the map.
     ///
-    /// NOTHING HERE IS NEW STATE. Sound is Sfx.Muted, which has existed since the audio pass and
-    /// had no control anywhere in the game; the save line reads CloudCoordinator, which the
+    /// NOTHING HERE IS NEW GAME STATE. Sound is a device setting (AudioPrefs: three volumes and the
+    /// mute Sfx.Muted always was, kept in PlayerPrefs and never in the save), drawn by
+    /// AudioSettingsCard; the credits line shows Content/credits; the save line reads CloudCoordinator, which the
     /// Account tab already reads; and Reset is the confirm dialog the Hub's old options button
     /// opened, moved rather than rewritten. A settings page that invented options would be a
     /// feature, and this pass is layout and navigation.
@@ -32,8 +33,7 @@ namespace Emberfall.UI.Screens
         private Image _ground;
         private ScrollRect _scroll;
 
-        private UIButton _soundButton;
-        private Text _soundNote;
+        private AudioSettingsCard _audioCard;
         private UIButton _fastSummonButton;
         private Text _fastSummonNote;
         private UIButton _statsButton;
@@ -50,11 +50,12 @@ namespace Emberfall.UI.Screens
                                                          new RectOffset(0, 0, 8, 48));
             ApplyContentInset();
 
-            BuildSoundCard(content);
+            BuildAudioCard(content);
             BuildSummonCard(content);
             if (TelemetrySwitch.Enabled) BuildStatsCard(content);
             BuildSaveCard(content);
             BuildResetCard(content);
+            BuildCreditsCard(content);
             BuildStampLine(content);
         }
 
@@ -86,19 +87,36 @@ namespace Emberfall.UI.Screens
 
         // ------------------------------------------------------------------ cards
 
-        private void BuildSoundCard(RectTransform parent)
+        private void BuildAudioCard(RectTransform parent)
         {
-            RectTransform card = Card(parent, 200f);
-            Heading(card, "SOUND");
+            RectTransform card = Card(parent, AudioSettingsCard.Height);
+            _audioCard = new AudioSettingsCard(App);
+            _audioCard.Build(card, CardWidth);
+        }
 
-            _soundButton = EmberforgeUI.Button("Sound", card, "", HubStyle.FontButton,
-                                               ForgeButtonKind.Secondary);
-            UIBuilder.Box(_soundButton.Root, 30f, -56f, 320f, HubStyle.TouchMin, new Vector2(0f, 1f));
-            _soundButton.OnClick(ToggleSound);
+        /// <summary>
+        /// Who made the sounds. The words are Content/credits (credits.txt), read on build, so a
+        /// credit changes by editing a text file and not this screen. The card is as tall as the
+        /// text needs: this page scrolls, so a longer credit costs nothing but length.
+        /// </summary>
+        private void BuildCreditsCard(RectTransform parent)
+        {
+            TextAsset asset = Resources.Load<TextAsset>("Content/credits");
+            string text = asset != null ? asset.text.Trim() : "";
+            if (text.Length == 0) return;
 
-            _soundNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
-                                           TextAnchor.UpperLeft);
-            UIBuilder.Box(_soundNote.rectTransform, 380f, -60f, CardWidth - 440f, 80f, new Vector2(0f, 1f));
+            const float charsPerLine = 100f;
+            int lines = 0;
+            string[] paragraphs = text.Replace("\r", "").Split('\n');
+            for (int i = 0; i < paragraphs.Length; i++)
+                lines += Mathf.Max(1, Mathf.CeilToInt(paragraphs[i].Length / charsPerLine));
+            float height = 80f + lines * (UITheme.FontTiny + 8f);
+
+            RectTransform card = Card(parent, height);
+            Heading(card, "CREDITS");
+            Text body = EmberforgeUI.Body("Credits", card, text, UITheme.FontTiny, Emberforge.TextBody,
+                                          TextAnchor.UpperLeft);
+            UIBuilder.Box(body.rectTransform, 30f, -60f, CardWidth - 90f, height - 70f, new Vector2(0f, 1f));
         }
 
         /// <summary>
@@ -255,25 +273,6 @@ namespace Emberfall.UI.Screens
 
         // ------------------------------------------------------------------ behaviour
 
-        private void ToggleSound()
-        {
-            if (App.Audio == null) return;
-            App.Audio.Muted = !App.Audio.Muted;
-            // Tapped AFTER the flip, so turning sound back on is audible and turning it off is
-            // silent - the feedback matches what the switch now says.
-            App.Audio.Tap();
-            RefreshSound();
-        }
-
-        private void RefreshSound()
-        {
-            bool muted = App.Audio != null && App.Audio.Muted;
-            _soundButton.SetText(muted ? "SOUND: OFF" : "SOUND: ON");
-            _soundNote.text = muted
-                ? "Every sound in the game is silenced, including battle hits and rewards."
-                : "Taps, battle hits and rewards play at their usual volume.";
-        }
-
         private void ToggleFastSummon()
         {
             SummonSettings.FastSummon = !SummonSettings.FastSummon;
@@ -326,11 +325,23 @@ namespace Emberfall.UI.Screens
             _saveNote.text = local + " It is also backed up to your account, so a new phone can pick it up.";
         }
 
+        /// <summary>For the capture tool: the page scrolled to its last card, where Credits is.</summary>
+        public void ScrollToEndForCapture()
+        {
+            if (_scroll != null) _scroll.verticalNormalizedPosition = 0f;
+        }
+
+        public override void OnHide()
+        {
+            // Volumes are stored as the sliders move; this is the one disk write for a drag.
+            if (_audioCard != null) _audioCard.Flush();
+        }
+
         public override void OnShow()
         {
             App.RefreshHud();
             _headerSubtitle.text = "";
-            RefreshSound();
+            _audioCard.Refresh();
             RefreshFastSummon();
             RefreshSave();
             _resetNote.text = ResetNote(ResetReachesCloud(App));
