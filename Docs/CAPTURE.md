@@ -13,7 +13,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 `
     -Targets "Screen:MainMenu;Screen:Summon;Screen:Battle" -LogDir D:\Emberfall\handoff\<RUN>\logs -Tag batch1
 ```
 
-- `-Targets` is a `;` list. `-TargetsFile` takes a file with one target per line (lines starting with `#` are skipped). A target can carry a size, `Screen:Summon@2400x1080`, or a stage, `Screen:Battle=2-6`.
+- `-Targets` is a `;` list. `-TargetsFile` takes a file with one target per line (lines starting with `#` are skipped). A target can carry a size, `Screen:Summon@2400x1080`, or a stage, `Screen:Battle=ch2_6` (a stage id from `campaign.json`).
 - `-LogDir` and `-Tag` are required. The editor log is `capture-batch-<tag>-launch1.log` there, and the script's own record is `capture-batch-<tag>.txt` and `capture-batch-<tag>-result.txt`.
 - `-CeilMin` (default 90) is the wall-clock ceiling for the whole session.
 - Run it in the foreground. It starts ONE editor, raises its window every few seconds (a backgrounded Game view photographs stale frames), and ends when the editor exits. It never starts a second editor except for the one relaunch described below.

@@ -428,7 +428,7 @@ namespace Emberfall.EditorTools
         ///
         ///     Screen:Summon                  1920x1080, writes screen_Summon.png
         ///     Screen:Summon@2400x1080        2400x1080, writes screen_Summon@2400x1080.png
-        ///     Screen:Battle=2-6              fights stage 2-6, writes screen_Battle=2-6.png
+        ///     Screen:Battle=ch2_6            fights stage ch2_6, writes screen_Battle=ch2_6.png
         ///
         /// The stage exists because Battle otherwise fights Session.NextStage, which is wherever
         /// the scratch profile happens to stand, so a capture of the art on a chosen enemy line
