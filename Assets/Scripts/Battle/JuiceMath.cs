@@ -36,6 +36,49 @@ namespace Emberfall.Battle
     }
 
     /// <summary>
+    /// Waits for one named moment as the events of a fight play, one Note per event in order. It is
+    /// the very code the battle screen's capture path runs per event, and the harness replays real
+    /// fights through it, so "the harness finds the moment" and "the screen finds it live" cannot
+    /// drift apart. Keeps its own skill-active flag from the events it is shown, so it must be fed
+    /// every event from the first, whether or not it is armed yet.
+    /// </summary>
+    public sealed class MomentTracker
+    {
+        private MomentKind _wanted;
+        private Aspect? _aspect;
+        private Func<int, Aspect> _aspectOf;
+        private bool _skill;
+
+        public bool Arrived;
+        /// <summary>Index of the event the moment arrived on, or -1.</summary>
+        public int ArrivedIndex = -1;
+
+        public void Arm(MomentKind kind, Aspect? aspect, Func<int, Aspect> aspectOf)
+        {
+            _wanted = kind;
+            _aspect = aspect;
+            _aspectOf = aspectOf;
+            Arrived = false;
+            ArrivedIndex = -1;
+        }
+
+        public void Note(BattleEvent e, int index)
+        {
+            _skill = JuiceMath.NextSkillActive(e, _skill);
+            if (_wanted == MomentKind.None || Arrived) return;
+            MomentKind kind = JuiceMath.Classify(e, _skill);
+            if (kind != _wanted) return;
+            if (_aspect != null)
+            {
+                int unit = JuiceMath.AspectUnit(e, kind);
+                if (unit < 0 || _aspectOf == null || _aspectOf(unit) != _aspect.Value) return;
+            }
+            Arrived = true;
+            ArrivedIndex = index;
+        }
+    }
+
+    /// <summary>
     /// The decisions of the R12 hit-feedback pass, as pure functions of a JuiceProfile and the
     /// record. Free of UnityEngine on purpose: Tools/DevHarness compiles this file, so the flag,
     /// the rollback, the cap, the lanes and the curves are proven by build-check without the

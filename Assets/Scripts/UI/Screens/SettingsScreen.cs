@@ -57,8 +57,14 @@ namespace Emberfall.UI.Screens
             ApplyContentInset();
 
             BuildAudioCard(content);
-            BuildSummonCard(content);
-            BuildBattleCard(content);
+            // Summoning and Battle are two short cards, so they share one row: the screen shake
+            // switch then sits inside the first screenful instead of under the fold.
+            RectTransform pair = UIBuilder.Node("Pair", content);
+            UIBuilder.Sized(pair, 0f, 200f);
+            HorizontalLayoutGroup pairLayout = UIBuilder.HStack(pair, 16f, null, TextAnchor.UpperLeft);
+            pairLayout.childForceExpandWidth = true;
+            BuildSummonCard(pair);
+            BuildBattleCard(pair);
             if (TelemetrySwitch.Enabled) BuildStatsCard(content);
             BuildSaveCard(content);
             BuildResetCard(content);
@@ -136,7 +142,7 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildSummonCard(RectTransform parent)
         {
-            RectTransform card = Card(parent, 200f);
+            RectTransform card = HalfCard(parent, 200f);
             Heading(card, "SUMMONING");
 
             _fastSummonButton = EmberforgeUI.Button("FastSummon", card, "", HubStyle.FontButton,
@@ -146,7 +152,7 @@ namespace Emberfall.UI.Screens
 
             _fastSummonNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
                                                 TextAnchor.UpperLeft);
-            UIBuilder.Box(_fastSummonNote.rectTransform, 380f, -60f, CardWidth - 440f, 80f, new Vector2(0f, 1f));
+            UIBuilder.Box(_fastSummonNote.rectTransform, 380f, -60f, 440f, 120f, new Vector2(0f, 1f));
         }
 
         /// <summary>
@@ -156,17 +162,17 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildBattleCard(RectTransform parent)
         {
-            RectTransform card = Card(parent, 200f);
+            RectTransform card = HalfCard(parent, 200f);
             Heading(card, "BATTLE");
 
             _screenShakeButton = EmberforgeUI.Button("ScreenShake", card, "", HubStyle.FontButton,
                                                      ForgeButtonKind.Secondary);
-            UIBuilder.Box(_screenShakeButton.Root, 30f, -56f, 400f, HubStyle.TouchMin, new Vector2(0f, 1f));
+            UIBuilder.Box(_screenShakeButton.Root, 30f, -56f, 360f, HubStyle.TouchMin, new Vector2(0f, 1f));
             _screenShakeButton.OnClick(ToggleScreenShake);
 
             _screenShakeNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
                                                  TextAnchor.UpperLeft);
-            UIBuilder.Box(_screenShakeNote.rectTransform, 460f, -60f, CardWidth - 520f, 80f, new Vector2(0f, 1f));
+            UIBuilder.Box(_screenShakeNote.rectTransform, 420f, -60f, 420f, 120f, new Vector2(0f, 1f));
         }
 
         /// <summary>
@@ -400,6 +406,17 @@ namespace Emberfall.UI.Screens
         private static void Heading(RectTransform card, string text)
         {
             EmberforgeUI.Heading("Heading", card, text, 30f, -22f);
+        }
+
+        /// <summary>A card that shares its row with another: it takes an equal share of the width
+        /// instead of the full card width.</summary>
+        private static RectTransform HalfCard(RectTransform parent, float height)
+        {
+            RectTransform card = Card(parent, height);
+            LayoutElement element = card.GetComponent<LayoutElement>();
+            element.preferredWidth = -1f;
+            element.flexibleWidth = 1f;
+            return card;
         }
 
         private static RectTransform Card(RectTransform parent, float height)

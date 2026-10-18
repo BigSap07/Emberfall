@@ -68,6 +68,10 @@ namespace Emberfall.EditorTools
         private const string MomentKey = "PlayModeScreenshot.Moment";
         /// <summary>Screen:BattleMoment only: 0 waits for the round, 1 for the moment, 2 settles.</summary>
         private const string MomentStageKey = "PlayModeScreenshot.MomentStage";
+        /// <summary>Screen:BattleMoment only: the GAME frame (Time.frameCount) the moment arrived on,
+        /// then the one the clock was frozen on. The editor's update runs more often than the game's
+        /// frames when the editor is not in front, so the settle is counted in game frames.</summary>
+        private const string MomentFrameKey = "PlayModeScreenshot.MomentFrame";
         /// <summary>Set once an onboarding target that waits on a screen (a battle's first round, a
         /// wave result's paint) has seen it ready, so the shot is timed from then.</summary>
         private const string OnboardReadyKey = "PlayModeScreenshot.OnboardReady";
@@ -2476,6 +2480,7 @@ namespace Emberfall.EditorTools
                               + (aspect != null ? " by " + aspect.Value : "") + (off ? " with the pre-R12 profile" : "") + ".");
                     // Frames mean game time from here to the shot, whatever the editor's speed.
                     Time.captureFramerate = 60;
+                    SessionState.SetInt(MomentFrameKey, Time.frameCount);
                     SessionState.SetInt(MomentStageKey, 1);
                     SessionState.SetInt(BattleArmKey, frame);
                 }
@@ -2489,24 +2494,50 @@ namespace Emberfall.EditorTools
 
             if (stage == 1)
             {
+                // A fight at 1x takes a minute to reach round four, so it runs at 4x until a few events
+                // before the moment and then drops to 1x, so the moment itself plays at the player's
+                // speed. The progress line says where the fight is, so a fight that stops moving is
+                // told apart from one that is only far from its moment.
+                if (battle != null && battle.MomentEventIndex >= 0)
+                    battle.SpeedForCapture = battle.PlayedEventIndex < battle.MomentEventIndex - 6 ? 4f : 1f;
+                if (battle != null && (frame - armed) % 600 == 0)
+                    Debug.Log("BattleMoment: progress event " + battle.PlayedEventIndex + " of " + battle.EventCount + ", the moment is event "
+                              + battle.MomentEventIndex + ", " + battle.RoundLabelForCapture + ", speed " + battle.SpeedForCapture
+                              + ", timeScale " + Time.timeScale + ", deltaTime " + Time.deltaTime.ToString("0.0000")
+                              + ", captureFramerate " + Time.captureFramerate + ", game frame " + (Time.frameCount - SessionState.GetInt(MomentFrameKey, 0))
+                              + " after arming, game time " + Time.time.ToString("0.0") + " s, editor update " + (frame - armed) + ".");
                 if (battle != null && battle.MomentArrived)
                 {
-                    Debug.Log("PlayModeScreenshot: " + requested + " arrived at frame " + frame + ", shooting in " + MomentSettleFrames(kind) + " frames.");
+                    battle.SpeedForCapture = 1f;
+                    Debug.Log("PlayModeScreenshot: " + requested + " arrived at game frame " + (Time.frameCount - SessionState.GetInt(MomentFrameKey, 0))
+                              + " after arming, shooting in " + MomentSettleFrames(kind) + " game frames.");
+                    SessionState.SetInt(MomentFrameKey, Time.frameCount);
                     SessionState.SetInt(MomentStageKey, 2);
-                    SessionState.SetInt(BattleArmKey, frame);
                 }
-                else if (frame > armed + waitCeiling)
+                else if (frame > armed + waitCeiling * 10)
                 {
-                    Debug.LogWarning("PlayModeScreenshot: " + requested + " never played within " + waitCeiling + " frames. Skipping it.");
+                    Debug.LogWarning("PlayModeScreenshot: " + requested + " never played within " + waitCeiling * 10 + " editor updates (stopped at event "
+                                     + (battle != null ? battle.PlayedEventIndex + " of " + battle.EventCount : "?") + "). Skipping it.");
                     SkipMoment(slot);
                 }
                 return;
             }
 
-            int settle = MomentSettleFrames(kind);
-            if (frame == armed + settle) Time.timeScale = 0f;
-            if (frame == armed + settle + 2) Canvas.ForceUpdateCanvases();
-            if (frame == armed + settle + 3)
+            // Stages 2 and 3 count GAME frames: settle, freeze the clock, let the canvas lay out, shoot.
+            int gameFrame = Time.frameCount;
+            int settleFrom = SessionState.GetInt(MomentFrameKey, gameFrame);
+            if (stage == 2)
+            {
+                if (gameFrame - settleFrom >= MomentSettleFrames(kind))
+                {
+                    Time.timeScale = 0f;
+                    SessionState.SetInt(MomentFrameKey, gameFrame);
+                    SessionState.SetInt(MomentStageKey, 3);
+                }
+                return;
+            }
+            Canvas.ForceUpdateCanvases();
+            if (gameFrame - settleFrom >= 3)
             {
                 Shoot(name, frame, slot);
                 SessionState.SetInt(MomentStageKey, 0);

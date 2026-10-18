@@ -47,6 +47,7 @@ namespace Emberfall.DevHarness
             CheckJuiceNotHashed(db, contentDir);
             CheckJuiceSimulationUntouched(root);
             CheckJuiceClassification(db, cfg.Juice);
+            CheckJuiceMomentTracker(db);
             CheckJuiceCurves(cfg.Juice);
             CheckJuiceLanes(cfg.Juice);
             CheckJuiceCap(cfg.Juice);
@@ -454,6 +455,74 @@ namespace Emberfall.DevHarness
             Check(cks == ss, "J10 a critical skill that kills takes the skill shake once, not a sum (" + Fmt(cks) + ")");
         }
 
+        // ------------------------------------------------------------------ J15 the live arrival
+
+        /// <summary>
+        /// J15. The battle screen finds a moment live with MomentTracker, fed one event at a time as
+        /// the fight plays. Here the same class is replayed over real fights, event by event, for every
+        /// kind and every aspect, and must arrive on exactly the event FindMoment names in the record;
+        /// armed in the middle of a fight it must arrive on the first matching event from there on.
+        /// A capture that found its moment here and never live would have to disagree with this.
+        /// </summary>
+        private static void CheckJuiceMomentTracker(ContentDatabase db)
+        {
+            List<JuiceFight> fights = JuiceFights(db);
+            MomentKind[] kinds = { MomentKind.Hit, MomentKind.Crit, MomentKind.Skill, MomentKind.Heal, MomentKind.Death };
+            int cases = 0, wrong = 0, arrivals = 0, midWrong = 0;
+            string first = "";
+            for (int f = 0; f < fights.Count; f++)
+            {
+                BattleResult r = fights[f].Result;
+                MomentKind[] all = JuiceMath.ClassifyAll(r.Events);
+                Func<int, Aspect> aspectOf = id => JuiceAspectOf(r, id);
+                for (int k = 0; k < kinds.Length; k++)
+                {
+                    for (int a = -1; a < 6; a++)
+                    {
+                        Aspect? aspect = a < 0 ? (Aspect?)null : (Aspect)a;
+                        int expected = JuiceMath.FindMoment(r.Events, aspectOf, kinds[k], aspect);
+                        MomentTracker t = new MomentTracker();
+                        t.Arm(kinds[k], aspect, aspectOf);
+                        for (int i = 0; i < r.Events.Count; i++) t.Note(r.Events[i], i);
+                        cases++;
+                        if (t.Arrived) arrivals++;
+                        if ((expected >= 0) != t.Arrived || t.ArrivedIndex != expected)
+                        {
+                            wrong++;
+                            if (first.Length == 0) first = fights[f].StageId + " " + kinds[k] + " " + aspect + " expected " + expected + " got " + t.ArrivedIndex;
+                        }
+
+                        // armed half way through: events before it are seen, not waited on
+                        int mid = r.Events.Count / 2;
+                        int expectedMid = -1;
+                        for (int i = mid; i < r.Events.Count && expectedMid < 0; i++)
+                        {
+                            if (all[i] != kinds[k]) continue;
+                            int unit = JuiceMath.AspectUnit(r.Events[i], kinds[k]);
+                            if (aspect == null || (unit >= 0 && aspectOf(unit) == aspect.Value)) expectedMid = i;
+                        }
+                        MomentTracker m = new MomentTracker();
+                        for (int i = 0; i < r.Events.Count; i++)
+                        {
+                            if (i == mid) m.Arm(kinds[k], aspect, aspectOf);
+                            m.Note(r.Events[i], i);
+                        }
+                        if (m.ArrivedIndex != expectedMid) midWrong++;
+                    }
+                }
+            }
+            Check(wrong == 0 && cases > 0 && arrivals > 0,
+                  "J15 LIVE ARRIVAL: MomentTracker, fed event by event like the battle screen feeds it, arrives on exactly the event FindMoment names, for every kind and aspect in "
+                  + fights.Count + " fights (" + cases + " cases, " + arrivals + " arrivals)" + (first.Length > 0 ? ": FIRST MISMATCH " + first : ""));
+            Check(midWrong == 0, "J15 armed half way through a fight it arrives on the first matching event after that, with the cast state still right");
+
+            // the screen must feed it every event and read nothing else
+            string root = Path.GetFullPath(Path.Combine(FindToolDir("DevHarness"), "..", ".."));
+            string screen = ReadJuiceSource(Path.Combine(root, "Assets", "Scripts"), "UI", "Screens", "BattleScreen.cs");
+            Check(Regex.IsMatch(screen, @"_moments\.Note\(e, index\);") && screen.Contains("public bool MomentArrived { get { return _moments.Arrived; } }"),
+                  "J15 WIRING (reads source): BattleScreen.Handle feeds MomentTracker every event and MomentArrived is the tracker's answer");
+        }
+
         // ------------------------------------------------------------------ J11 curves
 
         private static void CheckJuiceCurves(JuiceProfile p)
@@ -634,6 +703,18 @@ namespace Emberfall.DevHarness
             Check(stage.Length > 0 && found.Count == 0,
                   "J14 WIRING (reads source): BattleStage still reads its camera from BattleFraming and gained none of its literals" + (found.Count > 0 ? ": " + string.Join(", ", found.ToArray()) : ""));
 
+            // The cap: BattleVfx's asking Take consults JuiceMath.Admit, and every routine that takes a
+            // quad names a budget kind and ends when it is refused. The cap model above is true by
+            // construction; this is what ties it to the pool the game actually draws from.
+            string vfx = ReadJuiceSource(scripts, "Battle", "BattleVfx.cs");
+            int takes = Regex.Matches(vfx, @"Quad quad = Take\(").Count;
+            int guarded = Regex.Matches(vfx, @"Quad quad = Take\([^
+]*BudgetKind\.[^
+]*
+\s*if \(quad == null\)").Count;
+            Check(takes >= 8 && guarded == takes && Regex.IsMatch(vfx, @"Take\(Texture texture, Color color, bool additive, BudgetKind kind\)\s*\{\s*if \(Juice\.On && !JuiceMath\.Admit\(Juice\.Profile, kind, _live\.Count\)\) return null;"),
+                  "J13 WIRING (reads source): BattleVfx.Take asks JuiceMath.Admit against the live quad count, and all " + takes + " routines that take a quad name a budget kind and end when refused (" + guarded + " guarded)");
+
             string shots = File.Exists(Path.Combine(root, "Assets", "Editor", "PlayModeScreenshot.cs"))
                 ? File.ReadAllText(Path.Combine(root, "Assets", "Editor", "PlayModeScreenshot.cs")) : "";
             Check(shots.Contains("case \"BattleMoment\": id = ScreenId.Battle;") && shots.Contains("PumpBattleMoment(") && shots.Contains("MOMENT-ABSENT")
@@ -641,7 +722,7 @@ namespace Emberfall.DevHarness
                   "J14 WIRING (reads source): PlayModeScreenshot has the BattleMoment target, reports MOMENT-ABSENT, and has no literal Begin for it, so the nightly sweep never runs it");
 
             string settings = ReadJuiceSource(scripts, "UI", "Screens", "SettingsScreen.cs");
-            Check(Regex.Matches(settings, "\"Screen shake\"").Count == 1 && settings.Contains("ScreenShakePrefs.Enabled") && settings.Contains("BuildBattleCard(content);"),
+            Check(Regex.Matches(settings, "\"Screen shake\"").Count == 1 && settings.Contains("ScreenShakePrefs.Enabled") && settings.Contains("BuildBattleCard(pair);"),
                   "J14 WIRING (reads source): the settings screen has one Screen shake card, wired to ScreenShakePrefs");
 
             // The shake toggle: one choke point, on by default, in both flag states.
@@ -694,13 +775,14 @@ namespace Emberfall.DevHarness
             List<KeyValuePair<int, string>> ranked = new List<KeyValuePair<int, string>>();
             for (int s = 0; s < stages.Count; s++)
             {
-                int hits = 0;
+                int hits = 0, roundSum = 0;
                 for (int k = 0; k < fights[s].Length; k++)
                 {
                     BattleResult r = fights[s][k];
-                    if (JuiceMath.FindMoment(r.Events, id => JuiceAspectOf(r, id), kind, aspect) >= 0) hits++;
+                    int at = JuiceMath.FindMoment(r.Events, id => JuiceAspectOf(r, id), kind, aspect);
+                    if (at >= 0) { hits++; roundSum += r.Events[at].Round; }
                 }
-                if (hits > 0) ranked.Add(new KeyValuePair<int, string>(hits, stages[s].Id));
+                if (hits > 0) ranked.Add(new KeyValuePair<int, string>(hits, stages[s].Id + " (round " + (roundSum / hits) + ")"));
             }
             // most often first; ties keep campaign order (an early stage is a shorter fight)
             for (int i = 1; i < ranked.Count; i++)

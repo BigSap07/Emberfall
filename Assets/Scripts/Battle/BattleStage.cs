@@ -245,7 +245,7 @@ namespace Emberfall.Battle
             Actors.Clear();
             _backdrop = null;
             _backdropRenderer = null;
-            _dim = null;
+            if (_dim != null) { StopCoroutine(_dim); _dim = null; }
         }
 
         public void Teardown()

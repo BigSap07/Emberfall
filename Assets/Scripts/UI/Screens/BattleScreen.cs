@@ -247,16 +247,33 @@ namespace Emberfall.UI.Screens
 
         /// <summary>The moment the capture waits for, or None.</summary>
         public MomentKind MomentWanted { get; private set; }
-        private Aspect? _momentAspect;
+        private readonly MomentTracker _moments = new MomentTracker();
 
         /// <summary>True once the moment asked for has been played (the first one only).</summary>
-        public bool MomentArrived { get; private set; }
+        public bool MomentArrived { get { return _moments.Arrived; } }
+
+        /// <summary>Index in the record of the moment being waited for (-1 if none), of the event
+        /// that played last, and how many events the record holds. The capture reads them to run a
+        /// long fight fast up to the moment and slow down for it, and to log where a fight is.</summary>
+        public int MomentEventIndex { get; private set; }
+        public int PlayedEventIndex { get; private set; }
+        public int EventCount { get { return _result != null ? _result.Events.Count : 0; } }
+        public string RoundLabelForCapture { get { return _roundText ?? ""; } }
+        public float SpeedForCapture
+        {
+            get { return _speed; }
+            set
+            {
+                _speed = value;
+                if (_world != null && _world.Vfx != null) _world.Vfx.SpeedScale = value;
+            }
+        }
 
         public void ArmMomentCapture(MomentKind kind, Aspect? aspect)
         {
             MomentWanted = kind;
-            _momentAspect = aspect;
-            MomentArrived = false;
+            _moments.Arm(kind, aspect, AspectOfUnit);
+            MomentEventIndex = _result != null ? JuiceMath.FindMoment(_result.Events, AspectOfUnit, kind, aspect) : -1;
         }
 
         /// <summary>Whether the record of this fight holds the moment, by the same JuiceMath.FindMoment
@@ -289,17 +306,6 @@ namespace Emberfall.UI.Screens
             return "players " + players + " enemies " + enemies;
         }
 
-        private void NoteMoment(BattleEvent e)
-        {
-            MomentKind kind = JuiceMath.Classify(e, _skillActive);
-            if (kind != MomentWanted) return;
-            if (_momentAspect != null)
-            {
-                int unit = JuiceMath.AspectUnit(e, kind);
-                if (unit < 0 || AspectOfUnit(unit) != _momentAspect.Value) return;
-            }
-            MomentArrived = true;
-        }
 #endif
 
         /// <summary>Index into _turnOrder of the turn being played, and -1 before the round's
@@ -1269,7 +1275,8 @@ namespace Emberfall.UI.Screens
 #if UNITY_EDITOR
             HitJustPlayed = e.Type == BattleEventType.Damage && e.Status == StatusKind.None;
             if (e.Type == BattleEventType.Heal && e.Value > 0) _lastHealAt = Time.unscaledTime;
-            if (MomentWanted != MomentKind.None && !MomentArrived) NoteMoment(e);
+            PlayedEventIndex = index;
+            _moments.Note(e, index);
 #endif
 
             switch (e.Type)
@@ -2105,7 +2112,13 @@ namespace Emberfall.UI.Screens
             item.Root.SetAsLastSibling();
             int unitId = _floatUnitId;
             _floatUnitId = -1;
-            if (Juice.On) StartCoroutine(JuiceFloatRoutine(item, worldPosition, unitId, scale));
+            if (Juice.On)
+            {
+                // Callers that did not say whose number it is (a ward, a shield, a resist) pass the
+                // unit's head, so the unit is the one standing there.
+                if (unitId < 0) unitId = UnitAtHead(worldPosition);
+                StartCoroutine(JuiceFloatRoutine(item, worldPosition, unitId, scale));
+            }
             else StartCoroutine(FloatRoutine(item, worldPosition));
         }
 
@@ -2127,11 +2140,13 @@ namespace Emberfall.UI.Screens
             start.x += Random.Range(-9f, 9f);
 
             // Make room: the cap first (the oldest numbers on this unit, then overall), then the lane.
-            while (JuiceMath.RetireOldestOnTarget(p, LiveFloats(unitId))) RetireOldest(unitId);
+            // A number with no known unit gets no lane and no per-unit cap, so a caller that cannot
+            // say whose it is can never stack other units' numbers on one another.
+            while (unitId >= 0 && JuiceMath.RetireOldestOnTarget(p, LiveFloats(unitId))) RetireOldest(unitId);
             while (JuiceMath.RetireOldestOverall(p, LiveFloats(-2))) RetireOldest(-2);
             List<float> ys = new List<float>();
             List<FloatText> mine = new List<FloatText>();
-            for (int i = 0; i < _liveFloats.Count; i++)
+            for (int i = 0; unitId >= 0 && i < _liveFloats.Count; i++)
             {
                 if (_liveFloats[i].Retiring || _liveFloats[i].UnitId != unitId) continue;
                 mine.Add(_liveFloats[i]);
@@ -2185,6 +2200,18 @@ namespace Emberfall.UI.Screens
             item.Root.gameObject.SetActive(false);
             item.Retiring = false;
             item.Busy = false;
+        }
+
+        /// <summary>The id of the unit whose head is at that point, or -1.</summary>
+        private int UnitAtHead(Vector3 head)
+        {
+            if (_world == null) return -1;
+            for (int i = 0; i < _world.Actors.Count; i++)
+            {
+                UnitActor actor = _world.Actors[i];
+                if (actor != null && actor.Snapshot != null && (actor.HeadPosition - head).sqrMagnitude < 0.0001f) return actor.Snapshot.Id;
+            }
+            return -1;
         }
 
         /// <summary>Live, not-yet-retiring numbers on a unit (-2 counts every unit).</summary>
