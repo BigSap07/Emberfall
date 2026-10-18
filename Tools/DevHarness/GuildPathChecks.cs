@@ -654,13 +654,13 @@ namespace Emberfall.DevHarness
             PlayerProfile back = SaveSerializer.Deserialize(json, content, out err);
             Check(back != null && back.Waymarks == 25 && back.GuildPathNodes.Count == 2 && back.Lines.Count == p.Lines.Count
                   && back.ActiveLine == p.ActiveLine && Same(back.Team, p.Team) && SaveSerializer.Serialize(back) == json,
-                  "save version " + SaveSerializer.CurrentVersion + " carries the Waymarks, the nodes and every line, byte for byte");
+                  "save version " + SaveSerializer.BaseVersion + " carries the Waymarks, the nodes and every line, byte for byte");
 
             PlayerProfile plain = GameSession.CreateNewProfile(content, 0);
             string plainJson = SaveSerializer.Serialize(plain);
             Check(!plainJson.Contains("guildPath") && !plainJson.Contains("\"lines\""),
                   "a profile the Path never touched writes none of the new keys");
-            string v16 = Regex.Replace(json, @"""version""(\s*):(\s*)" + SaveSerializer.CurrentVersion, @"""version""$1:${2}16");
+            string v16 = Regex.Replace(json, @"""version""(\s*):(\s*)" + SaveSerializer.BaseVersion, @"""version""$1:${2}16");
             v16 = v16.Replace("\"guildPath\"", "\"guildPathIgnored\"").Replace("\"lines\"", "\"linesIgnored\"");
             PlayerProfile up = SaveSerializer.Deserialize(v16, content, out err);
             Check(up != null && up.Waymarks == 0 && up.GuildPathNodes.Count == 0 && up.Lines.Count == 0 && up.ActiveLine == 0,

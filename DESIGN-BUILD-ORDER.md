@@ -815,6 +815,12 @@ Version 22 records the daily loop: a `dailyLoop` block, written only when `Daily
 something. A version 21 save loads with an empty loop. `CheckDailyLoopSave` proves it. **The owner must
 raise the server's `save_limits` row to 22 before a cloud build is played**:
 `update save_limits set max_save_version = 22;`.
+Version 23 records the sinks: a `sinks` block (`SinksState`, the Armory and Archive cap counters),
+written only when it holds something. `Serialize` stamps 23 only when the block is written and 22
+otherwise (`SaveSerializer.VersionOf`), so a save with no purchase is the version 22 document and the
+cloud push sends the document's own version. `CheckSinksSave` and `CheckSinksOff` prove it. **The owner
+must raise the server's `save_limits` row to 23 before a cloud player with the flag on buys anything**:
+`update public.save_limits set max_save_version = 23, updated_at = now();`.
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -976,8 +982,13 @@ Unmade. Before that every Umbra floor fielded it, twice on floors 5 and 11, and
 `CheckRecitalDrawsNoScriptedLoss` now climbs 120 floors to say none does. It draws the templates of the
 floor's Aspect **that some campaign stage fields** (`GuildDungeonGenerator.TemplatePool`, the guild's
 rule), bosses included, so the retired shipped 12 are out of it; `Docs/CAMPAIGN-SPEC.md` 9.6 and 10.7
-measure what each change did to the floors. Coda is the Recital's own currency and accrues on every clear. **There is no Coda sink
-yet.** `ProvingGenerator` builds opponent lines. The events engine is content-driven through
+measure what each change did to the floors. Coda is the Recital's own currency and accrues on every clear.
+Two shops now spend the two purses, behind `SinksSwitch` (define `EMBERFALL_SINKS_ON`, default off, and
+flag off is the build before them): the Armory sells for Valor and the Archive for Coda, from
+`sinks.json`, which is not in `ContentVersion`. Prices are days of income, `SinkPricing` is the one place
+days become currency, and `SinkShop.Buy` is the only door that sells. Nothing in them is random and only
+earned currency pays. `Docs/DESIGN-SINKS.md` has the items, caps and the Echo note.
+`ProvingGenerator` builds opponent lines. The events engine is content-driven through
 `events.json`, and each milestone carries a permanent `id` that a claim is saved against, so a
 threshold can be retuned freely. Shop screens are wired.
 

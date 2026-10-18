@@ -174,7 +174,9 @@ namespace Emberfall.Game.Cloud
             if (plan.Action == SyncAction.UploadLocal)
             {
                 string pushError = "";
-                yield return Push(localJson, SaveSerializer.CurrentVersion,
+                // The document's own version, never the highest this build reads: a save with no
+                // sinks block is version 22 and the server's limit may not have reached 23.
+                yield return Push(localJson, SaveSerializer.VersionOfJson(localJson),
                                   SyncPlanner.ExpectedRevisionForUpload(inputs),
                                   delegate (CloudSaveRecord r, string e) { outcome.Record = r != null ? r : outcome.Record; pushError = e; });
                 outcome.Error = pushError;
@@ -225,7 +227,7 @@ namespace Emberfall.Game.Cloud
             }
 
             string pushError = "";
-            yield return Push(localJson, SaveSerializer.CurrentVersion, outcome.Record.Revision,
+            yield return Push(localJson, SaveSerializer.VersionOfJson(localJson), outcome.Record.Revision,
                               delegate (CloudSaveRecord r, string e)
                               {
                                   if (r != null) outcome.Record = r;

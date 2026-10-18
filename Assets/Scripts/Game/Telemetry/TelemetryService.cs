@@ -242,7 +242,7 @@ namespace Emberfall.Game.Telemetry
             // or the Yes itself), never from before consent: seconds is time since this event.
             _stretchStart = Time.realtimeSinceStartup;
             Record(TelemetrySchema.SessionStart,
-                   TelemetrySchema.SessionStartPayload(Application.platform.ToString(), SaveSerializer.CurrentVersion));
+                   TelemetrySchema.SessionStartPayload(Application.platform.ToString(), SaveSerializer.BaseVersion));
         }
 
         private void CloseSession()

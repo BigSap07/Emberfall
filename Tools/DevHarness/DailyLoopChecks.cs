@@ -639,7 +639,7 @@ namespace Emberfall.DevHarness
             Check(error == null && same && SaveSerializer.Serialize(back) == json,
                   "SAVE 22 ROUND TRIP: a board with progress and a claim, a calendar at day 3 and a week at 3 days saves and loads back identical, "
                   + "and saves again byte for byte (" + json.Length + " characters)");
-            Check(JsonValue.Parse(json).GetInt("version", 0) == SaveSerializer.CurrentVersion && SaveSerializer.CurrentVersion == 22 && json.Contains("\"dailyLoop\""),
+            Check(JsonValue.Parse(json).GetInt("version", 0) == SaveSerializer.BaseVersion && SaveSerializer.BaseVersion == 22 && json.Contains("\"dailyLoop\""),
                   "and it is stamped version 22, with the loop under its own key");
 
             bool was = DailyLoopSwitch.Enabled;
@@ -666,7 +666,7 @@ namespace Emberfall.DevHarness
             DailyLoopSwitch.Enabled = was;
             Check(!v22.Contains("\"dailyLoop\""), "a profile whose loop is empty writes no dailyLoop key at all");
 
-            string v21 = v22.Replace("\"version\": " + SaveSerializer.CurrentVersion, "\"version\": 21");
+            string v21 = v22.Replace("\"version\": " + SaveSerializer.BaseVersion, "\"version\": 21");
             PlayerProfile old = SaveSerializer.Deserialize(v21, db, out error);
             bool kept = old != null && old.Gold == played.Profile.Gold && old.Shards == played.Profile.Shards
                         && old.Heroes.Count == played.Profile.Heroes.Count && old.Heroes[0].Level == hero.Level

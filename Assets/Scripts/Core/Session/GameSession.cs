@@ -2206,6 +2206,23 @@ namespace Emberfall.Core.Session
             return true;
         }
 
+        /// <summary>
+        /// Puts one Echo back in the bank, settling regen first: the Armory's Echo (SinkShop).
+        /// Returns false, changing nothing but the settled regen, when the bank is already full.
+        /// Reaching the cap snaps the clock to nowUnix, as SettleRecitalEchoes does, because time
+        /// that passes while the bank is full banks nothing; below the cap the clock is left alone,
+        /// so the fractional remainder toward the next Echo survives the purchase.
+        /// </summary>
+        public bool AddRecitalEcho(long nowUnix)
+        {
+            SettleRecitalEchoes(nowUnix);
+            int max = Math.Max(0, Balance.RecitalEchoesMax);
+            if (Profile.RecitalEchoesBanked >= max) return false;
+            Profile.RecitalEchoesBanked++;
+            if (Profile.RecitalEchoesBanked >= max) Profile.RecitalEchoesClockUnix = Math.Max(Profile.RecitalEchoesClockUnix, nowUnix);
+            return true;
+        }
+
         // ------------------------------------------------------------------ The Proving (PvP)
         // The whole block below is the Echo bank's shape, field for field and method for method.
         // That is DESIGN-PVP section 5's decision, not laziness: two attempt-gated modes with two
@@ -2271,6 +2288,17 @@ namespace Emberfall.Core.Session
             SettleProvingBrands(nowUnix);
             if (Profile.ProvingBrandsBanked <= 0) return false;
             Profile.ProvingBrandsBanked--;
+            return true;
+        }
+
+        /// <summary>AddRecitalEcho for Brands: one Brand back in the bank, refused when it is full.</summary>
+        public bool AddProvingBrand(long nowUnix)
+        {
+            SettleProvingBrands(nowUnix);
+            int max = Math.Max(0, Balance.ProvingBrandsMax);
+            if (Profile.ProvingBrandsBanked >= max) return false;
+            Profile.ProvingBrandsBanked++;
+            if (Profile.ProvingBrandsBanked >= max) Profile.ProvingBrandsClockUnix = Math.Max(Profile.ProvingBrandsClockUnix, nowUnix);
             return true;
         }
 

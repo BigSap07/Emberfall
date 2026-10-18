@@ -88,11 +88,29 @@ namespace Emberfall.UI.Screens
             EmberforgeUI.Ground(Root);
             ScreenChrome.ForgedHeader(Root, "THE DEEP RECITAL", Router, out _headerSubtitle);
             _currencies.Build(Root);
+            if (SinksSwitch.Enabled) BuildArchiveDoor();
 
             float top = CurrencyStrip.BottomOf(CurrencyStrip.DefaultTop);
             float bannerHeight = ShortestCanvasHeight - top - UITheme.Space24 - CycleBlock;
             BuildBanner(top, bannerHeight);
             BuildCycleRow();
+        }
+
+        /// <summary>
+        /// THE ARCHIVE'S DOOR (DESIGN-SINKS.md): top right, at the strip's height, outside the banner
+        /// (which is already full at 20:9). Only with the switch on.
+        /// </summary>
+        private void BuildArchiveDoor()
+        {
+            UIButton archive = EmberforgeUI.Button("Archive", Root, "ARCHIVE", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIBuilder.Box(archive.Root, -UITheme.ScreenPadding, -CurrencyStrip.DefaultTop, 260f, CurrencyStrip.Height,
+                          new Vector2(1f, 1f));
+            archive.OnClick(delegate
+            {
+                if (!FeatureGates.TryEnter(App, "recital.Archive")) return;
+                App.Audio.Tap();
+                Router.Show(ScreenId.Archive);
+            });
         }
 
         /// <summary>The standing banner: floor plate, record, echo meter, one action.</summary>

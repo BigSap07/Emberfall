@@ -142,6 +142,20 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_valorValue.rectTransform, 8f);
             UIBuilder.Outlined(_valorValue, Emberforge.Outline, Emberforge.StrokeThin);
 
+            // THE ARMORY'S DOOR (DESIGN-SINKS.md), beside the purse it spends: right of it, at the
+            // same height, clear of the opponent card above at 20:9 as well. Only with the switch on.
+            if (SinksSwitch.Enabled)
+            {
+                UIButton armory = EmberforgeUI.Button("Armory", Root, "ARMORY", UITheme.FontSmall, ForgeButtonKind.Secondary);
+                UIBuilder.Box(armory.Root, CardWidth * 0.5f + UITheme.Space16 + 130f, bottom, 260f, 56f, new Vector2(0.5f, 0f));
+                armory.OnClick(delegate
+                {
+                    if (!FeatureGates.TryEnter(App, "proving.Armory")) return;
+                    App.Audio.Tap();
+                    Router.Show(ScreenId.Armory);
+                });
+            }
+
             _honestyNote = EmberforgeUI.Body("Note", Root,
                 "Opponents are reconstructed lines, not other players. Standing is your own record"
                 + " and sets how hard the next line is - it is not a rank against anyone.",

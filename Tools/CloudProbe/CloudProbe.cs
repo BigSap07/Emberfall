@@ -93,7 +93,8 @@ internal static class CloudProbe
     {
         Section("P1  a save this build refuses is kept, not overwritten");
         FreshDevice();
-        string newer = SaveSerializer.Serialize(RichProfile()).Replace("\"version\": " + SaveSerializer.CurrentVersion,
+        string rich = SaveSerializer.Serialize(RichProfile());
+        string newer = rich.Replace("\"version\": " + SaveSerializer.VersionOfJson(rich),
                                                                        "\"version\": " + (SaveSerializer.CurrentVersion + 1));
         File.WriteAllText(SaveService.FilePath, newer);
         PlayerPrefs.SetString(SaveService.PrefsKey, newer);

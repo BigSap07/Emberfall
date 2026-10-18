@@ -436,7 +436,47 @@ namespace Emberfall.Core.Save
         /// mid-day would come back to a board with its progress and its claims erased, and could
         /// claim the same order again. The bump refuses that. The server's save_limits row must be
         /// raised to 22 before a cloud player ships this, as it had to be for 21.
-        public const int CurrentVersion = 22;
+        ///
+        /// 23: the sinks (DESIGN-SINKS.md). One key, `sinks`: how much of each capped Armory and
+        /// Archive item has been bought today and this month (SinksState). Written only once it
+        /// holds something, and THE VERSION IS STAMPED 23 ONLY WHEN IT IS WRITTEN (VersionOf): a
+        /// save with no purchase is byte for byte the document the build before 23 wrote, version
+        /// number included, so a cloud push with SinksSwitch off claims 22 and needs no change on the
+        /// server. CurrentVersion is the highest version this build READS; BaseVersion is what a
+        /// save without a sinks block says.
+        ///
+        /// Upgrade needs NO migration step: the key's absence IS the empty block. Read on every load
+        /// whatever the switch says, so turning the switch off keeps what a player bought with it on.
+        ///
+        /// WHY THIS IS A BUMP. A version 22 build drops the key on write, so a player who opened it
+        /// after buying would come back to caps erased and could buy the same capped item again. The
+        /// bump refuses that, but only for a save that holds a purchase. The server's save_limits row
+        /// must be raised to 23 before a cloud player with the switch on buys anything.
+        public const int CurrentVersion = 23;
+
+        /// <summary>The version a save WITHOUT a sinks block says, which is the version before the
+        /// sinks existed. See CurrentVersion.</summary>
+        public const int BaseVersion = 22;
+
+        /// <summary>The version Serialize stamps on this profile: 23 when it holds a sinks block to
+        /// write, else the version before the sinks existed.</summary>
+        public static int VersionOf(PlayerProfile profile)
+        {
+            return profile != null && profile.Sinks != null && !profile.Sinks.IsEmpty ? CurrentVersion : BaseVersion;
+        }
+
+        /// <summary>The version a serialised document says it is, or BaseVersion when it names none
+        /// this build can read. What a cloud push claims: the document's own version, never the
+        /// highest this build reads.</summary>
+        public static int VersionOfJson(string json)
+        {
+            JsonValue root;
+            string error;
+            int version;
+            if (!JsonValue.TryParse(json, out root, out error)) return BaseVersion;
+            if (!TryReadVersion(root, out version, out error)) return BaseVersion;
+            return version;
+        }
 
         /// <summary>
         /// The campaign's stage ids in campaign.json order as they stood when version 20 moved
@@ -800,7 +840,7 @@ namespace Emberfall.Core.Save
         public static string Serialize(PlayerProfile profile)
         {
             JsonValue root = JsonValue.NewObject();
-            root.Set("version", CurrentVersion);
+            root.Set("version", VersionOf(profile));
             root.Set("playerName", profile.PlayerName);
             root.Set("avatarHeroId", profile.AvatarHeroId);
             root.Set("playerLevel", profile.PlayerLevel);
@@ -987,6 +1027,11 @@ namespace Emberfall.Core.Save
             // Version 22: the daily loop, only once it holds something - see CurrentVersion.
             if (profile.DailyLoop != null && !profile.DailyLoop.IsEmpty)
                 root.Set("dailyLoop", profile.DailyLoop.Write());
+
+            // Version 23: the sinks, only once they hold something, and the version above says 23
+            // only then - see CurrentVersion.
+            if (profile.Sinks != null && !profile.Sinks.IsEmpty)
+                root.Set("sinks", profile.Sinks.Write());
 
             return root.ToJson(true);
         }
@@ -1338,6 +1383,10 @@ namespace Emberfall.Core.Save
             // Version 22. Absent reads as the empty loop, which is true of every save written
             // before it and of every player who never had the switch on.
             profile.DailyLoop = DailyLoopState.Read(root["dailyLoop"]);
+
+            // Version 23. Absent reads as the empty block, which is true of every save written
+            // before it and of every player who never bought anything.
+            profile.Sinks = SinksState.Read(root["sinks"]);
 
             List<JsonValue> lines = root.GetList("lines");
             for (int l = 0; l < lines.Count; l++) profile.Lines.Add(ReadLine(lines[l]));

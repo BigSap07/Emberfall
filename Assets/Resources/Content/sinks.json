@@ -1,0 +1,85 @@
+{
+  // THE SINKS - DESIGN-SINKS.md. What the Armory sells for Valor and the Archive sells for Coda.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, on purpose, for guild-path.json's reason: nothing
+  // here is read by a fight. Retuning a price must not retire every guild's replays.
+  // ContentDatabase.LoadSinks reads it after Load. The whole shop is behind SinksSwitch and
+  // stays dark with it off, whatever this file says.
+  //
+  // PRICES ARE DAYS OF INCOME, never currency amounts. One day of income is what a player at the
+  // highest Proving standing (or Recital floor) reached earns in a day of full attempt banks;
+  // SinkPricing turns days into Valor or Coda and rounds up to priceRound. A fixed amount would be
+  // generous in week one and worthless by week ten, and days scale by themselves.
+  //
+  // NOTHING HERE IS RANDOM. kind is a closed set: armor (a fixed preset, built by hand), brand
+  // (+1 Proving attempt), echo (+1 Recital attempt), heroCopy (+1 copy of a hero the player picks
+  // from the list). An unknown kind is dropped with a warning. The shops sell for earned currency
+  // only.
+  //
+  // cap: items that share a cap key share one counter. per is "day" (the reward day, 04:00 UTC)
+  // or "month" (the calendar month of the reward day).
+  //
+  // armor presets are Honed at most (ArmorInfo.MaxDropTemper). primary is the slot's guaranteed
+  // stat, at its Honed magnitude. LoadSinks drops a preset whose values fall outside armor.json's
+  // ranges, so a preset can never be better than a roll could have been.
+  //
+  // heroes lists are explicit ids, four star heroes only, never a starting hero, and no hero in
+  // two lists. A roster addition never changes a shop silently.
+  "priceRound": 5,
+  "items": [
+    { "id": "armory_weapon", "shop": "armory", "kind": "armor", "days": 6,
+      "cap": { "key": "armor", "per": "month", "limit": 3 },
+      "armor": { "name": "Proving Edge", "slot": "Weapon", "aspect": "Ember", "temper": "Honed",
+                 "primary": 0.084,
+                 "subs": [ { "stat": "CritChance", "value": 0.036 }, { "stat": "CritDamage", "value": 0.072 } ] } },
+    { "id": "armory_helm", "shop": "armory", "kind": "armor", "days": 6,
+      "cap": { "key": "armor", "per": "month", "limit": 3 },
+      "armor": { "name": "Proving Casque", "slot": "Helm", "aspect": "Verdant", "temper": "Honed",
+                 "primary": 0.095,
+                 "subs": [ { "stat": "Defense", "value": 0.054 }, { "stat": "EffectResist", "value": 0.04 } ] } },
+    { "id": "armory_plate", "shop": "armory", "kind": "armor", "days": 6,
+      "cap": { "key": "armor", "per": "month", "limit": 3 },
+      "armor": { "name": "Proving Mail", "slot": "Plate", "aspect": "Lumen", "temper": "Honed",
+                 "primary": 0.084,
+                 "subs": [ { "stat": "MaxHp", "value": 0.058 }, { "stat": "EffectResist", "value": 0.04 } ] } },
+    { "id": "armory_boots", "shop": "armory", "kind": "armor", "days": 6,
+      "cap": { "key": "armor", "per": "month", "limit": 3 },
+      "armor": { "name": "Proving Treads", "slot": "Boots", "aspect": "Gale", "temper": "Honed",
+                 "primary": 0.056,
+                 "subs": [ { "stat": "Attack", "value": 0.054 }, { "stat": "EffectHit", "value": 0.04 } ] } },
+    { "id": "armory_ring", "shop": "armory", "kind": "armor", "days": 6,
+      "cap": { "key": "armor", "per": "month", "limit": 3 },
+      "armor": { "name": "Proving Ring", "slot": "AccessoryA", "aspect": "Umbra", "temper": "Honed",
+                 "primary": 0.048,
+                 "subs": [ { "stat": "Attack", "value": 0.054 }, { "stat": "Speed", "value": 0.036 } ] } },
+    { "id": "armory_charm", "shop": "armory", "kind": "armor", "days": 6,
+      "cap": { "key": "armor", "per": "month", "limit": 3 },
+      "armor": { "name": "Proving Pendant", "slot": "AccessoryB", "aspect": "Tide", "temper": "Honed",
+                 "primary": 0.117,
+                 "subs": [ { "stat": "CritChance", "value": 0.036 }, { "stat": "MaxHp", "value": 0.058 } ] } },
+
+    { "id": "armory_brand", "shop": "armory", "kind": "brand", "days": 0.25,
+      "cap": { "key": "brand", "per": "day", "limit": 3 } },
+    { "id": "armory_echo", "shop": "armory", "kind": "echo", "days": 1,
+      "cap": { "key": "echo", "per": "day", "limit": 1 } },
+
+    { "id": "armory_hero", "shop": "armory", "kind": "heroCopy", "days": 12,
+      "cap": { "key": "armoryHero", "per": "month", "limit": 1 },
+      "heroes": [
+        "branik_the_siege_mason", "halwen_the_reserve_keeper", "toren_the_closed_door",
+        "rhys_the_fence_walker", "jory_the_old_gate", "sable_the_queue_cutter",
+        "nadine_the_border_clerk", "celen_the_open_hand", "eira_the_rolling_barricade",
+        "siofra_the_turncoat_oracle", "tamsin_the_loose_thread", "kest_the_bridgebreaker",
+        "vanno_the_detour_king", "niko_the_uninvited_guest"
+      ] },
+
+    { "id": "archive_hero", "shop": "archive", "kind": "heroCopy", "days": 12,
+      "cap": { "key": "archiveHero", "per": "month", "limit": 1 },
+      "heroes": [
+        "orelle_the_fever_warden", "maren_the_long_sleeper", "lio_the_clear_diagnosis",
+        "tavia_the_signal_huntress", "maera_the_harbor_eye", "leon_the_numbered_arrow",
+        "demos_the_debt_collector", "corin_the_patience_engineer", "iolan_the_redacted_judge",
+        "mika_the_salvage_pilot", "finn_the_bellmaker", "ruma_the_false_trail"
+      ] }
+  ]
+}

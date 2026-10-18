@@ -455,6 +455,14 @@ namespace Emberfall.Core.Model
         /// </summary>
         public DailyLoopState DailyLoop = new DailyLoopState();
 
+        /// <summary>
+        /// What the Armory and the Archive remember: how much of each capped item has been bought
+        /// today and this month (DESIGN-SINKS.md). NEVER NULL. Empty for every profile that never
+        /// bought anything, and an empty one is not written to the save. Saved from version 23, and
+        /// only a save that carries one says 23 (SaveSerializer.VersionOf).
+        /// </summary>
+        public SinksState Sinks = new SinksState();
+
         /// <summary>Whether this tip or opening is recorded. Null-safe so a caller with no profile
         /// reads "not seen".</summary>
         public static bool HasSeen(PlayerProfile profile, string key)
@@ -535,8 +543,8 @@ namespace Emberfall.Core.Model
         /// <summary>
         /// Coda: The Deep Recital's own currency, the same isolated-purse pattern The Proving's
         /// Valor uses and for the same reason. It does not move Gold, Shards, Relic Dust, Slag or
-        /// Valor. There is no sink yet; the purse and accrual exist so the balance is visible and
-        /// the save field is in place for whatever Coda buys later.
+        /// Valor. Its one sink is the Archive (SinkShop, DESIGN-SINKS.md), open only while
+        /// SinksSwitch is on: with the switch off the purse accrues and buys nothing.
         /// </summary>
         public long Coda;
 
@@ -556,9 +564,10 @@ namespace Emberfall.Core.Model
         /// What the original reasoning was protecting still stands and is now protected a different
         /// way: the worry was that a new currency needs a sink, a sink means a shop, and a shop that
         /// sells power is a second progression track beside armor and relics - exactly the surface
-        /// task 13 stabilised. Valor is safe from that only for as long as it buys nothing that
-        /// affects combat. It currently has NO sink at all, which is a deliberate holding position,
-        /// not an oversight: see DESIGN-PVP section 6 for what has to be decided before it gets one.
+        /// task 13 stabilised. The owner has since decided Valor may buy armor, attempts and hero
+        /// copies. Its one sink is the Armory (SinkShop, DESIGN-SINKS.md), open only while
+        /// SinksSwitch is on, and it sells fixed items for earned Valor with no chance in any of
+        /// them. With the switch off Valor accrues and buys nothing.
         /// </summary>
         public long Valor;
 

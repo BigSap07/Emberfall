@@ -36,6 +36,8 @@ namespace Emberfall.Game
             db.LoadOnboarding(ReadTextOptional("onboarding"));
             // And the daily orders, chests and calendar (ContentDatabase.Orders): no fight reads them.
             db.LoadOrders(ReadTextOptional("orders"));
+            // And what the Armory and the Archive sell (ContentDatabase.Sinks): no fight reads it.
+            db.LoadSinks(ReadTextOptional("sinks"));
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

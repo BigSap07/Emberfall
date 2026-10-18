@@ -89,6 +89,12 @@ namespace Emberfall.EditorTools
         private const string LoopForceKey = "PlayModeScreenshot.DailyLoopForce";
         private const string LoopWasKey = "PlayModeScreenshot.DailyLoopWas";
 
+        /// <summary>The sinks' switch for this run, the daily loop's pair over again: 1 forces
+        /// SinksSwitch ON for the sink targets, 0 leaves it as the build has it. SinksWasKey is what
+        /// it was before the run, put back by Stop.</summary>
+        private const string SinksForceKey = "PlayModeScreenshot.SinksForce";
+        private const string SinksWasKey = "PlayModeScreenshot.SinksWas";
+
         /// <summary>
         /// Every run of this tool is on a scratch identity with the cloud held off, unconditionally:
         /// Begin swaps to it (unless a tool above, ScratchCaptures, already did) and enters Play
@@ -118,7 +124,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV23-audio-targets";
+        private const string BuildMarker = "FIXV24-sinks-targets";
 
         // THE WATCHDOG's state (CaptureWatchdog decides, this class acts). All of it lives in
         // SessionState because the domain reload that entering or leaving Play triggers wipes statics.
@@ -144,6 +150,7 @@ namespace Emberfall.EditorTools
         {
             Debug.Log("PlayModeScreenshot: loaded, build marker " + BuildMarker);
             ApplyLoopForce();
+            ApplySinksForce();
             EditorApplication.update += Pump;
             EditorApplication.update += PollTriggerFile;
             EditorApplication.update += WatchdogTick;
@@ -306,6 +313,45 @@ namespace Emberfall.EditorTools
 
         [MenuItem("Emberfall/Capture/Daily loop/Hub with the loop off", false, 96)]
         public static void CaptureHubLoopOff() { Begin("Screen:HubLoopOff"); }
+
+        // THE SINKS (DESIGN-SINKS.md). Each forces SinksSwitch ON for its run and seeds the scratch
+        // profile through SinkShop.Buy. Screen:Proving and Screen:Recital at the default switch are the
+        // rollback shots: the same two pages with no door.
+        [MenuItem("Emberfall/Capture/Sinks/Armory", false, 100)]
+        public static void CaptureArmory() { Begin("Screen:Armory"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Armory, after buying", false, 101)]
+        public static void CaptureArmoryBought() { Begin("Screen:ArmoryBought"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Armory, sold out", false, 102)]
+        public static void CaptureArmorySoldOut() { Begin("Screen:ArmorySoldOut"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Armory, hero picker", false, 103)]
+        public static void CaptureArmoryPicker() { Begin("Screen:ArmoryPicker"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Archive", false, 104)]
+        public static void CaptureArchive() { Begin("Screen:Archive"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Archive, after buying", false, 105)]
+        public static void CaptureArchiveBought() { Begin("Screen:ArchiveBought"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Archive, sold out", false, 106)]
+        public static void CaptureArchiveSoldOut() { Begin("Screen:ArchiveSoldOut"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Archive, hero picker", false, 107)]
+        public static void CaptureArchivePicker() { Begin("Screen:ArchivePicker"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Proving with the Armory door", false, 108)]
+        public static void CaptureProvingSinksOn() { Begin("Screen:ProvingSinksOn"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Recital with the Archive door", false, 109)]
+        public static void CaptureRecitalSinksOn() { Begin("Screen:RecitalSinksOn"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Proving with the sinks off", false, 110)]
+        public static void CaptureProvingSinksOff() { Begin("Screen:ProvingSinksOff"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Recital with the sinks off", false, 111)]
+        public static void CaptureRecitalSinksOff() { Begin("Screen:RecitalSinksOff"); }
 
         [MenuItem("Emberfall/Capture/Heroes", false, 61)]
         public static void CaptureHeroes() { Begin("Screen:Heroes"); }
@@ -562,6 +608,9 @@ namespace Emberfall.EditorTools
             SessionState.SetInt(LoopForceKey, LoopForceFor(target));
             SessionState.SetBool(LoopWasKey, DailyLoopSwitch.Enabled);
             ApplyLoopForce();
+            SessionState.SetInt(SinksForceKey, SinksForceFor(target));
+            SessionState.SetBool(SinksWasKey, SinksSwitch.Enabled);
+            ApplySinksForce();
             SessionState.SetBool(VerifiedKey, false);
             SessionState.SetString(TargetKey, target);
             SessionState.SetInt(WidthKey, width);
@@ -1267,6 +1316,12 @@ namespace Emberfall.EditorTools
                 DailyLoopSwitch.Enabled = SessionState.GetBool(LoopWasKey, false);
                 SessionState.SetInt(LoopForceKey, 0);
             }
+            // And the sinks' switch, for the same reason.
+            if (SessionState.GetInt(SinksForceKey, 0) != 0)
+            {
+                SinksSwitch.Enabled = SessionState.GetBool(SinksWasKey, false);
+                SessionState.SetInt(SinksForceKey, 0);
+            }
             SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetInt(MomentStageKey, 0);
             Juice.ForceForCapture(null);
@@ -1560,6 +1615,18 @@ namespace Emberfall.EditorTools
                     case "OrdersClaimed":
                     case "OrdersCalendar1":
                     case "OrdersCalendar4": id = ScreenId.Orders; break;
+                    case "Armory":
+                    case "ArmoryBought":
+                    case "ArmorySoldOut":
+                    case "ArmoryPicker": id = ScreenId.Armory; break;
+                    case "Archive":
+                    case "ArchiveBought":
+                    case "ArchiveSoldOut":
+                    case "ArchivePicker": id = ScreenId.Archive; break;
+                    case "ProvingSinksOn":
+                    case "ProvingSinksOff": id = ScreenId.Proving; break;
+                    case "RecitalSinksOn":
+                    case "RecitalSinksOff": id = ScreenId.Recital; break;
                     case "Result": id = ScreenId.Battle; break;
                     case "AudioFight": id = ScreenId.Battle; break;
                     case "BattleMoment": id = ScreenId.Battle; break;
@@ -1684,7 +1751,9 @@ namespace Emberfall.EditorTools
                 // photographs the Hub as a build without the loop draws it, and says so loudly if
                 // the switch is on or the page exists, since a shot of the wrong build is not evidence.
                 if (IsLoopScreen(name)) SeedLoop(app, name);
+                if (IsSinksScreen(name)) SeedSinks(app, name);
                 if (name == "HubLoopOff") CheckLoopIsOff(app);
+                if (name == "ProvingSinksOff" || name == "RecitalSinksOff") CheckSinksAreOff(app);
 
                 // A moment shot may ask for the Legacy profile (".off"), and that has to be in force
                 // before the fight is shown, because the profile is read as the fight plays.
@@ -1723,6 +1792,7 @@ namespace Emberfall.EditorTools
                                          + " for " + name + ", not Resolved.");
                 }
                 else app.Router.Show(id);
+                if (IsSinksScreen(name)) OpenSinksPicker(app, name);
                 Debug.Log("PlayModeScreenshot: showing " + name);
             }
 
@@ -1958,6 +2028,135 @@ namespace Emberfall.EditorTools
             }
             app.RefreshHud();
             Debug.Log("PlayModeScreenshot: seeded the daily loop for " + name);
+        }
+
+
+        // THE SINKS (DESIGN-SINKS.md). Each target forces SinksSwitch ON for its run, seeds a scratch
+        // profile through SinkShop.Buy and photographs a shop or the door that leads to one. Nothing
+        // is written to a profile except through the rules, and nothing runs on a real identity.
+        private static bool IsSinksScreen(string name)
+        {
+            switch (name)
+            {
+                case "Armory":
+                case "ArmoryBought":
+                case "ArmorySoldOut":
+                case "ArmoryPicker":
+                case "Archive":
+                case "ArchiveBought":
+                case "ArchiveSoldOut":
+                case "ArchivePicker":
+                case "ProvingSinksOn":
+                case "RecitalSinksOn":
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>1 forces the switch ON, 2 forces it OFF (the rollback shots), 0 leaves it.</summary>
+        private static int SinksForceFor(string target)
+        {
+            if (!target.StartsWith("Screen:")) return 0;
+            string name = target.Substring(7);
+            if (name == "ProvingSinksOff" || name == "RecitalSinksOff") return 2;
+            return IsSinksScreen(name) ? 1 : 0;
+        }
+
+        /// <summary>Applies the run's sinks switch, the way ApplyLoopForce applies the daily loop's.</summary>
+        private static void ApplySinksForce()
+        {
+            if (!SessionState.GetBool(ActiveKey, false)) return;
+            int force = SessionState.GetInt(SinksForceKey, 0);
+            if (force == 1) SinksSwitch.Enabled = true;
+            else if (force == 2) SinksSwitch.Enabled = false;
+        }
+
+        private static void CheckSinksAreOff(GameApp app)
+        {
+            bool off = !SinksSwitch.Enabled && app.Router.Armory == null && app.Router.Archive == null && app.Session.Profile.Sinks.IsEmpty;
+            Debug.Log(off
+                ? "PlayModeScreenshot: [ok] the sinks are off: no Armory, no Archive, no sinks state, so the page below is the page without them."
+                : "PlayModeScreenshot: [FAIL] the sinks are NOT off (switch " + SinksSwitch.Enabled + ", Armory " + (app.Router.Armory != null)
+                  + "). This capture is not the page without the sinks.");
+        }
+
+        /// <summary>
+        /// Puts the scratch profile where the shops have something to show (the Proving and the
+        /// Recital open, standing 9, floor 12, two full purses, both banks empty) and then makes the
+        /// purchases the target names, all through SinkShop.Buy. Scratch identity only: on anything
+        /// else it refuses and says so.
+        /// </summary>
+        private static void SeedSinks(GameApp app, string name)
+        {
+            if (!EditorScratchIdentity.IsScratch)
+            {
+                Debug.LogError("PlayModeScreenshot: refusing to seed the sinks on a real identity.");
+                return;
+            }
+            GameSession session = app.Session;
+            PlayerProfile profile = session.Profile;
+            long now = TimeUtil.NowUnix();
+            List<StageDef> stages = session.Content.AllStages;
+            for (int i = 0; i < stages.Count; i++)
+                if (!profile.ClearedStageIds.Contains(stages[i].Id)) profile.ClearedStageIds.Add(stages[i].Id);
+            profile.StagesCleared = CampaignProgress.CountCleared(profile, session.Content);
+            profile.ProvingStanding = 9;
+            profile.ProvingHighestStanding = 9;
+            profile.RecitalHighestFloor = 12;
+            profile.RecitalCurrentFloor = 13;
+            profile.Valor = 20000;
+            profile.Coda = 20000;
+            profile.ProvingBrandsBanked = 0;
+            profile.ProvingBrandsClockUnix = now;
+            profile.RecitalEchoesBanked = 0;
+            profile.RecitalEchoesClockUnix = now;
+            profile.Sinks = new SinksState();
+
+            string archiveHero = session.Content.Sinks.Item("archive_hero") != null
+                ? session.Content.Sinks.Item("archive_hero").Heroes[0] : null;
+            string armoryHero = session.Content.Sinks.Item("armory_hero") != null
+                ? session.Content.Sinks.Item("armory_hero").Heroes[0] : null;
+
+            switch (name)
+            {
+                case "ArmoryBought":
+                    SinkShop.Buy(session, "armory_weapon", null, now);
+                    SinkShop.Buy(session, "armory_brand", null, now);
+                    SinkShop.Buy(session, "armory_brand", null, now);
+                    break;
+                case "ArmorySoldOut":
+                    SinkShop.Buy(session, "armory_weapon", null, now);
+                    SinkShop.Buy(session, "armory_helm", null, now);
+                    SinkShop.Buy(session, "armory_plate", null, now);
+                    for (int i = 0; i < 3; i++) SinkShop.Buy(session, "armory_brand", null, now);
+                    SinkShop.Buy(session, "armory_echo", null, now);
+                    SinkShop.Buy(session, "armory_hero", armoryHero, now);
+                    break;
+                case "ArchiveBought":
+                    SinkShop.Buy(session, "archive_hero", archiveHero, now);
+                    break;
+                case "ArchiveSoldOut":
+                    SinkShop.Buy(session, "archive_hero", archiveHero, now);
+                    profile.Coda = 0;
+                    break;
+            }
+            app.RefreshHud();
+            Debug.Log("PlayModeScreenshot: seeded the sinks for " + name);
+        }
+
+        /// <summary>The picker targets open the hero picker with a hero chosen, after the Show.</summary>
+        private static void OpenSinksPicker(GameApp app, string name)
+        {
+            if (name == "ArmoryPicker" && app.Router.Armory != null)
+            {
+                SinkItemDef item = app.Session.Content.Sinks.Item("armory_hero");
+                if (item != null) app.Router.Armory.PickForCapture(item.Id, item.Heroes[Mathf.Min(2, item.Heroes.Count - 1)]);
+            }
+            if (name == "ArchivePicker" && app.Router.Archive != null)
+            {
+                SinkItemDef item = app.Session.Content.Sinks.Item("archive_hero");
+                if (item != null) app.Router.Archive.PickForCapture(item.Id, item.Heroes[Mathf.Min(2, item.Heroes.Count - 1)]);
+            }
         }
 
         /// <summary>Counts a fraction of an order's target through the rules (the kind's own counter,
