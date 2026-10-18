@@ -289,6 +289,7 @@ namespace Emberfall.DevHarness
             CheckOnboardingSwitch(content, contentDir);
             CheckTelemetry(content, contentDir);
             CheckDailyLoop(content, contentDir);
+            CheckSinks(content, contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
             CheckCaptureWatchdog(content, contentDir);

@@ -134,6 +134,8 @@ namespace Emberfall.Core.Progression
             new FeatureEntryPoint("screen:Proving", Feature.Proving, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Recital", Feature.Recital, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:RelicShop", Feature.Relics, "ScreenRouter.Show"),
+            new FeatureEntryPoint("screen:Armory", Feature.Proving, "ScreenRouter.Show"),
+            new FeatureEntryPoint("screen:Archive", Feature.Recital, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Campaign", Feature.Campaign, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Summon", Feature.Summon, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Formation", Feature.Heroes, "ScreenRouter.Show"),

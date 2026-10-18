@@ -75,8 +75,8 @@ namespace Emberfall.Core.Progression
     /// only, one purse per shop.
     ///
     /// Buy checks everything before it writes anything, then writes once, in a fixed order, so a
-    /// refusal leaves the profile byte for byte as it was. Only the shop's own purse falls; Gold,
-    /// Shards, Dust and Slag are never touched.
+    /// refusal leaves the profile byte for byte as it was. Only the shop's own purse falls;
+    /// no other currency is read or written here.
     ///
     /// The caps count in reward days (GameSession.DayStartUnix) and in calendar months of the
     /// reward day, both UTC. The stamps only move forward (SinksState), so a clock wound back finds
@@ -127,21 +127,24 @@ namespace Emberfall.Core.Progression
 
         // ------------------------------------------------------------------ rules
 
-        private static Feature ShopFeature(SinkShopId shop)
+        /// <summary>The entry point whose feature a shop belongs to: the Armory opens with the
+        /// Proving, the Archive with the Recital (FeatureEntryPoints).</summary>
+        private static string ShopEntry(SinkShopId shop)
         {
-            return shop == SinkShopId.Armory ? Feature.Proving : Feature.Recital;
+            return shop == SinkShopId.Armory ? "screen:Armory" : "screen:Archive";
         }
 
         /// <summary>True when every feature the item needs is open: its shop's, the bank's it fills
-        /// and the armor screen's it feeds.</summary>
+        /// and the armor bag's it feeds. Asked through FeatureEntryPoints, the one table that
+        /// decides an unlock.</summary>
         private static bool IsOpen(GameSession session, SinkItemDef item)
         {
             ContentDatabase content = session.Content;
             PlayerProfile profile = session.Profile;
-            if (!FeatureGate.IsUnlocked(content, profile, ShopFeature(item.Shop))) return false;
-            if (item.Kind == SinkKind.Brand && !FeatureGate.IsUnlocked(content, profile, Feature.Proving)) return false;
-            if (item.Kind == SinkKind.Echo && !FeatureGate.IsUnlocked(content, profile, Feature.Recital)) return false;
-            if (item.Kind == SinkKind.Armor && !FeatureGate.IsUnlocked(content, profile, Feature.Armor)) return false;
+            if (!FeatureEntryPoints.Allows(content, profile, ShopEntry(item.Shop))) return false;
+            if (item.Kind == SinkKind.Brand && !FeatureEntryPoints.Allows(content, profile, "screen:Proving")) return false;
+            if (item.Kind == SinkKind.Echo && !FeatureEntryPoints.Allows(content, profile, "screen:Recital")) return false;
+            if (item.Kind == SinkKind.Armor && !FeatureEntryPoints.Allows(content, profile, "screen:Inventory")) return false;
             return true;
         }
 
