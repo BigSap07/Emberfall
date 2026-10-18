@@ -75,6 +75,5 @@ flag on or off.
   heal-only or buff-only skill gets no dim and no ring. The owner may want it there too.
 - Numbers pinned under the top bar wait at the same ceiling, so very old, faint numbers can share
   that line.
-
 - Sprite units have no shader dissolve; they fade with a sink.
 - The optional freeze of a flipbook during the hit stop was not built.
