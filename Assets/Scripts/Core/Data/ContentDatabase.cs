@@ -115,6 +115,25 @@ namespace Emberfall.Core.Data
         }
 
         /// <summary>
+        /// What the Armory and the Archive sell (sinks.json, DESIGN-SINKS.md). Loaded after Load for
+        /// guild-path.json's reason and NOT part of ContentVersion: no fight reads it, so retuning a
+        /// price must not retire a guild replay. Empty (IsUsable false) on a database that never had
+        /// it loaded, which the shops read as "nothing to sell".
+        /// </summary>
+        public SinksConfig Sinks = new SinksConfig();
+
+        /// <summary>Parses sinks.json into Sinks, drops what this content cannot honour (an armor
+        /// preset the roller could not have produced, a hero that is not a four star, a starter or
+        /// already listed) and adds every warning to Warnings. Does not touch ContentVersion; see
+        /// Sinks.</summary>
+        public void LoadSinks(string sinksJson)
+        {
+            Sinks = SinksConfig.FromJson(sinksJson);
+            Sinks.Validate(this);
+            for (int i = 0; i < Sinks.Warnings.Count; i++) Warnings.Add(Sinks.Warnings[i]);
+        }
+
+        /// <summary>
         /// Which content this database was built from, as one short string: a hash of the text of
         /// every file handed to Load, in a fixed order.
         ///
