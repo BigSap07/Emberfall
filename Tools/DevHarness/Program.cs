@@ -34,6 +34,7 @@ namespace Emberfall.DevHarness
             bool guildPath = false;
             bool guildTech = false;
             bool guildTalentThemes = false;
+            bool momentSurvey = false;
             bool reconcile = false;
             int wallStudy = 0;
             bool lineCalibration = false;
@@ -72,6 +73,7 @@ namespace Emberfall.DevHarness
                 if (args[i] == "--guild-path") { guildPath = true; continue; }
                 if (args[i] == "--guild-tech") { guildTech = true; continue; }
                 if (args[i] == "--guild-talent-themes") { guildTalentThemes = true; continue; }
+                if (args[i] == "--moment-survey") { momentSurvey = true; continue; }
                 if (args[i] == "--tempo-study")
                 {
                     tempoStudy = true;
@@ -161,6 +163,9 @@ namespace Emberfall.DevHarness
                 Line(_failures == 0 ? "RESULT: all checks passed" : "RESULT: " + _failures + " check(s) FAILED");
                 return _failures == 0 ? 0 : 1;
             }
+
+            // Not a check: which stage openings hold each juice moment (JuiceChecks.cs), for the capture plan.
+            if (momentSurvey) return RunMomentSurvey(content);
 
             // The guild floor conditions' study (GuildDungeonChecks.RunConditionStudy). Not a check:
             // the instrument floor-conditions.json's pool, magnitudes and floor lists are read from.
@@ -285,6 +290,7 @@ namespace Emberfall.DevHarness
             CheckTelemetry(content, contentDir);
             CheckDailyLoop(content, contentDir);
             CheckAudio(content, contentDir);
+            CheckJuice(content, contentDir);
             CheckCaptureWatchdog(content, contentDir);
             CheckFeatureUnlockGating(content, contentDir);
             CheckAccounts(content);
