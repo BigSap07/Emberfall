@@ -172,8 +172,9 @@ namespace Emberfall.Battle
         // reserved that earlier passes left out, because both were caught clipping:
         //   the blob shadow's rotated footprint, 0.79 * scale of z-reach past the slot, and
         //   0.85 * scale of x-reach, which is what made the bottom of frame slice shadows;
-        //   the camera shake, +/-0.18 world (BattleScreen asks 0.14 on a crit, 0.18 on a
-        //   burst), which moves the frame 0.18*cos(28) = 0.159 vertically. The backdrop
+        //   the camera shake, +/-0.18 world (with the R12 juice flag off BattleScreen asks 0.14 on
+        //   a crit and 0.18 on a burst; with it on the director asks 0.09 on a crit and 0.15 on a
+        //   skill, and JuiceChecks pins both under 0.18), which moves the frame 0.18*cos(28) = 0.159 vertically. The backdrop
         //   already budgeted for shake; the frame bound never did.
         //
         //   highest  f  4.388   Orrin Kaal, slot 4, mid-cast, at shake extreme

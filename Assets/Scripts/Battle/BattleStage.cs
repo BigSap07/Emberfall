@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using Emberfall.Core.Combat;
+using Emberfall.Core.Data;
 
 namespace Emberfall.Battle
 {
@@ -32,6 +33,9 @@ namespace Emberfall.Battle
         private Transform _cameraRig;
         private Vector3 _cameraHome;
         private Coroutine _shake;
+        private MeshRenderer _backdropRenderer;
+        private Coroutine _dim;
+        private float _dimClock;
 
         /// <summary>The painted backdrop quad and its texture's aspect, kept so FitBackdrop can
         /// re-fit it to a new viewport without rebuilding the world.</summary>
@@ -111,6 +115,7 @@ namespace Emberfall.Battle
             backdropRenderer.material = BattleAssets.NewFx(painting, Color.white, false);
             backdropRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             backdropRenderer.receiveShadows = false;
+            _backdropRenderer = backdropRenderer;
 
             _backdrop = backdrop.transform;
             _backdropAspect = painting.height > 0 ? painting.width / (float)painting.height : 0f;
@@ -239,10 +244,14 @@ namespace Emberfall.Battle
             for (int i = _world.childCount - 1; i >= 0; i--) Destroy(_world.GetChild(i).gameObject);
             Actors.Clear();
             _backdrop = null;
+            _backdropRenderer = null;
+            if (_dim != null) { StopCoroutine(_dim); _dim = null; }
         }
 
         public void Teardown()
         {
+            if (_dim != null) { StopCoroutine(_dim); _dim = null; }
+            if (_backdropRenderer != null) _backdropRenderer.material.SetColor("_Color", Color.white);
             if (Vfx != null) Vfx.StopAll();
             if (Director != null) Director.Clear();
             ClearWorld();
@@ -252,6 +261,7 @@ namespace Emberfall.Battle
 
         public void Shake(float strength, float duration)
         {
+            if (!ScreenShakePrefs.Enabled) return;
             if (_shake != null) StopCoroutine(_shake);
             _shakeStrength = strength;
             _shakeUntil = Time.time + duration;
@@ -265,6 +275,7 @@ namespace Emberfall.Battle
         /// </summary>
         public void ShakeAtLeast(float strength, float duration)
         {
+            if (!ScreenShakePrefs.Enabled) return;
             if (_shake != null && _shakeStrength >= strength && _shakeUntil >= Time.time + duration) return;
             Shake(strength, duration);
         }
@@ -283,6 +294,42 @@ namespace Emberfall.Battle
             }
             _cameraRig.localPosition = _cameraHome;
             _shake = null;
+        }
+
+        /// <summary>
+        /// R12 skill moment: the painted backdrop dims toward JuiceProfile.DimTo and comes back
+        /// (JuiceMath.DimAlpha). Only the painting dims: the shader multiplies _Color into the
+        /// sample, and units and effects are separate quads, so they stay bright. A second skill
+        /// while one is running restarts the clock of the same coroutine; dims never stack.
+        /// </summary>
+        /// <summary>The backdrop's tint right now; white when nothing dims it. Read by the capture log.</summary>
+        public Color BackdropColor
+        {
+            get { return _backdropRenderer != null ? _backdropRenderer.material.GetColor("_Color") : Color.white; }
+        }
+
+        public void DimBackdrop(float speed)
+        {
+            if (!Juice.On) return;
+            if (_backdropRenderer == null) return;
+            _dimClock = 0f;
+            if (_dim == null) _dim = StartCoroutine(DimRoutine(Mathf.Max(1f, speed)));
+        }
+
+        private IEnumerator DimRoutine(float speed)
+        {
+            if (!Juice.On) { _dim = null; yield break; }
+            JuiceProfile p = Juice.Profile;
+            float total = JuiceMath.DimSeconds(p) / speed;
+            while (_dimClock < total && _backdropRenderer != null)
+            {
+                _dimClock += Time.deltaTime;
+                float a = JuiceMath.DimAlpha(p, _dimClock * speed);
+                _backdropRenderer.material.SetColor("_Color", new Color(a, a, a, 1f));
+                yield return null;
+            }
+            if (_backdropRenderer != null) _backdropRenderer.material.SetColor("_Color", Color.white);
+            _dim = null;
         }
 
         public Vector3 ScreenPoint(Vector3 worldPosition)

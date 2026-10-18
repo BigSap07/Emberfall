@@ -84,6 +84,10 @@ namespace Emberfall.Core.Data
         /// broken.</summary>
         public bool IsUsable;
 
+        /// <summary>The R12 hit-feedback numbers and their flag (vfx.json "juice"). Legacy when the
+        /// file or the block is absent, or when the block says "enabled": false.</summary>
+        public JuiceProfile Juice = JuiceProfile.Legacy;
+
         public const string FallbackType = "impact";
 
         public VfxEntry ForAbility(string abilityId)
@@ -110,6 +114,7 @@ namespace Emberfall.Core.Data
 
             ReadTable(root["abilities"], c.Abilities, c);
             ReadTable(root["types"], c.Types, c);
+            c.Juice = JuiceProfile.FromJson(root["juice"]);
             c.IsUsable = true;
             return c;
         }

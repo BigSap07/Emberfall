@@ -65,6 +65,17 @@ namespace Emberfall.Battle
             return quad;
         }
 
+        /// <summary>
+        /// The same, but asks the effect cap first (R12): with the flag on, a quad the pool has no
+        /// room for is refused, cheap decoration before important effects (JuiceMath.Admit), and
+        /// the routine that asked ends. Null means refused. With the flag off this is Take.
+        /// </summary>
+        private Quad Take(Texture texture, Color color, bool additive, BudgetKind kind)
+        {
+            if (Juice.On && !JuiceMath.Admit(Juice.Profile, kind, _live.Count)) return null;
+            return Take(texture, color, additive);
+        }
+
         private void Release(Quad quad)
         {
             _live.Remove(quad);
@@ -95,7 +106,8 @@ namespace Emberfall.Battle
 
         private IEnumerator ImpactRoutine(Vector3 position, Color color, float scale)
         {
-            Quad quad = Take(BattleAssets.SoftDot, color, true);
+            Quad quad = Take(BattleAssets.SoftDot, color, true, BudgetKind.Impact);
+            if (quad == null) yield break;
             quad.T.position = position;
             FaceCamera(quad.T);
 
@@ -115,7 +127,8 @@ namespace Emberfall.Battle
 
         private IEnumerator SparkRoutine(Vector3 position, Vector3 direction, Color color, float scale)
         {
-            Quad quad = Take(BattleAssets.SoftDot, color, true);
+            Quad quad = Take(BattleAssets.SoftDot, color, true, BudgetKind.Spark);
+            if (quad == null) yield break;
             quad.T.position = position;
             FaceCamera(quad.T);
 
@@ -138,7 +151,8 @@ namespace Emberfall.Battle
         /// <summary>Expanding ring. Flat on the ground for area effects, upright for impacts.</summary>
         public IEnumerator RingRoutine(Vector3 position, Color color, float maxRadius, float duration, bool flat)
         {
-            Quad quad = Take(BattleAssets.RingTexture, color, true);
+            Quad quad = Take(BattleAssets.RingTexture, color, true, BudgetKind.Ring);
+            if (quad == null) yield break;
             quad.T.position = position + (flat ? new Vector3(0f, 0.04f, 0f) : Vector3.zero);
             if (flat) quad.T.rotation = Quaternion.Euler(90f, 0f, 0f);
             else FaceCamera(quad.T);
@@ -165,7 +179,8 @@ namespace Emberfall.Battle
 
         private IEnumerator SlashRoutine(Vector3 from, Vector3 to, Color color)
         {
-            Quad quad = Take(BattleAssets.Streak, color, true);
+            Quad quad = Take(BattleAssets.Streak, color, true, BudgetKind.Slash);
+            if (quad == null) yield break;
             Vector3 mid = Vector3.Lerp(from, to, 0.62f) + Vector3.up * 0.15f;
             quad.T.position = mid;
             FaceCamera(quad.T);
@@ -188,7 +203,8 @@ namespace Emberfall.Battle
         /// <summary>Projectile that travels and then detonates. Yields until it lands.</summary>
         public IEnumerator Bolt(Vector3 from, Vector3 to, Color color)
         {
-            Quad quad = Take(BattleAssets.SoftDot, color, true);
+            Quad quad = Take(BattleAssets.SoftDot, color, true, BudgetKind.Bolt);
+            if (quad == null) { Impact(to, color, 0.9f); yield break; }
             quad.T.position = from;
             FaceCamera(quad.T);
             quad.T.localScale = new Vector3(0.45f, 0.45f, 0.45f);
@@ -237,7 +253,8 @@ namespace Emberfall.Battle
         private IEnumerator MoteRoutine(Vector3 position, Color color, float rise, float delay)
         {
             if (delay > 0f) yield return new WaitForSeconds(delay / SpeedScale);
-            Quad quad = Take(BattleAssets.SoftDot, color, true);
+            Quad quad = Take(BattleAssets.SoftDot, color, true, BudgetKind.Mote);
+            if (quad == null) yield break;
             quad.T.position = position;
             FaceCamera(quad.T);
 
@@ -264,7 +281,8 @@ namespace Emberfall.Battle
 
         private IEnumerator AuraRoutine(Vector3 groundPosition, Color color, float height)
         {
-            Quad quad = Take(BattleAssets.RingTexture, color, true);
+            Quad quad = Take(BattleAssets.RingTexture, color, true, BudgetKind.Aura);
+            if (quad == null) yield break;
             quad.T.rotation = Quaternion.Euler(90f, 0f, 0f);
 
             float duration = 0.55f / SpeedScale;
@@ -290,7 +308,8 @@ namespace Emberfall.Battle
 
         private IEnumerator ImplodeRoutine(Vector3 position, Color color)
         {
-            Quad quad = Take(BattleAssets.SoftDot, color, true);
+            Quad quad = Take(BattleAssets.SoftDot, color, true, BudgetKind.Impact);
+            if (quad == null) { Impact(position, color, 1.15f); yield break; }
             quad.T.position = position;
             FaceCamera(quad.T);
 
@@ -307,6 +326,40 @@ namespace Emberfall.Battle
             }
             Release(quad);
             Impact(position, color, 1.15f);
+        }
+
+        /// <summary>
+        /// R12: a soft additive glow, or with ring a ring, at a point: the glow behind an impact and
+        /// the ring of a skill moment. Fades from alpha to 0 over seconds while it grows. radius is
+        /// the half width at the end; priority quads are refused only by a full pool.
+        /// </summary>
+        public void Glow(Vector3 position, Color color, float radius, float seconds, float alpha, bool priority, bool ring)
+        {
+            if (!Juice.On) return;
+            StartCoroutine(GlowRoutine(position, color, radius, seconds, alpha, priority, ring));
+        }
+
+        private IEnumerator GlowRoutine(Vector3 position, Color color, float radius, float seconds, float alpha, bool priority, bool ring)
+        {
+            Texture texture = ring ? (Texture)BattleAssets.RingTexture : (Texture)BattleAssets.SoftDot;
+            Quad quad = Take(texture, color, true, priority ? BudgetKind.Priority : BudgetKind.Impact);
+            if (quad == null) yield break;
+            quad.T.position = position;
+            FaceCamera(quad.T);
+
+            float duration = Mathf.Max(0.01f, seconds) / SpeedScale;
+            float from = ring ? 0.6f : 0.8f;
+            float t = 0f;
+            while (t < duration)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / duration);
+                float size = Mathf.Lerp(from, 1f, Mathf.Sqrt(k)) * radius * 2f;
+                quad.T.localScale = new Vector3(size, size, size);
+                quad.Material.SetColor("_Color", new Color(color.r, color.g, color.b, alpha * (1f - k)));
+                yield return null;
+            }
+            Release(quad);
         }
 
         public void StopAll()

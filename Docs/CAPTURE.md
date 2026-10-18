@@ -22,6 +22,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 `
 
 The capture runs on a scratch identity with the cloud held off (`ScratchCaptures` and `EditorCaptureGuard`). Nothing here reads `supabase.json`.
 
+## Photographing a moment of a fight
+
+`Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off]` plays a campaign stage's first fight and freezes a few frames after a named moment, so a hit's flash, a crit's number pop or a skill's dim and ring are in the shot.
+
+- `kind` is `hit` (a basic attack that does not crit), `crit` (a basic attack that crits), `skill` (the damage of a cast), `heal` or `death`.
+- `aspect` is optional: `ember`, `tide`, `verdant`, `gale`, `umbra` or `lumen`. It is the aspect of the unit that makes the moment (the caster of a skill, the healer, the unit that falls), on either side.
+- `.off` plays the fight with the pre-R12 hit feedback (`Juice.ForceForCapture`), for a side by side. Without it the profile is whatever `vfx.json` says (`juice.enabled`).
+- The separator is a dot because the text after the `=` becomes part of the PNG's name and a colon cannot be in a Windows file name. Stage ids have no dot.
+- The game rolls its own seed for a fight, so a moment the harness finds in a stage is a likelihood, not a promise. `DevHarness.exe --moment-survey` lists, per kind and aspect, the stages that hold it most often over eight seeds. When the live fight does not hold the moment the log says `PlayModeScreenshot: MOMENT-ABSENT <target>: no <kind> ... pick another stage`, no PNG is written, and the batch reports the target `FAILED: no PNG was requested in the log` within seconds. Retry just that target on another stage.
+- The log line `BattleMoment: line aspects players ... enemies ...` names the aspects in the fight, so the shot can be filed against the right fight.
+- The target has no menu item and no literal `Begin` call, like `Screen:AudioFight`, so the nightly sweep does not run it. `Screen:Settings` is the layout proof for the screen shake card.
+
 ## Reading the RESULT lines
 
 One line per target, in the order given:

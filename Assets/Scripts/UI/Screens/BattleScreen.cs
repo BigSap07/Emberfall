@@ -41,6 +41,12 @@ namespace Emberfall.UI.Screens
 
             /// <summary>Added to the plate's tracked screen position by LateUpdate while the turn cue plays.</summary>
             public float TurnLift;
+
+            /// <summary>R12: the smooth HP fill. One coroutine per bar chases HpTo from HpFrom.</summary>
+            public float HpFrom;
+            public float HpTo;
+            public float HpClock;
+            public Coroutine HpAnim;
         }
 
         private sealed class FloatText
@@ -49,6 +55,15 @@ namespace Emberfall.UI.Screens
             public Text Label;
             public CanvasGroup Group;
             public bool Busy;
+
+            /// <summary>R12: which unit the number belongs to (-1 unknown), how high above its
+            /// anchor it is now, and whether it is being retired early.</summary>
+            public int UnitId;
+            public float Y;
+            public bool Retiring;
+            /// <summary>How long ago each newer number on this unit spawned, in game seconds; JuiceMath.PushOffset
+            /// turns them into how far this number has been pushed up.</summary>
+            public readonly List<float> PushAges = new List<float>();
         }
 
         private StageDef _stage;
@@ -102,6 +117,15 @@ namespace Emberfall.UI.Screens
         /// off the record in the order it plays; nothing is recomputed.
         /// </summary>
         private bool _skillActive;
+
+        /// <summary>R12: true once this action (a basic attack or a cast) has already held the
+        /// timeline for its first strike, so a five target skill holds once. Reset where
+        /// _skillActive is set or cleared.</summary>
+        private bool _holdSpent;
+
+        /// <summary>R12: the unit the next SpawnFloatingText belongs to, set by the case that
+        /// spawns it so the legacy spawn lines stay as they were. Consumed and cleared there.</summary>
+        private int _floatUnitId = -1;
 
         /// <summary>True once ShowResult has run - the fight is fully resolved and the result
         /// panel is up. Exists for external observers (editor automation, tests driving a real
@@ -219,6 +243,87 @@ namespace Emberfall.UI.Screens
         /// <summary>True for a quarter second after a Heal plays, so a capture can freeze on the heal effect.</summary>
         public bool HealJustPlayed { get { return Time.unscaledTime - _lastHealAt < 0.25f; } }
         private float _lastHealAt = -10f;
+
+        // ---- R12 BattleMoment capture (Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off]).
+        // Read only. The screen is asked whether the record holds a moment, told which one to wait
+        // for, and answers when it has played; it decides nothing and the fight is unchanged.
+
+        /// <summary>The moment the capture waits for, or None.</summary>
+        public MomentKind MomentWanted { get; private set; }
+        private readonly MomentTracker _moments = new MomentTracker();
+
+        /// <summary>True once the moment asked for has been played (the first one only).</summary>
+        public bool MomentArrived { get { return _moments.Arrived; } }
+
+        /// <summary>Index in the record of the moment being waited for (-1 if none), of the event
+        /// that played last, and how many events the record holds. The capture reads them to run a
+        /// long fight fast up to the moment and slow down for it, and to log where a fight is.</summary>
+        public int MomentEventIndex { get; private set; }
+        public int PlayedEventIndex { get; private set; }
+
+        /// <summary>The backdrop's current tint (white undimmed, 0.70 grey at the dim's depth), so a
+        /// capture can prove the skill dim was in force when the shot was taken.</summary>
+        public Color BackdropColorForCapture { get { return _world != null ? _world.BackdropColor : Color.white; } }
+
+        /// <summary>Frames to let the moment play on. A death with a clip holds the clip, then fades:
+        /// the shot lands half way through the fade. Others use the fallback.</summary>
+        public int SettleFramesForCapture(int fallback)
+        {
+            if (MomentWanted != MomentKind.Death || _result == null || MomentEventIndex < 0) return fallback;
+            UnitActor actor = ActorOf(_result.Events[MomentEventIndex].TargetId);
+            float hold = actor != null ? actor.DeathHoldNominalSeconds : 0f;
+            if (hold <= 0f) return fallback;
+            return Mathf.RoundToInt((hold - UnitActor.SpriteDeathFadeSeconds * 0.5f) * 60f);
+        }
+        public int EventCount { get { return _result != null ? _result.Events.Count : 0; } }
+        public string RoundLabelForCapture { get { return _roundText ?? ""; } }
+        public float SpeedForCapture
+        {
+            get { return _speed; }
+            set
+            {
+                _speed = value;
+                if (_world != null && _world.Vfx != null) _world.Vfx.SpeedScale = value;
+            }
+        }
+
+        public void ArmMomentCapture(MomentKind kind, Aspect? aspect)
+        {
+            MomentWanted = kind;
+            _moments.Arm(kind, aspect, AspectOfUnit);
+            MomentEventIndex = _result != null ? JuiceMath.FindMoment(_result.Events, AspectOfUnit, kind, aspect) : -1;
+        }
+
+        /// <summary>Whether the record of this fight holds the moment, by the same JuiceMath.FindMoment
+        /// the harness surveys with. Read off the record, nothing recomputed.</summary>
+        public bool MomentPresent(MomentKind kind, Aspect? aspect)
+        {
+            if (_result == null) return false;
+            return JuiceMath.FindMoment(_result.Events, AspectOfUnit, kind, aspect) >= 0;
+        }
+
+        private Aspect AspectOfUnit(int id)
+        {
+            UnitSnapshot u = _result != null ? _result.FindUnit(id) : null;
+            return u != null ? u.Aspect : Aspect.Ember;
+        }
+
+        /// <summary>One line naming the aspects on each side, printed when a moment capture arms, so
+        /// a reader of the log can tell which fight a shot belongs to.</summary>
+        public string DescribeLineForCapture()
+        {
+            if (_result == null) return "no record";
+            System.Text.StringBuilder players = new System.Text.StringBuilder();
+            System.Text.StringBuilder enemies = new System.Text.StringBuilder();
+            for (int i = 0; i < _result.Units.Count; i++)
+            {
+                System.Text.StringBuilder into = _result.Units[i].IsPlayer ? players : enemies;
+                if (into.Length > 0) into.Append(',');
+                into.Append(_result.Units[i].Aspect);
+            }
+            return "players " + players + " enemies " + enemies;
+        }
+
 #endif
 
         /// <summary>Index into _turnOrder of the turn being played, and -1 before the round's
@@ -1188,6 +1293,8 @@ namespace Emberfall.UI.Screens
 #if UNITY_EDITOR
             HitJustPlayed = e.Type == BattleEventType.Damage && e.Status == StatusKind.None;
             if (e.Type == BattleEventType.Heal && e.Value > 0) _lastHealAt = Time.unscaledTime;
+            PlayedEventIndex = index;
+            _moments.Note(e, index);
 #endif
 
             switch (e.Type)
@@ -1210,6 +1317,7 @@ namespace Emberfall.UI.Screens
                     _activeTurnBar = bar;
                     AdvanceTurnStrip(e.SourceId);
                     _skillActive = false;
+                    _holdSpent = false;
                     if (bar != null) yield return TurnCue(bar);
                     break;
                 }
@@ -1217,6 +1325,7 @@ namespace Emberfall.UI.Screens
                 case BattleEventType.BasicAttack:
                 {
                     _skillActive = false;
+                    _holdSpent = false;
                     UnitActor source = ActorOf(e.SourceId);
                     List<int> targetIds = LookaheadTargets(index);
                     UnitActor focus = targetIds.Count > 0 ? ActorOf(targetIds[0]) : null;
@@ -1284,6 +1393,7 @@ namespace Emberfall.UI.Screens
                     {
                         source.PlayCast(_speed);
                         _skillActive = true;
+                        _holdSpent = false;
                         App.Audio.Cast(source.Snapshot.Aspect);
                         ShowCallout(e.AbilityName, source.Snapshot.Name, false);
                         _world.Vfx.Aura(source.transform.position, AspectTint(source), 2.2f);
@@ -1336,7 +1446,7 @@ namespace Emberfall.UI.Screens
                         // impact: flash, shake, sound - immediate
                         target.PlayHit(e.Critical);
                         if (source != null && e.Status == StatusKind.None) _world.Vfx.Impact(target.CenterPosition, AspectTint(source), e.Critical ? 1.3f : 0.9f);
-                        if (e.Critical) _world.Shake(0.14f, 0.2f);
+                        if (e.Critical && !Juice.On) _world.Shake(0.14f, 0.2f);
                         PlayDamageSound(e, source);
 
                         yield return null; // number floats one frame after impact, never simultaneously
@@ -1345,12 +1455,18 @@ namespace Emberfall.UI.Screens
                         Color colour = e.Critical ? UITheme.Warning : Color.white;
                         if (e.Status == StatusKind.Burn) colour = UITheme.Ember;
                         string text = (e.Critical ? "CRIT " : "") + e.Value + AspectTag(e.AspectFactor);
+                        // R12: the crit tag sits on its own small line above the figure.
+                        if (Juice.On && e.Critical) text = "<size=" + (int)(UITheme.FontHeading * 0.6f) + ">CRIT</size>\n" + e.Value + AspectTag(e.AspectFactor);
+                        _floatUnitId = e.TargetId;
                         SpawnFloatingText(target.HeadPosition, text, colour, e.Critical ? 1.5f : 1f);
 
                         // effect, last: bar drains to the new value, ghost bar trails behind
                         target.DisplayHp = Mathf.Max(0f, target.DisplayHp - e.Value);
                         UpdateHp(target, e.Critical);
                     }
+                    // R12: the timeline holds for the strike, after the sound has rung and the
+                    // number is out, once per action. Not for a tick.
+                    if (Juice.On && target != null) yield return HitHold(e);
                     yield return Wait(e.Critical ? 0.14f : 0.10f);
                     break;
                 }
@@ -1362,6 +1478,7 @@ namespace Emberfall.UI.Screens
                     {
                         target.DisplayHp = Mathf.Min(target.MaxHp, target.DisplayHp + e.Value);
                         UpdateHp(target, false);
+                        _floatUnitId = e.TargetId;
                         SpawnFloatingText(target.HeadPosition, "+" + e.Value, UITheme.Success, 1f);
                         _world.Vfx.Motes(target.transform.position, UITheme.Success, 6, 2.2f);
                         App.Audio.Heal();
@@ -1686,6 +1803,9 @@ namespace Emberfall.UI.Screens
 
         private Color AspectTint(UnitActor actor)
         {
+            // R12: the old effects take the bible accent, the colour the director's flipbooks and
+            // particles already use, so one hit is one colour instead of two palettes.
+            if (Juice.On && actor != null) return UITheme.AspectAccent(actor.Snapshot.Aspect);
             return actor != null ? UITheme.AspectColor(actor.Snapshot.Aspect) : UITheme.TextPrimary;
         }
 
@@ -1769,6 +1889,8 @@ namespace Emberfall.UI.Screens
                 }
             }
 
+            // R12: the director owns the shake when the flag is on (a skill shakes medium, whatever its tag).
+            if (Juice.On) return;
             if (vfx == "burst" || vfx == "shadow") _world.Shake(0.18f, 0.26f);
         }
 
@@ -1789,8 +1911,65 @@ namespace Emberfall.UI.Screens
             UnitBar bar = BarOf(actor.Snapshot.Id);
             if (bar == null) return;
             float ratio = actor.MaxHp > 0f ? actor.DisplayHp / actor.MaxHp : 0f;
+            // R12: the fill eases to its new value; the ghost trails behind it as before.
+            if (Juice.On && Juice.Profile.HpFillSeconds > 0f && bar.Plate.HpFill != null)
+            {
+                SmoothHp(bar, actor, ratio);
+                StartCoroutine(DrainGhost(bar, ratio));
+                return;
+            }
             bar.Plate.SetHp(ratio, actor.MaxHp > 0f ? Mathf.Clamp01(actor.DisplayShield / actor.MaxHp) : 0f);
             StartCoroutine(DrainGhost(bar, ratio));
+        }
+
+        /// <summary>
+        /// R12: eases the main HP fill from where it is to ratio over HpFillSeconds. One coroutine
+        /// per bar; a second hit while it runs retargets it in place, so rapid hits chase one value.
+        /// </summary>
+        private void SmoothHp(UnitBar bar, UnitActor actor, float ratio)
+        {
+            if (!Juice.On) return;
+            bar.HpFrom = bar.Plate.HpFill.fillAmount;
+            bar.HpTo = ratio;
+            bar.HpClock = 0f;
+            if (bar.HpAnim == null) bar.HpAnim = StartCoroutine(HpFillRoutine(bar, actor));
+        }
+
+        private IEnumerator HpFillRoutine(UnitBar bar, UnitActor actor)
+        {
+            if (!Juice.On) { bar.HpAnim = null; yield break; }
+            float seconds = Mathf.Max(0.01f, Juice.Profile.HpFillSeconds) / _speed;
+            while (bar.HpClock < seconds && bar.Plate != null && bar.Plate.HpFill != null)
+            {
+                bar.HpClock += Time.deltaTime;
+                float k = Mathf.SmoothStep(0f, 1f, Mathf.Clamp01(bar.HpClock / seconds));
+                float ward = actor.MaxHp > 0f ? Mathf.Clamp01(actor.DisplayShield / actor.MaxHp) : 0f;
+                bar.Plate.SetHp(Mathf.Lerp(bar.HpFrom, bar.HpTo, k), ward);
+                yield return null;
+            }
+            if (bar.Plate != null && bar.Plate.HpFill != null)
+                bar.Plate.SetHp(bar.HpTo, actor.MaxHp > 0f ? Mathf.Clamp01(actor.DisplayShield / actor.MaxHp) : 0f);
+            bar.HpAnim = null;
+        }
+
+        /// <summary>
+        /// R12: the timeline stands still for the strike, in real time (unscaled, like the actors'
+        /// own hit-stop), divided by the playback speed. Once per action: JuiceMath.HoldFor says
+        /// zero after the first damage of a cast or attack. The owed animation tail is not paid
+        /// down here, because the sprites are frozen too and still owe it.
+        /// </summary>
+        private IEnumerator HitHold(BattleEvent e)
+        {
+            if (!Juice.On) yield break;
+            float seconds = JuiceMath.HoldFor(Juice.Profile, JuiceMath.IsTick(e), _holdSpent, e.Critical, _skillActive);
+            if (seconds <= 0f) yield break;
+            _holdSpent = true;
+            float remaining = seconds / _speed;
+            while (remaining > 0f)
+            {
+                remaining -= Time.unscaledDeltaTime;
+                yield return null;
+            }
         }
 
         private IEnumerator DrainGhost(UnitBar bar, float target)
@@ -1910,10 +2089,15 @@ namespace Emberfall.UI.Screens
             for (int i = 0; i < _floatPool.Count; i++)
             {
                 _floatPool[i].Busy = false;
+                _floatPool[i].Retiring = false;
                 _floatPool[i].Group.alpha = 0f;
                 _floatPool[i].Root.gameObject.SetActive(false);
             }
+            _liveFloats.Clear();
         }
+
+        /// <summary>R12: the numbers currently on screen, oldest first, for lanes and the cap.</summary>
+        private readonly List<FloatText> _liveFloats = new List<FloatText>();
 
         private FloatText TakeFloatText()
         {
@@ -1942,7 +2126,123 @@ namespace Emberfall.UI.Screens
             item.Root.localScale = new Vector3(scale, scale, 1f);
             item.Root.gameObject.SetActive(true);
             item.Root.SetAsLastSibling();
-            StartCoroutine(FloatRoutine(item, worldPosition));
+            int unitId = _floatUnitId;
+            _floatUnitId = -1;
+            if (Juice.On)
+            {
+                // Callers that did not say whose number it is (a ward, a shield, a resist) pass the
+                // unit's head, so the unit is the one standing there.
+                if (unitId < 0) unitId = UnitAtHead(worldPosition);
+                StartCoroutine(JuiceFloatRoutine(item, worldPosition, unitId, scale));
+            }
+            else StartCoroutine(FloatRoutine(item, worldPosition));
+        }
+
+        /// <summary>
+        /// R12: a damage or heal number that pops (1.4x easing to 1x), starts clear of any number
+        /// still live on the same unit, and counts against the cap of live numbers. The rise and
+        /// fade are the legacy ones. A crit's label is two lines tall, so its box is taller.
+        /// </summary>
+        private IEnumerator JuiceFloatRoutine(FloatText item, Vector3 worldPosition, int unitId, float baseScale)
+        {
+            if (!Juice.On) { item.Busy = false; item.Root.gameObject.SetActive(false); yield break; }
+            JuiceProfile p = Juice.Profile;
+            float canvasScale = App.RootCanvas != null ? App.RootCanvas.scaleFactor : 1f;
+            if (canvasScale <= 0f) canvasScale = 1f;
+
+            Vector3 screen = _world.Camera.WorldToScreenPoint(worldPosition);
+            Vector2 start = new Vector2(screen.x / canvasScale, screen.y / canvasScale);
+            start.y += BattleHudMetrics.FloatSpawnAboveHead;
+            start.x += Random.Range(-9f, 9f);
+
+            // Make room: the cap first (the oldest numbers on this unit, then overall), then the lane.
+            // A number with no known unit gets no lane and no per-unit cap, so a caller that cannot
+            // say whose it is can never stack other units' numbers on one another.
+            while (unitId >= 0 && JuiceMath.RetireOldestOnTarget(p, LiveFloats(unitId))) RetireOldest(unitId);
+            while (JuiceMath.RetireOldestOverall(p, LiveFloats(-2))) RetireOldest(-2);
+            // The newcomer starts at the base and every live number on the unit moves up one line, so
+            // numbers stack upward with the newest at the bottom and none can overlap another.
+            for (int i = 0; unitId >= 0 && i < _liveFloats.Count; i++)
+            {
+                if (_liveFloats[i].Retiring || _liveFloats[i].UnitId != unitId) continue;
+                _liveFloats[i].PushAges.Add(0f);
+            }
+
+            item.UnitId = unitId;
+            item.Y = 0f;
+            item.PushAges.Clear();
+            item.Retiring = false;
+            _liveFloats.Add(item);
+            bool twoLines = item.Label.text.IndexOf('\n') >= 0;
+            item.Root.sizeDelta = new Vector2(320f, twoLines ? 96f : 60f);
+
+            // A pushed number is held under the top bar like the rest.
+            float ceiling = BattleHudLayout.BarBottom(SafeTopCanvas(canvasScale))
+                            - BattleHudMetrics.FloatStopBelowBar - BattleHudMetrics.FloatHalfLine;
+            float climb = Mathf.Clamp(ceiling - start.y, 24f, FloatRise);
+
+            float duration = 0.75f / _speed;
+            float t = 0f;
+            float retiredFor = 0f;
+            while (true)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / duration);
+                float alpha = 1f - k * k;
+                if (item.Retiring)
+                {
+                    retiredFor += Time.deltaTime;
+                    alpha *= 1f - Mathf.Clamp01(retiredFor / 0.1f);
+                    if (retiredFor >= 0.1f) break;
+                }
+                else if (t >= duration) break;
+                float rise = climb * Mathf.Sqrt(k);
+                for (int a = 0; a < item.PushAges.Count; a++) item.PushAges[a] += Time.deltaTime * _speed;
+                item.Y = rise + JuiceMath.PushOffset(p, item.PushAges);
+                item.Root.anchoredPosition = new Vector2(start.x, Mathf.Min(start.y + item.Y, ceiling));
+                item.Group.alpha = alpha;
+                float s = baseScale * JuiceMath.PopScale(p, t * _speed);
+                item.Root.localScale = new Vector3(s, s, 1f);
+                yield return null;
+            }
+
+            _liveFloats.Remove(item);
+            item.Group.alpha = 0f;
+            item.Root.sizeDelta = new Vector2(320f, 60f);
+            item.Root.gameObject.SetActive(false);
+            item.Retiring = false;
+            item.Busy = false;
+        }
+
+        /// <summary>The id of the unit whose head is at that point, or -1.</summary>
+        private int UnitAtHead(Vector3 head)
+        {
+            if (_world == null) return -1;
+            for (int i = 0; i < _world.Actors.Count; i++)
+            {
+                UnitActor actor = _world.Actors[i];
+                if (actor != null && actor.Snapshot != null && (actor.HeadPosition - head).sqrMagnitude < 0.0001f) return actor.Snapshot.Id;
+            }
+            return -1;
+        }
+
+        /// <summary>Live, not-yet-retiring numbers on a unit (-2 counts every unit).</summary>
+        private int LiveFloats(int unitId)
+        {
+            int n = 0;
+            for (int i = 0; i < _liveFloats.Count; i++)
+                if (!_liveFloats[i].Retiring && (unitId == -2 || _liveFloats[i].UnitId == unitId)) n++;
+            return n;
+        }
+
+        private void RetireOldest(int unitId)
+        {
+            for (int i = 0; i < _liveFloats.Count; i++)
+            {
+                if (_liveFloats[i].Retiring || (unitId != -2 && _liveFloats[i].UnitId != unitId)) continue;
+                _liveFloats[i].Retiring = true;
+                return;
+            }
         }
 
         private IEnumerator FloatRoutine(FloatText item, Vector3 worldPosition)
