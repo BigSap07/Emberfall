@@ -727,10 +727,7 @@ namespace Emberfall.DevHarness
             // construction; this is what ties it to the pool the game actually draws from.
             string vfx = ReadJuiceSource(scripts, "Battle", "BattleVfx.cs");
             int takes = Regex.Matches(vfx, @"Quad quad = Take\(").Count;
-            int guarded = Regex.Matches(vfx, @"Quad quad = Take\([^
-]*BudgetKind\.[^
-]*
-\s*if \(quad == null\)").Count;
+            int guarded = Regex.Matches(vfx, @"Quad quad = Take\([^\n]*BudgetKind\.[^\n]*\n\s*if \(quad == null\)").Count;
             Check(takes >= 8 && guarded == takes && Regex.IsMatch(vfx, @"Take\(Texture texture, Color color, bool additive, BudgetKind kind\)\s*\{\s*if \(Juice\.On && !JuiceMath\.Admit\(Juice\.Profile, kind, _live\.Count\)\) return null;"),
                   "J13 WIRING (reads source): BattleVfx.Take asks JuiceMath.Admit against the live quad count, and all " + takes + " routines that take a quad name a budget kind and end when refused (" + guarded + " guarded)");
 
