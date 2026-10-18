@@ -299,6 +299,12 @@ to buy is the whole question, and it is an economy decision that wants its own p
 Until that is decided the number accumulates and is displayed, which is honest, and the mode is
 playable without it.
 
+**Decided, 2026-10-18.** The owner's R9 prompt chose the third option in part: Valor now buys
+preset armor and a hero copy (and a Brand, and an Echo), so the "buys nothing that affects combat"
+reading above no longer holds. It is flag-gated and default off (`SinksSwitch`), earned currency only,
+nothing random. The reasoning above stays as the record of the risk. The shop, prices and caps are in
+`Docs/DESIGN-SINKS.md`.
+
 ### Consolation on a loss (unchanged)
 
 A loss pays a reduced amount rather than nothing. Recital pays nothing on a loss, which is correct
