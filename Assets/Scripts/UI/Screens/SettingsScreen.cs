@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using Emberfall.Battle;
 using Emberfall.Core.Telemetry;
 using Emberfall.Game.Cloud;
 using Emberfall.Game.Telemetry;
@@ -36,6 +37,11 @@ namespace Emberfall.UI.Screens
         private AudioSettingsCard _audioCard;
         private UIButton _fastSummonButton;
         private Text _fastSummonNote;
+        private UIButton _screenShakeButton;
+        private Text _screenShakeNote;
+
+        /// <summary>The name of the camera shake switch, once, so the label and the harness agree.</summary>
+        private const string ScreenShakeName = "Screen shake";
         private UIButton _statsButton;
         private Text _statsNote;
         private Text _saveNote;
@@ -52,6 +58,7 @@ namespace Emberfall.UI.Screens
 
             BuildAudioCard(content);
             BuildSummonCard(content);
+            BuildBattleCard(content);
             if (TelemetrySwitch.Enabled) BuildStatsCard(content);
             BuildSaveCard(content);
             BuildResetCard(content);
@@ -140,6 +147,26 @@ namespace Emberfall.UI.Screens
             _fastSummonNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
                                                 TextAnchor.UpperLeft);
             UIBuilder.Box(_fastSummonNote.rectTransform, 380f, -60f, CardWidth - 440f, 80f, new Vector2(0f, 1f));
+        }
+
+        /// <summary>
+        /// Screen shake. The camera shakes on a critical hit and on a skill; some players find that
+        /// uncomfortable, so it can be turned off. Stored per device in PlayerPrefs
+        /// (ScreenShakePrefs), not on the save. BattleStage.Shake is the one place that reads it.
+        /// </summary>
+        private void BuildBattleCard(RectTransform parent)
+        {
+            RectTransform card = Card(parent, 200f);
+            Heading(card, "BATTLE");
+
+            _screenShakeButton = EmberforgeUI.Button("ScreenShake", card, "", HubStyle.FontButton,
+                                                     ForgeButtonKind.Secondary);
+            UIBuilder.Box(_screenShakeButton.Root, 30f, -56f, 400f, HubStyle.TouchMin, new Vector2(0f, 1f));
+            _screenShakeButton.OnClick(ToggleScreenShake);
+
+            _screenShakeNote = EmberforgeUI.Body("Note", card, "", UITheme.FontTiny, Emberforge.TextBody,
+                                                 TextAnchor.UpperLeft);
+            UIBuilder.Box(_screenShakeNote.rectTransform, 460f, -60f, CardWidth - 520f, 80f, new Vector2(0f, 1f));
         }
 
         /// <summary>
@@ -280,6 +307,20 @@ namespace Emberfall.UI.Screens
             RefreshFastSummon();
         }
 
+        private void ToggleScreenShake()
+        {
+            ScreenShakePrefs.Enabled = !ScreenShakePrefs.Enabled;
+            App.Audio.Tap();
+            RefreshScreenShake();
+        }
+
+        private void RefreshScreenShake()
+        {
+            bool on = ScreenShakePrefs.Enabled;
+            _screenShakeButton.SetText(ScreenShakeName.ToUpperInvariant() + (on ? ": ON" : ": OFF"));
+            _screenShakeNote.text = "Camera shake on critical hits and skills.";
+        }
+
         private void RefreshFastSummon()
         {
             bool fast = SummonSettings.FastSummon;
@@ -343,6 +384,7 @@ namespace Emberfall.UI.Screens
             _headerSubtitle.text = "";
             _audioCard.Refresh();
             RefreshFastSummon();
+            RefreshScreenShake();
             RefreshSave();
             _resetNote.text = ResetNote(ResetReachesCloud(App));
             if (TelemetrySwitch.Enabled) RefreshStats();

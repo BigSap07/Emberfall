@@ -627,6 +627,10 @@ namespace Emberfall.DevHarness
             Check(stage.Length > 0 && found.Count == 0,
                   "J14 WIRING (reads source): BattleStage still reads its camera from BattleFraming and gained none of its literals" + (found.Count > 0 ? ": " + string.Join(", ", found.ToArray()) : ""));
 
+            string settings = ReadJuiceSource(scripts, "UI", "Screens", "SettingsScreen.cs");
+            Check(Regex.Matches(settings, "\"Screen shake\"").Count == 1 && settings.Contains("ScreenShakePrefs.Enabled") && settings.Contains("BuildBattleCard(content);"),
+                  "J14 WIRING (reads source): the settings screen has one Screen shake card, wired to ScreenShakePrefs");
+
             // The shake toggle: one choke point, on by default, in both flag states.
             string prefs = ReadJuiceSource(scripts, "Battle", "ScreenShakePrefs.cs");
             Check(Regex.IsMatch(stage, @"public void Shake\(float strength, float duration\)\s*\{\s*if \(!ScreenShakePrefs\.Enabled\) return;")
