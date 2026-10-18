@@ -186,7 +186,7 @@ namespace Emberfall.DevHarness
         private static void CheckJuiceHookTripwire(string root)
         {
             string scripts = Path.Combine(root, "Assets", "Scripts");
-            int hooks = 0;
+            int hooks = 0, captureLines = 0;
             List<string> bad = new List<string>();
             foreach (string file in Directory.GetFiles(scripts, "*.cs", SearchOption.AllDirectories))
             {
@@ -196,17 +196,24 @@ namespace Emberfall.DevHarness
                 if (name == "Juice.cs" || name == "JuiceMath.cs") continue;
                 string[] lines = File.ReadAllText(file).Replace("\r\n", "\n").Split('\n');
                 bool[] guarded = JuiceGuardedLines(lines);
+                bool editorOnly = false;
                 for (int i = 0; i < lines.Length; i++)
                 {
                     string code = JuiceCodeOf(lines[i]);
+                    string trimmed = code.Trim();
+                    if (trimmed.StartsWith("#if UNITY_EDITOR", StringComparison.Ordinal)) editorOnly = true;
+                    else if (editorOnly && trimmed.StartsWith("#endif", StringComparison.Ordinal)) editorOnly = false;
                     if (code.Length == 0 || !JuiceHook.IsMatch(code)) continue;
+                    // The capture target's helpers read the record and change nothing in a fight; they
+                    // are compiled out of a player and must work with the flag off (the .off shot).
+                    if (editorOnly) { captureLines++; continue; }
                     hooks++;
                     if (code.Contains("Juice.On") || guarded[i]) continue;
                     bad.Add(name + ":" + (i + 1) + " " + code.Trim());
                 }
             }
             Check(bad.Count == 0,
-                  "J5 TRIPWIRE (reads source): every game-code line that reaches the juice pass is behind Juice.On (" + hooks + " hook lines)"
+                  "J5 TRIPWIRE (reads source): every game-code line that reaches the juice pass is behind Juice.On (" + hooks + " hook lines, plus " + captureLines + " read-only capture lines inside #if UNITY_EDITOR)"
                   + (bad.Count > 0 ? ": UNGUARDED " + string.Join(" | ", bad.ToArray()) : ""));
         }
 
@@ -627,6 +634,12 @@ namespace Emberfall.DevHarness
             Check(stage.Length > 0 && found.Count == 0,
                   "J14 WIRING (reads source): BattleStage still reads its camera from BattleFraming and gained none of its literals" + (found.Count > 0 ? ": " + string.Join(", ", found.ToArray()) : ""));
 
+            string shots = File.Exists(Path.Combine(root, "Assets", "Editor", "PlayModeScreenshot.cs"))
+                ? File.ReadAllText(Path.Combine(root, "Assets", "Editor", "PlayModeScreenshot.cs")) : "";
+            Check(shots.Contains("case \"BattleMoment\": id = ScreenId.Battle;") && shots.Contains("PumpBattleMoment(") && shots.Contains("MOMENT-ABSENT")
+                  && !shots.Contains("Begin(\"Screen:BattleMoment") && !shots.Contains("Begin(\"Screen:AudioFight"),
+                  "J14 WIRING (reads source): PlayModeScreenshot has the BattleMoment target, reports MOMENT-ABSENT, and has no literal Begin for it, so the nightly sweep never runs it");
+
             string settings = ReadJuiceSource(scripts, "UI", "Screens", "SettingsScreen.cs");
             Check(Regex.Matches(settings, "\"Screen shake\"").Count == 1 && settings.Contains("ScreenShakePrefs.Enabled") && settings.Contains("BuildBattleCard(content);"),
                   "J14 WIRING (reads source): the settings screen has one Screen shake card, wired to ScreenShakePrefs");
@@ -641,42 +654,66 @@ namespace Emberfall.DevHarness
 
         // ------------------------------------------------------------------ --moment-survey
 
+        private const int SurveySeeds = 8;
+
         /// <summary>
-        /// Not a check. For each moment kind and aspect, the first stage openings that contain one,
-        /// read through the same JuiceMath.FindMoment the capture target uses. The capture batch
-        /// takes its stage ids from here. A moment found here may still be absent from the live
-        /// fight (the game rolls its own seed); the capture target then says MOMENT-ABSENT.
+        /// Not a check. For each moment kind and aspect, the stage openings that hold one most
+        /// often over SurveySeeds seeds (the game rolls its own seed from the clock, so one seed
+        /// proves little), read through the same JuiceMath.FindMoment the capture target uses. The
+        /// capture batch takes its stage ids from here. A target the live fight does not hold says
+        /// MOMENT-ABSENT and is retried on another stage.
         /// </summary>
         private static int RunMomentSurvey(ContentDatabase db)
         {
-            Line("MOMENT SURVEY (first three stage openings holding each moment, by the aspect of the unit that makes it)");
-            List<JuiceFight> fights = JuiceFights(db);
+            Line("MOMENT SURVEY (stage openings holding each moment most often over " + SurveySeeds + " seeds, as hits/" + SurveySeeds
+                 + "; aspect is that of the unit that makes the moment)");
+            GameSession session = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            List<StageDef> stages = db.AllStages;
+            List<BattleResult[]> fights = new List<BattleResult[]>();
+            for (int s = 0; s < stages.Count; s++)
+            {
+                BattleResult[] row = new BattleResult[SurveySeeds];
+                for (int k = 0; k < SurveySeeds; k++)
+                    row[k] = CombatSimulation.Run(session.BuildBattleRequest(Opening(stages[s]), 4100000 + s * 101 + k));
+                fights.Add(row);
+            }
             MomentKind[] kinds = { MomentKind.Hit, MomentKind.Crit, MomentKind.Skill, MomentKind.Heal, MomentKind.Death };
             string[] aspects = Enum.GetNames(typeof(Aspect));
             for (int k = 0; k < kinds.Length; k++)
             {
                 bool byAspect = kinds[k] != MomentKind.Hit && kinds[k] != MomentKind.Crit;
-                if (!byAspect)
-                {
-                    Line(kinds[k] + ": " + JuiceSurveyStages(fights, kinds[k], null));
-                    continue;
-                }
+                if (!byAspect) { Line(kinds[k] + ": " + JuiceSurveyStages(stages, fights, kinds[k], null)); continue; }
                 for (int a = 0; a < aspects.Length; a++)
-                    Line(kinds[k] + "." + aspects[a].ToLowerInvariant() + ": " + JuiceSurveyStages(fights, kinds[k], (Aspect)a));
+                    Line(kinds[k] + "." + aspects[a].ToLowerInvariant() + ": " + JuiceSurveyStages(stages, fights, kinds[k], (Aspect)a));
             }
             return 0;
         }
 
-        private static string JuiceSurveyStages(List<JuiceFight> fights, MomentKind kind, Aspect? aspect)
+        private static string JuiceSurveyStages(List<StageDef> stages, List<BattleResult[]> fights, MomentKind kind, Aspect? aspect)
         {
-            List<string> ids = new List<string>();
-            for (int f = 0; f < fights.Count && ids.Count < 3; f++)
+            List<KeyValuePair<int, string>> ranked = new List<KeyValuePair<int, string>>();
+            for (int s = 0; s < stages.Count; s++)
             {
-                BattleResult r = fights[f].Result;
-                int at = JuiceMath.FindMoment(r.Events, id => JuiceAspectOf(r, id), kind, aspect);
-                if (at >= 0) ids.Add(fights[f].StageId);
+                int hits = 0;
+                for (int k = 0; k < fights[s].Length; k++)
+                {
+                    BattleResult r = fights[s][k];
+                    if (JuiceMath.FindMoment(r.Events, id => JuiceAspectOf(r, id), kind, aspect) >= 0) hits++;
+                }
+                if (hits > 0) ranked.Add(new KeyValuePair<int, string>(hits, stages[s].Id));
             }
-            return ids.Count == 0 ? "(none)" : string.Join(", ", ids.ToArray());
+            // most often first; ties keep campaign order (an early stage is a shorter fight)
+            for (int i = 1; i < ranked.Count; i++)
+            {
+                KeyValuePair<int, string> x = ranked[i];
+                int j = i - 1;
+                while (j >= 0 && ranked[j].Key < x.Key) { ranked[j + 1] = ranked[j]; j--; }
+                ranked[j + 1] = x;
+            }
+            if (ranked.Count == 0) return "(none)";
+            List<string> top = new List<string>();
+            for (int i = 0; i < ranked.Count && i < 3; i++) top.Add(ranked[i].Value + " " + ranked[i].Key + "/" + SurveySeeds);
+            return string.Join(", ", top.ToArray());
         }
     }
 }

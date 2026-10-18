@@ -64,6 +64,10 @@ namespace Emberfall.EditorTools
         /// <summary>The campaign stage a Battle target fights instead of Session.NextStage, or
         /// empty for NextStage. StageKey is the schedule's slot index, not this.</summary>
         private const string BattleStageKey = "PlayModeScreenshot.BattleStage";
+        /// <summary>Screen:BattleMoment only: the text after the stage id, "kind[.aspect][.off]".</summary>
+        private const string MomentKey = "PlayModeScreenshot.Moment";
+        /// <summary>Screen:BattleMoment only: 0 waits for the round, 1 for the moment, 2 settles.</summary>
+        private const string MomentStageKey = "PlayModeScreenshot.MomentStage";
         /// <summary>Set once an onboarding target that waits on a screen (a battle's first round, a
         /// wave result's paint) has seen it ready, so the shot is timed from then.</summary>
         private const string OnboardReadyKey = "PlayModeScreenshot.OnboardReady";
@@ -488,6 +492,24 @@ namespace Emberfall.EditorTools
                 target = target.Substring(0, eq);
                 suffix = "=" + battleStage + suffix;
             }
+
+            // Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off]: a dot and not a colon, because the
+            // text after the = is copied into the PNG's name and a colon cannot be in a Windows file
+            // name. A stage id has no dot. The stage rides in battleStage as for Battle.
+            string moment = "";
+            if (target == "Screen:BattleMoment")
+            {
+                int dot = battleStage.IndexOf('.');
+                if (dot > 0)
+                {
+                    moment = battleStage.Substring(dot + 1);
+                    battleStage = battleStage.Substring(0, dot);
+                }
+            }
+            SessionState.SetString(MomentKey, moment);
+            SessionState.SetInt(MomentStageKey, 0);
+            Juice.ForceForCapture(null);
+            Time.captureFramerate = 0;
 
             if (!EditorScratchIdentity.Enter(ScratchProduct))
             {
@@ -1240,6 +1262,9 @@ namespace Emberfall.EditorTools
                 SessionState.SetInt(LoopForceKey, 0);
             }
             SessionState.SetInt(ReplayStageKey, 0);
+            SessionState.SetInt(MomentStageKey, 0);
+            Juice.ForceForCapture(null);
+            Time.captureFramerate = 0;
             SessionState.SetBool(ActiveKey, false);
             SessionState.SetBool(TelemetryService.PromptInEditorKey, false);
             EditorApplication.isPlaying = false;
@@ -1531,6 +1556,7 @@ namespace Emberfall.EditorTools
                     case "OrdersCalendar4": id = ScreenId.Orders; break;
                     case "Result": id = ScreenId.Battle; break;
                     case "AudioFight": id = ScreenId.Battle; break;
+                    case "BattleMoment": id = ScreenId.Battle; break;
                     case "AudioSummon": id = ScreenId.Summon; break;
                     case "WaveResult":
                     case "WaveResultAuto":
@@ -1654,7 +1680,12 @@ namespace Emberfall.EditorTools
                 if (IsLoopScreen(name)) SeedLoop(app, name);
                 if (name == "HubLoopOff") CheckLoopIsOff(app);
 
-                if (name == "Battle" || name == "Result" || name == "AudioFight")
+                // A moment shot may ask for the Legacy profile (".off"), and that has to be in force
+                // before the fight is shown, because the profile is read as the fight plays.
+                if (name == "BattleMoment")
+                    Juice.ForceForCapture(SessionState.GetString(MomentKey, "").EndsWith(".off", StringComparison.Ordinal) ? (bool?)false : null);
+
+                if (name == "Battle" || name == "Result" || name == "AudioFight" || name == "BattleMoment")
                 {
                     string asked = SessionState.GetString(BattleStageKey, "");
                     StageDef next = asked.Length > 0 ? app.Session.Content.GetStage(asked) : app.Session.NextStage;
@@ -1725,6 +1756,15 @@ namespace Emberfall.EditorTools
 
                 if (frame == armed + BattlePaintDelay - 5) Canvas.ForceUpdateCanvases();
                 if (frame == armed + BattlePaintDelay) Shoot(name, frame, slot);
+                return;
+            }
+
+            // A NAMED MOMENT of a fight (R12): a hit, a crit, a skill, a heal or a death, frozen a few
+            // frames after it plays. Has no menu item and no literal Begin call, like AudioFight, so
+            // the nightly sweep (which reads those) does not run it. See PumpBattleMoment.
+            if (name == "BattleMoment")
+            {
+                PumpBattleMoment(app, name, frame, showAt, slot, BattleWaitCeiling);
                 return;
             }
 
@@ -2349,6 +2389,143 @@ namespace Emberfall.EditorTools
         }
 
         private const string ReplayStageKey = "PlayModeScreenshot.ReplayStage";
+
+        /// <summary>"kind[.aspect][.off]" to its parts. False for anything else.</summary>
+        private static bool ParseMoment(string spec, out MomentKind kind, out Aspect? aspect, out bool off)
+        {
+            kind = MomentKind.None;
+            aspect = null;
+            off = false;
+            string[] parts = spec.Split('.');
+            for (int i = 0; i < parts.Length; i++)
+            {
+                string p = parts[i].ToLowerInvariant();
+                if (i == 0)
+                {
+                    if (p == "hit") kind = MomentKind.Hit;
+                    else if (p == "crit") kind = MomentKind.Crit;
+                    else if (p == "skill") kind = MomentKind.Skill;
+                    else if (p == "heal") kind = MomentKind.Heal;
+                    else if (p == "death") kind = MomentKind.Death;
+                    else return false;
+                }
+                else if (p == "off") off = true;
+                else
+                {
+                    Aspect a;
+                    if (!Enum.TryParse(p, true, out a)) return false;
+                    aspect = a;
+                }
+            }
+            return kind != MomentKind.None;
+        }
+
+        /// <summary>Frames to let a moment play on after it arrives, so the shot lands on its look:
+        /// the flash is at its peak and the number is still popping for a hit or a crit, the dim and
+        /// the ring are at their strongest for a skill, the heal ring is out, a death is mid-sink.</summary>
+        private static int MomentSettleFrames(MomentKind kind)
+        {
+            switch (kind)
+            {
+                case MomentKind.Skill: return 4;
+                case MomentKind.Heal: return 6;
+                case MomentKind.Death: return 14;
+                default: return 3;
+            }
+        }
+
+        /// <summary>
+        /// Screen:BattleMoment. Stage 0 waits for the first round, checks the record holds the
+        /// moment (MOMENT-ABSENT and a skipped slot if not, so the batch reports the target FAILED
+        /// within seconds and the caller picks another stage), and arms the screen. Stage 1 waits
+        /// for the screen to play it. Stage 2 lets a few frames of game time pass (the clock is held
+        /// at 60 frames a second for the shot, so frames mean game time), freezes, and shoots.
+        /// </summary>
+        private static void PumpBattleMoment(GameApp app, string name, int frame, int showAt, int slot, int waitCeiling)
+        {
+            if (frame <= showAt) return;
+            string requested = SessionState.GetString(RequestedKey, SessionState.GetString(TargetKey, name));
+            string spec = SessionState.GetString(MomentKey, "");
+            MomentKind kind;
+            Aspect? aspect;
+            bool off;
+            if (!ParseMoment(spec, out kind, out aspect, out off))
+            {
+                Debug.LogError("PlayModeScreenshot: [FAIL] " + requested + ": '" + spec + "' is not kind[.aspect][.off] with kind hit, crit, skill, heal or death. Not shooting.");
+                SkipMoment(slot);
+                return;
+            }
+
+            BattleScreen battle = app.Router.Battle;
+            int stage = SessionState.GetInt(MomentStageKey, 0);
+            int armed = SessionState.GetInt(BattleArmKey, 0);
+
+            if (stage == 0)
+            {
+                if (battle != null && battle.RoundUnderway)
+                {
+                    if (!battle.MomentPresent(kind, aspect))
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: MOMENT-ABSENT " + requested + ": no " + kind
+                                         + (aspect != null ? " by " + aspect.Value : "") + " in this fight, pick another stage");
+                        SkipMoment(slot);
+                        return;
+                    }
+                    battle.ArmMomentCapture(kind, aspect);
+                    Debug.Log("BattleMoment: line aspects " + battle.DescribeLineForCapture() + "; waiting for " + kind
+                              + (aspect != null ? " by " + aspect.Value : "") + (off ? " with the pre-R12 profile" : "") + ".");
+                    // Frames mean game time from here to the shot, whatever the editor's speed.
+                    Time.captureFramerate = 60;
+                    SessionState.SetInt(MomentStageKey, 1);
+                    SessionState.SetInt(BattleArmKey, frame);
+                }
+                else if (frame > showAt + waitCeiling)
+                {
+                    Debug.LogWarning("PlayModeScreenshot: no round started within " + waitCeiling + " frames. Skipping " + requested + ".");
+                    SkipMoment(slot);
+                }
+                return;
+            }
+
+            if (stage == 1)
+            {
+                if (battle != null && battle.MomentArrived)
+                {
+                    Debug.Log("PlayModeScreenshot: " + requested + " arrived at frame " + frame + ", shooting in " + MomentSettleFrames(kind) + " frames.");
+                    SessionState.SetInt(MomentStageKey, 2);
+                    SessionState.SetInt(BattleArmKey, frame);
+                }
+                else if (frame > armed + waitCeiling)
+                {
+                    Debug.LogWarning("PlayModeScreenshot: " + requested + " never played within " + waitCeiling + " frames. Skipping it.");
+                    SkipMoment(slot);
+                }
+                return;
+            }
+
+            int settle = MomentSettleFrames(kind);
+            if (frame == armed + settle) Time.timeScale = 0f;
+            if (frame == armed + settle + 2) Canvas.ForceUpdateCanvases();
+            if (frame == armed + settle + 3)
+            {
+                Shoot(name, frame, slot);
+                SessionState.SetInt(MomentStageKey, 0);
+                Juice.ForceForCapture(null);
+                Time.captureFramerate = 0;
+                Time.timeScale = 1f;
+            }
+        }
+
+        /// <summary>Gives the slot up and puts back everything a moment shot changes.</summary>
+        private static void SkipMoment(int slot)
+        {
+            SessionState.SetInt(MomentStageKey, 0);
+            SessionState.SetInt(BattleArmKey, 0);
+            Juice.ForceForCapture(null);
+            Time.captureFramerate = 0;
+            Time.timeScale = 1f;
+            SessionState.SetInt(StageKey, slot + 1);
+        }
 
         /// <summary>
         /// WaveReplay: waits for the won wave to paint, presses WATCH through the screen's own

@@ -240,6 +240,66 @@ namespace Emberfall.UI.Screens
         /// <summary>True for a quarter second after a Heal plays, so a capture can freeze on the heal effect.</summary>
         public bool HealJustPlayed { get { return Time.unscaledTime - _lastHealAt < 0.25f; } }
         private float _lastHealAt = -10f;
+
+        // ---- R12 BattleMoment capture (Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off]).
+        // Read only. The screen is asked whether the record holds a moment, told which one to wait
+        // for, and answers when it has played; it decides nothing and the fight is unchanged.
+
+        /// <summary>The moment the capture waits for, or None.</summary>
+        public MomentKind MomentWanted { get; private set; }
+        private Aspect? _momentAspect;
+
+        /// <summary>True once the moment asked for has been played (the first one only).</summary>
+        public bool MomentArrived { get; private set; }
+
+        public void ArmMomentCapture(MomentKind kind, Aspect? aspect)
+        {
+            MomentWanted = kind;
+            _momentAspect = aspect;
+            MomentArrived = false;
+        }
+
+        /// <summary>Whether the record of this fight holds the moment, by the same JuiceMath.FindMoment
+        /// the harness surveys with. Read off the record, nothing recomputed.</summary>
+        public bool MomentPresent(MomentKind kind, Aspect? aspect)
+        {
+            if (_result == null) return false;
+            return JuiceMath.FindMoment(_result.Events, AspectOfUnit, kind, aspect) >= 0;
+        }
+
+        private Aspect AspectOfUnit(int id)
+        {
+            UnitSnapshot u = _result != null ? _result.FindUnit(id) : null;
+            return u != null ? u.Aspect : Aspect.Ember;
+        }
+
+        /// <summary>One line naming the aspects on each side, printed when a moment capture arms, so
+        /// a reader of the log can tell which fight a shot belongs to.</summary>
+        public string DescribeLineForCapture()
+        {
+            if (_result == null) return "no record";
+            System.Text.StringBuilder players = new System.Text.StringBuilder();
+            System.Text.StringBuilder enemies = new System.Text.StringBuilder();
+            for (int i = 0; i < _result.Units.Count; i++)
+            {
+                System.Text.StringBuilder into = _result.Units[i].IsPlayer ? players : enemies;
+                if (into.Length > 0) into.Append(',');
+                into.Append(_result.Units[i].Aspect);
+            }
+            return "players " + players + " enemies " + enemies;
+        }
+
+        private void NoteMoment(BattleEvent e)
+        {
+            MomentKind kind = JuiceMath.Classify(e, _skillActive);
+            if (kind != MomentWanted) return;
+            if (_momentAspect != null)
+            {
+                int unit = JuiceMath.AspectUnit(e, kind);
+                if (unit < 0 || AspectOfUnit(unit) != _momentAspect.Value) return;
+            }
+            MomentArrived = true;
+        }
 #endif
 
         /// <summary>Index into _turnOrder of the turn being played, and -1 before the round's
@@ -1209,6 +1269,7 @@ namespace Emberfall.UI.Screens
 #if UNITY_EDITOR
             HitJustPlayed = e.Type == BattleEventType.Damage && e.Status == StatusKind.None;
             if (e.Type == BattleEventType.Heal && e.Value > 0) _lastHealAt = Time.unscaledTime;
+            if (MomentWanted != MomentKind.None && !MomentArrived) NoteMoment(e);
 #endif
 
             switch (e.Type)
