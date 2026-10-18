@@ -64,6 +64,11 @@ namespace Emberfall.Battle
         private BattleResult _result;
         private readonly int[] _cursor = new int[64];
 
+        /// <summary>R12: the unit whose cast is the current action, or -1. Mirrors BattleScreen's
+        /// _skillActive from the events Play is fed: set by AbilityCast, cleared by BasicAttack and
+        /// TurnStart. A Damage from this source with no status is the cast's strike.</summary>
+        private int _skillSourceId = -1;
+
         private ParticleSystem _chips;
         private ParticleSystem _streaks;
         private ParticleSystem _rings;
@@ -76,6 +81,7 @@ namespace Emberfall.Battle
             public GameObject Go;
             public Transform T;
             public Material Material;
+            public bool Additive;
         }
 
         private readonly Stack<FlipQuad> _quadPool = new Stack<FlipQuad>();
@@ -117,6 +123,7 @@ namespace Emberfall.Battle
         public void Bind(BattleResult result)
         {
             _result = result;
+            _skillSourceId = -1;
             for (int i = 0; i < _cursor.Length; i++) _cursor[i] = 0;
         }
 
@@ -154,6 +161,13 @@ namespace Emberfall.Battle
             UnitActor target = e.TargetId >= 0 ? _stage.Find(e.TargetId) : null;
             switch (e.Type)
             {
+                case BattleEventType.AbilityCast:
+                    _skillSourceId = e.SourceId;
+                    break;
+                case BattleEventType.BasicAttack:
+                case BattleEventType.TurnStart:
+                    _skillSourceId = -1;
+                    break;
                 case BattleEventType.Damage:
                     PlayDamage(e, target);
                     break;
@@ -260,17 +274,50 @@ namespace Emberfall.Battle
             target.HitStop(stop);
             if (source != null && source.Alive) source.HitStop(stop);
 
+            // R12: the strike of a cast holds longer than a basic blow. HitStop keeps the larger
+            // request, so this only ever lengthens the freeze above.
+            bool skill = Juice.On && _skillSourceId >= 0 && e.SourceId == _skillSourceId;
+            if (Juice.On)
+            {
+                float juiceStop = JuiceMath.HitStopSeconds(Juice.Profile, crit, skill) / PlaybackSpeed();
+                target.HitStop(juiceStop);
+                if (source != null && source.Alive) source.HitStop(juiceStop);
+            }
+
             // Knockback along the attacker-to-target line. A crit pushes harder.
             if (source != null)
                 target.SetKnock(target.transform.position - source.transform.position, crit ? 1.5f : 1f);
 
+            // R12: the knock is a fixed number of screen pixels per kind of hit.
+            if (Juice.On && _stage.Camera != null)
+            {
+                float px = JuiceMath.KnockPx(Juice.Profile, crit, skill);
+                if (px > 0f) target.SetKnockDistance(JuiceMath.PixelsToWorld(px, _stage.Camera.rect.height, _stage.Camera.orthographicSize));
+            }
+
             // Camera shake on crits only. The host shakes on a crit too; ShakeAtLeast never
             // weakens a shake already running, so the two do not fight.
-            if (crit) _stage.ShakeAtLeast(0.14f, 0.2f);
+            // R12: the director owns every shake when the flag is on (the host's two calls step
+            // aside): small on a crit, medium on a skill, none on a plain hit.
+            if (Juice.On)
+            {
+                float shakeStrength, shakeSeconds;
+                JuiceMath.ShakeFor(Juice.Profile, crit, skill, false, out shakeStrength, out shakeSeconds);
+                if (shakeStrength > 0f) _stage.ShakeAtLeast(shakeStrength, shakeSeconds);
+            }
+            else if (crit) _stage.ShakeAtLeast(0.14f, 0.2f);
 
             Color tint = Accent(source);
             VfxEntry entry = Resolve(e);
             Vector3 point = FxPoint(target);
+
+            // R12: a soft additive glow behind the unit, in the attacker's accent, under the flipbook.
+            if (Juice.On && Juice.Profile.GlowRadius > 0f && _stage.Vfx != null && _stage.Camera != null)
+            {
+                JuiceProfile jp = Juice.Profile;
+                Vector3 behind = target.CenterPosition + _stage.Camera.transform.forward * 0.8f;
+                _stage.Vfx.Glow(behind, tint, jp.GlowRadius * (crit ? jp.GlowCritScale : 1f), jp.GlowSeconds, jp.GlowAlpha, crit, false);
+            }
 
             // The record's own aspect factor scales the burst: a weakness reads bigger, a resist
             // smaller. Read as given, no threshold of our own.
@@ -374,7 +421,34 @@ namespace Emberfall.Battle
             EmitRing(point, tint, 1.7f, 0.36f);
             EmitChips(point, tint, 12, 3.0f, 0.27f, 0.5f, Direction.Radial);
             EmitStreaks(point, tint, 7, 3.6f, 0.26f, 0.34f, Direction.Radial, null);
-            _stage.ShakeAtLeast(0.12f, 0.22f);
+            // R12: no shake of its own; the killing blow's crit or skill shake already covers it.
+            if (Juice.On)
+            {
+                float killStrength, killSeconds;
+                JuiceMath.ShakeFor(Juice.Profile, false, false, true, out killStrength, out killSeconds);
+                if (killStrength > 0f) _stage.ShakeAtLeast(killStrength, killSeconds);
+            }
+            else _stage.ShakeAtLeast(0.12f, 0.22f);
+        }
+
+        // ------------------------------------------------------------------ skill moment
+
+        /// <summary>
+        /// R12: the beat a cast lands on. The painted backdrop dims, and a ring of the caster's
+        /// accent flashes behind them. Called by the host at the strike, the moment the skill's
+        /// impact sound plays, so dim, shake, hit-stop and audio arrive together.
+        /// </summary>
+        public void SkillMoment(UnitActor caster)
+        {
+            if (!Juice.On) return;
+            if (caster == null || _stage == null || _stage.Vfx == null) return;
+            JuiceProfile p = Juice.Profile;
+            _stage.DimBackdrop(PlaybackSpeed());
+            Camera cam = _stage.Camera;
+            Vector3 behind = caster.CenterPosition + (cam != null ? cam.transform.forward * 0.6f : Vector3.zero);
+            Color accent = Accent(caster);
+            _stage.Vfx.Glow(behind, accent, p.RingRadius * 0.75f, p.RingSeconds, 1f, true, true);
+            _stage.Vfx.Glow(behind, accent, p.RingRadius * 0.45f, p.RingSeconds, 0.55f, true, false);
         }
 
         // ------------------------------------------------------------------ resolution
@@ -656,6 +730,11 @@ namespace Emberfall.Battle
             }
             quad.Material.SetTexture("_MainTex", sheet);
             quad.Material.SetColor("_Color", tint);
+            // R12: sheets draw additively (One, as NewFx's additive flag sets it), so a spike or a
+            // puff glows over the scene. A quad that was additive goes back to OneMinusSrcAlpha
+            // (10) when the flag is off again, so a pooled quad never carries the old blend.
+            if (Juice.On && Juice.Profile.Additive) { quad.Material.SetFloat("_DstBlend", 1f); quad.Additive = true; }
+            else if (quad.Additive) { quad.Material.SetFloat("_DstBlend", 10f); quad.Additive = false; }
             _quadLive.Add(quad);
             return quad;
         }

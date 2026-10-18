@@ -1,6 +1,7 @@
 using System.Collections;
 using UnityEngine;
 using Emberfall.Core.Combat;
+using Emberfall.Core.Data;
 
 namespace Emberfall.Battle
 {
@@ -47,6 +48,7 @@ namespace Emberfall.Battle
         private float _hitStop;
         private Vector3 _knockDirection;
         private float _knockScale = 1f;
+        private float _knockWorld;
         private float _flash;
         private float _bobSpeed = 1.6f;
         private float _bobHeight = 0.09f;
@@ -116,7 +118,8 @@ namespace Emberfall.Battle
 
             if (_flash > 0f)
             {
-                _flash = Mathf.Max(0f, _flash - Time.deltaTime * 5.5f);
+                if (Juice.On) _flash = Mathf.Max(0f, _flash - Time.deltaTime * JuiceMath.FlashDecayRate(Juice.Profile));
+                else _flash = Mathf.Max(0f, _flash - Time.deltaTime * 5.5f);
                 Rig.SetFlash(_flash);
             }
         }
@@ -259,16 +262,22 @@ namespace Emberfall.Battle
             // did not flinch cannot leak into the next one.
             Vector3 knock = _knockDirection;
             float knockScale = _knockScale;
+            float knockWorld = _knockWorld;
             _knockDirection = Vector3.zero;
             _knockScale = 1f;
+            _knockWorld = 0f;
 
             if (!Alive) return;
             _flash = critical ? 1f : 0.75f;
+            if (Juice.On) _flash = JuiceMath.FlashPeak(Juice.Profile, critical);
             if (Rig != null) Rig.SetFlash(_flash);
             // Priority, highest first: death, the unit's own action, the hit reaction. A blow
             // landing while this unit is still swinging or casting flashes it and nothing more.
             if (_acting) return;
             if (Rig != null && Rig.Animation != null && !Rig.Animation.PlayReaction(BattleClips.HitReaction)) return;
+            // R12: the knock is a fixed pixel distance (VfxDirector sets it from the hit kind), so
+            // a hit, a skill and a crit read as three clear steps at any camera size.
+            if (Juice.On && knockWorld > 0f) { Restart(FlinchRoutine(knockWorld, knock)); return; }
             Restart(FlinchRoutine((critical ? 0.24f : 0.15f) * knockScale, knock));
         }
 
@@ -308,6 +317,15 @@ namespace Emberfall.Battle
             awayWorld.y = 0f;
             _knockDirection = awayWorld.sqrMagnitude > 0.0001f ? awayWorld.normalized : Vector3.zero;
             _knockScale = scale;
+        }
+
+        /// <summary>
+        /// R12: how far, in world units, the next flinch travels, replacing the legacy
+        /// (0.15 or 0.24) * scale. Used once by the next PlayHit, like SetKnock.
+        /// </summary>
+        public void SetKnockDistance(float world)
+        {
+            _knockWorld = world;
         }
 
         private IEnumerator FlinchRoutine(float distance, Vector3 awayWorld)
@@ -356,6 +374,16 @@ namespace Emberfall.Battle
             _motion = null;
             if (Rig == null) yield break;
 
+            // R12: the unit whitens and holds for a beat before it goes, then the flash decays at
+            // the hit-flash rate. Update still ticks the decay after Alive flips (it never tests it).
+            if (Juice.On)
+            {
+                Rig.SetFlashColor(Color.white);
+                _flash = 1f;
+                Rig.SetFlash(_flash);
+                HitStop(Juice.Profile.DeathFlashSeconds / Mathf.Max(0.01f, speed));
+            }
+
             if (Rig.Animation != null)
             {
                 yield return PlaySpriteDeath(speed);
@@ -363,6 +391,7 @@ namespace Emberfall.Battle
             }
 
             float duration = 0.75f / speed;
+            if (Juice.On) duration = Juice.Profile.DeathSeconds / speed;
             float t = 0f;
             Quaternion from = Rig.Body.localRotation;
             Quaternion to = Quaternion.Euler(-78f, 0f, 14f);
@@ -374,6 +403,12 @@ namespace Emberfall.Battle
                 Rig.Body.localRotation = Quaternion.Slerp(from, to, Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, k * 1.6f)));
                 Rig.Body.localPosition = new Vector3(0f, -k * 0.18f, 0f);
                 Rig.SetFade(1f - Mathf.Clamp01((k - 0.25f) / 0.75f));
+                if (Juice.On)
+                {
+                    JuiceProfile jp = Juice.Profile;
+                    Rig.Body.localPosition = new Vector3(0f, -k * jp.DeathSink, 0f);
+                    Rig.SetFade(1f - Mathf.Clamp01((k - jp.DeathFadeStart) / (1f - jp.DeathFadeStart)));
+                }
                 if (Rig.Shadow != null)
                 {
                     float shrink = 1f - k;
@@ -417,6 +452,7 @@ namespace Emberfall.Battle
                 f += Time.deltaTime;
                 float shrink = 1f - Mathf.Clamp01(f / fadeSeconds);
                 Rig.SetFade(shrink);
+                if (Juice.On) Rig.Body.localPosition = new Vector3(0f, -(1f - shrink) * Juice.Profile.SpriteDeathSink, 0f);
                 // Same shrink-with-fade the generic tumble above already does, so the shadow
                 // doesn't sit there full-size under a character that has otherwise vanished.
                 if (Rig.Shadow != null)

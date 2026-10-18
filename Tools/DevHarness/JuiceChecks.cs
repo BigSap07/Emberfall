@@ -626,6 +626,13 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < forbidden.Length; i++) if (stage.Contains(forbidden[i])) found.Add(forbidden[i]);
             Check(stage.Length > 0 && found.Count == 0,
                   "J14 WIRING (reads source): BattleStage still reads its camera from BattleFraming and gained none of its literals" + (found.Count > 0 ? ": " + string.Join(", ", found.ToArray()) : ""));
+
+            // The shake toggle: one choke point, on by default, in both flag states.
+            string prefs = ReadJuiceSource(scripts, "Battle", "ScreenShakePrefs.cs");
+            Check(Regex.IsMatch(stage, @"public void Shake\(float strength, float duration\)\s*\{\s*if \(!ScreenShakePrefs\.Enabled\) return;")
+                  && Regex.IsMatch(stage, @"public void ShakeAtLeast\(float strength, float duration\)\s*\{\s*if \(!ScreenShakePrefs\.Enabled\) return;")
+                  && Regex.IsMatch(prefs, @"GetInt\(Key, 1\) == 1"),
+                  "J14 WIRING (reads source): BattleStage.Shake and ShakeAtLeast both start with the ScreenShakePrefs gate, and the preference defaults to ON");
         }
 
         // ------------------------------------------------------------------ --moment-survey
