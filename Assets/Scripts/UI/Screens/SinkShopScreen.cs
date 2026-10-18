@@ -478,10 +478,13 @@ namespace Emberfall.UI.Screens
             bool chosen = _chosen == heroId;
             HeroInstance owned = App.Session.Profile.FindHeroByDefId(heroId);
 
-            RectTransform card = UIBuilder.Node("Pick_" + heroId, parent);
-            UIBuilder.Sized(card, PickCardWidth, PickCardHeight);
-            if (chosen) EmberforgeUI.PanelOn(card, false);
-            else EmberforgeUI.PlainPanelOn(card);
+            // The kit's selectable card: the plate, the press feedback and a body that lets the tap
+            // through to it. The chosen one wears the gold frame, as every selected card here does.
+            string id = heroId;
+            ForgeCard forged = EmberforgeUI.SelectableCard("Pick_" + heroId, parent, delegate { Choose(id); });
+            EmberforgeUI.SetCardSelected(forged, chosen);
+            UIBuilder.Sized(forged.Root, PickCardWidth, PickCardHeight);
+            RectTransform card = forged.Body;
 
             RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", card, def, def.Stars, 96f);
             UIBuilder.Box(portrait, 0f, -UITheme.Space12, 96f, 96f, new Vector2(0.5f, 1f));
@@ -493,13 +496,6 @@ namespace Emberfall.UI.Screens
             Text own = EmberforgeUI.Label("Own", card, owned == null ? "NEW" : "OWNED  x" + owned.Copies, UITheme.FontTiny - 4,
                                           owned == null ? Emberforge.TextGold : Emberforge.TextQuiet, TextAnchor.MiddleCenter);
             UIBuilder.Box(own.rectTransform, 0f, 4f, PickCardWidth - 12f, 24f, new Vector2(0.5f, 0f));
-
-            Button tap = card.gameObject.AddComponent<Button>();
-            tap.transition = Selectable.Transition.None;
-            Image hit = card.gameObject.GetComponent<Image>();
-            if (hit != null) tap.targetGraphic = hit;
-            string id = heroId;
-            tap.onClick.AddListener(delegate { Choose(id); });
         }
 
         private void Choose(string heroId)

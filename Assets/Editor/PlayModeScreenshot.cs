@@ -347,6 +347,12 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/Sinks/Recital with the Archive door", false, 109)]
         public static void CaptureRecitalSinksOn() { Begin("Screen:RecitalSinksOn"); }
 
+        [MenuItem("Emberfall/Capture/Sinks/Proving with the sinks off", false, 110)]
+        public static void CaptureProvingSinksOff() { Begin("Screen:ProvingSinksOff"); }
+
+        [MenuItem("Emberfall/Capture/Sinks/Recital with the sinks off", false, 111)]
+        public static void CaptureRecitalSinksOff() { Begin("Screen:RecitalSinksOff"); }
+
         [MenuItem("Emberfall/Capture/Heroes", false, 61)]
         public static void CaptureHeroes() { Begin("Screen:Heroes"); }
 
@@ -1617,8 +1623,10 @@ namespace Emberfall.EditorTools
                     case "ArchiveBought":
                     case "ArchiveSoldOut":
                     case "ArchivePicker": id = ScreenId.Archive; break;
-                    case "ProvingSinksOn": id = ScreenId.Proving; break;
-                    case "RecitalSinksOn": id = ScreenId.Recital; break;
+                    case "ProvingSinksOn":
+                    case "ProvingSinksOff": id = ScreenId.Proving; break;
+                    case "RecitalSinksOn":
+                    case "RecitalSinksOff": id = ScreenId.Recital; break;
                     case "Result": id = ScreenId.Battle; break;
                     case "AudioFight": id = ScreenId.Battle; break;
                     case "BattleMoment": id = ScreenId.Battle; break;
@@ -1745,6 +1753,7 @@ namespace Emberfall.EditorTools
                 if (IsLoopScreen(name)) SeedLoop(app, name);
                 if (IsSinksScreen(name)) SeedSinks(app, name);
                 if (name == "HubLoopOff") CheckLoopIsOff(app);
+                if (name == "ProvingSinksOff" || name == "RecitalSinksOff") CheckSinksAreOff(app);
 
                 // A moment shot may ask for the Legacy profile (".off"), and that has to be in force
                 // before the fight is shown, because the profile is read as the fight plays.
@@ -2044,17 +2053,31 @@ namespace Emberfall.EditorTools
             return false;
         }
 
+        /// <summary>1 forces the switch ON, 2 forces it OFF (the rollback shots), 0 leaves it.</summary>
         private static int SinksForceFor(string target)
         {
             if (!target.StartsWith("Screen:")) return 0;
-            return IsSinksScreen(target.Substring(7)) ? 1 : 0;
+            string name = target.Substring(7);
+            if (name == "ProvingSinksOff" || name == "RecitalSinksOff") return 2;
+            return IsSinksScreen(name) ? 1 : 0;
         }
 
         /// <summary>Applies the run's sinks switch, the way ApplyLoopForce applies the daily loop's.</summary>
         private static void ApplySinksForce()
         {
             if (!SessionState.GetBool(ActiveKey, false)) return;
-            if (SessionState.GetInt(SinksForceKey, 0) == 1) SinksSwitch.Enabled = true;
+            int force = SessionState.GetInt(SinksForceKey, 0);
+            if (force == 1) SinksSwitch.Enabled = true;
+            else if (force == 2) SinksSwitch.Enabled = false;
+        }
+
+        private static void CheckSinksAreOff(GameApp app)
+        {
+            bool off = !SinksSwitch.Enabled && app.Router.Armory == null && app.Router.Archive == null && app.Session.Profile.Sinks.IsEmpty;
+            Debug.Log(off
+                ? "PlayModeScreenshot: [ok] the sinks are off: no Armory, no Archive, no sinks state, so the page below is the page without them."
+                : "PlayModeScreenshot: [FAIL] the sinks are NOT off (switch " + SinksSwitch.Enabled + ", Armory " + (app.Router.Armory != null)
+                  + "). This capture is not the page without the sinks.");
         }
 
         /// <summary>

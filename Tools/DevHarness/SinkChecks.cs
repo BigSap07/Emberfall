@@ -889,7 +889,7 @@ namespace Emberfall.DevHarness
 
             // The capture targets exist, force the switch and put it back.
             string[] targets = { "Armory", "ArmoryBought", "ArmorySoldOut", "ArmoryPicker", "Archive", "ArchiveBought", "ArchiveSoldOut",
-                                 "ArchivePicker", "ProvingSinksOn", "RecitalSinksOn" };
+                                 "ArchivePicker", "ProvingSinksOn", "RecitalSinksOn", "ProvingSinksOff", "RecitalSinksOff" };
             List<string> missing = new List<string>();
             for (int i = 0; i < targets.Length; i++)
                 if (shots.IndexOf("Begin(\"Screen:" + targets[i] + "\")", StringComparison.Ordinal) < 0
@@ -898,8 +898,17 @@ namespace Emberfall.DevHarness
                   && shots.Contains("SessionState.SetInt(SinksForceKey, SinksForceFor(target))"),
                   "WIRING (reads source): every sink capture target exists, forces the switch ON for its own run and puts it back after"
                   + (missing.Count > 0 ? " - missing " + string.Join(", ", missing.ToArray()) : ""));
-            Check(shots.Contains("EditorScratchIdentity.IsScratch") && shots.Contains("SinkShop.Buy(session"),
-                  "and the seed buys through SinkShop.Buy on the scratch identity only");
+            Check(shots.Contains("EditorScratchIdentity.IsScratch") && shots.Contains("SinkShop.Buy(session")
+                  && shots.Contains("else if (force == 2) SinksSwitch.Enabled = false;"),
+                  "and the seed buys through SinkShop.Buy on the scratch identity only, and the two rollback targets force the switch OFF");
+
+            // The cloud push claims the document's own version, so a save with no sinks block says 22.
+            string cloudPath = Path.Combine(root, "Assets", "Scripts", "Game", "Cloud", "CloudSaveService.cs");
+            string cloud = File.Exists(cloudPath) ? File.ReadAllText(cloudPath) : "";
+            int versioned = 0, from = 0;
+            while ((from = cloud.IndexOf("Push(localJson, SaveSerializer.VersionOfJson(localJson)", from, StringComparison.Ordinal)) >= 0) { versioned++; from++; }
+            Check(versioned == 2 && cloud.IndexOf("Push(localJson, SaveSerializer.CurrentVersion", StringComparison.Ordinal) < 0,
+                  "WIRING (reads source): both cloud pushes claim the document's own version (VersionOfJson), never the highest this build reads: a flag-off push sends 22");
         }
     }
 }
