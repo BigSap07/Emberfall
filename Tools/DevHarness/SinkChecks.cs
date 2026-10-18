@@ -44,6 +44,7 @@ namespace Emberfall.DevHarness
                 CheckSinksBanks(db);
                 CheckSinksRefusals(db);
                 CheckSinksNothingRandom(contentDir);
+                CheckSinksWiring(contentDir);
                 CheckSinksSave(db);
                 CheckSinksNotHashed(db, contentDir);
                 CheckSinksOff(db);
@@ -812,6 +813,93 @@ namespace Emberfall.DevHarness
             SinkShop.Buy(bought, "armory_weapon", null, SinkBase);
             string after = FingerprintOf(CombatSimulation.Run(bought.BuildBattleRequest(CampaignWaveGenerator.BuildBattle(db.AllStages[0], 1, 1), 4242)));
             Check(before == after, "and buying a preset leaves the team that was fighting fighting the same fight: a purchase adds to the bag and nothing is worn until the player wears it");
+        }
+
+        // ------------------------------------------------------------------ 12. wiring
+
+        /// <summary>
+        /// WIRING TRIPWIRES, not behavioural proof: the shop screens, the router and the capture tool
+        /// cannot run in the harness, so this reads their source. It fails if the screens stop being
+        /// built behind the switch, if a door appears outside it, if a shop screen starts to decide
+        /// or to sell by any road but SinkShop.Buy, or if a capture target loses its forced switch.
+        /// What the screens then look like is for the Play queue.
+        /// </summary>
+        private static void CheckSinksWiring(string contentDir)
+        {
+            string root = Path.GetFullPath(Path.Combine(contentDir, "..", "..", ".."));
+            string ui = Path.Combine(root, "Assets", "Scripts", "UI");
+            string routerPath = Path.Combine(ui, "ScreenRouter.cs");
+            string provingPath = Path.Combine(ui, "Screens", "ProvingScreen.cs");
+            string recitalPath = Path.Combine(ui, "Screens", "RecitalScreen.cs");
+            string shopPath = Path.Combine(ui, "Screens", "SinkShopScreen.cs");
+            string armoryPath = Path.Combine(ui, "Screens", "ArmoryScreen.cs");
+            string archivePath = Path.Combine(ui, "Screens", "ArchiveScreen.cs");
+            string shotsPath = Path.Combine(root, "Assets", "Editor", "PlayModeScreenshot.cs");
+            string[] files = { routerPath, provingPath, recitalPath, shopPath, armoryPath, archivePath, shotsPath };
+            for (int i = 0; i < files.Length; i++)
+                if (!File.Exists(files[i]))
+                {
+                    Check(false, "the sink screens, router, doors and capture file are where the harness expects them (" + files[i] + ")");
+                    return;
+                }
+            string router = File.ReadAllText(routerPath), proving = File.ReadAllText(provingPath), recital = File.ReadAllText(recitalPath);
+            string shop = File.ReadAllText(shopPath), armory = File.ReadAllText(armoryPath), archive = File.ReadAllText(archivePath);
+            string shots = File.ReadAllText(shotsPath);
+
+            // The router builds both screens, once each, and only inside the switch.
+            int guardAt = router.IndexOf("if (Emberfall.Core.Session.SinksSwitch.Enabled)", StringComparison.Ordinal);
+            int armoryAt = router.IndexOf("Create<Screens.ArmoryScreen>()", StringComparison.Ordinal);
+            int archiveAt = router.IndexOf("Create<Screens.ArchiveScreen>()", StringComparison.Ordinal);
+            Check(guardAt > 0 && armoryAt > guardAt && archiveAt > guardAt
+                  && router.IndexOf("Create<Screens.ArmoryScreen>()", armoryAt + 1, StringComparison.Ordinal) < 0
+                  && router.IndexOf("Create<Screens.ArchiveScreen>()", archiveAt + 1, StringComparison.Ordinal) < 0,
+                  "WIRING (reads source): the router builds the Armory and the Archive once each, and only inside the sinks switch");
+
+            // Each door is drawn only inside the switch and asks the gate with its own id.
+            int provingGuard = proving.IndexOf("if (SinksSwitch.Enabled)", StringComparison.Ordinal);
+            int recitalGuard = recital.IndexOf("if (SinksSwitch.Enabled)", StringComparison.Ordinal);
+            Check(provingGuard > 0 && proving.IndexOf("\"proving.Armory\"", StringComparison.Ordinal) > provingGuard
+                  && proving.IndexOf("ScreenId.Armory", StringComparison.Ordinal) > provingGuard
+                  && recitalGuard > 0 && recital.IndexOf("\"recital.Archive\"", StringComparison.Ordinal) > 0
+                  && recital.IndexOf("ScreenId.Archive", StringComparison.Ordinal) > 0
+                  && recital.IndexOf("BuildArchiveDoor();", recitalGuard, StringComparison.Ordinal) > recitalGuard,
+                  "and each door, the Armory's on the Proving and the Archive's on the Recital, is drawn only inside the switch, and asks the gate by its own id");
+
+            // The shop screen sells by SinkShop.Buy and reads by SinkShop.View, and by nothing else.
+            System.Text.RegularExpressions.MatchCollection calls = System.Text.RegularExpressions.Regex.Matches(shop, @"SinkShop\.(\w+)");
+            bool onlyTwo = calls.Count >= 2;
+            bool view = false, buy = false;
+            for (int i = 0; i < calls.Count; i++)
+            {
+                string name = calls[i].Groups[1].Value;
+                if (name == "View") view = true;
+                else if (name == "Buy") buy = true;
+                else onlyTwo = false;
+            }
+            string[] banned = { "SinkPricing", "GrantHeroDirect", "OwnedArmor", "AddRecitalEcho", "AddProvingBrand", "Profile.Sinks", "Random" };
+            List<string> found = new List<string>();
+            for (int i = 0; i < banned.Length; i++) if (shop.IndexOf(banned[i], StringComparison.Ordinal) >= 0) found.Add(banned[i]);
+            bool writesPurse = System.Text.RegularExpressions.Regex.IsMatch(shop, @"\.(Valor|Coda|Gold|Shards|RelicDust|Slag)\s*[-+]?=[^=]");
+            Check(onlyTwo && view && buy && found.Count == 0 && !writesPurse,
+                  "WIRING (reads source): the shop screen calls only SinkShop.View and SinkShop.Buy, prices nothing itself, grants nothing itself and writes no purse"
+                  + (found.Count > 0 ? " - names " + string.Join(", ", found.ToArray()) : ""));
+            Check(armory.IndexOf("SinkShop.", StringComparison.Ordinal) < 0 && archive.IndexOf("SinkShop.", StringComparison.Ordinal) < 0
+                  && armory.IndexOf("SinkShopId.Armory", StringComparison.Ordinal) > 0 && archive.IndexOf("SinkShopId.Archive", StringComparison.Ordinal) > 0,
+                  "and the two screens are thin: each names its shop and its words and calls nothing");
+
+            // The capture targets exist, force the switch and put it back.
+            string[] targets = { "Armory", "ArmoryBought", "ArmorySoldOut", "ArmoryPicker", "Archive", "ArchiveBought", "ArchiveSoldOut",
+                                 "ArchivePicker", "ProvingSinksOn", "RecitalSinksOn" };
+            List<string> missing = new List<string>();
+            for (int i = 0; i < targets.Length; i++)
+                if (shots.IndexOf("Begin(\"Screen:" + targets[i] + "\")", StringComparison.Ordinal) < 0
+                    || shots.IndexOf("case \"" + targets[i] + "\":", StringComparison.Ordinal) < 0) missing.Add(targets[i]);
+            Check(missing.Count == 0 && shots.Contains("SinksSwitch.Enabled = true") && shots.Contains("SinksSwitch.Enabled = SessionState.GetBool(SinksWasKey, false)")
+                  && shots.Contains("SessionState.SetInt(SinksForceKey, SinksForceFor(target))"),
+                  "WIRING (reads source): every sink capture target exists, forces the switch ON for its own run and puts it back after"
+                  + (missing.Count > 0 ? " - missing " + string.Join(", ", missing.ToArray()) : ""));
+            Check(shots.Contains("EditorScratchIdentity.IsScratch") && shots.Contains("SinkShop.Buy(session"),
+                  "and the seed buys through SinkShop.Buy on the scratch identity only");
         }
     }
 }
