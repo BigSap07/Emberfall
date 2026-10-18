@@ -1192,6 +1192,19 @@ flipbook `sheet` from `Assets/Resources/Art/Vfx` (six white-on-alpha sheets, `bu
 play only where a sheet is missing. The sheets are white so the attacker's aspect accent tints
 them; `Tools/texture-import-policy.py` has a group for the folder.
 
+**Hits land harder, behind one flag.** The `juice` block in `vfx.json` (not hashed; `enabled`
+false is the rollback, `EMBERFALL_JUICE` overrides it for one editor launch) sets a 0.08 s white
+hit flash, hit stop of 0.05 s, 0.09 s on a crit and 0.12 s on a skill impact (the timeline holds
+once per action, never `Time.timeScale`), shake only on crits and skill impacts, a 10 to 16 px
+knockback, damage numbers that pop from 1.4x and stack upward, additive flipbooks tinted by the
+caster's aspect accent with a glow, a skill moment on a cast's first impact (backdrop to 70 percent
+for 0.30 s and an aspect ring behind the caster), and a death flash, sink and smooth HP drain.
+`JuiceProfile` and `JuiceMath` are engine free, so `JuiceChecks.cs` proves flag off equals the
+old battle, the effect cap (40 live quads, 62 in all) and that the simulation baselines are
+unchanged. Settings has a SCREEN SHAKE toggle (`ScreenShakePrefs`, device only). The capture
+target `Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off]` stops on a hit, crit, skill, heal or
+death. See `Docs/DESIGN-JUICE.md`.
+
 **WATCH replays the hardest battle of a resolved wave.** `GameSession.ResolveWave` keeps a
 `WaveReplay` on the `WaveResolution`, in memory only: the lost battle, else the win that left the
 least HP, with its seed from `BattleSeed` and copies of the line that fought it
