@@ -61,6 +61,9 @@ namespace Emberfall.UI.Screens
             public int UnitId;
             public float Y;
             public bool Retiring;
+            /// <summary>How long ago each newer number on this unit spawned, in game seconds; JuiceMath.PushOffset
+            /// turns them into how far this number has been pushed up.</summary>
+            public readonly List<float> PushAges = new List<float>();
         }
 
         private StageDef _stage;
@@ -257,6 +260,21 @@ namespace Emberfall.UI.Screens
         /// long fight fast up to the moment and slow down for it, and to log where a fight is.</summary>
         public int MomentEventIndex { get; private set; }
         public int PlayedEventIndex { get; private set; }
+
+        /// <summary>The backdrop's current tint (white undimmed, 0.70 grey at the dim's depth), so a
+        /// capture can prove the skill dim was in force when the shot was taken.</summary>
+        public Color BackdropColorForCapture { get { return _world != null ? _world.BackdropColor : Color.white; } }
+
+        /// <summary>Frames to let the moment play on. A death with a clip holds the clip, then fades:
+        /// the shot lands half way through the fade. Others use the fallback.</summary>
+        public int SettleFramesForCapture(int fallback)
+        {
+            if (MomentWanted != MomentKind.Death || _result == null || MomentEventIndex < 0) return fallback;
+            UnitActor actor = ActorOf(_result.Events[MomentEventIndex].TargetId);
+            float hold = actor != null ? actor.DeathHoldNominalSeconds : 0f;
+            if (hold <= 0f) return fallback;
+            return Mathf.RoundToInt((hold - UnitActor.SpriteDeathFadeSeconds * 0.5f) * 60f);
+        }
         public int EventCount { get { return _result != null ? _result.Events.Count : 0; } }
         public string RoundLabelForCapture { get { return _roundText ?? ""; } }
         public float SpeedForCapture
@@ -1396,14 +1414,12 @@ namespace Emberfall.UI.Screens
                         float impactSeconds = Mathf.Clamp(impact, 0.02f, clipDuration);
                         yield return Wait(impactSeconds);
                         PlayTargetedVfx(e.Vfx, source, targetIds, AspectTint(source));
-                        if (Juice.On) _world.Director.SkillMoment(source);
                         _pendingAnimationTail = clipDuration - impactSeconds;
                     }
                     else
                     {
                         yield return Wait(0.36f);
                         if (source != null) PlayTargetedVfx(e.Vfx, source, targetIds, AspectTint(source));
-                        if (Juice.On && source != null) _world.Director.SkillMoment(source);
                         yield return Wait(0.12f);
                     }
                     break;
@@ -2144,28 +2160,23 @@ namespace Emberfall.UI.Screens
             // say whose it is can never stack other units' numbers on one another.
             while (unitId >= 0 && JuiceMath.RetireOldestOnTarget(p, LiveFloats(unitId))) RetireOldest(unitId);
             while (JuiceMath.RetireOldestOverall(p, LiveFloats(-2))) RetireOldest(-2);
-            List<float> ys = new List<float>();
-            List<FloatText> mine = new List<FloatText>();
+            // The newcomer starts at the base and every live number on the unit moves up one line, so
+            // numbers stack upward with the newest at the bottom and none can overlap another.
             for (int i = 0; unitId >= 0 && i < _liveFloats.Count; i++)
             {
                 if (_liveFloats[i].Retiring || _liveFloats[i].UnitId != unitId) continue;
-                mine.Add(_liveFloats[i]);
-                ys.Add(_liveFloats[i].Y);
+                _liveFloats[i].PushAges.Add(0f);
             }
-            int retire;
-            float offset = JuiceMath.NextNumberOffset(p, ys, out retire);
-            for (int i = 0; i < retire && i < mine.Count; i++) mine[i].Retiring = true;
 
             item.UnitId = unitId;
-            item.Y = offset;
+            item.Y = 0f;
+            item.PushAges.Clear();
             item.Retiring = false;
             _liveFloats.Add(item);
             bool twoLines = item.Label.text.IndexOf('\n') >= 0;
             item.Root.sizeDelta = new Vector2(320f, twoLines ? 96f : 60f);
 
-            // The offset comes out of the climb budget, not out of the ceiling, so a stacked
-            // number still stops under the top bar like the rest.
-            start.y += offset;
+            // A pushed number is held under the top bar like the rest.
             float ceiling = BattleHudLayout.BarBottom(SafeTopCanvas(canvasScale))
                             - BattleHudMetrics.FloatStopBelowBar - BattleHudMetrics.FloatHalfLine;
             float climb = Mathf.Clamp(ceiling - start.y, 24f, FloatRise);
@@ -2186,8 +2197,9 @@ namespace Emberfall.UI.Screens
                 }
                 else if (t >= duration) break;
                 float rise = climb * Mathf.Sqrt(k);
-                item.Y = offset + rise;
-                item.Root.anchoredPosition = start + new Vector2(0f, rise);
+                for (int a = 0; a < item.PushAges.Count; a++) item.PushAges[a] += Time.deltaTime * _speed;
+                item.Y = rise + JuiceMath.PushOffset(p, item.PushAges);
+                item.Root.anchoredPosition = new Vector2(start.x, Mathf.Min(start.y + item.Y, ceiling));
                 item.Group.alpha = alpha;
                 float s = baseScale * JuiceMath.PopScale(p, t * _speed);
                 item.Root.localScale = new Vector3(s, s, 1f);

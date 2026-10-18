@@ -55,6 +55,8 @@ namespace Emberfall.Core.Data
         public float PopSeconds = 0.15f;
         /// <summary>Canvas pixels one number needs above or below another on the same unit.</summary>
         public float NumberLineHeight = 36f;
+        /// <summary>Seconds a live number takes to move up one line when a newer one spawns under it.</summary>
+        public float NumberPushSeconds = 0.08f;
         /// <summary>Live numbers on one unit. 0 means unlimited (legacy).</summary>
         public int MaxNumbersPerTarget = 4;
         /// <summary>Live numbers overall. 0 means unlimited (legacy).</summary>
@@ -123,6 +125,7 @@ namespace Emberfall.Core.Data
                 p.PopScale = 1f;
                 p.PopSeconds = 0f;
                 p.NumberLineHeight = 0f;
+                p.NumberPushSeconds = 0f;
                 p.MaxNumbersPerTarget = 0;
                 p.MaxNumbers = 0;
                 p.DimTo = 1f;
@@ -185,6 +188,7 @@ namespace Emberfall.Core.Data
             p.PopScale = nu.GetFloat("pop", p.PopScale);
             p.PopSeconds = nu.GetFloat("popSeconds", p.PopSeconds);
             p.NumberLineHeight = nu.GetFloat("lineHeight", p.NumberLineHeight);
+            p.NumberPushSeconds = nu.GetFloat("pushSeconds", p.NumberPushSeconds);
             p.MaxNumbersPerTarget = nu.GetInt("maxPerTarget", p.MaxNumbersPerTarget);
             p.MaxNumbers = nu.GetInt("max", p.MaxNumbers);
 

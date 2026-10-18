@@ -154,18 +154,12 @@ namespace Emberfall.DevHarness
                   && Near(JuiceMath.FlashPeak(legacy, false), 0.75f) && Near(JuiceMath.FlashPeak(legacy, true), 1f)
                   && JuiceMath.KnockPx(legacy, true, true) == 0f && normalNone
                   && JuiceMath.PopScale(legacy, 0f) == 1f && JuiceMath.DimAlpha(legacy, 0.1f) == 1f
-                  && LegacyOffset(legacy) == 0f
+                  && JuiceMath.PushOffset(legacy, new float[] { 0.5f }) == 0f
                   && !JuiceMath.RetireOldestOnTarget(legacy, 99) && !JuiceMath.RetireOldestOverall(legacy, 999)
                   && JuiceMath.Admit(legacy, BudgetKind.Spark, 5000),
                   "J4 every JuiceMath decision, given Legacy, returns the answer the battle gave before the pass (no skill kind, no hold, 0.75 flash, no knock, no pop, no dim, no lanes, no cap)");
 
             CheckJuiceHookTripwire(root);
-        }
-
-        private static float LegacyOffset(JuiceProfile legacy)
-        {
-            int retire;
-            return JuiceMath.NextNumberOffset(legacy, new float[] { 0f, 10f }, out retire);
         }
 
         private static string ReadJuiceSource(string scripts, params string[] parts)
@@ -562,51 +556,76 @@ namespace Emberfall.DevHarness
         private sealed class JuiceNumber
         {
             public float Born;
-            public float Offset;
+            public readonly List<float> PushAges = new List<float>();
         }
 
+        /// <summary>
+        /// J12. Numbers on one unit stack upward, newest at the bottom: a spawn moves every live number
+        /// up one line (JuiceMath.PushStep, eased), and a number is only ever pushed up, so the order
+        /// never changes. Simulated frame by frame at 60 fps over 300 random spawns, with the real rise
+        /// (120 px, square root, 0.75 s) and the real cap of four per unit, and asserted at EVERY frame,
+        /// not just at spawn: no two live numbers cross, and once a newer number has finished its push
+        /// (0.08 s) it sits at least a full line under the one above it.
+        /// </summary>
         private static void CheckJuiceLanes(JuiceProfile p)
         {
             const float Life = 0.75f;
             const float Rise = 120f;
+            const float Dt = 1f / 60f;
             Random rng = new Random(12012);
             List<JuiceNumber> live = new List<JuiceNumber>();
             float now = 0f;
-            int spawned = 0, tooClose = 0, overCap = 0, retired = 0;
-            float maxOffset = 0f;
-            for (int n = 0; n < 300; n++)
+            float nextSpawn = 0f;
+            int spawned = 0, crossed = 0, tooClose = 0, overCap = 0, retired = 0, pairFrames = 0;
+            float minGap = float.MaxValue;
+            float maxY = 0f;
+            while (spawned < 300)
             {
-                now += (float)rng.NextDouble() * (n % 7 == 0 ? 0.01f : 0.35f);
+                now += Dt;
                 for (int i = live.Count - 1; i >= 0; i--) if (now - live[i].Born >= Life) live.RemoveAt(i);
-                if (JuiceMath.RetireOldestOnTarget(p, live.Count)) { live.RemoveAt(0); retired++; }
-                List<float> ys = new List<float>();
-                for (int i = 0; i < live.Count; i++) ys.Add(live[i].Offset + Rise * (float)Math.Sqrt((now - live[i].Born) / Life));
-                int retire;
-                float offset = JuiceMath.NextNumberOffset(p, ys, out retire);
-                if (retire > 0)
+                if (now >= nextSpawn)
                 {
-                    live.RemoveRange(0, retire);
-                    retired += retire;
-                    ys.RemoveRange(0, retire);
+                    if (JuiceMath.RetireOldestOnTarget(p, live.Count)) { live.RemoveAt(0); retired++; }
+                    for (int i = 0; i < live.Count; i++) live[i].PushAges.Add(0f);
+                    JuiceNumber n = new JuiceNumber();
+                    n.Born = now;
+                    live.Add(n);
+                    if (live.Count > p.MaxNumbersPerTarget) overCap++;
+                    spawned++;
+                    nextSpawn = now + (spawned % 7 == 0 ? 0.01f : (float)rng.NextDouble() * 0.35f);
                 }
-                for (int i = 0; i < ys.Count; i++) if (Math.Abs(offset - ys[i]) < p.NumberLineHeight - 0.001f) tooClose++;
-                JuiceNumber num = new JuiceNumber();
-                num.Born = now;
-                num.Offset = offset;
-                live.Add(num);
-                if (live.Count > p.MaxNumbersPerTarget) overCap++;
-                if (offset > maxOffset) maxOffset = offset;
-                spawned++;
+                for (int i = 0; i < live.Count; i++)
+                    for (int a = 0; a < live[i].PushAges.Count; a++) live[i].PushAges[a] += Dt;
+                for (int i = 0; i < live.Count; i++)
+                {
+                    float yi = Rise * (float)Math.Sqrt((now - live[i].Born) / Life) + JuiceMath.PushOffset(p, live[i].PushAges);
+                    maxY = Math.Max(maxY, yi);
+                    for (int j = i + 1; j < live.Count; j++)
+                    {
+                        float yj = Rise * (float)Math.Sqrt((now - live[j].Born) / Life) + JuiceMath.PushOffset(p, live[j].PushAges);
+                        float gap = yi - yj;                       // i is older, so it must stay above
+                        pairFrames++;
+                        if (gap < -0.001f) crossed++;
+                        if (now - live[j].Born >= p.NumberPushSeconds + Dt)
+                        {
+                            minGap = Math.Min(minGap, gap);
+                            if (gap < p.NumberLineHeight - 0.01f) tooClose++;
+                        }
+                    }
+                }
             }
-            Check(tooClose == 0 && overCap == 0,
-                  "J12 LANES: " + spawned + " random spawns on one unit, each starts a full line (" + Fmt(p.NumberLineHeight) + " px) clear of every live number, never more than "
+            Check(crossed == 0 && tooClose == 0 && overCap == 0,
+                  "J12 LANES: " + spawned + " random spawns on one unit, every frame of the rise (" + pairFrames + " pair frames at 60 fps): no two numbers cross, a pair is at least a full line ("
+                  + Fmt(p.NumberLineHeight) + " px) apart once the newer has finished its " + Fmt(p.NumberPushSeconds) + " s push (smallest gap " + Fmt(minGap) + " px), never more than "
                   + p.MaxNumbersPerTarget + " live (" + retired + " retired early)");
-            Check(maxOffset <= (p.MaxNumbersPerTarget - 1) * p.NumberLineHeight + 0.001f,
-                  "J12 a start offset never passes " + (p.MaxNumbersPerTarget - 1) + " lines (largest " + Fmt(maxOffset) + " px), so the climb ceiling keeps room");
-            int r0, r1, r2;
-            Check(JuiceMath.NextNumberOffset(p, new float[0], out r0) == 0f && Near(JuiceMath.NextNumberOffset(p, new float[] { 5f }, out r1), 5f + p.NumberLineHeight)
-                  && Near(JuiceMath.NextNumberOffset(p, new float[] { 90f }, out r2), 0f) && r0 == 0 && r1 == 0 && r2 == 0,
-                  "J12 an empty unit starts at 0, a number at the start pushes the next up one line, one far above does not");
+            Check(maxY <= Rise + (p.MaxNumbersPerTarget - 1) * p.NumberLineHeight + 0.01f,
+                  "J12 a stacked number climbs at most " + Fmt(Rise + (p.MaxNumbersPerTarget - 1) * p.NumberLineHeight) + " px (the rise plus " + (p.MaxNumbersPerTarget - 1)
+                  + " lines, largest " + Fmt(maxY) + "), and the screen holds every number under the top bar");
+            Check(Near(JuiceMath.PushOffset(p, new float[] { p.NumberPushSeconds }), p.NumberLineHeight)
+                  && Near(JuiceMath.PushOffset(p, new float[] { p.NumberPushSeconds / 2f }), p.NumberLineHeight / 2f)
+                  && Near(JuiceMath.PushOffset(p, new float[] { 5f, 5f }), 2f * p.NumberLineHeight)
+                  && JuiceMath.PushOffset(JuiceProfile.Legacy, new float[] { 5f }) == 0f,
+                  "J12 a push takes one line in " + Fmt(p.NumberPushSeconds) + " s and is nothing with the flag off");
         }
 
         // ------------------------------------------------------------------ J13 cap

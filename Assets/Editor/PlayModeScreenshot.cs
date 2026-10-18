@@ -72,6 +72,8 @@ namespace Emberfall.EditorTools
         /// then the one the clock was frozen on. The editor's update runs more often than the game's
         /// frames when the editor is not in front, so the settle is counted in game frames.</summary>
         private const string MomentFrameKey = "PlayModeScreenshot.MomentFrame";
+        /// <summary>Screen:BattleMoment only: how many game frames this moment settles for.</summary>
+        private const string MomentSettleKey = "PlayModeScreenshot.MomentSettle";
         /// <summary>Set once an onboarding target that waits on a screen (a battle's first round, a
         /// wave result's paint) has seen it ready, so the shot is timed from then.</summary>
         private const string OnboardReadyKey = "PlayModeScreenshot.OnboardReady";
@@ -2509,8 +2511,10 @@ namespace Emberfall.EditorTools
                 if (battle != null && battle.MomentArrived)
                 {
                     battle.SpeedForCapture = 1f;
+                    int settleFrames = battle.SettleFramesForCapture(MomentSettleFrames(kind));
+                    SessionState.SetInt(MomentSettleKey, settleFrames);
                     Debug.Log("PlayModeScreenshot: " + requested + " arrived at game frame " + (Time.frameCount - SessionState.GetInt(MomentFrameKey, 0))
-                              + " after arming, shooting in " + MomentSettleFrames(kind) + " game frames.");
+                              + " after arming, shooting in " + settleFrames + " game frames.");
                     SessionState.SetInt(MomentFrameKey, Time.frameCount);
                     SessionState.SetInt(MomentStageKey, 2);
                 }
@@ -2528,7 +2532,7 @@ namespace Emberfall.EditorTools
             int settleFrom = SessionState.GetInt(MomentFrameKey, gameFrame);
             if (stage == 2)
             {
-                if (gameFrame - settleFrom >= MomentSettleFrames(kind))
+                if (gameFrame - settleFrom >= SessionState.GetInt(MomentSettleKey, MomentSettleFrames(kind)))
                 {
                     Time.timeScale = 0f;
                     SessionState.SetInt(MomentFrameKey, gameFrame);
@@ -2539,6 +2543,9 @@ namespace Emberfall.EditorTools
             Canvas.ForceUpdateCanvases();
             if (gameFrame - settleFrom >= 3)
             {
+                Color backdrop = app.Router.Battle != null ? app.Router.Battle.BackdropColorForCapture : Color.white;
+                Debug.Log("BattleMoment: shot taken, backdrop _Color (" + backdrop.r.ToString("0.00") + ", " + backdrop.g.ToString("0.00") + ", " + backdrop.b.ToString("0.00")
+                          + ") (1.00 is undimmed, 0.70 is the full skill dim), Juice.On " + Juice.On + ".");
                 Shoot(name, frame, slot);
                 SessionState.SetInt(MomentStageKey, 0);
                 Juice.ForceForCapture(null);

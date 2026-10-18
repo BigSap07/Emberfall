@@ -69,6 +69,10 @@ namespace Emberfall.Battle
         /// TurnStart. A Damage from this source with no status is the cast's strike.</summary>
         private int _skillSourceId = -1;
 
+        /// <summary>R12: true once the current cast has had its skill moment (dim and ring), which
+        /// lands on the cast's first impact, so it is shown with the blow and not before it.</summary>
+        private bool _skillMomentDone;
+
         private ParticleSystem _chips;
         private ParticleSystem _streaks;
         private ParticleSystem _rings;
@@ -163,6 +167,7 @@ namespace Emberfall.Battle
             {
                 case BattleEventType.AbilityCast:
                     _skillSourceId = e.SourceId;
+                    _skillMomentDone = false;
                     break;
                 case BattleEventType.BasicAttack:
                 case BattleEventType.TurnStart:
@@ -277,6 +282,12 @@ namespace Emberfall.Battle
             // R12: the strike of a cast holds longer than a basic blow. HitStop keeps the larger
             // request, so this only ever lengthens the freeze above.
             bool skill = Juice.On && _skillSourceId >= 0 && e.SourceId == _skillSourceId;
+            // The skill moment lands with the cast's first impact: dim, ring, hit-stop and shake together.
+            if (Juice.On && skill && !_skillMomentDone && source != null)
+            {
+                _skillMomentDone = true;
+                SkillMoment(source);
+            }
             if (Juice.On)
             {
                 float juiceStop = JuiceMath.HitStopSeconds(Juice.Profile, crit, skill) / PlaybackSpeed();
@@ -435,8 +446,8 @@ namespace Emberfall.Battle
 
         /// <summary>
         /// R12: the beat a cast lands on. The painted backdrop dims, and a ring of the caster's
-        /// accent flashes behind them. Called by the host at the strike, the moment the skill's
-        /// impact sound plays, so dim, shake, hit-stop and audio arrive together.
+        /// accent flashes behind them. Called by PlayDamage on a cast's first impact, the moment the
+        /// skill's impact sound plays, so dim, shake, hit-stop and audio arrive together.
         /// </summary>
         public void SkillMoment(UnitActor caster)
         {

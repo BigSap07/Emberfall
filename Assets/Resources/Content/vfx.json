@@ -12,7 +12,7 @@
       "kill":  { "strength": 0.0,  "seconds": 0.0 }
     },
     "knockPx": { "normal": 10, "skill": 13, "crit": 16 },
-    "numbers": { "pop": 1.4, "popSeconds": 0.15, "lineHeight": 36, "maxPerTarget": 4, "max": 14 },
+    "numbers": { "pop": 1.4, "popSeconds": 0.15, "lineHeight": 36, "pushSeconds": 0.08, "maxPerTarget": 4, "max": 14 },
     "dim": { "to": 0.70, "in": 0.05, "hold": 0.15, "out": 0.10, "ringRadius": 2.2, "ringSeconds": 0.28 },
     "glow": { "radius": 1.1, "seconds": 0.18, "alpha": 0.8, "critScale": 1.3, "additive": true },
     "death": { "flashSeconds": 0.08, "seconds": 0.55, "fadeStart": 0.10, "sink": 0.30, "spriteSink": 0.25, "hpFillSeconds": 0.20 },

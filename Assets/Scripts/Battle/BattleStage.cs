@@ -302,6 +302,12 @@ namespace Emberfall.Battle
         /// sample, and units and effects are separate quads, so they stay bright. A second skill
         /// while one is running restarts the clock of the same coroutine; dims never stack.
         /// </summary>
+        /// <summary>The backdrop's tint right now; white when nothing dims it. Read by the capture log.</summary>
+        public Color BackdropColor
+        {
+            get { return _backdropRenderer != null ? _backdropRenderer.material.GetColor("_Color") : Color.white; }
+        }
+
         public void DimBackdrop(float speed)
         {
             if (!Juice.On) return;

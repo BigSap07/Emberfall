@@ -287,34 +287,23 @@ namespace Emberfall.Battle
             return p.DimInSeconds + p.DimHoldSeconds + p.DimOutSeconds;
         }
 
-        /// <summary>Where a new number on a unit starts, above its anchor: the smallest offset at
-        /// or above 0 that sits at least a line height from every number still live on that unit
-        /// (liveYs are their current heights above the anchor, OLDEST FIRST). The offset never
-        /// passes (MaxNumbersPerTarget - 1) lines: when stacking above the live numbers would,
-        /// the oldest are retired early instead (retire says how many) and the offset is worked
-        /// out again. 0 with the flag off.</summary>
-        public static float NextNumberOffset(JuiceProfile p, IList<float> liveYs, out int retire)
+        /// <summary>
+        /// How far a number has been pushed up by newer numbers spawning under it on its unit: each newer
+        /// number moves it up one line, eased linearly over NumberPushSeconds, so pushAges holds how long
+        /// ago each of those spawns was (seconds). The sum is exact per spawn, which is what keeps two
+        /// numbers a full line apart once the newer one's own push has finished: the older has always been
+        /// pushed by every spawn the newer was, plus the newer's own. 0 with the flag off.
+        /// </summary>
+        public static float PushOffset(JuiceProfile p, IList<float> pushAges)
         {
-            retire = 0;
-            if (!p.On || p.NumberLineHeight <= 0f || liveYs == null || liveYs.Count == 0) return 0f;
-            float cap = Math.Max(0, p.MaxNumbersPerTarget - 1) * p.NumberLineHeight;
-            for (int skip = 0; skip <= liveYs.Count; skip++)
+            if (!p.On || p.NumberLineHeight <= 0f || pushAges == null) return 0f;
+            float total = 0f;
+            for (int i = 0; i < pushAges.Count; i++)
             {
-                List<float> kept = new List<float>();
-                for (int i = skip; i < liveYs.Count; i++) kept.Add(liveYs[i]);
-                kept.Sort();
-                float candidate = 0f;
-                for (int i = 0; i < kept.Count; i++)
-                {
-                    if (Math.Abs(candidate - kept[i]) < p.NumberLineHeight) candidate = kept[i] + p.NumberLineHeight;
-                }
-                if (candidate <= cap || skip == liveYs.Count)
-                {
-                    retire = skip;
-                    return Math.Min(candidate, cap);
-                }
+                float k = p.NumberPushSeconds <= 0f ? 1f : pushAges[i] / p.NumberPushSeconds;
+                total += p.NumberLineHeight * (k < 0f ? 0f : (k > 1f ? 1f : k));
             }
-            return 0f;
+            return total;
         }
 
         /// <summary>True when a new number must retire the oldest one on its unit first.</summary>
