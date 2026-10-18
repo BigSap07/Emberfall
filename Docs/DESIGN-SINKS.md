@@ -174,7 +174,8 @@ included, for a shop change. `CheckSinksNotHashed` proves a price retune moves p
   `recital.Archive`, so `CheckFeatureUnlockGating` knows every door.
 - Unlocks follow the Proving and the Recital. `SinkShop` asks `FeatureEntryPoints`, the one table that
   decides an unlock, and an armor item also needs the armor bag open.
-- Capture targets in `PlayModeScreenshot`, each forcing the switch on and restoring it:
+- Capture targets in `PlayModeScreenshot`, each forcing the switch and restoring it (on, except the two
+  rollback shots `Screen:ProvingSinksOff` and `Screen:RecitalSinksOff`, which force it off and check no door shows):
   `Screen:Armory`, `ArmoryBought`, `ArmorySoldOut`, `ArmoryPicker`, `Screen:Archive`, `ArchiveBought`,
   `ArchiveSoldOut`, `ArchivePicker`, `Screen:ProvingSinksOn` and `Screen:RecitalSinksOn`. They seed the
   scratch identity only and every purchase goes through `SinkShop.Buy`.
