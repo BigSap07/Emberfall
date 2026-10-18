@@ -177,10 +177,12 @@ namespace Emberfall.UI
                 "Spent entering the Deep Recital. Regenerates over time.");
 
             Row("CODA", HudTopBar.Format(profile.Coda), UITheme.Coda, TextureLab.GemIcon(64),
-                "Paid by the Deep Recital. Nothing to spend it on yet.");
+                SinksSwitch.Enabled ? "Paid by the Deep Recital. Spent in the Archive."
+                                : "Paid by the Deep Recital. Nothing to spend it on yet.");
 
             Row("VALOR", HudTopBar.Format(profile.Valor), UITheme.Gold, TextureLab.Sigil(0, 64),
-                "Paid by the Proving. Nothing to spend it on yet.");
+                SinksSwitch.Enabled ? "Paid by the Proving. Spent in the Armory."
+                                : "Paid by the Proving. Nothing to spend it on yet.");
 
             Row("WAYMARKS", HudTopBar.Format(profile.Waymarks), UITheme.Waymark, TextureLab.Circle(64),
                 "Paid by the guild dungeon. Spent on the Guild Path.");

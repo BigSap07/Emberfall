@@ -37,7 +37,9 @@ namespace Emberfall.UI
         GuildTech,
         Fusion,
         WaveResult,
-        Orders
+        Orders,
+        Armory,
+        Archive
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -143,6 +145,12 @@ namespace Emberfall.UI
         /// switch off has no such screen, and Show(ScreenId.Orders) is a no-op.</summary>
         public Screens.OrdersScreen Orders;
 
+        /// <summary>The Armory (Valor) and the Archive (Coda), DESIGN-SINKS.md. Null unless
+        /// SinksSwitch is on, so a build with the switch off has no such screens, and
+        /// Show(ScreenId.Armory) or Show(ScreenId.Archive) is a no-op.</summary>
+        public Screens.ArmoryScreen Armory;
+        public Screens.ArchiveScreen Archive;
+
         public UIScreen Current { get; private set; }
 
         public void Build(GameApp app, RectTransform screenLayer, RectTransform overlayLayer)
@@ -211,6 +219,14 @@ namespace Emberfall.UI
             // The daily orders, orders.json's chests and the login calendar (DESIGN-DAILY-LOOP.md).
             // Built only with the switch on: off, this build has no such screen at all.
             if (Emberfall.Core.Session.DailyLoopSwitch.Enabled) Orders = Create<Screens.OrdersScreen>();
+
+            // The two sink shops (DESIGN-SINKS.md). Built only with the switch on: off, this build
+            // has no such screens at all and nothing leads to them.
+            if (Emberfall.Core.Session.SinksSwitch.Enabled)
+            {
+                Armory = Create<Screens.ArmoryScreen>();
+                Archive = Create<Screens.ArchiveScreen>();
+            }
         }
 
         /// <summary>

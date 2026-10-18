@@ -170,7 +170,11 @@ namespace Emberfall.Core.Progression
             new FeatureEntryPoint("herodetail.ArmorSlot", Feature.Armor, "HeroDetailScreen armor card"),
             new FeatureEntryPoint("talents.LockedCard", Feature.Fusion, "TalentsScreen locked card"),
             new FeatureEntryPoint("inventory.tab.RELIC", Feature.Relics, "InventoryScreen rail"),
-            new FeatureEntryPoint("formation.GuildTech", Feature.Guilds, "FormationScreen")
+            new FeatureEntryPoint("formation.GuildTech", Feature.Guilds, "FormationScreen"),
+
+            // The sink shops' doors (DESIGN-SINKS.md): the Armory off the Proving, the Archive off the Recital.
+            new FeatureEntryPoint("proving.Armory", Feature.Proving, "ProvingScreen"),
+            new FeatureEntryPoint("recital.Archive", Feature.Recital, "RecitalScreen")
         };
 
         /// <summary>The router's screens that belong to no gated feature: the Hub, the shared
