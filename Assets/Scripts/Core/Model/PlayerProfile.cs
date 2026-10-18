@@ -455,6 +455,14 @@ namespace Emberfall.Core.Model
         /// </summary>
         public DailyLoopState DailyLoop = new DailyLoopState();
 
+        /// <summary>
+        /// What the Armory and the Archive remember: how much of each capped item has been bought
+        /// today and this month (DESIGN-SINKS.md). NEVER NULL. Empty for every profile that never
+        /// bought anything, and an empty one is not written to the save. Saved from version 23, and
+        /// only a save that carries one says 23 (SaveSerializer.VersionOf).
+        /// </summary>
+        public SinksState Sinks = new SinksState();
+
         /// <summary>Whether this tip or opening is recorded. Null-safe so a caller with no profile
         /// reads "not seen".</summary>
         public static bool HasSeen(PlayerProfile profile, string key)

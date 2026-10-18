@@ -3530,10 +3530,10 @@ namespace Emberfall.DevHarness
             // 18 is the level clamp's, 19 the milestone claims', 20 the cleared-stage ids' (with
             // the Echo and Brand bank clamp), 21 the onboarding step and seen tips' and 22 the daily
             // loop's - see SaveSerializer.CurrentVersion, not the gate's.
-            Check(SaveSerializer.CurrentVersion == 22,
+            Check(SaveSerializer.BaseVersion == 22,
                   "the ascension gate moved no save version - it is derived from Ascension, which is already "
                   + "stored, and a persisted 'unlocked' could only ever disagree with the tier (version "
-                  + SaveSerializer.CurrentVersion + ", which the level clamp, the milestone claims, the cleared-stage ids, onboarding and the daily loop moved from 17)");
+                  + SaveSerializer.BaseVersion + ", which the level clamp, the milestone claims, the cleared-stage ids, onboarding and the daily loop moved from 17)");
             hero.Ascension = 0;
             string json = SaveSerializer.Serialize(profile);
             string error;
@@ -3654,7 +3654,7 @@ namespace Emberfall.DevHarness
             // this check silently stopped exercising the talent migration the moment a later bump
             // landed, and started exercising whatever the previous bump was instead.
             const int TalentPredecessorVersion = 12;
-            string previous = cleanJson.Replace("\"version\": " + SaveSerializer.CurrentVersion,
+            string previous = cleanJson.Replace("\"version\": " + SaveSerializer.BaseVersion,
                                                 "\"version\": " + TalentPredecessorVersion);
             string previousError;
             PlayerProfile upgraded = SaveSerializer.Deserialize(previous, db, out previousError);
@@ -3665,7 +3665,7 @@ namespace Emberfall.DevHarness
             int previousVersion = SaveSerializer.CurrentVersion - 1;
             string oneBelowError;
             PlayerProfile oneBelow = SaveSerializer.Deserialize(
-                cleanJson.Replace("\"version\": " + SaveSerializer.CurrentVersion,
+                cleanJson.Replace("\"version\": " + SaveSerializer.BaseVersion,
                                   "\"version\": " + previousVersion), db, out oneBelowError);
             Check(oneBelow != null && oneBelowError == null,
                   "and so does a save one below CURRENT (version " + previousVersion + "), so the ordinary upgrade "
@@ -3699,7 +3699,7 @@ namespace Emberfall.DevHarness
             int nextVersion = SaveSerializer.CurrentVersion + 1;
             string nextError;
             PlayerProfile next = SaveSerializer.Deserialize(cleanJson.Replace(
-                "\"version\": " + SaveSerializer.CurrentVersion,
+                "\"version\": " + SaveSerializer.BaseVersion,
                 "\"version\": " + nextVersion), db, out nextError);
             Check(next == null && nextError != null
                   && nextError.IndexOf("newer build", StringComparison.Ordinal) >= 0,
@@ -3761,7 +3761,7 @@ namespace Emberfall.DevHarness
             // ---- the upgrade, against a document stamped 13: the last format in which a loadout
             // could not carry a talent at all. Zero is not a default chosen here, it is what those
             // opponents actually fought with, because LoadoutUnit had no field for anything else.
-            string thirteen = withTalent.Replace("\"version\": " + SaveSerializer.CurrentVersion, "\"version\": 13");
+            string thirteen = withTalent.Replace("\"version\": " + SaveSerializer.BaseVersion, "\"version\": 13");
             // Strip the key the way a version 13 writer would have: it did not know it existed.
             thirteen = thirteen.Replace("\"selectedTalent\": 2,", "").Replace(", \"selectedTalent\": 2", "");
             string upgradeError;
@@ -8199,8 +8199,8 @@ namespace Emberfall.DevHarness
             string json = SaveSerializer.Serialize(fresh);
             JsonValue parsed;
             string parseError;
-            Check(JsonValue.TryParse(json, out parsed, out parseError) && parsed.GetInt("version", 0) == SaveSerializer.CurrentVersion,
-                  "a fresh save is stamped version " + SaveSerializer.CurrentVersion);
+            Check(JsonValue.TryParse(json, out parsed, out parseError) && parsed.GetInt("version", 0) == SaveSerializer.BaseVersion,
+                  "a fresh save is stamped version " + SaveSerializer.BaseVersion);
 
             // save, upgrade: a version 1 save with a 3-entry team fills slots 1-3 and leaves 4-5 empty
             // The three defIds are the CURRENT starters, not the ones this fixture shipped with -
@@ -11060,7 +11060,7 @@ namespace Emberfall.DevHarness
             // ---- the downgrade guard, same shape as every version bump before this one, and the
             // same "current + 1" pattern CheckRelicSaveMigration uses so neither goes stale at the
             // next bump.
-            string currentTag = "\"version\": " + SaveSerializer.CurrentVersion;
+            string currentTag = "\"version\": " + SaveSerializer.BaseVersion;
             string futureTag = "\"version\": " + (SaveSerializer.CurrentVersion + 1);
             string future = SaveSerializer.Serialize(profile).Replace(currentTag, futureTag);
             string futureError;
@@ -13438,7 +13438,7 @@ namespace Emberfall.DevHarness
                   + " inheriting a phantom position");
 
             // Downgrade guard, the same shape every prior bump checks.
-            string future = json.Replace("\"version\": " + SaveSerializer.CurrentVersion,
+            string future = json.Replace("\"version\": " + SaveSerializer.BaseVersion,
                                          "\"version\": " + (SaveSerializer.CurrentVersion + 1));
             string futureError;
             PlayerProfile refused = SaveSerializer.Deserialize(future, db, out futureError);
@@ -13837,7 +13837,7 @@ namespace Emberfall.DevHarness
                   + (upgraded != null ? upgraded.Coda.ToString() : "-") + ")");
 
             // A newer save is refused with the same message every earlier bump uses
-            string currentTag = "\"version\": " + SaveSerializer.CurrentVersion;
+            string currentTag = "\"version\": " + SaveSerializer.BaseVersion;
             string futureTag = "\"version\": " + (SaveSerializer.CurrentVersion + 1);
             string future = SaveSerializer.Serialize(fresh).Replace(currentTag, futureTag);
             string futureError;
@@ -13994,7 +13994,7 @@ namespace Emberfall.DevHarness
                   + (upgraded == null ? "-" : upgraded.RecitalEchoesBanked.ToString()) + ")");
 
             // ---- the downgrade guard, same "current + 1" pattern the relic and event bumps use
-            string currentTag = "\"version\": " + SaveSerializer.CurrentVersion;
+            string currentTag = "\"version\": " + SaveSerializer.BaseVersion;
             string futureTag = "\"version\": " + (SaveSerializer.CurrentVersion + 1);
             string future = SaveSerializer.Serialize(profile).Replace(currentTag, futureTag);
             string futureError;
@@ -14192,7 +14192,7 @@ namespace Emberfall.DevHarness
             // Built off CurrentVersion rather than a literal: this asserts the guard, not the
             // number, and a pinned number turns every future save bump into a false failure here.
             int newer = SaveSerializer.CurrentVersion + 1;
-            string future = json.Replace("\"version\": " + SaveSerializer.CurrentVersion, "\"version\": " + newer);
+            string future = json.Replace("\"version\": " + SaveSerializer.BaseVersion, "\"version\": " + newer);
             string error3;
             PlayerProfile fromFuture = SaveSerializer.Deserialize(future, db, out error3);
             Check(fromFuture == null && error3 != null,
@@ -14706,7 +14706,7 @@ namespace Emberfall.DevHarness
             // CURRENT version number by one rather than hardcoding "6", so this keeps testing
             // "one newer than what this build reads" instead of going stale (silently untested)
             // the next time CurrentVersion itself moves, exactly as it just did for events.
-            string currentTag = "\"version\": " + SaveSerializer.CurrentVersion;
+            string currentTag = "\"version\": " + SaveSerializer.BaseVersion;
             string futureTag = "\"version\": " + (SaveSerializer.CurrentVersion + 1);
             string future = SaveSerializer.Serialize(source).Replace(currentTag, futureTag);
             string futureError;
@@ -18647,7 +18647,7 @@ namespace Emberfall.DevHarness
                   "an ascended profile round-trips byte for byte");
 
             string v15 = System.Text.RegularExpressions.Regex.Replace(json, @"""ascension""(\s*):", @"""ascensionIgnored""$1:");
-            v15 = System.Text.RegularExpressions.Regex.Replace(v15, @"""version""(\s*):(\s*)" + SaveSerializer.CurrentVersion, @"""version""$1:${2}15");
+            v15 = System.Text.RegularExpressions.Regex.Replace(v15, @"""version""(\s*):(\s*)" + SaveSerializer.BaseVersion, @"""version""$1:${2}15");
             PlayerProfile upgraded = SaveSerializer.Deserialize(v15, db, out err);
             HeroInstance up15 = upgraded != null ? upgraded.FindHeroByDefId(five.Id) : null;
             // Version 16 kept the level here and version 18 does not: a hero with no ascension key
@@ -18681,7 +18681,7 @@ namespace Emberfall.DevHarness
             string json = SaveSerializer.Serialize(s.Profile);
             // Written as version 17 wrote it: the same keys, the old number.
             string v17 = System.Text.RegularExpressions.Regex.Replace(json,
-                @"""version""(\s*):(\s*)" + SaveSerializer.CurrentVersion, @"""version""$1:${2}17");
+                @"""version""(\s*):(\s*)" + SaveSerializer.BaseVersion, @"""version""$1:${2}17");
             string err;
             PlayerProfile back = SaveSerializer.Deserialize(v17, db, out err);
             HeroInstance f = back != null ? back.FindHeroByDefId(five.Id) : null;

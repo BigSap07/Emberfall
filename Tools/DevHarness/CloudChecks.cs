@@ -125,7 +125,7 @@ namespace Emberfall.DevHarness
         private static void CheckVersionField(ContentDatabase content)
         {
             string whole = SaveSerializer.Serialize(Rich(content));
-            string current = "\"version\": " + SaveSerializer.CurrentVersion;
+            string current = "\"version\": " + SaveSerializer.BaseVersion;
             Check(whole.Contains(current), "the serialised save carries its version as a plain integer");
 
             Check(Refused(content, whole.Replace(current, "\"version\": " + (SaveSerializer.CurrentVersion + 1))),
