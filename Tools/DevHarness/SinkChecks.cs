@@ -902,6 +902,11 @@ namespace Emberfall.DevHarness
                   && shots.Contains("else if (force == 2) SinksSwitch.Enabled = false;"),
                   "and the seed buys through SinkShop.Buy on the scratch identity only, and the two rollback targets force the switch OFF");
 
+            string telemetryPath = Path.Combine(root, "Assets", "Scripts", "Game", "Telemetry", "TelemetryService.cs");
+            string telemetry = File.Exists(telemetryPath) ? File.ReadAllText(telemetryPath) : "";
+            Check(telemetry.Contains("SessionStartPayload(Application.platform.ToString(), SaveSerializer.BaseVersion)"),
+                  "WIRING (reads source): session_start reports BaseVersion (22), exactly what main sent, with the switch off or on");
+
             // The cloud push claims the document's own version, so a save with no sinks block says 22.
             string cloudPath = Path.Combine(root, "Assets", "Scripts", "Game", "Cloud", "CloudSaveService.cs");
             string cloud = File.Exists(cloudPath) ? File.ReadAllText(cloudPath) : "";
