@@ -2445,6 +2445,7 @@ namespace Emberfall.EditorTools
         /// </summary>
         private static void PumpStore(GameApp app, string name, int frame, int showAt)
         {
+            if (!EditorScratchIdentity.IsScratch) return;   // never buy on a real profile: SeedStore refuses one, and so does this pump
             StoreScreen store = app.Router.Store;
             if (store == null) return;
             if (frame == showAt + 15)
