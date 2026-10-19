@@ -1153,8 +1153,8 @@ Unmade. Before that every Umbra floor fielded it, twice on floors 5 and 11, and
 floor's Aspect **that some campaign stage fields** (`GuildDungeonGenerator.TemplatePool`, the guild's
 rule), bosses included, so the retired shipped 12 are out of it; `Docs/CAMPAIGN-SPEC.md` 9.6 and 10.7
 measure what each change did to the floors. Coda is the Recital's own currency and accrues on every clear.
-Two shops now spend the two purses, behind `SinksSwitch` (define `EMBERFALL_SINKS_ON`, default off, and
-flag off is the build before them): the Armory sells for Valor and the Archive for Coda, from
+Two shops now spend the two purses, behind `SinksSwitch` (on by default since R19; define `EMBERFALL_SINKS_OFF`
+and the flag off is the build before them): the Armory sells for Valor and the Archive for Coda, from
 `sinks.json`, which is not in `ContentVersion`. Prices are days of income, `SinkPricing` is the one place
 days become currency, and `SinkShop.Buy` is the only door that sells. Nothing in them is random and only
 earned currency pays. `Docs/DESIGN-SINKS.md` has the items, caps and the Echo note.
@@ -1191,24 +1191,70 @@ hourglasses, Slag, Dust in sweeps of the frontier stage, a 4-star of the player'
 a Monday epoch, so every player is in the same one; its stamp only moves forward, a wound-back clock reopens
 nothing and unclaimed tiers lapse (`CheckPassRollover`). The paid track is in the data and a locked row on
 `WayfarersRoadScreen`, drawn only with `PassPaidSwitch` (define `EMBERFALL_PASS_PAID`, off); `ClaimPaid`
-refuses every call unless the Store (R19, `StoreSwitch`) is on and the player bought this season's premium
-(`WayfarersRoadState.PaidSeason`), and then pays the paid tier through `PurchaseGrants.Apply`, so a paid reward is
-Sealed (`CheckStorePass`). `WayfarersRoadSwitch` is on
+refuses every call unless the Store (**The Store (R19)**, below) is on and the player bought this season's premium
+through it (`WayfarersRoadState.PaidSeason`); the paid track is then claimable on the Store's PASS tab and pays through
+`PurchaseGrants.Apply`, so every paid reward is Sealed, a 5-star copy at tier 30 included (`CheckStorePass`). `WayfarersRoadSwitch` is on
 by default (`EMBERFALL_WAYFARERS_ROAD_OFF` rolls it back), **but the pass is inert until the build defines
 `EMBERFALL_DAILY_LOOP_ON`**, because the loop that feeds it is off by default; its door is a button in the
 header of `OrdersScreen`, which exists only with the loop. That default is the lead's call of 2026-10-19.
 
-**The purchase path (R19, `Docs/DESIGN-STORE.md`).** Behind `StoreSwitch` (define `EMBERFALL_STORE_ON`, off) and
-with no real money in this run. All of it is Core and proven by the harness without Unity: `PurchaseGrants.Apply`
-turns a fixed `PurchaseGrant` (a closed list of `GrantKind` lines, none random, no Shards) into Sealed goods, all or
-nothing; `PurchaseLedger` grants once per receipt id, writes nothing in `Begin`, and restores a non-consumable on a
-new profile; `PurchaseFlow` wires a store backend to the ledger and abandons a purchase the store never completes
-after 120 seconds; `SimulatedStore` is the debug store. `StoreModes.Resolve` picks what a build does: the editor and
-a development build are the test store, a release build is coming soon with no buy path. The Unity IAP adapter
-(`UnityIapBackend`, `Assets/Scripts/Game/Store`) is a thin layer behind `EMBERFALL_UNITY_IAP` (set by
-`Assets/csc.rsp`) and Unity IAP's fake store in the editor; `PurchaseService` builds the flow. `CheckStore` is the
-proof: grants, ledger, restore, every random mechanic refusing a profile that holds only purchased goods, the
-paid track, the save, the build modes, the flow and a rollback.
+### The Store (R19)
+
+`Docs/DESIGN-STORE.md` is the decision record; `Docs/DESIGN-SEALED.md` is the rule it obeys. No real money moves in
+this build and no real product id, store key or receipt is in the tree.
+
+**What a player sees.** A gold STORE button on the Hub rail opens `StoreScreen` with three tabs. PASS shows Wayfarer's
+Road, the free and the paid track one above the other, with the premium unlock. PACKS lists the offers, the chosen
+one with its full contents, price tier, limit and when it comes back, a hero picker for a pick, the Ember Ledger's
+days left and CLAIM TODAY, the Growth Fund's milestones with a claim on each, and RESTORE PURCHASES. SHOPS links
+the Proving Armory, the Recital Archive, the Quartermaster and the Relic Shop. A banner says TEST STORE in the editor
+and a development build, and a release build says COMING SOON and draws no buy button. The screen decides and grants
+nothing; `CheckOfferWiring` proves it names no grant, no record and no random call.
+
+**The flags.** `StoreSwitch` is on by default and `EMBERFALL_STORE_OFF` rolls it back to the build before R19 (no
+door, every call refuses `Off`, the save is the document the build before wrote; `CheckStoreOff`, `CheckOfferOff`).
+`SinksSwitch` is now on by default too, so the Armory and the Archive exist for the Shops tab, and
+`EMBERFALL_SINKS_OFF` rolls it back. `HeroContractSwitch` is off (define `EMBERFALL_HERO_CONTRACT`): the Hero Contract
+is not listed and cannot be bought until the owner re-measures the curve with paid copies.
+
+**The seven offers** are in `store.json` (`StoreConfig`, not in `ContentVersion`; every product id and price tier is a
+placeholder): the Starter Pact (once, one of three named 5-stars and 6 hours of idle Gold), the Weekly Pack (resets
+weekly), the Monthly Pack (resets monthly), the Ember Ledger (a 30 day card, hours each reward day claimed and 10 percent
+more idle Gold), the Growth Fund (once, fixed rewards at 2-12 to 6-12), the Wayfarer's Road premium (per season) and the
+Hero Contract (off). Hours are `GameSession.IdleYield` at the buyer's own frontier, Gold only, and Dust is counted in
+sweeps of the frontier stage, so nothing needs retuning when the frontier moves. `StoreOffers` holds the limits, resets
+and claims; its clock only moves forward, so a wound-back clock reopens nothing (`CheckOfferClockWoundBack`). The value
+of each offer in days of frontier income per chapter is in the R19 handoff's `offer-values.md`.
+
+**THE RULE.** Everything a purchase grants is Sealed, and no purchase path reaches a random mechanic.
+`PurchaseGrants.Apply` is the one place a purchase becomes goods: a fixed `PurchaseGrant` made of a closed list of
+`GrantKind` lines (none random, no Shards, Dust unmarked) is checked first and written in one block, through
+`SealedGrants`, which no other game file calls. That covers the purchase, a Ledger day, a Growth Fund milestone, the
+Ledger's share of an idle claim and a paid pass tier. `CheckStoreNoRandomPath` reads the purchase-path files for any
+random, summon, roll, forge or conversion word, and `CheckStoreRandomMechanicsRefuse` shows a profile holding only
+purchased goods is refused by the summon, the Quartermaster, the forge and the conversion while a level-up still takes
+the Gold.
+
+**The purchase path.** Core and proven without Unity (`CheckStore`): `PurchaseLedger` (`Begin` writes nothing and the
+pick is held in memory; `Complete` grants once per receipt id; `Restore`), `PurchaseFlow` (wires a store to the ledger
+and abandons a purchase the store has not answered in 120 seconds, which grants nothing), `SimulatedStore` (the debug
+store), `StoreBackend` and `StoreModes.Resolve`. Game: `PurchaseService` builds the flow, and `UnityIapBackend` is the
+thin Unity IAP 5.4.4 adapter behind `EMBERFALL_UNITY_IAP` (set by `Assets/csc.rsp`). The editor uses Unity IAP's fake
+store (the debug store for scripted captures), a development build uses the debug store, and a release build is
+coming soon with no backend built; the live store needs `EMBERFALL_STORE_LIVE`, which nothing sets. Only the Starter
+Pact and the Growth Fund restore, once, and a profile that already holds a receipt for the offer owes nothing under any
+transaction id. A paid purchase delivered with no pick waits in `PurchaseFlow.PurchaseWaiting` and the Store screen
+asks for the hero (`FinishPurchase`, `FinishRestore`).
+
+**The pass depends on the daily loop.** The premium is sold only while the daily orders run, because the pass earns its
+points from them; with `DailyLoopSwitch` off the offer says so and cannot be bought, and the paid track stays locked.
+
+**The save is version 25** (`SaveSerializer.HoldsVersion25Data`, described with version 24 above). `save_limits_25.sql`
+in the R19 handoff is not applied: **the owner raises the server's `save_limits` row to 25 before a cloud player holds a
+receipt or a bought paid track.**
+
+**The curve.** The spender's reference walk and fusing walk against the non-spender, per chapter, are measured by
+`--store-curve` (`StoreCurve.cs`). Result: to be filled in from the R19 report when the curve check is final.
 
 ### The first session, and the unlock table
 

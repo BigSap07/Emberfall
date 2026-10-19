@@ -35,7 +35,7 @@ namespace Emberfall.DevHarness
             Line("");
             Line("STORE (R19: a purchase grants fixed Sealed goods once per receipt, writes nothing until the store completes it, and reaches no random mechanic)");
             bool shipped = StoreSwitch.Enabled, contractShipped = HeroContractSwitch.Enabled;
-            Check(!shipped && !contractShipped, "SHIPPED OFF: StoreSwitch and HeroContractSwitch are off unless the build defines EMBERFALL_STORE_ON / EMBERFALL_HERO_CONTRACT");
+            Check(shipped && !contractShipped, "SHIPPED: StoreSwitch is ON unless the build defines EMBERFALL_STORE_OFF, and HeroContractSwitch is OFF unless it defines EMBERFALL_HERO_CONTRACT");
             try
             {
                 StoreSwitch.Enabled = true;
@@ -48,6 +48,9 @@ namespace Emberfall.DevHarness
                 CheckStoreSave(db);
                 CheckStoreModes();
                 CheckStoreFlow(db);
+                CheckStorePickAfterDelivery(db);
+                CheckStoreShippedRestorable(db);
+                CheckStoreRealRules(db);
                 CheckStoreOff(db);
             }
             finally
@@ -88,7 +91,7 @@ namespace Emberfall.DevHarness
                 return null;
             }
 
-            public bool CanBuy(GameSession s, string offerId, long nowUnix, out string reason)
+            public bool CanBuy(GameSession s, string offerId, string choiceHeroId, long nowUnix, out string reason)
             {
                 OfferRecord r = s.Profile.Store.Find(offerId);
                 if (r != null && r.Count >= Limit) { reason = "Limit reached."; return false; }
@@ -96,7 +99,7 @@ namespace Emberfall.DevHarness
                 return true;
             }
 
-            public void RecordPurchase(GameSession s, string offerId, long nowUnix)
+            public void RecordPurchase(GameSession s, string offerId, string choiceHeroId, long nowUnix)
             {
                 s.Profile.Store.Record(offerId).Count++;
                 Recorded++;
@@ -382,6 +385,12 @@ namespace Emberfall.DevHarness
             Check(!same.Success && same.Reason == PurchaseRefusal.AlreadyGranted && StoreSnapshot(oldProfile) == oldBefore,
                   "and restoring on the profile that bought it changes nothing");
 
+            // The same product under a NEW transaction id on the profile that already holds it: nothing is owed.
+            string oldBefore2 = StoreSnapshot(oldProfile);
+            PurchaseResult newId = ledger.Restore(oldProfile, productId, "receipt-A-reissued", five[0].Id, now);
+            Check(!newId.Success && newId.Reason == PurchaseRefusal.AlreadyGranted && StoreSnapshot(oldProfile) == oldBefore2,
+                  "a restore under a NEW receipt id on the profile that already holds the offer grants no second copy");
+
             // A pack that resets is not restorable.
             GameSession other = StoreSession(db);
             string before = StoreSnapshot(other);
@@ -628,6 +637,15 @@ namespace Emberfall.DevHarness
             rules.Limit = int.MaxValue;
             rules.Add("tiny", false, StoreGrantOf(new GrantItem(GrantKind.Dust, 1)));
             for (int i = 0; i < StoreState.ReceiptsMax + 3; i++) { ledger.Begin(cap, "tiny", null, now); ledger.Complete(cap, "tiny", "cap-" + i, now); }
+            // A restorable offer's receipt is kept longest: it is what stops a restore granting it twice.
+            GameSession keep = StoreSession(db);
+            ledger.Begin(keep, "starter", five[0].Id, now);
+            ledger.Complete(keep, "starter", "keep-starter", now);
+            for (int i = 0; i < StoreState.ReceiptsMax + 3; i++) { ledger.Begin(keep, "tiny", null, now); ledger.Complete(keep, "tiny", "keep-" + i, now); }
+            PurchaseResult reissued = ledger.Restore(keep, rules.Find("starter").ProductId, "keep-starter-reissued", five[0].Id, now);
+            Check(keep.Profile.Store.Receipts.Count == StoreState.ReceiptsMax && keep.Profile.Store.FindReceipt("keep-starter") != null
+                  && !reissued.Success && reissued.Reason == PurchaseRefusal.AlreadyGranted,
+                  "when the list is full the oldest receipt of a NON-restorable offer goes first: the Starter Pact's receipt survives " + (StoreState.ReceiptsMax + 3) + " later purchases and a restore still owes nothing");
             Check(cap.Profile.Store.Receipts.Count == StoreState.ReceiptsMax && cap.Profile.Store.FindReceipt("cap-0") == null && cap.Profile.Store.FindReceipt("cap-" + (StoreState.ReceiptsMax + 2)) != null,
                   "the receipt list never grows past " + StoreState.ReceiptsMax + ": the oldest are dropped");
         }
@@ -791,6 +809,190 @@ namespace Emberfall.DevHarness
             public void OnRestoreFinished(bool success, string detail) { }
         }
 
+        // ------------------------------------------------------------------ 8c. review 1: the shipped file, the real rules, a pick-less delivery
+
+        private static void CheckStoreShippedRestorable(ContentDatabase db)
+        {
+            List<string> restorable = new List<string>();
+            for (int i = 0; i < db.Store.Offers.Count; i++)
+                if (db.Store.Offers[i].Restorable && db.Store.Offers[i].Built.Restorable) restorable.Add(db.Store.Offers[i].Id);
+            restorable.Sort();
+            Check(string.Join(",", restorable.ToArray()) == "growth_fund,starter_pact",
+                  "THE SHIPPED STORE.JSON RESTORES EXACTLY THE TWO ONE-TIME PURCHASES (" + string.Join(", ", restorable.ToArray()) + "): a pack, a card, a pass and a contract are used up");
+        }
+
+        /// <summary>A delivery with no pick, then the player picks: granted once, the store told it is finished.</summary>
+        private static void CheckStorePickAfterDelivery(ContentDatabase db)
+        {
+            long now = StoreNow(db);
+            List<HeroDef> five = StoreFiveStars(db);
+            string[] account = { null };
+            StoreTestRules rules = StoreRulesFor(db);
+
+            // The store finished a Starter Pact purchase and the app was closed before the player's pick was used.
+            SimulatedStore bare = new SimulatedStore();
+            bare.LoadAccount = () => account[0];
+            bare.SaveAccount = t => account[0] = t;
+            bare.Initialize(new List<StoreOffer>(rules.Offers.Values), new SilentListener());
+            bare.Purchase(rules.Find("starter").ProductId);
+            bare.Tick(1.0);
+
+            GameSession s = StoreSession(db);
+            FlowRig rig = StoreRig(db, s, account, StoreMode.Test, true);
+            string before = StoreSnapshot(s);
+            Check(rig.Flow.PurchaseWaiting.Count == 1 && rig.Store.OpenCount == 1 && s.Profile.Store.Receipts.Count == 0 && StoreSnapshot(s) == before && rig.Saves == 0,
+                  "A PAID PURCHASE WITH NO PICK WAITS FOR THE PICK: delivered after a restart it grants nothing, is not confirmed (the store keeps it open) and is listed for the screen");
+            PurchaseResult wrong = rig.Flow.FinishPurchase(rig.Flow.PurchaseWaiting[0][0], five[3].Id);
+            Check(!wrong.Success && wrong.Reason == PurchaseRefusal.BadChoice && rig.Flow.PurchaseWaiting.Count == 1 && rig.Store.OpenCount == 1 && StoreSnapshot(s) == before,
+                  "a pick outside the named heroes finishes nothing, and the purchase keeps waiting");
+            PurchaseResult done = rig.Flow.FinishPurchase(rig.Flow.PurchaseWaiting[0][0], five[1].Id);
+            HeroInstance hero = s.Profile.FindHeroByDefId(five[1].Id);
+            Check(done.Success && hero != null && hero.SealedCopiesHeld == 1 && rig.Flow.PurchaseWaiting.Count == 0 && rig.Store.OpenCount == 0 && rig.Saves == 1 && s.Profile.Store.Receipts.Count == 1,
+                  "THE PICK FINISHES IT ONCE: the hero arrives Sealed, the receipt is kept, the store is told it is finished and the game saves");
+            PurchaseResult again = rig.Flow.FinishPurchase(rig.Rules.Find("starter").ProductId, five[1].Id);
+            Check(!again.Success && s.Profile.Store.Receipts.Count == 1 && hero.Copies == 1, "and finishing it again grants nothing");
+        }
+
+        /// <summary>The REAL rules (StoreRules over StoreOffers, the shipped store.json) driven through the ledger,
+        /// one offer of each kind: Begin, Complete, a second Begin refused by the limit, a wound-back clock still refused, and
+        /// the next period reopening.</summary>
+        private static void CheckStoreRealRules(ContentDatabase db)
+        {
+            bool roadWas = WayfarersRoadSwitch.Enabled, loopWas = DailyLoopSwitch.Enabled, contractWas = HeroContractSwitch.Enabled;
+            try
+            {
+                WayfarersRoadSwitch.Enabled = true;
+                DailyLoopSwitch.Enabled = true;
+                CheckStoreRealPacks(db);
+                CheckStoreRealStarterLedgerFundPass(db);
+                HeroContractSwitch.Enabled = true;
+                CheckStoreRealContract(db);
+            }
+            finally
+            {
+                WayfarersRoadSwitch.Enabled = roadWas;
+                DailyLoopSwitch.Enabled = loopWas;
+                HeroContractSwitch.Enabled = contractWas;
+                StoreOffers.Bind(null);
+            }
+        }
+
+        private static GameSession StoreRealSession(ContentDatabase db, long now)
+        {
+            GameSession s = OfferSession(db, 2);
+            StoreOffers.Bind(s);
+            return s;
+        }
+
+        private static void CheckStoreRealPacks(ContentDatabase db)
+        {
+            long monday = OfferMonday(db);
+            GameSession s = StoreRealSession(db, monday);
+            PurchaseLedger ledger = new PurchaseLedger(StoreRules.Shared);
+            long gold0 = s.Profile.Gold;
+
+            PurchaseResult b1 = ledger.Begin(s, "weekly_pack", null, monday);
+            PurchaseResult c1 = ledger.Complete(s, "weekly_pack", "real-w1", monday);
+            Check(b1.Success && c1.Success && s.Profile.Gold > gold0 && s.Profile.Sealed.Gold > 0 && s.Profile.FreeGold == gold0
+                  && s.Profile.Store.FindReceipt("real-w1") != null,
+                  "REAL RULES, WEEKLY: Begin and Complete grant the pack Sealed through the Store's own rules and keep the receipt");
+            PurchaseResult again = ledger.Begin(s, "weekly_pack", null, monday + 3 * 86400L);
+            PurchaseResult wound = ledger.Begin(s, "weekly_pack", null, monday - 10 * 86400L);
+            PurchaseResult nextWeek = ledger.Begin(s, "weekly_pack", null, monday + 7 * 86400L);
+            Check(!again.Success && again.Reason == PurchaseRefusal.NotAvailable && !wound.Success && wound.Reason == PurchaseRefusal.NotAvailable && nextWeek.Success,
+                  "REAL RULES, WEEKLY: a second Begin the same week is refused by the limit, a wound-back clock is still refused, the next Monday reopens");
+            ledger.Abandon("weekly_pack");
+
+            long jan = OfferUnix(2027, 1, 15, 12);
+            PurchaseResult m1 = ledger.Begin(s, "monthly_pack", null, jan);
+            ledger.Complete(s, "monthly_pack", "real-m1", jan);
+            PurchaseResult m2 = ledger.Begin(s, "monthly_pack", null, jan + 7 * 86400L);
+            PurchaseResult m2b = ledger.Begin(s, "monthly_pack", null, jan - 3 * 86400L);
+            PurchaseResult m3 = ledger.Begin(s, "monthly_pack", null, OfferUnix(2027, 2, 1, 5));
+            Check(m1.Success && !m2.Success && !m2b.Success && m3.Success,
+                  "REAL RULES, MONTHLY: refused later in the month and with the clock wound back, open again on the first reward day of the next month");
+        }
+
+        private static void CheckStoreRealStarterLedgerFundPass(ContentDatabase db)
+        {
+            long monday = OfferMonday(db);
+            GameSession s = StoreRealSession(db, monday);
+            PurchaseLedger ledger = new PurchaseLedger(StoreRules.Shared);
+            string pick = db.Store.Offer("starter_pact").HeroChoices[0];
+
+            PurchaseResult noPick = ledger.Begin(s, "starter_pact", null, monday);
+            PurchaseResult badPick = ledger.Begin(s, "starter_pact", OfferFourStar(db), monday);
+            ledger.Begin(s, "starter_pact", pick, monday);
+            PurchaseResult paid = ledger.Complete(s, "starter_pact", "real-s1", monday);
+            HeroInstance hero = s.Profile.FindHeroByDefId(pick);
+            PurchaseResult second = ledger.Begin(s, "starter_pact", pick, monday + 400 * 86400L);
+            Check(!noPick.Success && noPick.Reason == PurchaseRefusal.BadChoice && !badPick.Success && paid.Success && hero != null && hero.SealedCopiesHeld == 1 && !second.Success,
+                  "REAL RULES, STARTER: needs one of its named heroes, grants it Sealed, and is once for good (refused a year later)");
+
+            // Restore on the shipped data: the same profile under a new transaction id owes nothing; a fresh profile gets it once.
+            string before = StoreSnapshot(s);
+            PurchaseResult restoreSame = ledger.Restore(s, db.Store.Offer("starter_pact").ProductId, "real-s1-new-id", pick, monday);
+            Check(!restoreSame.Success && restoreSame.Reason == PurchaseRefusal.AlreadyGranted && StoreSnapshot(s) == before && hero.Copies == 1,
+                  "RESTORE UNDER A NEW TRANSACTION ID: the profile that bought the Starter Pact is owed nothing more, so no second copy and the save is untouched");
+            GameSession fresh = StoreRealSession(db, monday);
+            PurchaseResult restoreNew = ledger.Restore(fresh, db.Store.Offer("starter_pact").ProductId, "real-s1", pick, monday);
+            PurchaseResult restoreOther = ledger.Restore(fresh, db.Store.Offer("weekly_pack").ProductId, "real-w9", null, monday);
+            HeroInstance back = fresh.Profile.FindHeroByDefId(pick);
+            Check(restoreNew.Success && back != null && back.SealedCopiesHeld == 1 && !restoreOther.Success && restoreOther.Reason == PurchaseRefusal.NotRestorable
+                  && !ledger.Begin(fresh, "starter_pact", pick, monday).Success,
+                  "RESTORE ON A NEW PROFILE WITH THE SHIPPED DATA: the Starter Pact comes back once, Sealed, and cannot then be bought again; a weekly pack is not restorable");
+
+            // The card.
+            PurchaseResult l1 = ledger.Begin(s, "ember_ledger", null, monday);
+            ledger.Complete(s, "ember_ledger", "real-l1", monday);
+            PurchaseResult l2 = ledger.Begin(s, "ember_ledger", null, monday + 5 * 86400L);
+            PurchaseResult l3 = ledger.Begin(s, "ember_ledger", null, monday + 40 * 86400L);
+            Check(l1.Success && StoreOffers.LedgerActive(s, monday) && !l2.Success && l3.Success,
+                  "REAL RULES, LEDGER: one card at a time (refused while it runs), open again once it has expired");
+
+            // The fund.
+            PurchaseResult f1 = ledger.Begin(s, "growth_fund", null, monday);
+            ledger.Complete(s, "growth_fund", "real-g1", monday);
+            Check(f1.Success && s.Profile.Store.FindReceipt("real-g1") != null && !ledger.Begin(s, "growth_fund", null, monday + 365 * 86400L).Success,
+                  "REAL RULES, GROWTH FUND: bought once for good");
+
+            // The pass, per season.
+            long season = WayfarersRoad.SeasonOf(s, monday);
+            PurchaseResult p1 = ledger.Begin(s, "pass_premium", null, monday);
+            ledger.Complete(s, "pass_premium", "real-p1", monday);
+            PurchaseResult p2 = ledger.Begin(s, "pass_premium", null, monday + 3 * 86400L);
+            PurchaseResult p3 = ledger.Begin(s, "pass_premium", null, monday + db.WayfarersRoad.SeasonDays * 86400L);
+            Check(p1.Success && StoreOffers.PassOwned(s, monday) && !p2.Success && p3.Success && WayfarersRoad.SeasonOf(s, monday + db.WayfarersRoad.SeasonDays * 86400L) == season + 1,
+                  "REAL RULES, PASS: the season's premium is bought once and refused again that season, open again next season");
+        }
+
+        private static void CheckStoreRealContract(ContentDatabase db)
+        {
+            long monday = OfferMonday(db);
+            GameSession s = StoreRealSession(db, monday);
+            PurchaseLedger ledger = new PurchaseLedger(StoreRules.Shared);
+            string a = db.Store.Offer("starter_pact").HeroChoices[0], b = db.Store.Offer("starter_pact").HeroChoices[1];
+            s.GrantHeroDirect(db.GetHero(a), monday);
+            s.GrantHeroDirect(db.GetHero(b), monday);
+
+            int bought = 0;
+            for (int i = 0; i < 4; i++)
+            {
+                PurchaseResult begun = ledger.Begin(s, "hero_contract", a, monday + i * 3600L);
+                if (!begun.Success) break;
+                if (ledger.Complete(s, "hero_contract", "real-c" + i, monday + i * 3600L).Success) bought++;
+            }
+            HeroInstance ha = s.Profile.FindHeroByDefId(a);
+            PurchaseResult other = ledger.Begin(s, "hero_contract", b, monday);
+            PurchaseResult noPick = ledger.Begin(s, "hero_contract", null, monday);
+            PurchaseResult unowned = ledger.Begin(s, "hero_contract", db.Store.Offer("starter_pact").HeroChoices[2], monday);
+            Check(bought == 2 && ha.Copies == 3 && ha.SealedCopiesHeld == 2 && StoreOffers.Check(s, "hero_contract", a, monday) == StoreRefusal.SoldOut,
+                  "REAL RULES, HERO CONTRACT: the limit is 2 a month for that hero on the purchase path (" + bought + " bought of 4 tried), counted under the right hero");
+            Check(other.Success && !noPick.Success && !unowned.Success,
+                  "and a second hero's contract is still open, one with no pick or an unowned hero is refused at Begin");
+            ledger.Abandon("hero_contract");
+        }
+
         // ------------------------------------------------------------------ 9. rollback
 
         private static void CheckStoreOff(ContentDatabase db)
@@ -816,6 +1018,40 @@ namespace Emberfall.DevHarness
                 GameSession on = StoreSession(db);
                 for (int d = 0; d < 3; d++) PassPlayDay(on, now + d * 86400L);
                 Check(StoreSnapshot(on) == offJson, "ON WITH NOTHING BOUGHT IS OFF: three days of play with the Store on is the off save, byte for byte, version included");
+
+                // A profile that never played the road: merely drawing the Hub (the Store badge reads StoreOffers.View on every
+                // refresh) must not write the save. It used to roll the road's season and move the save from 22 to 24.
+                bool roadWas = WayfarersRoadSwitch.Enabled, loopWas = DailyLoopSwitch.Enabled;
+                try
+                {
+                    WayfarersRoadSwitch.Enabled = true;
+                    DailyLoopSwitch.Enabled = false;
+                    GameSession seen = StoreSession(db);
+                    string fresh = StoreSnapshot(seen);
+                    StoreOffers.Bind(seen);
+                    StoreView v1 = StoreOffers.View(seen, now);
+                    StoreView v2 = StoreOffers.View(seen, now + 40 * 86400L);
+                    PassView peek = WayfarersRoad.Peek(seen, now);
+                    Check(v1.Active && v2.Active && peek.Active && StoreSnapshot(seen) == fresh && SaveSerializer.VersionOf(seen.Profile) == SaveSerializer.BaseVersion
+                          && seen.Profile.WayfarersRoad.IsEmpty,
+                          "SEEING THE HUB WRITES NOTHING: with the shipped switches a fresh profile viewed through StoreOffers.View (the badge path) and WayfarersRoad.Peek is byte for byte the same save, still version " + SaveSerializer.BaseVersion);
+                    PassView opened = WayfarersRoad.View(seen, now);
+                    Check(opened.Active && !seen.Profile.WayfarersRoad.IsEmpty,
+                          "and opening the Pass tab (View) still rolls the season, as the road's own screen does");
+                    // A stored older season reads as no points and no claims through the peek, and the state is left alone.
+                    GameSession old = StoreSession(db);
+                    WayfarersRoad.OnClaim(old, PassPointSource.Order, now);
+                    old.Profile.WayfarersRoad.ClaimedMask = 3;
+                    string oldJson = StoreSnapshot(old);
+                    PassView later = WayfarersRoad.Peek(old, now + db.WayfarersRoad.SeasonDays * 86400L);
+                    Check(later.Active && later.Points == 0 && later.Reached == 0 && later.Season == old.Profile.WayfarersRoad.SeasonIndex + 1 && StoreSnapshot(old) == oldJson,
+                          "a peek into a later season reads no points and no claims, and writes nothing");
+                }
+                finally
+                {
+                    WayfarersRoadSwitch.Enabled = roadWas;
+                    DailyLoopSwitch.Enabled = loopWas;
+                }
             }
             finally
             {
@@ -865,6 +1101,12 @@ namespace Emberfall.DevHarness
             }
             Check(hits.Count == 0, "NO PURCHASE GRANT PATH REACHES A RANDOM MECHANIC: " + files.Count + " files of the purchase path (grant, ledger, state, store wrapper) name no random number, roll, summon, reroll, forge, quartermaster or conversion"
                   + (hits.Count > 0 ? " (" + string.Join(", ", hits.ToArray()) + ")" : ""));
+
+            // The Store screen reads the road through Peek, so drawing any tab (the Pass tab included) writes nothing; a claim,
+            // a paid claim and a purchase roll the season for themselves.
+            string screen = StoreStripCommentsAndStrings(File.ReadAllText(Path.Combine(root, "Assets", "Scripts", "UI", "Screens", "StoreScreen.cs")));
+            Check(screen.Contains("WayfarersRoad.Peek(") && !screen.Contains("WayfarersRoad.View("),
+                  "THE STORE SCREEN READS THE ROAD READ ONLY: StoreScreen draws it through WayfarersRoad.Peek and never calls View, so opening the Pass tab leaves the save untouched");
 
             // Who may make a Sealed mark, and who may apply a grant.
             List<string> sealers = new List<string>(), appliers = new List<string>();

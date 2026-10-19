@@ -26,6 +26,9 @@
   // limit and reset: how many a buyer may take in a period. reset is never, week (Monday to Sunday by reward
   // day), month (calendar month of the reward day, UTC), season (Wayfarer's Road) or expiry (a card: one at
   // a time). Every counter only moves forward, so a clock wound back reopens nothing.
+  //
+  // restorable: true only for the two ONE-TIME purchases a store can hand back to a new profile of the same account
+  // (starter_pact, growth_fund). A pack, a card, a season pass and a contract are used up and are never restored.
   "tiers": { "low": 0.99, "small": 1.99, "mid": 4.99, "high": 9.99, "top": 19.99 },
 
   "offers": [
@@ -33,7 +36,7 @@
       "id": "starter_pact", "name": "Starter Pact", "kind": "starter", "tier": "mid",
       "productId": "placeholder.emberfall.store.starter_pact",
       "blurb": "A 5-star of your choice and a head start. Once per profile.",
-      "limit": 1, "reset": "never",
+      "limit": 1, "reset": "never", "restorable": true,
       "hours": 6,
       "heroChoices": [ "brenna_the_remaining_wall", "vaelis_the_unfixed_blade", "nereia_the_field_medic" ]
     },
@@ -62,7 +65,7 @@
       "id": "growth_fund", "name": "Growth Fund", "kind": "growth", "tier": "high",
       "productId": "placeholder.emberfall.store.growth_fund",
       "blurb": "Fixed rewards as you clear the last stage of each chapter. Once per profile.",
-      "limit": 1, "reset": "never",
+      "limit": 1, "reset": "never", "restorable": true,
       "milestones": [
         { "stage": "ch2_12", "hours": 12, "dustSweeps": 10 },
         { "stage": "ch3_12", "hours": 24, "dustSweeps": 15 },

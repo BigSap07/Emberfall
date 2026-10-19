@@ -144,16 +144,19 @@ namespace Emberfall.Core.Progression
     /// instance; it holds no state, everything it knows is in the session's profile and content.</summary>
     public sealed class StoreRules : IStoreRules
     {
-        public bool CanBuy(GameSession session, string offerId, long nowUnix, out string reason)
+        public bool CanBuy(GameSession session, string offerId, string choiceHeroId, long nowUnix, out string reason)
         {
-            StoreRefusal r = StoreOffers.CheckAny(session, offerId, nowUnix);
+            // With a pick the rules check that pick (the Hero Contract's limit is per hero); without one, any.
+            StoreRefusal r = string.IsNullOrEmpty(choiceHeroId)
+                ? StoreOffers.CheckAny(session, offerId, nowUnix)
+                : StoreOffers.Check(session, offerId, choiceHeroId, nowUnix);
             reason = r == StoreRefusal.None ? "" : StoreOffers.ReasonText(r);
             return r == StoreRefusal.None;
         }
 
-        public void RecordPurchase(GameSession session, string offerId, long nowUnix)
+        public void RecordPurchase(GameSession session, string offerId, string choiceHeroId, long nowUnix)
         {
-            StoreOffers.Record(session, offerId, "", nowUnix);
+            StoreOffers.Record(session, offerId, choiceHeroId ?? "", nowUnix);
         }
 
         public StoreOffer Find(string offerId)
@@ -793,7 +796,7 @@ namespace Emberfall.Core.Progression
 
         private static void FillPass(GameSession session, StoreView v, long nowUnix)
         {
-            PassView road = WayfarersRoad.View(session, nowUnix);   // rolls the road's season stamp forward, as the road's own screen does
+            PassView road = WayfarersRoad.Peek(session, nowUnix);   // read only: drawing the Hub must never write the save
             v.PassOpen = road.Active;
             v.PassNeedsLoop = !DailyLoop.Active(session);
             if (!road.Active) return;
