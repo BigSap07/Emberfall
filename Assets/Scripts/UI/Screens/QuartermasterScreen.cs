@@ -85,7 +85,7 @@ namespace Emberfall.UI.Screens
         public override void OnShow()
         {
             // Opening the shelf is what rolls a new day's stock; a purchase never does.
-            Quartermaster.Open(App.Session, TimeUtil.NowUnix());
+            if (Quartermaster.Open(App.Session, TimeUtil.NowUnix())) App.RequestSave();
             App.RefreshHud();
             Rebuild();
         }
