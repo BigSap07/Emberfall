@@ -167,6 +167,21 @@ namespace Emberfall.Core.Data
         /// LoadWayfarersRoad is called.</summary>
         public WayfarersRoadConfig WayfarersRoad = new WayfarersRoadConfig();
 
+        /// <summary>What the Store sells (store.json, Docs/DESIGN-STORE.md): fixed offers, placeholder euro tiers
+        /// and placeholder product ids. NOT part of ContentVersion, for Sinks' reason: no fight reads it. Empty
+        /// (IsUsable false) until LoadStore is called.</summary>
+        public StoreConfig Store = new StoreConfig();
+
+        /// <summary>Parses store.json into Store, drops what this content cannot honour (a hero that is not a
+        /// non-starting 5-star, a milestone at a stage that does not exist) and adds every warning to Warnings.
+        /// Does not touch ContentVersion.</summary>
+        public void LoadStore(string storeJson)
+        {
+            Store = StoreConfig.FromJson(storeJson);
+            Store.Validate(this);
+            for (int i = 0; i < Store.Warnings.Count; i++) Warnings.Add(Store.Warnings[i]);
+        }
+
         /// <summary>Parses wayfarers-road.json into WayfarersRoad and adds its warnings to Warnings. Does
         /// not touch ContentVersion.</summary>
         public void LoadWayfarersRoad(string wayfarersRoadJson)

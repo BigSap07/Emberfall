@@ -4918,6 +4918,8 @@ namespace Emberfall.DevHarness
                 db.LoadRelicShop(File.Exists(relicShopPath) ? File.ReadAllText(relicShopPath) : null);
                 string wayfarersPath = Path.Combine(dir, "wayfarers-road.json");
                 db.LoadWayfarersRoad(File.Exists(wayfarersPath) ? File.ReadAllText(wayfarersPath) : null);
+                string storePath = Path.Combine(dir, "store.json");
+                db.LoadStore(File.Exists(storePath) ? File.ReadAllText(storePath) : null);
                 return db;
             }
             catch (Exception ex)

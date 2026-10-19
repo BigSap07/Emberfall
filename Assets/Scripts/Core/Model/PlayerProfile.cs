@@ -526,6 +526,13 @@ namespace Emberfall.Core.Model
         /// </summary>
         public WayfarersRoadState WayfarersRoad = new WayfarersRoadState();
 
+        /// <summary>
+        /// The Store's counters, ledger card, growth fund and paid-track claims (Docs/DESIGN-STORE.md). NEVER NULL.
+        /// Empty for every profile that never bought anything, and an empty one is not written to the save. The
+        /// save key `store` and the version it needs belong to SaveSerializer.
+        /// </summary>
+        public StoreState Store = new StoreState();
+
         /// <summary>Gold a random mechanic may spend: the purse less its Sealed part.</summary>
         public long FreeGold { get { return Gold - Math.Min(Math.Max(0, Sealed.Gold), Gold); } }
 
