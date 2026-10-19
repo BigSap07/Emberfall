@@ -167,6 +167,7 @@ namespace Emberfall.DevHarness
                 if (own.SpritePending && cfg.StandIns.TryGetValue(id, out standId)) source = look(standId);
                 float mul;
                 if (!cfg.ScaleMul.TryGetValue(id, out mul)) mul = 1f;
+                if (own.SpritePending && source == own) mul *= cfg.MannequinScale;
                 if (Math.Abs(v2.Scale - Math.Max(0.3f, source.Scale) * BattleFraming.UnitScaleV2 * mul) > 1e-5f) wrongScale++;
                 if (source != own && (v2.Sprite != source.Sprite || v2.SpritePending)) wrongArt++;
                 if (source == own && own.Sprite != v2.Sprite) wrongArt++;
@@ -174,7 +175,7 @@ namespace Emberfall.DevHarness
             Check(sameObject == units, "S2 v1 is exactly R12: Resolve(v2 off) returns the snapshot's own VisualDef, the same object, for all "
                   + units + " heroes and enemies");
             Check(mutated == 0, "S2 v2 builds from a copy and never changes a definition (" + units + " units, " + mutated + " mutated)");
-            Check(wrongScale == 0 && wrongArt == 0, "S2 v2 draws every unit " + F2(BattleFraming.UnitScaleV2) + "x its own scale (a stand-in at the stand-in's, " + cfg.ScaleMul.Count + " unit with its own scaleMul), and a stand-in's art is a sheet"
+            Check(wrongScale == 0 && wrongArt == 0, "S2 v2 draws every unit " + F2(BattleFraming.UnitScaleV2) + "x its own scale (a stand-in at the stand-in's, " + cfg.ScaleMul.Count + " unit with its own scaleMul, mannequins x" + F2(cfg.MannequinScale) + "), and a stand-in's art is a sheet"
                   + " (" + wrongScale + " wrong scales, " + wrongArt + " wrong art)");
 
             // Clone copies every public field: fill each with a value no default holds, then compare.

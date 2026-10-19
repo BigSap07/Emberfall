@@ -55,6 +55,11 @@
     "carrion_vulture": 0.8
   },
 
+  // mannequinScale: an undrawn unit with no stand-in is drawn at 0.8 of the v2 scale, 0.96 of its R12
+  // size, so a placeholder is not upscaled past R12. At the full 1.2 a golem-shaped boss mannequin
+  // (scale 1.2, golem shaped) was 2.7 tall in chapter 4 and its legs covered its own name plate.
+  "mannequinScale": 0.8,
+
   // The mannequin is drawn facing right with its eye on the right, and an enemy normally shows a
   // sheet as drawn, so every placeholder enemy faced away from the heroes. true mirrors the
   // mannequin on both sides so it faces its opponent.
