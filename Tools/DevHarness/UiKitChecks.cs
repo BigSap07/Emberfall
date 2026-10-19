@@ -137,7 +137,7 @@ namespace Emberfall.DevHarness
                     if (firstMiss.Count < 5) firstMiss.Add(key);
                     continue;
                 }
-                string m = File.ReadAllText(meta);
+                string m = File.ReadAllText(meta).Replace("\r\n", "\n");   // a fresh checkout (autocrlf) lands CRLF
                 Match g = Regex.Match(m, @"^guid: ([0-9a-f]{32})\s*$", RegexOptions.Multiline);
                 bool sprite = m.Contains("textureType: 8") && m.Contains("spriteMode: 1") && m.Contains("alphaIsTransparency: 1");
                 // the Windows and Android entries must be explicit: DefaultTexturePlatform ships RGBA32
@@ -179,7 +179,7 @@ namespace Emberfall.DevHarness
             {
                 string meta = Path.Combine(kitDir, sliced[i] + ".png.meta");
                 if (!File.Exists(meta)) { unsliced++; continue; }
-                Match b = Regex.Match(File.ReadAllText(meta), @"spriteBorder: \{x: (\d+), y: (\d+), z: (\d+), w: (\d+)\}");
+                Match b = Regex.Match(File.ReadAllText(meta).Replace("\r\n", "\n"), @"spriteBorder: \{x: (\d+), y: (\d+), z: (\d+), w: (\d+)\}");
                 if (!b.Success || (b.Groups[1].Value == "0" && b.Groups[2].Value == "0" && b.Groups[3].Value == "0" && b.Groups[4].Value == "0")) unsliced++;
             }
             Check(unsliced == 0, "every piece the map draws sliced (panels, buttons, tabs, pill) carries a sprite border (" + unsliced + " without)");
