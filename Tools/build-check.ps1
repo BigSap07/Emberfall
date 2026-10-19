@@ -123,7 +123,7 @@ $engineSources = @($core + $shim + $runtime + $editor)
 # Proven the hard way during the Aspects build: a deliberately broken Editor script (bad method
 # name, wrong argument types) still passed this exact step, and only the real Unity compiler, with
 # UNITY_EDITOR defined by the editor itself, caught it.
-$okEngine = Compile "unity-code" $engineSources "library" (Join-Path $out "EmberfallEngineCheck.dll") "UNITY_EDITOR"
+$okEngine = Compile "unity-code" $engineSources "library" (Join-Path $out "EmberfallEngineCheck.dll") "UNITY_EDITOR;EMBERFALL_UNITY_IAP"
 
 
 # ---------------------------------------------------------------------------------------------
