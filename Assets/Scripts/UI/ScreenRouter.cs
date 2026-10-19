@@ -41,7 +41,8 @@ namespace Emberfall.UI
         Armory,
         Archive,
         Quartermaster,
-        WayfarersRoad
+        WayfarersRoad,
+        Store
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -161,6 +162,10 @@ namespace Emberfall.UI
         public Screens.WayfarersRoadScreen WayfarersRoad;
         public Screens.ArchiveScreen Archive;
 
+        /// <summary>The Store (Docs/DESIGN-STORE.md): the pass, the packs and the shops in one place. Null
+        /// unless StoreSwitch is on; Show(ScreenId.Store) is then a no-op.</summary>
+        public Screens.StoreScreen Store;
+
         public UIScreen Current { get; private set; }
 
         public void Build(GameApp app, RectTransform screenLayer, RectTransform overlayLayer)
@@ -245,6 +250,10 @@ namespace Emberfall.UI
             // Wayfarer's Road (Docs/DESIGN-WAYFARERS-ROAD.md). Built only with the switch on: off, this
             // build has no such screen at all and nothing leads to it.
             if (Emberfall.Core.Session.WayfarersRoadSwitch.Enabled) WayfarersRoad = Create<Screens.WayfarersRoadScreen>();
+
+            // The Store (Docs/DESIGN-STORE.md). Built only with the switch on: off, this build has no such
+            // screen at all and no door on the Hub leads to it.
+            if (Emberfall.Core.Session.StoreSwitch.Enabled) Store = Create<Screens.StoreScreen>();
         }
 
         /// <summary>

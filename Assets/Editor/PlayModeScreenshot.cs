@@ -373,6 +373,38 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/R17 sinks/Wayfarer's Road, selector picker", false, 125)]
         public static void CaptureWayfarersRoadPicker() { Begin("Screen:WayfarersRoadPicker"); }
 
+        // R19 STORE (Docs/DESIGN-STORE.md). Builder A's block: the Store's three tabs, a pick, a purchase in the
+        // debug store, the coming-soon look and the Hub's door. Each seeds the scratch identity through the rules.
+        [MenuItem("Emberfall/Capture/R19 store/Pass, premium locked", false, 130)]
+        public static void CaptureStorePass() { Begin("Screen:StorePass"); }
+
+        [MenuItem("Emberfall/Capture/R19 store/Pass, premium bought", false, 131)]
+        public static void CaptureStorePassPremium() { Begin("Screen:StorePassPremium"); }
+
+        [MenuItem("Emberfall/Capture/R19 store/Packs", false, 132)]
+        public static void CaptureStorePacks() { Begin("Screen:StorePacks"); }
+
+        [MenuItem("Emberfall/Capture/R19 store/Packs, Starter Pact picker", false, 133)]
+        public static void CaptureStorePacksPicker() { Begin("Screen:StorePacksPicker"); }
+
+        [MenuItem("Emberfall/Capture/R19 store/Packs, Ember Ledger running", false, 134)]
+        public static void CaptureStorePacksLedger() { Begin("Screen:StorePacksLedger"); }
+
+        [MenuItem("Emberfall/Capture/R19 store/Packs, Growth Fund bought", false, 135)]
+        public static void CaptureStorePacksGrowth() { Begin("Screen:StorePacksGrowth"); }
+
+        [MenuItem("Emberfall/Capture/R19 store/Packs, after a purchase in the debug store", false, 136)]
+        public static void CaptureStorePurchase() { Begin("Screen:StorePurchase"); }
+
+        [MenuItem("Emberfall/Capture/R19 store/Packs, coming soon (release look)", false, 137)]
+        public static void CaptureStoreComingSoon() { Begin("Screen:StoreComingSoon"); }
+
+        [MenuItem("Emberfall/Capture/R19 store/Shops", false, 138)]
+        public static void CaptureStoreShops() { Begin("Screen:StoreShops"); }
+
+        [MenuItem("Emberfall/Capture/R19 store/Hub with the Store door", false, 139)]
+        public static void CaptureHubStore() { Begin("Screen:HubStore"); }
+
         [MenuItem("Emberfall/Capture/Heroes", false, 61)]
         public static void CaptureHeroes() { Begin("Screen:Heroes"); }
 
@@ -724,7 +756,7 @@ namespace Emberfall.EditorTools
         {
             if (!target.StartsWith("Screen:")) return 0;
             string name = target.Substring(7);
-            if (IsLoopScreen(name)) return 1;
+            if (IsLoopScreen(name) || IsStorePassScreen(name)) return 1;
             return name == "HubLoopOff" ? 2 : 0;
         }
 
@@ -1665,6 +1697,16 @@ namespace Emberfall.EditorTools
                     case "ProvingSinksOff": id = ScreenId.Proving; break;
                     case "RecitalSinksOn":
                     case "RecitalSinksOff": id = ScreenId.Recital; break;
+                    case "StorePass":
+                    case "StorePassPremium":
+                    case "StorePacks":
+                    case "StorePacksPicker":
+                    case "StorePacksLedger":
+                    case "StorePacksGrowth":
+                    case "StorePurchase":
+                    case "StoreComingSoon":
+                    case "StoreShops": id = ScreenId.Store; break;
+                    case "HubStore": id = ScreenId.MainMenu; break;
                     case "Result": id = ScreenId.Battle; break;
                     case "AudioFight": id = ScreenId.Battle; break;
                     case "BattleMoment": id = ScreenId.Battle; break;
@@ -1817,6 +1859,7 @@ namespace Emberfall.EditorTools
                 if (IsLoopScreen(name)) SeedLoop(app, name);
                 if (IsSinksScreen(name)) SeedSinks(app, name);
                 if (IsR17SinkScreen(name)) SeedR17Sinks(app, name);
+                if (IsStoreScreen(name)) SeedStore(app, name);
                 if (name == "HubLoopOff") CheckLoopIsOff(app);
                 if (name == "ProvingSinksOff" || name == "RecitalSinksOff") CheckSinksAreOff(app);
 
@@ -1881,6 +1924,7 @@ namespace Emberfall.EditorTools
                 if (name == "StageCard") app.Router.Campaign.SelectStageForCapture(SessionState.GetString(BattleStageKey, ""));
                 if (IsSinksScreen(name)) OpenSinksPicker(app, name);
                 if (name == "WayfarersRoadPicker") OpenRoadPicker(app);
+                if (IsStoreScreen(name)) OpenStoreView(app, name);
                 Debug.Log("PlayModeScreenshot: showing " + name);
             }
 
@@ -2266,6 +2310,138 @@ namespace Emberfall.EditorTools
             }
             app.RefreshHud();
             Debug.Log("PlayModeScreenshot: seeded the sinks for " + name);
+        }
+
+        // R19 STORE targets (Docs/DESIGN-STORE.md). Builder A's block. Every target seeds the scratch identity
+        // through the rules (StoreOffers.Fulfil is internal to Core, so purchases here go through the debug
+        // store and the purchase flow, exactly as a tap does) and shows a tab. Nothing runs on a real identity.
+        private static bool IsStorePassScreen(string name)
+        {
+            return name == "StorePass" || name == "StorePassPremium";
+        }
+
+        private static bool IsStoreScreen(string name)
+        {
+            switch (name)
+            {
+                case "StorePass":
+                case "StorePassPremium":
+                case "StorePacks":
+                case "StorePacksPicker":
+                case "StorePacksLedger":
+                case "StorePacksGrowth":
+                case "StorePurchase":
+                case "StoreComingSoon":
+                case "StoreShops":
+                case "HubStore":
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Buys an offer in the debug store, the way the Buy button does: the flow begins it, the debug store
+        /// answers, the ledger grants once. The store is ticked by hand so the capture does not wait on frames.</summary>
+        private static bool StoreBuy(GameApp app, string offerId, string heroId)
+        {
+            PurchaseService svc = PurchaseService.Instance;
+            if (svc == null || svc.Flow == null) return false;
+            PurchaseResult begun = svc.Flow.Buy(offerId, heroId);
+            if (!begun.Success) { Debug.LogWarning("PlayModeScreenshot: the debug store would not begin " + offerId + ": " + begun.Message); return false; }
+            for (int i = 0; i < 40 && svc.Flow.IsPending(offerId); i++) svc.Tick(0.1f);
+            return !svc.Flow.IsPending(offerId);
+        }
+
+        private static void SeedStore(GameApp app, string name)
+        {
+            if (!EditorScratchIdentity.IsScratch)
+            {
+                Debug.LogError("PlayModeScreenshot: refusing to seed the Store on a real identity.");
+                return;
+            }
+            GameSession session = app.Session;
+            PlayerProfile profile = session.Profile;
+            long now = TimeUtil.NowUnix();
+            // The debug store, scripted, with its account in the cache folder so a capture never touches the
+            // player's own debug account; fast, so a buy finishes inside the capture.
+            PurchaseService.ForceDebugStore = true;
+            PurchaseService.DebugAccountPath = Path.Combine(Path.GetTempPath(), "emberfall-capture-store-account.json");
+            StoreScreen.CaptureComingSoon = name == "StoreComingSoon";
+
+            // 2-12 cleared: a frontier with real numbers, and the Growth Fund's first milestone in reach.
+            List<StageDef> stages = session.Content.AllStages;
+            for (int i = 0; i < stages.Count; i++)
+            {
+                int chapter;
+                string id = stages[i].ChapterId;
+                if (id.Length > 2 && int.TryParse(id.Substring(2), out chapter) && chapter <= 2 && !profile.ClearedStageIds.Contains(stages[i].Id))
+                    profile.ClearedStageIds.Add(stages[i].Id);
+            }
+            profile.StagesCleared = CampaignProgress.CountCleared(profile, session.Content);
+            profile.Valor = 5000;
+            profile.Coda = 5000;
+            profile.ProvingHighestStanding = 5;
+            profile.RecitalHighestFloor = 10;
+            profile.LastIdleClaimUnix = now - 4 * 3600;
+            StoreOffers.Bind(session);
+            if (PurchaseService.Instance == null)
+            {
+                List<StoreOffer> offers = new List<StoreOffer>();
+                for (int i = 0; i < session.Content.Store.Offers.Count; i++) offers.Add(session.Content.Store.Offers[i].Built);
+                PurchaseService.Ensure(StoreRules.Shared, offers);
+            }
+            if (PurchaseService.Instance != null && PurchaseService.Instance.DebugStore != null) PurchaseService.Instance.DebugStore.DelaySeconds = 0.05;
+
+            if (name == "StorePass" || name == "StorePassPremium")
+            {
+                for (int i = 0; i < 70; i++) WayfarersRoad.OnClaim(session, PassPointSource.Order, now);   // 560 points: tier 12
+                for (int t = 1; t <= 4; t++) WayfarersRoad.Claim(session, t, null, now);
+                if (name == "StorePassPremium")
+                {
+                    StoreBuy(app, StoreOffers.PassOfferId, "");
+                    WayfarersRoad.ClaimPaid(session, 5, null, now);
+                    WayfarersRoad.ClaimPaid(session, 10, null, now);
+                }
+            }
+            else if (name == "StorePacksLedger")
+            {
+                StoreBuy(app, "ember_ledger", "");
+            }
+            else if (name == "StorePacksGrowth")
+            {
+                StoreBuy(app, "growth_fund", "");
+            }
+            else if (name == "HubStore")
+            {
+                StoreBuy(app, "ember_ledger", "");   // so the dot on the door has something to say
+            }
+            app.RefreshHud();
+            Debug.Log("PlayModeScreenshot: seeded the Store for " + name);
+        }
+
+        /// <summary>Opens the tab a target photographs, after the Show.</summary>
+        private static void OpenStoreView(GameApp app, string name)
+        {
+            StoreScreen store = app.Router.Store;
+            if (store == null) return;
+            switch (name)
+            {
+                case "StorePass":
+                case "StorePassPremium": store.OpenTab(StoreScreen.Tab.Pass); break;
+                case "StoreShops": store.OpenTab(StoreScreen.Tab.Shops); break;
+                case "StorePacks": store.SelectForCapture("starter_pact"); break;
+                case "StorePacksLedger": store.SelectForCapture("ember_ledger"); break;
+                case "StorePacksGrowth": store.SelectForCapture("growth_fund"); break;
+                case "StoreComingSoon": store.SelectForCapture("weekly_pack"); break;
+                case "StorePurchase":
+                    store.SelectForCapture("weekly_pack");
+                    StoreBuy(app, "weekly_pack", "");
+                    store.SelectForCapture("weekly_pack");
+                    break;
+                case "StorePacksPicker":
+                    store.PickForCapture("starter_pact", "brenna_the_remaining_wall");
+                    break;
+            }
+            if (name == "StorePass" || name == "StorePassPremium") store.OpenTab(StoreScreen.Tab.Pass);
         }
 
         // THE R17 SINKS: the Quartermaster and the Relic Shop's upgrades. A separate block, kept apart

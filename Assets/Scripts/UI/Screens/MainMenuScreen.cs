@@ -70,6 +70,7 @@ namespace Emberfall.UI.Screens
         private HudElement _chest;
         private HudElement _friendsButton;
         private HudElement _ordersButton;
+        private HudElement _storeButton;
         private float _overflowButtonTop;
 
         // ---------- the campaign card ----------
@@ -499,6 +500,24 @@ namespace Emberfall.UI.Screens
             // More and pushes More one slot down; with the switch off there is no fifth button,
             // nothing moves, and the rail is the four it always was. A dot says something is ready.
             int slot = 3;
+
+            // THE STORE'S DOOR, present only with StoreSwitch on, in the slot above Orders. A gold caption
+            // sits under the disc so it reads as a shop and not as one more icon. A dot says a payout of
+            // something bought is ready (a ledger day, a growth milestone, a paid pass tier).
+            if (StoreSwitch.Enabled)
+            {
+                _storeButton = HudWidgets.RailButton("Store", _hud, "", TextureLab.CoinIcon(64),
+                                                     UITheme.Gold, OpenStore);
+                Place(_storeButton.Root, top + step * slot);
+                Text caption = EmberforgeUI.Label("StoreCaption", _storeButton.Root, "STORE", UITheme.FontTiny - 6,
+                                                  Emberforge.TextGold, TextAnchor.LowerCenter);
+                UIBuilder.Box(caption.rectTransform, 0f, -2f, HubStyle.TouchMin, 22f, new Vector2(0.5f, 0f));
+                UIBuilder.Outlined(caption, Emberforge.Outline, Emberforge.StrokeThin);
+                caption.raycastTarget = false;
+                slot++;
+                RefreshStoreBadge();
+            }
+
             if (DailyLoopSwitch.Enabled)
             {
                 _ordersButton = HudWidgets.RailButton("Orders", _hud, "", TextureLab.Check(64),
@@ -622,6 +641,7 @@ namespace Emberfall.UI.Screens
 
             RefreshFriendBadge();
             RefreshOrdersBadge();
+            RefreshStoreBadge();
             FeatureLockView.RefreshAll(App, Root);
             _tick = 0f;
         }
@@ -661,6 +681,7 @@ namespace Emberfall.UI.Screens
             _tick = 0f;
             RefreshIdle();
             RefreshOrdersBadge();
+            RefreshStoreBadge();
             // The popup is not a MonoBehaviour and does not tick itself: while it is open, this is
             // what keeps its stored time honest under the player's eyes.
             if (_claimPopup != null && _claimPopup.IsOpen) _claimPopup.Refresh();
@@ -831,6 +852,20 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.Show(ScreenId.Events);
+        }
+
+        private void OpenStore()
+        {
+            App.Audio.Tap();
+            Router.Show(ScreenId.Store);
+        }
+
+        /// <summary>The dot on the Store rail button: lit while something bought can be claimed, read from the
+        /// same StoreView the Store draws, so it cannot disagree.</summary>
+        private void RefreshStoreBadge()
+        {
+            if (_storeButton == null || !SessionReady("RefreshStoreBadge")) return;
+            _storeButton.SetBadge(StoreOffers.View(App.Session, TimeUtil.NowUnix()).AnythingToClaim ? 1 : 0);
         }
 
         private void OpenOrders()
