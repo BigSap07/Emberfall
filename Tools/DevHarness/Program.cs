@@ -270,6 +270,9 @@ namespace Emberfall.DevHarness
             CheckAbilityNumbersMatchTheSimulation(content);
             CheckAbilityCardTextIsComplete(content, contentDir);
             CheckAbilityFactsMatchTheSimulation(content, contentDir);
+            CheckWallChestsContentAndCard(content, contentDir);
+            CheckWallChestsPayOnce(content, contentDir);
+            CheckWallChestsRollBack(content, contentDir);
             ReportTalentExercise();
 
             CheckDebrief();

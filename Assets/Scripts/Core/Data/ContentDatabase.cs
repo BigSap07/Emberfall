@@ -72,6 +72,21 @@ namespace Emberfall.Core.Data
         }
 
         /// <summary>
+        /// The one-time chests on a chapter's wall and finale stages (wall-chests.json). Loaded
+        /// after Load and NOT part of ContentVersion: no fight reads it. Empty (IsUsable false) on a
+        /// database that never loaded it, which means no stage carries a chest.
+        /// </summary>
+        public WallChestConfig WallChests = new WallChestConfig();
+
+        /// <summary>Parses wall-chests.json into WallChests and adds its warnings to Warnings. Does
+        /// not touch ContentVersion; see WallChests.</summary>
+        public void LoadWallChests(string wallChestsJson)
+        {
+            WallChests = WallChestConfig.FromJson(wallChestsJson);
+            for (int i = 0; i < WallChests.Warnings.Count; i++) Warnings.Add(WallChests.Warnings[i]);
+        }
+
+        /// <summary>
         /// Card sentences for abilities whose authored description is still a drafting note
         /// (ability-text.json). Loaded after Load and NOT part of ContentVersion: no fight reads
         /// it. Empty on a database that never loaded it, which leaves those cards without prose.

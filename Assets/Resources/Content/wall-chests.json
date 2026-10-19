@@ -1,0 +1,8 @@
+{
+  "note": "The one-time chest on a chapter's wall stage and finale stage (R17 task 5), opened on the first clear. Hours are hours of idle income at the frontier the clear reaches, paid by GameSession.IdleYield; Slag scales with the chapter number. enabled=false is the rollback: a first clear pays what it paid before this file. Not hashed into ContentVersion.",
+  "enabled": true,
+  "wallStageIndex": 6,
+  "finaleStageIndex": 12,
+  "wall": { "hours": 1.5, "slagPerChapter": 12 },
+  "finale": { "hours": 4, "slagPerChapter": 30 }
+}
