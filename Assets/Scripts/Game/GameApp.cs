@@ -280,6 +280,19 @@ namespace Emberfall.Game
                 TelemetryConsentPrompt.Install(this);
             }
 
+            // The boot splash (UiKitSplash), last so it covers a finished Hub. Behind the UI kit switch: with it
+            // off UiKit.Splash is null and nothing is built. Editor capture runs set the suppress key, so no
+            // shot is ever taken under it; a real boot, in the editor or a player, shows it.
+            bool showSplash = true;
+#if UNITY_EDITOR
+            if (UnityEditor.EditorPrefs.GetBool(SuppressFirstRunKey, false)) showSplash = false;
+#endif
+            if (showSplash && UiKit.On)
+            {
+                BootStage = "splash";
+                UiKitSplash.Show(OverlayLayer, false);
+            }
+
             BootStage = "complete";
             BootCompleted = true;
             }

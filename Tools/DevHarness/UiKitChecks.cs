@@ -34,6 +34,7 @@ namespace Emberfall.DevHarness
                 CheckUiKitFilesAndImports(db, kitDir);
                 CheckUiKitNotHashed(db, contentDir);
                 CheckUiKitWiring(scriptsDir);
+                CheckUiKitSplashAndIcon(Path.GetFullPath(Path.Combine(contentDir, "..", "..", "..")), scriptsDir);
             }
             finally
             {
@@ -200,6 +201,42 @@ namespace Emberfall.DevHarness
             }
             Check(mentions == 0 && ContentDatabase.VersionOf(texts) == db.ContentVersion,
                   "THE KIT IS NOT HASHED: no fight file names it and ContentVersion is exactly the hash of the eight fight files (" + db.ContentVersion + ")");
+        }
+
+        /// <summary>R21: the boot splash is behind the switch (null off, "splash" on), the splash is built last in
+        /// GameApp only when the kit is on, and the default app icon in ProjectSettings is the delivered file,
+        /// imported compressed. A source and file scan: the splash draws only in the editor.</summary>
+        private static void CheckUiKitSplashAndIcon(string root, string scriptsDir)
+        {
+            UiKitSwitch.Enabled = false;
+            bool offNull = UiKitMap.Splash() == null;
+            UiKitSwitch.Enabled = true;
+            bool onNamed = UiKitMap.Splash() == "splash" && UiKitMap.AllTableKeys().Contains("splash");
+            UiKitSwitch.Enabled = false;
+            Check(offNull && onNamed, "SPLASH: the boot splash answers null with the switch off and the key splash with it on, and the file check covers it");
+
+            string splash = File.ReadAllText(Path.Combine(scriptsDir, "UI", "UiKitSplash.cs"));
+            string app = File.ReadAllText(Path.Combine(scriptsDir, "Game", "GameApp.cs"));
+            int show = app.IndexOf("UiKitSplash.Show(");
+            int complete = app.IndexOf("BootStage = \"complete\"");
+            bool gated = show > 0 && complete > show && app.Substring(Math.Max(0, show - 200), Math.Min(200, show)).Contains("UiKit.On");
+            Check(splash.Contains("UiKit.Splash()") && gated,
+                  "SPLASH WIRING: UiKitSplash asks the kit for its art, and GameApp builds it only when UiKit.On, after the first screen and before boot completes");
+
+            string meta = Path.Combine(root, "Assets", "AppIcon", "app_icon.png.meta");
+            string settings = Path.Combine(root, "ProjectSettings", "ProjectSettings.asset");
+            bool icon = File.Exists(Path.Combine(root, "Assets", "AppIcon", "app_icon.png")) && File.Exists(meta) && File.Exists(settings);
+            if (icon)
+            {
+                string m = File.ReadAllText(meta).Replace("\r\n", "\n");
+                Match g = Regex.Match(m, @"^guid: ([0-9a-f]{32})\s*$", RegexOptions.Multiline);
+                string ps = File.ReadAllText(settings).Replace("\r\n", "\n");
+                bool named = g.Success && ps.Contains("m_BuildTargetIcons:\n  - m_BuildTarget: \n    m_Icons:\n    - serializedVersion: 2\n      m_Icon: {fileID: 2800000, guid: " + g.Groups[1].Value + ", type: 3}");
+                bool compressed = Regex.IsMatch(m, @"buildTarget: Standalone\n(?:    .*\n)*?    textureFormat: 25")
+                                  && Regex.IsMatch(m, @"buildTarget: Android\n(?:    .*\n)*?    textureFormat: (?:48|50)");
+                icon = named && compressed;
+            }
+            Check(icon, "APP ICON: ProjectSettings names Assets/AppIcon/app_icon.png as the default icon, and its import is compressed (BC7 Windows, ASTC Android)");
         }
 
         /// <summary>The engine half reads the map where the map says it should, and nothing in Core calls the

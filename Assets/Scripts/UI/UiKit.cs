@@ -68,6 +68,7 @@ namespace Emberfall.UI
         public static Sprite Currency(string purse) { return Get(UiKitMap.Currency(purse)); }
         public static Sprite OfferCard(string offerId) { return Get(UiKitMap.OfferCard(offerId)); }
         public static Sprite PassHeader() { return Get(UiKitMap.PassHeader()); }
+        public static Sprite Splash() { return Get(UiKitMap.Splash()); }
         public static Sprite Relic(string relicId) { return Get(UiKitMap.RelicIcon(relicId)); }
         public static Sprite Ability(string heroId, string abilityId)
         {

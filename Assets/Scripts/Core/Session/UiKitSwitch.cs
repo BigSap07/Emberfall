@@ -130,6 +130,12 @@ namespace Emberfall.Core.Session
             return UiKitSwitch.Enabled ? "store/header_wayfarers_road" : null;
         }
 
+        /// <summary>The boot splash, the key art shown over the Hub for a moment when the app starts.</summary>
+        public static string Splash()
+        {
+            return UiKitSwitch.Enabled ? "splash" : null;
+        }
+
         /// <summary>One icon per relic id in relics.json.</summary>
         public static string RelicIcon(string relicId)
         {
@@ -180,6 +186,7 @@ namespace Emberfall.Core.Session
             for (int i = 0; i < aspects.Length; i++) keys.Add("aspect_" + aspects[i]);
             for (int i = 1; i <= 5; i++) { keys.Add("card_frame_" + i); keys.Add("card_frame_" + i + "_open"); }
             keys.Add("store/header_wayfarers_road");
+            keys.Add("splash");
             return keys;
         }
 

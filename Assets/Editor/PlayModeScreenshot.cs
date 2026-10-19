@@ -488,6 +488,10 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/R20 kit/Victory (stage cleared), kit off", false, 167)]
         public static void CaptureKitWaveResultClearedOff() { Begin("Screen:WaveResultCleared+plain"); }
 
+        // R21: the boot splash over the Hub. +kit only means anything: with the kit off there is no splash art.
+        [MenuItem("Emberfall/Capture/R21 splash, kit on", false, 172)]
+        public static void CaptureKitSplashOn() { Begin("Screen:Splash+kit"); }
+
         [MenuItem("Emberfall/Capture/R20 kit/Battle result, kit on", false, 168)]
         public static void CaptureKitResultOn() { Begin("Screen:Result+kit"); }
 
@@ -1858,6 +1862,15 @@ namespace Emberfall.EditorTools
                 // THE TOAST is not a screen either: it lands on top of whatever is showing. The Hub
                 // is put up here and the message is sent just before the shot, below, because a
                 // toast only holds for a second and a half.
+                // THE BOOT SPLASH (UiKitSplash) is built the way GameApp builds it, over the Hub, but held for the shot.
+                if (name == "Splash")
+                {
+                    app.Router.Show(ScreenId.MainMenu);
+                    if (UiKitSplash.Show(app.OverlayLayer, true) == null)
+                        Debug.LogWarning("PlayModeScreenshot: no splash art (Screen:Splash+kit needs the kit on and Art/UIKit/splash), the Hub is shot as it is.");
+                    Debug.Log("PlayModeScreenshot: showing the boot splash over the Hub");
+                    return;
+                }
                 if (name == "Toast" || name == "ToastLong")
                 {
                     app.Router.Show(ScreenId.MainMenu);
