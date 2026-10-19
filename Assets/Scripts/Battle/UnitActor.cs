@@ -100,11 +100,14 @@ namespace Emberfall.Battle
             // the flash decay all wait, so the flash holds at its peak for the duration. Counted in
             // unscaled time so it is a real-time pause whatever the game clock is doing, and the
             // motion coroutines below wait on the same counter.
-            // R15 v2: a hit's flash is a short tint on its own clock. It falls before the freeze
+            // R15 v2: a hit's flash is a short tint on the real-time clock. It falls before the freeze
             // test, so hit stop can hold the motion but never the flash past its seconds.
             if (_flashFree && _flash > 0f)
             {
-                _flash = Mathf.Max(0f, _flash - Time.deltaTime * _flashRate);
+                // Real time, so slow motion cannot stretch it. A paused game (timeScale 0, which is
+                // how a capture freezes a frame) holds it.
+                float step = Time.timeScale > 0f ? Time.unscaledDeltaTime : 0f;
+                _flash = Mathf.Max(0f, _flash - step * _flashRate);
                 Rig.SetFlash(_flash);
                 if (_flash <= 0f) _flashFree = false;
             }

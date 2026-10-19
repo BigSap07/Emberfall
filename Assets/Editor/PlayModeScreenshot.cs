@@ -2757,8 +2757,8 @@ namespace Emberfall.EditorTools
             {
                 switch (kind)
                 {
-                    case MomentKind.Hit: return 2;
-                    case MomentKind.Crit: return 2;
+                    case MomentKind.Hit: return 1;
+                    case MomentKind.Crit: return 1;
                     case MomentKind.Skill: return 8;
                     case MomentKind.Heal: return 8;
                     case MomentKind.Buff: return 12;
