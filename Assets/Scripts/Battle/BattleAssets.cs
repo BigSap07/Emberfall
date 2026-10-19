@@ -360,7 +360,10 @@ namespace Emberfall.Battle
         /// Proving), "deep" (the guild dungeon) and the recital ids "tidal" and "coast". Each
         /// becomes a real painting by dropping a file at Assets/Resources/Backgrounds/{id}.png
         /// with NO code change of any kind. That is the whole point of keying this on the id
-        /// campaign.json already authors.
+        /// campaign.json already authors. A boss variant is the same drop: stage 12 of each chapter
+        /// 2 to 6 names "{id}_boss" in campaign.json, and Backgrounds/{id}_boss.png is its painting. Nothing
+        /// else keys on the environment id (GetEnvironment's default arm gives "crossing_boss" the palette
+        /// "crossing" always had), so no fallback to the base id is needed.
         ///
         /// A TRAP WORTH KNOWING, because it makes the fallback quieter than it sounds. The
         /// generated backdrop is built from GetEnvironment(id), and GetEnvironment only has cases
