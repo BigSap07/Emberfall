@@ -1631,6 +1631,7 @@ namespace Emberfall.EditorTools
                     case "AudioFight": id = ScreenId.Battle; break;
                     case "BattleMoment": id = ScreenId.Battle; break;
                     case "AudioSummon": id = ScreenId.Summon; break;
+                    case "AudioRoundTrip": id = ScreenId.MainMenu; break;
                     case "WaveResult":
                     case "WaveResultAuto":
                     case "WaveResultCleared":
@@ -1877,6 +1878,15 @@ namespace Emberfall.EditorTools
 
                 if (frame == armed + BattlePaintDelay - 5) Canvas.ForceUpdateCanvases();
                 if (frame == armed + BattlePaintDelay) Shoot(name, frame, slot);
+                return;
+            }
+
+            // AUDIO PLAY PROOF, THE ROUND TRIP (R14-MUSIC): hub, map, one fight, hub. See
+            // PumpAudioRoundTrip. Has no menu item and no literal Begin call on purpose, so the nightly
+            // sweep does not run it: it is long and its point is the cue log.
+            if (name == "AudioRoundTrip")
+            {
+                PumpAudioRoundTrip(app, name, frame, showAt, slot);
                 return;
             }
 
@@ -2443,6 +2453,86 @@ namespace Emberfall.EditorTools
         /// 5-star (the biggest reveal and its five star pings), so every summon.reveal.N a batch can
         /// hit that matters fires once.</summary>
         private static readonly int[] AudioSummonTiers = { 1, 3, 5 };
+
+        private static int _roundTripPhase;
+        private static int _roundTripAt;
+
+        /// <summary>
+        /// AudioRoundTrip (R14-MUSIC), started as Screen:AudioRoundTrip=&lt;stage id&gt; (the next
+        /// stage when none is named): the hub, the map, one whole fight, and the hub again, each calm
+        /// screen held long enough to hear it. The cue log (EMBERFALL_CUE_LOG) must show music.hub, then
+        /// music.map as a same-track carry, then the fight's battle track (a crossfade), the victory
+        /// duck and stinger, and the hub again after the fight. The fight is played in real time like
+        /// AudioFight, so a skill moment in it writes its DUCK line too. Nothing here decides anything:
+        /// it presses the same Router.Show a tap does.
+        /// </summary>
+        private static void PumpAudioRoundTrip(GameApp app, string name, int frame, int showAt, int slot)
+        {
+            const int Hold = 150;
+            const int FightCeiling = 14400;
+            const int PaintDelay = 20;
+
+            if (frame == showAt)
+            {
+                _roundTripPhase = 0;
+                _roundTripAt = frame;
+                return;
+            }
+            if (frame < showAt) return;
+
+            switch (_roundTripPhase)
+            {
+                case 0:
+                    if (frame - _roundTripAt < Hold) return;
+                    app.Router.Show(ScreenId.Campaign);
+                    Debug.Log("PlayModeScreenshot: AudioRoundTrip is on the map at frame " + frame + ".");
+                    _roundTripPhase = 1;
+                    _roundTripAt = frame;
+                    return;
+                case 1:
+                    if (frame - _roundTripAt < Hold) return;
+                    string asked = SessionState.GetString(BattleStageKey, "");
+                    StageDef next = asked.Length > 0 ? app.Session.Content.GetStage(asked) : app.Session.NextStage;
+                    if (next == null)
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: no campaign stage to fight, skipping AudioRoundTrip.");
+                        SessionState.SetInt(StageKey, slot + 1);
+                        return;
+                    }
+                    app.Router.Battle.SetStage(next);
+                    app.Router.Show(ScreenId.Battle);
+                    Debug.Log("PlayModeScreenshot: AudioRoundTrip is fighting " + next.Id + " at frame " + frame + ".");
+                    _roundTripPhase = 2;
+                    _roundTripAt = frame;
+                    return;
+                case 2:
+                    BattleScreen fight = app.Router.Battle;
+                    bool timedOut = frame - _roundTripAt > FightCeiling;
+                    if ((fight != null && fight.Finished) || timedOut)
+                    {
+                        if (timedOut) Debug.LogWarning("PlayModeScreenshot: the fight did not finish within " + FightCeiling + " frames. Leaving it.");
+                        _roundTripPhase = 3;
+                        _roundTripAt = frame;
+                    }
+                    return;
+                case 3:
+                    if (frame - _roundTripAt < Hold) return;
+                    app.Router.Show(ScreenId.MainMenu);
+                    Debug.Log("PlayModeScreenshot: AudioRoundTrip is back on the hub at frame " + frame + ".");
+                    _roundTripPhase = 4;
+                    _roundTripAt = frame;
+                    return;
+                case 4:
+                    if (frame - _roundTripAt < Hold) return;
+                    _roundTripPhase = 5;
+                    _roundTripAt = frame;
+                    return;
+                default:
+                    if (frame == _roundTripAt + PaintDelay - 5) Canvas.ForceUpdateCanvases();
+                    if (frame == _roundTripAt + PaintDelay) Shoot(name, frame, slot);
+                    return;
+            }
+        }
 
         private static int _audioSummonStart;
         private static int _audioSummonSettledAt;

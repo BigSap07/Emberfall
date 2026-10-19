@@ -1,6 +1,7 @@
 {
   "realAudio": true,
-  "defaults": { "pitchJitter": 0.04, "volumeJitter": 0.1, "musicFade": 1.2, "sfxVoices": 10, "uiVoices": 4, "perCueVoices": 6 },
+  "music": true,
+  "defaults": { "pitchJitter": 0.04, "volumeJitter": 0.1, "musicFade": 1.0, "duckDb": 6, "duckIn": 0.08, "duckOut": 0.5, "duckVictoryHold": 0.8, "sfxVoices": 10, "uiVoices": 4, "perCueVoices": 6 },
   "volumes": { "music": 0.6, "sfx": 0.8, "ui": 0.7 },
   "musicByScreen": {
     "MainMenu": "music.hub",
@@ -17,6 +18,12 @@
     "GuildDungeonBoards": "music.guild",
     "GuildTech": "music.guild",
     "Battle.campaign": "music.battle",
+    "Battle.campaign.ch1": "music.battle",
+    "Battle.campaign.ch2": "music.battle.ch2",
+    "Battle.campaign.ch3": "music.battle",
+    "Battle.campaign.ch4": "music.battle.ch2",
+    "Battle.campaign.ch5": "music.battle",
+    "Battle.campaign.ch6": "music.battle.ch2",
     "Battle.boss": "music.battle.boss",
     "Battle.recital": "music.battle",
     "Battle.proving": "music.battle",
@@ -28,82 +35,100 @@
       "id": "music.hub",
       "channel": "music",
       "loop": true,
-      "fade": 1.2,
-      "volume": 1.0,
-      "files": [],
-      "note": "main menu / hub; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "fade": 1.0,
+      "volume": 0.5,
+      "intro": "music/hub_intro",
+      "files": ["music/hub_loop"],
+      "note": "main menu / hub: the owner's warm village theme (hub_loop). Shares its file with music.map, so hub to map carries on without a restart"
     },
     {
       "id": "music.map",
       "channel": "music",
       "loop": true,
-      "fade": 1.2,
-      "volume": 1.0,
-      "files": [],
-      "note": "campaign map; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "fade": 1.0,
+      "volume": 0.5,
+      "intro": "music/hub_intro",
+      "files": ["music/hub_loop"],
+      "note": "campaign map: the same file as music.hub, so the track carries on from the hub"
     },
     {
       "id": "music.battle",
       "channel": "music",
       "loop": true,
-      "fade": 1.2,
-      "volume": 1.0,
-      "files": [],
-      "note": "campaign battles; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "fade": 1.0,
+      "volume": 0.5,
+      "intro": "music/battle_ch1_intro",
+      "files": ["music/battle_ch1_loop"],
+      "note": "campaign battles in chapter 1 and the default for chapters the map does not name; also recital, proving and guild fights (DEFAULT TAKEN)"
+    },
+    {
+      "id": "music.battle.ch2",
+      "channel": "music",
+      "loop": true,
+      "fade": 1.0,
+      "volume": 0.5,
+      "intro": "music/battle_ch2_intro",
+      "files": ["music/battle_ch2_loop"],
+      "note": "campaign battles in chapters 2, 4 and 6: the darker battle track (chapters 3 to 6 alternate the two battle tracks, DEFAULT TAKEN)"
     },
     {
       "id": "music.battle.boss",
       "channel": "music",
       "loop": true,
-      "fade": 1.2,
-      "volume": 1.0,
-      "files": [],
-      "note": "battle at a wall or boss stage (miniboss stage 6, boss stage 12); silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "fade": 1.0,
+      "volume": 0.5,
+      "intro": "music/boss_intro",
+      "files": ["music/boss_loop"],
+      "note": "battle at a wall or boss stage (miniboss stage 6, boss stage 12, the chapter finale): the climactic track"
     },
     {
       "id": "music.summon",
       "channel": "music",
       "loop": true,
-      "fade": 1.2,
-      "volume": 1.0,
-      "files": [],
-      "note": "summon screen; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "fade": 1.0,
+      "volume": 0.5,
+      "files": ["music/summon_loop"],
+      "note": "summon screen: the mystical ambient track, a calm stretch with no build-up"
     },
     {
       "id": "music.recital",
       "channel": "music",
       "loop": true,
-      "fade": 1.2,
-      "volume": 1.0,
-      "files": [],
-      "note": "recital screen; the recital fights play music.battle; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "fade": 1.0,
+      "volume": 0.5,
+      "intro": "music/hub_intro",
+      "files": ["music/hub_loop"],
+      "note": "recital screen; the recital fights play music.battle. DEFAULT TAKEN: the hub track, a calm menu screen"
     },
     {
       "id": "music.proving",
       "channel": "music",
       "loop": true,
-      "fade": 1.2,
-      "volume": 1.0,
-      "files": [],
-      "note": "proving screen; the proving fights play music.battle; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "fade": 1.0,
+      "volume": 0.5,
+      "intro": "music/hub_intro",
+      "files": ["music/hub_loop"],
+      "note": "proving screen; the proving fights play music.battle. DEFAULT TAKEN: the hub track, a calm menu screen"
     },
     {
       "id": "music.guild",
       "channel": "music",
       "loop": true,
-      "fade": 1.2,
-      "volume": 1.0,
-      "files": [],
-      "note": "guild screens and guild dungeon; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "fade": 1.0,
+      "volume": 0.5,
+      "intro": "music/hub_intro",
+      "files": ["music/hub_loop"],
+      "note": "guild screens and guild dungeon screens. DEFAULT TAKEN: the hub track"
     },
     {
       "id": "music.prologue",
       "channel": "music",
       "loop": true,
-      "fade": 1.2,
-      "volume": 1.0,
-      "files": [],
-      "note": "prologue fight; silent by design: audio-in has no music folder yet. Put tracks in audio-in/music and list them here."
+      "fade": 1.0,
+      "volume": 0.5,
+      "intro": "music/battle_ch1_intro",
+      "files": ["music/battle_ch1_loop"],
+      "note": "prologue fight. DEFAULT TAKEN: the heroic chapter 1 battle track"
     },
     {
       "id": "music.stinger.victory",

@@ -24,7 +24,7 @@ namespace Emberfall.DevHarness
         private static readonly string[] AudioRequiredCues =
         {
             // music, and the two stingers
-            "music.hub", "music.map", "music.battle", "music.battle.boss", "music.summon", "music.recital",
+            "music.hub", "music.map", "music.battle", "music.battle.ch2", "music.battle.boss", "music.summon", "music.recital",
             "music.proving", "music.guild", "music.prologue", "music.stinger.victory", "music.stinger.defeat",
             // interface
             "ui.tap", "ui.confirm", "ui.back", "ui.locked", "ui.reward", "ui.levelup", "ui.unlock",
@@ -65,6 +65,7 @@ namespace Emberfall.DevHarness
             CheckAudioVoiceRules(cfg);
             CheckAudioWiring(cfg, root);
             CheckAudioCredits(root, audioRoot, contentDir, jsonText);
+            CheckMusic(db, cfg, root, audioRoot, jsonText);
         }
 
         // ------------------------------------------------------------------ the map
@@ -100,7 +101,7 @@ namespace Emberfall.DevHarness
             Check(empty.Count == 0, "every sfx and ui cue has at least one file" + (empty.Count > 0 ? ": EMPTY " + string.Join(", ", empty.ToArray()) : ""));
             Check(musicFromSfx.Count == 0,
                   "a sound effect is never used as music: every file on a music cue is under music/ (" + silentMusic
-                  + " music cues are silent while audio-in holds no music)" + (musicFromSfx.Count > 0 ? ": " + string.Join(", ", musicFromSfx.ToArray()) : ""));
+                  + " music cues are silent: the stingers, or every one with the music flag off)" + (musicFromSfx.Count > 0 ? ": " + string.Join(", ", musicFromSfx.ToArray()) : ""));
 
             // The summon tiers must not all be the same sound.
             HashSet<string> tierSounds = new HashSet<string>();
@@ -150,6 +151,12 @@ namespace Emberfall.DevHarness
             {
                 string wav = Path.Combine(audioRoot, all[i].Replace('/', Path.DirectorySeparatorChar) + ".wav");
                 string ogg = Path.Combine(audioRoot, all[i].Replace('/', Path.DirectorySeparatorChar) + ".ogg");
+                // A music file is minutes of audio: CheckMusic reads its header and does not load it whole.
+                if (all[i].StartsWith("music/", StringComparison.Ordinal))
+                {
+                    if (!File.Exists(wav) && !File.Exists(ogg)) missing.Add(all[i]);
+                    continue;
+                }
                 if (File.Exists(wav))
                 {
                     double seconds = WavInfo.Seconds(File.ReadAllBytes(wav));
@@ -195,6 +202,9 @@ namespace Emberfall.DevHarness
             int compared = 0;
             for (int i = 0; i < all.Count; i++)
             {
+                // Music is converted from FLAC and cut into loops, so it is never a byte copy; CheckMusic
+                // proves each music file is named after one of the owner's tracks instead.
+                if (all[i].StartsWith("music/", StringComparison.Ordinal)) continue;
                 string mine = Path.Combine(audioRoot, all[i].Replace('/', Path.DirectorySeparatorChar) + ".wav");
                 string theirs = Path.Combine(audioIn, all[i].Replace('/', Path.DirectorySeparatorChar) + ".wav");
                 if (!File.Exists(mine) || !File.Exists(theirs)) { different.Add(all[i]); continue; }
@@ -205,7 +215,7 @@ namespace Emberfall.DevHarness
                 if (!same) different.Add(all[i]);
                 compared++;
             }
-            Check(different.Count == 0, "every copied file is byte for byte the owner's file in audio-in (" + compared + " compared)"
+            Check(different.Count == 0, "every copied sound effect is byte for byte the owner's file in audio-in (" + compared + " compared; music is checked by the MUSIC checks)"
                   + (different.Count > 0 ? ": DIFFERENT " + string.Join(", ", different.ToArray()) : ""));
         }
 
@@ -275,6 +285,7 @@ namespace Emberfall.DevHarness
 
         private static void CheckAudioRollback(string jsonText)
         {
+            // The music flag has its own rollback proof in CheckMusic.
             string off = jsonText.Replace("\"realAudio\": true", "\"realAudio\": false");
             AudioCueConfig on = AudioCueConfig.FromJson(jsonText);
             AudioCueConfig flagOff = AudioCueConfig.FromJson(off);
@@ -553,6 +564,425 @@ namespace Emberfall.DevHarness
             Check(shots.Contains("name == \"AudioSummon\"") && shots.Contains("name == \"AudioFight\"")
                   && !shots.Contains("Begin(\"Screen:AudioSummon\")") && !shots.Contains("Begin(\"Screen:AudioFight"),
                   "WIRING (reads source): the AudioSummon and AudioFight capture targets exist and have no literal Begin call, so the nightly does not sweep them");
+        }
+
+        // ------------------------------------------------------------------ music (R14-MUSIC)
+
+        /// <summary>The cues that loop a track. The two stingers are one-shots and may stay empty.</summary>
+        private static readonly string[] MusicLoopCues =
+        {
+            "music.hub", "music.map", "music.battle", "music.battle.ch2", "music.battle.boss", "music.summon",
+            "music.recital", "music.proving", "music.guild", "music.prologue"
+        };
+
+        /// <summary>
+        /// THE MUSIC, as checks (R14-MUSIC). Playback needs speakers, so what is proved is everything
+        /// around it that can be read: every loop cue has a real 48 kHz 16 bit file of the right length,
+        /// each stage resolves to the track the cue map promises, the music flag false really means
+        /// every music cue is silent, the duck envelope has the numbers the owner asked for, and the
+        /// service and the screens call the engine-free logic. What it then sounds like is for the Play
+        /// proof's cue log and the owner's ears.
+        /// </summary>
+        private static void CheckMusic(ContentDatabase db, AudioCueConfig cfg, string root, string audioRoot, string jsonText)
+        {
+            Line("");
+            Line("MUSIC (R14-MUSIC: the owner's five tracks, the cue map, crossfade, carry on, duck)");
+
+            // 1. every loop cue has files, and they are loops under music/
+            List<string> noFiles = new List<string>();
+            List<string> badName = new List<string>();
+            for (int i = 0; i < MusicLoopCues.Length; i++)
+            {
+                AudioCueDef c = cfg.Cue(MusicLoopCues[i]);
+                if (c == null || c.Channel != AudioChannel.Music || !c.Loop || c.Files.Count == 0) { noFiles.Add(MusicLoopCues[i]); continue; }
+                for (int f = 0; f < c.Files.Count; f++)
+                    if (!c.Files[f].StartsWith("music/", StringComparison.Ordinal) || !c.Files[f].EndsWith("_loop", StringComparison.Ordinal))
+                        badName.Add(MusicLoopCues[i] + "=" + c.Files[f]);
+            }
+            Check(noFiles.Count == 0 && badName.Count == 0,
+                  "every music cue except the two stingers has a looping file under music/ named <track>_loop (" + MusicLoopCues.Length + " cues)"
+                  + (noFiles.Count > 0 ? ": NO FILES " + string.Join(", ", noFiles.ToArray()) : "")
+                  + (badName.Count > 0 ? ": BAD NAME " + string.Join(", ", badName.ToArray()) : ""));
+
+            // 2. the files: real wav, 48 kHz, 16 bit, stereo, the right length
+            string summonFile = cfg.Cue("music.summon") != null && cfg.Cue("music.summon").Files.Count > 0 ? cfg.Cue("music.summon").Files[0] : "";
+            HashSet<string> musicFiles = new HashSet<string>();
+            HashSet<string> loopFiles = new HashSet<string>();
+            HashSet<string> introFiles = new HashSet<string>();
+            foreach (string id in cfg.Order)
+            {
+                AudioCueDef c = cfg.Cues[id];
+                if (c.Channel != AudioChannel.Music) continue;
+                for (int f = 0; f < c.Files.Count; f++) { musicFiles.Add(c.Files[f]); loopFiles.Add(c.Files[f]); }
+                if (c.Intro.Length > 0) { musicFiles.Add(c.Intro); introFiles.Add(c.Intro); }
+            }
+            List<string> headerBad = new List<string>();
+            List<string> lengthBad = new List<string>();
+            List<string> lengths = new List<string>();
+            foreach (string file in musicFiles)
+            {
+                string path = Path.Combine(audioRoot, file.Replace('/', Path.DirectorySeparatorChar) + ".wav");
+                if (!File.Exists(path)) { headerBad.Add(file + " (missing)"); continue; }
+                byte[] head = new byte[65536];
+                int got;
+                long length = new FileInfo(path).Length;
+                using (FileStream fs = File.OpenRead(path)) got = fs.Read(head, 0, head.Length);
+                if (got < head.Length) Array.Resize(ref head, got);
+                WavInfo.Header h = WavInfo.ReadHeader(head, length);
+                if (!h.Ok || h.Format != 1 || h.SampleRate != 48000 || h.Bits != 16 || h.Channels != 2)
+                {
+                    headerBad.Add(file + " (" + (h.Ok ? h.Format + "/" + h.Channels + "ch/" + h.SampleRate + "Hz/" + h.Bits + "bit" : "not a wav") + ")");
+                    continue;
+                }
+                lengths.Add(Path.GetFileName(file) + " " + h.Seconds.ToString("0.0") + " s");
+                if (introFiles.Contains(file) && !loopFiles.Contains(file)) { if (h.Seconds < 0.5) lengthBad.Add(file + " " + h.Seconds.ToString("0.0")); continue; }
+                bool summon = file == summonFile;
+                double lo = summon ? 30.0 : 60.0;
+                double hi = summon ? 60.0 : 1e9;
+                if (h.Seconds < lo || h.Seconds > hi) lengthBad.Add(file + " " + h.Seconds.ToString("0.0") + " s not in " + lo + " to " + (summon ? "60" : "any"));
+            }
+            Check(musicFiles.Count > 0 && headerBad.Count == 0,
+                  "every music file exists as a PCM wav at 48 kHz, 16 bit, stereo (" + musicFiles.Count + " files)"
+                  + (headerBad.Count > 0 ? ": BAD " + string.Join(", ", headerBad.ToArray()) : ""));
+            Check(musicFiles.Count > 0 && lengthBad.Count == 0,
+                  "each loop is at least 60 s, the summon loop 30 to 60 s: " + string.Join(", ", lengths.ToArray())
+                  + (lengthBad.Count > 0 ? "; WRONG " + string.Join(", ", lengthBad.ToArray()) : ""));
+
+            // 3. named after the owner's tracks, nothing unused, streaming import
+            string audioIn = Environment.GetEnvironmentVariable("EMBERFALL_AUDIO_IN");
+            if (string.IsNullOrEmpty(audioIn)) audioIn = @"D:\Emberfall\audio-in";
+            string flacDir = Path.Combine(audioIn, "music");
+            if (!Directory.Exists(flacDir))
+            {
+                Line("  [skip] the owner's audio-in/music folder is not on this machine; the track name comparison did not run");
+            }
+            else
+            {
+                List<string> unnamed = new List<string>();
+                foreach (string file in musicFiles)
+                {
+                    string baseName = file.Substring("music/".Length);
+                    if (baseName.EndsWith("_loop", StringComparison.Ordinal)) baseName = baseName.Substring(0, baseName.Length - "_loop".Length);
+                    else if (baseName.EndsWith("_intro", StringComparison.Ordinal)) baseName = baseName.Substring(0, baseName.Length - "_intro".Length);
+                    else { unnamed.Add(file); continue; }
+                    if (!File.Exists(Path.Combine(flacDir, baseName + ".flac"))) unnamed.Add(file);
+                }
+                Check(unnamed.Count == 0, "every music file is named after one of the owner's FLAC tracks, plus _loop or _intro (music is converted and cut, so it is not a byte copy)"
+                      + (unnamed.Count > 0 ? ": NO TRACK FOR " + string.Join(", ", unnamed.ToArray()) : ""));
+            }
+
+            List<string> orphanMusic = new List<string>();
+            List<string> notStreaming = new List<string>();
+            string musicRoot = Path.Combine(audioRoot, "music");
+            if (Directory.Exists(musicRoot))
+            {
+                foreach (string file in Directory.GetFiles(musicRoot, "*.wav", SearchOption.TopDirectoryOnly))
+                {
+                    string rel = "music/" + Path.GetFileNameWithoutExtension(file);
+                    if (!musicFiles.Contains(rel)) orphanMusic.Add(rel);
+                    string metaPath = file + ".meta";
+                    string meta = File.Exists(metaPath) ? File.ReadAllText(metaPath) : "";
+                    if (MetaInt(meta, "loadType") != 2 || MetaInt(meta, "compressionFormat") != 1 || MetaInt(meta, "forceToMono") != 0)
+                        notStreaming.Add(rel);
+                }
+            }
+            Check(orphanMusic.Count == 0, "no music file is unused" + (orphanMusic.Count > 0 ? ": " + string.Join(", ", orphanMusic.ToArray()) : ""));
+            Check(notStreaming.Count == 0 && Directory.Exists(musicRoot),
+                  "the import meta of every music file is streaming Vorbis, stereo" + (notStreaming.Count > 0 ? ": WRONG " + string.Join(", ", notStreaming.ToArray()) : ""));
+
+            // 4. the cue map: which stage plays which track
+            CheckMusicMap(db, cfg);
+
+            // 5. the music flag and its rollback
+            CheckMusicFlag(cfg, jsonText);
+
+            // 6. crossfade, carry on, duck
+            CheckMusicTransitions(cfg, jsonText);
+
+            // 7. the source: the service, the screens and the credits use the logic proved above
+            CheckMusicWiring(cfg, root);
+        }
+
+        private static string MusicFileOf(AudioCueConfig cfg, string cueId)
+        {
+            AudioCueDef c = cfg.Cue(cueId);
+            return c != null && c.Files.Count > 0 ? c.Files[0] : "";
+        }
+
+        private static void CheckMusicMap(ContentDatabase db, AudioCueConfig cfg)
+        {
+            // chapter 1 and 2 battles, and the rest, through the same function BattleScreen calls
+            int ch1 = 0, ch2 = 0, ch1Wrong = 0, ch2Wrong = 0, otherChapters = 0, otherWrong = 0;
+            int walls = 0, finales = 0, bossWrong = 0;
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                StageDef s = db.AllStages[i];
+                string kind = AudioCueConfig.CampaignBattleKind(s);
+                string cue = cfg.BattleMusicCue(kind);
+                string file = MusicFileOf(cfg, cue);
+                if (s.IsBoss || s.IsMiniboss)
+                {
+                    if (s.IsMiniboss) walls++;
+                    if (s.IsBoss) finales++;
+                    if (kind != "boss" || cue != "music.battle.boss" || file != "music/boss_loop") bossWrong++;
+                    continue;
+                }
+                if (s.ChapterNumber == 1) { ch1++; if (cue != "music.battle" || file != "music/battle_ch1_loop") ch1Wrong++; }
+                else if (s.ChapterNumber == 2) { ch2++; if (cue != "music.battle.ch2" || file != "music/battle_ch2_loop") ch2Wrong++; }
+                else
+                {
+                    otherChapters++;
+                    if (file != "music/battle_ch1_loop" && file != "music/battle_ch2_loop") otherWrong++;
+                }
+            }
+            Check(ch1 > 0 && ch1Wrong == 0, "every chapter 1 campaign battle plays battle_ch1_loop (" + ch1 + " stages)");
+            Check(ch2 > 0 && ch2Wrong == 0, "every chapter 2 campaign battle plays battle_ch2_loop (" + ch2 + " stages)");
+            Check(otherChapters > 0 && otherWrong == 0,
+                  "chapters 3 and later play one of the two battle tracks, alternating (" + otherChapters + " stages; DEFAULT TAKEN)");
+            Check(walls == db.Chapters.Count && finales == db.Chapters.Count && bossWrong == 0,
+                  "every wall (the miniboss stage, " + walls + ") and every chapter finale (the boss stage, " + finales + ") plays music.battle.boss, boss_loop"
+                  + (bossWrong > 0 ? ": WRONG " + bossWrong : ""));
+            int lastIsBoss = 0;
+            for (int c = 0; c < db.Chapters.Count; c++)
+            {
+                List<StageDef> st = db.Chapters[c].Stages;
+                if (st.Count > 0 && st[st.Count - 1].IsBoss) lastIsBoss++;
+            }
+            Check(lastIsBoss == db.Chapters.Count, "a chapter finale is the last stage of its chapter and is flagged boss (" + lastIsBoss + " of " + db.Chapters.Count + " chapters)");
+
+            // the fallback lookup stays: a chapter the map does not name plays the campaign track
+            Check(cfg.BattleMusicCue("campaign.ch99") == "music.battle" && cfg.BattleMusicCue("campaign") == "music.battle",
+                  "the fallback lookup stays: Battle.campaign.chN falls back to Battle.campaign (chapter 99 plays " + cfg.BattleMusicCue("campaign.ch99") + ")");
+            Check(cfg.BattleMusicCue("prologue") == "music.prologue" && cfg.BattleMusicCue("boss") == "music.battle.boss"
+                  && cfg.BattleMusicCue("recital") == "music.battle" && cfg.BattleMusicCue("proving") == "music.battle"
+                  && cfg.BattleMusicCue("guild") == "music.battle",
+                  "the other battle kinds keep their cues: prologue, boss, recital, proving, guild");
+
+            // the screens
+            string hub = MusicFileOf(cfg, cfg.ScreenMusicCue("MainMenu"));
+            string map = MusicFileOf(cfg, cfg.ScreenMusicCue("Campaign"));
+            Check(hub == "music/hub_loop" && map == hub && cfg.ScreenMusicCue("MainMenu") != cfg.ScreenMusicCue("Campaign"),
+                  "the hub and the map are two cues that share one file, hub_loop (" + hub + ", " + map + ")");
+            Check(MusicFileOf(cfg, cfg.ScreenMusicCue("Summon")) == "music/summon_loop", "the summon screen plays summon_loop");
+            bool guildHub = true;
+            string[] guildScreens = { "Guild", "GuildRequests", "GuildChat", "GuildDungeon", "GuildFloor", "GuildDungeonResult", "GuildDungeonBoards", "GuildTech", "Recital", "Proving" };
+            for (int i = 0; i < guildScreens.Length; i++)
+                if (MusicFileOf(cfg, cfg.ScreenMusicCue(guildScreens[i])) != "music/hub_loop") guildHub = false;
+            Check(guildHub, "recital, proving and the guild screens play the hub track, so going there from the hub carries on (DEFAULT TAKEN)");
+            Check(MusicFileOf(cfg, "music.prologue") == "music/battle_ch1_loop", "the prologue fight plays battle_ch1_loop (DEFAULT TAKEN)");
+        }
+
+        private static void CheckMusicFlag(AudioCueConfig cfg, string jsonText)
+        {
+            string offText = jsonText.Replace("\"music\": true", "\"music\": false");
+            string missingText = jsonText.Replace("  \"music\": true,\n", "").Replace("  \"music\": true,\r\n", "");
+            AudioCueConfig off = AudioCueConfig.FromJson(offText);
+            AudioCueConfig missing = AudioCueConfig.FromJson(missingText);
+            Check(cfg.Music && offText != jsonText && !off.Music && missingText != jsonText && missing.Music,
+                  "THE MUSIC FLAG: audio.json carries \"music\": true; false parses as off; a file with no key reads as on (an old file lists no music files, so on plays nothing there)");
+
+            // ROLLBACK. The same json with every music file taken away is what the game shipped before R14.
+            string preText = Regex.Replace(jsonText, "\"files\": \\[\"music/[^\\]]*\\]", "\"files\": []");
+            preText = Regex.Replace(preText, "\"intro\": \"[^\"]*\",?\\s*", "");
+            AudioCueConfig pre = AudioCueConfig.FromJson(preText);
+            int cues = 0, differs = 0, silentOff = 0, musicCues = 0, sfxChanged = 0;
+            foreach (string id in cfg.Order)
+            {
+                AudioCueDef now = off.Cue(id);
+                AudioCueDef before = pre.Cue(id);
+                cues++;
+                if (now == null || before == null) { differs++; continue; }
+                if (now.Channel == AudioChannel.Music)
+                {
+                    musicCues++;
+                    if (off.IsSilentNow(now) && off.EffectiveFiles(now).Count == 0 && off.EffectiveIntro(now).Length == 0) silentOff++;
+                    if (off.IsSilentNow(now) != pre.IsSilentNow(before)) differs++;
+                }
+                else
+                {
+                    List<string> a = off.EffectiveFiles(now);
+                    List<string> b = pre.EffectiveFiles(before);
+                    bool same = a.Count == b.Count;
+                    for (int k = 0; same && k < a.Count; k++) if (a[k] != b[k]) same = false;
+                    if (!same) sfxChanged++;
+                }
+            }
+            Check(musicCues > 0 && silentOff == musicCues && differs == 0 && sfxChanged == 0,
+                  "ROLLBACK: with \"music\": false every music cue is silent (" + silentOff + " of " + musicCues + ") exactly as when no music file was listed, and the " + (cues - musicCues) + " other cues are untouched");
+
+            // The screens resolve to the same cue ids as before R14 for the old kinds, and all of them are silent.
+            string[] oldKinds = { "campaign", "boss", "recital", "proving", "prologue", "guild" };
+            int sameResolve = 0, silentResolve = 0;
+            for (int i = 0; i < oldKinds.Length; i++)
+            {
+                string expect;
+                if (!off.MusicByScreen.TryGetValue("Battle." + oldKinds[i], out expect)) off.MusicByScreen.TryGetValue("Battle", out expect);
+                string got = off.BattleMusicCue(oldKinds[i]);
+                if (got == expect) sameResolve++;
+                if (got != null && off.IsSilentNow(off.Cue(got))) silentResolve++;
+            }
+            int screensSilent = 0;
+            foreach (KeyValuePair<string, string> pair in off.MusicByScreen)
+                if (off.IsSilentNow(off.Cue(pair.Value))) screensSilent++;
+            Check(sameResolve == oldKinds.Length && silentResolve == oldKinds.Length && screensSilent == off.MusicByScreen.Count,
+                  "ROLLBACK: with the flag off every old battle kind still resolves to its old cue (" + sameResolve + " of " + oldKinds.Length
+                  + ") and every one of the " + off.MusicByScreen.Count + " screen entries is silent");
+
+            // The duck does nothing, and no carry is possible, with the flag off.
+            MusicDuck duck = new MusicDuck();
+            duck.Trigger(off, 1f);
+            float gain = 1f;
+            for (int i = 0; i < 100; i++) gain = Math.Min(gain, duck.Step(off, 0.01f));
+            AudioCueDef hubOff = off.Cue("music.map");
+            Check(gain == 1f && duck.Depth == 0f && !off.CarriesOn("music/hub_loop", hubOff),
+                  "ROLLBACK: with the flag off the duck never moves the music and no track carries on");
+        }
+
+        private static void CheckMusicTransitions(AudioCueConfig cfg, string jsonText)
+        {
+            // crossfade of about a second
+            List<string> fades = new List<string>();
+            bool fadesOk = cfg.MusicFade >= 0.8f && cfg.MusicFade <= 1.5f;
+            for (int i = 0; i < MusicLoopCues.Length; i++)
+            {
+                AudioCueDef c = cfg.Cue(MusicLoopCues[i]);
+                float f = c == null ? -1f : (c.Fade >= 0f ? c.Fade : cfg.MusicFade);
+                if (f < 0.8f || f > 1.5f) { fadesOk = false; fades.Add(MusicLoopCues[i] + "=" + f); }
+            }
+            Check(fadesOk, "a screen change crossfades in about 1 second (musicFade " + cfg.MusicFade + ", every music loop cue 0.8 to 1.5 s)"
+                  + (fades.Count > 0 ? ": WRONG " + string.Join(", ", fades.ToArray()) : ""));
+
+            // carry on compares the file, not the cue id
+            AudioCueDef hub = cfg.Cue("music.hub");
+            AudioCueDef map = cfg.Cue("music.map");
+            AudioCueDef battle = cfg.Cue("music.battle");
+            AudioCueDef ch2 = cfg.Cue("music.battle.ch2");
+            string hubFile = MusicFileOf(cfg, "music.hub");
+            Check(hub != null && map != null && battle != null && ch2 != null
+                  && cfg.CarriesOn(hubFile, map) && cfg.CarriesOn(MusicFileOf(cfg, "music.map"), hub)
+                  && !cfg.CarriesOn(hubFile, battle) && !cfg.CarriesOn(MusicFileOf(cfg, "music.battle"), ch2)
+                  && cfg.CarriesOn(MusicFileOf(cfg, "music.battle"), battle) && !cfg.CarriesOn("", map),
+                  "the same track carries on without a restart under another cue id (hub to map, and the chapter 1 battle track is not the chapter 2 one), and a different track never does");
+            Check(cfg.CarriesOn(MusicFileOf(cfg, "music.battle"), cfg.Cue("music.prologue")),
+                  "the prologue fight carries on from a chapter 1 battle (same file, other cue)");
+
+            // an intro plays once, then the loop: parsed, listed for the file checks, gated by the flag
+            // The summon cue ships without an intro, so a synthetic one proves the plumbing on its own.
+            string withIntro = jsonText.Replace("\"id\": \"music.summon\",", "\"id\": \"music.summon\",\n      \"intro\": \"music/summon_intro\",");
+            AudioCueConfig intro = AudioCueConfig.FromJson(withIntro);
+            AudioCueConfig introOff = AudioCueConfig.FromJson(withIntro.Replace("\"music\": true", "\"music\": false"));
+            AudioCueDef isum = intro.Cue("music.summon");
+            Check(withIntro != jsonText && isum != null && isum.Intro == "music/summon_intro" && intro.EffectiveIntro(isum) == "music/summon_intro"
+                  && intro.AllFiles().Contains("music/summon_intro") && introOff.EffectiveIntro(introOff.Cue("music.summon")) == ""
+                  && intro.EffectiveIntro(intro.Cue("music.hub")) == "music/hub_intro" && cfg.EffectiveIntro(cfg.Cue("music.summon")) == "",
+                  "a cue may name an intro file: it is parsed, it joins the file checks, it belongs to that cue alone, and the flag off drops it");
+
+            // every shipped intro sits beside the loop it opens, with the same base name, on every cue that uses that loop
+            List<string> mismatched = new List<string>();
+            int withIntros = 0;
+            for (int i = 0; i < MusicLoopCues.Length; i++)
+            {
+                AudioCueDef c = cfg.Cue(MusicLoopCues[i]);
+                if (c == null || c.Intro.Length == 0) continue;
+                withIntros++;
+                string loopName = c.Files[0];
+                if (c.Intro != loopName.Substring(0, loopName.Length - "_loop".Length) + "_intro") mismatched.Add(c.Id);
+            }
+            Check(withIntros > 0 && mismatched.Count == 0,
+                  "every intro is the _intro of the loop it opens (" + withIntros + " cues have one)" + (mismatched.Count > 0 ? ": MISMATCH " + string.Join(", ", mismatched.ToArray()) : ""));
+
+            // the duck: the numbers
+            Check(cfg.DuckDb >= 4f && cfg.DuckDb <= 8f && cfg.DuckIn >= 0.02f && cfg.DuckIn <= 0.25f && cfg.DuckOut >= 0.3f && cfg.DuckOut <= 0.8f
+                  && cfg.DuckVictoryHold >= 0.3f && cfg.DuckVictoryHold <= 3f,
+                  "the duck values are in range: " + cfg.DuckDb + " dB down over " + cfg.DuckIn + " s, back over " + cfg.DuckOut + " s, held " + cfg.DuckVictoryHold + " s for the victory");
+
+            // the duck: the envelope, run
+            MusicDuck duck = new MusicDuck();
+            const float dt = 0.005f;
+            duck.Trigger(cfg, 0.30f);
+            float minGain = 1f, tDown = -1f, tBack = -1f, t = 0f;
+            float gain = 1f;
+            for (int step = 0; step < 400; step++)
+            {
+                t += dt;
+                gain = duck.Step(cfg, dt);
+                if (gain < minGain) minGain = gain;
+                if (tDown < 0f && duck.Depth >= 0.999f) tDown = t;
+                if (tDown >= 0f && tBack < 0f && t > 0.30f && gain >= 0.995f) tBack = t;
+            }
+            double db = 20.0 * Math.Log10(minGain);
+            Check(Math.Abs(db + cfg.DuckDb) < 0.1 && tDown > 0f && tDown <= cfg.DuckIn + 0.02f && tBack > 0.30f && tBack - 0.30f <= cfg.DuckOut + 0.03f && gain >= 0.999f,
+                  "the duck envelope steps back " + db.ToString("0.0") + " dB in " + tDown.ToString("0.000") + " s, holds the 0.30 s of a skill moment, and is back in "
+                  + (tBack - 0.30f).ToString("0.000") + " s (the config says " + cfg.DuckOut + ")");
+
+            // a second skill inside the first extends the hold and never ducks deeper
+            MusicDuck again = new MusicDuck();
+            again.Trigger(cfg, 0.30f);
+            float deepest = 1f;
+            for (int step = 0; step < 100; step++)
+            {
+                if (step == 40) again.Trigger(cfg, 0.30f);
+                deepest = Math.Min(deepest, again.Step(cfg, dt));
+            }
+            Check(deepest >= cfg.DuckGain - 0.0001f, "two skill moments in a row never duck deeper than " + cfg.DuckDb + " dB (deepest " + (20.0 * Math.Log10(deepest)).ToString("0.00") + " dB)");
+
+            AudioCueDef vic = cfg.Cue("music.stinger.victory");
+            Check(vic != null && Math.Abs(vic.StopMusic - 0.8f) < 0.0001f,
+                  "the victory stinger still ends the battle track over 0.8 s (stopMusic " + (vic == null ? -1f : vic.StopMusic) + ")");
+        }
+
+        private static void CheckMusicWiring(AudioCueConfig cfg, string root)
+        {
+            string scripts = Path.Combine(root, "Assets", "Scripts");
+            string service = ReadIfThere(Path.Combine(scripts, "Game", "AudioService.cs"));
+            string sfx = ReadIfThere(Path.Combine(scripts, "Game", "Sfx.cs"));
+            string vfx = ReadIfThere(Path.Combine(scripts, "Battle", "VfxDirector.cs"));
+            string battle = ReadIfThere(Path.Combine(scripts, "UI", "Screens", "BattleScreen.cs"));
+            string credits = ReadIfThere(Path.Combine(root, "Assets", "Resources", "Content", "credits.txt"));
+
+            int setAt = service.IndexOf("public void SetMusic(", StringComparison.Ordinal);
+            int setEnd = setAt < 0 ? -1 : service.IndexOf("private Fader PlayingFader(", setAt, StringComparison.Ordinal);
+            string setBody = setAt >= 0 && setEnd > setAt ? service.Substring(setAt, setEnd - setAt) : "";
+            Check(setBody.Contains("_config.EffectiveFiles(def)") && setBody.Contains("_config.CarriesOn(") && setBody.Contains("same-track carry")
+                  && setBody.Contains("PlayScheduled") && !setBody.Contains("def.Files") && !setBody.Contains("def.IsSilent"),
+                  "WIRING (reads source): SetMusic reads the files through the music flag, carries on by file, logs the carry, and starts an intro on the audio clock; it never reads a cue's own file list");
+
+            int duckAt = service.IndexOf("public void Duck(", StringComparison.Ordinal);
+            int duckEnd = duckAt < 0 ? -1 : service.IndexOf("VictoryDuckHold", duckAt, StringComparison.Ordinal);
+            string duckBody = duckAt >= 0 && duckEnd > duckAt ? service.Substring(duckAt, duckEnd - duckAt) : "";
+            Check(duckBody.Contains("!_config.Music") && duckBody.Contains("AudioCueLog.Record(\"DUCK\"") && service.Contains("_duck.Step(_config, dt)"),
+                  "WIRING (reads source): AudioService.Duck does nothing with the music flag off, writes a DUCK line every time, and the music volume follows the envelope");
+
+            int playAt = service.IndexOf("public bool Play(string cueId, float volumeScale)", StringComparison.Ordinal);
+            int playEnd = playAt < 0 ? -1 : service.IndexOf("public bool Play(string cueId) {", playAt, StringComparison.Ordinal);
+            string playBody = playAt >= 0 && playEnd > playAt ? service.Substring(playAt, playEnd - playAt) : "";
+            Check(playBody.Contains("_config.IsSilentNow(def)") && playBody.Contains("_config.EffectiveFiles(def)") && !playBody.Contains("def.IsSilent"),
+                  "WIRING (reads source): a stinger obeys the music flag too, so a music one-shot is silent with the flag off");
+
+            int skillAt = vfx.IndexOf("public void SkillMoment(", StringComparison.Ordinal);
+            int skillEnd = skillAt < 0 ? -1 : vfx.IndexOf("// ----", skillAt, StringComparison.Ordinal);
+            string skillBody = skillAt >= 0 && skillEnd > skillAt ? vfx.Substring(skillAt, skillEnd - skillAt) : "";
+            int gateAt = skillBody.IndexOf("if (!Juice.On) return;", StringComparison.Ordinal);
+            int duckCall = skillBody.IndexOf(".Audio.Duck(\"skill\"", StringComparison.Ordinal);
+            Check(gateAt >= 0 && duckCall > gateAt && skillBody.Contains("JuiceMath.DimSeconds(p)"),
+                  "WIRING (reads source): the skill moment ducks the music for the length of its backdrop dim, behind the Juice.On gate");
+
+            int victoryAt = sfx.IndexOf("public void Victory()", StringComparison.Ordinal);
+            int defeatAt = victoryAt < 0 ? -1 : sfx.IndexOf("public void Defeat()", victoryAt, StringComparison.Ordinal);
+            string victoryBody = victoryAt >= 0 && defeatAt > victoryAt ? sfx.Substring(victoryAt, defeatAt - victoryAt) : "";
+            int vDuck = victoryBody.IndexOf("Service.Duck(\"victory\"", StringComparison.Ordinal);
+            int vStinger = victoryBody.IndexOf("Service.Play(\"music.stinger.victory\")", StringComparison.Ordinal);
+            Check(vDuck >= 0 && vStinger > vDuck, "WIRING (reads source): the victory ducks the music, then plays the stinger that ends the battle track");
+
+            Check(battle.Contains("AudioCueConfig.CampaignBattleKind(_stage)") && battle.Contains("return \"prologue\";") && battle.Contains("return \"guild\";"),
+                  "WIRING (reads source): BattleMusicKind names the chapter through AudioCueConfig.CampaignBattleKind and keeps its prologue, guild, proving and recital kinds");
+
+            string shots = ReadIfThere(Path.Combine(root, "Assets", "Editor", "PlayModeScreenshot.cs"));
+            Check(shots.Contains("name == \"AudioRoundTrip\"") && shots.Contains("PumpAudioRoundTrip(") && !shots.Contains("Begin(\"Screen:AudioRoundTrip"),
+                  "WIRING (reads source): the AudioRoundTrip capture target (hub, map, fight, hub) exists and has no literal Begin call, so the nightly does not sweep it");
+
+            Check(credits.Contains("Suno") && credits.IndexOf("no music", StringComparison.OrdinalIgnoreCase) < 0,
+                  "credits.txt credits the music to the owner, made with Suno, and no longer says there is no music");
         }
 
         // ------------------------------------------------------------------ credits

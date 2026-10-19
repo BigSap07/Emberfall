@@ -455,6 +455,9 @@ namespace Emberfall.Battle
             if (caster == null || _stage == null || _stage.Vfx == null) return;
             JuiceProfile p = Juice.Profile;
             _stage.DimBackdrop(PlaybackSpeed());
+            // R14: the music steps back for as long as the backdrop is dimmed. Audio decides how far.
+            Game.GameApp app = Game.GameApp.Instance;
+            if (app != null && app.Audio != null) app.Audio.Duck("skill", JuiceMath.DimSeconds(p) / PlaybackSpeed());
             Camera cam = _stage.Camera;
             Vector3 behind = caster.CenterPosition + (cam != null ? cam.transform.forward * 0.6f : Vector3.zero);
             Color accent = Accent(caster);

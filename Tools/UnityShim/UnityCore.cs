@@ -818,6 +818,7 @@ namespace UnityEngine
     {
         public float length { get { return 0f; } }
         public int samples { get { return 0; } }
+        public int frequency { get { return 0; } }
         public static AudioClip Create(string name, int lengthSamples, int channels, int frequency, bool stream) { return null; }
         public bool SetData(float[] data, int offsetSamples) { return true; }
     }
@@ -830,10 +831,13 @@ namespace UnityEngine
         public bool loop { get; set; }
         public bool playOnAwake { get; set; }
         public void Play() { }
+        public void PlayScheduled(double time) { }
         public void Stop() { }
         public void PlayOneShot(AudioClip clip) { }
         public void PlayOneShot(AudioClip clip, float volumeScale) { }
     }
+
+    public static class AudioSettings { public static double dspTime { get { return 0.0; } } }
 
     public sealed class AudioListener : Behaviour { public static float volume { get; set; } }
 
