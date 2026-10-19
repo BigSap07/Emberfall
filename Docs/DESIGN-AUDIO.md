@@ -169,9 +169,9 @@ menu item and no literal `Begin` call in `PlayModeScreenshot`, so the nightly sw
 - `Screen:AudioFight=<stage id>` plays one whole fight on the battle screen at the speed the player
   has set and waits for the result, so hits, crits, casts, skill impacts, heals, shields and deaths
   fire. A longer stage has more of each: `ch1_6` (a miniboss) and `ch2_6` are good picks. These are
-  wave stages: a won battle mid-stage shows the wave progress and plays no victory cue. The victory
-  and defeat cues play on a stage clear or a lost wave, which the `Screen:WaveResultCleared` and
-  `Screen:WaveResultLost` targets show.
+  wave stages: a won battle mid-stage shows the wave progress, and `ShowWaveProgressResult` plays
+  the victory cue (and so the victory duck) there too. A stage clear and a lost wave are shown by
+  the `Screen:WaveResultCleared` and `Screen:WaveResultLost` targets.
 - `Screen:AudioRoundTrip=<stage id>` holds the hub for about 4 s and the map for about 3 s, plays
   the stage's fight in real time, then holds the hub again for about 4 s. The log must show
   `MUSIC music.hub`, `MUSIC music.map same-track carry`, the fight's track with a fade, and the hub
