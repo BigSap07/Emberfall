@@ -1262,6 +1262,11 @@ namespace Emberfall.UI
 
             _plate.sprite = EmberforgeSkin.Get(slot);
 
+            // The UI kit has one plate for rest and press (painted metal, no pressed art), so a press darkens
+            // it instead; the baked kit swaps to its own pressed sprite and the colour stays white.
+            bool kitPlate = UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) != null;
+            if (kitPlate) _plate.color = _down && _interactable ? UITheme.ButtonPressed : Color.white;
+
             if (_content != null)
                 _content.anchoredPosition = _down
                     ? new Vector2(_restPosition.x, _restPosition.y - Emberforge.ButtonPressDrop)

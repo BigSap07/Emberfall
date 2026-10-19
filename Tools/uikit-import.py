@@ -46,7 +46,7 @@ ASTC_4x4 = 48
 # (forge_panel's border is 34 to 64, a button's 24 to 30). Pixels per unit is what sets it: a border of
 # b pixels draws at b * 100 / ppu units. frame: by the left border. plate: by the sprite's height, the
 # natural height the control is drawn at. A piece not listed is never sliced.
-DRAWN_LEFT_BORDER = {"panel_large": 56.0, "panel_small": 38.0, "popup": 30.0}
+DRAWN_LEFT_BORDER = {"panel_large": 34.0, "panel_small": 26.0, "popup": 30.0}
 NATURAL_HEIGHT = {"btn_primary": 90.0, "btn_secondary": 90.0, "btn_disabled": 90.0, "tab_on": 72.0, "tab_off": 72.0,
                   "pill_currency": 64.0, "bar_frame": 36.0, "banner_title": 150.0}
 
