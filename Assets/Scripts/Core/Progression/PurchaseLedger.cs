@@ -12,12 +12,15 @@ namespace Emberfall.Core.Progression
     /// </summary>
     public interface IStoreRules
     {
-        /// <summary>True when the offer may be bought now. On false, reason is a sentence a player can read.</summary>
-        bool CanBuy(GameSession session, string offerId, long nowUnix, out string reason);
+        /// <summary>True when the offer may be bought now by this buyer with this pick (the pick matters
+        /// for a limit that is per hero: the Hero Contract). On false, reason is a sentence a player can
+        /// read. Reads, writes nothing.</summary>
+        bool CanBuy(GameSession session, string offerId, string choiceHeroId, long nowUnix, out string reason);
 
         /// <summary>Called once, after a grant is applied: the offer counts the purchase (its limit, its
-        /// period, a card's first day). Writes through PlayerProfile.Store.Record.</summary>
-        void RecordPurchase(GameSession session, string offerId, long nowUnix);
+        /// period, a card's first day) under the same pick the grant used. Writes through
+        /// PlayerProfile.Store.Record.</summary>
+        void RecordPurchase(GameSession session, string offerId, string choiceHeroId, long nowUnix);
 
         StoreOffer Find(string offerId);
         StoreOffer FindByProduct(string productId);
@@ -124,7 +127,7 @@ namespace Emberfall.Core.Progression
             StoreOffer offer = _rules.Find(offerId);
             if (offer == null) { r.Reason = PurchaseRefusal.NoSuchOffer; return r; }
             string why;
-            if (!_rules.CanBuy(session, offerId, nowUnix, out why))
+            if (!_rules.CanBuy(session, offerId, choiceHeroId, nowUnix, out why))
             {
                 r.Reason = PurchaseRefusal.NotAvailable;
                 r.Message = why ?? "";
@@ -159,7 +162,14 @@ namespace Emberfall.Core.Progression
         {
             string choice;
             if (offerId == null || !_pending.TryGetValue(offerId, out choice)) choice = "";
-            PurchaseResult r = Deliver(session, _rules == null ? null : _rules.Find(offerId), receiptId, choice, nowUnix, false);
+            return Complete(session, offerId, receiptId, choice, nowUnix);
+        }
+
+        /// <summary>The same with the pick named: a purchase the store delivered with no pick (after a restart or a
+        /// timeout) is finished once the player has chosen.</summary>
+        public PurchaseResult Complete(GameSession session, string offerId, string receiptId, string choiceHeroId, long nowUnix)
+        {
+            PurchaseResult r = Deliver(session, _rules == null ? null : _rules.Find(offerId), receiptId, choiceHeroId ?? "", nowUnix, false);
             if (r.CanConfirm && offerId != null) _pending.Remove(offerId);
             return r;
         }
@@ -174,6 +184,11 @@ namespace Emberfall.Core.Progression
             if (offer == null) { r.Reason = PurchaseRefusal.NoSuchOffer; return r; }
             r.OfferId = offer.Id;
             if (!offer.Restorable) { r.Reason = PurchaseRefusal.NotRestorable; return r; }
+            // A store may hand a restored purchase back under a NEW transaction id (Apple does). This profile
+            // already holds a receipt for the offer, whichever id it came under: nothing more is owed.
+            List<PurchaseReceipt> have = session.Profile.Store.Receipts;
+            for (int i = 0; i < have.Count; i++)
+                if (have[i].OfferId == offer.Id) { r.Reason = PurchaseRefusal.AlreadyGranted; return r; }
             return Deliver(session, offer, receiptId, choiceHeroId ?? "", nowUnix, true);
         }
 
@@ -214,7 +229,7 @@ namespace Emberfall.Core.Progression
             receipt.Restored = restored;
             if (store.Receipts.Count >= StoreState.ReceiptsMax) store.Receipts.RemoveAt(0);
             store.Receipts.Add(receipt);
-            _rules.RecordPurchase(session, offer.Id, nowUnix);
+            _rules.RecordPurchase(session, offer.Id, choiceHeroId, nowUnix);
             r.Success = true;
             return r;
         }

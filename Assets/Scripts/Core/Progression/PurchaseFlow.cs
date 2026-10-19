@@ -34,6 +34,7 @@ namespace Emberfall.Core.Progression
         private readonly Action _save;
         private readonly Dictionary<string, double> _age = new Dictionary<string, double>();
         private readonly List<string[]> _restoreWaiting = new List<string[]>();
+        private readonly List<string[]> _purchaseWaiting = new List<string[]>();
         private Func<string, string> _restoreChoice;
 
         /// <summary>Every finished purchase, restore or refusal of a delivered purchase, for the screen.</summary>
@@ -63,6 +64,11 @@ namespace Emberfall.Core.Progression
 
         /// <summary>Offers a restore found that still need the player's pick: { productId, receiptId }.</summary>
         public IList<string[]> RestoreWaiting { get { return _restoreWaiting; } }
+
+        /// <summary>Purchases the store delivered that were paid and still need the player's pick (a delivery after a
+        /// restart or a timeout has no pick): { productId, receiptId }. The screen asks the player and calls
+        /// FinishPurchase. Nothing is granted until then, and the store keeps each open.</summary>
+        public IList<string[]> PurchaseWaiting { get { return _purchaseWaiting; } }
 
         /// <summary>Starts the store and delivers any purchase it finished and nobody confirmed.</summary>
         public void Start(IList<StoreOffer> offers)
@@ -177,7 +183,38 @@ namespace Emberfall.Core.Progression
             _age.Remove(offer.Id);
             if (r.CanConfirm && _backend != null) _backend.Confirm(productId, receiptId);
             if (r.Success && _save != null) _save();
+            if (r.Reason == PurchaseRefusal.BadChoice) QueueWaiting(_purchaseWaiting, productId, receiptId);
             Report(r);
+        }
+
+        /// <summary>Finishes a paid purchase that was waiting for a pick: grants it once, tells the store it is
+        /// finished and saves.</summary>
+        public PurchaseResult FinishPurchase(string productId, string choiceHeroId)
+        {
+            for (int i = 0; i < _purchaseWaiting.Count; i++)
+            {
+                if (_purchaseWaiting[i][0] != productId) continue;
+                string receipt = _purchaseWaiting[i][1];
+                StoreOffer offer = _ledger.Rules.FindByProduct(productId);
+                PurchaseResult r = offer == null ? new PurchaseResult() : _ledger.Complete(_session(), offer.Id, receipt, choiceHeroId, _now());
+                if (r.CanConfirm)
+                {
+                    _purchaseWaiting.RemoveAt(i);
+                    if (_backend != null) _backend.Confirm(productId, receipt);
+                }
+                if (r.Success && _save != null) _save();
+                Report(r);
+                return r;
+            }
+            PurchaseResult none = new PurchaseResult();
+            none.Reason = PurchaseRefusal.NoSuchOffer;
+            return none;
+        }
+
+        private static void QueueWaiting(List<string[]> list, string productId, string receiptId)
+        {
+            for (int i = 0; i < list.Count; i++) if (list[i][1] == receiptId) return;
+            list.Add(new[] { productId, receiptId });
         }
 
         public void OnPurchaseFailed(string productId, StoreFailure reason, string detail)
@@ -195,12 +232,7 @@ namespace Emberfall.Core.Progression
             if (offer == null) return;
             string choice = _restoreChoice == null ? "" : (_restoreChoice(offer.Id) ?? "");
             PurchaseResult r = _ledger.Restore(_session(), productId, receiptId, choice, _now());
-            if (r.Reason == PurchaseRefusal.BadChoice)
-            {
-                bool queued = false;
-                for (int i = 0; i < _restoreWaiting.Count; i++) if (_restoreWaiting[i][1] == receiptId) queued = true;
-                if (!queued) _restoreWaiting.Add(new[] { productId, receiptId });
-            }
+            if (r.Reason == PurchaseRefusal.BadChoice) QueueWaiting(_restoreWaiting, productId, receiptId);
             if (r.Success && _save != null) _save();
             Report(r);
         }
