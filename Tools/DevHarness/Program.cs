@@ -19446,11 +19446,13 @@ namespace Emberfall.DevHarness
         // 2 on was loosened in R16 by one shared step (recommendedPower five to eight percent lower,
         // never taking a stage past x1.20 on the median of 60 walks) so no reference walk is stuck; the
         // values here are the first-seed readings of that content. Every value sits inside
-        // PowerBandFor's band (the solver prints a line for any that does not). Running the solver on
-        // content that already has this shape changes nothing; running it after a hero or an economy
-        // change moves the recommendedPower of each stage and keeps the ratio. A new shape is a change
-        // to this table made together with the content it describes, because the first-seed reading
-        // moves with every level edit (a content edit re-draws the walk).
+        // PowerBandFor's band (the solver prints a line for any that does not).
+        //
+        // THE TABLE IS A SNAPSHOT of first-seed readings of ONE engine and ONE content state. It goes
+        // stale after any engine or content change: recommendedPower follows a single-seed walk, and a
+        // level edit or a combat change re-draws that walk (the counterattack rule alone moved 42 stages
+        // on a what-if). Re-read it after any such change, together with the content it describes. On
+        // the exact content and engine it was read from, a what-if moves nothing; that is all it claims.
         //
         // A stage past the table's end (a longer campaign) falls back to the middle of its band.
         private static readonly float[] SolverTargetRatios =

@@ -20,10 +20,11 @@
 # BEFORE YOU RUN IT, READ Docs/ECONOMY-PROPOSAL-R4.md. The solver aims at the per-stage curve that proposal
 # shipped: SolverTargetRatios in Program.cs is entry power over recommendedPower at each of the 72 stages,
 # read off the reference walk on the shipped content. The CEIL band is read by kind (IsCeilWall, IsCeilBreezy, CeilKindOf; breezy has no upper edge) and
-# the power band by stage (PowerBandFor). Running it on content that already has that shape changes
-# nothing; -WhatIf proves it (R16: a what-if on the shipped content moves no stage). A hero, rarity or
-# economy change moves each stage's recommendedPower and keeps its ratio. Reshaping the curve itself is a
-# change to SolverTargetRatios, not a re-run.
+# the power band by stage (PowerBandFor). SolverTargetRatios is a SNAPSHOT of first-seed readings of one engine
+# and one content state: it goes stale after any engine or content change (the counterattack rule alone moved 42
+# stages on a what-if, because recommendedPower follows a single-seed walk that any level or combat edit re-draws),
+# so re-read it after any such change, together with the content it describes. On the exact engine and content it
+# was read from, -WhatIf moves nothing; that is all it claims.
 #
 # WHEN TO RUN IT. After any change to a hero the balance line fields, and after any change to the
 # economy. See DESIGN-CAMPAIGN-STRUCTURE.md.
