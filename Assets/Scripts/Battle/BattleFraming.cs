@@ -210,6 +210,91 @@ namespace Emberfall.Battle
         public const float CameraZ = -9.5f;
         public const float OrthographicSize = 3.65f;
 
+        // ------------------------------------------------------------------ R15 feel preset "v2"
+        //
+        // The v2 look draws every unit 20 percent larger (UnitScaleV2) at about the same camera
+        // size, which is only possible because the slots are laid out differently. The old grid
+        // is two ranks of units in a column each, so every pair in a column has to clear on the
+        // z axis alone, and the vertical frame is the thing that binds (see the long comment above
+        // for what it costs). v2 stops stacking units in a column: the front pair stands close to
+        // the centre line, the outer two of the back rank stand far out at the very top and bottom
+        // of the field, and the middle of the back rank stands between them on the centre line,
+        // so the five wrap round the centre like a C. Two units that share a z now stand at
+        // different x, and the field has 3 to 4 world units of free width on each side to pay for it.
+        //
+        // The numbers came from an offline search (the five slot positions, minimising the vertical
+        // frame) over the real roster, then were rounded and PROVED by the harness (StageChecks),
+        // which projects the art's measured visible silhouettes through Project below:
+        //   allies: every ally slot is judged by the widest and tallest hero there is (Darian is 1.09
+        //     wide across the screen and Brenna 2.30 tall at 1.2x), since any hero can stand in any slot;
+        //   enemies: each of the 72 authored lines, slot by slot, mannequins and stand-ins included;
+        //   a body gap of at least 0.05 world, plate boxes (240 x 69 canvas units) clear of each other
+        //     by 8, a plate's bars clear of any other unit's body, plates clear of the NEXT pill and the
+        //     ability callout, and the camera shake and cast lift reserved top and bottom with the near
+        //     edge of the scaled blob shadow.
+        // It is NOT a free lunch: the formation is wider than it was, so the frame is also clamped by
+        // width (HalfWidthV2 below), and a narrow viewport zooms out instead of cutting a unit off
+        // (BattleStage.FitBackdrop reads OrthographicSizeFor(v2, aspect)). One unit did not fit the
+        // search, the Carrion Vulture, whose wings span 2.7 world units at 1.2x; stage-v2.json gives it
+        // a 0.8 scaleMul rather than widening every slot for one bird.
+        public const float UnitScaleV2 = 1.2f;
+
+        public static readonly SlotPoint[] AllySlotsV2 =
+        {
+            new SlotPoint(-1.15f, -3.30f), new SlotPoint(-1.15f, 3.30f),
+            new SlotPoint(-5.30f, -4.45f), new SlotPoint(-3.45f, 0f), new SlotPoint(-5.30f, 4.45f)
+        };
+
+        public static readonly SlotPoint[] EnemySlotsV2 =
+        {
+            new SlotPoint(1.15f, -3.30f), new SlotPoint(1.15f, 3.30f),
+            new SlotPoint(5.30f, -4.45f), new SlotPoint(3.45f, 0f), new SlotPoint(5.30f, 4.45f)
+        };
+
+        public const float CameraYV2 = 6.15f;
+        public const float OrthographicSizeV2 = 3.70f;
+
+        /// <summary>The widest a body or its plate reaches from x = 0 in v2, before the shake: the
+        /// outer back slot, 5.30, plus the widest scaled half-width across the screen (1.14, the
+        /// Carrion Vulture's wings at the 0.8 its scaleMul gives it) plus the shake and a margin of 0.18. A viewport narrower than this
+        /// asks for a larger orthographic size.</summary>
+        public const float HalfWidthV2 = 5.30f + 1.14f + 0.36f;
+
+        public static SlotPoint Slot(bool isPlayer, int slot, bool v2)
+        {
+            if (!v2) return Slot(isPlayer, slot);
+            SlotPoint[] side = isPlayer ? AllySlotsV2 : EnemySlotsV2;
+            int i = slot < 0 ? 0 : slot >= side.Length ? side.Length - 1 : slot;
+            return side[i];
+        }
+
+        public static float CameraYFor(bool v2) { return v2 ? CameraYV2 : CameraY; }
+
+        /// <summary>The camera's orthographic size for a rendering of the field: the preset's own,
+        /// or, in v2 only, whatever the formation's width needs when the viewport is narrower than
+        /// the one v2 was drawn for (width / aspect). v1 is never touched by the aspect.</summary>
+        public static float OrthographicSizeFor(bool v2, float viewportAspect)
+        {
+            if (!v2) return OrthographicSize;
+            float byWidth = viewportAspect > 0.01f ? HalfWidthV2 / viewportAspect : 0f;
+            return OrthographicSizeV2 > byWidth ? OrthographicSizeV2 : byWidth;
+        }
+
+        /// <summary>Project for the preset: the camera of the v2 look, at the given orthographic
+        /// size. v1 delegates to the original so the HUD model keeps its meaning.</summary>
+        public static CanvasPoint Project(float x, float y, float z, CanvasRect viewport, bool v2, float orthographicSize)
+        {
+            if (!v2) return Project(x, y, z, viewport);
+            double pitch = CameraPitch * Math.PI / 180.0;
+            float cos = (float)Math.Cos(pitch);
+            float sin = (float)Math.Sin(pitch);
+            float right = x - CameraX;
+            float up = (y - CameraYV2) * cos + (z - CameraZ) * sin;
+            float perUnit = viewport.Height / (2f * orthographicSize);
+            return new CanvasPoint(viewport.X + viewport.Width * 0.5f + right * perUnit,
+                                   viewport.Y + viewport.Height * 0.5f + up * perUnit);
+        }
+
         /// <summary>A rectangle in canvas units, origin bottom-left, y up.</summary>
         public struct CanvasRect
         {

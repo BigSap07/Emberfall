@@ -58,7 +58,8 @@ $sources = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs 
            (Join-Path $root "Tools\DevHarness\WallResolve.cs") + (Join-Path $root "Tools\DevHarness\TempoStudy.cs") + (Join-Path $root "Tools\DevHarness\SolvePrereqs.cs") + (Join-Path $root "Tools\DevHarness\ParityStudy.cs") + (Join-Path $root "Tools\DevHarness\GuildPathChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTechChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentParity.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentThemes.cs") +
            (Join-Path $root "Tools\DevHarness\TalentTrialChecks.cs") + (Join-Path $root "Tools\DevHarness\OnboardingChecks.cs") + (Join-Path $root "Tools\DevHarness\TelemetryChecks.cs") + (Join-Path $root "Tools\DevHarness\DailyLoopChecks.cs") + (Join-Path $root "Tools\DevHarness\SinkChecks.cs") + (Join-Path $root "Tools\DevHarness\AudioChecks.cs") + (Join-Path $root "Tools\DevHarness\JuiceChecks.cs") + (Join-Path $root "Tools\DevHarness\CaptureWatchdogChecks.cs") + (Join-Path $root "Assets\Editor\CaptureWatchdog.cs") +
            (Join-Path $root "Assets\Scripts\Battle\BattleFraming.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudMetrics.cs") +
-           (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudLayout.cs") + (Join-Path $root "Tools\DevHarness\BattleHudChecks.cs")
+           (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudLayout.cs") + (Join-Path $root "Tools\DevHarness\BattleHudChecks.cs") +
+           (Join-Path $root "Tools\DevHarness\StageChecks.cs") + (Join-Path $root "Assets\Scripts\Battle\StagePresentation.cs")
 $rsp = Join-Path $env:TEMP "emberfall_recpwr.rsp"
 $lines = @($sources | ForEach-Object { '"' + $_ + '"' })
 [IO.File]::WriteAllLines($rsp, [string[]]$lines, [Text.UTF8Encoding]::new($false))

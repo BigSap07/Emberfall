@@ -561,6 +561,7 @@ namespace Emberfall.EditorTools
             SessionState.SetString(MomentKey, moment);
             SessionState.SetInt(MomentStageKey, 0);
             Juice.ForceForCapture(null);
+            StageFeel.ForceForCapture(null);
             Time.captureFramerate = 0;
 
             if (!EditorScratchIdentity.Enter(ScratchProduct))
@@ -1325,6 +1326,7 @@ namespace Emberfall.EditorTools
             SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetInt(MomentStageKey, 0);
             Juice.ForceForCapture(null);
+            StageFeel.ForceForCapture(null);
             Time.captureFramerate = 0;
             SessionState.SetBool(ActiveKey, false);
             SessionState.SetBool(TelemetryService.PromptInEditorKey, false);
@@ -1645,6 +1647,16 @@ namespace Emberfall.EditorTools
                     // so it routes to the page and opens the dialog a frame later, exactly as the
                     // Hub's layers do below.
                     case "AbilityNumbers": id = ScreenId.HeroDetail; break;
+                }
+
+                // THE ROSTER SHEET (R15): every unit of one side in one clip, built through the battle's own
+                // door, with no UI over it. Screen:RosterSheet=<side>[.<clip>][.v1|.v2]. It shows no screen,
+                // so nothing is routed; the generic shot below photographs it. See RosterSheetShots.
+                if (name == "RosterSheet")
+                {
+                    RosterSheetShots.Build(app, SessionState.GetString(BattleStageKey, ""));
+                    Debug.Log("PlayModeScreenshot: showing " + name);
+                    return;
                 }
 
                 // THE HUB'S THREE LAYERS ABOVE THE MAP are targets of their own, because none of

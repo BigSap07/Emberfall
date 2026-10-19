@@ -80,7 +80,9 @@ namespace Emberfall.Battle
             // wears instead of a face, and what a broken sprite is reported under; the aspect
             // is what tints the mannequin. Both come off the snapshot the simulation already
             // produced, so no screen has to look a unit up a second time to draw it.
-            Rig = UnitRig.Build("Rig", transform, snapshot.Visual, facingForward,
+            // StageFeel.Resolve is the snapshot's own VisualDef, the same object, unless the v2 look
+            // is on: then a stand-in's art, a corrected facing and the larger scale (StagePresentation).
+            Rig = UnitRig.Build("Rig", transform, StageFeel.Resolve(snapshot), facingForward,
                                 snapshot.Name, snapshot.Aspect);
 
             _idlePhase = (snapshot.Id * 0.73f) % 6.28f;
