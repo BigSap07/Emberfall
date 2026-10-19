@@ -239,6 +239,10 @@ namespace Emberfall.Battle
         // a 0.8 scaleMul rather than widening every slot for one bird.
         public const float UnitScaleV2 = 1.2f;
 
+        /// <summary>The melee step (UnitActor.ApproachDistance, 0.85) is scaled by this in v2: the
+        /// front pair is 2.30 apart rather than 2.80, so 0.4 leaves the 1.95 the old step left.</summary>
+        public const float ApproachScaleV2 = 0.4f;
+
         public static readonly SlotPoint[] AllySlotsV2 =
         {
             new SlotPoint(-1.15f, -3.30f), new SlotPoint(-1.15f, 3.30f),

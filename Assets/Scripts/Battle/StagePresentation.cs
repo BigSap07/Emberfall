@@ -41,6 +41,11 @@ namespace Emberfall.Battle
         /// <summary>Def ids whose spriteMirror is inverted in v2.</summary>
         public readonly HashSet<string> FaceFlip = new HashSet<string>();
 
+        /// <summary>Per unit, the clips whose facing is inverted in v2, on top of the unit's own
+        /// mirror: a sheet that is drawn right in one clip and left in another cannot be fixed by one
+        /// flip. SpriteAnimator applies it when the clip starts.</summary>
+        public readonly Dictionary<string, HashSet<string>> ClipFlip = new Dictionary<string, HashSet<string>>();
+
         /// <summary>A unit's own multiplier on the v2 scale, by def id. One unit is wider than the
         /// formation was solved for (the Carrion Vulture's wings span 2.7 world units at 1.2x), and
         /// shrinking it is cheaper than widening every slot for it.</summary>
@@ -83,6 +88,19 @@ namespace Emberfall.Battle
                     string id = flip[i].AsString("");
                     if (id.Length == 0) { c.Warnings.Add("stage-v2.json: a faceFlip entry is empty"); continue; }
                     c.FaceFlip.Add(id);
+                }
+            }
+
+            JsonValue clips = root["clipFlip"];
+            if (clips.IsObject)
+            {
+                foreach (string key in clips.Keys)
+                {
+                    HashSet<string> set = new HashSet<string>();
+                    JsonValue list = clips[key];
+                    for (int i = 0; list.IsArray && i < list.Count; i++) { string clip = list[i].AsString(""); if (clip.Length > 0) set.Add(clip); }
+                    if (key.Length == 0 || set.Count == 0) { c.Warnings.Add("stage-v2.json: clipFlip for '" + key + "' names no clip"); continue; }
+                    c.ClipFlip[key] = set;
                 }
             }
 

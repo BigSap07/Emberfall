@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
@@ -51,6 +52,14 @@ namespace Emberfall.Battle
             if (app == null || app.Content == null) return null;
             EnemyDef def = app.Content.GetEnemy(enemyId);
             return def != null ? def.Visual : null;
+        }
+
+        /// <summary>The clips of this unit whose facing v2 inverts, or null (always null in v1).</summary>
+        public static HashSet<string> ClipFlips(string defId)
+        {
+            if (!V2 || defId == null) return null;
+            HashSet<string> set;
+            return Config.ClipFlip.TryGetValue(defId, out set) ? set : null;
         }
 
         /// <summary>The VisualDef a unit's rig is built from: the snapshot's own in v1, the same
