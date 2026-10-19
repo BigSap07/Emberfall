@@ -839,21 +839,25 @@ namespace Emberfall.DevHarness
 
         private static void CheckOfferValueReport(ContentDatabase db)
         {
+            System.Globalization.CultureInfo inv = System.Globalization.CultureInfo.InvariantCulture;
             Line("");
-            Line("  OFFER VALUES (days of frontier income at the end of each chapter; a day = " + (2.0 * db.Balance.IdleCapHours) + " hours of idle, Dust day = " + db.Balance.RepeatFullClearsPerDay + " sweeps, hero = days of Shards for one random 5-star)");
+            Line("  OFFER VALUES in days of frontier income at the end of each chapter. A day = " + (2.0 * db.Balance.IdleCapHours).ToString("0", inv)
+                 + " hours of idle (the idle chest is collected twice a day). Dust day = the capped repeat clears of every cleared stage ("
+                 + db.Balance.RepeatFullClearsPerDay + " a stage). Hero = days of frontier Shards for one pull at the base 5-star rate.");
             bool finite = true;
             for (int chapter = 1; chapter <= 6; chapter++)
             {
                 GameSession s = OfferSession(db, chapter);
-                string row = "  frontier " + chapter + "-12  idle gold/hour " + (long)s.IdleGoldPerHour + "  5-star every " + StoreOffers.DaysPerFiveStarPull(s).ToString("0.00") + " d:";
+                Line("  VALUE frontier " + chapter + "-12: idle gold/hour " + ((long)s.IdleGoldPerHour).ToString(inv) + ", dust day " + ((long)StoreOffers.DustDay(s)).ToString(inv)
+                     + ", days per 5-star pull " + StoreOffers.DaysPerFiveStarPull(s).ToString("0.00", inv));
                 for (int i = 0; i < db.Store.Offers.Count; i++)
                 {
                     StoreOfferDef d = db.Store.Offers[i];
                     StoreValue v = StoreOffers.ValueOf(s, d);
                     if (double.IsNaN(v.TotalDays) || double.IsInfinity(v.TotalDays) || v.TotalDays < 0.0) finite = false;
-                    row += "  " + d.Id + " " + v.TotalDays.ToString("0.0");
+                    Line("    " + d.Id + " total " + v.TotalDays.ToString("0.00", inv) + " d (gold " + v.GoldDays.ToString("0.00", inv) + " = " + v.GoldHours.ToString("0.#", inv) + " h, dust "
+                         + v.DustDays.ToString("0.00", inv) + " = " + v.DustSweeps.ToString("0.#", inv) + " sweeps, hero " + v.HeroDays.ToString("0.00", inv) + " = " + v.HeroCopies + " copy)");
                 }
-                Line(row);
             }
             Check(finite, "every offer has a finite, non-negative value in days of income at every chapter's frontier");
         }
