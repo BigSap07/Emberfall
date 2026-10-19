@@ -36,6 +36,16 @@ The capture runs on a scratch identity with the cloud held off (`ScratchCaptures
 - The log line `BattleMoment: line aspects players ... enemies ...` names the aspects in the fight, so the shot can be filed against the right fight.
 - The target has no menu item and no literal `Begin` call, like `Screen:AudioFight`, so the nightly sweep does not run it. `Screen:Settings` is the layout proof for the screen shake card.
 
+## Photographing a whole side (the roster sheet)
+
+`Screen:RosterSheet=<side>[.<clip>][.v1|.v2]` lines up every unit of one side in one picture, in one clip, so a unit that faces the wrong way shows at a glance.
+
+- `side` is `allies` (every hero with a finished sheet, then three mannequins) or `enemies` (every drawn enemy, the mapped placeholders, the retired 3D rigs, the static paintings, then three mannequins).
+- `clip` is `idle` (the default), `basic`, `skill`, `hit` or `death`. An attack clip is frozen on its own strike frame, death on its last frame, a unit with no sheet simply stands.
+- `.v1` or `.v2` forces the feel preset for the shot, the same suffixes as `BattleMoment`; without one the shot uses `feelPreset` in `vfx.json`. A before and after per side is `allies.v1` and `allies.v2`.
+- Each unit is built through `UnitActor.Setup`, so the stand-ins, facing and scale of v2 are what a fight draws, and under each unit are its name and three arrows: `>>>` for an ally (who must face right), `<<<` for an enemy (who must face left). A body that points against its arrows faces the wrong way in that clip. The log has one `RosterSheet: unit` line per unit.
+- No UI is drawn. The target has no menu item and no literal `Begin` call, so the nightly sweep does not run it.
+
 ## Reading the RESULT lines
 
 One line per target, in the order given:

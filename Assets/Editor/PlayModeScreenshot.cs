@@ -1649,6 +1649,16 @@ namespace Emberfall.EditorTools
                     case "AbilityNumbers": id = ScreenId.HeroDetail; break;
                 }
 
+                // THE ROSTER SHEET (R15): every unit of one side in one clip, built through the battle's own
+                // door, with no UI over it. Screen:RosterSheet=<side>[.<clip>][.v1|.v2]. It shows no screen,
+                // so nothing is routed; the generic shot below photographs it. See RosterSheetShots.
+                if (name == "RosterSheet")
+                {
+                    RosterSheetShots.Build(app, SessionState.GetString(BattleStageKey, ""));
+                    Debug.Log("PlayModeScreenshot: showing " + name);
+                    return;
+                }
+
                 // THE HUB'S THREE LAYERS ABOVE THE MAP are targets of their own, because none of
                 // them is a screen the router owns: a popup, a panel sheet and a menu are opened
                 // BY the Hub, over it, and a capture schedule that only ever calls Router.Show

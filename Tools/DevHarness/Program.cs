@@ -340,6 +340,8 @@ namespace Emberfall.DevHarness
             // The battle HUD's layout (BattleHudChecks.cs): every plate and pill placed through the
             // screen's own BattleHudLayout at three phone shapes, and none of them meet.
             CheckBattleHud(contentDir);
+            // The R15 v2 stage look (StageChecks.cs): stand-ins, facing, scale and framing, from the real content and art.
+            CheckStage(content, contentDir);
             PrintInstrumentComparison();
 
             Line("");
