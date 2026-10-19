@@ -165,7 +165,9 @@ vocabulary. Lumen needs the least new code of the six and has the least evidence
 
 **Verified during `claude/aspects-lumen`.** The `FindTaunter` override is exactly as described and
 still outranks `LastAttacker` and `LastTarget` — both forced against a line where those modes
-provably wanted somebody else, and both anchored 5 hits out of 5. `FindTaunter` is now
+provably wanted somebody else, and both anchored 5 hits out of 5. (R16 changed half of this: a
+counterattack, `LastAttacker` with a live attacker, now answers the attacker and ignores Taunt. The
+anchor still outranks `LastTarget` and every ordinary single-enemy pick.) `FindTaunter` is now
 `FindTargetAnchor`, since `Taunt` is no longer the only way to qualify.
 
 ⚠️ **Half of this hook list belongs to the weighting DESIGN-WORLD replaced.** The shield-absorb

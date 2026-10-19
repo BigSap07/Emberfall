@@ -212,11 +212,11 @@ jax_the_clockwork_rat|2|0ceb127aa0c81388
 jax_the_clockwork_rat|3|e4fd328894e5f9c4
 jax_the_clockwork_rat|4|772ca6b6d64823c2
 jax_the_clockwork_rat|5|aad5d286f4cc8425
-jory_the_old_gate|1|d74b8d3ca8d1af76
-jory_the_old_gate|2|a8077f642eba68e2
-jory_the_old_gate|3|74470a8f03c00b81
-jory_the_old_gate|4|b0706c304c340832
-jory_the_old_gate|5|fa564185a8beab41
+jory_the_old_gate|1|7147393cb16c2876
+jory_the_old_gate|2|2090eb8a8ac36d60
+jory_the_old_gate|3|5ee8e7a6d34c57b3
+jory_the_old_gate|4|752af0c06e1eca07
+jory_the_old_gate|5|19ff33bf21cf1841
 kael_the_unyielding|1|fb53136489991969
 kael_the_unyielding|2|f107599e4caa8d27
 kael_the_unyielding|3|1bcb250b89132962

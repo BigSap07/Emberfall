@@ -215,6 +215,19 @@ either side** - `BroadcastSubject`, `DefeatedUnit`, `ThresholdUnit`, `SwapAdvanc
 `SwapDelayedUnit` - completing the own-side repair above. `CheckNoAbilityHitsItsOwnCaster` fails if
 any ability lands damage on its own caster without naming Self.
 
+**R16 counterattack rule: a counterattack answers the attacker, not Taunt.** `TargetMode.LastAttacker`
+is the strike-back mode (Jory's Worn Hinges, Caldus's Defined Duty and No Uncertain Ground, the guild
+line's Answer in Kind). In `ResolveTargetsInner` a live, legal attacker now returns before the
+Dev Arena's forced pick, the Provoke and the Taunt anchor, exactly as the five named-body modes above
+do. When the attacker is dead, excluded or was never recorded, the effect falls back to `FrontEnemy`,
+and that fallback is an ordinary pick that respects Taunt. `LastTarget` is deliberately not in the rule:
+it names the body the caster last hit, which is a follow-up and not a strike back, so the anchor still
+outranks it. `EnemyThatLastDamagedAlly` is not in it either: it is an authored active (Maera's Keep the
+Beacon) that picks, and its card says which body it picks. The cards keep their text, because the
+text always said the attacker. `CheckCounterAnswersTheAttackerNotTaunt` proves it on a synthetic arena
+(a counter goes to the attacker with a Taunt holder standing; the same hero's ordinary attack still
+goes to the Taunt holder; the control with no Taunt agrees).
+
 **The round-end repair: `RoundEnd` reads the round it closes.** `CloseRound` used to release the turn
 order before raising `RoundEnd`, and `ApplyTurnShift` returns on a missing order ahead of the branch
 that carries a delay into the next round, so Finn's Aftershock Clock fired every round and never

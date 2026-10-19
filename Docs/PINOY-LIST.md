@@ -548,7 +548,9 @@ Pinoy's.
   and the active only marks the target and makes it take more damage from Nadine.
   `Docs/DECISIONS-OPEN.md` W3 already proposes: *"Strikes the front enemy and marks it; while the
   mark lasts, it takes more damage from Nadine."*
-- **Caldus, No Uncertain Ground.** The card says Caldus "strikes it", meaning the Declared Target
+- **Caldus, No Uncertain Ground.** (R16: settled the other way. Counterattacks now answer the
+  attacker and ignore Taunt, so the card is right as written and the proposed wording below is
+  withdrawn, for Defined Duty and Jory's Worn Hinges too.) The card says Caldus "strikes it", meaning the Declared Target
   that hit the ally. The strike aims at `LastAttacker`, and the engine's Taunt anchor outranks that
   mode, so while an enemy holds Provoke, the strike lands on that enemy instead. READ from
   `DESIGN-BUILD-ORDER.md`: 126 times in 240 campaign battles. **The Taunt rule stays; the card is

@@ -2046,6 +2046,7 @@ namespace Emberfall.DevHarness
             CheckStatStatusesExpire();
             CheckNewTargetModesSelect();
             CheckAnchorStillOverridesNewModes();
+            CheckCounterAnswersTheAttackerNotTaunt();
 
             Line("");
         }
@@ -2500,6 +2501,147 @@ namespace Emberfall.DevHarness
                   "and with a Taunt holder standing, the SAME mode collapses onto the anchor instead (got "
                   + (anchored.Count == 0 ? "nobody" : anchored[0]) + ") - unchanged from how every "
                   + "pre-existing single-enemy mode already behaves, and deliberately not altered here");
+        }
+
+        /// <summary>
+        /// R16 owner decision 4: a counterattack answers the attacker, not Taunt.
+        ///
+        /// One hero on the player side counters (OnDamaged, Damage on LastAttacker). The enemy
+        /// side is the attacker in front and a Taunt holder behind it, so the two bodies the
+        /// counter could land on are different and the answer is unambiguous. Zero variance, so the
+        /// order of events is the whole story: the attacker acts first, the counter follows its
+        /// blow, and the hero's own basic comes later.
+        ///
+        /// (a) the counter lands on the attacker although a Taunt holder stands on that side.
+        /// (b) the hero's own ordinary single-enemy pick still lands on the Taunt holder, so the
+        ///     rule moved the counter and nothing else.
+        /// (c) the control: with no Taunt holder the counter lands on the attacker as well, so
+        ///     (a) is not Taunt being absent.
+        /// (d) the other shape of strike back, an ally's passive answering a blow on a THIRD body
+        ///     (OnEnemyDamagedAlly, Caldus's No Uncertain Ground): it too goes to the enemy that
+        ///     hit the ally, past the Taunt holder.
+        /// </summary>
+        private static void CheckCounterAnswersTheAttackerNotTaunt()
+        {
+            for (int variant = 0; variant < 2; variant++)
+            {
+                bool taunt = variant == 0;
+                BattleResult r = RunCounterArena(taunt);
+                if (r == null) return;
+
+                int heroId = -1, watcherId = -1, attackerId = -1, tauntId = -1;
+                for (int i = 0; i < r.Units.Count; i++)
+                {
+                    if (r.Units[i].DefId == "ctr_hero") heroId = r.Units[i].Id;
+                    else if (r.Units[i].DefId == "ctr_watcher") watcherId = r.Units[i].Id;
+                    else if (r.Units[i].DefId == "ctr_attacker") attackerId = r.Units[i].Id;
+                    else if (r.Units[i].DefId == "ctr_taunter") tauntId = r.Units[i].Id;
+                }
+
+                // The first blow the attacker lands on the hero, the counter that follows it, and
+                // the hero's own basic after that.
+                bool hit = false, tauntHeld = false;
+                int counterTarget = -1, basicTarget = -1, watcherTarget = -1;
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Taunt && e.TargetId == tauntId)
+                        tauntHeld = true;
+                    if (e.Type != BattleEventType.Damage || e.Status != StatusKind.None) continue;
+                    if (!hit)
+                    {
+                        if (e.SourceId == attackerId && e.TargetId == heroId) hit = true;
+                        continue;
+                    }
+                    if (e.SourceId == watcherId && watcherTarget < 0) watcherTarget = e.TargetId;
+                    if (e.SourceId != heroId) continue;
+                    if (counterTarget < 0) counterTarget = e.TargetId;
+                    else if (basicTarget < 0) basicTarget = e.TargetId;
+                }
+
+                string counterName = counterTarget < 0 ? "nobody" : r.FindUnit(counterTarget).DefId;
+                string basicName = basicTarget < 0 ? "nobody" : r.FindUnit(basicTarget).DefId;
+                string watcherName = watcherTarget < 0 ? "nobody" : r.FindUnit(watcherTarget).DefId;
+                if (taunt)
+                {
+                    Check(tauntHeld, "counter arena: the enemy Taunt holder really holds Taunt");
+                    Check(hit && counterTarget == attackerId,
+                          "(a) a counterattack goes to the attacker although a Taunt holder stands on that side (got "
+                          + counterName + ")");
+                    Check(basicTarget == tauntId,
+                          "(b) the same hero's ordinary single-enemy attack still respects Taunt (got " + basicName + ")");
+                    Check(hit && watcherTarget == attackerId,
+                          "(d) an ally's strike back at the enemy that hit another ally goes to that enemy past the Taunt holder (got "
+                          + watcherName + ")");
+                }
+                else
+                {
+                    Check(!tauntHeld, "counter arena control: no Taunt anywhere");
+                    Check(hit && counterTarget == attackerId,
+                          "(c) control, no Taunt holder: the counterattack goes to the attacker (got " + counterName + ")");
+                    Check(basicTarget == attackerId,
+                          "(c) and the ordinary attack goes to the front enemy, which is the attacker (got " + basicName + ")");
+                    Check(hit && watcherTarget == attackerId,
+                          "(c) and the ally's strike back goes to the attacker too (got " + watcherName + ")");
+                }
+            }
+        }
+
+        private static BattleResult RunCounterArena(bool tauntHolder)
+        {
+            string taunterPassive = tauntHolder
+                ? ",\n      \"passive\": { \"id\": \"ctr_prime\", \"name\": \"Prime\", \"trigger\": \"BattleStart\","
+                  + " \"effects\": [ { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"Taunt\","
+                  + " \"duration\": 99, \"chance\": 1 } ] }"
+                : "";
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""ctr_hero"", ""name"": ""Counterer"", ""aspect"": ""Ember"", ""role"": ""Bulwark"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""ctr_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 } ] },
+      ""passive"": { ""id"": ""ctr_counter"", ""name"": ""Strike Back"", ""trigger"": ""OnDamaged"",
+        ""oncePerBattle"": false, ""limit"": ""OncePerRound"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LastAttacker"", ""power"": 1 } ] } },
+    { ""id"": ""ctr_watcher"", ""name"": ""Watcher"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""ctr_watcher_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 } ] },
+      ""passive"": { ""id"": ""ctr_watch"", ""name"": ""No Uncertain Ground"", ""trigger"": ""OnEnemyDamagedAlly"",
+        ""oncePerBattle"": false, ""limit"": ""OncePerRound"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LastAttacker"", ""power"": 1 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""ctr_attacker"", ""name"": ""Attacker"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""ctr_attacker_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1 } ] } },
+    { ""id"": ""ctr_taunter"", ""name"": ""Taunter"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""ctr_taunter_basic"", ""name"": ""Nudge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] }" + taunterPassive + @" }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""ctr_ch"", ""name"": ""Counter Arena"", ""stages"": [
+        { ""id"": ""ctr_arena"", ""index"": 1, ""enemies"": [
+            { ""id"": ""ctr_attacker"", ""level"": 1 }, { ""id"": ""ctr_taunter"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 3, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "CounterArena");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("ctr_hero"), 1));
+            team.Add(MakeInstance(db.GetHero("ctr_watcher"), 1));
+            return RunWith(db, db.GetStage("ctr_arena"), 909, team);
         }
 
         /// <summary>

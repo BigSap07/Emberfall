@@ -7894,6 +7894,45 @@ namespace Emberfall.Core.Combat
                         return result;
                 }
 
+                // A COUNTERATTACK ANSWERS THE ATTACKER, NOT TAUNT (owner decision 4, R16).
+                //
+                // TargetMode.LastAttacker is the strike-back mode: Jory's Worn Hinges, Caldus's
+                // Defined Duty and No Uncertain Ground, and the guild line's Answer in Kind all
+                // use it to hit the body that hit. It names one specific enemy the simulation
+                // recorded before the effect ran, so like the five modes above it is not a
+                // question a Taunt holder can answer for its side. Before this rule the anchor
+                // below intercepted it, and a counter meant for the attacker landed on the
+                // protector instead (126 times in 240 campaign battles for No Uncertain Ground).
+                //
+                // Only a LIVE, legal attacker is answered here. When the attacker is dead, is the
+                // excluded body, or was never recorded, the effect falls through to the ordinary
+                // single-enemy pick below as FrontEnemy, and that pick respects Taunt as any
+                // other does. LastTarget is NOT in this rule: it names the body the caster last
+                // hit, which is a follow-up and not a strike back, so the anchor still outranks it.
+                // EnemyThatLastDamagedAlly is not in it either: it is an authored active (Maera's
+                // Keep the Beacon) that picks, and its card says which body it picks.
+                if (mode == TargetMode.LastAttacker)
+                {
+                    // INSIDE A BROADCAST ABOUT SOMEBODY ELSE, THAT BODY'S ATTACKER - the one
+                    // ConditionSubject.LastAttacker has always named. The two used to disagree:
+                    // the condition read the broadcast subject and this read the caster, so one
+                    // passive could gate on the enemy that just hit an ally and then strike the
+                    // enemy that last hit its owner. Caldus's No Uncertain Ground is that
+                    // passive - "when the Declared Target attacks another ally, Caldus deals 45%
+                    // of Attack damage to THAT enemy" checked the Declared Target and hit
+                    // whoever had last reached Caldus. At OnDamaged the subject IS the caster,
+                    // so every counterattack written against the caster's own attacker is
+                    // untouched.
+                    CombatUnit about = _broadcastSubject != null && _broadcastSubject != caster
+                                       ? _broadcastSubject : caster;
+                    CombatUnit attacker = FindUnit(about.LastAttackerId);
+                    if (attacker != null && attacker.Alive && attacker != excluded && attacker.IsPlayer != caster.IsPlayer)
+                    {
+                        result.Add(attacker);
+                        return result;
+                    }
+                }
+
                 // THE HAND-DRIVEN PICK, and the only line in this method that is not about the
                 // game. `_forcedPrimary` is null in every battle the game resolves - the guard is a
                 // null test, draws nothing from the RNG and cannot move a fingerprint - and is set
@@ -7939,8 +7978,8 @@ namespace Emberfall.Core.Combat
                 }
 
                 // Every remaining mode targets a single enemy, and the anchor overrides all of them
-                // including LastAttacker/LastTarget, so the unit that answers for a side cannot be
-                // targeted around. ("Provoke" in the previous version of this comment was the old
+                // including LastTarget (and LastAttacker when its attacker is gone and it falls back
+                // to FrontEnemy), so the unit that answers for a side cannot be targeted around. ("Provoke" in the previous version of this comment was the old
                 // name for StatusKind.Taunt and had outlived it.)
                 //
                 // Note for anyone reading the RNG stream: returning here short-circuits the switch
@@ -8017,24 +8056,8 @@ namespace Emberfall.Core.Combat
                 {
                     case TargetMode.LastAttacker:
                     {
-                        // INSIDE A BROADCAST ABOUT SOMEBODY ELSE, THAT BODY'S ATTACKER - the one
-                        // ConditionSubject.LastAttacker has always named. The two used to disagree:
-                        // the condition read the broadcast subject and this read the caster, so one
-                        // passive could gate on the enemy that just hit an ally and then strike the
-                        // enemy that last hit its owner. Caldus's No Uncertain Ground is that
-                        // passive - "when the Declared Target attacks another ally, Caldus deals 45%
-                        // of Attack damage to THAT enemy" checked the Declared Target and hit
-                        // whoever had last reached Caldus. At OnDamaged the subject IS the caster,
-                        // so every counterattack written against the caster's own attacker is
-                        // untouched.
-                        CombatUnit about = _broadcastSubject != null && _broadcastSubject != caster
-                                           ? _broadcastSubject : caster;
-                        CombatUnit remembered = FindUnit(about.LastAttackerId);
-                        if (remembered != null && remembered.Alive && remembered != excluded && remembered.IsPlayer != caster.IsPlayer)
-                        {
-                            result.Add(remembered);
-                            return result;
-                        }
+                        // A live, legal attacker was answered above, before the anchor. Reaching
+                        // here means there is none, so this is an ordinary front-enemy pick.
                         mode = TargetMode.FrontEnemy;
                         break;
                     }
