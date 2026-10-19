@@ -49,12 +49,32 @@ namespace Emberfall.DevHarness
         {
             Line("WALL CHESTS (content and the stage card)");
             string path = Path.Combine(contentDir, "wall-chests.json");
-            live.LoadWallChests(File.Exists(path) ? File.ReadAllText(path) : "");
-            WallChestConfig cfg = live.WallChests;
+            string shipped = File.Exists(path) ? File.ReadAllText(path) : "";
+            live.LoadWallChests(shipped);
+            WallChestConfig shippedCfg = live.WallChests;
 
-            Check(cfg.Warnings.Count == 0, cfg.Warnings.Count == 0 ? "wall-chests.json parses without a warning"
-                  : "wall-chests.json warns: " + string.Join("; ", cfg.Warnings.ToArray()));
-            Check(cfg.IsUsable && cfg.Enabled, "the shipped switch is ON and the file is usable");
+            // THE SHIPPED DEFAULT IS OFF: with the chests on, the reference walks' power band at walk 0 went
+            // over x1.25 at 2-7, 3-4 and 3-6. The file and its numbers stay; only the switch is off. Every
+            // other check here turns them on explicitly, from the file's own numbers.
+            Check(shippedCfg.Warnings.Count == 0, shippedCfg.Warnings.Count == 0 ? "wall-chests.json parses without a warning"
+                  : "wall-chests.json warns: " + string.Join("; ", shippedCfg.Warnings.ToArray()));
+            Check(!shippedCfg.Enabled && !shippedCfg.IsUsable && shippedCfg.Wall.Hours > 0.0 && shippedCfg.Finale.Hours > 0.0,
+                  "the shipped switch is OFF and the data is still in the file (wall " + shippedCfg.Wall.Hours + " h, finale "
+                  + shippedCfg.Finale.Hours + " h)");
+            GameSession offSession = new GameSession(live, GameSession.CreateNewProfile(live, 0));
+            int shown = 0;
+            for (int i = 0; i < live.AllStages.Count; i++)
+            {
+                WallChestView off = WallChests.Preview(offSession, live.AllStages[i]);
+                if (off.Present || off.Line.Length != 0) shown++;
+            }
+            Check(shown == 0, "with the shipped default no stage card shows a chest line (" + shown + " of " + live.AllStages.Count + " stages do)");
+
+            string enabledText = shipped.Replace("\"enabled\": false", "\"enabled\": true");
+            Check(enabledText != shipped, "the shipped file's switch reads \"enabled\": false, which is what turns it on for the checks below");
+            live.LoadWallChests(enabledText);
+            WallChestConfig cfg = live.WallChests;
+            Check(cfg.IsUsable && cfg.Enabled, "with the switch turned on the file is usable");
             Check(cfg.Finale.Hours > cfg.Wall.Hours && cfg.Finale.SlagPerChapter > cfg.Wall.SlagPerChapter,
                   "the finale chest is larger than the wall chest in both hours (" + cfg.Finale.Hours + " against "
                   + cfg.Wall.Hours + ") and Slag per chapter (" + cfg.Finale.SlagPerChapter + " against "

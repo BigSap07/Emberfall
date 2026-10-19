@@ -595,9 +595,12 @@ that never convert and never ascend stuck at 3-4 (walk 51, seed 51000154: entry 
 chest's size is not a safe lever, since smaller Shard-paying chests each stuck a different walk. **It pays on the first clear, from
 `GameSession.GrantBattleResult`, and there is no save field**: a chest is opened when its stage is in
 `PlayerProfile.ClearedStageIds`, so a stage cleared before this shipped reads as opened and pays
-nothing, and there are no retroactive chests. `"enabled": false` in the file is the rollback and a
-first clear then pays what it always paid. `CheckWallChestsContentAndCard`, `CheckWallChestsPayOnce` and
-`CheckWallChestsRollBack` prove it, and 20 fusion walks all finish with the chests in.
+nothing, and there are no retroactive chests. **The chests ship OFF**:
+`"enabled": false` in the file is the default, and the data stays in it. With them on, the reference walk 0's power
+band went over x1.25 at 2-7, 3-4 and 3-6 (x1.261 to x1.267), even with Gold only; with them off a first clear pays
+what it always paid and the stage card draws no chest line. `CheckWallChestsContentAndCard`, `CheckWallChestsPayOnce`
+and `CheckWallChestsRollBack` assert the shipped default is off and prove the payout, the card and the rollback by
+turning the chests on explicitly inside the check. To turn them on, set `"enabled": true` and re-run the walks.
 
 **Battle stats.** `WaveResolution.Stats` (a `WaveStats`) holds what each hero dealt, took, healed,
 shielded and killed, per battle and summed over the battles that resolve fought. `GameSession.ResolveWave`
