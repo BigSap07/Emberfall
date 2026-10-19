@@ -40,7 +40,8 @@ namespace Emberfall.UI
         Orders,
         Armory,
         Archive,
-        Quartermaster
+        Quartermaster,
+        WayfarersRoad
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -154,6 +155,10 @@ namespace Emberfall.UI
         /// <summary>The Quartermaster (Gold), Docs/DESIGN-QUARTERMASTER.md. Null unless
         /// QuartermasterSwitch is on; Show(ScreenId.Quartermaster) is then a no-op.</summary>
         public Screens.QuartermasterScreen Quartermaster;
+
+        /// <summary>Wayfarer's Road, the free track of the season pass (Docs/DESIGN-WAYFARERS-ROAD.md).
+        /// Null unless WayfarersRoadSwitch is on; Show(ScreenId.WayfarersRoad) is then a no-op.</summary>
+        public Screens.WayfarersRoadScreen WayfarersRoad;
         public Screens.ArchiveScreen Archive;
 
         public UIScreen Current { get; private set; }
@@ -236,6 +241,10 @@ namespace Emberfall.UI
             // The Quartermaster (Docs/DESIGN-QUARTERMASTER.md). Built only with the switch on: off,
             // this build has no such screen at all and nothing leads to it.
             if (Emberfall.Core.Session.QuartermasterSwitch.Enabled) Quartermaster = Create<Screens.QuartermasterScreen>();
+
+            // Wayfarer's Road (Docs/DESIGN-WAYFARERS-ROAD.md). Built only with the switch on: off, this
+            // build has no such screen at all and nothing leads to it.
+            if (Emberfall.Core.Session.WayfarersRoadSwitch.Enabled) WayfarersRoad = Create<Screens.WayfarersRoadScreen>();
         }
 
         /// <summary>

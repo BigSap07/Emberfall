@@ -1,0 +1,79 @@
+{
+  // WAYFARER'S ROAD, THE FREE TRACK - Docs/DESIGN-WAYFARERS-ROAD.md. A 28 day season of 30 tiers.
+  // Points come only from the daily loop's claims (orders, the daily chest, the weekly chest), so the
+  // pass feeds the loop and nothing else feeds the pass. Every reward is fixed and shown up front.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, for guild-path.json's reason: nothing here is read by a
+  // fight. ContentDatabase.LoadWayfarersRoad reads it after Load. The whole pass is behind
+  // WayfarersRoadSwitch (on by default; EMBERFALL_WAYFARERS_ROAD_OFF rolls it back) and, because its
+  // points are the daily loop's claims, it earns nothing while DailyLoopSwitch is off.
+  //
+  // SEASONS are back to back from "epoch" (a Monday, so a season is exactly four reward-day weeks),
+  // each seasonDays long, turning over on the reward day (04:00 UTC, balance.json). Unclaimed tiers
+  // lapse with the season.
+  //
+  // SIZING. A day on which a player claims all five orders and the daily chest is 5 x 8 + 12 = 52
+  // points; a tier is 40 points, so 30 tiers are 1,200 points, and 24 such days finish the track
+  // (24 x 52 = 1,248) while 23 do not (1,196). The weekly chest adds 40 points on a week of five
+  // complete days. CheckWayfarersRoadSizing proves both numbers against orders.json.
+  //
+  // REWARDS. hourglass: hours of idle income at the frontier (the one idle formula, as the loop pays).
+  // dust: that many repeat-clear payouts of the frontier stage (RelicDustForRepeatClear), so it scales
+  // with the player. slag: Slag, a fixed amount, free (earned) Slag. selector: one hero of that many
+  // stars the player picks, a plain earned copy, NEVER Sealed. cosmetic: paid track only.
+  //
+  // THE PAID TRACK is data and a locked row on screen, behind PassPaidSwitch (define EMBERFALL_PASS_PAID,
+  // which stays off). There is no purchase path: nothing in the game can unlock it.
+  //
+  // buyTier: a tier can be bought with Valor or Coda (earned currencies only), priced in days of that
+  // purse's income (SinkPricing), at most maxPerSeason a season.
+  "seasonDays": 28,
+  "epoch": "2026-01-05",
+  "tierPoints": 40,
+  "points": { "order": 8, "dailyChest": 12, "weeklyChest": 40 },
+  "buyTier": { "days": 2, "maxPerSeason": 3 },
+  "priceRound": 5,
+
+  "tiers": [
+    { "tier": 1,  "kind": "hourglass", "amount": 1 },
+    { "tier": 2,  "kind": "slag",      "amount": 20 },
+    { "tier": 3,  "kind": "dust",      "amount": 10 },
+    { "tier": 4,  "kind": "hourglass", "amount": 1 },
+    { "tier": 5,  "kind": "slag",      "amount": 20 },
+    { "tier": 6,  "kind": "dust",      "amount": 10 },
+    { "tier": 7,  "kind": "hourglass", "amount": 1.5 },
+    { "tier": 8,  "kind": "slag",      "amount": 30 },
+    { "tier": 9,  "kind": "dust",      "amount": 15 },
+    { "tier": 10, "kind": "hourglass", "amount": 2 },
+    { "tier": 11, "kind": "slag",      "amount": 30 },
+    { "tier": 12, "kind": "dust",      "amount": 15 },
+    { "tier": 13, "kind": "hourglass", "amount": 2 },
+    { "tier": 14, "kind": "slag",      "amount": 40 },
+    { "tier": 15, "kind": "selector",  "stars": 4 },
+    { "tier": 16, "kind": "hourglass", "amount": 2 },
+    { "tier": 17, "kind": "slag",      "amount": 40 },
+    { "tier": 18, "kind": "dust",      "amount": 20 },
+    { "tier": 19, "kind": "hourglass", "amount": 2.5 },
+    { "tier": 20, "kind": "slag",      "amount": 50 },
+    { "tier": 21, "kind": "dust",      "amount": 20 },
+    { "tier": 22, "kind": "hourglass", "amount": 3 },
+    { "tier": 23, "kind": "slag",      "amount": 50 },
+    { "tier": 24, "kind": "dust",      "amount": 25 },
+    { "tier": 25, "kind": "hourglass", "amount": 3 },
+    { "tier": 26, "kind": "slag",      "amount": 60 },
+    { "tier": 27, "kind": "dust",      "amount": 25 },
+    { "tier": 28, "kind": "hourglass", "amount": 4 },
+    { "tier": 29, "kind": "slag",      "amount": 80 },
+    { "tier": 30, "kind": "selector",  "stars": 5 }
+  ],
+
+  "paid": [
+    { "tier": 1,  "kind": "cosmetic",  "label": "Road banner" },
+    { "tier": 5,  "kind": "hourglass", "amount": 2 },
+    { "tier": 10, "kind": "hourglass", "amount": 3 },
+    { "tier": 15, "kind": "cosmetic",  "label": "Portrait frame" },
+    { "tier": 20, "kind": "hourglass", "amount": 4 },
+    { "tier": 25, "kind": "hourglass", "amount": 6 },
+    { "tier": 30, "kind": "selector",  "stars": 5, "label": "Sealed 5-star copy" }
+  ]
+}

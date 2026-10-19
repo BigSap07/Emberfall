@@ -364,6 +364,15 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/R17 sinks/Relic Shop with upgrades", false, 122)]
         public static void CaptureRelicShopUpgrade() { Begin("Screen:RelicShopUpgrade"); }
 
+        [MenuItem("Emberfall/Capture/R17 sinks/Wayfarer's Road", false, 123)]
+        public static void CaptureWayfarersRoad() { Begin("Screen:WayfarersRoad"); }
+
+        [MenuItem("Emberfall/Capture/R17 sinks/Wayfarer's Road with the locked paid row", false, 124)]
+        public static void CaptureWayfarersRoadPaid() { Begin("Screen:WayfarersRoadPaid"); }
+
+        [MenuItem("Emberfall/Capture/R17 sinks/Wayfarer's Road, selector picker", false, 125)]
+        public static void CaptureWayfarersRoadPicker() { Begin("Screen:WayfarersRoadPicker"); }
+
         [MenuItem("Emberfall/Capture/Heroes", false, 61)]
         public static void CaptureHeroes() { Begin("Screen:Heroes"); }
 
@@ -1639,6 +1648,9 @@ namespace Emberfall.EditorTools
                     case "Quartermaster":
                     case "QuartermasterBought": id = ScreenId.Quartermaster; break;
                     case "RelicShopUpgrade": id = ScreenId.RelicShop; break;
+                    case "WayfarersRoad":
+                    case "WayfarersRoadPaid":
+                    case "WayfarersRoadPicker": id = ScreenId.WayfarersRoad; break;
                     case "ProvingSinksOn":
                     case "ProvingSinksOff": id = ScreenId.Proving; break;
                     case "RecitalSinksOn":
@@ -1827,6 +1839,7 @@ namespace Emberfall.EditorTools
                 }
                 else app.Router.Show(id);
                 if (IsSinksScreen(name)) OpenSinksPicker(app, name);
+                if (name == "WayfarersRoadPicker") OpenRoadPicker(app);
                 Debug.Log("PlayModeScreenshot: showing " + name);
             }
 
@@ -2194,7 +2207,8 @@ namespace Emberfall.EditorTools
         // from the sinks above.
         private static bool IsR17SinkScreen(string name)
         {
-            return name == "Quartermaster" || name == "QuartermasterBought" || name == "RelicShopUpgrade";
+            return name == "Quartermaster" || name == "QuartermasterBought" || name == "RelicShopUpgrade"
+                || name == "WayfarersRoad" || name == "WayfarersRoadPaid" || name == "WayfarersRoadPicker";
         }
 
         /// <summary>
@@ -2239,8 +2253,28 @@ namespace Emberfall.EditorTools
                     for (int t = 0; t < i; t++) session.UpgradeRelic(relics[i].Id, now);
                 }
             }
+            else if (name == "WayfarersRoad" || name == "WayfarersRoadPaid" || name == "WayfarersRoadPicker")
+            {
+                // Mid-season: points through the pass's own call (the daily loop's claims are its only source),
+                // the first six tiers claimed through Claim, Valor and Coda in hand for the buy buttons.
+                // Every target sets the paid switch itself, so one shot cannot leak it into the next.
+                PassPaidSwitch.Enabled = name == "WayfarersRoadPaid";
+                profile.Valor = 5000;
+                profile.Coda = 5000;
+                int orders = name == "WayfarersRoadPicker" ? 80 : 50;   // 8 points each: 640 points is tier 16, 400 is tier 10
+                for (int i = 0; i < orders; i++) WayfarersRoad.OnClaim(session, PassPointSource.Order, now);
+                for (int t = 1; t <= 6; t++) WayfarersRoad.Claim(session, t, null, now);
+            }
             app.RefreshHud();
             Debug.Log("PlayModeScreenshot: seeded the R17 sinks for " + name);
+        }
+
+        /// <summary>The picker target opens tier 15's four-star picker with the first listed hero chosen, after the Show.</summary>
+        private static void OpenRoadPicker(GameApp app)
+        {
+            if (app.Router.WayfarersRoad == null) return;
+            List<HeroDef> pool = WayfarersRoad.SelectorHeroes(app.Session, 4);
+            if (pool.Count > 0) app.Router.WayfarersRoad.PickForCapture(15, pool[Mathf.Min(2, pool.Count - 1)].Id);
         }
 
         /// <summary>The picker targets open the hero picker with a hero chosen, after the Show.</summary>

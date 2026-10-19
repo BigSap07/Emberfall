@@ -132,6 +132,19 @@ namespace Emberfall.Core.Data
         /// no recorded replay reads it. Empty (IsUsable false) until LoadRelicShop is called.</summary>
         public RelicShopConfig RelicShop = new RelicShopConfig();
 
+        /// <summary>The season pass: its season, points, tiers and paid track (wayfarers-road.json).
+        /// NOT part of ContentVersion, for Sinks' reason: no fight reads it. Empty (IsUsable false) until
+        /// LoadWayfarersRoad is called.</summary>
+        public WayfarersRoadConfig WayfarersRoad = new WayfarersRoadConfig();
+
+        /// <summary>Parses wayfarers-road.json into WayfarersRoad and adds its warnings to Warnings. Does
+        /// not touch ContentVersion.</summary>
+        public void LoadWayfarersRoad(string wayfarersRoadJson)
+        {
+            WayfarersRoad = WayfarersRoadConfig.FromJson(wayfarersRoadJson);
+            for (int i = 0; i < WayfarersRoad.Warnings.Count; i++) Warnings.Add(WayfarersRoad.Warnings[i]);
+        }
+
         /// <summary>Parses relic-shop.json into RelicShop and adds its warnings to Warnings. Does not
         /// touch ContentVersion.</summary>
         public void LoadRelicShop(string relicShopJson)
