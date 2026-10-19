@@ -636,8 +636,8 @@ namespace Emberfall.UI.Screens
             bool selected = o.Id == _selected;
             string id = o.Id;
             ForgeCard card = EmberforgeUI.SelectableCard("Offer_" + id, _body, delegate { App.Audio.Tap(); _selected = id; Rebuild(); });
-            EmberforgeUI.SetCardSelected(card, selected);
             UIBuilder.Box(card.Root, 0f, -(index * (RowHeight + 8f)), ListWidth, RowHeight, new Vector2(0f, 1f));
+            EmberforgeUI.SetCardSelected(card, selected);
             RectTransform body = card.Body;
 
             // The kit's card for this offer, small, in the icon's place (and a little taller: a card is 3:4).
@@ -647,10 +647,12 @@ namespace Emberfall.UI.Screens
             if (kitCard != null) { UIBuilder.Box(icon.rectTransform, 10f, 0f, 60f, 80f, new Vector2(0f, 0.5f)); icon.preserveAspect = true; }
             else UIBuilder.Box(icon.rectTransform, 14f, 0f, 56f, 56f, new Vector2(0f, 0.5f));
             Text name = EmberforgeUI.Title("Name", body, o.Name.ToUpperInvariant(), UITheme.FontSmall, selected ? Emberforge.TextGold : Emberforge.TextBody, TextAnchor.UpperLeft);
-            UIBuilder.Box(name.rectTransform, 84f, -10f, ListWidth - 280f, 34f, new Vector2(0f, 1f));
+            // With the kit on, the row's frame is thicker at the top, so the two lines sit a few units lower.
+            float kitDrop = kitCard != null ? 7f : 0f;
+            UIBuilder.Box(name.rectTransform, 84f, -10f - kitDrop, ListWidth - 280f, 34f, new Vector2(0f, 1f));
             UIBuilder.BestFit(name, 15, UITheme.FontSmall);   // a long name shrinks to its own width, clear of the state pill
             Text price = EmberforgeUI.Label("Price", body, o.PriceLabel + "   -   " + o.LimitLabel, UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(price.rectTransform, 84f, -50f, ListWidth - 270f, 28f, new Vector2(0f, 1f));
+            UIBuilder.Box(price.rectTransform, 84f, -50f - kitDrop * 0.4f, ListWidth - 270f, 28f, new Vector2(0f, 1f));
 
             string stateText;
             Color tint;

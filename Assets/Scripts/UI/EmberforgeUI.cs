@@ -250,6 +250,15 @@ namespace Emberfall.UI
             if (card == null || card.Plate == null) return;
             card.Plate.sprite = EmberforgeSkin.Get(selected ? EmberforgeArt.Slot.Panel
                                                             : EmberforgeArt.Slot.PanelPlain);
+
+            // With the kit on, the big panel's corner blocks sit on the contents of a short card (a Store row is
+            // 90 units tall), so a short card keeps the kit's small frame in both states and says "selected" by
+            // brightness instead: full for the one being acted on, dimmed for the rest.
+            if (UiKit.Forge(EmberforgeArt.Slot.Panel) != null && IsSmallFixed(card.Root))
+            {
+                card.Plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.PanelPlain);
+                card.Plate.color = selected ? Color.white : new Color(0.7f, 0.7f, 0.7f, 1f);
+            }
         }
 
         /// <summary>
