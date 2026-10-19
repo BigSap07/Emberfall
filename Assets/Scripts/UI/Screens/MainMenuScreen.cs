@@ -506,7 +506,7 @@ namespace Emberfall.UI.Screens
             // something bought is ready (a ledger day, a growth milestone, a paid pass tier).
             if (StoreSwitch.Enabled)
             {
-                _storeButton = HudWidgets.RailButton("Store", _hud, "", TextureLab.CoinIcon(64),
+                _storeButton = HudWidgets.RailButton("Store", _hud, HudSkin.IconStore, TextureLab.CoinIcon(64),
                                                      UITheme.Gold, OpenStore);
                 Place(_storeButton.Root, top + step * slot);
                 Text caption = EmberforgeUI.Label("StoreCaption", _storeButton.Root, "STORE", UITheme.FontTiny - 6,

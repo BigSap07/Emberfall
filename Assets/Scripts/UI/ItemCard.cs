@@ -46,6 +46,15 @@ namespace Emberfall.UI
         public static RectTransform Build(string name, Transform parent, float size, Sprite icon,
                                           Color rarity, int pips, int maxPips, Color aspectGlow)
         {
+            return Build(name, parent, size, icon, rarity, pips, maxPips, aspectGlow, Emberforge.TextBody, IconFraction);
+        }
+
+        /// <summary>The card with the icon's tint and size stated: a UI kit icon is painted in colour, so
+        /// it is drawn white (the flat glyphs are tinted) and a little larger.</summary>
+        private static RectTransform Build(string name, Transform parent, float size, Sprite icon,
+                                           Color rarity, int pips, int maxPips, Color aspectGlow,
+                                           Color iconTint, float iconFraction)
+        {
             RectTransform card = UIBuilder.Node(name, parent);
             UIBuilder.Size(card, size, size);
 
@@ -89,8 +98,8 @@ namespace Emberfall.UI
 
             if (icon != null)
             {
-                Image glyph = UIBuilder.Img("Icon", card, icon, Emberforge.TextBody);
-                float iconSize = size * IconFraction;
+                Image glyph = UIBuilder.Img("Icon", card, icon, iconTint);
+                float iconSize = size * iconFraction;
                 float lift = maxPips > 0 ? size * 0.06f : 0f;
                 UIBuilder.Box(glyph.rectTransform, 0f, lift, iconSize, iconSize, new Vector2(0.5f, 0.5f));
             }
@@ -153,6 +162,14 @@ namespace Emberfall.UI
                                              RelicDef def, int tier, int maxTier)
         {
             Color grade = UITheme.RelicGradeColor(def.Grade);
+
+            // The UI kit's icon for this relic id, when the kit is on: drawn white and larger. Otherwise
+            // the sigil it always had.
+            Sprite kit = UiKit.Relic(def.Id);
+            if (kit != null)
+                return Build(name, parent, size, kit, grade,
+                             Mathf.Clamp(tier, 0, Mathf.Max(1, maxTier)), Mathf.Max(1, maxTier), Color.clear,
+                             Color.white, 0.72f);
             return Build(name, parent, size, TextureLab.Sigil(RelicSigil(def.Id), 128), grade,
                          Mathf.Clamp(tier, 0, Mathf.Max(1, maxTier)), Mathf.Max(1, maxTier), Color.clear);
         }

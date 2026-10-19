@@ -82,6 +82,12 @@ namespace Emberfall.UI
 
         public static Sprite Get(string slot)
         {
+            // THE UI KIT FIRST, while its switch is on and the map has a piece for this slot. UiKit
+            // answers null otherwise, which falls straight through to the three steps below exactly as
+            // before; the kit's sprite is never put in Cache, so the switch cannot leak between states.
+            Sprite kit = UiKit.Forge(slot);
+            if (kit != null) return kit;
+
             Sprite cached;
             if (Cache.TryGetValue(slot, out cached)) return cached;
 

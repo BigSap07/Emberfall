@@ -35,6 +35,10 @@ namespace Emberfall.UI
             public Color Tint = Color.white;
             public AbilityDef Ability;
             public PassiveDef Passive;
+
+            /// <summary>The hero whose ability this is, for the UI kit's ability icon (the icon files
+            /// are named hero__ability). Empty for an enemy or a caller that does not say; no icon then.</summary>
+            public string HeroId = "";
         }
 
         private const float SheetWidth = 900f;
@@ -123,7 +127,10 @@ namespace Emberfall.UI
             {
                 Entry entry = entries[e];
                 if (entry.Ability == null) continue;
-                if (several) AddHeader(entry);
+                // The kit's ability icon rides on the header. A one-ability card has no header, so with the
+                // kit on and an icon for it the header row is added; with the kit off nothing here changes.
+                Sprite icon = UiKit.Ability(entry.HeroId, entry.Ability.Id);
+                if (several || icon != null) AddHeader(entry, icon);
 
                 string prose = texts != null ? texts.Prose(entry.Ability.Id, entry.Ability.Description)
                                              : (entry.Ability.Description ?? "");
@@ -185,7 +192,7 @@ namespace Emberfall.UI
             if (closed != null) closed();
         }
 
-        private void AddHeader(Entry entry)
+        private void AddHeader(Entry entry, Sprite icon)
         {
             RectTransform row = UIBuilder.Node("Header", _list);
             UIBuilder.Sized(row, 0f, HeaderHeight);
@@ -205,6 +212,17 @@ namespace Emberfall.UI
             name.rectTransform.offsetMin = new Vector2(0f, 0f);
             name.rectTransform.offsetMax = new Vector2(-Emberforge.Space8, 0f);
             UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
+
+            if (icon != null)
+            {
+                // At the right end, clear of the name: the name keeps its box and just stops short of it.
+                name.rectTransform.offsetMax = new Vector2(-(HeaderHeight + Emberforge.Space12), 0f);
+                Image glyph = UIBuilder.Img("AbilityIcon", row, icon, Color.white);
+                UIBuilder.Box(glyph.rectTransform, -Emberforge.Space8, 0f, HeaderHeight, HeaderHeight,
+                              new Vector2(1f, 0.5f));
+                glyph.preserveAspect = true;
+                glyph.raycastTarget = false;
+            }
         }
 
         private void AddProse(string prose)

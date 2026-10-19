@@ -108,6 +108,13 @@ namespace Emberfall.UI.Screens
         private Image _pityFill;
         private Text _pityLabel;
         private Image _pityChest;
+        private bool _pityKitChest;
+
+        private Color PityChestTint(bool live)
+        {
+            if (_pityKitChest) return live ? Color.white : new Color(0.45f, 0.45f, 0.45f, 1f);
+            return live ? UITheme.Gold : UITheme.TextDim;
+        }
 
         /// <summary>The summon itself: press, buildup, tell, flash, reveal, and the ten-pull
         /// summary. Built on the app's overlay layer rather than inside this screen, so the dim
@@ -231,7 +238,10 @@ namespace Emberfall.UI.Screens
                                            ForgeButtonKind.Primary);
             UIBuilder.Box(_pullOne.Root, -150f, pullY, PullWidth, PullHeight, new Vector2(0.5f, 0f));
 
-            Image shard = UIBuilder.Img("Shard", _pullOne.Root, TextureLab.CrystalIcon(64), UITheme.Shard);
+            // The UI kit's shard icon (painted in colour, so white) when the kit is on; the tinted crystal otherwise.
+            Sprite kitShard = UiKit.Currency("shards");
+            Image shard = UIBuilder.Img("Shard", _pullOne.Root, kitShard != null ? kitShard : TextureLab.CrystalIcon(64),
+                                        kitShard != null ? Color.white : UITheme.Shard);
             UIBuilder.Box(shard.rectTransform, 34f, 0f, 32f, 32f, new Vector2(0f, 0.5f));
 
             _pullOne.Label.alignment = TextAnchor.MiddleLeft;
@@ -311,7 +321,11 @@ namespace Emberfall.UI.Screens
                 tickRect.anchoredPosition = Vector2.zero;
             }
 
-            _pityChest = UIBuilder.Img("Chest", row, TextureLab.Chest(64), Emberforge.TextGold);
+            // The kit's chest, drawn white while the guarantee is live and dimmed when it is spent (the flat chest
+            // takes the tint itself, so PityChestTint answers per state).
+            Sprite kitChest = UiKit.Hud(HudSkin.IconChest);
+            _pityKitChest = kitChest != null;
+            _pityChest = UIBuilder.Img("Chest", row, kitChest != null ? kitChest : TextureLab.Chest(64), Emberforge.TextGold);
             UIBuilder.Box(_pityChest.rectTransform, 0f, 0f, 34f, 34f, new Vector2(1f, 0.5f));
 
             _pityLabel = EmberforgeUI.Label("PityLabel", Root, "", UITheme.FontTiny - 2,
@@ -413,7 +427,7 @@ namespace Emberfall.UI.Screens
             if (left > 0)
             {
                 _pityFill.color = Color.white;
-                _pityChest.color = UITheme.Gold;
+                _pityChest.color = PityChestTint(true);
                 _pityLabel.color = UITheme.TextMuted;
                 _pityLabel.text = "OPENING GUARANTEE  -  " + left
                                 + (left == 1 ? " PULL LEFT THAT CANNOT DUPLICATE" : " PULLS LEFT THAT CANNOT DUPLICATE");
@@ -421,7 +435,7 @@ namespace Emberfall.UI.Screens
             else
             {
                 _pityFill.color = UITheme.WithAlpha(Color.white, 0.35f);
-                _pityChest.color = UITheme.TextDim;
+                _pityChest.color = PityChestTint(false);
                 _pityLabel.color = UITheme.TextDim;
                 _pityLabel.text = "OPENING GUARANTEE SPENT  -  PULLS NOW DRAW FROM THE FULL POOL";
             }

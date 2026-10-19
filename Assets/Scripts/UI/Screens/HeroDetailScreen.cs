@@ -710,6 +710,17 @@ namespace Emberfall.UI.Screens
 
                 BuildAbilityValue(cell, ability, values, cardWidth);
 
+                // THE UI KIT'S ABILITY ICON, a medallion on the card's top-left corner so no text box
+                // moves. Absent with the kit off, and for an ability the kit has no icon for.
+                Sprite kitIcon = UiKit.Ability(def.Id, ability.Id);
+                if (kitIcon != null)
+                {
+                    Image medal = UIBuilder.Img("AbilityIcon", cell, kitIcon, Color.white);
+                    UIBuilder.Box(medal.rectTransform, -14f, 14f, 46f, 46f, new Vector2(0f, 1f));
+                    medal.preserveAspect = true;
+                    medal.raycastTarget = false;
+                }
+
                 // The whole card is the button: an almost-transparent Image over it, taking the
                 // tap. A pressable plate from the kit would be a third button voice on a row whose
                 // cards are not controls - they are a readout you can ask a question of.
@@ -728,6 +739,7 @@ namespace Emberfall.UI.Screens
                 press.transition = Selectable.Transition.None;
                 press.targetGraphic = target;
                 AbilityCardSheet.Entry entry = new AbilityCardSheet.Entry();
+                entry.HeroId = def.Id;
                 entry.Kind = kinds[i];
                 entry.Tint = tints[i];
                 entry.Ability = ability;

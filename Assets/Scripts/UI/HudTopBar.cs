@@ -106,9 +106,9 @@ namespace Emberfall.UI
         private void BuildCurrencies()
         {
             float step = PillWidth + UITheme.Space12;
-            _dustText = Pill("Dust", "DUST", -UITheme.ScreenPadding - step * 2f, UITheme.Dust);
-            _goldText = Pill("Gold", "GOLD", -UITheme.ScreenPadding - step, UITheme.Gold);
-            _shardText = Pill("Shards", "SHARDS", -UITheme.ScreenPadding, UITheme.Shard);
+            _dustText = Pill("Dust", "DUST", -UITheme.ScreenPadding - step * 2f, UITheme.Dust, "dust");
+            _goldText = Pill("Gold", "GOLD", -UITheme.ScreenPadding - step, UITheme.Gold, "gold");
+            _shardText = Pill("Shards", "SHARDS", -UITheme.ScreenPadding, UITheme.Shard, "shards");
         }
 
         /// <summary>
@@ -116,10 +116,10 @@ namespace Emberfall.UI
         /// identical diamonds to anyone who had not already learned which colour was which, so
         /// each pill says what it holds in the quiet voice beside its jewel.
         /// </summary>
-        private Text Pill(string name, string caption, float x, Color jewelTint)
+        private Text Pill(string name, string caption, float x, Color jewelTint, string purse)
         {
             ForgePill pill = EmberforgeUI.CurrencyPill(name, Root, PillWidth, PillHeight,
-                                                       jewelTint, null);
+                                                       jewelTint, null, purse);
             UIBuilder.Box(pill.Root, x, -(UITheme.TopBarHeight - PillHeight) * 0.5f,
                           PillWidth, PillHeight, new Vector2(1f, 1f));
 

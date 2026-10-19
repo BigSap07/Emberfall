@@ -102,8 +102,8 @@ namespace Emberfall.UI
             UIBuilder.FillParent(row, Pad, 0f, Pad, 0f);
             UIBuilder.HStack(row, CellGap, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
-            _gold   = Cell(row, "Gold",   TextureLab.CoinIcon(64),    UITheme.Gold);
-            _shards = Cell(row, "Shards", TextureLab.CrystalIcon(64), UITheme.Shard);
+            _gold   = Cell(row, "Gold",   TextureLab.CoinIcon(64),    UITheme.Gold,  "gold");
+            _shards = Cell(row, "Shards", TextureLab.CrystalIcon(64), UITheme.Shard, "shards");
 
             UIButton bag = EmberforgeUI.Button("Bag", row, "BAG", UITheme.FontTiny,
                                                ForgeButtonKind.Secondary);
@@ -128,12 +128,16 @@ namespace Emberfall.UI
         /// the strip is already a panel, and a second raised surface on top of one is two objects
         /// where the design has one object with wells cut into it.
         /// </summary>
-        private static Text Cell(RectTransform parent, string name, Sprite icon, Color tint)
+        private static Text Cell(RectTransform parent, string name, Sprite icon, Color tint, string purse)
         {
             RectTransform cell = UIBuilder.Node(name, parent);
             UIBuilder.Sized(cell, CellWidth, 0f);
 
-            Image glyph = UIBuilder.Img("Icon", cell, icon, tint);
+            // The UI kit's own icon for the purse (painted in colour, so drawn white) when the kit is
+            // on; the flat tinted glyph otherwise.
+            Sprite kitIcon = UiKit.Currency(purse);
+            Image glyph = UIBuilder.Img("Icon", cell, kitIcon != null ? kitIcon : icon,
+                                        kitIcon != null ? Color.white : tint);
             UIBuilder.Box(glyph.rectTransform, 0f, 0f, IconSize, IconSize, new Vector2(0f, 0.5f));
             glyph.raycastTarget = false;
 

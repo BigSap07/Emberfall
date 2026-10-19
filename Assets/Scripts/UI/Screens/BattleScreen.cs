@@ -174,6 +174,7 @@ namespace Emberfall.UI.Screens
         private RectTransform _callout;
         private CanvasGroup _calloutGroup;
         private Text _calloutText;
+        private Image _calloutIcon;
 
         /// <summary>The callout's text width at the size it is drawn, kept so SyncFrame can
         /// re-place the pill when the screen changes shape.</summary>
@@ -748,6 +749,20 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_calloutText.rectTransform, 0f);
             UIBuilder.Outlined(_calloutText, BattleHudStyle.TextOutline, Emberforge.StrokeThin);
 
+            // THE UI KIT'S ABILITY ICON, hung off the pill's left end rather than inside it, so the box
+            // BattleHudLayout.Callout places (and the harness proves) is the same box with the kit on or off.
+            // Hidden unless the kit is on and has an icon for the ability being shown (ShowCallout).
+            _calloutIcon = UIBuilder.Img("AbilityIcon", _callout, null, Color.white);
+            _calloutIcon.rectTransform.anchorMin = new Vector2(0f, 0.5f);
+            _calloutIcon.rectTransform.anchorMax = new Vector2(0f, 0.5f);
+            _calloutIcon.rectTransform.pivot = new Vector2(1f, 0.5f);
+            _calloutIcon.rectTransform.anchoredPosition = new Vector2(-BattleHudMetrics.CalloutGap, 0f);
+            _calloutIcon.rectTransform.sizeDelta = new Vector2(BattleHudMetrics.CalloutHeight * 1.3f,
+                                                               BattleHudMetrics.CalloutHeight * 1.3f);
+            _calloutIcon.preserveAspect = true;
+            _calloutIcon.raycastTarget = false;
+            _calloutIcon.gameObject.SetActive(false);
+
             _callout.gameObject.SetActive(false);
         }
 
@@ -1266,12 +1281,12 @@ namespace Emberfall.UI.Screens
 
             List<AbilityCardSheet.Entry> entries = new List<AbilityCardSheet.Entry>();
             if (def.BasicAttack != null)
-                entries.Add(CardEntry("BASIC", UITheme.TextMuted, def.BasicAttack, null));
+                entries.Add(CardEntry("BASIC", UITheme.TextMuted, def.BasicAttack, null, def.Id));
             if (def.Active != null)
-                entries.Add(CardEntry("ACTIVE", UITheme.Energy, def.Active, null));
+                entries.Add(CardEntry("ACTIVE", UITheme.Energy, def.Active, null, def.Id));
             for (int i = 0; i < def.Passives.Count; i++)
                 entries.Add(CardEntry("PASSIVE", UITheme.StarColor(snapshot.Stars),
-                                      AbilityMath.AsAbility(def.Passives[i]), def.Passives[i]));
+                                      AbilityMath.AsAbility(def.Passives[i]), def.Passives[i], def.Id));
             if (entries.Count == 0) return;
 
             // The stats the fight started the unit at, so the numbers are the ones this fight deals.
@@ -1298,9 +1313,11 @@ namespace Emberfall.UI.Screens
         }
 #endif
 
-        private static AbilityCardSheet.Entry CardEntry(string kind, Color tint, AbilityDef ability, PassiveDef passive)
+        private static AbilityCardSheet.Entry CardEntry(string kind, Color tint, AbilityDef ability, PassiveDef passive,
+                                                        string heroId)
         {
             AbilityCardSheet.Entry entry = new AbilityCardSheet.Entry();
+            entry.HeroId = heroId;
             entry.Kind = kind;
             entry.Tint = tint;
             entry.Ability = ability;
@@ -1544,7 +1561,7 @@ namespace Emberfall.UI.Screens
                         _buffSounded = false;
                         _debuffSounded = false;
                         App.Audio.Cast(source.Snapshot.Aspect);
-                        ShowCallout(e.AbilityName, source.Snapshot.Name, false);
+                        ShowCallout(e.AbilityName, source.Snapshot.Name, false, source.Snapshot.DefId, e.AbilityId);
                         if (!Feel.V2) _world.Vfx.Aura(source.transform.position, AspectTint(source), 2.2f);
                     }
 
@@ -1580,7 +1597,7 @@ namespace Emberfall.UI.Screens
                     if (source != null)
                     {
                         if (!Feel.V2) _world.Vfx.Aura(source.transform.position, UITheme.Gold, 2f);
-                        ShowCallout(e.AbilityName, source.Snapshot.Name, true);
+                        ShowCallout(e.AbilityName, source.Snapshot.Name, true, source.Snapshot.DefId, e.AbilityId);
                     }
                     yield return Wait(0.18f);
                     break;
@@ -2204,8 +2221,11 @@ namespace Emberfall.UI.Screens
         /// line plus its padding, up to CalloutMaxWidth; a line longer than that is set smaller
         /// rather than run out of the pill.
         /// </summary>
-        private void ShowCallout(string ability, string caster, bool passive)
+        private void ShowCallout(string ability, string caster, bool passive, string heroId, string abilityId)
         {
+            Sprite kitIcon = UiKit.Ability(heroId, abilityId);
+            _calloutIcon.sprite = kitIcon;
+            _calloutIcon.gameObject.SetActive(kitIcon != null);
             string text = "<color=#" + ColorUtility.ToHtmlStringRGB(BattleHudStyle.CalloutAbility) + ">"
                           + (ability ?? "") + "</color>" + BattleHudStyle.Separator
                           + (caster ?? "").ToUpperInvariant();

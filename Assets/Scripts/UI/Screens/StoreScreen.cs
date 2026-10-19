@@ -278,6 +278,7 @@ namespace Emberfall.UI.Screens
             RectTransform summary = UIBuilder.Node("Summary", _body);
             UIBuilder.Box(summary, 0f, 0f, ContentWidth, 116f, new Vector2(0.5f, 1f));
             EmberforgeUI.PanelOn(summary, true);
+            AddPassHeaderArt(summary);
 
             Text title = EmberforgeUI.Title("Title", summary, "SEASON " + view.PassSeason + "   -   " + view.PassDaysLeft + (view.PassDaysLeft == 1 ? " DAY" : " DAYS") + " LEFT",
                                             UITheme.FontBody, Emberforge.TextGold, TextAnchor.UpperLeft);
@@ -356,6 +357,32 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(label.rectTransform, 0f, -navY, 320f, 52f, new Vector2(0.5f, 1f));
         }
 
+        /// <summary>
+        /// THE UI KIT'S WAYFARER'S ROAD HEADER, as the summary's backdrop: the painting fills the panel's
+        /// inside (cropped to its middle band, never stretched) under a dark scrim, so the words and the
+        /// buttons on the summary keep the contrast they have on the plain panel. Nothing moves: the art is
+        /// a child drawn before the texts. With the kit off, or without the file, this does nothing.
+        /// </summary>
+        private static void AddPassHeaderArt(RectTransform summary)
+        {
+            Sprite header = UiKit.PassHeader();
+            if (header == null) return;
+            RectTransform window = UIBuilder.Node("KitHeader", summary);
+            UIBuilder.FillParent(window, 10f);
+            window.gameObject.AddComponent<RectMask2D>();
+
+            // Cover the window: as wide as it is, as tall as the painting's ratio makes it, centred.
+            float width = ContentWidth - 20f;
+            float height = width * header.rect.height / header.rect.width;
+            Image art = UIBuilder.Img("Art", window, header, Color.white);
+            UIBuilder.Box(art.rectTransform, 0f, 0f, width, height, new Vector2(0.5f, 0.5f));
+            art.raycastTarget = false;
+
+            Image scrim = UIBuilder.Img("Scrim", window, TextureLab.White, new Color(0.04f, 0.02f, 0.01f, 0.6f));
+            UIBuilder.FillParent(scrim.rectTransform, 0f);
+            scrim.raycastTarget = false;
+        }
+
         private RectTransform Tile(string name, float x, float y, float height, bool claimed, bool highlight)
         {
             RectTransform tile = UIBuilder.Node(name, _body);
@@ -419,7 +446,11 @@ namespace Emberfall.UI.Screens
                        : kind == PassRewardKind.Slag ? UITheme.Slag
                        : kind == PassRewardKind.Cosmetic ? Emberforge.TextGold : UITheme.Gold;
             const float icon = 56f;
-            Image mark = UIBuilder.Img("Mark", tile, IconFor(kind), UITheme.WithAlpha(tint, alpha));
+            // The kit's own icon for the purse this reward pays (painted in colour, so white, at the same
+            // alpha); the flat tinted glyph otherwise.
+            Sprite kitMark = KitIconFor(kind);
+            Image mark = UIBuilder.Img("Mark", tile, kitMark != null ? kitMark : IconFor(kind),
+                                       kitMark != null ? UITheme.WithAlpha(Color.white, alpha) : UITheme.WithAlpha(tint, alpha));
             UIBuilder.Box(mark.rectTransform, 0f, -12f, icon, icon, new Vector2(0.5f, 1f));
             Text text = EmberforgeUI.Body("Line", tile, line, UITheme.FontTiny - 4, Emberforge.TextBody, TextAnchor.UpperCenter);
             UIBuilder.Box(text.rectTransform, 0f, -74f, TileWidth - 16f, 70f, new Vector2(0.5f, 1f));
@@ -441,6 +472,19 @@ namespace Emberfall.UI.Screens
             UIButton b = EmberforgeUI.Button("Claim", tile, text, UITheme.FontTiny, ForgeButtonKind.Primary);
             UIBuilder.Box(b.Root, 0f, UITheme.Space8, TileWidth - 18f, 42f, new Vector2(0.5f, 0f));
             b.OnClick(delegate { action(); });
+        }
+
+        private static Sprite KitIconFor(PassRewardKind kind)
+        {
+            switch (kind)
+            {
+                case PassRewardKind.Hourglass: return UiKit.Currency("echo");
+                case PassRewardKind.Dust: return UiKit.Currency("dust");
+                case PassRewardKind.Slag: return UiKit.Currency("slag");
+                case PassRewardKind.Selector: return null;
+                case PassRewardKind.Cosmetic: return null;
+            }
+            return UiKit.Currency("gold");
         }
 
         private static Sprite IconFor(PassRewardKind kind)
@@ -596,8 +640,12 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(card.Root, 0f, -(index * (RowHeight + 8f)), ListWidth, RowHeight, new Vector2(0f, 1f));
             RectTransform body = card.Body;
 
-            Image icon = UIBuilder.Img("Icon", body, OfferIcon(o.Kind), UITheme.WithAlpha(OfferTint(o.Kind), 0.95f));
-            UIBuilder.Box(icon.rectTransform, 14f, 0f, 56f, 56f, new Vector2(0f, 0.5f));
+            // The kit's card for this offer, small, in the icon's place (and a little taller: a card is 3:4).
+            Sprite kitCard = UiKit.OfferCard(o.Id);
+            Image icon = UIBuilder.Img("Icon", body, kitCard != null ? kitCard : OfferIcon(o.Kind),
+                                       kitCard != null ? Color.white : UITheme.WithAlpha(OfferTint(o.Kind), 0.95f));
+            if (kitCard != null) { UIBuilder.Box(icon.rectTransform, 10f, 0f, 60f, 80f, new Vector2(0f, 0.5f)); icon.preserveAspect = true; }
+            else UIBuilder.Box(icon.rectTransform, 14f, 0f, 56f, 56f, new Vector2(0f, 0.5f));
             Text name = EmberforgeUI.Title("Name", body, o.Name.ToUpperInvariant(), UITheme.FontSmall, selected ? Emberforge.TextGold : Emberforge.TextBody, TextAnchor.UpperLeft);
             UIBuilder.Box(name.rectTransform, 84f, -10f, ListWidth - 280f, 34f, new Vector2(0f, 1f));
             UIBuilder.BestFit(name, 15, UITheme.FontSmall);   // a long name shrinks to its own width, clear of the state pill
@@ -662,6 +710,20 @@ namespace Emberfall.UI.Screens
 
             Image icon = UIBuilder.Img("Icon", pane, OfferIcon(o.Kind), UITheme.WithAlpha(OfferTint(o.Kind), 0.95f));
             UIBuilder.Box(icon.rectTransform, 28f, -24f, 72f, 72f, new Vector2(0f, 1f));
+
+            // THE UI KIT'S OFFER CARD, large, in the empty top-right of the pane (the texts end well short
+            // of it). The growth fund's milestone chips start lower and further right, so its card is the
+            // small one. The little glyph beside the name is the kit card's job now, so it steps aside.
+            Sprite kitCard = UiKit.OfferCard(o.Id);
+            if (kitCard != null)
+            {
+                icon.enabled = false;
+                float cardHeight = o.Kind == StoreOfferKind.Growth ? 190f : 420f;
+                Image art = UIBuilder.Img("KitCard", pane, kitCard, Color.white);
+                UIBuilder.Box(art.rectTransform, -28f, -28f, cardHeight * 0.75f, cardHeight, new Vector2(1f, 1f));
+                art.preserveAspect = true;
+                art.raycastTarget = false;
+            }
             Text name = EmberforgeUI.Title("Name", pane, o.Name.ToUpperInvariant(), UITheme.FontHeading, Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(name.rectTransform, 116f, -22f, 800f, 44f, new Vector2(0f, 1f));
             UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
@@ -872,6 +934,7 @@ namespace Emberfall.UI.Screens
             public Color Tint;
             public bool Built;
             public string Purse;
+            public string Kit;      // the purse's name for the UI kit's icon ("valor", "coda", ...)
         }
 
         private void BuildShops()
@@ -879,13 +942,13 @@ namespace Emberfall.UI.Screens
             PlayerProfile p = App.Session.Profile;
             List<ShopDoor> doors = new List<ShopDoor>();
             doors.Add(new ShopDoor { Name = "PROVING ARMORY", Pays = "Valor", Sells = "Honed armor presets, Brand and Echo refills and one four-star copy a month. Every item is fixed.",
-                                     Screen = ScreenId.Armory, Icon = TextureLab.Plate(128), Tint = UITheme.Ember, Built = Router.Armory != null, Purse = HudTopBar.Format(p.Valor) + " Valor" });
+                                     Screen = ScreenId.Armory, Icon = TextureLab.Plate(128), Tint = UITheme.Ember, Built = Router.Armory != null, Purse = HudTopBar.Format(p.Valor) + " Valor", Kit = "valor" });
             doors.Add(new ShopDoor { Name = "RECITAL ARCHIVE", Pays = "Coda", Sells = "One four-star hero copy a month, chosen from a fixed list.",
-                                     Screen = ScreenId.Archive, Icon = TextureLab.SpiralIcon(128), Tint = UITheme.Mythic, Built = Router.Archive != null, Purse = HudTopBar.Format(p.Coda) + " Coda" });
+                                     Screen = ScreenId.Archive, Icon = TextureLab.SpiralIcon(128), Tint = UITheme.Mythic, Built = Router.Archive != null, Purse = HudTopBar.Format(p.Coda) + " Coda", Kit = "coda" });
             doors.Add(new ShopDoor { Name = "QUARTERMASTER", Pays = "Gold", Sells = "A daily shelf of rolled armor, one piece for each slot, restocked every reward day.",
-                                     Screen = ScreenId.Quartermaster, Icon = TextureLab.Chest(128), Tint = UITheme.Gold, Built = Router.Quartermaster != null, Purse = HudTopBar.Format(p.Gold) + " Gold" });
+                                     Screen = ScreenId.Quartermaster, Icon = TextureLab.Chest(128), Tint = UITheme.Gold, Built = Router.Quartermaster != null, Purse = HudTopBar.Format(p.Gold) + " Gold", Kit = "gold" });
             doors.Add(new ShopDoor { Name = "RELIC SHOP", Pays = "Relic Dust", Sells = "Relics at their fixed price, and the upgrade of each relic you own.",
-                                     Screen = ScreenId.RelicShop, Icon = TextureLab.Diamond(128), Tint = UITheme.Dust, Built = Router.RelicShop != null, Purse = HudTopBar.Format(p.RelicDust) + " Dust" });
+                                     Screen = ScreenId.RelicShop, Icon = TextureLab.Diamond(128), Tint = UITheme.Dust, Built = Router.RelicShop != null, Purse = HudTopBar.Format(p.RelicDust) + " Dust", Kit = "dust" });
 
             const float cardWidth = 420f, gap = 26f, cardHeight = 600f;
             float startX = -(cardWidth * doors.Count + gap * (doors.Count - 1)) * 0.5f + cardWidth * 0.5f;
@@ -896,7 +959,9 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Box(card, startX + i * (cardWidth + gap), -20f, cardWidth, cardHeight, new Vector2(0.5f, 1f));
                 EmberforgeUI.PanelOn(card, true);
 
-                Image mark = UIBuilder.Img("Icon", card, d.Icon, UITheme.WithAlpha(d.Tint, 0.95f));
+                Sprite kitMark = UiKit.Currency(d.Kit);
+                Image mark = UIBuilder.Img("Icon", card, kitMark != null ? kitMark : d.Icon,
+                                           kitMark != null ? Color.white : UITheme.WithAlpha(d.Tint, 0.95f));
                 UIBuilder.Box(mark.rectTransform, 0f, -36f, 120f, 120f, new Vector2(0.5f, 1f));
                 Text name = EmberforgeUI.Title("Name", card, d.Name, UITheme.FontBody, Emberforge.TextGold, TextAnchor.UpperCenter);
                 UIBuilder.Box(name.rectTransform, 0f, -176f, cardWidth - 24f, 40f, new Vector2(0.5f, 1f));

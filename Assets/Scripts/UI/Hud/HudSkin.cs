@@ -69,6 +69,10 @@ namespace Emberfall.UI
         public const string IconChest = "hud_chest";
         public const string IconClose = "hud_close";
 
+        /// <summary>The Store's rail door. Empty until now (it drew a coin glyph); the slot exists so the
+        /// UI kit has a piece to put in it. With no kit and no file it is the coin it always was.</summary>
+        public const string IconStore = "hud_nav_store";
+
         /// <summary>The battle plates' status icons, one slot per role. A kind's own slot
         /// (StatusKindSlot) is tried before its role's; see BattleHudStyle.StatusSprite.</summary>
         public const string StatusBuff = "hud_status_buff";
@@ -94,11 +98,23 @@ namespace Emberfall.UI
 
         private static Sprite Authored(string slot)
         {
+            // THE UI KIT FIRST, and only while its switch is on (UiKit answers null otherwise). The
+            // kit's sprite is never put in Overrides, so flipping the switch cannot serve the other state.
+            Sprite kit = UiKit.Hud(slot);
+            if (kit != null) return kit;
+
             Sprite found;
             if (Overrides.TryGetValue(slot, out found)) return found;
             found = Resources.Load<Sprite>(Folder + slot);
             Overrides[slot] = found;
             return found;
+        }
+
+        /// <summary>True when this slot is being drawn from the UI kit right now. The kit's icons are
+        /// painted in colour, so a caller that tints a glyph draws it white instead.</summary>
+        public static bool IsKit(string slot)
+        {
+            return UiKit.Hud(slot) != null;
         }
 
         /// <summary>Drops every cached lookup, so a sprite imported while the editor is running is

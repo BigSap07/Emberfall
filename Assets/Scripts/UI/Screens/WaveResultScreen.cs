@@ -703,7 +703,11 @@ namespace Emberfall.UI.Screens
         private RectTransform CurrencyTile(string name, Sprite icon, Color tint, string amount, string label)
         {
             RectTransform tile = Tile(name);
-            Image mark = UIBuilder.Img("Icon", tile, icon, tint);
+            // The UI kit's icon for the purse this tile pays (gold, shards, slag), painted in colour so drawn
+            // white; the flat tinted glyph otherwise, and always for a tile the kit has no icon for (XP).
+            Sprite kitIcon = UiKit.Currency(name);
+            Image mark = UIBuilder.Img("Icon", tile, kitIcon != null ? kitIcon : icon,
+                                       kitIcon != null ? Color.white : tint);
             UIBuilder.Box(mark.rectTransform, 0f, -22f, 64f, 64f, TopCentre);
             TileText(tile, amount, label, tint);
             return tile;

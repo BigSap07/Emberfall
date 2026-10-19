@@ -95,6 +95,14 @@ namespace Emberfall.EditorTools
         private const string SinksForceKey = "PlayModeScreenshot.SinksForce";
         private const string SinksWasKey = "PlayModeScreenshot.SinksWas";
 
+        /// <summary>The UI kit's switch for this run (R20): a target named with +kit forces UiKitSwitch ON
+        /// for the capture only, +plain forces it OFF (the before shot and the rollback proof), 0 leaves
+        /// it as the build has it. The switch is a static, so the domain reload Play mode triggers resets
+        /// it and the static constructor re-applies it before the game boots; KitWasKey is what it was
+        /// before the run, put back by Stop. It is never committed ON.</summary>
+        private const string KitForceKey = "PlayModeScreenshot.UiKitForce";
+        private const string KitWasKey = "PlayModeScreenshot.UiKitWas";
+
         /// <summary>
         /// Every run of this tool is on a scratch identity with the cloud held off, unconditionally:
         /// Begin swaps to it (unless a tool above, ScratchCaptures, already did) and enters Play
@@ -124,7 +132,7 @@ namespace Emberfall.EditorTools
         /// completes. Placing a trigger without first confirming this marker is exactly what
         /// produced two more wasted runs against stale code on this feature's own verification pass.
         /// </summary>
-        private const string BuildMarker = "FIXV24-sinks-targets";
+        private const string BuildMarker = "FIXV25-uikit-targets";
 
         // THE WATCHDOG's state (CaptureWatchdog decides, this class acts). All of it lives in
         // SessionState because the domain reload that entering or leaving Play triggers wipes statics.
@@ -151,6 +159,7 @@ namespace Emberfall.EditorTools
             Debug.Log("PlayModeScreenshot: loaded, build marker " + BuildMarker);
             ApplyLoopForce();
             ApplySinksForce();
+            ApplyKitForce();
             EditorApplication.update += Pump;
             EditorApplication.update += PollTriggerFile;
             EditorApplication.update += WatchdogTick;
@@ -177,6 +186,17 @@ namespace Emberfall.EditorTools
             int force = SessionState.GetInt(LoopForceKey, 0);
             if (force == 1) DailyLoopSwitch.Enabled = true;
             else if (force == 2) DailyLoopSwitch.Enabled = false;
+        }
+
+        /// <summary>Applies the run's UI kit switch, the way ApplyLoopForce applies the daily loop's.
+        /// Forgets the kit's cached sprites so a flip inside one editor session is read by the next build.</summary>
+        private static void ApplyKitForce()
+        {
+            if (!SessionState.GetBool(ActiveKey, false)) return;
+            int force = SessionState.GetInt(KitForceKey, 0);
+            if (force == 0) return;
+            UiKitSwitch.Enabled = force == 1;
+            UiKit.Forget();
         }
 
         private static void PollTriggerFile()
@@ -410,6 +430,76 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/R19 store/Packs, a paid purchase waiting for its pick", false, 140)]
         public static void CaptureStorePickWaiting() { Begin("Screen:StorePickWaiting"); }
 
+        // THE UI KIT (R20, behind UiKitSwitch, committed OFF). Every target below is an ordinary screen target
+        // with the switch forced for the capture only: +kit ON, +plain OFF. The pair is the before and the
+        // after, and the +plain shot is also the rollback proof (it must equal the target with no suffix).
+        // The scratch identity and the offline guard are Begin's, as for every other target.
+        [MenuItem("Emberfall/Capture/R20 kit/Hub, kit on", false, 150)]
+        public static void CaptureKitMainMenuOn() { Begin("Screen:MainMenu+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Hub, kit off", false, 151)]
+        public static void CaptureKitMainMenuOff() { Begin("Screen:MainMenu+plain"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Hub with the Store door, kit on", false, 152)]
+        public static void CaptureKitHubStoreOn() { Begin("Screen:HubStore+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Hub with the Store door, kit off", false, 153)]
+        public static void CaptureKitHubStoreOff() { Begin("Screen:HubStore+plain"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Battle, kit on", false, 154)]
+        public static void CaptureKitBattleOn() { Begin("Screen:Battle+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Battle, kit off", false, 155)]
+        public static void CaptureKitBattleOff() { Begin("Screen:Battle+plain"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Battle unit card, kit on", false, 156)]
+        public static void CaptureKitBattleCardOn() { Begin("Screen:BattleCard+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Battle unit card, kit off", false, 157)]
+        public static void CaptureKitBattleCardOff() { Begin("Screen:BattleCard+plain"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Hero detail, kit on", false, 158)]
+        public static void CaptureKitHeroDetailOn() { Begin("Screen:HeroDetail+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Hero detail, kit off", false, 159)]
+        public static void CaptureKitHeroDetailOff() { Begin("Screen:HeroDetail+plain"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Hero ability card, kit on", false, 160)]
+        public static void CaptureKitAbilityCardOn() { Begin("Screen:AbilityCard+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Hero ability card, kit off", false, 161)]
+        public static void CaptureKitAbilityCardOff() { Begin("Screen:AbilityCard+plain"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Store pass tab, kit on", false, 162)]
+        public static void CaptureKitStorePassOn() { Begin("Screen:StorePass+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Store pass tab, kit off", false, 163)]
+        public static void CaptureKitStorePassOff() { Begin("Screen:StorePass+plain"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Store packs, kit on", false, 164)]
+        public static void CaptureKitStorePacksOn() { Begin("Screen:StorePacks+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Store packs, kit off", false, 165)]
+        public static void CaptureKitStorePacksOff() { Begin("Screen:StorePacks+plain"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Victory (stage cleared), kit on", false, 166)]
+        public static void CaptureKitWaveResultClearedOn() { Begin("Screen:WaveResultCleared+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Victory (stage cleared), kit off", false, 167)]
+        public static void CaptureKitWaveResultClearedOff() { Begin("Screen:WaveResultCleared+plain"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Battle result, kit on", false, 168)]
+        public static void CaptureKitResultOn() { Begin("Screen:Result+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Battle result, kit off", false, 169)]
+        public static void CaptureKitResultOff() { Begin("Screen:Result+plain"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Summon, kit on", false, 170)]
+        public static void CaptureKitSummonOn() { Begin("Screen:Summon+kit"); }
+
+        [MenuItem("Emberfall/Capture/R20 kit/Summon, kit off", false, 171)]
+        public static void CaptureKitSummonOff() { Begin("Screen:Summon+plain"); }
+
         [MenuItem("Emberfall/Capture/Heroes", false, 61)]
         public static void CaptureHeroes() { Begin("Screen:Heroes"); }
 
@@ -602,6 +692,13 @@ namespace Emberfall.EditorTools
                 suffix = "=" + battleStage + suffix;
             }
 
+            // Screen:<Name>+kit forces the UI kit ON for this capture, +plain forces it OFF. It rides on
+            // the target name so every existing target can be shot both ways without a new code path, and
+            // it goes into the file name so the two shots sit side by side.
+            int kitForce = 0;
+            if (target.EndsWith("+kit")) { kitForce = 1; target = target.Substring(0, target.Length - 4); suffix = "+kit" + suffix; }
+            else if (target.EndsWith("+plain")) { kitForce = 2; target = target.Substring(0, target.Length - 6); suffix = "+plain" + suffix; }
+
             // Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off]: a dot and not a colon, because the
             // text after the = is copied into the PNG's name and a colon cannot be in a Windows file
             // name. A stage id has no dot. The stage rides in battleStage as for Battle.
@@ -669,6 +766,9 @@ namespace Emberfall.EditorTools
             SessionState.SetInt(SinksForceKey, SinksForceFor(target));
             SessionState.SetBool(SinksWasKey, SinksSwitch.Enabled);
             ApplySinksForce();
+            SessionState.SetInt(KitForceKey, kitForce);
+            SessionState.SetBool(KitWasKey, UiKitSwitch.Enabled);
+            ApplyKitForce();
             SessionState.SetBool(VerifiedKey, false);
             SessionState.SetString(TargetKey, target);
             SessionState.SetInt(WidthKey, width);
@@ -1379,6 +1479,13 @@ namespace Emberfall.EditorTools
             {
                 SinksSwitch.Enabled = SessionState.GetBool(SinksWasKey, false);
                 SessionState.SetInt(SinksForceKey, 0);
+            }
+            // And the UI kit's, so a +kit run cannot leave the switch on for the next one in this editor.
+            if (SessionState.GetInt(KitForceKey, 0) != 0)
+            {
+                UiKitSwitch.Enabled = SessionState.GetBool(KitWasKey, false);
+                SessionState.SetInt(KitForceKey, 0);
+                UiKit.Forget();
             }
             SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetInt(MomentStageKey, 0);

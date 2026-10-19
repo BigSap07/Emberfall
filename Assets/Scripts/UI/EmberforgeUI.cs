@@ -91,6 +91,9 @@ namespace Emberfall.UI
     /// </summary>
     public static class EmberforgeUI
     {
+        /// <summary>The UI kit's own name for the currency pill's plate (see UiKitMap).</summary>
+        private const string UiKitPill = "forge_pill_currency";
+
         // ------------------------------------------------------------------ surfaces
 
         /// <summary>
@@ -345,6 +348,9 @@ namespace Emberfall.UI
         /// whatever is inside the panel's corner.</summary>
         public static void Ornaments(RectTransform panel)
         {
+            // The UI kit's panel carries its own corner pieces; four diamonds on top of them would be
+            // a second set of corners.
+            if (UiKit.Forge(EmberforgeArt.Slot.Panel) != null) return;
             float s = Emberforge.OrnamentSize;
             float inset = s * 0.34f;
             AddOrnament(panel, new Vector2(0f, 1f), inset, -inset, s);
@@ -594,12 +600,16 @@ namespace Emberfall.UI
                                        Color.white);
             UIBuilder.FillParent(built.Disc.rectTransform, 0f);
 
+            // A UI KIT ICON is painted in colour, so it is drawn white and a little larger than the
+            // flat glyphs it replaces; with the kit off none of this applies and the glyph is exactly
+            // what it was.
+            bool kitGlyph = HudSkin.IsKit(glyphSlot);
             built.Glyph = UIBuilder.Img("Glyph", built.Face, HudSkin.Icon(glyphSlot, fallbackGlyph),
-                                        glyphTint);
+                                        kitGlyph ? Color.white : glyphTint);
             // 0.30 rather than a shared inset: the disc's gold frame plus its inner shadow occupy
             // the outer fifth of it, and a glyph drawn into that band reads as sitting ON the rim
             // rather than in the dish.
-            UIBuilder.FillParent(built.Glyph.rectTransform, discSize * 0.30f);
+            UIBuilder.FillParent(built.Glyph.rectTransform, discSize * (kitGlyph ? 0.20f : 0.30f));
 
             EmberforgeDiscSkin skin = handle.Root.gameObject.AddComponent<EmberforgeDiscSkin>();
             skin.Bind(built.Disc, built.Face);
@@ -625,6 +635,18 @@ namespace Emberfall.UI
                                         Emberforge.TextGold, HubStyle.RailDisc, action);
             UIBuilder.Box(disc.Root, -HubStyle.HudEdge * 0.5f, -HubStyle.HudEdge * 0.5f,
                           HubStyle.TouchMin, HubStyle.TouchMin, new Vector2(1f, 1f));
+            // THE UI KIT'S OWN CLOSE BUTTON is a whole painted disc with its cross in it, so it
+            // replaces the disc and the glyph and the text cross all at once.
+            Sprite kitClose = UiKit.Hud(HudSkin.IconClose);
+            if (kitClose != null)
+            {
+                disc.Disc.enabled = false;
+                disc.Glyph.sprite = kitClose;
+                disc.Glyph.color = Color.white;
+                disc.Glyph.enabled = true;
+                UIBuilder.FillParent(disc.Glyph.rectTransform, 0f);
+                return disc;
+            }
             disc.Glyph.enabled = false;
 
             Text cross = Title("Cross", disc.Face, "X", UITheme.FontBody, Emberforge.TextGold,
@@ -790,7 +812,9 @@ namespace Emberfall.UI
                 tab.Plate.sprite = EmberforgeSkin.Get(selected
                     ? EmberforgeArt.Slot.TabOn : EmberforgeArt.Slot.TabOff);
             if (tab.Caption != null)
-                tab.Caption.color = selected ? Emberforge.TextGold : Emberforge.TextQuiet;
+                tab.Caption.color = selected
+                    ? (UiKit.Forge(EmberforgeArt.Slot.TabOn) != null ? UITheme.TextOnAccent : Emberforge.TextGold)
+                    : Emberforge.TextQuiet;
         }
 
         // ------------------------------------------------------------------ the currency pill
@@ -808,12 +832,25 @@ namespace Emberfall.UI
         public static ForgePill CurrencyPill(string name, Transform parent, float width, float height,
                                              Color jewelTint, Action onPlus)
         {
+            return CurrencyPill(name, parent, width, height, jewelTint, onPlus, null);
+        }
+
+        /// <summary>
+        /// The same pill, naming the purse it holds ("gold", "shards", "dust"). With the UI kit on,
+        /// the kit's own icon for that purse replaces the tinted jewel; with it off, or for a purse
+        /// the kit has no icon for, the jewel is drawn exactly as before.
+        /// </summary>
+        public static ForgePill CurrencyPill(string name, Transform parent, float width, float height,
+                                             Color jewelTint, Action onPlus, string purse)
+        {
             ForgePill pill = new ForgePill();
             pill.Root = UIBuilder.Node(name, parent);
             UIBuilder.Size(pill.Root, width, height);
 
             Image plate = pill.Root.gameObject.AddComponent<Image>();
-            plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.Pill);
+            // The kit's currency plate when it is on and the purse has its icon; the pill otherwise.
+            Sprite kitPlate = purse != null ? UiKit.Forge(UiKitPill) : null;
+            plate.sprite = kitPlate != null ? kitPlate : EmberforgeSkin.Get(EmberforgeArt.Slot.Pill);
             plate.type = Image.Type.Sliced;
             plate.color = Color.white;
             plate.raycastTarget = false;
@@ -829,6 +866,16 @@ namespace Emberfall.UI
             Image jewelEdge = UIBuilder.Img("Edge", jewelHost,
                                             EmberforgeSkin.Get(EmberforgeArt.Slot.JewelEdge), Color.white);
             UIBuilder.FillParent(jewelEdge.rectTransform, 0f);
+
+            Sprite kitIcon = UiKit.Currency(purse);
+            if (kitIcon != null)
+            {
+                pill.Jewel.enabled = false;
+                jewelEdge.enabled = false;
+                Image icon = UIBuilder.Img("KitIcon", jewelHost, kitIcon, Color.white);
+                UIBuilder.FillParent(icon.rectTransform, -jewelSize * 0.1f);
+                icon.raycastTarget = false;
+            }
 
             // The figure's right inset. It does NOT grow when a plus is present, because the
             // plus is hung mostly OUTSIDE the pill - see below - so it takes almost none of the
@@ -1222,7 +1269,7 @@ namespace Emberfall.UI
 
             // The gloss is a property of a lit face, and a disabled button is not lit. Hiding it
             // is what stops a greyed-out button still looking glossy and therefore still pressable.
-            if (_gloss != null) _gloss.enabled = _interactable;
+            if (_gloss != null) _gloss.enabled = _interactable && UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) == null;
         }
     }
 

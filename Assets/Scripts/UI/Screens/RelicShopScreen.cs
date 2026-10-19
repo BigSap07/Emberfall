@@ -282,9 +282,13 @@ namespace Emberfall.UI.Screens
             // The relic's own mark. Sigil is the project's existing emblem set, indexed off the
             // relic id's hash so a given relic always draws the same mark - stable between sessions
             // and between here and anywhere else that wants to draw it later.
-            Image mark = UIBuilder.Img("Mark", iconTile, TextureLab.Sigil(SigilFor(index), 128),
-                                       UITheme.WithAlpha(grade, owned ? 0.55f : 0.9f));
-            UIBuilder.Box(mark.rectTransform, 0f, 0f, tile * 0.58f, tile * 0.58f, new Vector2(0.5f, 0.5f));
+            // With the UI kit on, the relic's own icon (painted in colour: white, larger, dimmed when owned).
+            Sprite kitRelic = UiKit.Relic(relic.Id);
+            Image mark = UIBuilder.Img("Mark", iconTile, kitRelic != null ? kitRelic : TextureLab.Sigil(SigilFor(index), 128),
+                                       kitRelic != null ? new Color(1f, 1f, 1f, owned ? 0.7f : 1f)
+                                                        : UITheme.WithAlpha(grade, owned ? 0.55f : 0.9f));
+            float markSize = kitRelic != null ? tile * 0.82f : tile * 0.58f;
+            UIBuilder.Box(mark.rectTransform, 0f, 0f, markSize, markSize, new Vector2(0.5f, 0.5f));
 
             top += tile + UITheme.Space12;
 
