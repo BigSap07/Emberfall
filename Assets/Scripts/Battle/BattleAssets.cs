@@ -352,21 +352,22 @@ namespace Emberfall.Battle
         /// already authors per stage, so adding a painting for a new environment is a file drop
         /// rather than a code change.
         ///
-        /// PAINTED TODAY: "ashen", "ember", "hollow" - four campaign stages each.
+        /// PAINTED TODAY: "ashen", "ember", "hollow" (chapter 1, four stages each) and chapters 2
+        /// to 6 as "crossing", "city", "old_kingdom", "divided_realm" and "sanctuary", the ids
+        /// campaign.json authors for those chapters.
         ///
-        /// NAMED BUT UNPAINTED, falling through to GeneratedBackdrop below: "coast", "deep",
-        /// "tidal" (twelve chapter 2 stages) and "proving" (The Proving). Each becomes a real
-        /// painting by dropping a file at Assets/Resources/Backgrounds/{id}.png - specifically
-        /// Backgrounds/proving.png for The Proving - with NO code change of any kind. That is the
-        /// whole point of keying this on the id campaign.json already authors.
+        /// NAMED BUT UNPAINTED, falling through to GeneratedBackdrop below: "proving" (The
+        /// Proving), "deep" (the guild dungeon) and the recital ids "tidal" and "coast". Each
+        /// becomes a real painting by dropping a file at Assets/Resources/Backgrounds/{id}.png
+        /// with NO code change of any kind. That is the whole point of keying this on the id
+        /// campaign.json already authors.
         ///
         /// A TRAP WORTH KNOWING, because it makes the fallback quieter than it sounds. The
         /// generated backdrop is built from GetEnvironment(id), and GetEnvironment only has cases
-        /// for "ember", "hollow" and now "proving" - everything else, INCLUDING "coast", "deep" and
-        /// "tidal", hits its default arm and is drawn in ashen's palette. So those twelve stages do
-        /// not currently generate "their own" colours; they generate ashen's. That is a real gap
-        /// and it is not fixed here, because a palette is an art-direction decision rather than a
-        /// mechanical one. "proving" was given a case precisely so it would not join them.
+        /// for "ember", "hollow" and "proving" - everything else, including an id that has no
+        /// painting, hits its default arm and is drawn in ashen's palette. A palette is an
+        /// art-direction decision rather than a mechanical one, so an unpainted id does not get
+        /// "its own" colours. "proving" was given a case precisely so it would not join them.
         ///
         /// The fallback deliberately differs from UnitSprite's. There, a non-empty sprite id that
         /// fails to resolve is a content bug and gets the unmissable magenta square. Here a
