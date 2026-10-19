@@ -50,8 +50,10 @@ namespace Emberfall.DevHarness
             Line("WALL CHESTS (content and the stage card)");
             string path = Path.Combine(contentDir, "wall-chests.json");
             string shipped = File.Exists(path) ? File.ReadAllText(path) : "";
-            live.LoadWallChests(shipped);
-            WallChestConfig shippedCfg = live.WallChests;
+            // NEVER MUTATE `live`: it is Main's shared content and every later walk reads it. The shipped
+            // default is read from a throwaway database, and so is the enabled variant below.
+            ContentDatabase shippedDb = LoadWallChestContent(contentDir, shipped);
+            WallChestConfig shippedCfg = shippedDb.WallChests;
 
             // THE SHIPPED DEFAULT IS OFF: with the chests on, the reference walks' power band at walk 0 went
             // over x1.25 at 2-7, 3-4 and 3-6. The file and its numbers stay; only the switch is off. Every
@@ -61,32 +63,32 @@ namespace Emberfall.DevHarness
             Check(!shippedCfg.Enabled && !shippedCfg.IsUsable && shippedCfg.Wall.Hours > 0.0 && shippedCfg.Finale.Hours > 0.0,
                   "the shipped switch is OFF and the data is still in the file (wall " + shippedCfg.Wall.Hours + " h, finale "
                   + shippedCfg.Finale.Hours + " h)");
-            GameSession offSession = new GameSession(live, GameSession.CreateNewProfile(live, 0));
+            GameSession offSession = new GameSession(shippedDb, GameSession.CreateNewProfile(shippedDb, 0));
             int shown = 0;
-            for (int i = 0; i < live.AllStages.Count; i++)
+            for (int i = 0; i < shippedDb.AllStages.Count; i++)
             {
-                WallChestView off = WallChests.Preview(offSession, live.AllStages[i]);
+                WallChestView off = WallChests.Preview(offSession, shippedDb.AllStages[i]);
                 if (off.Present || off.Line.Length != 0) shown++;
             }
-            Check(shown == 0, "with the shipped default no stage card shows a chest line (" + shown + " of " + live.AllStages.Count + " stages do)");
+            Check(shown == 0, "with the shipped default no stage card shows a chest line (" + shown + " of " + shippedDb.AllStages.Count + " stages do)");
 
             string enabledText = shipped.Replace("\"enabled\": false", "\"enabled\": true");
             Check(enabledText != shipped, "the shipped file's switch reads \"enabled\": false, which is what turns it on for the checks below");
-            live.LoadWallChests(enabledText);
-            WallChestConfig cfg = live.WallChests;
+            ContentDatabase on = LoadWallChestContent(contentDir, enabledText);
+            WallChestConfig cfg = on.WallChests;
             Check(cfg.IsUsable && cfg.Enabled, "with the switch turned on the file is usable");
             Check(cfg.Finale.Hours > cfg.Wall.Hours && cfg.Finale.SlagPerChapter > cfg.Wall.SlagPerChapter,
                   "the finale chest is larger than the wall chest in both hours (" + cfg.Finale.Hours + " against "
                   + cfg.Wall.Hours + ") and Slag per chapter (" + cfg.Finale.SlagPerChapter + " against "
                   + cfg.Wall.SlagPerChapter + ")");
 
-            GameSession session = new GameSession(live, GameSession.CreateNewProfile(live, 0));
+            GameSession session = new GameSession(on, GameSession.CreateNewProfile(on, 0));
             int walls = 0, finales = 0, chapters = 0;
             List<string> wrong = new List<string>();
             HashSet<string> seenChapters = new HashSet<string>();
-            for (int i = 0; i < live.AllStages.Count; i++)
+            for (int i = 0; i < on.AllStages.Count; i++)
             {
-                StageDef st = live.AllStages[i];
+                StageDef st = on.AllStages[i];
                 if (seenChapters.Add(st.ChapterId)) chapters++;
                 WallChestView v = WallChests.Preview(session, st);
                 bool expectWall = st.Index == 6, expectFinale = st.Index == 12;
@@ -107,7 +109,7 @@ namespace Emberfall.DevHarness
                       + string.Join("; ", wrong.ToArray()));
 
             // Deeper chapters pay more Slag, and the card says so before the fight.
-            StageDef first = live.AllStages[5], last = live.AllStages[live.AllStages.Count - 1];
+            StageDef first = on.AllStages[5], last = on.AllStages[on.AllStages.Count - 1];
             WallChestView a = WallChests.Preview(session, first), b = WallChests.Preview(session, last);
             Check(a.Present && b.Present && b.Slag > a.Slag,
                   "Slag grows with the chapter: " + first.DisplayCode + " holds " + a.Slag + ", " + last.DisplayCode + " holds " + b.Slag);
