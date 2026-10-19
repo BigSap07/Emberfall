@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using UnityEngine;
+using Emberfall.Battle;
 using Emberfall.Core.Data;
 using Random = UnityEngine.Random;
 
@@ -211,7 +212,9 @@ namespace Emberfall.Game
             // layers= counts the EXTRA sources a cue started under its main one (battle.hit carries one:
             // layers=1 is two sounds playing, the stone hit and the arcane snap). sources= is the sum.
             int layersStarted = 0;
-            for (int l = 0; l < def.Layers.Count; l++)
+            // R15 v2: a basic hit plays its main sound alone; layers stay on crits and skills.
+            bool alone = Feel.V2 && Feel.Profile.IsSingleSound(cueId);
+            for (int l = 0; l < def.Layers.Count && !alone; l++)
             {
                 AudioLayerDef layer = def.Layers[l];
                 if (layer.Files.Count == 0) continue;
@@ -244,7 +247,8 @@ namespace Emberfall.Game
             AudioCueLog.Record("PLAY", cueId, "ch=" + ChannelName(def.Channel) + " file=" + file
                                + " vol=" + volume.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)
                                + " pitch=" + pitch.ToString("F3", System.Globalization.CultureInfo.InvariantCulture)
-                               + " layers=" + layersStarted + " sources=" + (1 + layersStarted));
+                               + " layers=" + layersStarted + " sources=" + (1 + layersStarted)
+                               + (Feel.V2 ? " class=" + FeelMath.CueClass(cueId) : ""));
             return true;
         }
 
@@ -252,7 +256,7 @@ namespace Emberfall.Game
 
         private bool StartVoice(AudioChannel channel, string cueId, AudioClip clip, float volume, float pitch, int priority, float trim)
         {
-            List<Voice> pool = channel == AudioChannel.Ui ? _uiVoices : _sfxVoices;
+            List<Voice> pool = channel == AudioChannel.Ui ? _uiVoices : SfxPool();
             if (pool.Count == 0) return false;
             float now = Time.unscaledTime;
 
@@ -276,6 +280,19 @@ namespace Emberfall.Game
             use.BusyUntil = now + (trimmed ? trim : length) + 0.05f;
             return true;
         }
+
+        /// <summary>The sfx voices a new sound may take: all of them, or with the R15 v2 preset the
+        /// first few only, so a busy turn cannot stack past the cap (Feel.Profile.AudioSfxVoices).</summary>
+        private List<Voice> SfxPool()
+        {
+            if (!Feel.V2) return _sfxVoices;
+            int n = Feel.Profile.AudioSfxVoices;
+            if (n <= 0 || n >= _sfxVoices.Count) return _sfxVoices;
+            if (_sfxCapped == null || _sfxCapped.Count != n) _sfxCapped = _sfxVoices.GetRange(0, n);
+            return _sfxCapped;
+        }
+
+        private List<Voice> _sfxCapped;
 
         // ------------------------------------------------------------------ music
 

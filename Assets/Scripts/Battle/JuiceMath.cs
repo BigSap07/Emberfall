@@ -17,7 +17,13 @@ namespace Emberfall.Battle
         /// BasicAttack or TurnStart, the same rule PlayDamageSound uses for SkillImpact.</summary>
         Skill,
         Heal,
-        Death
+        Death,
+        /// <summary>R15: a beneficial status landing (never a ward, which is Shield).</summary>
+        Buff,
+        /// <summary>R15: a harmful status landing.</summary>
+        Debuff,
+        /// <summary>R15: a ward gained (ShieldGain).</summary>
+        Shield
     }
 
     /// <summary>Which pool a BattleVfx quad is drawn from, for the effect cap.</summary>
@@ -114,6 +120,11 @@ namespace Emberfall.Battle
                     return e.Value > 0 ? MomentKind.Heal : MomentKind.None;
                 case BattleEventType.Death:
                     return MomentKind.Death;
+                case BattleEventType.StatusApplied:
+                    if (e.Status == StatusKind.None || e.Status == StatusKind.Shield) return MomentKind.None;
+                    return StatusInfo.IsHarmful(e.Status) ? MomentKind.Debuff : MomentKind.Buff;
+                case BattleEventType.ShieldGain:
+                    return e.Value > 0 ? MomentKind.Shield : MomentKind.None;
             }
             return MomentKind.None;
         }

@@ -52,6 +52,7 @@ namespace Emberfall.DevHarness
             CheckJuiceLanes(cfg.Juice);
             CheckJuiceCap(cfg.Juice);
             CheckJuiceWiring(root);
+            CheckFeel(db, contentDir, jsonText, cfg, root);
         }
 
         // ------------------------------------------------------------------ J1 config
@@ -224,13 +225,13 @@ namespace Emberfall.DevHarness
 
         /// <summary>Lines inside a block opened by a Juice.On condition (its if and its else), or
         /// inside a method that begins with if (!Juice.On) return/yield break.</summary>
-        private static bool[] JuiceGuardedLines(string[] lines)
+        private static bool[] JuiceGuardedLines(string[] lines, string flag = "Juice.On")
         {
             bool[] guarded = new bool[lines.Length];
             for (int i = 0; i < lines.Length; i++)
             {
                 string code = JuiceCodeOf(lines[i]);
-                if (code.Contains("Juice.On"))
+                if (code.Contains(flag))
                 {
                     int open = -1;
                     if (code.Contains("{")) open = i;
@@ -261,7 +262,7 @@ namespace Emberfall.DevHarness
                     }
                 }
                 // method whose first statement is the guard
-                if (code.Contains("Juice.On") && code.Contains("!Juice.On") && (code.Contains("return") || code.Contains("yield break")))
+                if (code.Contains(flag) && code.Contains("!" + flag) && (code.Contains("return") || code.Contains("yield break")))
                 {
                     int decl = i - 1;
                     while (decl >= 0 && (lines[decl].Trim() == "{" || lines[decl].Trim().Length == 0)) decl--;
@@ -461,7 +462,7 @@ namespace Emberfall.DevHarness
         private static void CheckJuiceMomentTracker(ContentDatabase db)
         {
             List<JuiceFight> fights = JuiceFights(db);
-            MomentKind[] kinds = { MomentKind.Hit, MomentKind.Crit, MomentKind.Skill, MomentKind.Heal, MomentKind.Death };
+            MomentKind[] kinds = { MomentKind.Hit, MomentKind.Crit, MomentKind.Skill, MomentKind.Heal, MomentKind.Death, MomentKind.Buff, MomentKind.Debuff, MomentKind.Shield };
             int cases = 0, wrong = 0, arrivals = 0, midWrong = 0;
             string first = "";
             for (int f = 0; f < fights.Count; f++)
@@ -774,23 +775,24 @@ namespace Emberfall.DevHarness
                     row[k] = CombatSimulation.Run(session.BuildBattleRequest(Opening(stages[s]), 4100000 + s * 101 + k));
                 fights.Add(row);
             }
-            MomentKind[] kinds = { MomentKind.Hit, MomentKind.Crit, MomentKind.Skill, MomentKind.Heal, MomentKind.Death };
+            MomentKind[] kinds = { MomentKind.Hit, MomentKind.Crit, MomentKind.Skill, MomentKind.Heal, MomentKind.Death, MomentKind.Buff, MomentKind.Debuff, MomentKind.Shield };
             string[] aspects = Enum.GetNames(typeof(Aspect));
             for (int k = 0; k < kinds.Length; k++)
             {
                 bool byAspect = kinds[k] != MomentKind.Hit && kinds[k] != MomentKind.Crit;
-                if (!byAspect) { Line(kinds[k] + ": " + JuiceSurveyStages(stages, fights, kinds[k], null)); continue; }
+                if (!byAspect) { Line(kinds[k] + ": " + JuiceSurveyStages(stages, fights, kinds[k], null) + "   | chapters 1 and 2: " + JuiceSurveyStages(stages, fights, kinds[k], null, 2)); continue; }
                 for (int a = 0; a < aspects.Length; a++)
-                    Line(kinds[k] + "." + aspects[a].ToLowerInvariant() + ": " + JuiceSurveyStages(stages, fights, kinds[k], (Aspect)a));
+                    Line(kinds[k] + "." + aspects[a].ToLowerInvariant() + ": " + JuiceSurveyStages(stages, fights, kinds[k], (Aspect)a) + "   | chapters 1 and 2: " + JuiceSurveyStages(stages, fights, kinds[k], (Aspect)a, 2));
             }
             return 0;
         }
 
-        private static string JuiceSurveyStages(List<StageDef> stages, List<BattleResult[]> fights, MomentKind kind, Aspect? aspect)
+        private static string JuiceSurveyStages(List<StageDef> stages, List<BattleResult[]> fights, MomentKind kind, Aspect? aspect, int maxChapter = 0)
         {
             List<KeyValuePair<int, string>> ranked = new List<KeyValuePair<int, string>>();
             for (int s = 0; s < stages.Count; s++)
             {
+                if (maxChapter > 0 && (stages[s].ChapterNumber < 1 || stages[s].ChapterNumber > maxChapter)) continue;
                 int hits = 0, roundSum = 0;
                 for (int k = 0; k < fights[s].Length; k++)
                 {

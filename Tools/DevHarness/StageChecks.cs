@@ -553,8 +553,9 @@ namespace Emberfall.DevHarness
             Check(actor.Contains("StageFeel.Resolve(snapshot)") && stage.Contains("StageFeel.V2") && stage.Contains("OrthographicSizeFor(")
                   && stage.Contains("BattleFraming.Slot(snapshot.IsPlayer, snapshot.Slot, _framingV2)"),
                   "S5 the rig is built from StageFeel.Resolve and the stage reads the preset for its camera and its slots");
-            Check(feel.Contains("root.GetString(\"feelPreset\", \"v1\") == \"v2\"") && feel.Contains("EMBERFALL_FEEL"),
-                  "S5 the stage reads vfx.json feelPreset (a missing key is v1) and EMBERFALL_FEEL forces one launch");
+            Check(feel.Contains("public static bool V2 { get { return Feel.V2; } }") && !feel.Contains("GetEnvironmentVariable") && !feel.Contains("GetString(\"feelPreset\""),
+                  "S5 there is ONE switch: StageFeel.V2 is Feel.V2 (vfx.json feelPreset, EMBERFALL_FEEL, the .v1 and .v2 suffixes and the juice rollback), and the stage keeps no preset of its own");
+            Check(feel.Contains("if (!V2) return snapshot.Visual;"), "S5 stage-v2.json is read only once the switch says v2 (Resolve returns the snapshot's own VisualDef before it touches the config)");
 
             // Simulation untouched: no Core file and no hashed content knows about any of it.
             string core = Path.Combine(root, "Assets", "Scripts", "Core");
@@ -565,6 +566,16 @@ namespace Emberfall.DevHarness
                 if (text.IndexOf("StageFeel", StringComparison.Ordinal) >= 0 || text.IndexOf("StagePresentation", StringComparison.Ordinal) >= 0
                     || text.IndexOf("stage-v2", StringComparison.Ordinal) >= 0) mentions.Add(Path.GetFileName(file));
             }
+            List<string> globs = new List<string>();
+            foreach (string file in Directory.GetFiles(core, "*.cs", SearchOption.AllDirectories))
+            {
+                string text = File.ReadAllText(file);
+                if (text.IndexOf("GetFiles(", StringComparison.Ordinal) >= 0 || text.IndexOf("EnumerateFiles(", StringComparison.Ordinal) >= 0
+                    || text.IndexOf("GetAssets(", StringComparison.Ordinal) >= 0) globs.Add(Path.GetFileName(file));
+            }
+            Check(globs.Count == 0, "S5 ContentDatabase and the rest of Core never glob the Content folder, so stage-v2.json cannot be hashed or loaded by accident"
+                  + " (the stage, hero and talent fingerprints and the eight-file ContentVersion in this same run are measured with the file present)"
+                  + (globs.Count > 0 ? ": " + string.Join(", ", globs.ToArray()) : ""));
             Check(mentions.Count == 0, "S5 SIMULATION UNTOUCHED (reads source): no Core file mentions the v2 stage look"
                   + (mentions.Count > 0 ? ": " + string.Join(", ", mentions.ToArray()) : ""));
 

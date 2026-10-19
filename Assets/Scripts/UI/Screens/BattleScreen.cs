@@ -1366,7 +1366,7 @@ namespace Emberfall.UI.Screens
                         for (int t = 0; t < targetIds.Count; t++)
                         {
                             UnitActor hit = ActorOf(targetIds[t]);
-                            if (hit != null) PlayAbilityVfx(e.Vfx, source, hit, AspectTint(source));
+                            if (hit != null && !Feel.V2) PlayAbilityVfx(e.Vfx, source, hit, AspectTint(source));
                         }
                         _pendingAnimationTail = backSeconds;
                     }
@@ -1379,7 +1379,7 @@ namespace Emberfall.UI.Screens
                             for (int t = 0; t < targetIds.Count; t++)
                             {
                                 UnitActor hit = ActorOf(targetIds[t]);
-                                if (hit != null) PlayAbilityVfx(e.Vfx, source, hit, AspectTint(source));
+                                if (hit != null && !Feel.V2) PlayAbilityVfx(e.Vfx, source, hit, AspectTint(source));
                             }
                         }
                     }
@@ -1397,7 +1397,7 @@ namespace Emberfall.UI.Screens
                         _holdSpent = false;
                         App.Audio.Cast(source.Snapshot.Aspect);
                         ShowCallout(e.AbilityName, source.Snapshot.Name, false);
-                        _world.Vfx.Aura(source.transform.position, AspectTint(source), 2.2f);
+                        if (!Feel.V2) _world.Vfx.Aura(source.transform.position, AspectTint(source), 2.2f);
                     }
 
                     // Kael's Breaking Point hits AllEnemies, so there is no single target to lunge
@@ -1446,7 +1446,7 @@ namespace Emberfall.UI.Screens
                     {
                         // impact: flash, shake, sound - immediate
                         target.PlayHit(e.Critical);
-                        if (source != null && e.Status == StatusKind.None) _world.Vfx.Impact(target.CenterPosition, AspectTint(source), e.Critical ? 1.3f : 0.9f);
+                        if (source != null && e.Status == StatusKind.None && !Feel.V2) _world.Vfx.Impact(target.CenterPosition, AspectTint(source), e.Critical ? 1.3f : 0.9f);
                         if (e.Critical && !Juice.On) _world.Shake(0.14f, 0.2f);
                         PlayDamageSound(e, source);
 
@@ -1481,7 +1481,7 @@ namespace Emberfall.UI.Screens
                         UpdateHp(target, false);
                         _floatUnitId = e.TargetId;
                         SpawnFloatingText(target.HeadPosition, "+" + e.Value, UITheme.Success, 1f);
-                        _world.Vfx.Motes(target.transform.position, UITheme.Success, 6, 2.2f);
+                        if (!Feel.V2) _world.Vfx.Motes(target.transform.position, UITheme.Success, 6, 2.2f);
                         App.Audio.Heal();
                     }
                     yield return Wait(0.08f);
@@ -1496,7 +1496,7 @@ namespace Emberfall.UI.Screens
                         target.DisplayShield += e.Value;
                         UpdateHp(target, false);
                         SpawnFloatingText(target.HeadPosition, "+" + e.Value + " ward", UITheme.Shield, 0.9f);
-                        _world.Vfx.Aura(target.transform.position, UITheme.Shield, 2f);
+                        if (!Feel.V2) _world.Vfx.Aura(target.transform.position, UITheme.Shield, 2f);
                         App.Audio.Shield();
                     }
                     yield return Wait(0.06f);
@@ -1525,7 +1525,7 @@ namespace Emberfall.UI.Screens
                     if (target != null)
                     {
                         Color tint = StatusInfo.IsHarmful(e.Status) ? UITheme.Danger : UITheme.Success;
-                        _world.Vfx.Aura(target.transform.position, tint, 1.8f);
+                        if (!Feel.V2) _world.Vfx.Aura(target.transform.position, tint, 1.8f);
                         // A ward has its own sound, from ShieldGain; every other status is a buff or a debuff.
                         if (e.Status != StatusKind.Shield)
                         {
@@ -1795,7 +1795,8 @@ namespace Emberfall.UI.Screens
             if (_skillActive && source != null)
             {
                 App.Audio.SkillImpact(source.Snapshot.Aspect);
-                if (e.Critical) App.Audio.Crit();
+                // R15 v2: one cue per class, so a critical skill is the skill impact and does not borrow the crit cue.
+                if (e.Critical && !Feel.V2) App.Audio.Crit();
                 return;
             }
             if (e.Critical) App.Audio.Crit();
@@ -1868,6 +1869,8 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void PlayTargetedVfx(string vfx, UnitActor source, List<int> targetIds, Color colour)
         {
+            // R15 v2: every target gets its look from its own Damage, Heal or StatusApplied event (VfxDirector).
+            if (Feel.V2) return;
             if (targetIds.Count > 0)
             {
                 for (int i = 0; i < targetIds.Count; i++)
@@ -2134,6 +2137,8 @@ namespace Emberfall.UI.Screens
                 // Callers that did not say whose number it is (a ward, a shield, a resist) pass the
                 // unit's head, so the unit is the one standing there.
                 if (unitId < 0) unitId = UnitAtHead(worldPosition);
+                // R15 v2: numbers about a quarter larger.
+                if (Feel.V2) scale = FeelMath.NumberScale(Feel.Profile, scale);
                 StartCoroutine(JuiceFloatRoutine(item, worldPosition, unitId, scale));
             }
             else StartCoroutine(FloatRoutine(item, worldPosition));
@@ -2182,6 +2187,10 @@ namespace Emberfall.UI.Screens
                             - BattleHudMetrics.FloatStopBelowBar - BattleHudMetrics.FloatHalfLine;
             float climb = Mathf.Clamp(ceiling - start.y, 24f, FloatRise);
 
+            // R15 v2: a bigger number needs a bigger line between the numbers stacked on one unit.
+            float lineScale = 1f;
+            if (Feel.V2) lineScale = FeelMath.NumberScale(Feel.Profile, 1f);
+
             float duration = 0.75f / _speed;
             float t = 0f;
             float retiredFor = 0f;
@@ -2199,7 +2208,7 @@ namespace Emberfall.UI.Screens
                 else if (t >= duration) break;
                 float rise = climb * Mathf.Sqrt(k);
                 for (int a = 0; a < item.PushAges.Count; a++) item.PushAges[a] += Time.deltaTime * _speed;
-                item.Y = rise + JuiceMath.PushOffset(p, item.PushAges);
+                item.Y = rise + JuiceMath.PushOffset(p, item.PushAges) * lineScale;
                 item.Root.anchoredPosition = new Vector2(start.x, Mathf.Min(start.y + item.Y, ceiling));
                 item.Group.alpha = alpha;
                 float s = baseScale * JuiceMath.PopScale(p, t * _speed);

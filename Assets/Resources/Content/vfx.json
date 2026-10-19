@@ -1,6 +1,27 @@
 {
   "_about": "Presentation only. NOT hashed into ContentDatabase.ContentVersion, so editing this file never retires a guild dungeon replay. Read by Assets/Scripts/Battle/VfxDirector.cs through VfxConfig. Resolution for a hit: abilities[abilityId], else types[the ability's vfx tag], else types.impact. An entry with a sheet that exists on disk plays that flipbook; otherwise its shape/chips/streaks/speed/size/life/ring numbers play as a procedural burst. To add art: put the sheet under Assets/Resources, add an abilities entry with sheet (Resources path, no extension), columns, rows, frames, fps, scale. Optional start is the first frame played (default 0). No code change. Shapes are neutral and are tinted by the attacker's aspect accent; nothing here may be element-literal (DESIGN-ART-BIBLE section 4).",
 
+  "feelPreset": "v2",
+  "_aboutFeel": "R15 feel switch. \"v2\" plays the feel pass (numbers in the v2 block below); \"v1\" restores the R12 battle exactly; a missing key reads v1. Env EMBERFALL_FEEL=v1 or v2 overrides it for one editor launch. The v2 pass needs juice.enabled: with juice off the battle is the pre-R12 one. Anything left out of the v2 block keeps the shipped value (FeelProfile.V2From).",
+
+  "v2": {
+    "_about": "R15 v2 numbers, read by FeelProfile.V2From; anything left out keeps the shipped value. Sizes are world units for a humanoid (scaled by body height), seconds are play time at 1x. Only the six existing sheets and procedural shapes are used, tinted by the attacker's aspect, never element-literal.",
+    "flash": { "peakNormal": 0.35, "peakCrit": 0.55, "seconds": 0.06 },
+    "vfx": {
+      "maxPerUnit": 2,
+      "maxLive": 14,
+      "puffWhite": 0.35,
+      "hit":   { "size": 0.55, "seconds": 0.14 },
+      "crit":  { "size": 1.05, "seconds": 0.20, "glowRadius": 0.8 },
+      "skill": { "sheet": "Art/Vfx/burst_puff", "columns": 4, "rows": 4, "frames": 16, "fps": 30, "scale": 2.4, "glowRadius": 1.0, "glowAlpha": 0.5, "castGlowRadius": 0.9, "castGlowSeconds": 0.30 },
+      "heal":  { "glowRadius": 0.85, "glowSeconds": 0.45, "sparks": 5, "rise": 1.1, "seconds": 0.75 },
+      "pulse": { "size": 1.0, "seconds": 0.42, "travel": 0.8, "arrowSize": 0.5, "arrowSeconds": 0.8, "arrowTravel": 0.7 },
+      "shield": { "seconds": 0.26, "alpha": 0.85, "absorbAlpha": 0.55 }
+    },
+    "numbers": { "scale": 1.25 },
+    "audio": { "sfxVoices": 6, "singleSound": ["battle.hit"] }
+  },
+
   "juice": {
     "_about": "R12 hit feedback. enabled:false (or deleting this block) is the whole rollback: the battle plays exactly as it did before. Env EMBERFALL_JUICE=0 or 1 overrides it for one editor launch. Numbers are read by JuiceProfile.FromJson; anything left out keeps the shipped value. Shake strengths must stay at or under 0.18 (BattleFraming reserve).",
     "enabled": true,

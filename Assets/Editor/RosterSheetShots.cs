@@ -21,8 +21,7 @@ namespace Emberfall.EditorTools
     ///
     /// The text after the = is "side[.clip][.preset]". side is allies or enemies. clip is idle (the
     /// default), basic, skill, hit or death. preset is v1 or v2 and forces the stage look for the
-    /// shot; without it the look is whatever vfx.json "feelPreset" says (a branch that has not
-    /// merged the switch reads v1, so say .v2 there). The dots are dots because the text becomes
+    /// shot; without it the look is whatever vfx.json "feelPreset" says. The dots are dots because the text becomes
     /// part of the PNG's name and a colon cannot be in a Windows file name.
     ///
     /// Each unit is built through UnitActor.Setup, the one door a battle uses, so the stand-ins, the
@@ -62,7 +61,7 @@ namespace Emberfall.EditorTools
                 else if (parts[i] == "idle" || parts[i] == "basic" || parts[i] == "skill" || parts[i] == "hit" || parts[i] == "death") clip = parts[i];
                 else Debug.LogWarning("RosterSheet: '" + parts[i] + "' is not a clip (idle, basic, skill, hit, death) or a preset (v1, v2), ignored.");
             }
-            StageFeel.ForceForCapture(v2);
+            Feel.ForceForCapture(v2);
 
             if (app.RootCanvas != null) app.RootCanvas.gameObject.SetActive(false);
             if (_root != null) UnityEngine.Object.Destroy(_root);
