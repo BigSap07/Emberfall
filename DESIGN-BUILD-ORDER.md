@@ -1897,7 +1897,10 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   about 0.4 GB unzipped (an extrapolation, not measured across all sheets). It is visibly softer:
   hair strands, face and armour trim smear into blotches in a battle capture, which is why the
   policy chose BC7 on purpose and why this reverses a recorded decision. Lowering
-  `maxTextureSize` is not an alternative: it rescales the whole sheet and shears the frame grid.
+  `maxTextureSize` is not a good alternative: it halves the texel density, which is the blotch
+  problem again (that it also shears the frame grid, as the policy comment says, is unverified).
+  The importer metas are owned by the policy script, so the durable form of the change is the policy
+  edit and not a hand edit of the metas.
   Source: `Tools/build-windows.ps1` at the R16 measurement (`Docs/BALANCE-REPORT-R16.md`, Player
   size). `EmberfallBuild` writes this report beside every Windows player, and
   `Tools/build-windows.ps1` prints it. The APK has not been measured: Android reads its own importer
