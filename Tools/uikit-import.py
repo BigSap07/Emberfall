@@ -46,6 +46,7 @@ ASTC_4x4 = 48
 # (forge_panel's border is 34 to 64, a button's 24 to 30). Pixels per unit is what sets it: a border of
 # b pixels draws at b * 100 / ppu units. frame: by the left border. plate: by the sprite's height, the
 # natural height the control is drawn at. A piece not listed is never sliced.
+MIDDLE = 6          # pixels of flat plate left between two borders that would otherwise meet
 DRAWN_LEFT_BORDER = {"panel_large": 34.0, "panel_small": 26.0, "popup": 30.0}
 NATURAL_HEIGHT = {"btn_primary": 90.0, "btn_secondary": 90.0, "btn_disabled": 90.0, "tab_on": 72.0, "tab_off": 72.0,
                   "pill_currency": 64.0, "bar_frame": 36.0, "banner_title": 150.0}
@@ -128,6 +129,16 @@ def border_and_ppu(key, size, nine):
         return (0, 0, 0, 0), 100.0      # shown whole (icons, round pieces, card frames, bar fills)
     l, b, r, t = [int(v) for v in entry["border_lbrt"]]
     w, h = size
+    # A border pair that covers the whole side leaves a middle of ZERO pixels, and a control taller than the
+    # sprite's natural height then stretches that nothing into a hairline across the plate (seen in the
+    # nine-slice simulation of buttons, tabs and the pill). Keep a few pixels of flat plate to stretch.
+    for _ in range(2):
+        if t + b > h - MIDDLE:
+            cut = (t + b - (h - MIDDLE) + 1) // 2
+            t, b = t - cut, b - cut
+        if l + r > w - MIDDLE:
+            cut = (l + r - (w - MIDDLE) + 1) // 2
+            l, r = l - cut, r - cut
     if key in DRAWN_LEFT_BORDER:
         ppu = 100.0 * l / DRAWN_LEFT_BORDER[key]
     else:
