@@ -1809,19 +1809,6 @@ Beyond the harness:
 - **Rheia has no skill clip.** Her delivery included an `idle2` where `skill` should be, so her
   active plays with no animation and the idle continues. Silent, not an error.
 
-- **A save written before the star-gated caps loads heroes above their own cap, and nothing
-  clamps them.** The caps used to be `heroLevelCapBase` 12 plus 4 per account rank, so a rank-30
-  profile capped every hero at 132; they are `fiveStarLevelCaps` now, 9, 18 and 39 tier levels,
-  which is Levels 9, 45 and 281. `SaveSerializer` reads `level` back as written and the version
-  15 to 16 step is documented as needing no migration, which was true of the ascension KEY and not
-  of the cap that moved in the same commit. Measured, not inferred: the live capture profile holds
-  every hero at Level 60, two of them at tier 1 (cap 45) and the rest at tier 0 (cap 9).
-  It is invisible on most of the game, because `GameSession.TierLevelOf` clamps: the fusion hero
-  list prints such a tier-0 hero as `LEVEL 9 / 9` and the hero page reads the same way. The ascend
-  card is where the two meet, since `LevelBefore` is the true Level - a tier-0 hero at Level 60
-  photographs as tier level `9 -> 18` over Level `60 -> 60`, all four figures correct for a hero
-  that should not exist. Whether the fix is a clamp on load, a regrant, or leaving old saves alone
-  is a decision about player progress and has not been taken.
 - **The talent screen reads "no clear change" for talents the harness reads as clear gains, and
   it is resolution, not a sampling bug.** On the local editor save of 2026-10-11 (Kael at Level 10 beside
   Kiva, Isara, Kest and Oris), `TalentTrial` at its 40 seeds reads Kael I +468, t 1.69 and Kael II
