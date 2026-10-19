@@ -37,6 +37,7 @@ namespace Emberfall.DevHarness
             bool momentSurvey = false;
             bool reconcile = false;
             int wallStudy = 0;
+            int storeCurve = 0;
             bool lineCalibration = false;
             bool probeStudy = false;
             bool tempoStudy = false;
@@ -68,6 +69,13 @@ namespace Emberfall.DevHarness
                 // --wall-study walks (a subset of "fuses,noconv,none"); --relevel is lever R2 of
                 // Docs/ECONOMY-PROPOSAL-R4.md, see RunRelevel.
                 if (args[i] == "--wall-modes" && i + 1 < args.Length) { _wallModes = args[++i]; continue; }
+                if (args[i] == "--store-curve")
+                {
+                    storeCurve = 20;
+                    int n;
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out n)) { storeCurve = n; i++; }
+                    continue;
+                }
                 if (args[i] == "--relevel" && i + 1 < args.Length) { _relevelSpec = args[++i]; continue; }
                 if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
                 if (args[i] == "--guild-path") { guildPath = true; continue; }
@@ -117,6 +125,7 @@ namespace Emberfall.DevHarness
             // Also not a check, and not run by the gate: see RunCeilReconcile.
             if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
             if (wallStudy > 0) return RunWallStudy(contentDir, wallStudy);
+            if (storeCurve > 0) return RunStoreCurve(contentDir, storeCurve);
             if (_relevelSpec != null) return RunRelevel(contentDir, _relevelSpec);
             if (lineCalibration) return RunLineCalibration(contentDir);
             // Nor this: the probe study measures the level search and writes nothing.
@@ -17470,6 +17479,7 @@ namespace Emberfall.DevHarness
         {
             EconomyRun run = new EconomyRun();
             run.SetFirstSeed(firstSeed);
+            run.Now = StoreWalkClockStart(db);   // 0 in every run but --store-curve (StoreCurve.cs)
             PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
             // The walk's guild tech, and it is NULL for every walk but G5's own reading: the
             // reference player recommendedPower is derived for has none, and CheckGuildTechNeverGates
@@ -17523,6 +17533,7 @@ namespace Emberfall.DevHarness
                     // ---- between sittings the player is away, and idle accrues against that gap.
                     //      One claim per sitting, capped exactly as the game caps it.
                     run.Now += EconomyAwaySeconds;
+                    StoreSpenderStep(db, session, run.Now);   // inert unless --store-curve asked for the spender
                     IdleReport idle = session.ClaimIdle(run.Now);
                     run.Ledger.GoldIdle += idle.Gold;
                     run.Ledger.ShardIdle += idle.Shards;
