@@ -2366,13 +2366,19 @@ namespace Emberfall.EditorTools
                 Debug.LogError("PlayModeScreenshot: refusing to seed the Store on a real identity.");
                 return;
             }
+            // A CLEAN SCRATCH PROFILE for every Store target: the scratch identity's save carries the last target's purchases
+            // (SOLD OUT, BOUGHT, 71K Gold, a Starter hero), so a fresh profile is written over it and adopted before anything
+            // is seeded. Scratch identity only (the guard above); the real save is never touched.
+            SaveService.Save(GameSession.CreateNewProfile(app.Session.Content, TimeUtil.NowUnix()));
+            app.AdoptSaveFromDisk();
             GameSession session = app.Session;
             PlayerProfile profile = session.Profile;
             long now = TimeUtil.NowUnix();
-            // The debug store, scripted, with its account in the cache folder so a capture never touches the
-            // player's own debug account; fast, so a buy finishes inside the capture.
+            // The debug store, scripted, with its account in the temp folder so a capture never touches the
+            // player's own debug account; a NEW account file every run, so an earlier target's purchases are not
+            // delivered again; fast, so a buy finishes inside the capture.
             PurchaseService.ForceDebugStore = true;
-            PurchaseService.DebugAccountPath = Path.Combine(Path.GetTempPath(), "emberfall-capture-store-account.json");
+            PurchaseService.DebugAccountPath = Path.Combine(Path.GetTempPath(), "emberfall-capture-store-account-" + DateTime.UtcNow.Ticks + ".json");
             StoreScreen.CaptureComingSoon = name == "StoreComingSoon";
 
             // 2-12 cleared: a frontier with real numbers, and the Growth Fund's first milestone in reach.
@@ -2445,6 +2451,7 @@ namespace Emberfall.EditorTools
         /// </summary>
         private static void PumpStore(GameApp app, string name, int frame, int showAt)
         {
+            if (!EditorScratchIdentity.IsScratch) return;   // never buy on a real profile: SeedStore refuses one, and so does this pump
             StoreScreen store = app.Router.Store;
             if (store == null) return;
             if (frame == showAt + 15)
