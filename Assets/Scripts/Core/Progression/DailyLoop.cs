@@ -287,6 +287,7 @@ namespace Emberfall.Core.Progression
             p.Claimed = true;
             LoopPayout payout = Pay(session, d.Hours);
             if (AllClaimed(session)) st.WeekDays = Math.Min(7, st.WeekDays + 1);
+            WayfarersRoad.OnClaim(session, PassPointSource.Order, nowUnix);   // the pass counts the claim
             return payout;
         }
 
@@ -314,7 +315,9 @@ namespace Emberfall.Core.Progression
             if (st.ChestClaimed) return Refuse("Already opened.");
             if (!AllClaimed(session)) return Refuse("Claim every order first.");
             st.ChestClaimed = true;
-            return Pay(session, session.Content.Orders.DailyChestHours);
+            LoopPayout payout = Pay(session, session.Content.Orders.DailyChestHours);
+            WayfarersRoad.OnClaim(session, PassPointSource.DailyChest, nowUnix);
+            return payout;
         }
 
         public static LoopPayout ClaimWeeklyChest(GameSession session, long nowUnix)
@@ -325,7 +328,9 @@ namespace Emberfall.Core.Progression
             if (st.WeekChestClaimed) return Refuse("Already opened.");
             if (st.WeekDays < session.Content.Orders.WeeklyDaysRequired) return Refuse("Not enough days yet.");
             st.WeekChestClaimed = true;
-            return Pay(session, session.Content.Orders.WeeklyChestHours);
+            LoopPayout payout = Pay(session, session.Content.Orders.WeeklyChestHours);
+            WayfarersRoad.OnClaim(session, PassPointSource.WeeklyChest, nowUnix);
+            return payout;
         }
 
         /// <summary>True when a calendar reward can be taken: the reward day of nowUnix is later

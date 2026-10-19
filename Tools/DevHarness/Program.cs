@@ -293,6 +293,7 @@ namespace Emberfall.DevHarness
             CheckSealed(content, contentDir);
             CheckQuartermaster(content, contentDir);
             CheckRelicEndgame(content, contentDir);
+            CheckWayfarersRoad(content, contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
             CheckCaptureWatchdog(content, contentDir);
@@ -4907,6 +4908,8 @@ namespace Emberfall.DevHarness
                 db.LoadQuartermaster(File.Exists(quartermasterPath) ? File.ReadAllText(quartermasterPath) : null);
                 string relicShopPath = Path.Combine(dir, "relic-shop.json");
                 db.LoadRelicShop(File.Exists(relicShopPath) ? File.ReadAllText(relicShopPath) : null);
+                string wayfarersPath = Path.Combine(dir, "wayfarers-road.json");
+                db.LoadWayfarersRoad(File.Exists(wayfarersPath) ? File.ReadAllText(wayfarersPath) : null);
                 return db;
             }
             catch (Exception ex)

@@ -518,6 +518,14 @@ namespace Emberfall.Core.Model
         /// </summary>
         public QuartermasterState Quartermaster = new QuartermasterState();
 
+        /// <summary>
+        /// Wayfarer's Road: this season's points, claimed tiers and bought tiers
+        /// (Docs/DESIGN-WAYFARERS-ROAD.md). NEVER NULL. Empty for every profile that never earned a point,
+        /// and an empty one is not written to the save. Saved from version 24, and only a save that
+        /// carries one says 24 (SaveSerializer.VersionOf).
+        /// </summary>
+        public WayfarersRoadState WayfarersRoad = new WayfarersRoadState();
+
         /// <summary>Gold a random mechanic may spend: the purse less its Sealed part.</summary>
         public long FreeGold { get { return Gold - Math.Min(Math.Max(0, Sealed.Gold), Gold); } }
 

@@ -64,6 +64,7 @@ namespace Emberfall.UI.Screens
         {
             EmberforgeUI.Ground(Root);
             ScreenChrome.ForgedHeader(Root, "DAILY ORDERS", Router, out _headerSubtitle);
+            if (WayfarersRoadSwitch.Enabled) BuildRoadDoor();
 
             float top = ScreenChrome.HeaderTop + 108f + UITheme.Space8;
             RectTransform content = UIBuilder.Node("Content", Root);
@@ -73,6 +74,21 @@ namespace Emberfall.UI.Screens
             _dailyBody = Panel(content, "DailyChest", SideX, 0f, SideWidth, CardHeight);
             _weeklyBody = Panel(content, "WeeklyChest", SideX, CardHeight + CardGap, SideWidth, CardHeight);
             _calendarBody = Panel(content, "Calendar", 0f, CalendarTop, ContentWidth, CalendarHeight);
+        }
+
+        /// <summary>
+        /// WAYFARER'S ROAD'S DOOR (Docs/DESIGN-WAYFARERS-ROAD.md): top right, in the header band beside
+        /// the ribbon, because the pass counts this page's claims. Only with the switch on.
+        /// </summary>
+        private void BuildRoadDoor()
+        {
+            UIButton door = EmberforgeUI.Button("WayfarersRoad", Root, "WAYFARER'S ROAD", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIBuilder.Box(door.Root, -UITheme.ScreenPadding, -(ScreenChrome.HeaderTop + 24f), 320f, 56f, new Vector2(1f, 1f));
+            door.OnClick(delegate
+            {
+                App.Audio.Tap();
+                Router.Show(ScreenId.WayfarersRoad);
+            });
         }
 
         /// <summary>A framed panel at a top-left offset, and the empty node a repaint fills.</summary>

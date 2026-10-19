@@ -42,6 +42,8 @@ namespace Emberfall.Game
             db.LoadQuartermaster(ReadTextOptional("quartermaster"));
             // And what the Relic Shop charges and what an upgrade tier is worth (ContentDatabase.RelicShop).
             db.LoadRelicShop(ReadTextOptional("relic-shop"));
+            // And the season pass (ContentDatabase.WayfarersRoad): no fight reads it.
+            db.LoadWayfarersRoad(ReadTextOptional("wayfarers-road"));
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

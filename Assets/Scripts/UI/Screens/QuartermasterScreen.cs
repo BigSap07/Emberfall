@@ -11,7 +11,7 @@ namespace Emberfall.UI.Screens
 {
     /// <summary>
     /// The Quartermaster (Docs/DESIGN-QUARTERMASTER.md): a shelf of rolled armor, one piece per slot,
-    /// sold for Gold, restocked at the reward day. On the sink shops' furniture: a purse plate, a row
+    /// sold for Gold, restocked at the reward day. On the sink shops' furniture: the currency strip (Gold is on it, so no second plate), a row
     /// of cards, a cost chip that goes red when unaffordable, a Buy button and a footer.
     ///
     /// THIS SCREEN DECIDES NOTHING. It opens the shelf through Quartermaster.Open, draws
@@ -24,7 +24,7 @@ namespace Emberfall.UI.Screens
     {
         public override ScreenId Id { get { return ScreenId.Quartermaster; } }
 
-        /// <summary>This screen carries its own CurrencyStrip and Gold plate, so the shared top bar
+        /// <summary>This screen carries its own CurrencyStrip, which shows Gold, so the shared top bar
         /// would state the same numbers a few pixels above them. Same reasoning as the Relic Shop.</summary>
         public override bool HidesTopBar { get { return true; } }
 
@@ -38,14 +38,12 @@ namespace Emberfall.UI.Screens
         private readonly CurrencyStrip _currencies = new CurrencyStrip();
         private RectTransform _row;
         private Text _footer;
-        private Text _purseValue;
 
         protected override void Build()
         {
             EmberforgeUI.Ground(Root);
             ScreenChrome.ForgedHeader(Root, "THE QUARTERMASTER", Router, out _headerSubtitle);
             _currencies.Build(Root);
-            BuildPursePlate();
 
             float top = CurrencyStrip.BottomOf(CurrencyStrip.DefaultTop);
 
@@ -56,28 +54,6 @@ namespace Emberfall.UI.Screens
             float below = top + CardHeight + UITheme.Space24;
             _footer = EmberforgeUI.Label("Footer", Root, "", UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(_footer.rectTransform, 0f, -below, 1500f, 56f, new Vector2(0.5f, 1f));
-        }
-
-        /// <summary>The Gold plate, seated beside the strip at its height, as the Relic Shop seats its Dust.</summary>
-        private void BuildPursePlate()
-        {
-            RectTransform plate = UIBuilder.Node("PursePlate", Root);
-            UIBuilder.Box(plate, -UITheme.ScreenPadding, -CurrencyStrip.DefaultTop, 380f,
-                          CurrencyStrip.Height, new Vector2(1f, 1f));
-
-            Image bg = EmberforgeUI.SunkenOn(plate);
-            bg.raycastTarget = false;
-
-            Image icon = UIBuilder.Img("Icon", plate, TextureLab.CoinIcon(64), UITheme.Gold);
-            UIBuilder.Box(icon.rectTransform, UITheme.Space16, 0f, 32f, 32f, new Vector2(0f, 0.5f));
-            icon.raycastTarget = false;
-
-            _purseValue = EmberforgeUI.Label("Purse", plate, "", UITheme.FontSmall,
-                                             Emberforge.TextGold, TextAnchor.MiddleLeft);
-            UIBuilder.FillParent(_purseValue.rectTransform,
-                                 UITheme.Space16 + 32f + UITheme.Space12, 0f, UITheme.Space16, 0f);
-            UIBuilder.Outlined(_purseValue, Emberforge.Outline, Emberforge.StrokeThin);
-            _purseValue.raycastTarget = false;
         }
 
         // ------------------------------------------------------------------ refresh
@@ -96,7 +72,6 @@ namespace Emberfall.UI.Screens
             _currencies.Refresh(App.Session, now);
 
             QuartermasterView view = Quartermaster.View(App.Session, now);
-            _purseValue.text = "GOLD   " + HudTopBar.Format(view.Gold);
 
             for (int i = _row.childCount - 1; i >= 0; i--) UnityEngine.Object.Destroy(_row.GetChild(i).gameObject);
 

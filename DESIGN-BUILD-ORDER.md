@@ -317,8 +317,23 @@ question in `Docs/PINOY-LIST.md` section 2f. Nothing is pinned as unwritten: Nys
 the last, has text since defect pass 3 repaired it to strike the enemy her Link turns a blow onto
 rather than Nysera herself. `CheckAbilityTextIsPlayerFacing` enforces
 it: a description that is empty, holds a digit or a percent sign, or reads as a drafting note fails,
-and so does a pinned exception that no longer applies. The card still does not show a description
-anywhere; the text is ready for whichever screen shows it first.
+and so does a pinned exception that no longer applies. **The text is shown now**, on the ability card
+(below).
+
+**The ability card (R17).** `AbilityCardSheet` is one layer over whatever screen asked, and it is the
+same card from two doors: a tap on an ability on the hero page, and a tap on a unit in battle, which
+pauses the fight while it is up. Per ability it shows the sentence (`AbilityDef.Description` or
+`PassiveDef.Description`, read through `AbilityTextConfig.Prose`), then the facts `AbilityFacts` builds
+(Energy cost, when a passive fires, how often, how many rounds a status or Ward lasts, how big a
+status is), then one row per damage, healing or Ward figure from `AbilityMath`. It holds no game
+logic. The 28 abilities whose authored description is still a drafting note read their sentence from
+`ability-text.json` instead (`AbilityTextConfig`, not hashed into `ContentVersion`): proposed wording
+from `Docs/DECISIONS-OPEN.md`, which leaves the file in the same commit as the owner's answer to the
+matching question in `Docs/PINOY-LIST.md` section 2f. A description that already reads as player text
+never consults the file. `CheckAbilityCardTextIsComplete` proves every ability a hero owns has
+non-empty text, and `CheckAbilityFactsMatchTheSimulation` (beside `CheckAbilityNumbersMatchTheSimulation`)
+proves each printed duration, threshold, cost and status size equals what `CombatSimulation` does with
+the same effect.
 
 ### The star band, and its floor
 
@@ -568,6 +583,17 @@ recorded by id** (`PlayerProfile.ClearedStageIds`): `CampaignProgress` derives t
 furthest stage, unlocks, idle income and the count from them, and `stagesCleared` is a derived
 count kept for the summary readers. `CheckWaveResolve`, `CheckClearedStagesById` and
 `CheckStageResumeAfterWaveResolve` prove it.
+
+**Wall chests (R17).** Stage 6 and stage 12 of every chapter carry a fixed one-time chest, shown on the
+campaign stage card before the fight and on both result screens. `WallChests` reads
+`wall-chests.json` (`WallChestConfig`, not hashed into `ContentVersion`): the wall pays 1.5 hours of
+frontier income and 12 Slag a chapter, the finale 4 hours and 30 Slag a chapter, the hours paid by
+`GameSession.IdleYield` at the frontier the clear reaches. **It pays on the first clear, from
+`GameSession.GrantBattleResult`, and there is no save field**: a chest is opened when its stage is in
+`PlayerProfile.ClearedStageIds`, so a stage cleared before this shipped reads as opened and pays
+nothing, and there are no retroactive chests. `"enabled": false` in the file is the rollback and a
+first clear then pays what it always paid. `CheckWallChestsContentAndCard`, `CheckWallChestsPayOnce` and
+`CheckWallChestsRollBack` prove it, and 20 fusion walks all finish with the chests in.
 
 **Battle stats.** `WaveResolution.Stats` (a `WaveStats`) holds what each hero dealt, took, healed,
 shielded and killed, per battle and summed over the battles that resolve fought. `GameSession.ResolveWave`
@@ -843,13 +869,59 @@ pass does not rediscover them.** They are both open decisions now; see below.
 Armor rolls through `ArmorRoller` with primaries, subs, tempers and attunements, shown on
 `InventoryScreen` and `ForgeScreen`. Relics are a two-tier model: a Legendary changes a rule in the
 effect pipeline, a Mythic changes a rule and carries a stat block on top of it. Relic progression
-ships on top of that, with `RelicShopScreen` as its storefront.
+ships on top of that, with `RelicShopScreen` as its storefront, now priced as endgame content and
+upgradeable to tier 3 (**Sealed, the Quartermaster, and relics as endgame**, below).
+
+### Sealed, the Quartermaster, and relics as endgame
+
+Three R17 pieces of the Gold, Dust and purchase rules, each with a decision record in `Docs/`.
+
+**Sealed** (`Docs/DESIGN-SEALED.md`). Anything a future purchase grants is marked Sealed in the save, and a
+summon, a conversion or a forge gamble refuses it: `PlayerProfile.Sealed` (`SealedState`) is the Sealed
+part of the Gold, Shards and Slag purses, `HeroInstance.SealedCopies` a count inside `Copies`, and
+`ArmorPiece.Sealed` a flag. A random mechanic spends only `PlayerProfile.FreeGold`, `FreeShards` and
+`FreeSlag`: `GameSession.Summon` and `CanSummon` read free Shards, `GameSession.ConversionSpare`
+(the conversion screen and `ConversionBlocker` both read it) never counts a Sealed copy,
+`RerollArmor`, `CombineArmor` and `PlayerProfile.ArmorCombineCandidates` refuse a Sealed piece and Sealed Slag, and the
+Quartermaster refuses Sealed Gold. A deterministic sink takes it: `SpendGoldDeterministic` (a level-up)
+and `Ascend` take the Sealed part first, equip and salvage accept a Sealed piece, and salvaging one pays
+Sealed Slag so a purchase cannot be washed into Slag a reroll accepts. **No purchase path exists.**
+`SealedGrants` is the debug grant, called by nothing under `Assets` (the harness proves it). It is a rule
+and has no flag. `CheckSealed` is one check per refusal, each proving the save is byte for byte unchanged
+after it.
+
+**The Quartermaster** (`Docs/DESIGN-QUARTERMASTER.md`, the build of `DESIGN-SHOP.md`). A daily shelf of six
+rolled armor pieces, one per slot, sold for Gold, restocked at the reward day. `Quartermaster.Open` rolls a
+new day's stock from the day, `View` shows it and `Buy` is the only door that sells. A price is hours of
+the player's own idle Gold at their frontier (`Quartermaster.PriceOf`, Rough 30 hours, Honed 90, rounded
+up), worked out when asked and never stored; the stock is stored as resolved pieces
+(`QuartermasterState`). **It opens when 3-12 is cleared (from 4-1)**, in its own unlock row
+(`Feature.Quartermaster` in `onboarding.json`), reached from a door on `ForgeScreen`. The sizing was
+measured first from the reference walk (`QuartermasterSizing`): Gold is level fuel until chapter 3 and a
+pile from chapter 4 (35.9 million held at 6-12), a chapter's surplus buys about 0.6, 1.4 and 1.4 days of
+stock in chapters 4, 5 and 6 and under 0.04 in chapters 1 to 3, so the shop is a chapter 4 and later sink
+by construction. `quartermaster.json` is not in `ContentVersion`. `QuartermasterSwitch` is on by default
+and `EMBERFALL_QUARTERMASTER_OFF` rolls it back to the build before it. `CheckQuartermaster` proves it.
+
+**Relics as endgame** (`Docs/DESIGN-RELIC-ENDGAME.md`). The relic list is data: `RelicShop.View` lists
+`relics.json` and a relic added there is on the shelf at its grade's price, can be bought and fights with its own
+numbers, with no code (`CheckRelicShopIsDataDriven` adds a test relic in memory). Prices moved to
+`relic-shop.json` (not hashed): Legendary 5,000 and Mythic 20,000 Dust, measured against the Dust a committed
+player earns (1,548 a day at 3-1, 3,204 at 4-12, 4,932 at 6-12), so buying all ten takes 51.7, 25 and 16 days
+from those frontiers where the old prices took under four. `relicMaxTier` is 3 with the endgame on:
+`GameSession.UpgradeRelic` raises a tier for the relic's price times 2 then 4 and scales its stat block by
+1.25 then 1.5 in a fight, a preview and the power score through one resolver,
+`PlayerProfile.EquippedRelicOf`. A Mythic's hook never scales, and a tier 1 relic resolves to the content's
+own object, so a fight that uses no upgrade is the fight it always was. `balance.json` still carries 80, 2400
+and 1 for the rollback: `RelicEndgameSwitch` is on by default and `EMBERFALL_RELIC_ENDGAME_OFF` restores them.
+`CheckRelicEndgame` proves it; `CheckRelicInventoryModel` runs with the switch off on purpose, pinning the
+pre-endgame rules.
 
 ### Summoning, idle income, save
 
 Summoning with a pity rule that guarantees distinct unowned heroes. Idle income accrues against a
 real clock and is capped. `SaveSerializer` writes the whole document, at
-`SaveSerializer.CurrentVersion` 22, and a save from a newer build is refused rather than read.
+`SaveSerializer.CurrentVersion` 24, and a save from a newer build is refused rather than read.
 Version 15 keeps records this build cannot resolve; version 16 adds each hero's ascension tier;
 version 17 adds the Guild Path's copy of the server's answer and the formation's saved lines, and
 later the guild tech tree's copy of it - deliberately without a further bump, because the server
@@ -890,6 +962,17 @@ otherwise (`SaveSerializer.VersionOf`), so a save with no purchase is the versio
 cloud push sends the document's own version. `CheckSinksSave` and `CheckSinksOff` prove it. **The owner
 must raise the server's `save_limits` row to 23 before a cloud player with the flag on buys anything**:
 `update public.save_limits set max_save_version = 23, updated_at = now();`.
+Version 24 is R17's one bump and carries four new things, each written only once it holds something:
+the Sealed marks (`sealed` on the profile, `sealedCopies` on a hero, `sealed` on an armor piece), the
+Quartermaster's shelf (`quartermaster`), Wayfarer's Road's season (`wayfarersRoad`) and an upgraded relic
+(an `ownedRelics` tier above 1). `SaveSerializer.HoldsVersion24Data` is the one place that decides a document
+is a version 24 document; a document with none of them is stamped 22 (or 23 with a sinks block), so a save
+that never touched R17 is byte for byte the document the build before wrote and the cloud push claims the
+document's own version. Absence of every key is the empty state, so there is no migration step.
+`CheckSealed`, `CheckQuartermaster`, `CheckRelicEndgame` and `CheckWayfarersRoad` each prove their
+round trip, the version and a rollback. **The owner must raise the server's `save_limits` row to 24 before a
+cloud player holds any of it**: `update public.save_limits set max_save_version = 24, updated_at = now();`
+(`save_limits_24.sql` in the R17 handoff, not applied).
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -1076,6 +1159,24 @@ and with it off no order is generated, no key is written and the hub shows no do
 is a placeholder, reached from an Orders door on the `MainMenuScreen` rail. All hours in
 `orders.json` are placeholders for the balance pass. The eleven `CheckDailyLoop*` checks are in
 `DailyLoopChecks.cs`. Design: `Docs/DESIGN-DAILY-LOOP.md`.
+
+**Wayfarer's Road, the free track (R17, `Docs/DESIGN-WAYFARERS-ROAD.md`).** A 28 day season of 30 tiers
+whose only points are this loop's claims: `DailyLoop.ClaimOrder`, `ClaimDailyChest` and `ClaimWeeklyChest`
+call `WayfarersRoad.OnClaim` (8, 12 and 40 points), and nothing else does. A tier is 46 points and the track is
+sized on a player who also claims the weekly chest: 24 active days (52 points each, plus four weekly chests)
+finish it and 23 do not (`CheckPassSizing` plays both through the real loop). Selectors reset every season, so a
+full-track player gets a free 4-star and 5-star every 28 days.
+Every reward is fixed and shown up front in `wayfarers-road.json` (`WayfarersRoadConfig`, not hashed):
+hourglasses, Slag, Dust in sweeps of the frontier stage, a 4-star of the player's choice at tier 15 and a
+5-star at tier 30, both plain earned copies and **never Sealed**. A tier can be bought with Valor or Coda
+(`WayfarersRoad.BuyTier`, 2 days of that purse's income, 3 a season). A season is a block of reward days from
+a Monday epoch, so every player is in the same one; its stamp only moves forward, a wound-back clock reopens
+nothing and unclaimed tiers lapse (`CheckPassRollover`). The paid track is in the data and a locked row on
+`WayfarersRoadScreen`, drawn only with `PassPaidSwitch` (define `EMBERFALL_PASS_PAID`, off); `ClaimPaid`
+refuses every call and the saved state has no field that could record an unlock. `WayfarersRoadSwitch` is on
+by default (`EMBERFALL_WAYFARERS_ROAD_OFF` rolls it back), **but the pass is inert until the build defines
+`EMBERFALL_DAILY_LOOP_ON`**, because the loop that feeds it is off by default; its door is a button in the
+header of `OrdersScreen`, which exists only with the loop. That default is the lead's call of 2026-10-19.
 
 ### The first session, and the unlock table
 
@@ -1880,13 +1981,20 @@ listed, so the day a kit change makes one a trap the harness says so.
 
 Not scheduled and not blocked on anything in **Next**, listed so it is not rediscovered.
 
-- **Showing the ability text.** The card's number line from
-  [`Docs/DESIGN-DAMAGE-DISPLAY.md`](Docs/DESIGN-DAMAGE-DISPLAY.md) is built: `AbilityText` prints a
-  flat value with the authored percentage under it, and `CheckAbilityNumbersMatchTheSimulation`
-  proves the figures. `AbilityDef.Description` and `PassiveDef.Description` are still rendered
-  nowhere. They now hold player text, so putting them on the ability breakdown is a UI decision
-  rather than a content one. Durations, thresholds, Energy amounts and status sizes are printed
-  nowhere either, and the text no longer carries them.
+- **The 28 drafting-note descriptions.** The ability card (**Heroes and kits**) shows every
+  ability's sentence, its facts and its numbers. Twenty-eight abilities still read their sentence from
+  `ability-text.json`, proposed wording standing in for a drafting note, until the owner answers the
+  matching question in `Docs/PINOY-LIST.md` section 2f; the answer goes into `heroes.json` and the line
+  leaves the file in the same commit.
+- **Summon inflation, measured and not changed.** A summon costs 120 Shards at every stage while idle
+  Shards a day grow x9.6 from 1-12 to 6-12 (680 to 6,500) and, with a committed player's repeat-clear
+  purses, x51 (1,418 to 72,380; those purses are 79% to 91% of their Shards from 3-12 on). Days per random
+  5-star fall from 5.9 at 1-12 to 0.62 at 6-12 on idle alone and to 0.06 with the sweeps. Two options, both
+  of which move a hashed file: a summon cost per chapter (120, 120, 200, 300, 410, 530 at 1-12 to 6-12 holds
+  an idle player at 2.7 days per 5-star), or idle Shards flattened to the 2-12 level (74 an hour, 23% of
+  today's at 6-12). Neither touches the repeat-clear purses, the larger driver, and the cost option cannot
+  serve an idle and a committed player at once. `SummonInflationStudy` (`--check SummonInflationStudy`)
+  prints the tables; the note is `summon-inflation.md` in the R17 handoff data folder.
 - **Guilds phase two, systems 4 and 5.** Systems 1 to 3 - the dungeon, the Waymark economy and the
   guild tech tree that replaced the four-node Path - are built (see **Guilds, phase one**). The
   fodder exchange and (parked) guild wars remain, as sequenced in `DESIGN-GUILDS-PHASE-TWO.md`.

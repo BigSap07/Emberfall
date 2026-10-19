@@ -463,6 +463,9 @@ namespace Emberfall.Core.Save
         ///  - the Quartermaster's shelf (QuartermasterState): the `quartermaster` block, today's rolled
         ///    stock and which pieces are sold. A build that drops it would let a player buy the same
         ///    day's pieces again.
+        ///  - Wayfarer's Road (WayfarersRoadState): the `wayfarersRoad` block, this season's points, claimed
+        ///    tiers and bought tiers. A build that drops it would lose points earned and let a claimed tier
+        ///    be claimed again.
         ///  - an upgraded relic (OwnedRelic.Tier above 1, Docs/DESIGN-RELIC-ENDGAME.md). The `tier` key has
         ///    always been written, but a build before 24 never authored a tier above 1, so one that
         ///    reads it shows an upgrade the build cannot price or fight with.
@@ -497,6 +500,7 @@ namespace Emberfall.Core.Save
             if (profile == null) return false;
             if (SealedState.ProfileHoldsAny(profile)) return true;
             if (profile.Quartermaster != null && !profile.Quartermaster.IsEmpty) return true;
+            if (profile.WayfarersRoad != null && !profile.WayfarersRoad.IsEmpty) return true;
             for (int i = 0; i < profile.OwnedRelics.Count; i++)
                 if (profile.OwnedRelics[i].Tier > 1) return true;
             return false;
@@ -1085,6 +1089,10 @@ namespace Emberfall.Core.Save
             if (profile.Quartermaster != null && !profile.Quartermaster.IsEmpty)
                 root.Set("quartermaster", profile.Quartermaster.Write());
 
+            // Version 24: Wayfarer's Road's season, only once it holds something.
+            if (profile.WayfarersRoad != null && !profile.WayfarersRoad.IsEmpty)
+                root.Set("wayfarersRoad", profile.WayfarersRoad.Write());
+
             return root.ToJson(true);
         }
 
@@ -1449,6 +1457,9 @@ namespace Emberfall.Core.Save
 
             // Version 24. Absent reads as no stock, so the shop rolls one the first time it is opened.
             profile.Quartermaster = QuartermasterState.Read(root["quartermaster"]);
+
+            // Version 24. Absent reads as no season, so the pass starts at the first point earned.
+            profile.WayfarersRoad = WayfarersRoadState.Read(root["wayfarersRoad"]);
 
             List<JsonValue> lines = root.GetList("lines");
             for (int l = 0; l < lines.Count; l++) profile.Lines.Add(ReadLine(lines[l]));
