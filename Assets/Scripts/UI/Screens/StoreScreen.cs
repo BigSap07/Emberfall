@@ -33,14 +33,14 @@ namespace Emberfall.UI.Screens
         public enum Tab { Pass, Packs, Shops }
 
         private const float ContentWidth = 1760f;
-        private const float BodyHeight = 796f;
+        private const float BodyHeight = 700f;   // the body starts about 350 units down: 350 + 700 leaves the buy bar on screen at 1080
         private const float TabWidth = 300f;
         private const int PageSize = 10;
         private const float TileWidth = 150f;
         private const float TileGap = 10f;
         private const float LabelColumn = 96f;
         private const float ListWidth = 560f;
-        private const float RowHeight = 104f;
+        private const float RowHeight = 90f;
         private const int PickPerRow = 7;
         private const int PickPerPage = 14;
         private const float PickCardWidth = 150f;
@@ -397,7 +397,7 @@ namespace Emberfall.UI.Screens
             if (!owned)
             {
                 Image pad = UIBuilder.Img("Lock", tile, TextureLab.Padlock(64), UITheme.WithAlpha(Emberforge.TextQuiet, 0.9f));
-                UIBuilder.Box(pad.rectTransform, 0f, 30f, 38f, 38f, new Vector2(0.5f, 0f));
+                UIBuilder.Box(pad.rectTransform, -8f, -8f, 30f, 30f, new Vector2(1f, 1f));   // the corner, clear of the SEALED label
                 return;
             }
             if (t.Claimed) { StateChip(tile, "CLAIMED", UITheme.Success); return; }
@@ -599,9 +599,10 @@ namespace Emberfall.UI.Screens
             Image icon = UIBuilder.Img("Icon", body, OfferIcon(o.Kind), UITheme.WithAlpha(OfferTint(o.Kind), 0.95f));
             UIBuilder.Box(icon.rectTransform, 14f, 0f, 56f, 56f, new Vector2(0f, 0.5f));
             Text name = EmberforgeUI.Title("Name", body, o.Name.ToUpperInvariant(), UITheme.FontSmall, selected ? Emberforge.TextGold : Emberforge.TextBody, TextAnchor.UpperLeft);
-            UIBuilder.Box(name.rectTransform, 84f, -12f, ListWidth - 270f, 34f, new Vector2(0f, 1f));
+            UIBuilder.Box(name.rectTransform, 84f, -10f, ListWidth - 280f, 34f, new Vector2(0f, 1f));
+            UIBuilder.BestFit(name, 15, UITheme.FontSmall);   // a long name shrinks to its own width, clear of the state pill
             Text price = EmberforgeUI.Label("Price", body, o.PriceLabel + "   -   " + o.LimitLabel, UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(price.rectTransform, 84f, -52f, ListWidth - 270f, 28f, new Vector2(0f, 1f));
+            UIBuilder.Box(price.rectTransform, 84f, -50f, ListWidth - 270f, 28f, new Vector2(0f, 1f));
 
             string stateText;
             Color tint;
@@ -722,6 +723,11 @@ namespace Emberfall.UI.Screens
                 claim.OnClick(delegate { ClaimLedger(); });
             }
 
+            if (_receiptOffer == o.Id && _receiptLine.Length > 0)
+            {
+                Text got = EmberforgeUI.Body("Delivered", pane, "JUST DELIVERED: " + _receiptLine, UITheme.FontSmall - 4, UITheme.Success, TextAnchor.UpperLeft);
+                UIBuilder.Box(got.rectTransform, 28f, -(y + (o.Kind == StoreOfferKind.Ledger && o.Owned ? 130f : 14f)), ContentWidth - ListWidth - 80f, 60f, new Vector2(0f, 1f));
+            }
             BuildBuyBar(pane, o, now);
         }
 
@@ -828,13 +834,20 @@ namespace Emberfall.UI.Screens
             Rebuild();
         }
 
+        /// <summary>What the last finished purchase delivered, drawn on that offer's detail pane (the toast is kept short: a long
+        /// one covers the list).</summary>
+        private string _receiptOffer = "";
+        private string _receiptLine = "";
+
         private void OnFinished(PurchaseResult r)
         {
             if (r.Success)
             {
                 App.Audio.Reward();
-                string lines = r.Grant != null && r.Grant.Lines.Count > 0 ? string.Join(", ", r.Grant.Lines.ToArray()) : "Done.";
-                App.Notify("Bought. " + lines);
+                _receiptOffer = r.OfferId;
+                _receiptLine = r.Grant != null && r.Grant.Lines.Count > 0 ? string.Join(", ", r.Grant.Lines.ToArray()) : "";
+                StoreOfferDef def = App.Session.Content.Store.Offer(r.OfferId);
+                App.Notify("Bought: " + (def != null ? def.Name : "your purchase") + ".");
                 App.RefreshHud();
             }
             else if (r.Message.Length > 0) App.Notify(r.Message);
