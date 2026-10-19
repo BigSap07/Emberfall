@@ -19638,6 +19638,9 @@ namespace Emberfall.DevHarness
             /// seed. Zero means the arithmetic landed in band on its own.</summary>
             public int UnitsMoved;
             public bool FloorPinned;
+            /// <summary>The new recommendedPower is the one on file, so the committed levels stand and
+            /// no level search ran: there is no CEIL reading to print.</summary>
+            public bool Kept;
 
             /// <summary>What the stage held when this iteration started, captured before the
             /// proposal overwrote it. The loop has settled when no stage's four numbers move, and
@@ -20646,7 +20649,13 @@ namespace Emberfall.DevHarness
                     SolverApplyCeiling(p.Stage, seededCeiling, ramp);
 
                     p.FloorPinned = IsFloorPinned(db, p.Stage);
-                    if (!p.FloorPinned)
+                    // A stage whose recommendedPower is the one on file is a stage already solved: the
+                    // committed levels were searched against exactly this number. Searching it again would
+                    // only chase the 5 point cushion, and one level moved on any stage re-draws every later
+                    // seed of the walk, so re-solving a solved tree would not be a no-op.
+                    bool solvedAlready = p.NewRecommended == was.Recommended;
+                    p.Kept = solvedAlready;
+                    if (!p.FloorPinned && !solvedAlready)
                     {
                         int stageProbes = 0;
                         // THE FLAT CEILING, not the grant ladder, and the choice is measured rather
@@ -20806,7 +20815,7 @@ namespace Emberfall.DevHarness
                      + (was.Ceiling + "->" + s.CeilingLevel).PadRight(10)
                      + (p == null ? "?" : p.SeededCeiling.ToString()).PadLeft(5)
                      + (p == null ? "?" : p.UnitsMoved.ToString()).PadLeft(6)
-                     + (p == null ? "?" : (p.FloorPinned ? "PINNED" : Pct(p.LandedCeilRate))).PadLeft(10)
+                     + (p == null ? "?" : (p.FloorPinned ? "PINNED" : p.Kept ? "kept" : Pct(p.LandedCeilRate))).PadLeft(10)
                      + "   " + (rosterMoved ? (wasRoster[s.Id] + " -> " + roster) : (roster + " unmoved")));
             }
 
