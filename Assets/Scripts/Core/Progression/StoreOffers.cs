@@ -64,6 +64,8 @@ namespace Emberfall.Core.Progression
         public PassRewardKind Kind;
         public int Stars;
         public string Line = "";
+        /// <summary>The same reward in few words, for a narrow tile: "2 h idle Gold", "A 5-star of your pick".</summary>
+        public string Short = "";
         public bool Reached;
         public bool Claimed;
         public bool CanClaim;
@@ -809,12 +811,25 @@ namespace Emberfall.Core.Progression
                 t.Kind = p.Kind;
                 t.Stars = p.Stars;
                 t.Line = PaidLine(session, p);
+                t.Short = PaidShort(p);
                 t.Reached = p.Tier <= road.Reached;
                 t.Claimed = v.PassOwned && st.HasClaimedPaid(p.Tier);
                 t.CanClaim = v.PassOwned && t.Reached && !t.Claimed;
                 if (t.CanClaim) v.AnythingToClaim = true;
                 v.Paid.Add(t);
             }
+        }
+
+        private static string PaidShort(PassRewardDef p)
+        {
+            switch (p.Kind)
+            {
+                case PassRewardKind.Hourglass: return Num(p.Amount) + " h idle Gold";
+                case PassRewardKind.Slag: return Big((long)p.Amount) + " Slag";
+                case PassRewardKind.Dust: return Num(p.Amount) + " sweeps Dust";
+                case PassRewardKind.Selector: return "A " + p.Stars + "-star of your pick";
+            }
+            return p.Label.Length > 0 ? p.Label : "Cosmetic";
         }
 
         private static string PaidLine(GameSession session, PassRewardDef p)

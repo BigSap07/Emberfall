@@ -391,7 +391,7 @@ namespace Emberfall.UI.Screens
                 return;
             }
             RectTransform tile = Tile("Paid" + tier, x, y, height, t.Claimed || !owned, t.Kind == PassRewardKind.Selector);
-            TileFace(tile, t.Kind, t.Line, "", owned ? (t.Claimed ? 0.5f : 0.95f) : 0.4f, height);
+            TileFace(tile, t.Kind, t.Short, "SEALED", owned ? (t.Claimed ? 0.5f : 0.95f) : 0.4f, height);
             if (!owned)
             {
                 Image pad = UIBuilder.Img("Lock", tile, TextureLab.Padlock(64), UITheme.WithAlpha(Emberforge.TextQuiet, 0.9f));
@@ -419,12 +419,12 @@ namespace Emberfall.UI.Screens
             const float icon = 56f;
             Image mark = UIBuilder.Img("Mark", tile, IconFor(kind), UITheme.WithAlpha(tint, alpha));
             UIBuilder.Box(mark.rectTransform, 0f, -12f, icon, icon, new Vector2(0.5f, 1f));
-            Text text = EmberforgeUI.Body("Line", tile, line, UITheme.FontTiny - 6, Emberforge.TextBody, TextAnchor.UpperCenter);
-            UIBuilder.Box(text.rectTransform, 0f, -74f, TileWidth - 20f, 76f, new Vector2(0.5f, 1f));
+            Text text = EmberforgeUI.Body("Line", tile, line, UITheme.FontTiny - 4, Emberforge.TextBody, TextAnchor.UpperCenter);
+            UIBuilder.Box(text.rectTransform, 0f, -74f, TileWidth - 16f, 70f, new Vector2(0.5f, 1f));
             if (detail != null && detail.Length > 0)
             {
-                Text d = EmberforgeUI.Label("Detail", tile, detail, UITheme.FontTiny - 8, Emberforge.TextQuiet, TextAnchor.UpperCenter);
-                UIBuilder.Box(d.rectTransform, 0f, -height + 98f, TileWidth - 12f, 30f, new Vector2(0.5f, 1f));
+                Text d = EmberforgeUI.Label("Detail", tile, detail, UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperCenter);
+                UIBuilder.Box(d.rectTransform, 0f, -146f, TileWidth - 8f, 22f, new Vector2(0.5f, 1f));
             }
         }
 
