@@ -65,9 +65,16 @@
   // line and every mitigation roll is built from; tier t's first level stands one Level past tier
   // t - 1's cap (F6), and each of its tier levels walks this many Levels, so its HP, Attack and
   // Defense run at this multiple of tier 0's along the tier. M_t = 1 + 0.115 * (first Level - 1):
-  // tier 1 starts at Level 10 (x2.035) and tier 2 at Level 46 (x6.175). StatMath.LevelAt says why
-  // it is done on Level rather than as a multiplier on the stats: combat reads Level for mitigation.
-  "ascensionCurveMultipliers": [1, 2.035, 6.175],
+  // tier 1 starts at Level 10 (x2.035). StatMath.LevelAt says why it is done on Level rather than
+  // as a multiplier on the stats: combat reads Level for mitigation.
+  //
+  // TIER 2 IS AN OWNER DECISION, NOT A DERIVATION (2026-10-19, R16, candidate A of
+  // Docs/BALANCE-REPORT-R13.md section 4). The continuity rule above would give x6.175 (Levels
+  // 46 to 281), and a fusing player then sat at x14 to x18 over the reference curve from chapter 4
+  // to the finale. The owner set it to x1.5 (Levels 46 to 103), which puts that plateau at about x6.
+  // It is the one number here the harness pins instead of derives; CheckFusionEconomyDerivation says
+  // so and derives every other number around it. Tier 2 still starts one Level past tier 1's cap (F6).
+  "ascensionCurveMultipliers": [1, 2.035, 1.5],
   // ascensionCopies[t]: copies of the SAME hero (F5) the step from tier t to t + 1 spends, beyond
   // the hero itself - M(t+1) - M(t), rounded, because a copy is one hero's tier-0 level-1 power.
   "ascensionCopies": [1, 4],

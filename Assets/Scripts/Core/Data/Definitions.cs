@@ -2635,7 +2635,7 @@ namespace Emberfall.Core.Data
         /// the one ladder each of its tier levels is worth, which makes its HP, Attack and Defense
         /// that multiple of tier 0's along the tier (StatMath.LevelAt), and the multiple its level
         /// cost carries. Tier 0 is 1. Same length as FiveStarLevelCaps.</summary>
-        public float[] AscensionCurveMultipliers = { 1f, 2.035f, 6.175f };
+        public float[] AscensionCurveMultipliers = { 1f, 2.035f, 1.5f };
 
         /// <summary>AscensionCopies[t] is how many copies of the SAME hero (F5) the step from tier t
         /// to t + 1 consumes, beyond the hero itself. One shorter than FiveStarLevelCaps.</summary>

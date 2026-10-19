@@ -281,7 +281,9 @@ namespace Emberfall.Core.Save
         ///
         /// No key moved. What moved, in the commit that made version 16, was the cap a stored
         /// level is read against: 12 + 4 per account rank, up to 80 levels for everyone, became
-        /// 9 / 45 / 281 for a 5-star by tier and 5 to 8 below five stars. Every
+        /// 9 / 45 / 281 for a 5-star by tier and 5 to 8 below five stars (R16 then set the tier 2
+        /// stride to x1.5, so the top cap is Level 103 and a tier 2 hero saved at up to 281 is clamped
+        /// to it on load; migrated and not grandfathered, there being no players). Every
         /// save written before that carried levels the new caps call illegal - the dev capture save
         /// had 94 heroes at Level 60 with a cap of 9 - and version 16's note above chose to keep
         /// them. That choice leaked: TierLevelOf clamps, so most screens hid it, but the fusion
