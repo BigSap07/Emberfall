@@ -1198,8 +1198,8 @@ by default (`EMBERFALL_WAYFARERS_ROAD_OFF` rolls it back), **but the pass is ine
 `EMBERFALL_DAILY_LOOP_ON`**, because the loop that feeds it is off by default; its door is a button in the
 header of `OrdersScreen`, which exists only with the loop. That default is the lead's call of 2026-10-19.
 
-**The purchase path (R19, `Docs/DESIGN-STORE.md`).** Behind `StoreSwitch` (define `EMBERFALL_STORE_ON`, off) and
-with no real money in this run. All of it is Core and proven by the harness without Unity: `PurchaseGrants.Apply`
+**The purchase path (R19, `Docs/DESIGN-STORE.md`).** Behind `StoreSwitch` (on by default; define `EMBERFALL_STORE_OFF` to roll
+back) and with no real money in this run. All of it is Core and proven by the harness without Unity: `PurchaseGrants.Apply`
 turns a fixed `PurchaseGrant` (a closed list of `GrantKind` lines, none random, no Shards) into Sealed goods, all or
 nothing; `PurchaseLedger` grants once per receipt id, writes nothing in `Begin`, and restores a non-consumable on a
 new profile; `PurchaseFlow` wires a store backend to the ledger and abandons a purchase the store never completes

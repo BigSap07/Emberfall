@@ -1,22 +1,22 @@
 namespace Emberfall.Core.Session
 {
     /// <summary>
-    /// THE STORE SWITCH (R19, Docs/DESIGN-STORE.md): the purchase path and the Store. OFF by default. Define
-    /// EMBERFALL_STORE_ON to turn it on. With it off nothing can be bought, restored or recorded: every
-    /// PurchaseLedger call refuses with Off, no Store door is drawn, and the save carries no trace of it, so
-    /// the build is the one before R19 byte for byte. State already in a save is kept and written back
-    /// untouched. The field is writable so the harness and the capture targets can force it; whatever sets it
-    /// puts it back.
+    /// THE STORE SWITCH (R19, Docs/DESIGN-STORE.md): the purchase path and the Store. ON by default, like
+    /// QuartermasterSwitch. Define EMBERFALL_STORE_OFF to roll back to the build before R19: nothing can be
+    /// bought, restored or recorded, every PurchaseLedger call refuses with Off, no Store door is drawn, and the
+    /// save carries no trace of it. State already in a save is kept and written back untouched. The field is
+    /// writable so the harness and the capture targets can force it; whatever sets it puts it back.
     ///
-    /// What the build does with a purchase is decided separately by StoreMode.Resolve: a release build never
-    /// sells anything through this run's code, whatever this switch says.
+    /// ON does not mean a player can pay. What the build does with a purchase is decided separately by
+    /// StoreModes.Resolve: a release build shows every offer as COMING SOON with no buy button, whatever this
+    /// switch says; the editor and a development build run the test store with no real money.
     /// </summary>
     public static class StoreSwitch
     {
-#if EMBERFALL_STORE_ON
-        public static bool Enabled = true;
-#else
+#if EMBERFALL_STORE_OFF
         public static bool Enabled = false;
+#else
+        public static bool Enabled = true;
 #endif
     }
 
