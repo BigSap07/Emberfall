@@ -69,7 +69,16 @@ namespace Emberfall.UI
         public static Sprite OfferCard(string offerId) { return Get(UiKitMap.OfferCard(offerId)); }
         public static Sprite PassHeader() { return Get(UiKitMap.PassHeader()); }
         public static Sprite Relic(string relicId) { return Get(UiKitMap.RelicIcon(relicId)); }
-        public static Sprite Ability(string heroId, string abilityId) { return Get(UiKitMap.AbilityIcon(heroId, abilityId), false); }
+        public static Sprite Ability(string heroId, string abilityId)
+        {
+            Sprite sprite = Get(UiKitMap.AbilityIcon(heroId, abilityId), false);
+            // A hero's flat-stats passive is named like its passive1 with _stats on the end (Unusable Cover and
+            // kael_unusable_cover_stats), and says the same words in the callout, so it wears the passive1 icon.
+            const string stats = "_stats";
+            if (sprite == null && abilityId != null && abilityId.EndsWith(stats))
+                sprite = Get(UiKitMap.AbilityIcon(heroId, abilityId.Substring(0, abilityId.Length - stats.Length)), false);
+            return sprite;
+        }
         public static Sprite AspectBadge(string aspect) { return Get(UiKitMap.AspectBadge(aspect)); }
         public static Sprite CardFrame(int stars) { return Get(UiKitMap.CardFrame(stars)); }
         public static Sprite CardFrameOpen(int stars) { return Get(UiKitMap.CardFrameOpen(stars)); }

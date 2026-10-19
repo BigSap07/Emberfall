@@ -117,10 +117,24 @@ namespace Emberfall.UI
         {
             Image plate = rect.gameObject.AddComponent<Image>();
             plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.Panel);
+            // The kit's big panel has 34-unit corner blocks, which crowd a small fixed-size panel (the player
+            // plate, a pass tile, a summary strip). Those take the kit's small panel, whose corners are bolts.
+            // Only with the kit on, and only for a rect whose size is fixed and under KitSmallPanel.
+            if (UiKit.Forge(EmberforgeArt.Slot.Panel) != null && IsSmallFixed(rect))
+                plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.PanelPlain);
             plate.type = Image.Type.Sliced;
             plate.color = Color.white;
             if (ornaments) Ornaments(rect);
             return plate;
+        }
+
+        private const float KitSmallPanel = 170f;
+
+        private static bool IsSmallFixed(RectTransform rect)
+        {
+            if (rect.anchorMin != rect.anchorMax) return false;
+            Vector2 size = rect.sizeDelta;
+            return size.x > 0f && size.y > 0f && Mathf.Min(size.x, size.y) < KitSmallPanel;
         }
 
         /// <summary>A panel with no gold frame: a card in a grid, a row in a list. The frame is
@@ -812,9 +826,19 @@ namespace Emberfall.UI
                 tab.Plate.sprite = EmberforgeSkin.Get(selected
                     ? EmberforgeArt.Slot.TabOn : EmberforgeArt.Slot.TabOff);
             if (tab.Caption != null)
+            {
+                bool kitTab = UiKit.Forge(EmberforgeArt.Slot.TabOn) != null;
                 tab.Caption.color = selected
-                    ? (UiKit.Forge(EmberforgeArt.Slot.TabOn) != null ? UITheme.TextOnAccent : Emberforge.TextGold)
+                    ? (kitTab ? UITheme.TextOnAccent : Emberforge.TextGold)
                     : Emberforge.TextQuiet;
+                // Dark text on the kit's bright parchment tab: the kit's black outline would eat it, so the
+                // selected tab's outline is off (and back on when it is not selected).
+                if (kitTab)
+                {
+                    Outline edge = tab.Caption.GetComponent<Outline>();
+                    if (edge != null) edge.enabled = !selected;
+                }
+            }
         }
 
         // ------------------------------------------------------------------ the currency pill
@@ -1184,8 +1208,25 @@ namespace Emberfall.UI
             _gloss = gloss;
             _kind = kind;
             if (_content != null) _restPosition = _content.anchoredPosition;
+
+            // THE KIT'S PRIMARY PLATE IS BROWN, and the primary button is the one thing on a screen that has
+            // to read as "press me". Over the plate goes the same plate in warm orange at partial alpha, which
+            // keeps the painted metal and rivets and lifts the colour to today's call to action. Only when the
+            // kit is on; nothing is added otherwise.
+            if (plate != null && UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) != null)
+            {
+                RectTransform warm = UIBuilder.Node("Warm", plate.rectTransform);
+                UIBuilder.FillParent(warm, 0f);
+                warm.SetAsFirstSibling();
+                _warm = warm.gameObject.AddComponent<Image>();
+                _warm.type = Image.Type.Sliced;
+                _warm.raycastTarget = false;
+            }
             Apply();
         }
+
+        private Image _warm;
+        private static readonly Color WarmTint = new Color(1f, 0.64f, 0.18f, 0.62f);
 
         public void SetInteractable(bool value)
         {
@@ -1266,6 +1307,12 @@ namespace Emberfall.UI
             // it instead; the baked kit swaps to its own pressed sprite and the colour stays white.
             bool kitPlate = UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) != null;
             if (kitPlate) _plate.color = _down && _interactable ? UITheme.ButtonPressed : Color.white;
+            if (_warm != null)
+            {
+                _warm.enabled = _interactable && _kind == ForgeButtonKind.Primary;
+                _warm.sprite = _plate.sprite;
+                _warm.color = _down ? new Color(WarmTint.r * 0.82f, WarmTint.g * 0.82f, WarmTint.b * 0.82f, WarmTint.a) : WarmTint;
+            }
 
             if (_content != null)
                 _content.anchoredPosition = _down

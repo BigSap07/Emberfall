@@ -89,8 +89,8 @@ def meta_for(template, guid, max_size, border, ppu):
     # change cannot move them silently.
     s = re.sub(r"(buildTarget: Android\n(?:    .*\n)*?    textureFormat: )\d+", r"\g<1>%d" % ASTC_4x4, s)
     s = re.sub(r"(buildTarget: Standalone\n(?:    .*\n)*?    textureFormat: )\d+", r"\g<1>%d" % BC7, s)
-    # the template's spriteID belongs to another asset; Unity writes this one's on first import
-    s = re.sub(r"^    spriteID: .*\n", "", s, flags=re.M)
+    # Unity writes this one line on first import (spriteID: 5e97eb03825dee720800000000000000 for a Single
+    # sprite, the value the template carries); keeping it means the first import leaves the metas as written.
     return s
 
 
