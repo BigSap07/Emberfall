@@ -7911,6 +7911,13 @@ namespace Emberfall.Core.Combat
                 // hit, which is a follow-up and not a strike back, so the anchor still outranks it.
                 // EnemyThatLastDamagedAlly is not in it either: it is an authored active (Maera's
                 // Keep the Beacon) that picks, and its card says which body it picks.
+                //
+                // ROLLBACK FLAG. Compiling with EMBERFALL_COUNTER_ANSWERS_TAUNT defined removes this
+                // block and restores the old resolution exactly: the anchor outranks LastAttacker
+                // again, and the case in the switch below answers it as it did. The default build,
+                // with no define, is the new rule. The define is for proving the rollback and for
+                // reading the old numbers; build-check does not compile it.
+#if !EMBERFALL_COUNTER_ANSWERS_TAUNT
                 if (mode == TargetMode.LastAttacker)
                 {
                     // INSIDE A BROADCAST ABOUT SOMEBODY ELSE, THAT BODY'S ATTACKER - the one
@@ -7932,6 +7939,7 @@ namespace Emberfall.Core.Combat
                         return result;
                     }
                 }
+#endif
 
                 // THE HAND-DRIVEN PICK, and the only line in this method that is not about the
                 // game. `_forcedPrimary` is null in every battle the game resolves - the guard is a
@@ -8056,8 +8064,20 @@ namespace Emberfall.Core.Combat
                 {
                     case TargetMode.LastAttacker:
                     {
-                        // A live, legal attacker was answered above, before the anchor. Reaching
-                        // here means there is none, so this is an ordinary front-enemy pick.
+#if EMBERFALL_COUNTER_ANSWERS_TAUNT
+                        // The old resolution, below the anchor (rollback build only).
+                        CombatUnit about = _broadcastSubject != null && _broadcastSubject != caster
+                                           ? _broadcastSubject : caster;
+                        CombatUnit remembered = FindUnit(about.LastAttackerId);
+                        if (remembered != null && remembered.Alive && remembered != excluded && remembered.IsPlayer != caster.IsPlayer)
+                        {
+                            result.Add(remembered);
+                            return result;
+                        }
+#endif
+                        // In the default build a live, legal attacker was answered above, before the
+                        // anchor. Reaching here means there is none, so this is an ordinary
+                        // front-enemy pick.
                         mode = TargetMode.FrontEnemy;
                         break;
                     }

@@ -226,7 +226,9 @@ outranks it. `EnemyThatLastDamagedAlly` is not in it either: it is an authored a
 Beacon) that picks, and its card says which body it picks. The cards keep their text, because the
 text always said the attacker. `CheckCounterAnswersTheAttackerNotTaunt` proves it on a synthetic arena
 (a counter goes to the attacker with a Taunt holder standing; the same hero's ordinary attack still
-goes to the Taunt holder; the control with no Taunt agrees).
+goes to the Taunt holder; the control with no Taunt agrees). Compiling with the define
+`EMBERFALL_COUNTER_ANSWERS_TAUNT` restores the old resolution exactly (the anchor outranks
+`LastAttacker` again); the default build has the new rule and needs no define.
 
 **The round-end repair: `RoundEnd` reads the round it closes.** `CloseRound` used to release the turn
 order before raising `RoundEnd`, and `ApplyTurnShift` returns on a missing order ahead of the branch
