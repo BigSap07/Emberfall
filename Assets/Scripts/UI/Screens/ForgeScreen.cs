@@ -78,6 +78,7 @@ namespace Emberfall.UI.Screens
 
             float top = ScreenChrome.HeaderTop + 108f + UITheme.Space8;
             BuildSlagPlate(top);
+            if (QuartermasterSwitch.Enabled) BuildQuartermasterDoor(top);
 
             top += 56f + UITheme.Space16;
             BuildRail(top);
@@ -106,6 +107,22 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_slagValue.rectTransform, UITheme.Space16 + 30f + UITheme.Space12, 0f,
                                  UITheme.Space16, 0f);
             UIBuilder.Outlined(_slagValue, Emberforge.Outline, Emberforge.StrokeThin);
+        }
+
+        /// <summary>
+        /// THE QUARTERMASTER'S DOOR (Docs/DESIGN-QUARTERMASTER.md): level with the Slag plate, in the
+        /// gap between it and the slot rail, which is clear at this height. Only with the switch on.
+        /// </summary>
+        private void BuildQuartermasterDoor(float top)
+        {
+            UIButton door = EmberforgeUI.Button("Quartermaster", Root, "QUARTERMASTER", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIBuilder.Box(door.Root, -640f, -top, 300f, 56f, new Vector2(0.5f, 1f));
+            door.OnClick(delegate
+            {
+                if (!FeatureGates.TryEnter(App, "forge.Quartermaster")) return;
+                App.Audio.Tap();
+                Router.Show(ScreenId.Quartermaster);
+            });
         }
 
         /// <summary>The slot filter, down the left, as the mockup draws it.</summary>

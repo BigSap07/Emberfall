@@ -2,6 +2,10 @@
 
 Design only. No C# exists for this and this document does not write any.
 
+**Built in R17 (2026-10-19).** The reasoning below stands; the status claim above does not. The shop,
+its prices and its sizing are in `Docs/DESIGN-QUARTERMASTER.md`, and the Gold audit asked for in
+section 1 was run (`QuartermasterSizing`).
+
 A rotating stock of items an NPC sells for currency the player already has, restocking on a
 cadence. No player-to-player anything: there is no backend, and a trading system is not a feature
 this project can half-build. Every decision below is constrained by `Resources.Load` and a local

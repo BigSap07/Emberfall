@@ -276,6 +276,24 @@ namespace Emberfall.Core.Model
         public string Name = "Armor";
         public ArmorSlot Slot = ArmorSlot.Weapon;
 
+        /// <summary>An independent copy: the same slot, temper, aspect, name and rolls, a fresh set of
+        /// roll objects. Uid and the Sealed mark are copied as they stand. The Quartermaster adds a
+        /// copy of a stocked piece to the bag so the bag's piece and the shelf's are never one object.</summary>
+        public ArmorPiece Clone()
+        {
+            ArmorPiece c = new ArmorPiece();
+            c.Uid = Uid;
+            c.Name = Name;
+            c.Slot = Slot;
+            c.Aspect = Aspect;
+            c.Temper = Temper;
+            c.Sealed = Sealed;
+            c.Primary = new ArmorStatRoll(Primary.Stat, Primary.Mode, Primary.Value);
+            for (int i = 0; i < SubStats.Count; i++)
+                c.SubStats.Add(new ArmorStatRoll(SubStats[i].Stat, SubStats[i].Mode, SubStats[i].Value));
+            return c;
+        }
+
         /// <summary>The piece's own aspect tag, rolled at drop and independent of its slot. Matched
         /// against the WEARER's aspect for attunement (DESIGN-ARMOR section 6) and used for nothing
         /// else - it never touches AspectChart and never affects combat directly.</summary>
@@ -491,6 +509,14 @@ namespace Emberfall.Core.Model
         /// (SaveSerializer.VersionOf).
         /// </summary>
         public SealedState Sealed = new SealedState();
+
+        /// <summary>
+        /// The Quartermaster's shelf: today's stock of rolled armor and which pieces are sold
+        /// (Docs/DESIGN-QUARTERMASTER.md). NEVER NULL. Empty for every profile that never opened the
+        /// shop, and an empty one is not written to the save. Saved from version 24, and only a save
+        /// that carries a stock says 24 (SaveSerializer.VersionOf).
+        /// </summary>
+        public QuartermasterState Quartermaster = new QuartermasterState();
 
         /// <summary>Gold a random mechanic may spend: the purse less its Sealed part.</summary>
         public long FreeGold { get { return Gold - Math.Min(Math.Max(0, Sealed.Gold), Gold); } }
@@ -870,8 +896,7 @@ namespace Emberfall.Core.Model
             {
                 HeroInstance hero = team[i];
                 if (hero.Def == null) continue;
-                RelicDef relic = content != null && !string.IsNullOrEmpty(hero.EquippedRelicId)
-                    ? content.GetRelic(hero.EquippedRelicId) : null;
+                RelicDef relic = EquippedRelicOf(hero, content);
                 // Guild tech is IN the power score now. DESIGN-GUILD-TECH retires the rule that
                 // guild progression changes no fight, so a line that fights harder has to read as
                 // stronger - a power score that ignored the tree would understate every member of
@@ -904,6 +929,32 @@ namespace Emberfall.Core.Model
             if (string.IsNullOrEmpty(relicId)) return null;
             for (int i = 0; i < OwnedRelics.Count; i++) if (OwnedRelics[i].RelicId == relicId) return OwnedRelics[i];
             return null;
+        }
+
+        /// <summary>
+        /// The relic a hero wears AS IT STANDS: the content's relic, scaled to the owned relic's upgrade
+        /// tier when the relic endgame is on (Docs/DESIGN-RELIC-ENDGAME.md). THE ONE RESOLVER for a
+        /// hero's relic, read by the simulation's setup, the power score and every preview, so the number
+        /// a player reads on a card is by construction the number the fight uses. Null for an empty slot
+        /// or an id content no longer names. A tier 1 relic, and every relic with the switch off, is the
+        /// content's own object, which is what keeps every fight that does not use an upgrade identical.
+        /// </summary>
+        public RelicDef EquippedRelicOf(HeroInstance hero, ContentDatabase content)
+        {
+            if (hero == null) return null;
+            return RelicAtOwnedTier(hero.EquippedRelicId, content);
+        }
+
+        /// <summary>An owned relic as it stands at its tier (EquippedRelicOf's rule, by relic id), for a
+        /// card that describes the relic the player holds. The content's own relic at tier 1, with the
+        /// switch off, and for a relic the player does not own.</summary>
+        public RelicDef RelicAtOwnedTier(string relicId, ContentDatabase content)
+        {
+            if (content == null || string.IsNullOrEmpty(relicId)) return null;
+            RelicDef relic = content.GetRelic(relicId);
+            if (relic == null || !Session.RelicEndgameSwitch.Enabled || !content.RelicShop.IsUsable) return relic;
+            int tier = RelicTier(relicId);
+            return tier > 1 ? relic.AtScale(content.RelicShop.StatScaleOf(Math.Min(tier, content.RelicShop.MaxTier))) : relic;
         }
 
         public bool OwnsRelic(string relicId)

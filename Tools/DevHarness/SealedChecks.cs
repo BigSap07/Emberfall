@@ -37,6 +37,13 @@ namespace Emberfall.DevHarness
             CheckSealedNothingCallsTheGrant(contentDir);
         }
 
+        /// <summary>The cloud and save audit alone (CloudChecks.Run), for a pass that moved the save
+        /// version: --check CloudChecksAlone. The full run calls it from Main; this is the aid.</summary>
+        private static void CloudChecksAlone(ContentDatabase db, string contentDir)
+        {
+            _failures += CloudChecks.Run(db, contentDir);
+        }
+
         // ------------------------------------------------------------------ helpers
 
         private static GameSession SealedSession(ContentDatabase db)

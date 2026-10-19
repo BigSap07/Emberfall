@@ -422,8 +422,7 @@ namespace Emberfall.UI.Screens
             ContentDatabase content = App.Session.Content;
             ArmorConfig config = content != null ? content.Armor : null;
 
-            RelicDef relic = !string.IsNullOrEmpty(hero.EquippedRelicId)
-                ? content.GetRelic(hero.EquippedRelicId) : null;
+            RelicDef relic = App.Session.Profile.EquippedRelicOf(hero, content);
             List<ArmorPiece> worn = App.Session.Profile.EquippedArmorOf(hero);
 
             if (withCandidate)
@@ -663,7 +662,7 @@ namespace Emberfall.UI.Screens
                 List<OwnedRelic> relics = profile.OwnedRelics;
                 for (int i = 0; i < relics.Count; i++)
                 {
-                    RelicDef def = App.Session.Content.GetRelic(relics[i].RelicId);
+                    RelicDef def = App.Session.Profile.RelicAtOwnedTier(relics[i].RelicId, App.Session.Content);
                     if (def == null) continue;
                     AddRelicCell(relics[i], def);
                     count++;
@@ -914,7 +913,7 @@ namespace Emberfall.UI.Screens
             List<OwnedRelic> all = App.Session.Profile.OwnedRelics;
             for (int i = 0; i < all.Count; i++) if (all[i].RelicId == relicId) { owned = all[i]; break; }
 
-            RelicDef def = App.Session.Content.GetRelic(relicId);
+            RelicDef def = App.Session.Profile.RelicAtOwnedTier(relicId, App.Session.Content);
             if (owned == null || def == null) { _selected = ""; RebuildDetail(); return; }
 
             Color tint = UITheme.RelicGradeColor(def.Grade);

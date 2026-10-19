@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Data;
+using Emberfall.Core.Progression;
 using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
@@ -179,21 +180,34 @@ namespace Emberfall.UI.Screens
             return Mathf.Max(1, (count + PageSize - 1) / PageSize);
         }
 
+        /// <summary>The price line under the shelf: the two grades' prices, and what a tier costs
+        /// against the relic's own price when the relic endgame is on.</summary>
+        private string PriceHint()
+        {
+            GameSession s = App.Session;
+            string text = "LEGENDARY " + HudTopBar.Format(s.RelicGradePrice(RelicGrade.Legendary))
+                        + " DUST   -   MYTHIC " + HudTopBar.Format(s.RelicGradePrice(RelicGrade.Mythic)) + " DUST";
+            if (!s.RelicEndgameActive || s.Content.RelicShop.Tiers.Count == 0) return text;
+            text += "   -   TIERS";
+            for (int i = 0; i < s.Content.RelicShop.Tiers.Count; i++)
+                text += (i == 0 ? " " : ", ") + s.Content.RelicShop.Tiers[i].Tier + " COSTS x"
+                      + s.Content.RelicShop.Tiers[i].PriceMultiplier.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+            return text;
+        }
+
         private void Rebuild()
         {
             _currencies.Refresh(App.Session, TimeUtil.NowUnix());
 
-            int dust = (int)App.Session.Profile.RelicDust;
             _dustValue.text = "RELIC DUST   " + HudTopBar.Format(App.Session.Profile.RelicDust);
 
-            List<RelicDef> relics = App.Session.Content.Relics;
+            List<RelicCardView> relics = RelicShop.View(App.Session);
             int pages = PageCount();
             _page = Mathf.Clamp(_page, 0, pages - 1);
 
             _headerSubtitle.text = relics.Count + " RELICS AVAILABLE";
             _pageLabel.text = "PAGE " + (_page + 1) + " OF " + pages;
-            _priceHint.text = "LEGENDARY " + App.Session.Balance.RelicShopPrice
-                            + " DUST   -   MYTHIC " + App.Session.Balance.RelicMythicShopPrice + " DUST";
+            _priceHint.text = PriceHint();
 
             _prevPage.Interactable = _page > 0;
             _nextPage.Interactable = _page < pages - 1;
@@ -211,7 +225,7 @@ namespace Emberfall.UI.Screens
 
             int first = _page * PageSize;
             for (int i = first; i < first + PageSize && i < relics.Count; i++)
-                BuildRelicCard(relics[i], i, dust);
+                BuildRelicCard(relics[i], i);
         }
 
         /// <summary>
@@ -219,14 +233,16 @@ namespace Emberfall.UI.Screens
         /// the layout of a legendary and a mythic is identical, so the two are compared on their
         /// text rather than on their shape.
         /// </summary>
-        private void BuildRelicCard(RelicDef relic, int index, int dust)
+        private void BuildRelicCard(RelicCardView view, int index)
         {
+            RelicDef relic = view.Relic;
             bool mythic = relic.Grade == RelicGrade.Mythic;
             Color grade = UITheme.RelicGradeColor(relic.Grade);
 
-            int price = App.Session.RelicPrice(relic);
-            bool owned = App.Session.Profile.OwnsRelic(relic.Id);
-            bool affordable = !owned && dust >= price;
+            bool owned = view.Owned;
+            bool upgradable = owned && view.UpgradePrice > 0;
+            int price = upgradable ? view.UpgradePrice : view.Price;
+            bool affordable = !owned ? view.CanBuy : view.CanUpgrade;
 
             RectTransform card = UIBuilder.Node("Relic_" + relic.Id, _row);
             UIBuilder.Sized(card, CardWidth, CardHeight);
@@ -286,7 +302,10 @@ namespace Emberfall.UI.Screens
 
             // ---- the relic's own text, from CardText() so the shop and the inventory cannot drift
             // into describing the same relic two ways.
-            Text rule = EmberforgeUI.Body("Rule", card, relic.CardText(), UITheme.FontTiny - 4,
+            string cardText = relic.CardText();
+            if (owned) cardText += "\nTIER " + view.Tier + " OF " + view.MaxTier;
+            if (upgradable && view.NextStats.Length > 0) cardText += "\nNEXT  " + view.NextStats;
+            Text rule = EmberforgeUI.Body("Rule", card, cardText, UITheme.FontTiny - 4,
                                                Emberforge.TextQuiet, TextAnchor.UpperCenter);
             rule.rectTransform.anchorMin = new Vector2(0f, 0f);
             rule.rectTransform.anchorMax = new Vector2(1f, 1f);
@@ -310,10 +329,20 @@ namespace Emberfall.UI.Screens
             UIBuilder.Outlined(costText, Emberforge.Outline, Emberforge.StrokeThin);
 
             // ---- action
-            if (owned)
+            if (owned && !upgradable)
             {
-                RectTransform ownedBadge = EmberforgeUI.Chip("Owned", card, "OWNED", Emberforge.TextQuiet, UITheme.FontTiny);
+                RectTransform ownedBadge = EmberforgeUI.Chip("Owned", card,
+                    view.MaxTier > 1 && view.Tier >= view.MaxTier ? "MAX TIER" : "OWNED", Emberforge.TextQuiet, UITheme.FontTiny);
                 UIBuilder.Box(ownedBadge, 0f, UITheme.Space16, CardWidth - UITheme.Space24, 40f, new Vector2(0.5f, 0f));
+            }
+            else if (owned)
+            {
+                UIButton up = EmberforgeUI.Button("Upgrade", card, "UPGRADE TO " + (view.Tier + 1), UITheme.FontSmall, ForgeButtonKind.Primary);
+                UIBuilder.Box(up.Root, 0f, UITheme.Space12, CardWidth - UITheme.Space24, 46f, new Vector2(0.5f, 0f));
+                up.Interactable = affordable;
+
+                RelicDef capturedUp = view.Relic;
+                up.OnClick(delegate { OnUpgrade(capturedUp); });
             }
             else
             {
@@ -353,7 +382,7 @@ namespace Emberfall.UI.Screens
 
         private void OnBuy(RelicDef relic)
         {
-            bool success = App.Session.BuyRelic(relic.Id, TimeUtil.NowUnix());
+            bool success = RelicShop.Buy(App.Session, relic.Id, TimeUtil.NowUnix());
             if (!success)
             {
                 App.Notify("Not enough Relic Dust.");
@@ -361,6 +390,21 @@ namespace Emberfall.UI.Screens
             }
             App.Audio.Reward();
             App.Notify(relic.Name + " added to your inventory.");
+            App.RefreshHud();
+            App.RequestSave();
+            Rebuild();
+        }
+
+        private void OnUpgrade(RelicDef relic)
+        {
+            bool success = RelicShop.Upgrade(App.Session, relic.Id, TimeUtil.NowUnix());
+            if (!success)
+            {
+                App.Notify("Not enough Relic Dust.");
+                return;
+            }
+            App.Audio.Reward();
+            App.Notify(relic.Name + " raised to tier " + App.Session.Profile.RelicTier(relic.Id) + ".");
             App.RefreshHud();
             App.RequestSave();
             Rebuild();

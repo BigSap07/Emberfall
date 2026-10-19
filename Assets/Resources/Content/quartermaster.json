@@ -1,0 +1,23 @@
+{
+  // THE QUARTERMASTER - Docs/DESIGN-QUARTERMASTER.md. A daily stock of rolled armor, one piece per
+  // slot, sold for Gold. The stock refreshes at the reward day (04:00 UTC, balance.json).
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, for guild-path.json's reason: nothing here is read
+  // by a fight. Retuning a price must not retire every guild's replays. ContentDatabase.
+  // LoadQuartermaster reads it after Load. The whole shop is behind QuartermasterSwitch.
+  //
+  // PRICES ARE HOURS OF THE PLAYER'S OWN IDLE GOLD AT THEIR FRONTIER, never Gold amounts. A piece
+  // costs hours x the idle Gold per hour of the furthest stage cleared, rounded up to priceRound.
+  // The hours were sized from the reference walk (Docs/DESIGN-QUARTERMASTER.md): a day's stock of
+  // six pieces costs about what one chapter's surplus Gold comes to in chapters 4 to 6, where the
+  // level cap has closed the usual sink. It is a slow drain on purpose.
+  //
+  // Temper comes from the same roll a drop uses (ArmorRoller.RollTemper), so the shop never sells
+  // a rung a drop could not reach: Gilded and Radiant stay Combine-only.
+  "priceRound": 10,
+  "slots": ["Weapon", "Helm", "Plate", "Boots", "AccessoryA", "AccessoryB"],
+  "hours": {
+    "Rough": 30,
+    "Honed": 90
+  }
+}

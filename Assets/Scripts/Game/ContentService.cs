@@ -38,6 +38,10 @@ namespace Emberfall.Game
             db.LoadOrders(ReadTextOptional("orders"));
             // And what the Armory and the Archive sell (ContentDatabase.Sinks): no fight reads it.
             db.LoadSinks(ReadTextOptional("sinks"));
+            // And what the Quartermaster stocks and charges (ContentDatabase.Quartermaster): no fight reads it.
+            db.LoadQuartermaster(ReadTextOptional("quartermaster"));
+            // And what the Relic Shop charges and what an upgrade tier is worth (ContentDatabase.RelicShop).
+            db.LoadRelicShop(ReadTextOptional("relic-shop"));
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

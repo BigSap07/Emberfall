@@ -2110,6 +2110,33 @@ namespace Emberfall.Core.Data
             return string.IsNullOrEmpty(stats) ? Rule : Rule + "\n" + stats;
         }
 
+        /// <summary>
+        /// This relic as it stands at an upgrade tier (Docs/DESIGN-RELIC-ENDGAME.md): the same relic
+        /// with every stat value scaled by `scale`, a mythic relic's hook and rule untouched. A scale of
+        /// 1 returns THIS object, so a tier 1 relic, every synthetic request and every build with the
+        /// upgrades off go through exactly the object they always did. Never mutates the content's own.
+        /// </summary>
+        public RelicDef AtScale(double scale)
+        {
+            if (scale == 1.0 || Stats.Count == 0) return this;
+            RelicDef r = new RelicDef();
+            r.Id = Id;
+            r.Name = Name;
+            r.Rule = Rule;
+            r.PairedHeroId = PairedHeroId;
+            r.Grade = Grade;
+            r.Hook = Hook;
+            for (int i = 0; i < Stats.Count; i++)
+            {
+                RelicStatBonus b = new RelicStatBonus();
+                b.Stat = Stats[i].Stat;
+                b.Mode = Stats[i].Mode;
+                b.Value = (float)(Stats[i].Value * scale);
+                r.Stats.Add(b);
+            }
+            return r;
+        }
+
         public static RelicDef FromJson(JsonValue j)
         {
             if (j == null || j.IsNull) return null;

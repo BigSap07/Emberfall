@@ -27,7 +27,8 @@
     { "feature": "guilds",   "stage": "ch2_1" },
     { "feature": "proving",  "stage": "ch2_4" },
     { "feature": "recital",  "stage": "ch2_8" },
-    { "feature": "relics",   "stage": "ch3_1" }
+    { "feature": "relics",   "stage": "ch3_1" },
+    { "feature": "quartermaster", "stage": "ch3_12" }
   ],
 
   // 1. WAKE. One line per entry, shown together on a dark screen over the dimmed hub.

@@ -122,6 +122,32 @@ namespace Emberfall.Core.Data
         /// </summary>
         public SinksConfig Sinks = new SinksConfig();
 
+        /// <summary>What the Quartermaster stocks and charges (quartermaster.json). NOT part of
+        /// ContentVersion, for Sinks' reason: no fight reads it. Empty (IsUsable false) until
+        /// LoadQuartermaster is called.</summary>
+        public QuartermasterConfig Quartermaster = new QuartermasterConfig();
+
+        /// <summary>What the Relic Shop charges and what an upgrade tier is worth (relic-shop.json).
+        /// NOT part of ContentVersion, for Sinks' reason: the guild dungeon fights with no relics, so
+        /// no recorded replay reads it. Empty (IsUsable false) until LoadRelicShop is called.</summary>
+        public RelicShopConfig RelicShop = new RelicShopConfig();
+
+        /// <summary>Parses relic-shop.json into RelicShop and adds its warnings to Warnings. Does not
+        /// touch ContentVersion.</summary>
+        public void LoadRelicShop(string relicShopJson)
+        {
+            RelicShop = RelicShopConfig.FromJson(relicShopJson);
+            for (int i = 0; i < RelicShop.Warnings.Count; i++) Warnings.Add(RelicShop.Warnings[i]);
+        }
+
+        /// <summary>Parses quartermaster.json into Quartermaster and adds its warnings to Warnings.
+        /// Does not touch ContentVersion.</summary>
+        public void LoadQuartermaster(string quartermasterJson)
+        {
+            Quartermaster = QuartermasterConfig.FromJson(quartermasterJson);
+            for (int i = 0; i < Quartermaster.Warnings.Count; i++) Warnings.Add(Quartermaster.Warnings[i]);
+        }
+
         /// <summary>Parses sinks.json into Sinks, drops what this content cannot honour (an armor
         /// preset the roller could not have produced, a hero that is not a four star, a starter or
         /// already listed) and adds every warning to Warnings. Does not touch ContentVersion; see
