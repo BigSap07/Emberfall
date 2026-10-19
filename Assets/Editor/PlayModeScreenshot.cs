@@ -1909,17 +1909,20 @@ namespace Emberfall.EditorTools
             // AudioSummon, so the nightly sweep does not run it.
             if (name == "AudioFight")
             {
-                if (frame <= showAt) return;
+                if (frame <= showAt) { _audioFightStart = -1f; return; }
                 BattleScreen fight = app.Router.Battle;
-                const int FightCeiling = 14400;
+                // A ceiling in real seconds, not frames: the editor runs far above 60 fps, so a frame count
+                // is a different number of seconds on every machine and cut a fight off at about 57 s.
+                const float FightCeilingSeconds = 240f;
+                if (_audioFightStart < 0f) _audioFightStart = Time.realtimeSinceStartup;
                 int fightArmed = SessionState.GetInt(BattleArmKey, 0);
                 if (fightArmed == 0)
                 {
                     if (fight != null && fight.Finished) { SessionState.SetInt(BattleArmKey, frame); return; }
-                    if (frame > showAt + FightCeiling)
+                    if (Time.realtimeSinceStartup - _audioFightStart > FightCeilingSeconds)
                     {
                         SessionState.SetInt(BattleArmKey, frame);
-                        Debug.LogWarning("PlayModeScreenshot: the fight did not finish within " + FightCeiling + " frames. Shooting anyway.");
+                        Debug.LogWarning("PlayModeScreenshot: the fight did not finish within " + FightCeilingSeconds + " s. Shooting anyway.");
                     }
                     return;
                 }
@@ -2455,12 +2458,14 @@ namespace Emberfall.EditorTools
         private static readonly int[] AudioSummonTiers = { 1, 3, 5 };
 
         private static int _roundTripPhase;
-        private static int _roundTripAt;
+        private static float _roundTripAt;          // Time.realtimeSinceStartup when the phase began
+        private static int _roundTripFrame;         // the frame the closing shot is counted from
+        private static float _audioFightStart = -1f;
 
         /// <summary>
         /// AudioRoundTrip (R14-MUSIC), started as Screen:AudioRoundTrip=&lt;stage id&gt; (the next
         /// stage when none is named): the hub, the map, one whole fight, and the hub again, each calm
-        /// screen held long enough to hear it (about 4 s, 3 s, and 4 s on the way back). The cue log (EMBERFALL_CUE_LOG) must show music.hub, then
+        /// screen held long enough to hear it (4 s, 3 s, and 4 s on the way back, in real seconds). The cue log (EMBERFALL_CUE_LOG) must show music.hub, then
         /// music.map as a same-track carry, then the fight's battle track (a crossfade), the victory
         /// duck and stinger, and the hub again after the fight. The fight is played in real time like
         /// AudioFight, so a skill moment in it writes its DUCK line too. Nothing here decides anything:
@@ -2468,16 +2473,18 @@ namespace Emberfall.EditorTools
         /// </summary>
         private static void PumpAudioRoundTrip(GameApp app, string name, int frame, int showAt, int slot)
         {
-            const int HubHold = 240;   // about 4 s at 60 fps
-            const int MapHold = 180;   // about 3 s: long enough to see the carry and no restart
-            const int Hold = 60;       // a beat on the result before leaving it
-            const int FightCeiling = 14400;
+            // Every hold and the fight ceiling are real seconds: the editor's frame rate is not 60.
+            const float HubHold = 4f;
+            const float MapHold = 3f;     // long enough to see the carry and no restart
+            const float Hold = 1f;        // a beat on the result before leaving it
+            const float FightCeiling = 240f;
             const int PaintDelay = 20;
+            float clock = Time.realtimeSinceStartup;
 
             if (frame == showAt)
             {
                 _roundTripPhase = 0;
-                _roundTripAt = frame;
+                _roundTripAt = clock;
                 return;
             }
             if (frame < showAt) return;
@@ -2485,14 +2492,14 @@ namespace Emberfall.EditorTools
             switch (_roundTripPhase)
             {
                 case 0:
-                    if (frame - _roundTripAt < HubHold) return;
+                    if (clock - _roundTripAt < HubHold) return;
                     app.Router.Show(ScreenId.Campaign);
                     Debug.Log("PlayModeScreenshot: AudioRoundTrip is on the map at frame " + frame + ".");
                     _roundTripPhase = 1;
-                    _roundTripAt = frame;
+                    _roundTripAt = clock;
                     return;
                 case 1:
-                    if (frame - _roundTripAt < MapHold) return;
+                    if (clock - _roundTripAt < MapHold) return;
                     string asked = SessionState.GetString(BattleStageKey, "");
                     StageDef next = asked.Length > 0 ? app.Session.Content.GetStage(asked) : app.Session.NextStage;
                     if (next == null)
@@ -2505,33 +2512,33 @@ namespace Emberfall.EditorTools
                     app.Router.Show(ScreenId.Battle);
                     Debug.Log("PlayModeScreenshot: AudioRoundTrip is fighting " + next.Id + " at frame " + frame + ".");
                     _roundTripPhase = 2;
-                    _roundTripAt = frame;
+                    _roundTripAt = clock;
                     return;
                 case 2:
                     BattleScreen fight = app.Router.Battle;
-                    bool timedOut = frame - _roundTripAt > FightCeiling;
+                    bool timedOut = clock - _roundTripAt > FightCeiling;
                     if ((fight != null && fight.Finished) || timedOut)
                     {
-                        if (timedOut) Debug.LogWarning("PlayModeScreenshot: the fight did not finish within " + FightCeiling + " frames. Leaving it.");
+                        if (timedOut) Debug.LogWarning("PlayModeScreenshot: the fight did not finish within " + FightCeiling + " s. Leaving it.");
                         _roundTripPhase = 3;
-                        _roundTripAt = frame;
+                        _roundTripAt = clock;
                     }
                     return;
                 case 3:
-                    if (frame - _roundTripAt < Hold) return;
+                    if (clock - _roundTripAt < Hold) return;
                     app.Router.Show(ScreenId.MainMenu);
                     Debug.Log("PlayModeScreenshot: AudioRoundTrip is back on the hub at frame " + frame + ".");
                     _roundTripPhase = 4;
-                    _roundTripAt = frame;
+                    _roundTripAt = clock;
                     return;
                 case 4:
-                    if (frame - _roundTripAt < HubHold) return;
+                    if (clock - _roundTripAt < HubHold) return;
                     _roundTripPhase = 5;
-                    _roundTripAt = frame;
+                    _roundTripFrame = frame;
                     return;
                 default:
-                    if (frame == _roundTripAt + PaintDelay - 5) Canvas.ForceUpdateCanvases();
-                    if (frame == _roundTripAt + PaintDelay) Shoot(name, frame, slot);
+                    if (frame == _roundTripFrame + PaintDelay - 5) Canvas.ForceUpdateCanvases();
+                    if (frame == _roundTripFrame + PaintDelay) Shoot(name, frame, slot);
                     return;
             }
         }
