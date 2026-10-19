@@ -17470,7 +17470,8 @@ namespace Emberfall.DevHarness
         {
             EconomyRun run = new EconomyRun();
             run.SetFirstSeed(firstSeed);
-            PlayerProfile profile = GameSession.CreateNewProfile(db, 0);
+            run.Now = _walkClockBase;
+            PlayerProfile profile = GameSession.CreateNewProfile(db, _walkClockBase);
             // The walk's guild tech, and it is NULL for every walk but G5's own reading: the
             // reference player recommendedPower is derived for has none, and CheckGuildTechNeverGates
             // asserts that rather than this arranging it. See SimulateEconomyWithTech.
@@ -17526,6 +17527,8 @@ namespace Emberfall.DevHarness
                     IdleReport idle = session.ClaimIdle(run.Now);
                     run.Ledger.GoldIdle += idle.Gold;
                     run.Ledger.ShardIdle += idle.Shards;
+                    // R19: a spender's purchases for this moment (StoreCurve.cs). Null for every walk but that study's.
+                    if (_walkSpender != null) _walkSpender(run);
                     // THE ORDER OF A SITTING'S ROSTER WORK, and it changed with fusion. Gold used to
                     // go first, into the line as it stood, and the pulls came after it, so a hero
                     // pulled this sitting waited for the next one to be levelled. Now the pulls
