@@ -7,7 +7,8 @@ and file names live in `audio.json`; read that file for the truth about any one 
 
 The game used to make nine tones in code (`Sfx`). It now plays the owner's sound packs, wired to
 every screen and battle event, with volume settings. The packs sit in `D:\Emberfall\audio-in`. That
-folder is the owner's. Files are only ever copied from it.
+folder is the owner's. Files are only ever copied from it; the music is converted and cut from
+copies, never edited in place.
 
 There is music now: the owner's five tracks from `audio-in/music`, wired to every screen and fight
 (see **Music** below). The two stingers are still empty, because `audio-in` holds no jingle.
@@ -22,7 +23,7 @@ There is music now: the owner's five tracks from `audio-in/music`, wired to ever
 | Door | `Sfx` in `Assets/Scripts/Game` | The one class the rest of the game calls. Keeps the old synthesised tones as the rollback. |
 | Settings | `AudioPrefs`, `AudioSettingsCard` | Three volumes and a mute, on the device. |
 | Log | `AudioCueLog` | Every cue that fires, with its time. |
-| Files | `Assets/Audio/Resources/sfx` and `music` | Copies of the owner's wav files. |
+| Files | `Assets/Audio/Resources/sfx` and `music` | Copies of the owner's wav files (sfx), and loops and intros cut from the owner's tracks (music). |
 | Import | `Tools/audio-import-policy.py` | Writes the `.meta` files. |
 | Proof | `AudioChecks.cs` in `Tools/DevHarness` | Harness checks. |
 
@@ -57,7 +58,7 @@ The owner made five tracks with Suno: hub, battle_ch1, battle_ch2, boss and summ
 from its start up to the loop start, so it runs into the loop sample for sample. Summon has no
 intro: its loop is a calm 49 s stretch. Every loop is normalised to -20 LUFS, and each intro keeps
 its track's gain. Every music cue has `volume` 0.5, so music sits under every battle sound effect
-at the default sliders. The map: the hub and the map play hub, and so do the Recital, Proving and
+at the default sliders. Which screen plays what: the hub and the map play hub, and so do the Recital, Proving and
 Guild screens. Chapter 1 fights play battle_ch1 and chapter 2 fights battle_ch2. Chapters 3 to 6
 alternate between the two, and any later chapter plays battle_ch1. A wall (a miniboss stage) or
 a chapter finale (a boss stage) plays boss, and the summon screen plays summon. Recital, Proving,
