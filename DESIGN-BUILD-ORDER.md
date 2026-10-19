@@ -1077,8 +1077,13 @@ the schema, the consent rules and the INSERT-only grants.
 
 ### Real audio
 
-`Assets/Resources/Content/audio.json` maps 49 cues to 114 of the owner's wav files through
-`AudioService` behind the `Sfx` door. Music cues are empty because no music was supplied. The
+`Assets/Resources/Content/audio.json` maps 50 cues to 114 of the owner's sound files and 9 music files through
+`AudioService` behind the `Sfx` door. Music plays the owner's five tracks (hub, battle_ch1,
+battle_ch2, boss, summon) as loops in `Assets/Audio/Resources/music`, four with an intro, at -20
+LUFS and cue volume 0.5. Chapter 1 and 2 fights get their own track, walls and finales play boss,
+a screen change crossfades over 1.0 s, the same file carries on with no restart, and a skill
+moment or a victory ducks the music 6 dB. The rollback is `"music": false` in `audio.json`
+(every music cue silent, as before). Both stingers are still empty. The
 settings screen has music, effects and interface sliders plus a mute (`AudioPrefs`, `PlayerPrefs`,
 60/80/70), and `credits.txt` names the packs. The rollback is `realAudio` false in `audio.json`.
 See `Docs/DESIGN-AUDIO.md`.

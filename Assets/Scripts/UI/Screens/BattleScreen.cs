@@ -1073,8 +1073,9 @@ namespace Emberfall.UI.Screens
             if (_guildRun != null) return "guild";
             if (_duelOpponent != null || _provingOpponent != null) return "proving";
             if (_recitalFloor >= 0) return "recital";
-            if (_stage != null && (_stage.IsBoss || _stage.IsMiniboss)) return "boss";
-            return "campaign";
+            // A wall (miniboss stage) or a chapter finale (boss stage) is "boss"; any other campaign
+            // stage is "campaign.chN", which musicByScreen falls back from to "Battle.campaign".
+            return AudioCueConfig.CampaignBattleKind(_stage);
         }
 
         private void RunSimulation()

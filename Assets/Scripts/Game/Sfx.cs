@@ -91,7 +91,13 @@ namespace Emberfall.Game
 
         public void Victory()
         {
-            if (RealAudio) { Service.Play("music.stinger.victory"); Service.Play("battle.victory"); }
+            if (RealAudio)
+            {
+                // The music steps back for the victory moment, then the stinger ends the battle track.
+                Service.Duck("victory", Service.VictoryDuckHold);
+                Service.Play("music.stinger.victory");
+                Service.Play("battle.victory");
+            }
             else PlayOld(Old.Victory, 0.85f);
         }
 
@@ -117,6 +123,13 @@ namespace Emberfall.Game
         public void EnterBattle(string kind)
         {
             if (RealAudio) Service.EnterBattle(kind);
+        }
+
+        /// <summary>The music steps back for a moment (a skill, the victory) and returns. Silent
+        /// on the synthesised set, and with audio.json's music flag off.</summary>
+        public void Duck(string reason, float holdSeconds)
+        {
+            if (RealAudio) Service.Duck(reason, holdSeconds);
         }
 
         public void StartLoop(string cueId)

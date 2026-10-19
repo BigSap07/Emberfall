@@ -1,4 +1,4 @@
 SOUND
 Spell and summon sound effects: "Combat Magic Spells" by AD Sounds.
 Interface, coin and hit sounds: "Fantasy Inventory & UI Sounds Pack" by Daydream Sound.
-There is no music in this version.
+Music: by the owner of Emberfall, made with Suno.

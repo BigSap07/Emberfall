@@ -51,10 +51,13 @@ namespace Emberfall.Game
             public int Priority;
         }
 
-        /// <summary>One music source, or one loop: a level that moves toward a target.</summary>
+        /// <summary>One music source, or one loop: a level that moves toward a target. A music slot
+        /// also owns a Lead source, which plays the intro of a cue that has one.</summary>
         private sealed class Fader
         {
             public AudioSource Source;
+            public AudioSource Lead;
+            public string File = "";
             public float Level;
             public float Target;
             public float Rate;
@@ -74,6 +77,11 @@ namespace Emberfall.Game
         private readonly Fader[] _music = new Fader[2];
         private readonly Dictionary<string, Fader> _loops = new Dictionary<string, Fader>();
         private string _musicCue = "";
+        private string _musicFile = "";
+        private readonly MusicDuck _duck = new MusicDuck();
+        /// <summary>Intros already played this session. An intro is a track's opening, heard once; a
+        /// player who leaves a screen and comes back gets the loop, not a minute of opening again.</summary>
+        private readonly HashSet<string> _introsPlayed = new HashSet<string>();
 
         public AudioCueConfig Config { get { return _config; } }
 
@@ -130,6 +138,7 @@ namespace Emberfall.Game
                 Fader f = new Fader();
                 f.Source = NewSource("Music" + i);
                 f.Source.loop = true;
+                f.Lead = NewSource("Music" + i + "Intro");
                 f.Channel = AudioChannel.Music;
                 _music[i] = f;
             }
@@ -160,9 +169,13 @@ namespace Emberfall.Game
             float now = Time.unscaledTime;
             if (!_cooldowns.TryFire(cueId, now, def.Cooldown)) return false;
 
-            if (def.StopMusic >= 0f) StopMusic(def.StopMusic);
+            // A stinger ends the battle track only when it plays a file of its own (StopsMusic). A silent
+            // stinger leaves the track playing under the result screen; the victory duck steps it back.
+            if (_config.StopsMusic(def)) StopMusic(def.StopMusic);
+            else if (def.StopMusic >= 0f) AudioCueLog.Record("STOP", cueId, "skipped, stinger silent");
 
-            if (def.IsSilent)
+            // A music one-shot (a stinger) under the music flag off is silent, as it was before R14.
+            if (_config.IsSilentNow(def))
             {
                 AudioCueLog.Record(def.Channel == AudioChannel.Music ? "SILENT" : "NOFILE", cueId, "no files in audio.json");
                 return false;
@@ -175,7 +188,7 @@ namespace Emberfall.Game
                 return false;
             }
 
-            string file = Pick(cueId, def.Files);
+            string file = Pick(cueId, _config.EffectiveFiles(def));
             AudioClip clip = Clip(file);
             if (clip == null)
             {
@@ -268,8 +281,13 @@ namespace Emberfall.Game
 
         /// <summary>
         /// Crossfades to a music cue. The same cue again does nothing. A cue with no files fades
-        /// the current track out and plays nothing: that is what every music cue does while
-        /// audio-in holds no music, and it is logged as SILENT so the proof can show the cue fired.
+        /// the current track out and plays nothing: that is what every music cue does with the
+        /// music flag off, and it is logged as SILENT so the proof can show the cue fired.
+        ///
+        /// A cue whose file is the one already playing carries on without a restart, whatever its
+        /// id (music.hub to music.map); that is logged as a same-track carry. Any other cue
+        /// crossfades in over its fade. A cue with an intro plays the intro once and schedules the
+        /// loop to start the instant it ends, on the audio clock.
         /// </summary>
         public void SetMusic(string cueId)
         {
@@ -283,34 +301,94 @@ namespace Emberfall.Game
             _musicCue = cueId;
 
             float fade = def.Fade >= 0f ? def.Fade : _config.MusicFade;
-            for (int i = 0; i < _music.Length; i++) BeginFade(_music[i], 0f, fade);
+            List<string> files = _config.EffectiveFiles(def);
 
-            if (def.IsSilent)
+            if (files.Count == 0)
             {
-                AudioCueLog.Record("SILENT", cueId, "music, no files in audio.json");
+                _musicFile = "";
+                for (int i = 0; i < _music.Length; i++) BeginFade(_music[i], 0f, fade);
+                AudioCueLog.Record("SILENT", cueId, _config.Music ? "music, no files in audio.json" : "music, the music flag is off");
                 return;
             }
 
-            string file = Pick(cueId, def.Files);
+            if (_config.CarriesOn(_musicFile, def))
+            {
+                Fader carry = PlayingFader(_musicFile);
+                if (carry != null)
+                {
+                    carry.Cue = cueId;
+                    carry.Base = def.Volume;
+                    AudioCueLog.Record("MUSIC", cueId, "same-track carry file=" + _musicFile);
+                    return;
+                }
+            }
+
+            for (int i = 0; i < _music.Length; i++) BeginFade(_music[i], 0f, fade);
+
+            string file = Pick(cueId, files);
             AudioClip clip = Clip(file);
             if (clip == null)
             {
+                _musicFile = "";
                 AudioCueLog.Record("NOFILE", cueId, "music file=" + file);
                 return;
             }
 
             Fader next = _music[0].Level <= _music[1].Level ? _music[0] : _music[1];
             next.Source.Stop();
+            next.Lead.Stop();
+            next.Lead.clip = null;
             next.Source.clip = clip;
             next.Source.loop = true;
             next.Source.pitch = 1f;
+            next.Lead.pitch = 1f;
             next.Cue = cueId;
+            next.File = file;
             next.Base = def.Volume;
             next.Level = 0f;
             next.Source.volume = 0f;
-            next.Source.Play();
+            next.Lead.volume = 0f;
+            _musicFile = file;
+
+            string detail = "file=" + file + " fade=" + fade.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+            string introPath = _config.EffectiveIntro(def);
+            if (introPath.Length > 0 && _introsPlayed.Contains(introPath))
+            {
+                detail += " intro=skipped (played earlier this session)";
+                introPath = "";
+            }
+            AudioClip intro = introPath.Length > 0 ? Clip(introPath) : null;
+            if (introPath.Length > 0 && intro == null) AudioCueLog.Record("NOFILE", cueId, "music intro=" + introPath);
+            if (intro != null)
+            {
+                // Both starts are scheduled on the audio clock, so the loop begins on the sample the
+                // intro ends and no frame time can open a gap.
+                double start = AudioSettings.dspTime + 0.05;
+                double introLength = (double)intro.samples / intro.frequency;
+                next.Lead.clip = intro;
+                next.Lead.loop = false;
+                next.Lead.PlayScheduled(start);
+                next.Source.PlayScheduled(start + introLength);
+                _introsPlayed.Add(introPath);
+                detail += " intro=" + introPath + " loopAfter=" + introLength.ToString("F3", System.Globalization.CultureInfo.InvariantCulture);
+            }
+            else
+            {
+                next.Source.Play();
+            }
             BeginFade(next, 1f, fade);
-            AudioCueLog.Record("MUSIC", cueId, "file=" + file + " fade=" + fade.ToString("F2", System.Globalization.CultureInfo.InvariantCulture));
+            AudioCueLog.Record("MUSIC", cueId, detail);
+        }
+
+        /// <summary>The music slot that is playing this file and not fading out, or null.</summary>
+        private Fader PlayingFader(string file)
+        {
+            for (int i = 0; i < _music.Length; i++)
+            {
+                Fader f = _music[i];
+                if (f != null && f.File == file && f.Target > 0.5f && f.Source.clip != null) return f;
+            }
+            return null;
         }
 
         /// <summary>Fades the music out and forgets the cue, so asking for it again plays it.</summary>
@@ -318,8 +396,29 @@ namespace Emberfall.Game
         {
             if (!Enabled) return;
             _musicCue = "";
+            _musicFile = "";
             for (int i = 0; i < _music.Length; i++) BeginFade(_music[i], 0f, fadeSeconds);
         }
+
+        /// <summary>
+        /// Steps the music back by the configured dB for holdSeconds, then lets it return over the
+        /// configured time. The skill moment and the victory call this. It does nothing with the
+        /// music flag off. Each call writes one DUCK line to the cue log, whether or not a track is
+        /// sounding, so the play proof can see the moment.
+        /// </summary>
+        public void Duck(string reason, float holdSeconds)
+        {
+            if (!Enabled || !_config.Music) return;
+            _duck.Trigger(_config, holdSeconds);
+            System.Globalization.CultureInfo inv = System.Globalization.CultureInfo.InvariantCulture;
+            AudioCueLog.Record("DUCK", reason, "db=" + _config.DuckDb.ToString("F1", inv)
+                               + " hold=" + holdSeconds.ToString("F2", inv)
+                               + " in=" + _config.DuckIn.ToString("F2", inv)
+                               + " out=" + _config.DuckOut.ToString("F2", inv));
+        }
+
+        /// <summary>Seconds the music stays ducked for the victory moment (audio.json).</summary>
+        public float VictoryDuckHold { get { return _config.DuckVictoryHold; } }
 
         /// <summary>The ScreenId name just shown. A screen with no entry in musicByScreen leaves
         /// the music as it is.</summary>
@@ -330,18 +429,18 @@ namespace Emberfall.Game
             // way that screen was left.
             foreach (KeyValuePair<string, Fader> pair in _loops)
                 if (pair.Value.Target > 0.5f) StopLoop(pair.Key, 0.1f);
-            string cue;
-            if (_config.MusicByScreen.TryGetValue(screenName, out cue)) SetMusic(cue);
+            string cue = _config.ScreenMusicCue(screenName);
+            if (cue != null) SetMusic(cue);
         }
 
-        /// <summary>The battle screen's music, by kind: campaign, boss, recital, proving, prologue,
-        /// guild. Looked up as "Battle.kind" in musicByScreen, then "Battle".</summary>
+        /// <summary>The battle screen's music, by kind: campaign.chN, boss, recital, proving,
+        /// prologue, guild. Looked up as "Battle.kind" in musicByScreen, then with the last dot
+        /// segment taken off at a time, down to "Battle" (AudioCueConfig.BattleMusicCue).</summary>
         public void EnterBattle(string kind)
         {
             if (!Enabled) return;
-            string cue;
-            if (_config.MusicByScreen.TryGetValue("Battle." + kind, out cue)
-                || _config.MusicByScreen.TryGetValue("Battle", out cue)) SetMusic(cue);
+            string cue = _config.BattleMusicCue(kind);
+            if (cue != null) SetMusic(cue);
         }
 
         private void BeginFade(Fader f, float target, float seconds)
@@ -410,7 +509,8 @@ namespace Emberfall.Game
             if (!Enabled) return;
             float dt = Time.unscaledDeltaTime;
 
-            for (int i = 0; i < _music.Length; i++) StepFader(_music[i], dt, AudioPrefs.Music);
+            float duck = _duck.Step(_config, dt);
+            for (int i = 0; i < _music.Length; i++) StepFader(_music[i], dt, AudioPrefs.Music * duck);
             foreach (KeyValuePair<string, Fader> pair in _loops)
                 StepFader(pair.Value, dt, pair.Value.Channel == AudioChannel.Ui ? AudioPrefs.Ui : AudioPrefs.Sfx);
 
@@ -455,11 +555,19 @@ namespace Emberfall.Game
         {
             if (f == null || f.Source == null) return;
             f.Level = Mathf.MoveTowards(f.Level, f.Target, f.Rate * dt);
-            f.Source.volume = Mathf.Clamp01(f.Level * f.Base * channelVolume);
+            float volume = Mathf.Clamp01(f.Level * f.Base * channelVolume);
+            f.Source.volume = volume;
+            if (f.Lead != null) f.Lead.volume = volume;
             if (f.Target <= 0f && f.Level <= 0f && f.Source.clip != null)
             {
                 f.Source.Stop();
                 f.Source.clip = null;
+                f.File = "";
+                if (f.Lead != null)
+                {
+                    f.Lead.Stop();
+                    f.Lead.clip = null;
+                }
             }
         }
 
