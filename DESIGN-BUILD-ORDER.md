@@ -1256,6 +1256,74 @@ receipt or a bought paid track.**
 **The curve.** The spender's reference walk and fusing walk against the non-spender, per chapter, are measured by
 `--store-curve` (`StoreCurve.cs`). Result: to be filled in from the R19 report when the curve check is final.
 
+### The UI kit (R20)
+
+A generated art kit (panels, buttons, tabs, pills, currency and navigation icons, aspect badges, relic icons, ability
+icons, Store card art) that skins the existing screens behind one switch. It is a skin, not a redesign: no layout
+moved, and the kit only replaces the sprite, tint or text colour at the call sites listed below.
+
+**The switch.** `UiKitSwitch` (Core, engine-free) is **off** and is committed off. `EMBERFALL_UIKIT` builds it on:
+add the define to the player's scripting define symbols (`Assets/csc.rsp` carries the one other define, for the
+store, and takes `-define:EMBERFALL_UIKIT` the same way). The field is writable so a harness check or a capture can
+force it. Off is today exactly: every lookup in `UiKitMap` answers null, every call site keeps the drawing it always
+had as its fallback, and no kit sprite is loaded. The switch reads nothing from a save, writes nothing to one, never
+reaches a fight, and the kit's art is named in none of the eight hashed content files (`ContentVersion` did not move).
+
+**The map and the loader.** `UiKitMap` (Core) is the one place a slot or an id meets a kit piece, as plain strings:
+HudSkin slots, EmberforgeArt slots, purses, Store offer ids, relic ids, ability ids, aspects, card frames. `UiKit`
+(UI) turns a key into a sprite with `Resources.Load`, caches hits and misses, and warns once per missing key. It is
+asked first by `EmberforgeSkin.Get` and `HudSkin.Authored`, which is how every screen built from the Emberforge
+components takes the kit without a code change. Ability icons are one texture: `ability_atlas.png` holds the 109
+distinct icons that cover all 254 abilities (basic, active and passive1 of every hero), and `UiKit` cuts a sprite
+from it with `Sprite.Create` using the cells in `ability_atlas_map.json`. A hero's flat-stats passive (an id ending
+`_stats`) wears its passive1 icon.
+
+**What each screen gets with the kit on.**
+- **Hub:** navigation icons (the Bag uses the relic pendant, More uses the gear), the Store door, the idle chest, the
+  close button, currency pills with the gold, shards and dust icons, the currency strip icons, panels, popups,
+  buttons, tabs and round discs. A fixed-size panel under 170 units on its short side takes the kit's small panel.
+- **Battle HUD:** the generic pill (callout, turn order) is the kit's dark plate, and the callout shows the
+  ability or passive icon off its left end, outside the box `BattleHudLayout` places.
+- **Ability card** (`AbilityCardSheet`, the battle unit card and the Hero page): the icon at the end of each header; a
+  one-ability card gains a header only when there is an icon.
+- **Hero screen:** a medallion on the corner of each basic, active and passive1 card, and the aspect badges on the
+  hero's aspect and the six-aspect row.
+- **Store:** the Wayfarer's Road header as the Pass tab's summary backdrop, each offer's card on its row and large in
+  the detail pane, purse icons on the Pass tiles and the Shop doors.
+- **Relics:** one icon per relic id in `ItemCard.ForRelic` (Inventory) and on the Relic Shop card.
+- **Victory:** the gold, shards and slag tiles. **Summon:** the shard icon on PULL and the chest on the opening
+  guarantee.
+- **Buttons:** the kit's plates have no pressed art, so a press darkens the plate; the primary plate is brown, so a
+  warm overlay keeps it reading as the call to action; the selected tab's outline is off so its dark text is legible.
+
+**Import.** `Tools/uikit-import.py` copies the generator's import-ready set into `Assets/Resources/Art/UIKit` and
+writes the `.meta` files, so the settings do not depend on what Unity guesses. 68 textures: Sprite (2D and UI), single,
+mips off, bilinear, no NPOT scale, full rect, borders from the nine-slice table (a border pair that would meet keeps
+six pixels of flat plate so a stretched plate has no hairline), and a pixels-per-unit per piece that draws a panel's
+corner block at 34 units. **Explicit BC7 (Windows) and ASTC 4x4 (Android) on every meta**, because
+`DefaultTexturePlatform` ships uncompressed: about 9 MB on a device instead of about 37 MB. Everything under Resources
+ships whether the switch is on or off. `Tools/texture-import-policy.py` carries three UI kit groups and reports 0 files
+to write.
+
+**Capture targets.** Any `Screen:<Name>` target takes `+kit` (switch forced on for the capture only) or `+plain` (forced
+off; the before shot and the rollback proof), before any `=param` and `@WxH`, for example
+`Screen:MainMenu+kit@2400x1080`. The menu `Emberfall/Capture/R20 kit/` lists Hub, Hub with the Store door, Battle, Battle
+unit card, Hero detail, Hero ability card, Store pass tab, Store packs, Victory, Battle result and Summon, each on and
+off. The switch is set in edit mode before Play starts and again on the Play domain load, so the screens are built
+after it; `PlayModeScreenshot` puts it back when the run ends.
+
+**The check.** `CheckUiKit`: shipped off, off answers null for every lookup, on maps every relic and every ability,
+every key has a PNG and a meta that imports as a single sprite with BC7 and ASTC stated, every ability has a cell inside
+the atlas, the sliced pieces carry borders, the kit is absent from the hashed files, the wiring, the switch put back. It
+reads the metas with line endings normalised, because a fresh checkout lands CRLF.
+
+**Not wired.** Card frames as portrait backing (all 94 heroes ship round framed badges and a portrait-shaped frame does
+not fit one without a layout change; the five frames and their open versions are imported and mapped). Kit bars on
+unit plates (10 units tall, no room for a sliced trough). The title ribbon (the kit banner needs about 100 units of
+height and the ribbon is 56). A Unity sprite atlas asset (the abilities are already one texture, the other pieces are
+single sprites). Kit art on screens not named above (Guild, Talents, Fusion, Forge and the rest keep their look
+except where they build panels, buttons and tabs through the shared components, which the kit also skins).
+
 ### The first session, and the unlock table
 
 `Onboarding` in `Assets/Scripts/Core/Session` decides the first session and `OnboardingCoach` in
