@@ -671,16 +671,20 @@ namespace Emberfall.Battle
             FlipQuad q = h.Quad;
             FaceCameraQuad(q, up ? 0f : 180f);
             q.T.localScale = new Vector3(size, size, size);
+            // Anchored to the head: the rig height is the body top, so the chip starts a small gap above
+            // it and moves a little (a buff rises away from the head, a debuff settles toward it).
             float body = target.HeadPosition.y - target.transform.position.y;
-            Vector3 start = FxPoint(target) + Vector3.up * (body * 0.62f);
-            float drift = body * travel * 0.35f * (up ? 1f : -1f);
+            Vector3 head = target.HeadPosition + (FxPoint(target) - target.CenterPosition);
+            float scale = travel / 0.7f;
+            float from = up ? 0.06f : 0.06f + 0.18f * scale;
+            float to = up ? 0.06f + 0.18f * scale : 0.06f;
             float duration = Mathf.Max(0.02f, seconds) / PlaybackSpeed();
             float t = 0f;
             while (t < duration && !h.Retired)
             {
                 t += Time.deltaTime;
                 float k = Mathf.Clamp01(t / duration);
-                q.T.position = start + Vector3.up * (drift * (1f - (1f - k) * (1f - k)));
+                q.T.position = head + Vector3.up * (body * Mathf.Lerp(from, to, 1f - (1f - k) * (1f - k)) + size * 0.5f);
                 float a = k < 0.15f ? k / 0.15f : 1f - Mathf.Clamp01((k - 0.55f) / 0.45f);
                 q.Material.SetColor("_Color", new Color(tint.r, tint.g, tint.b, a));
                 yield return null;
