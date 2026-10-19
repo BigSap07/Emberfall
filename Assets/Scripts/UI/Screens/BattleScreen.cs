@@ -810,17 +810,20 @@ namespace Emberfall.UI.Screens
             ScrollRect rewardScroll;
             _rewardList = UIBuilder.ScrollList("List", card, out rewardScroll, 4f,
                                                new RectOffset(0, 0, 0, 0));
-            UIBuilder.Box(rewardScroll.GetComponent<RectTransform>(), 0f, -44f, 764f, 250f,
+            // 350 tall for rows of RewardRowHeight: eight rows fit with no scrolling. A first clear of a wall
+            // stage is first-clear bonus, gold, shards, XP, the unlocked stage and the chest, and the box
+            // used to hold five, so the chest row was cut off by its edge with no hint it was there.
+            UIBuilder.Box(rewardScroll.GetComponent<RectTransform>(), 0f, -44f, 764f, 350f,
                           new Vector2(0.5f, 1f));
 
             // Divider between rewards and stat breakdown.
             Image dividerImage = EmberforgeUI.Rule("Divider", card);
-            UIBuilder.Box(dividerImage.rectTransform, 0f, -302f, 760f, Emberforge.RuleHeight,
+            UIBuilder.Box(dividerImage.rectTransform, 0f, -402f, 760f, Emberforge.RuleHeight,
                           new Vector2(0.5f, 1f));
 
             // Stat tab strip — 3 tabs: DEALT / HEALED / TAKEN. Rewards are never behind a tab.
             RectTransform tabStrip = UIBuilder.Node("Tabs", card);
-            UIBuilder.Box(tabStrip, 0f, -314f, 780f, 34f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(tabStrip, 0f, -412f, 780f, 34f, new Vector2(0.5f, 1f));
             UIBuilder.HStack(tabStrip, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
 
             // REAL TABS, not three teal buttons. Three buttons in a row is three things to press
@@ -839,7 +842,7 @@ namespace Emberfall.UI.Screens
             ScrollRect statScroll;
             _statsPanel = UIBuilder.ScrollList("Stats", card, out statScroll, 2f,
                                                new RectOffset(0, 0, 0, 0));
-            UIBuilder.Box(statScroll.GetComponent<RectTransform>(), 0f, -356f, 764f, 328f,
+            UIBuilder.Box(statScroll.GetComponent<RectTransform>(), 0f, -454f, 764f, 230f,
                           new Vector2(0.5f, 1f));
 
             // the Debrief line - one sentence, the single biggest reason the fight went this way -
@@ -2951,6 +2954,9 @@ namespace Emberfall.UI.Screens
             }
         }
 
+        /// <summary>One spoils row. 40 rather than 44 so the eight rows a stage clear can carry fit the box.</summary>
+        private const float RewardRowHeight = 40f;
+
         private void AddRewardRow(string label, string value, Color tint)
         {
             AddRewardRow(_rewardList, label, value, tint);
@@ -2958,7 +2964,7 @@ namespace Emberfall.UI.Screens
 
         private static void AddRewardRow(Transform list, string label, string value, Color tint)
         {
-            Widgets.StatRow(label, list, label, value, tint, 44f);
+            Widgets.StatRow(label, list, label, value, tint, RewardRowHeight);
         }
 
         /// <summary>
