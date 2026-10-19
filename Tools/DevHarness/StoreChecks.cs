@@ -1102,6 +1102,12 @@ namespace Emberfall.DevHarness
             Check(hits.Count == 0, "NO PURCHASE GRANT PATH REACHES A RANDOM MECHANIC: " + files.Count + " files of the purchase path (grant, ledger, state, store wrapper) name no random number, roll, summon, reroll, forge, quartermaster or conversion"
                   + (hits.Count > 0 ? " (" + string.Join(", ", hits.ToArray()) + ")" : ""));
 
+            // The Store screen reads the road through Peek, so drawing any tab (the Pass tab included) writes nothing; a claim,
+            // a paid claim and a purchase roll the season for themselves.
+            string screen = StoreStripCommentsAndStrings(File.ReadAllText(Path.Combine(root, "Assets", "Scripts", "UI", "Screens", "StoreScreen.cs")));
+            Check(screen.Contains("WayfarersRoad.Peek(") && !screen.Contains("WayfarersRoad.View("),
+                  "THE STORE SCREEN READS THE ROAD READ ONLY: StoreScreen draws it through WayfarersRoad.Peek and never calls View, so opening the Pass tab leaves the save untouched");
+
             // Who may make a Sealed mark, and who may apply a grant.
             List<string> sealers = new List<string>(), appliers = new List<string>();
             string[] all = Directory.GetFiles(Path.Combine(root, "Assets"), "*.cs", SearchOption.AllDirectories);

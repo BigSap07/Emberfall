@@ -17,7 +17,7 @@ namespace Emberfall.UI.Screens
     /// with its contents in full and its price before anything can be bought. SHOPS links the four
     /// earned-currency shops in one place (they keep their own screens).
     ///
-    /// THIS SCREEN DECIDES NOTHING. It draws StoreOffers.View and WayfarersRoad.View, claims through
+    /// THIS SCREEN DECIDES NOTHING. It draws StoreOffers.View and WayfarersRoad.Peek, claims through
     /// StoreOffers.ClaimLedger and ClaimGrowth and WayfarersRoad.Claim and ClaimPaid, and buys only through
     /// the purchase flow (PurchaseService): it never grants anything. In a release build the flow has no
     /// backend and every offer reads COMING SOON with no buy button.
@@ -270,7 +270,7 @@ namespace Emberfall.UI.Screens
                 UIBuilder.FillParent(none.rectTransform, 0f);
                 return;
             }
-            PassView road = WayfarersRoad.View(App.Session, now);
+            PassView road = WayfarersRoad.Peek(App.Session, now);   // read only: opening the tab writes nothing; a claim or a purchase rolls the season itself
             StoreOfferView premium = Find(view, StoreOffers.PassOfferId);
 
             RectTransform summary = UIBuilder.Node("Summary", _body);
