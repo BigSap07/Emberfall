@@ -24,11 +24,13 @@ The capture runs on a scratch identity with the cloud held off (`ScratchCaptures
 
 ## Photographing a moment of a fight
 
-`Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off]` plays a campaign stage's first fight and freezes a few frames after a named moment, so a hit's flash, a crit's number pop or a skill's dim and ring are in the shot.
+`Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off][.v1|.v2]` plays a campaign stage's first fight and freezes a few frames after a named moment, so a hit's flash, a crit's number pop or a skill's dim and ring are in the shot.
 
-- `kind` is `hit` (a basic attack that does not crit), `crit` (a basic attack that crits), `skill` (the damage of a cast), `heal` or `death`.
+- `kind` is `hit` (a basic attack that does not crit), `crit` (a basic attack that crits), `skill` (the damage of a cast), `heal`, `buff` (a beneficial status landing, never a ward), `debuff` (a harmful status landing), `shield` (a ward gained) or `death`. These eight are the event classes the feel pass gives one look and one sound each.
 - `aspect` is optional: `ember`, `tide`, `verdant`, `gale`, `umbra` or `lumen`. It is the aspect of the unit that makes the moment (the caster of a skill, the healer, the unit that falls), on either side.
 - `.off` plays the fight with the pre-R12 hit feedback (`Juice.ForceForCapture`), for a side by side. Without it the profile is whatever `vfx.json` says (`juice.enabled`).
+- `.v1` and `.v2` force the R15 feel preset (`Feel.ForceForCapture`) whatever `feelPreset` in `vfx.json` says, so one batch can shoot both looks of the same moment. `.v1` is the R12 look, `.v2` the feel pass. `.off` wins over both: with the R12 pass off the feel pass is off too. `EMBERFALL_FEEL=v1` or `v2` does the same for a whole editor launch.
+- The shot is taken a fixed number of game frames after the moment arrives, and in v2 that number is per kind because the effects are short: hit 1, crit 1, skill 8, heal 8, buff 12, debuff 12, shield 5 (v1 and R12 use 3, 4, 6 and 14 for hit and crit, skill, heal and death). The v2 hit flash is a 0.06 s tint, so a later shot would miss it. The flash is held while the game is paused for the shot.
 - The separator is a dot because the text after the `=` becomes part of the PNG's name and a colon cannot be in a Windows file name. Stage ids have no dot.
 - The game rolls its own seed for a fight, so a moment the harness finds in a stage is a likelihood, not a promise. `DevHarness.exe --moment-survey` lists, per kind and aspect, the stages that hold it most often over eight seeds. When the live fight does not hold the moment the log says `PlayModeScreenshot: MOMENT-ABSENT <target>: no <kind> ... pick another stage`, no PNG is written, and the batch reports the target `FAILED: no PNG was requested in the log` within seconds. Retry just that target on another stage.
 - The log line `BattleMoment: line aspects players ... enemies ...` names the aspects in the fight, so the shot can be filed against the right fight.
