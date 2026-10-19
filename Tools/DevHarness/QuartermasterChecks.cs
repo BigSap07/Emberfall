@@ -251,8 +251,8 @@ namespace Emberfall.DevHarness
         private static void CheckQuartermasterStock(ContentDatabase db)
         {
             long now = SinkUnix(2025, 10, 9, 8);
-            GameSession a = QmSession(db, 30, 0);
-            GameSession b = QmSession(db, 30, 0);
+            GameSession a = QmSession(db, 36, 0);
+            GameSession b = QmSession(db, 36, 0);
             bool rolledA = Quartermaster.Open(a, now), rolledB = Quartermaster.Open(b, now + 600);
             Check(rolledA && rolledB && QmStockText(a) == QmStockText(b) && a.Profile.Quartermaster.Slots.Count == 6,
                   "THE STOCK IS A DAY'S, NOT A PLAYER'S MOMENT: two sessions opening at different times of one reward day get the same six pieces");
@@ -274,7 +274,7 @@ namespace Emberfall.DevHarness
             Check(onePerSlot, "the shelf holds one piece per configured slot, in the file's order");
             Check(ceiling && noUid, "over 120 days no piece is above the drop ceiling (Honed), and no stocked piece has a uid or a Sealed mark before it is bought");
 
-            GameSession tomorrow = QmSession(db, 30, 0);
+            GameSession tomorrow = QmSession(db, 36, 0);
             Quartermaster.Open(tomorrow, now + 86400L);
             Check(QmStockText(tomorrow) != QmStockText(a), "and the next reward day's stock is a different one");
 
@@ -282,7 +282,7 @@ namespace Emberfall.DevHarness
             int honedEarly = 0, honedLate = 0;
             for (int day = 0; day < 200; day++)
             {
-                GameSession e = QmSession(db, 12, 0), l = QmSession(db, db.AllStages.Count, 0);
+                GameSession e = QmSession(db, 36, 0), l = QmSession(db, db.AllStages.Count, 0);
                 Quartermaster.Open(e, now + day * 86400L);
                 Quartermaster.Open(l, now + day * 86400L);
                 for (int i = 0; i < e.Profile.Quartermaster.Slots.Count; i++)
@@ -291,7 +291,7 @@ namespace Emberfall.DevHarness
                     if (l.Profile.Quartermaster.Slots[i].Piece.Temper == ArmorTemper.Honed) honedLate++;
             }
             Check(honedLate > honedEarly,
-                  "a deeper frontier stocks more Honed pieces, as it drops more (" + honedEarly + " Honed in 200 days at 1-12 against " + honedLate + " at 6-12)");
+                  "a deeper frontier stocks more Honed pieces, as it drops more (" + honedEarly + " Honed in 200 days at 3-12 against " + honedLate + " at 6-12)");
         }
 
         // ------------------------------------------------------------------ 4. sale
@@ -347,13 +347,20 @@ namespace Emberfall.DevHarness
         {
             long now = SinkUnix(2025, 10, 9, 8);
 
-            // Locked: nothing cleared, the armor bag is shut.
+            // Locked: nothing cleared, and one stage short of 3-12.
             GameSession locked = QmSession(db, 0, 5000000);
             bool rolled = Quartermaster.Open(locked, now);
             string before = QmSnapshot(locked);
             QuartermasterResult lockedBuy = Quartermaster.Buy(locked, 0, now);
             Check(!rolled && !lockedBuy.Success && lockedBuy.Reason == QuartermasterRefusal.Locked && QmSnapshot(locked) == before && !Quartermaster.View(locked, now).Open,
-                  "LOCKED: before the armor bag opens nothing is stocked, a purchase is refused as Locked and the save is byte for byte as it was");
+                  "LOCKED: before 3-12 is cleared nothing is stocked, a purchase is refused as Locked and the save is byte for byte as it was");
+
+            // THE LEAD'S GATE: the shop opens when 3-12 is cleared (from 4-1), in its own unlock row, not with the armor bag at 1-12.
+            GameSession short35 = QmSession(db, 35, 5000000), open36 = QmSession(db, 36, 5000000);
+            StageDef gate = FeatureGate.UnlockStage(db, Feature.Quartermaster);
+            Check(gate != null && gate.DisplayCode == "3-12" && !Quartermaster.IsOpen(short35) && Quartermaster.IsOpen(open36)
+                  && FeatureGate.IsUnlocked(db, short35.Profile, Feature.Armor) && !Quartermaster.Open(short35, now) && Quartermaster.Open(open36, now),
+                  "THE SHOP OPENS AT 4-1: with 35 stages cleared (3-11) the armor bag is open and the Quartermaster is not; clearing 3-12 opens it (unlocks at " + (gate != null ? gate.DisplayCode : "none") + ")");
 
             // Stale: the shop was not opened today.
             GameSession stale = QmSession(db, 36, 5000000);

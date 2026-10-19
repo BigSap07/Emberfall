@@ -105,7 +105,7 @@ namespace Emberfall.UI.Screens
                 _headerSubtitle.text = "CLOSED";
                 _footer.text = "";
                 Text empty = EmberforgeUI.Label("Empty", _row,
-                    view.Active && !view.Open ? "The Quartermaster opens with the armor bag." : "The Quartermaster is closed.",
+                    view.Active && !view.Open ? FeatureGate.LockLine(App.Session.Content, Feature.Quartermaster) : "The Quartermaster is closed.",
                     UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.Sized(empty.rectTransform, ShelfWidth, CardHeight);
                 return;

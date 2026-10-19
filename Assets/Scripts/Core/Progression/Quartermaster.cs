@@ -12,7 +12,7 @@ namespace Emberfall.Core.Progression
         None,
         /// <summary>QuartermasterSwitch is off, or quartermaster.json or armor.json holds nothing.</summary>
         Off,
-        /// <summary>The armor bag is not open yet (FeatureEntryPoints, "screen:Quartermaster").</summary>
+        /// <summary>The shop is not open yet: 3-12 is not cleared (Feature.Quartermaster, FeatureEntryPoints "screen:Quartermaster").</summary>
         Locked,
         /// <summary>Today's stock has not been rolled yet: the shop was not opened (Quartermaster.Open).</summary>
         Stale,
@@ -55,7 +55,7 @@ namespace Emberfall.Core.Progression
     {
         /// <summary>False when the switch is off or the content sells nothing: draw nothing.</summary>
         public bool Active;
-        /// <summary>False while the armor bag is locked.</summary>
+        /// <summary>False until 3-12 is cleared.</summary>
         public bool Open;
         /// <summary>True when today's stock has not been rolled, until Quartermaster.Open is called.</summary>
         public bool Stale;
@@ -99,7 +99,7 @@ namespace Emberfall.Core.Progression
                 && session.Content.Armor != null && session.Content.Armor.IsUsable;
         }
 
-        /// <summary>True when the armor bag is open, asked through FeatureEntryPoints.</summary>
+        /// <summary>True when 3-12 is cleared, asked through FeatureEntryPoints.</summary>
         public static bool IsOpen(GameSession session)
         {
             return FeatureEntryPoints.Allows(session.Content, session.Profile, "screen:Quartermaster");
@@ -140,7 +140,7 @@ namespace Emberfall.Core.Progression
         /// <summary>
         /// Rolls today's stock if the shelf is from an earlier reward day (or was never rolled), and
         /// answers whether it did. Idempotent within a day. Does nothing when the shop is off or the
-        /// armor bag is locked. A screen calls this when it opens; Buy never does, so a purchase can
+        /// shop is locked. A screen calls this when it opens; Buy never does, so a purchase can
         /// only ever be of a shelf the player was shown.
         /// </summary>
         public static bool Open(GameSession session, long nowUnix)

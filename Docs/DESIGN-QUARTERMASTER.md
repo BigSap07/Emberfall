@@ -10,6 +10,12 @@ A daily stock of **rolled armor, one piece per slot (six), sold for Gold**, rest
 (04:00 UTC, the same clock as the daily loop and the sinks). A slot stays on the shelf as SOLD until
 the next restock. It is opened from the Forge (`QUARTERMASTER` button, entry id `forge.Quartermaster`).
 
+**It opens when 3-12 is cleared (from 4-1)**, in its own unlock row (`Feature.Quartermaster`, `onboarding.json`).
+This is the lead's default: the first build gated it with the armor bag at 1-12, and review found a Rough piece
+costs 20k Gold at 1-12 and 227k at 3-12 against 5k to 27k held, so the shop was visible and unreachable until
+chapter 4. The sizing below says the same thing: **in practice it is a chapter 4 and later sink**, which follows from
+Gold being level fuel until chapter 3. The prices are unchanged.
+
 Rolled armor bought with Gold is fine: Gold is earned. Rolled armor bought with **Sealed** Gold is
 not (a roll), so the shop spends `PlayerProfile.FreeGold` only and refuses Sealed Gold as `SealedGold`
 (see `DESIGN-SEALED.md`).

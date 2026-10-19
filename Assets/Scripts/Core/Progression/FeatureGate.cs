@@ -136,7 +136,7 @@ namespace Emberfall.Core.Progression
             new FeatureEntryPoint("screen:RelicShop", Feature.Relics, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Armory", Feature.Proving, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Archive", Feature.Recital, "ScreenRouter.Show"),
-            new FeatureEntryPoint("screen:Quartermaster", Feature.Armor, "ScreenRouter.Show"),
+            new FeatureEntryPoint("screen:Quartermaster", Feature.Quartermaster, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Campaign", Feature.Campaign, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Summon", Feature.Summon, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Formation", Feature.Heroes, "ScreenRouter.Show"),
@@ -178,7 +178,7 @@ namespace Emberfall.Core.Progression
             new FeatureEntryPoint("recital.Archive", Feature.Recital, "RecitalScreen"),
 
             // The Quartermaster's door (Docs/DESIGN-QUARTERMASTER.md), off the Forge.
-            new FeatureEntryPoint("forge.Quartermaster", Feature.Forge, "ForgeScreen")
+            new FeatureEntryPoint("forge.Quartermaster", Feature.Quartermaster, "ForgeScreen")
         };
 
         /// <summary>The router's screens that belong to no gated feature: the Hub, the shared

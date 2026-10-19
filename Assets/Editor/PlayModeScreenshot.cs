@@ -353,6 +353,17 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/Sinks/Recital with the sinks off", false, 111)]
         public static void CaptureRecitalSinksOff() { Begin("Screen:RecitalSinksOff"); }
 
+        // THE R17 GOLD AND DUST SINKS (Docs/DESIGN-QUARTERMASTER.md, Docs/DESIGN-RELIC-ENDGAME.md). Both are
+        // on by default, so no switch is forced; each target seeds the scratch profile through the rules.
+        [MenuItem("Emberfall/Capture/R17 sinks/Quartermaster", false, 120)]
+        public static void CaptureQuartermaster() { Begin("Screen:Quartermaster"); }
+
+        [MenuItem("Emberfall/Capture/R17 sinks/Quartermaster, after two buys", false, 121)]
+        public static void CaptureQuartermasterBought() { Begin("Screen:QuartermasterBought"); }
+
+        [MenuItem("Emberfall/Capture/R17 sinks/Relic Shop with upgrades", false, 122)]
+        public static void CaptureRelicShopUpgrade() { Begin("Screen:RelicShopUpgrade"); }
+
         [MenuItem("Emberfall/Capture/Heroes", false, 61)]
         public static void CaptureHeroes() { Begin("Screen:Heroes"); }
 
@@ -1625,6 +1636,9 @@ namespace Emberfall.EditorTools
                     case "ArchiveBought":
                     case "ArchiveSoldOut":
                     case "ArchivePicker": id = ScreenId.Archive; break;
+                    case "Quartermaster":
+                    case "QuartermasterBought": id = ScreenId.Quartermaster; break;
+                    case "RelicShopUpgrade": id = ScreenId.RelicShop; break;
                     case "ProvingSinksOn":
                     case "ProvingSinksOff": id = ScreenId.Proving; break;
                     case "RecitalSinksOn":
@@ -1765,6 +1779,7 @@ namespace Emberfall.EditorTools
                 // the switch is on or the page exists, since a shot of the wrong build is not evidence.
                 if (IsLoopScreen(name)) SeedLoop(app, name);
                 if (IsSinksScreen(name)) SeedSinks(app, name);
+                if (IsR17SinkScreen(name)) SeedR17Sinks(app, name);
                 if (name == "HubLoopOff") CheckLoopIsOff(app);
                 if (name == "ProvingSinksOff" || name == "RecitalSinksOff") CheckSinksAreOff(app);
 
@@ -2173,6 +2188,59 @@ namespace Emberfall.EditorTools
             }
             app.RefreshHud();
             Debug.Log("PlayModeScreenshot: seeded the sinks for " + name);
+        }
+
+        // THE R17 SINKS: the Quartermaster and the Relic Shop's upgrades. A separate block, kept apart
+        // from the sinks above.
+        private static bool IsR17SinkScreen(string name)
+        {
+            return name == "Quartermaster" || name == "QuartermasterBought" || name == "RelicShopUpgrade";
+        }
+
+        /// <summary>
+        /// Clears the campaign on the scratch profile (so the armor bag, the Quartermaster at 3-12 and the
+        /// relics at 3-1 are open) and then does what the target names, all through the rules: the
+        /// shelf is rolled by Quartermaster.Open and bought from by Quartermaster.Buy, the relics are
+        /// granted by GrantRelic and raised by UpgradeRelic. Scratch identity only.
+        /// </summary>
+        private static void SeedR17Sinks(GameApp app, string name)
+        {
+            if (!EditorScratchIdentity.IsScratch)
+            {
+                Debug.LogError("PlayModeScreenshot: refusing to seed the R17 sinks on a real identity.");
+                return;
+            }
+            GameSession session = app.Session;
+            PlayerProfile profile = session.Profile;
+            long now = TimeUtil.NowUnix();
+            List<StageDef> stages = session.Content.AllStages;
+            for (int i = 0; i < stages.Count; i++)
+                if (!profile.ClearedStageIds.Contains(stages[i].Id)) profile.ClearedStageIds.Add(stages[i].Id);
+            profile.StagesCleared = CampaignProgress.CountCleared(profile, session.Content);
+
+            if (name == "Quartermaster" || name == "QuartermasterBought")
+            {
+                profile.Gold = 60000000;
+                Quartermaster.Open(session, now);
+                if (name == "QuartermasterBought")
+                {
+                    Quartermaster.Buy(session, 0, now);
+                    Quartermaster.Buy(session, 2, now);
+                }
+            }
+            else if (name == "RelicShopUpgrade")
+            {
+                // Three relics at tiers 1, 2 and 3, and Dust left to show the next price and a button that works.
+                profile.RelicDust = 2000000;
+                List<RelicDef> relics = session.Content.Relics;
+                for (int i = 0; i < 3 && i < relics.Count; i++)
+                {
+                    session.GrantRelic(relics[i].Id);
+                    for (int t = 0; t < i; t++) session.UpgradeRelic(relics[i].Id, now);
+                }
+            }
+            app.RefreshHud();
+            Debug.Log("PlayModeScreenshot: seeded the R17 sinks for " + name);
         }
 
         /// <summary>The picker targets open the hero picker with a hero chosen, after the Show.</summary>

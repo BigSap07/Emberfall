@@ -37,7 +37,7 @@ namespace Emberfall.DevHarness
             new[] { "Friends", "ch1_4" }, new[] { "Fusion", "ch1_6" },
             new[] { "Talents", "ch1_12" }, new[] { "Armor", "ch1_12" }, new[] { "Forge", "ch1_12" },
             new[] { "Guilds", "ch2_1" }, new[] { "Proving", "ch2_4" }, new[] { "Recital", "ch2_8" },
-            new[] { "Relics", "ch3_1" }
+            new[] { "Relics", "ch3_1" }, new[] { "Quartermaster", "ch3_12" }
         };
 
         private const long OnboardingNow = 1760000000L;
@@ -436,7 +436,7 @@ namespace Emberfall.DevHarness
                 if (DecidedUnlocks[i][1].Length > 0 && db.GetStage(DecidedUnlocks[i][1]) == null) decided = false;
             }
             Check(decided && Enum.GetValues(typeof(Feature)).Length == DecidedUnlocks.Length,
-                  "onboarding.json's table is the decided one, one row per feature: Friends 1-4, Fusion 1-6, Talents, Armor and Forge 1-12, Guilds 2-1, Proving 2-4, Recital 2-8, Relics 3-1, the rest from the start");
+                  "onboarding.json's table is the decided one, one row per feature: Friends 1-4, Fusion 1-6, Talents, Armor and Forge 1-12, Guilds 2-1, Proving 2-4, Recital 2-8, Relics 3-1, Quartermaster 3-12, the rest from the start");
             Check(FeatureGate.LockLine(db, Feature.Fusion) == "UNLOCKS AT 1-6" && FeatureGate.LockLine(db, Feature.Campaign) == "",
                   "a locked feature's line reads \"" + FeatureGate.LockLine(db, Feature.Fusion) + "\", and an open one has none");
 
