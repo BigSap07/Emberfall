@@ -47,6 +47,7 @@ namespace Emberfall.DevHarness
                 CheckStorePass(db);
                 CheckStoreSave(db);
                 CheckStoreModes();
+                CheckStoreFlow(db);
                 CheckStoreOff(db);
             }
             finally
@@ -646,6 +647,150 @@ namespace Emberfall.DevHarness
                   "and only the test and live stores draw a buy button: coming soon and off draw none");
         }
 
+        // ------------------------------------------------------------------ 8b. the flow with the debug store
+
+        private sealed class FlowRig
+        {
+            public StoreTestRules Rules;
+            public SimulatedStore Store = new SimulatedStore();
+            public PurchaseFlow Flow;
+            public GameSession Session;
+            public int Saves;
+            public readonly List<PurchaseResult> Finished = new List<PurchaseResult>();
+            public readonly List<string> Failed = new List<string>();
+        }
+
+        private static FlowRig StoreRig(ContentDatabase db, GameSession session, string[] account, StoreMode mode, bool withBackend)
+        {
+            FlowRig rig = new FlowRig();
+            rig.Rules = StoreRulesFor(db);
+            rig.Session = session;
+            rig.Store.LoadAccount = () => account[0];
+            rig.Store.SaveAccount = text => account[0] = text;
+            rig.Flow = new PurchaseFlow(rig.Rules, withBackend ? rig.Store : null, mode, () => rig.Session, () => StoreNow(db), () => rig.Saves++);
+            rig.Flow.Finished += r => rig.Finished.Add(r);
+            rig.Flow.Failed += (id, text) => rig.Failed.Add(id + ": " + text);
+            List<StoreOffer> offers = new List<StoreOffer>(rig.Rules.Offers.Values);
+            rig.Flow.Start(offers);
+            return rig;
+        }
+
+        private static void CheckStoreFlow(ContentDatabase db)
+        {
+            List<HeroDef> five = StoreFiveStars(db);
+            string[] account = { null };
+
+            // A purchase end to end in the debug store.
+            GameSession s = StoreSession(db);
+            FlowRig a = StoreRig(db, s, account, StoreMode.Test, true);
+            string before = StoreSnapshot(s);
+            PurchaseResult begun = a.Flow.Buy("weekly", null);
+            Check(begun.Success && a.Flow.IsPending("weekly") && StoreSnapshot(s) == before && a.Saves == 0,
+                  "FLOW: Buy starts the purchase in the store and writes nothing to the save");
+            a.Flow.Tick(0.1);
+            Check(a.Finished.Count == 0 && StoreSnapshot(s) == before, "and the store has not answered yet, so nothing is granted");
+            a.Flow.Tick(0.5);
+            Check(a.Finished.Count == 1 && a.Finished[0].Success && s.Profile.Store.FindReceipt("DEBUG-000001") != null && s.Profile.Sealed.Slag == 200 && a.Saves == 1
+                  && a.Store.OpenCount == 0 && !a.Flow.IsPending("weekly"),
+                  "the store completes it: granted once with receipt DEBUG-000001, saved once, and the store told to close it (open purchases: " + a.Store.OpenCount + ")");
+
+            // A purchase that stays pending past the timeout grants nothing.
+            GameSession h = StoreSession(db);
+            string[] account2 = { null };
+            FlowRig held = StoreRig(db, h, account2, StoreMode.Test, true);
+            held.Store.AutoApprove = false;
+            string heldBefore = StoreSnapshot(h);
+            held.Flow.Buy("weekly", null);
+            held.Flow.Tick(PurchaseFlow.PendingTimeoutSeconds - 1.0);
+            bool stillPending = held.Flow.IsPending("weekly");
+            held.Flow.Tick(2.0);
+            Check(stillPending && !held.Flow.IsPending("weekly") && held.Failed.Count == 1 && held.Failed[0].Contains("Nothing was bought") && StoreSnapshot(h) == heldBefore && held.Saves == 0,
+                  "A PENDING PURCHASE THAT NEVER COMPLETES GRANTS NOTHING: held by the store for " + PurchaseFlow.PendingTimeoutSeconds + " seconds it is abandoned, reported, and the save is byte for byte as it was");
+
+            // Declined.
+            GameSession d = StoreSession(db);
+            FlowRig declined = StoreRig(db, d, new string[] { null }, StoreMode.Test, true);
+            declined.Store.AutoApprove = false;
+            string declinedBefore = StoreSnapshot(d);
+            declined.Flow.Buy("weekly", null);
+            declined.Store.Decline();
+            Check(declined.Failed.Count == 1 && declined.Failed[0].Contains("cancelled") && !declined.Flow.IsPending("weekly") && StoreSnapshot(d) == declinedBefore && declined.Saves == 0,
+                  "a cancelled purchase grants nothing and writes nothing");
+            Check(declined.Flow.Buy("weekly", null).Success, "and the same offer can be started again after a cancel");
+
+            // A second tap while one waits.
+            PurchaseResult twice = declined.Flow.Buy("weekly", null);
+            Check(!twice.Success && twice.Reason == PurchaseRefusal.NotAvailable, "a second Buy while the first waits for the store is refused");
+
+            // A late answer after the timeout still grants once: the player was charged.
+            held.Store.Approve();
+            Check(held.Finished.Count == 1 && held.Finished[0].Success && h.Profile.Store.Receipts.Count == 1 && h.Profile.Sealed.Slag == 200 && held.Store.OpenCount == 0,
+                  "a late answer after the timeout still grants once and closes (the player was charged), Sealed like any other");
+
+            // A purchase the store finished and nobody confirmed is delivered again, and granted once.
+            string[] acct3 = { null };
+            GameSession g = StoreSession(db);
+            SimulatedStore bare = new SimulatedStore();
+            bare.LoadAccount = () => acct3[0];
+            bare.SaveAccount = t => acct3[0] = t;
+            StoreTestRules r3 = StoreRulesFor(db);
+            bare.Initialize(new List<StoreOffer>(r3.Offers.Values), new SilentListener());
+            bare.Purchase(r3.Find("weekly").ProductId);
+            bare.Tick(1.0);
+            FlowRig again = StoreRig(db, g, acct3, StoreMode.Test, true);
+            Check(again.Finished.Count == 1 && again.Finished[0].Success && g.Profile.Sealed.Slag == 200 && again.Store.OpenCount == 0 && again.Saves == 1,
+                  "AN OPEN PURCHASE IS DELIVERED AGAIN AT THE NEXT START and granted once (the app was closed before the grant)");
+            FlowRig third = StoreRig(db, g, acct3, StoreMode.Test, true);
+            Check(third.Finished.Count == 0 && g.Profile.Sealed.Slag == 200, "and once it is confirmed it is not delivered a third time");
+
+            // Restore on a new profile, through the account.
+            string[] acct4 = { null };
+            GameSession oldP = StoreSession(db);
+            FlowRig bought = StoreRig(db, oldP, acct4, StoreMode.Test, true);
+            bought.Flow.Buy("starter", five[1].Id);
+            bought.Flow.Tick(1.0);
+            Check(bought.Finished.Count == 1 && bought.Finished[0].Success && bought.Store.RestorableCount == 1, "FLOW RESTORE: the Starter Pact is bought and the account remembers it");
+            GameSession newP = StoreSession(db);
+            FlowRig restored = StoreRig(db, newP, acct4, StoreMode.Test, true);
+            restored.Flow.Restore(offerId => "");
+            Check(restored.Flow.RestoreWaiting.Count == 1 && newP.Profile.Store.Receipts.Count == 0 && newP.Profile.FindHeroByDefId(five[1].Id) == null,
+                  "a restore of a pick offer waits for the pick: nothing is granted yet and the screen is told");
+            PurchaseResult finish = restored.Flow.FinishRestore(restored.Flow.RestoreWaiting[0][0], five[1].Id);
+            HeroInstance back = newP.Profile.FindHeroByDefId(five[1].Id);
+            Check(finish.Success && back != null && back.SealedCopiesHeld == 1 && restored.Flow.RestoreWaiting.Count == 0 && newP.Profile.Store.Receipts[0].Restored,
+                  "RESTORE ON A NEW PROFILE: after the pick the hero comes back Sealed, once, the receipt marked restored");
+            FlowRig restoredAgain = StoreRig(db, newP, acct4, StoreMode.Test, true);
+            string restoredSnapshot = StoreSnapshot(newP);
+            restoredAgain.Flow.Restore(offerId => five[1].Id);
+            Check(StoreSnapshot(newP) == restoredSnapshot, "and a second restore on that profile changes nothing");
+
+            // A weekly pack is not in the account after it is confirmed (consumable).
+            Check(a.Store.RestorableCount == 0, "a confirmed pack is closed and forgotten by the store: nothing to restore");
+
+            // Coming soon: no backend, no button, no purchase.
+            GameSession c = StoreSession(db);
+            FlowRig soon = StoreRig(db, c, new string[] { null }, StoreMode.ComingSoon, false);
+            string soonBefore = StoreSnapshot(c);
+            PurchaseResult tap = soon.Flow.Buy("weekly", null);
+            soon.Flow.Tick(10);
+            soon.Flow.Restore(offerId => "");
+            Check(!soon.Flow.CanBuy && !tap.Success && tap.Reason == PurchaseRefusal.ComingSoon && !soon.Flow.IsPending("weekly") && StoreSnapshot(c) == soonBefore && soon.Saves == 0,
+                  "COMING SOON: a release build has no buy path (CanBuy is false), a tap is refused as coming soon, and the save is byte for byte as it was");
+            FlowRig soonWithStore = StoreRig(db, c, new string[] { null }, StoreMode.ComingSoon, true);
+            soonWithStore.Flow.Buy("weekly", null);
+            soonWithStore.Flow.Tick(10);
+            Check(soonWithStore.Store.PendingCount == 0 && !soonWithStore.Store.IsReady && StoreSnapshot(c) == soonBefore,
+                  "and even with a store object present, coming soon never starts it and never asks it to purchase");
+        }
+
+        private sealed class SilentListener : IStoreBackendListener
+        {
+            public void OnPurchaseCompleted(string productId, string receiptId) { }
+            public void OnPurchaseFailed(string productId, StoreFailure reason, string detail) { }
+            public void OnRestoredPurchase(string productId, string receiptId) { }
+            public void OnRestoreFinished(bool success, string detail) { }
+        }
+
         // ------------------------------------------------------------------ 9. rollback
 
         private static void CheckStoreOff(ContentDatabase db)
@@ -696,6 +841,9 @@ namespace Emberfall.DevHarness
                 Path.Combine("Assets", "Scripts", "Core", "Data", "PurchaseGrant.cs"),
                 Path.Combine("Assets", "Scripts", "Core", "Progression", "PurchaseGrants.cs"),
                 Path.Combine("Assets", "Scripts", "Core", "Progression", "PurchaseLedger.cs"),
+                Path.Combine("Assets", "Scripts", "Core", "Progression", "PurchaseFlow.cs"),
+                Path.Combine("Assets", "Scripts", "Core", "Progression", "SimulatedStore.cs"),
+                Path.Combine("Assets", "Scripts", "Core", "Progression", "StoreBackend.cs"),
                 Path.Combine("Assets", "Scripts", "Core", "Model", "StoreState.cs")
             };
             List<string> files = new List<string>(core);
