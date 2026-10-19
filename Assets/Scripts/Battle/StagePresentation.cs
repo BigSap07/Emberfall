@@ -51,6 +51,11 @@ namespace Emberfall.Battle
         /// shrinking it is cheaper than widening every slot for it.</summary>
         public readonly Dictionary<string, float> ScaleMul = new Dictionary<string, float>();
 
+        /// <summary>The scale factor on a mannequin (an undrawn unit with no stand-in), on top of the v2
+        /// scale. 0.8 of 1.2 is 0.96: a placeholder is not upscaled past what R12 drew, because the
+        /// big ones (a golem-shaped boss at scale 1.2 is 2.7 tall at 1.2x) filled a third of the field.</summary>
+        public float MannequinScale = 1f;
+
         /// <summary>The mannequin faces its opponent in v2 (see the class comment).</summary>
         public bool MannequinFacesOpponent = true;
 
@@ -114,6 +119,9 @@ namespace Emberfall.Battle
                     c.ScaleMul[key] = value;
                 }
             }
+
+            c.MannequinScale = root.GetFloat("mannequinScale", 1f);
+            if (c.MannequinScale < 0.3f || c.MannequinScale > 1.5f) { c.Warnings.Add("stage-v2.json: mannequinScale is outside 0.3 to 1.5"); c.MannequinScale = 1f; }
 
             c.MannequinFacesOpponent = root.GetBool("mannequinFacesOpponent", true);
             return c;
@@ -179,7 +187,8 @@ namespace Emberfall.Battle
 
             float own_mul;
             v.Scale = Math.Max(0.3f, v.Scale) * BattleFraming.UnitScaleV2
-                      * (defId != null && ScaleMul.TryGetValue(defId, out own_mul) ? own_mul : 1f);
+                      * (defId != null && ScaleMul.TryGetValue(defId, out own_mul) ? own_mul : 1f)
+                      * (v.SpritePending ? MannequinScale : 1f);
             return v;
         }
     }
