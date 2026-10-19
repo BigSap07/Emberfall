@@ -53,7 +53,7 @@ Chapters 1 and 2 do not move. The plateau is now x6.0 to x7.0. It equals R13's c
 
 Sources: `logs\fng60-before-r16-seeds.log` (before) and `logs\task2-guard.md` (after).
 
-Four stuck walks are in both (23, 46, 51, 59). Walk 48 is cured. Walks 1, 6, 16 and 20 are new. Walks 0 to 19, the old guard, hold three of the new ones (1, 6, 16), which were green before and are the reds after the counterattack rule (section 5). Fusion A cannot move a reference walk: that player never ascends. The check is red until the curve is loosened (section 4). That is the point of widening it.
+Four stuck walks are in both (23, 46, 51, 59). Walk 48 is cured. Walks 1, 6, 16 and 20 are new. Walks 0 to 19, the old guard, hold three of the new ones (1, 6, 16), which were green before and are the reds after the counterattack rule (section 5). Fusion A cannot move a reference walk: that player never ascends. The check was red until the curve was loosened, and is green on 60 walks after it (section 4). That is the point of widening it.
 
 The solver's stuck scan reads the same 60 walks, so it costs three times as much per iteration.
 
@@ -70,19 +70,49 @@ Source: `data\sim-progress.md`, `data\solver-whatif-final.log`.
 
 Target (prompt): over 60 reference walks, 0 stuck, no ordinary stage with a worst tail over 12 extra sittings, every banded stage inside its band, the walls binding as designed.
 
-Two before columns, because the counterattack rule moved the walks (section 5). The honest before for the curve lever is the second one.
+Two before columns, because the counterattack rule moved the walks (section 5). The honest before for the curve lever is the second one. The third column is the result.
 
-| | R16 start: old engine, old curve | New engine, old curve |
-|---|---|---|
-| Stuck walks of 60 | 5 | 8 |
-| Stuck stages | 2-4, 2-6, 2-9, 4-2, 5-3 | 2-4, 2-6, 2-9, 3-7, 4-2 (twice), 5-4, 5-9 |
-| Ordinary stages with a worst tail over 12 | 2-3 21, 2-4 26, 2-5 16, 2-8 29, 2-10 47, 3-7 15, 3-10 21 | 2-3 21, 2-4 26, 2-5 16, 2-8 29, 2-10 47, 2-11 17, 3-4 45, 6-3 17 |
-| Walls with a worst tail over 12 | 2-6 30, 2-12 28, 4-12 13 | 2-6 30, 2-12 28 |
-| CEIL, graded stages inside band | 70 of 70 (1-1 and 1-2 are floor pinned, not graded) | not measured |
+| | Old engine, old curve | New engine, old curve | New engine, new curve |
+|---|---|---|---|
+| Stuck walks of 60 | 5 | 8 | **0** |
+| Stuck stages | 2-4, 2-6, 2-9, 4-2, 5-3 | 2-4, 2-6, 2-9, 3-7, 4-2 (twice), 5-4, 5-9 | none |
+| Ordinary stages with a worst tail over 12 | 2-3 21, 2-4 26, 2-5 16, 2-8 29, 2-10 47, 3-7 15, 3-10 21 | 2-3 21, 2-4 26, 2-5 16, 2-8 29, 2-10 47, 2-11 17, 3-4 45, 6-3 17 | none (largest tail 8, at 2-10) |
+| Walls with a worst tail over 12 | 2-6 30, 2-12 28, 4-12 13 | 2-6 30, 2-12 28 | none (largest tail 4, at 4-6) |
+| Power band, walk 0 (the guard reads this one) | inside | inside | 72 of 72 inside; highest x1.237 at 3-4, closest to a low edge 1-6 at x1.012 (low edge 1.00) |
+| CEIL, graded stages inside band | 70 of 70 (1-1 and 1-2 are floor pinned, not graded) | not measured | 70 of 70 (1-1 and 1-2 pinned) |
+| `CheckFusionNeverGates` on 60 walks | red, 5 stuck | red, 8 stuck | green |
 
-Sources: `data\tails-before.csv` and `data\tails-before-summary.md` (left column, byte identical to R13's baseline per review 2, `data\review\review2-task4-before-table.md`); `data\tails-new-engine-old-curve.csv` (right column). Worst tail counts stuck walks as 9999 in the raw rows and is listed here for cleared walks only.
+Sources: `data\tails-before.csv` and `data\tails-before-summary.md` (left column, byte identical to R13's baseline per review 2, `data\review\review2-task4-before-table.md`); `data\tails-new-engine-old-curve.csv` (middle column); `data\tails-after-summary.txt` and `data\tails-before-after.csv` (right column, all three columns per stage). Worst tail counts cleared walks only; a stuck walk is listed as stuck.
 
-**PLACEHOLDER: the after column.** The lead fills in the lever, the package (recommended power down by one shared percentage per chapter from chapter 2, enemy levels re-solved), the after table of stuck walks, worst tails and CEIL per stage, and the guard on 60 seeds.
+**The lever.** `recommendedPower` from `2-1` to `6-12` is lowered by one shared 8 percent. No stage is taken past x1.20 on the median of the 60 walks: the power band tops out at x1.25 and 15 to 24 stages already sat at x1.17 to x1.21 (`data\sim-progress.md`, the step labelled D). That cap holds 4 of the 60 chapter 2 to 6 stages unchanged (`ch3_4`, `ch5_11`, `ch6_7`, `ch6_10`) and lets 20 more move by less than 8 percent, so 56 move: 36 by the full 8 percent, 20 by 0.4 to 7.8 percent (`data\campaign-changes-cap8.csv`). Chapter 1 is untouched, so the walls at 1-6 to 1-12 stay as designed (their tails, CEIL and ratios are identical in the table below). The package was measured whole, after all of tasks 1, 2 and 5, because R13 showed spot fixes interact. The enemy levels of every moved stage are re-solved with `SolveStageLevelsAt` to the CEIL rate the stage read before, and the opening roster of all 56 moved (their `floorLevel` and `ceilingLevel` fall by 1 to 7 levels). `SolverTargetRatios` is re-read on the loosened content, so a solver what-if on it moves nothing. Sum of the change: 56 stages, 42,790 power taken off `recommendedPower`.
+
+Variants tried (`data\sim-progress.md`): the same step uncapped (-8 percent everywhere) leaves 0 stuck but a 22 and a 23 sitting tail at 2-9 and 2-10 and 6 stages over the band top; a looser cap (labelled cap11 in that log) leaves 1 stuck (seed 46 at 3-4, a stage the cap leaves loose). The capped 8 percent step is the one that met the target.
+
+**The walls** (extra sittings median/p90/max, then stuck walks; CEIL percent; median entry ratio). Source: `data\walls-before-after.txt`. Before is the new engine on the old curve.
+
+| Wall | Before | After | CEIL before to after | Ratio before to after |
+|---|---|---|---|---|
+| 1-6 | 0/1/4, 0 | 0/1/4, 0 | 71.8 to 71.8 | 1.076 to 1.076 |
+| 1-12 | 1/2/4, 0 | 1/2/4, 0 | 59.3 to 59.3 | 0.939 to 0.939 |
+| 2-6 | 0/5/30, 1 | 0/0/1, 0 | 62.7 to 66.6 | 1.106 to 1.194 |
+| 2-12 | 1/5/28, 0 | 0/0/0, 0 | 56.5 to 58.3 | 1.083 to 1.177 |
+| 3-6 | 0/1/3, 0 | 0/0/1, 0 | 68.0 to 65.3 | 1.143 to 1.208 |
+| 3-12 | 0/1/5, 0 | 0/0/3, 0 | 64.6 to 64.5 | 1.160 to 1.196 |
+| 4-6 | 0/0/3, 0 | 0/0/4, 0 | 64.1 to 64.6 | 1.136 to 1.200 |
+| 4-12 | 1/3/10, 0 | 0/0/0, 0 | 64.1 to 61.0 | 1.085 to 1.171 |
+| 5-6 | 0/2/10, 0 | 0/0/0, 0 | 63.2 to 62.4 | 1.083 to 1.175 |
+| 5-12 | 1/2/4, 0 | 0/0/0, 0 | 66.6 to 66.9 | 1.093 to 1.183 |
+| 6-6 | 0/0/1, 0 | 0/0/1, 0 | 62.7 to 58.8 | 1.195 to 1.204 |
+| 6-12 | 0/2/8, 0 | 0/0/0, 0 | 64.1 to 68.4 | 1.033 to 1.125 |
+
+The walls still bind: every chapter 2 to 6 wall keeps a CEIL of 58.8 to 68.4 percent, inside the wall band of 55 to 72, and a median ratio of x1.125 to x1.208, at the top of the band and not past it. The cost is that they bind less in sittings: the worst wall tail is 4 extra sittings, where it was 30.
+
+**Caveats.**
+- 30 stage readings across all 60 walks sit outside the power band (2-1 four times, 2-11 three times, 4-7, 3-3, 3-4, 2-6 and 2-7 twice each, three stages once). The guard reads walk 0 only and walk 0 is inside; this is the spread of 60 players, informational (`data\tails-after-summary.txt`).
+- 3-4 was already at x1.202 before the lever and is held by the cap; it reads x1.215 after, which is inside the noise of the re-draw, and it is the highest chapter 2 to 6 median.
+- The 56 moved stages change their opening battle, so their stage fingerprints move and `stage-fingerprint-baseline.txt` is regenerated for them (reason: this lever). ContentVersion moves as well.
+
+**PLACEHOLDER: the ContentVersion after value of the loosened curve, and the build-check run on the merged tree.** The lead fills these in when the sim sends them.
 
 ## 5. Counterattacks (owner decision 4, task 5)
 

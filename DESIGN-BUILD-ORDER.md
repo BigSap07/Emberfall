@@ -811,12 +811,21 @@ of a band is raised to the running maximum of every earlier low, marked with a s
 and each relaxation prints the `recommendedPower` that would retire it. At the derivation nothing
 needed relaxing.
 
-**PLACEHOLDER, R16 task 4 (loosening the curve): the lead fills this in from the task 4 result.**
-Two before columns exist, both over 60 reference walks. The pre-R16 engine on the pre-R16 curve: 5
-stuck (seeds 23, 46, 48, 51 and 59, at 4-2, 2-9, 5-3, 2-6 and 2-4). The R16 engine, with the
-counterattack rule, on the same curve: 8 stuck (`CheckFusionNeverGates` is red on exactly these
-until task 4 lands). The after column is not written yet.
-(`Docs/BALANCE-REPORT-R16.md`, Curve.)
+**R16 loosened the curve from chapter 2 on, and the reference player no longer sticks anywhere.** The
+pre-R16 engine on the pre-R16 curve left 5 of 60 reference walks stuck (seeds 23, 46, 48, 51 and 59,
+at 4-2, 2-9, 5-3, 2-6 and 2-4); the counterattack rule re-drew the walks and left 8 on the same curve.
+`recommendedPower` from `2-1` to `6-12` is now 8 percent lower, capped so that no stage's median over
+the 60 walks passes about x1.20 (the band tops out at x1.25): 56 of the 60 chapter 2 to 6 stages move,
+`ch3_4`, `ch5_11`, `ch6_7` and `ch6_10` are held by the cap, and chapter 1 is untouched, so walls 1-6
+to 1-12 are as designed. The enemy levels of every moved stage are re-solved with
+`SolveStageLevelsAt` to the CEIL rate the stage read before, and `SolverTargetRatios` is re-read on
+the loosened content. Result over 60 walks: 0 stuck, no stage with a tail over 12 extra sittings (the
+largest is 8, at `2-10`; walls 2-6, 2-12 and 4-12 fall from 30, 28 and 10 to 1, 0 and 0), walk 0
+inside the power band at every stage (highest x1.237, `3-4`), CEIL 70 of 70 graded stages in band, and
+`CheckFusionNeverGates` green on 60 walks. The walls bind in power and CEIL, less in sittings. The 56
+moved stages' opening rosters move, so their stage fingerprints and `ContentVersion` moved, and
+`stage-fingerprint-baseline.txt` was regenerated for them with a stated reason. Numbers and tables:
+`Docs/BALANCE-REPORT-R16.md`, Curve. The package was measured whole: R13 proved spot fixes interact.
 
 **Two costs were measured rather than argued, and both are written into `campaign.json` so the next
 pass does not rediscover them.** They are both open decisions now; see below.
