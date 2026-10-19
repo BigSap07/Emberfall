@@ -44,7 +44,7 @@ namespace Emberfall.UI.Screens
         private const int PickPerRow = 7;
         private const int PickPerPage = 14;
         private const float PickCardWidth = 150f;
-        private const float PickCardHeight = 180f;
+        private const float PickCardHeight = 196f;
 
         private Text _headerSubtitle;
         private RectTransform _body;
@@ -58,6 +58,8 @@ namespace Emberfall.UI.Screens
         // the hero picker (a starter pact, a contract, a paid selector tier)
         private bool _picking;
         private string _pickTitle = "";
+        /// <summary>What the offer gives besides the hero, one line under the picker title. Empty when there is none.</summary>
+        private string _pickNote = "";
         private readonly List<HeroDef> _pickHeroes = new List<HeroDef>();
         private int _pickPage;
         private string _chosen;
@@ -490,6 +492,7 @@ namespace Emberfall.UI.Screens
             _pickHeroes.Clear();
             _pickHeroes.AddRange(WayfarersRoad.SelectorHeroes(App.Session, stars));
             _pickTitle = "CHOOSE A " + stars + "-STAR  -  TIER " + tier + " OF THE PAID TRACK";
+            _pickNote = "";
             _pickConfirmLabel = "TAKE ";
             _pickPage = 0;
             _chosen = null;
@@ -552,6 +555,7 @@ namespace Emberfall.UI.Screens
                 if (h != null) _pickHeroes.Add(h);
             }
             _pickTitle = def.Name.ToUpperInvariant() + "  -  YOU HAVE PAID, CHOOSE YOUR HERO";
+            _pickNote = "";
             _pickConfirmLabel = "TAKE ";
             _pickPage = 0;
             _chosen = null;
@@ -791,6 +795,11 @@ namespace Emberfall.UI.Screens
                 if (def != null) _pickHeroes.Add(def);
             }
             _pickTitle = o.Name.ToUpperInvariant() + "  -  CHOOSE YOUR HERO";
+            // what the pact also gives, in its own words from the card: every line that is not the hero list
+            List<string> also = new List<string>();
+            for (int i = 0; i < o.Lines.Count; i++)
+                if (!o.Lines[i].StartsWith("One copy of a ") && !o.Lines[i].StartsWith("  ")) also.Add(o.Lines[i]);
+            _pickNote = also.Count > 0 ? "ALSO IN THE PACT: " + string.Join("  -  ", also.ToArray()) + "   -   " + o.PriceLabel : o.PriceLabel;
             _pickConfirmLabel = "BUY, TAKE ";
             _pickPage = 0;
             _chosen = null;
@@ -913,7 +922,12 @@ namespace Emberfall.UI.Screens
 
             float gridWidth = PickPerRow * PickCardWidth + (PickPerRow - 1) * 12f;
             RectTransform grid = UIBuilder.Node("Grid", _body);
-            UIBuilder.Box(grid, 0f, -64f, gridWidth, PickCardHeight * 2f + 12f, new Vector2(0.5f, 1f));
+            if (_pickNote.Length > 0)
+            {
+                Text note = EmberforgeUI.Label("Note", _body, _pickNote, UITheme.FontTiny, Emberforge.TextBody, TextAnchor.UpperCenter);
+                UIBuilder.Box(note.rectTransform, 0f, -50f, ContentWidth, 30f, new Vector2(0.5f, 1f));
+            }
+            UIBuilder.Box(grid, 0f, -92f, gridWidth, PickCardHeight * 2f + 12f, new Vector2(0.5f, 1f));
             UIBuilder.VStack(grid, 12f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
             RectTransform rowA = null;
             int first = _pickPage * PickPerPage;
@@ -928,7 +942,7 @@ namespace Emberfall.UI.Screens
                 BuildPickCard(rowA, _pickHeroes[i]);
             }
 
-            float y = 64f + PickCardHeight * 2f + 12f + 20f;
+            float y = 92f + PickCardHeight * 2f + 12f + 20f;
             UIButton back = EmberforgeUI.Button("Back", _body, "BACK", UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(back.Root, -(gridWidth * 0.5f) + 100f, -y, 200f, 56f, new Vector2(0.5f, 1f));
             back.OnClick(delegate { TryStepBack(); });
@@ -970,7 +984,9 @@ namespace Emberfall.UI.Screens
             RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", card, def, def.Stars, 96f);
             UIBuilder.Box(portrait, 0f, -UITheme.Space12, 96f, 96f, new Vector2(0.5f, 1f));
             Text label = EmberforgeUI.Label("Name", card, def.Name.ToUpperInvariant(), UITheme.FontTiny - 6, Emberforge.TextBody, TextAnchor.UpperCenter);
-            UIBuilder.Box(label.rectTransform, 0f, -(UITheme.Space12 + 100f), PickCardWidth - 12f, 34f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(label.rectTransform, 0f, -(UITheme.Space12 + 100f), PickCardWidth - 12f, 24f, new Vector2(0.5f, 1f));
+            Text role = EmberforgeUI.Label("Role", card, def.Role.ToString().ToUpperInvariant() + "  " + def.Aspect.ToString().ToUpperInvariant(), UITheme.FontTiny - 8, Emberforge.TextQuiet, TextAnchor.UpperCenter);
+            UIBuilder.Box(role.rectTransform, 0f, -(UITheme.Space12 + 126f), PickCardWidth - 8f, 22f, new Vector2(0.5f, 1f));
             Text own = EmberforgeUI.Label("Own", card, owned == null ? "NEW" : "OWNED  x" + owned.Copies, UITheme.FontTiny - 4,
                                           owned == null ? Emberforge.TextGold : Emberforge.TextQuiet, TextAnchor.MiddleCenter);
             UIBuilder.Box(own.rectTransform, 0f, 4f, PickCardWidth - 12f, 24f, new Vector2(0.5f, 0f));
