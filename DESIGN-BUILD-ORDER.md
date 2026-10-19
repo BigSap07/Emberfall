@@ -706,13 +706,21 @@ eight first seeds, because a conversion's roll makes one walk's roster one draw.
 decision 4.
 
 **The economy responds to shards now, not gold.** `CheckEconomyRespondsToIncome` scales gold and
-shards together on the back half of the campaign; the late-campaign ratio responds 0.6. Gold alone,
-still printed, responds 0.22, because gold stops at each hero's cap.
+shards together from `IncomeProbeFirstStage` on (a third of the way into the campaign, `3-1`, since
+R16; it was the back half, from `4-1`); the late-campaign ratio responds 0.6. Gold alone, still
+printed, responds 0.22, because gold stops at each hero's cap.
 **Since the economy merge the check reads the early window.** `CheckEconomyRespondsToIncome` walks
-8 matched players at 1x and 2.5x income and guards the mean entry ratio over `4-1` to `4-6`, before
-level caps bind, at a bar of 0.50. Before the merge's content that window read +0.94, after it
-+1.00. The late reading is printed only: it read +0.31 before and -0.11 after, with a per-player
-spread of about 0.5, which is draw noise for players at their caps.
+8 matched players at 1x and 2.5x income and guards the mean entry ratio over the first six scaled
+stages, before level caps bind, at a bar of 0.50. Before the merge's content that window read +0.94
+(at `4-1` to `4-6`), after it +1.00. The late reading is printed only: it read +0.31 before and -0.11
+after, with a per-player spread of about 0.5, which is draw noise for players at their caps.
+**R16 moved the window from `4-1` to `3-1`, and the reason is the fusion plateau (owner decision 1,
+tier 2 stride x1.5).** Under the lower top tier a fusing player stops depending on income from about
+`3-12` on: its roster and levels read the same at 1x and 2.5x, so the response at `4-1` fell to 0.12
+(spread -0.37 to 0.50), which is the plateau working and not the link between income and power being
+severed. The window now sits before the plateau. The three readings: 0.12 with the window at `4-1`,
+0.70 at `3-1` (spread 0.57 to 1.17, kept) and 0.32 at `2-1` (fails, because the early ratios are
+small). The bar is unchanged.
 
 **The R4 economy proposal is applied** (`Docs/ECONOMY-PROPOSAL-R4.md`, candidate F; owner sign-off
 2026-10-17). `1-1` to `1-6`, purses, shards, account XP, the per-wave drip and fusion pacing are
