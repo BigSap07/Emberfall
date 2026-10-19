@@ -1267,6 +1267,9 @@ namespace Emberfall.UI.Screens
 
         private IEnumerator Playback()
         {
+            // A fight starts with neither sound spent, whatever the last fight left behind.
+            _buffSounded = false;
+            _debuffSounded = false;
             yield return Wait(0.35f);
 
             for (int i = 0; i < _result.Events.Count; i++)
@@ -1294,6 +1297,12 @@ namespace Emberfall.UI.Screens
             // It plays what the record says and decides nothing, so a skip that never reaches
             // this line leaves the fight and its result exactly as they were.
             _world.Director.Play(e);
+            // A battle-start or round-start passive is its own beat: its buff or debuff sounds once too.
+            if (e.Type == BattleEventType.BattleStart || e.Type == BattleEventType.RoundStart)
+            {
+                _buffSounded = false;
+                _debuffSounded = false;
+            }
 #if UNITY_EDITOR
             HitJustPlayed = e.Type == BattleEventType.Damage && e.Status == StatusKind.None;
             if (e.Type == BattleEventType.Heal && e.Value > 0) _lastHealAt = Time.unscaledTime;

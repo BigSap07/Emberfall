@@ -453,8 +453,10 @@ namespace Emberfall.DevHarness
             // (a turn, a basic attack, a cast) and set where the sound plays.
             int clears = System.Text.RegularExpressions.Regex.Matches(battle, @"_buffSounded = false;").Count;
             int clearsD = System.Text.RegularExpressions.Regex.Matches(battle, @"_debuffSounded = false;").Count;
-            Check(clears == 3 && clearsD == 3 && battle.Contains("_buffSounded = true;") && battle.Contains("_debuffSounded = true;"),
-                  "FE9 WIRING (reads source): in v2 a buff and a debuff each sound once per action (cleared at TurnStart, BasicAttack and AbilityCast), not once per target or icon");
+            bool atFightStart = Regex.IsMatch(battle, @"private IEnumerator Playback\(\)\s*\{[^}]*?_buffSounded = false;\s*_debuffSounded = false;");
+            bool atRoundStart = Regex.IsMatch(battle, @"e\.Type == BattleEventType\.BattleStart \|\| e\.Type == BattleEventType\.RoundStart\)\s*\{\s*_buffSounded = false;\s*_debuffSounded = false;");
+            Check(clears == 5 && clearsD == 5 && atFightStart && atRoundStart && battle.Contains("_buffSounded = true;") && battle.Contains("_debuffSounded = true;"),
+                  "FE9 WIRING (reads source): in v2 a buff and a debuff each sound once per action, not once per target or icon: cleared when a fight's playback begins, at BattleStart and RoundStart (their passives are their own beat), and at TurnStart, BasicAttack and AbilityCast (" + clears + " sites)");
 
             // No ring aura is left in v2: every Vfx.Aura call in BattleScreen is behind !Feel.V2 (the one in
             // PlayAreaVfxOn is reached only through PlayTargetedVfx, which returns first in v2).
