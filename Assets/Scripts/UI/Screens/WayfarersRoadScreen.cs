@@ -32,7 +32,7 @@ namespace Emberfall.UI.Screens
         private const float TileWidth = 156f;
         private const float TileHeight = 320f;
         private const float TileGap = 10f;
-        private const float SummaryHeight = 128f;
+        private const float SummaryHeight = 172f;
         private const float RowTop = SummaryHeight + 12f;
         private const float PaidTop = RowTop + TileHeight + 12f;
         private const float PaidHeight = 104f;
@@ -199,20 +199,20 @@ namespace Emberfall.UI.Screens
             Text how = EmberforgeUI.Body("How", _summary,
                 "Points come from claiming the daily orders and the two chests. Unclaimed tiers lapse when the season ends.",
                 UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(how.rectTransform, 820f, -16f, 520f, 80f, new Vector2(0f, 1f));
+            UIBuilder.Box(how.rectTransform, 820f, -16f, 440f, 110f, new Vector2(0f, 1f));
 
             // Buying a tier: two earned purses, at most BuyMax a season.
             Text bought = EmberforgeUI.Label("Bought", _summary, "TIERS BOUGHT  " + view.Bought + " OF " + view.BuyMax,
                                              UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
-            UIBuilder.Box(bought.rectTransform, -190f, -16f, 340f, 26f, new Vector2(1f, 1f));
-            BuyButton("BuyValor", "BUY A TIER  -  " + HudTopBar.Format(view.ValorPrice) + " VALOR", -190f, -50f, view.CanBuyWithValor, PassCurrency.Valor);
-            BuyButton("BuyCoda", "BUY A TIER  -  " + HudTopBar.Format(view.CodaPrice) + " CODA", -190f, -92f, view.CanBuyWithCoda, PassCurrency.Coda);
+            UIBuilder.Box(bought.rectTransform, -28f, -14f, 340f, 26f, new Vector2(1f, 1f));
+            BuyButton("BuyValor", "BUY A TIER  -  " + HudTopBar.Format(view.ValorPrice) + " VALOR", -28f, -46f, view.CanBuyWithValor, PassCurrency.Valor);
+            BuyButton("BuyCoda", "BUY A TIER  -  " + HudTopBar.Format(view.CodaPrice) + " CODA", -28f, -98f, view.CanBuyWithCoda, PassCurrency.Coda);
         }
 
         private void BuyButton(string name, string label, float x, float y, bool can, PassCurrency currency)
         {
             UIButton b = EmberforgeUI.Button(name, _summary, label, UITheme.FontTiny, ForgeButtonKind.Secondary);
-            UIBuilder.Box(b.Root, x, y - 20f, 340f, 38f, new Vector2(1f, 1f));
+            UIBuilder.Box(b.Root, x, y, 340f, 44f, new Vector2(1f, 1f));
             b.Interactable = can;
             PassCurrency captured = currency;
             b.OnClick(delegate { OnBuy(captured); });
@@ -245,7 +245,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(mark.rectTransform, 0f, 0f, icon, icon, new Vector2(0.5f, 0.5f));
 
             Text line = EmberforgeUI.Body("Line", tile, t.Line, UITheme.FontTiny - 4, Emberforge.TextBody, TextAnchor.UpperCenter);
-            UIBuilder.Box(line.rectTransform, 0f, -150f, TileWidth - 14f, 64f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(line.rectTransform, 0f, -150f, TileWidth - 36f, 64f, new Vector2(0.5f, 1f));   // padded so a long line wraps inside the card
             Text detail = EmberforgeUI.Label("Detail", tile, t.Detail, UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(detail.rectTransform, 0f, -216f, TileWidth - 10f, 40f, new Vector2(0.5f, 1f));
 
@@ -296,8 +296,11 @@ namespace Emberfall.UI.Screens
                 RectTransform cell = UIBuilder.Node("Paid_" + p.Tier, _paid);
                 UIBuilder.Box(cell, x, -28f, TileWidth, PaidHeight - 30f, new Vector2(0f, 1f));
                 EmberforgeUI.PlainPanelOn(cell);
-                Text label = EmberforgeUI.Body("Line", cell, p.Tier + "  " + p.Line, UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
-                UIBuilder.FillParent(label.rectTransform, 6f);
+                // The tier number and the reward are two lines, so "20" and "4 HOURS" never read as one number.
+                Text tierLabel = EmberforgeUI.Label("Tier", cell, "TIER " + p.Tier, UITheme.FontTiny - 4, Emberforge.TextGold, TextAnchor.UpperCenter);
+                UIBuilder.Box(tierLabel.rectTransform, 0f, -6f, TileWidth - 12f, 22f, new Vector2(0.5f, 1f));
+                Text label = EmberforgeUI.Body("Line", cell, p.Line, UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperCenter);
+                UIBuilder.Box(label.rectTransform, 0f, -30f, TileWidth - 24f, PaidHeight - 66f, new Vector2(0.5f, 1f));
             }
         }
 
