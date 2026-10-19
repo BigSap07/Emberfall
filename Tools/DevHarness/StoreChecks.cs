@@ -828,7 +828,7 @@ namespace Emberfall.DevHarness
         private static void CheckStoreNoRandomPath(string contentDir)
         {
             string[] kinds = Enum.GetNames(typeof(GrantKind));
-            string expected = "Gold,Slag,Dust,IdleGoldHours,HeroCopy,HeroChoice,OwnedHeroCopy,PassPremium,Activate";
+            string expected = "Gold,Slag,Dust,DustSweeps,IdleGoldHours,HeroCopy,HeroChoice,OwnedHeroCopy,PassPremium,Activate";
             Check(string.Join(",", kinds) == expected,
                   "THE GRANT KINDS ARE A CLOSED LIST OF FIXED LINES (" + string.Join(", ", kinds) + "): adding one is a decision for review, and none rolls, draws or summons");
 
