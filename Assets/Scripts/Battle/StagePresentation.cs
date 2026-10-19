@@ -52,8 +52,9 @@ namespace Emberfall.Battle
         public readonly Dictionary<string, float> ScaleMul = new Dictionary<string, float>();
 
         /// <summary>The scale factor on a mannequin (an undrawn unit with no stand-in), on top of the v2
-        /// scale. 0.8 of 1.2 is 0.96: a placeholder is not upscaled past what R12 drew, because the
-        /// big ones (a golem-shaped boss at scale 1.2 is 2.7 tall at 1.2x) filled a third of the field.</summary>
+        /// scale. 0.7 of 1.2 is 0.84: a placeholder is drawn smaller than R12 drew it, because the
+        /// big ones (a golem-shaped boss at scale 1.2 is 2.7 tall at 1.2x) filled a third of the field
+        /// and at 0.8 still put their feet into their own name plates.</summary>
         public float MannequinScale = 1f;
 
         /// <summary>The mannequin faces its opponent in v2 (see the class comment).</summary>
