@@ -13,7 +13,7 @@ same call for Coda.
 - **The Armory** sells for Valor. It is opened from the Proving screen.
 - **The Archive** sells for Coda. It is opened from the Deep Recital screen.
 
-Both sit behind one flag, default off. With the flag off the build is the build before them.
+Both sit behind one flag. It shipped OFF; R19 turned it ON by default so the Store's Shops tab links them (see `DESIGN-STORE.md`). With the flag off the build is the build before them.
 
 ## The Belgian rule
 
@@ -118,11 +118,10 @@ sell is inert against those three.
 
 ## The flag
 
-- Define `EMBERFALL_SINKS_ON` in the scripting defines. `SinksSwitch.Enabled` is a writable static,
-  default false, a copy of `DailyLoopSwitch`. The harness and the capture targets force it and put it
-  back.
-- **How the owner turns it on:** add `EMBERFALL_SINKS_ON` to the scripting define symbols for the
-  build. **Rollback:** remove the define.
+- `SinksSwitch.Enabled` is a writable static, ON by default since R19. The harness and the capture targets
+  force it and put it back.
+- **How the owner turns it off:** add `EMBERFALL_SINKS_OFF` to the scripting define symbols for the
+  build. That is the rollback. (Until R19 the switch was off by default and `EMBERFALL_SINKS_ON` turned it on.)
 - Off means: neither screen is built (`ScreenRouter` builds them only inside the switch guard), no door
   leads to one, `SinkShop.Buy` refuses with `Off`, and `SinkShop.View` answers inactive. State already
   in a save is read and written back untouched, so switching off never costs a player what they bought.
