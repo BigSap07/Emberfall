@@ -30,10 +30,14 @@ namespace Emberfall.DevHarness
     internal static partial class Program
     {
         /// <summary>0 = the plain walk. 1 = the walk on the season calendar's clock with no purchase (the control).
-        /// 2 = the spender.</summary>
+        /// 2 = the spender. 3 = the spender who also buys the Hero Contract (its define is OFF in the build; the
+        /// walk turns it on for itself to measure what turning it on would do).</summary>
         private static int _walkStoreMode = 0;
 
         private static ContentDatabase _walkStoreDb;
+
+        /// <summary>--store-contracts also walks the spender who buys the Hero Contract (a fifth column).</summary>
+        private static bool _storeContracts;
 
         private static long StoreWalkClockStart(ContentDatabase db)
         {
@@ -47,13 +51,14 @@ namespace Emberfall.DevHarness
         /// road and claim the paid track. Called by the walk before it claims the idle chest.</summary>
         private static void StoreSpenderStep(ContentDatabase db, GameSession s, long now)
         {
-            if (_walkStoreMode != 2) return;
-            bool storeWas = StoreSwitch.Enabled, loopWas = DailyLoopSwitch.Enabled, roadWas = WayfarersRoadSwitch.Enabled;
+            if (_walkStoreMode < 2) return;
+            bool storeWas = StoreSwitch.Enabled, loopWas = DailyLoopSwitch.Enabled, roadWas = WayfarersRoadSwitch.Enabled, contractWas = HeroContractSwitch.Enabled;
             try
             {
                 StoreSwitch.Enabled = true;
                 DailyLoopSwitch.Enabled = true;
                 WayfarersRoadSwitch.Enabled = true;
+                HeroContractSwitch.Enabled = _walkStoreMode == 3;
                 StoreOffers.ClaimLedger(s, now);
                 StoreOfferDef growth = db.Store.Offer("growth_fund");
                 for (int i = 0; growth != null && i < growth.Milestones.Count; i++) StoreOffers.ClaimGrowth(s, i, now);
@@ -63,6 +68,14 @@ namespace Emberfall.DevHarness
                     string id = SpenderOrder[k];
                     string choice = id == "starter_pact" ? db.Store.Offer(id).HeroChoices[0] : null;
                     if (StoreOffers.Check(s, id, choice, now) == StoreRefusal.None) StoreOffers.Fulfil(s, id, choice, now);
+                }
+
+                if (_walkStoreMode == 3)
+                {
+                    // two contracts a month for the hero the spender concentrates on (limit 2 per hero per month)
+                    string target = StoreBestSealedHero(s, 5);
+                    for (int c = 0; c < 2 && target != null && s.Profile.FindHeroByDefId(target) != null; c++)
+                        if (StoreOffers.Check(s, "hero_contract", target, now) == StoreRefusal.None) StoreOffers.Fulfil(s, "hero_contract", target, now);
                 }
 
                 if (StoreOffers.PassOwned(s, now))
@@ -82,6 +95,7 @@ namespace Emberfall.DevHarness
                 StoreSwitch.Enabled = storeWas;
                 DailyLoopSwitch.Enabled = loopWas;
                 WayfarersRoadSwitch.Enabled = roadWas;
+                HeroContractSwitch.Enabled = contractWas;
             }
         }
 
@@ -121,6 +135,19 @@ namespace Emberfall.DevHarness
             return entry.Count == 0 ? 0 : Median(entry);
         }
 
+        /// <summary>The median extra sittings a stage cost beyond its own ladder floor (WallExtraSittings): what a wall costs.</summary>
+        private static string StoreExtra(List<EconomyRun> runs, int stageIndex)
+        {
+            List<int> extra = new List<int>();
+            for (int k = 0; k < runs.Count; k++)
+            {
+                if (stageIndex >= runs[k].Stages.Count) continue;
+                int ladder, floor;
+                extra.Add(WallExtraSittings(runs[k].Stages[stageIndex], out ladder, out floor));
+            }
+            return extra.Count == 0 ? "-" : Median(extra).ToString();
+        }
+
         private static int StoreStuck(List<EconomyRun> runs)
         {
             int stuck = 0;
@@ -153,9 +180,10 @@ namespace Emberfall.DevHarness
             List<EconomyRun> refSpend = StoreCurveRuns(db, walks, false, false, 2);
             List<EconomyRun> fuseNon = StoreCurveRuns(db, walks, true, true, 1);
             List<EconomyRun> fuseSpend = StoreCurveRuns(db, walks, true, true, 2);
+            List<EconomyRun> fuseContract = _storeContracts ? StoreCurveRuns(db, walks, true, true, 3) : null;
 
             Line("");
-            Line("  stage   rec.Pwr  ref non   ref spender   fusing non   fusing spender   (WALL = stage 6 or 12)");
+            Line("  stage   rec.Pwr  ref non   ref spender   fusing non   fusing spender" + (fuseContract != null ? "   + contracts" : "") + "   extra sittings, median (ref non / ref spender / fusing non / fusing spender)");
             for (int s = 0; s < db.AllStages.Count; s++)
             {
                 StageDef st = db.AllStages[s];
@@ -163,7 +191,9 @@ namespace Emberfall.DevHarness
                 if (!wall && st.Index != 1) continue;
                 Line("  " + st.DisplayCode.PadRight(7) + st.RecommendedPower.ToString().PadLeft(7)
                      + StoreRatio(db, refNon, s).PadLeft(10) + StoreRatio(db, refSpend, s).PadLeft(14)
-                     + StoreRatio(db, fuseNon, s).PadLeft(13) + StoreRatio(db, fuseSpend, s).PadLeft(17) + (wall ? "   WALL" : ""));
+                     + StoreRatio(db, fuseNon, s).PadLeft(13) + StoreRatio(db, fuseSpend, s).PadLeft(17)
+                     + (fuseContract != null ? StoreRatio(db, fuseContract, s).PadLeft(14) : "")
+                     + (wall ? "   WALL   " + StoreExtra(refNon, s) + " / " + StoreExtra(refSpend, s) + " / " + StoreExtra(fuseNon, s) + " / " + StoreExtra(fuseSpend, s) : ""));
             }
             Line("");
             Line("  stuck walks of " + walks + ": reference non " + StoreStuck(refNon) + ", reference spender " + StoreStuck(refSpend)

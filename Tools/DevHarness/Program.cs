@@ -69,6 +69,7 @@ namespace Emberfall.DevHarness
                 // --wall-study walks (a subset of "fuses,noconv,none"); --relevel is lever R2 of
                 // Docs/ECONOMY-PROPOSAL-R4.md, see RunRelevel.
                 if (args[i] == "--wall-modes" && i + 1 < args.Length) { _wallModes = args[++i]; continue; }
+                if (args[i] == "--store-contracts") { _storeContracts = true; continue; }
                 if (args[i] == "--store-curve")
                 {
                     storeCurve = 20;

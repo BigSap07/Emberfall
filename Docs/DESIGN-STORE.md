@@ -55,6 +55,32 @@ Capture targets (in `PlayModeScreenshot`): `Screen:HubStore`, `StorePacks`, `Sto
 
 Placeholder icons (listed for Pinoy): the Store rail button (a coin), the offer icons on the Packs tab (a crown for the Starter Pact, a chest for the packs, an hourglass for the Ledger, a gem for the Growth Fund, a sigil for the pass, crossed swords for the Contract), the reward icons on the pass tiles (hourglass, spiral, ingot, crown, sigil) and the four shop icons (plate, spiral, chest, diamond). All are `TextureLab` drawings. No art was required.
 
+## The curve check (R19 task 4)
+
+`DevHarness.exe --store-curve [walks]` (`StoreCurve.cs`) runs the R16 reference walk and the fusing walk twice each, 20 walks a column: as a non-spender and as a player who buys the Starter Pact, the Growth Fund, the Ember Ledger, the Weekly and Monthly Packs and the pass premium as each period reopens (the walk's clock is the season calendar's, and the non-spender is the control on that same clock, so only the purchases differ). The spender buys through the harness's direct fulfilment, so every good is Sealed. The pass is walked as a diligent player's: the road is filled each season and every paid tier claimed. With `--store-contracts` a fifth column adds two Hero Contracts a month for the hero the spender concentrates on. The full output is in `D:\Emberfall\handoff\R19-STORE\data\store-curve-20walks.txt` and `store-curve-20walks-with-contracts.txt`.
+
+Median entry power over `recommendedPower`, 20 walks:
+
+| Stage | Reference, non-spender | Reference, spender | Fusing, non-spender | Fusing, spender | Fusing, spender + contracts |
+|---|---|---|---|---|---|
+| 1-6 (wall) | x1.077 | x1.253 | x1.077 | x1.253 | x1.253 |
+| 1-12 (wall) | x0.939 | x1.055 | x0.980 | x1.186 | x1.582 |
+| 2-1 | x1.192 | x1.289 | x1.293 | x1.442 | x1.888 |
+| 2-6 (wall) | x1.189 | x1.195 | x1.961 | x2.251 | x2.672 |
+| 2-12 (wall) | x1.168 | x1.191 | x3.165 | x3.261 | x3.625 |
+| 3-6 (wall) | x1.199 | x1.207 | x4.395 | x4.918 | x5.266 |
+| 3-12 (wall) | x1.202 | x1.205 | x6.379 | x6.429 | x6.344 |
+| 4-12 (wall) | x1.178 | x1.183 | x6.804 | x6.793 | x6.854 |
+| 5-12 (wall) | x1.192 | x1.191 | x6.922 | x6.906 | x6.928 |
+| 6-12 (wall) | x1.128 | x1.121 | x6.547 | x6.557 | x6.549 |
+
+What it says:
+
+- **The walls still bind for the spender.** No walk is stuck in any column, the total sittings are 260 to 262 in every column, and no wall costs an extra sitting for any player in this instrument (a wall here is a power band, not a count of sittings). The spender's reference ratio stays inside the reference band from 2-6 on (x1.12 to x1.21, the non-spender's own range). It is x1.253 at 1-6 and x1.289 at 2-1, 0.3 and 3 percent over the x1.25 the band allows a reference walk, and the spender is ahead by 6 to 21 percent only in chapters 1 to 3.
+- **The advantage is early and it closes.** The fusing spender leads the fusing non-spender by 21 percent at 1-12 (the Starter Pact's 5-star and the first weeks of Gold), 12 percent at 2-6 and 12 percent at 3-6, then by under 2 percent from 3-12. From chapter 4 the plateau (x6.3 to x7.0) is the same for both, because the fusing player's power is capped by the ascension tiers and not by income.
+- **The Hero Contract is the offer that moves the curve.** With two contracts a month on one hero the fusing spender reads x1.582 at 1-12 (against x0.980 for the non-spender and x1.186 for the spender without it), x1.888 at 2-1 and x3.625 at 2-12. It also closes by 3-12. This is why the contract sits behind its own define, OFF: the early walls (1-12, 2-x) would be crossed with a large margin by anyone who buys it.
+- **No pack was scaled down.** No wall broke, so the packs are as sized in `store.json`. If the owner wants the early lead smaller, the levers are the Starter Pact's hero list (a 5-star is most of its early value), and the Growth Fund's and the pass's selector, not the hours.
+
 ## The flag
 
 `StoreSwitch.Enabled`, **ON by default**, like `QuartermasterSwitch`. Define `EMBERFALL_STORE_OFF` to roll back. Off means no screen is built, no door is drawn, `StoreOffers` answers Off and writes nothing, the idle claim is the claim it always was even with a card in the save, and the save is the document the build before wrote. State already in a save is kept and written back untouched. `CheckOfferOff` proves it.
