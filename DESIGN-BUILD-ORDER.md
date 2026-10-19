@@ -1218,8 +1218,8 @@ for 0.30 s and an aspect ring behind the caster), and a death flash, sink and sm
 `JuiceProfile` and `JuiceMath` are engine free, so `JuiceChecks.cs` proves flag off equals the
 old battle, the effect cap (40 live quads, 62 in all) and that the simulation baselines are
 unchanged. Settings has a SCREEN SHAKE toggle (`ScreenShakePrefs`, device only). The capture
-target `Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off]` stops on a hit, crit, skill, heal or
-death. See `Docs/DESIGN-JUICE.md`.
+target `Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off][.v1|.v2]` stops on a hit, crit, skill,
+heal, buff, debuff, shield or death. See `Docs/DESIGN-JUICE.md`.
 
 **A fight reads clean at 1x, behind one switch.** `"feelPreset"` in `vfx.json` (not hashed) ships
 `"v2"`; `"v1"` is the R12 battle exactly, and `EMBERFALL_FEEL` overrides it for one editor launch.
@@ -1228,7 +1228,8 @@ debuff, shield, death) one look and its own cue with no geometric rings, caps ef
 draws numbers 1.25 times larger, plays one sound per basic hit with at most 6 effect voices, draws
 units 1.2 times larger on a re-solved formation, shows Drifting Pilgrim and Thornback Boar for the two
 chapter 1 placeholders, and fixes facing (six heroes flipped, four with per-clip flips, enemy mannequins
-turned to face the heroes). Stage numbers live in the unhashed `stage-v2.json`. `FeelChecks.cs` and
+turned to face the heroes). Who a unit looks like (stand-ins, flips, a per-unit scale) lives in the
+unhashed `stage-v2.json`; the formation, camera and unit scale are `BattleFraming` constants. `FeelChecks.cs` and
 `StageChecks.cs` prove v1 equals R12 and that ids, stats, `ContentVersion` and the fingerprints are
 unchanged. `Screen:RosterSheet=<side>[.page][.clip][.v1|.v2]` photographs a whole side for the facing
 proof. See the v2 section of `Docs/DESIGN-JUICE.md`.
