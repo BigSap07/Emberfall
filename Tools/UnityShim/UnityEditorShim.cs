@@ -382,6 +382,7 @@ namespace UnityEditor
 
     public static class EditorPrefs
     {
+        public static bool HasKey(string key) { return false; }
         public static bool GetBool(string key, bool defaultValue) { return defaultValue; }
         public static void SetBool(string key, bool value) { }
         public static string GetString(string key, string defaultValue) { return defaultValue; }
