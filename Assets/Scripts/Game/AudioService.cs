@@ -169,7 +169,10 @@ namespace Emberfall.Game
             float now = Time.unscaledTime;
             if (!_cooldowns.TryFire(cueId, now, def.Cooldown)) return false;
 
-            if (def.StopMusic >= 0f) StopMusic(def.StopMusic);
+            // A stinger ends the battle track only when it plays a file of its own (StopsMusic). A silent
+            // stinger leaves the track playing under the result screen; the victory duck steps it back.
+            if (_config.StopsMusic(def)) StopMusic(def.StopMusic);
+            else if (def.StopMusic >= 0f) AudioCueLog.Record("STOP", cueId, "skipped, stinger silent");
 
             // A music one-shot (a stinger) under the music flag off is silent, as it was before R14.
             if (_config.IsSilentNow(def))

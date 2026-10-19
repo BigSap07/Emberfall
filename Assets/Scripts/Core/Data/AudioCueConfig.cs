@@ -153,6 +153,18 @@ namespace Emberfall.Core.Data
             return EffectiveFiles(cue).Count == 0;
         }
 
+        /// <summary>
+        /// Whether firing this cue ends the music (the victory and defeat stingers). With the music flag
+        /// on, a stinger that plays no file leaves the battle track under the result screen, so the
+        /// music only ducks and comes back; a stinger with a file ends the track as before. With the
+        /// flag off nothing sounds, so the old rule stands and the cue's stopMusic applies as it always did.
+        /// </summary>
+        public bool StopsMusic(AudioCueDef cue)
+        {
+            if (cue == null || cue.StopMusic < 0f) return false;
+            return !Music || !IsSilentNow(cue);
+        }
+
         /// <summary>The intro file of a music cue, or empty. Only a cue that plays has one.</summary>
         public string EffectiveIntro(AudioCueDef cue)
         {

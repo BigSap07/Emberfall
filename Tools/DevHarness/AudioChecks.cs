@@ -927,8 +927,21 @@ namespace Emberfall.DevHarness
             Check(deepest >= cfg.DuckGain - 0.0001f, "two skill moments in a row never duck deeper than " + cfg.DuckDb + " dB (deepest " + (20.0 * Math.Log10(deepest)).ToString("0.00") + " dB)");
 
             AudioCueDef vic = cfg.Cue("music.stinger.victory");
-            Check(vic != null && Math.Abs(vic.StopMusic - 0.8f) < 0.0001f,
-                  "the victory stinger still ends the battle track over 0.8 s (stopMusic " + (vic == null ? -1f : vic.StopMusic) + ")");
+            AudioCueDef lose = cfg.Cue("music.stinger.defeat");
+            Check(vic != null && lose != null && Math.Abs(vic.StopMusic - 0.8f) < 0.0001f && Math.Abs(lose.StopMusic - 0.8f) < 0.0001f,
+                  "the stingers keep stopMusic 0.8 s (victory " + (vic == null ? -1f : vic.StopMusic) + ", defeat " + (lose == null ? -1f : lose.StopMusic) + ")");
+
+            // A stinger ends the battle track only when it plays a file. Today both are empty, so the
+            // track plays on under the result and the victory duck steps it back and returns.
+            string stingerFile = Regex.Replace(jsonText, "\"files\": \\[\\](\\s*,\\s*\"note\": \"victory stinger)", "\"files\": [\"music/boss_loop\"]$1");
+            AudioCueConfig withFile = AudioCueConfig.FromJson(stingerFile);
+            AudioCueConfig withFileOff = AudioCueConfig.FromJson(stingerFile.Replace("\"music\": true", "\"music\": false"));
+            AudioCueDef vicFile = withFile.Cue("music.stinger.victory");
+            Check(stingerFile != jsonText && vicFile != null && vicFile.Files.Count == 1
+                  && !cfg.StopsMusic(vic) && !cfg.StopsMusic(lose)
+                  && withFile.StopsMusic(vicFile) && !withFile.StopsMusic(withFile.Cue("music.stinger.defeat"))
+                  && withFileOff.StopsMusic(withFileOff.Cue("music.stinger.victory")) && !cfg.StopsMusic(cfg.Cue("music.hub")),
+                  "a stinger with no file leaves the battle track playing under the result (only the duck moves it); one with a file ends the track over stopMusic; with the flag off the old rule stands");
         }
 
         private static void CheckMusicWiring(AudioCueConfig cfg, string root)
@@ -968,6 +981,8 @@ namespace Emberfall.DevHarness
             string playBody = playAt >= 0 && playEnd > playAt ? service.Substring(playAt, playEnd - playAt) : "";
             Check(playBody.Contains("_config.IsSilentNow(def)") && playBody.Contains("_config.EffectiveFiles(def)") && !playBody.Contains("def.IsSilent"),
                   "WIRING (reads source): a stinger obeys the music flag too, so a music one-shot is silent with the flag off");
+            Check(playBody.Contains("if (_config.StopsMusic(def)) StopMusic(def.StopMusic);") && playBody.Contains("\"STOP\"") && !playBody.Contains("if (def.StopMusic >= 0f) StopMusic("),
+                  "WIRING (reads source): a stinger stops the music only through StopsMusic, and a silent stinger writes a STOP skipped line");
 
             int skillAt = vfx.IndexOf("public void SkillMoment(", StringComparison.Ordinal);
             int skillEnd = skillAt < 0 ? -1 : vfx.IndexOf("// ----", skillAt, StringComparison.Ordinal);
