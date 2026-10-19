@@ -497,9 +497,22 @@ namespace Emberfall.DevHarness
             long gold0 = s.Profile.Gold, dust0 = s.Profile.RelicDust;
             StoreFulfilment c0 = StoreOffers.ClaimGrowth(s, 0, now);
             long goldPaid = s.Profile.Gold - gold0;
-            Check(c0.Success && goldPaid == s.IdleYield((long)Math.Round(def.Milestones[0].Hours * 3600.0)).Gold && s.Profile.Sealed.Gold == goldPaid
-                  && s.Profile.RelicDust - dust0 == (long)Math.Round(def.Milestones[0].DustSweeps * WayfarersRoad.DustPerSweep(s)),
-                  "a milestone pays its fixed hours as Sealed Gold and its sweeps as Dust (" + goldPaid + " Gold)");
+            Check(c0.Success && goldPaid == StoreOffers.MilestoneGold(s, def.Milestones[0]) && s.Profile.Sealed.Gold == goldPaid
+                  && s.Profile.RelicDust - dust0 == StoreOffers.MilestoneDust(s, def.Milestones[0]),
+                  "a milestone pays its fixed hours as Sealed Gold and its sweeps as Dust, priced at its own stage (" + goldPaid + " Gold)");
+
+            // FIXED AT THE MILESTONE: a player who clears to 6-12 and only then claims 2-12 gets the 2-12 amount, the same a
+            // player claiming at 2-12 gets, and never the 6-12 rate.
+            GameSession early = OfferSession(db, 2), late = OfferSession(db, 6);
+            StoreOffers.Fulfil(early, "growth_fund", null, now);
+            StoreOffers.Fulfil(late, "growth_fund", null, now);
+            long e0 = early.Profile.Gold, l0 = late.Profile.Gold;
+            StoreOffers.ClaimGrowth(early, 0, now);
+            StoreOffers.ClaimGrowth(late, 0, now);
+            long earlyPaid = early.Profile.Gold - e0, latePaid = late.Profile.Gold - l0;
+            long hourlyAtSixTwelve = late.IdleYield((long)Math.Round(def.Milestones[0].Hours * 3600.0)).Gold;
+            Check(earlyPaid > 0 && earlyPaid == latePaid && latePaid < hourlyAtSixTwelve,
+                  "THE GROWTH FUND IS FIXED AT EACH MILESTONE: claiming 2-12 from a 6-12 frontier pays " + latePaid + " Gold, the same as claiming it at 2-12, not the " + hourlyAtSixTwelve + " the claim-time rate would pay");
             string snap = OfferSnapshot(s);
             Check(StoreOffers.ClaimGrowth(s, 0, now).Reason == StoreRefusal.Claimed && OfferSnapshot(s) == snap, "and each milestone pays once");
 

@@ -695,6 +695,8 @@ namespace Emberfall.UI.Screens
                     }
                     y += 54f;
                 }
+                Text fixedNote = EmberforgeUI.Label("FixedNote", pane, "Each reward is priced at its own stage, whenever you claim it.", UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+                UIBuilder.Box(fixedNote.rectTransform, 28f, -(y + 6f), 900f, 28f, new Vector2(0f, 1f));
             }
             else
             {

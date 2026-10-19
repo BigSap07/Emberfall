@@ -504,13 +504,30 @@ namespace Emberfall.Core.Progression
             return chapter + "-" + stage.Index;
         }
 
+        /// <summary>The Gold a Growth Fund milestone pays: its hours of idle Gold priced at the MILESTONE'S OWN stage, never
+        /// at the frontier the claim is made from, so a player who hoards claims gets each milestone at its own rate.</summary>
+        public static long MilestoneGold(GameSession session, StoreMilestone m)
+        {
+            StageDef stage = session.Content.GetStage(m.StageId);
+            if (stage == null || m.Hours <= 0.0) return 0L;
+            return (long)Math.Floor(StatMath.IdleGoldPerSecond(session.Balance, stage) * (float)Math.Round(m.Hours * 3600.0));
+        }
+
+        /// <summary>The Dust a Growth Fund milestone pays: its sweeps at the milestone stage's own repeat-clear payout.</summary>
+        public static long MilestoneDust(GameSession session, StoreMilestone m)
+        {
+            StageDef stage = session.Content.GetStage(m.StageId);
+            if (stage == null || m.DustSweeps <= 0.0) return 0L;
+            return (long)Math.Round(m.DustSweeps * session.RelicDustForRepeatClear(stage));
+        }
+
         private static string MilestoneLine(GameSession session, StoreMilestone m)
         {
             StageDef stage = session.Content.GetStage(m.StageId);
             string pays = "";
-            if (m.Hours > 0.0) pays = PurchaseGrants.Describe(new GrantItem(GrantKind.IdleGoldHours, m.Hours), session) + " (Sealed)";
+            if (m.Hours > 0.0) pays = HoursText(m.Hours) + " of idle Gold at that stage = " + Big(MilestoneGold(session, m)) + " Gold (Sealed)";
             if (m.DustSweeps > 0.0)
-                pays += (pays.Length > 0 ? ", " : "") + PurchaseGrants.Describe(new GrantItem(GrantKind.DustSweeps, m.DustSweeps), session);
+                pays += (pays.Length > 0 ? ", " : "") + Num(m.DustSweeps) + " sweeps of Dust = " + Big(MilestoneDust(session, m)) + " Dust";
             return "Clear " + (stage != null ? StageLabel(stage) : m.StageId) + ": " + pays;
         }
 
@@ -686,8 +703,10 @@ namespace Emberfall.Core.Progression
             if (!session.Profile.HasClearedStage(m.StageId)) { r.Reason = StoreRefusal.NotReached; return r; }
 
             PurchaseGrant grant = new PurchaseGrant();
-            if (m.Hours > 0.0) grant.Add(new GrantItem(GrantKind.IdleGoldHours, m.Hours));
-            if (m.DustSweeps > 0.0) grant.Add(new GrantItem(GrantKind.DustSweeps, m.DustSweeps));
+            // FIXED rewards: priced at the milestone's own stage, then granted as plain Gold and Dust amounts.
+            long gold = MilestoneGold(session, m), dust = MilestoneDust(session, m);
+            if (gold > 0) grant.Add(new GrantItem(GrantKind.Gold, gold));
+            if (dust > 0) grant.Add(new GrantItem(GrantKind.Dust, dust));
             GrantResult g = PurchaseGrants.Apply(session, grant, null, nowUnix);
             if (!g.Success) { r.Reason = StoreRefusal.Nothing; return r; }
             Stamp(session, EffectiveDay(session, nowUnix));
