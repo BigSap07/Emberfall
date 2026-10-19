@@ -88,6 +88,14 @@ namespace Emberfall.Core.Data
         /// file or the block is absent, or when the block says "enabled": false.</summary>
         public JuiceProfile Juice = JuiceProfile.Legacy;
 
+        /// <summary>The R15 feel numbers the file asks for: the "v2" block when "feelPreset" says
+        /// "v2", else the V1 profile (also when the key or the file is absent).</summary>
+        public FeelProfile Feel = FeelProfile.V1;
+
+        /// <summary>The v2 numbers from the file's "v2" block whatever the preset says, for a capture
+        /// or an env var that asks for v2 while the file says v1.</summary>
+        public FeelProfile FeelV2 = FeelProfile.Shipped;
+
         public const string FallbackType = "impact";
 
         public VfxEntry ForAbility(string abilityId)
@@ -115,6 +123,8 @@ namespace Emberfall.Core.Data
             ReadTable(root["abilities"], c.Abilities, c);
             ReadTable(root["types"], c.Types, c);
             c.Juice = JuiceProfile.FromJson(root["juice"]);
+            c.FeelV2 = FeelProfile.V2From(root);
+            c.Feel = FeelProfile.PresetOf(root) == FeelProfile.PresetV2 ? c.FeelV2 : FeelProfile.V1;
             c.IsUsable = true;
             return c;
         }

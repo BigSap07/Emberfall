@@ -50,6 +50,10 @@ namespace Emberfall.Battle
         private float _knockScale = 1f;
         private float _knockWorld;
         private float _flash;
+        /// <summary>R15 v2: true while _flash is a hit's tint falling at _flashRate on the play
+        /// clock, ahead of the hit-stop test. False is the R12 flash, held by hit stop.</summary>
+        private bool _flashFree;
+        private float _flashRate;
         private float _bobSpeed = 1.6f;
         private float _bobHeight = 0.09f;
         private Coroutine _motion;
@@ -96,6 +100,15 @@ namespace Emberfall.Battle
             // the flash decay all wait, so the flash holds at its peak for the duration. Counted in
             // unscaled time so it is a real-time pause whatever the game clock is doing, and the
             // motion coroutines below wait on the same counter.
+            // R15 v2: a hit's flash is a short tint on its own clock. It falls before the freeze
+            // test, so hit stop can hold the motion but never the flash past its seconds.
+            if (_flashFree && _flash > 0f)
+            {
+                _flash = Mathf.Max(0f, _flash - Time.deltaTime * _flashRate);
+                Rig.SetFlash(_flash);
+                if (_flash <= 0f) _flashFree = false;
+            }
+
             if (_hitStop > 0f)
             {
                 _hitStop -= Time.unscaledDeltaTime;
@@ -116,7 +129,7 @@ namespace Emberfall.Battle
                 Rig.Body.localRotation = Quaternion.Euler(0f, sway, Mathf.Sin(_idlePhase * 0.8f) * 3.0f);
             }
 
-            if (_flash > 0f)
+            if (_flash > 0f && !_flashFree)
             {
                 if (Juice.On) _flash = Mathf.Max(0f, _flash - Time.deltaTime * JuiceMath.FlashDecayRate(Juice.Profile));
                 else _flash = Mathf.Max(0f, _flash - Time.deltaTime * 5.5f);
@@ -270,6 +283,16 @@ namespace Emberfall.Battle
             if (!Alive) return;
             _flash = critical ? 1f : 0.75f;
             if (Juice.On) _flash = JuiceMath.FlashPeak(Juice.Profile, critical);
+            // R15 v2: a tint (about 35 percent, crit about 55) that lasts FlashSeconds and is not
+            // held by hit stop. The white-out above is what v1 plays.
+            if (Feel.V2)
+            {
+                FeelProfile fp = Feel.Profile;
+                _flash = FeelMath.FlashPeak(fp, critical);
+                _flashRate = FeelMath.FlashDecayRate(fp, critical);
+                _flashFree = true;
+            }
+            else _flashFree = false;
             if (Rig != null) Rig.SetFlash(_flash);
             // Priority, highest first: death, the unit's own action, the hit reaction. A blow
             // landing while this unit is still swinging or casting flashes it and nothing more.
@@ -289,6 +312,7 @@ namespace Emberfall.Battle
         {
             if (Rig == null || !Alive) return;
             Rig.SetFlashColor(color);
+            _flashFree = false;                  // R15: only a blow's flash runs on its own clock
             _flash = Mathf.Max(_flash, amount);
             Rig.SetFlash(_flash);
         }
@@ -370,6 +394,7 @@ namespace Emberfall.Battle
             if (Director != null) Director.NoteDeath(this);
             Alive = false;
             _acting = false;
+            _flashFree = false;                  // R15: the death flash is the R12 one, held by its hit stop
             if (_motion != null) StopCoroutine(_motion);
             _motion = null;
             if (Rig == null) yield break;

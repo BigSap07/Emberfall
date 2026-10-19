@@ -52,6 +52,7 @@ namespace Emberfall.DevHarness
             CheckJuiceLanes(cfg.Juice);
             CheckJuiceCap(cfg.Juice);
             CheckJuiceWiring(root);
+            CheckFeel(db, contentDir, jsonText, cfg, root);
         }
 
         // ------------------------------------------------------------------ J1 config
@@ -224,13 +225,13 @@ namespace Emberfall.DevHarness
 
         /// <summary>Lines inside a block opened by a Juice.On condition (its if and its else), or
         /// inside a method that begins with if (!Juice.On) return/yield break.</summary>
-        private static bool[] JuiceGuardedLines(string[] lines)
+        private static bool[] JuiceGuardedLines(string[] lines, string flag = "Juice.On")
         {
             bool[] guarded = new bool[lines.Length];
             for (int i = 0; i < lines.Length; i++)
             {
                 string code = JuiceCodeOf(lines[i]);
-                if (code.Contains("Juice.On"))
+                if (code.Contains(flag))
                 {
                     int open = -1;
                     if (code.Contains("{")) open = i;
@@ -261,7 +262,7 @@ namespace Emberfall.DevHarness
                     }
                 }
                 // method whose first statement is the guard
-                if (code.Contains("Juice.On") && code.Contains("!Juice.On") && (code.Contains("return") || code.Contains("yield break")))
+                if (code.Contains(flag) && code.Contains("!" + flag) && (code.Contains("return") || code.Contains("yield break")))
                 {
                     int decl = i - 1;
                     while (decl >= 0 && (lines[decl].Trim() == "{" || lines[decl].Trim().Length == 0)) decl--;
