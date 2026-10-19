@@ -395,7 +395,7 @@ namespace Emberfall.UI.Screens
             int rerollCost = App.Session.RerollCost(focus);
             UIButton reroll = Action("Reroll", 0f, "REROLL", rerollCost + " SLAG",
                                      UITheme.Gold, TextureLab.SpiralIcon(64));
-            reroll.Interactable = App.Session.Profile.Slag >= rerollCost && rerollCost > 0;
+            reroll.Interactable = App.Session.Profile.FreeSlag >= rerollCost && rerollCost > 0 && !focus.Sealed;
             reroll.OnClick(delegate { OnReroll(uid); });
             Reason(_actions, "ReasonReroll", 0f,
                    rerollCost <= 0 ? "Cannot be rerolled" : SlagShortfall(rerollCost));
@@ -413,7 +413,7 @@ namespace Emberfall.UI.Screens
             // already filters: GameSession.CombineArmor refuses ALL THREE inputs if any one of them
             // is worn, including this piece itself.
             combine.Interactable = !equipped && nextTemper.HasValue && partners.Count == 2
-                                 && App.Session.Profile.Slag >= combineCost;
+                                 && App.Session.Profile.FreeSlag >= combineCost;
             string uidB = partners.Count > 0 ? partners[0].Uid : "";
             string uidC = partners.Count > 1 ? partners[1].Uid : "";
             combine.OnClick(delegate { OnCombine(uid, uidB, uidC); });
@@ -640,7 +640,7 @@ namespace Emberfall.UI.Screens
         /// the SHORTFALL rather than the price, because the price is already on the button.</summary>
         private string SlagShortfall(int cost)
         {
-            long have = App.Session.Profile.Slag;
+            long have = App.Session.Profile.FreeSlag;
             if (have >= cost) return "";
             return "Needs " + (cost - have) + " more Slag";
         }

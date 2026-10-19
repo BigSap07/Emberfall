@@ -617,8 +617,8 @@ namespace Emberfall.DevHarness
 
         private static void CheckSinksSave(ContentDatabase db)
         {
-            Check(SaveSerializer.CurrentVersion == 23 && SaveSerializer.BaseVersion == 22,
-                  "THE VERSIONS: this build reads up to 23 and a save with no sinks block is stamped 22");
+            Check(SaveSerializer.SinksVersion == 23 && SaveSerializer.BaseVersion == 22 && SaveSerializer.CurrentVersion >= 23,
+                  "THE VERSIONS: the sinks block is version 23 (this build reads up to " + SaveSerializer.CurrentVersion + ") and a save with no sinks block is stamped 22");
 
             GameSession s = SinkSession(db, 10, 12, 100000, 100000);
             string emptyJson = SaveSerializer.Serialize(s.Profile);

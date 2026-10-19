@@ -454,17 +454,43 @@ namespace Emberfall.Core.Save
         /// after buying would come back to caps erased and could buy the same capped item again. The
         /// bump refuses that, but only for a save that holds a purchase. The server's save_limits row
         /// must be raised to 23 before a cloud player with the switch on buys anything.
-        public const int CurrentVersion = 23;
+        ///
+        /// 24: the R17 core gaps. One version for the whole run, stamped ONLY on a document that
+        /// holds data a version 23 build would drop, exactly as 23 is. Today that is:
+        ///  - the Sealed marks (SealedState): the `sealed` block, `sealedCopies` on a hero and
+        ///    `sealed` on an armor piece. They record what a purchase granted, so a build that drops
+        ///    them would turn purchased goods into earned ones and let them into a summon.
+        ///  - any other R17 state, each added to HoldsVersion24Data when it is written.
+        /// Upgrade needs NO migration step: every key's absence is the empty state. A save that
+        /// holds none of it is byte for byte the document the build before wrote, version included.
+        /// The server's save_limits row must be raised to 24 before a cloud player holds any of it.
+        public const int CurrentVersion = 24;
 
         /// <summary>The version a save WITHOUT a sinks block says, which is the version before the
         /// sinks existed. See CurrentVersion.</summary>
         public const int BaseVersion = 22;
 
-        /// <summary>The version Serialize stamps on this profile: 23 when it holds a sinks block to
-        /// write, else the version before the sinks existed.</summary>
+        /// <summary>The version of the sinks block, which a save says when it holds one and none of
+        /// the version 24 data.</summary>
+        public const int SinksVersion = 23;
+
+        /// <summary>The version Serialize stamps on this profile: 24 when it holds any version 24
+        /// data, else 23 when it holds a sinks block to write, else the version before the sinks
+        /// existed. A document claims a version only when it holds data from it.</summary>
         public static int VersionOf(PlayerProfile profile)
         {
-            return profile != null && profile.Sinks != null && !profile.Sinks.IsEmpty ? CurrentVersion : BaseVersion;
+            if (HoldsVersion24Data(profile)) return CurrentVersion;
+            return profile != null && profile.Sinks != null && !profile.Sinks.IsEmpty ? SinksVersion : BaseVersion;
+        }
+
+        /// <summary>True when the profile holds anything a version 23 build would drop. THE ONE PLACE
+        /// that decides a save is a version 24 save: a task of the R17 run that adds saved state
+        /// adds its clause here and writes the data only when the clause is true.</summary>
+        public static bool HoldsVersion24Data(PlayerProfile profile)
+        {
+            if (profile == null) return false;
+            if (SealedState.ProfileHoldsAny(profile)) return true;
+            return false;
         }
 
         /// <summary>The version a serialised document says it is, or BaseVersion when it names none
@@ -655,6 +681,8 @@ namespace Emberfall.Core.Save
                 subs.Add(WriteRoll(piece.SubStats[i]));
             }
             aj.Set("subStats", subs);
+            // Version 24: a purchased piece (SealedState). Written only when true.
+            if (piece.Sealed) aj.Set("sealed", true);
             return aj;
         }
 
@@ -669,6 +697,7 @@ namespace Emberfall.Core.Save
             piece.Slot = EnumUtil.Parse(aj.GetString("slot", "Weapon"), ArmorSlot.Weapon);
             piece.Aspect = EnumUtil.Parse(aj.GetString("aspect", "Ember"), Aspect.Ember);
             piece.Temper = EnumUtil.Parse(aj.GetString("temper", "Rough"), ArmorTemper.Rough);
+            piece.Sealed = aj.GetBool("sealed", false);
 
             ArmorStatRoll primary = ReadRoll(aj["primary"]);
             if (primary == null)
@@ -926,6 +955,9 @@ namespace Emberfall.Core.Save
                 // Version 16, same reasoning again: absent is tier 0.
                 if (h.Ascension > 0) hj.Set("ascension", h.Ascension);
 
+                // Version 24: how many of the copies are Sealed (SealedState). Absent is none.
+                if (h.SealedCopiesHeld > 0) hj.Set("sealedCopies", h.SealedCopiesHeld);
+
                 heroes.Add(hj);
             }
             // Version 15: the heroes this build could not resolve, written back exactly as they
@@ -1034,6 +1066,11 @@ namespace Emberfall.Core.Save
             // only then - see CurrentVersion.
             if (profile.Sinks != null && !profile.Sinks.IsEmpty)
                 root.Set("sinks", profile.Sinks.Write());
+
+            // Version 24: the Sealed part of each purse, only once it holds something. The hero and
+            // armor marks are written on their own records above.
+            if (profile.Sealed != null && !profile.Sealed.IsEmpty)
+                root.Set("sealed", profile.Sealed.Write());
 
             return root.ToJson(true);
         }
@@ -1238,6 +1275,9 @@ namespace Emberfall.Core.Save
                 // gets it back.
                 h.Ascension = Math.Max(0, hj.GetInt("ascension", 0));
 
+                // Version 24: Sealed copies, never more than the copies there are. Absent is none.
+                h.SealedCopies = Math.Max(0, Math.Min(h.Copies, hj.GetInt("sealedCopies", 0)));
+
                 // THE VERSION 18 CLAMP (see CurrentVersion): a level outside this hero's tier is
                 // illegal state, whatever version wrote it. Not conditioned on the version, so the
                 // next cap change is migrated here too. A tier this build does not author has no
@@ -1389,6 +1429,10 @@ namespace Emberfall.Core.Save
             // Version 23. Absent reads as the empty block, which is true of every save written
             // before it and of every player who never bought anything.
             profile.Sinks = SinksState.Read(root["sinks"]);
+
+            // Version 24. Absent reads as the empty block, which is true of every save written
+            // before it and of every player who never held a purchased good.
+            profile.Sealed = SealedState.Read(root["sealed"]);
 
             List<JsonValue> lines = root.GetList("lines");
             for (int l = 0; l < lines.Count; l++) profile.Lines.Add(ReadLine(lines[l]));

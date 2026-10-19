@@ -424,7 +424,7 @@ namespace Emberfall.Core.Session
                 if (hero.Level >= cap) break;
                 int cost = LevelUpCost(hero);
                 if (Profile.Gold < cost) break;
-                Profile.Gold -= cost;
+                Profile.SpendGoldDeterministic(cost);   // a level-up is a deterministic sink: Sealed Gold is welcome, and goes first
                 hero.Level = Math.Min(cap, NextLevelOf(hero));
                 result.GoldSpent += cost;
                 result.LevelsGained++;
@@ -482,7 +482,11 @@ namespace Emberfall.Core.Session
             result.LevelBefore = TierLevelOf(hero);
             result.CopiesSpent = cost;
             int landing = AscensionLanding(hero, hero.Ascension + 1);
+            // Ascension of the same hero is a deterministic sink: it takes Sealed copies, and takes
+            // them first so the copies left are as free as they can be.
+            int sealedBefore = hero.SealedCopiesHeld;
             hero.Copies -= cost;
+            hero.SealedCopies = Math.Max(0, sealedBefore - cost);
             hero.Ascension++;
             hero.Level = landing;
             result.ToTier = hero.Ascension;
@@ -651,9 +655,10 @@ namespace Emberfall.Core.Session
             }
             foreach (KeyValuePair<HeroInstance, int> kv in taken)
             {
-                int spare = kv.Key.Copies - (Profile.IsDeployed(kv.Key.Uid) ? 1 : 0);
+                int spare = ConversionSpare(kv.Key);
                 if (kv.Value > spare)
-                    return kv.Key.DisplayName + " cannot give " + kv.Value + " (has " + spare + " to spare).";
+                    return kv.Key.DisplayName + " cannot give " + kv.Value + " (has " + spare + " to spare"
+                        + (kv.Key.SealedCopiesHeld > 0 ? "; Sealed copies never enter a conversion" : "") + ").";
             }
             if (IsSeedAspect(target))
             {
@@ -663,6 +668,20 @@ namespace Emberfall.Core.Session
             if (points < Balance.ConversionPointsRequired)
                 return "Worth " + points + " of the " + Balance.ConversionPointsRequired + " a conversion needs.";
             return null;
+        }
+
+        /// <summary>
+        /// How many bodies of this hero a conversion may take: the copies, less the one a deployed
+        /// hero keeps on the team, and less every SEALED copy (SealedState), which never enters a
+        /// conversion. The deployed body and a Sealed body can be the same body, so the floor is the
+        /// larger of the two, not their sum. The one answer the conversion screen and
+        /// ConversionBlocker both read.
+        /// </summary>
+        public int ConversionSpare(HeroInstance hero)
+        {
+            if (hero == null) return 0;
+            int kept = Math.Max(hero.SealedCopiesHeld, Profile.IsDeployed(hero.Uid) ? 1 : 0);
+            return Math.Max(0, hero.Copies - kept);
         }
 
         private static string Article(Aspect aspect, bool capital)
@@ -1488,7 +1507,11 @@ namespace Emberfall.Core.Session
             if (piece == null) return false;
             if (Profile.HeroWearingArmor(armorUid) != null) return false;
 
-            Profile.Slag += SalvageValue(piece);
+            // Salvage is deterministic, so a Sealed piece may be salvaged. What it pays is Sealed
+            // Slag: otherwise a purchased piece could be turned into Slag that a reroll accepts.
+            int paid = SalvageValue(piece);
+            Profile.Slag += paid;
+            if (piece.Sealed) Profile.Sealed.Slag += paid;
             Profile.OwnedArmor.Remove(piece);
             return true;
         }
@@ -1508,11 +1531,12 @@ namespace Emberfall.Core.Session
         {
             ArmorPiece piece = Profile.FindArmor(armorUid);
             if (piece == null) return false;
+            if (piece.Sealed) return false;   // a reroll is a gamble: no purchased piece enters it
             ArmorConfig config = Content != null ? Content.Armor : null;
             if (config == null || !config.IsUsable) return false;
 
             int cost = RerollCost(piece);
-            if (Profile.Slag < cost) return false;
+            if (Profile.FreeSlag < cost) return false;   // and no purchased Slag pays for one
 
             int seed = ArmorSeed(nowUnix, PlayerProfile.SlotIndex(piece.Slot), Profile.OwnedArmor.Count + piece.SubStats.Count);
             if (!ArmorRoller.Reroll(config, piece, seed)) return false;
@@ -1557,6 +1581,7 @@ namespace Emberfall.Core.Session
             ArmorPiece b = Profile.FindArmor(armorUidB);
             ArmorPiece c = Profile.FindArmor(armorUidC);
             if (a == null || b == null || c == null) return false;
+            if (a.Sealed || b.Sealed || c.Sealed) return false;   // a combine is a gamble: no purchased piece enters it
             if (a.Slot != b.Slot || a.Slot != c.Slot) return false;
             if (a.Temper != b.Temper || a.Temper != c.Temper) return false;
 
@@ -1576,7 +1601,7 @@ namespace Emberfall.Core.Session
             if (config == null || !config.IsUsable) return false;
 
             int cost = CombineCost(outputTemper.Value);
-            if (Profile.Slag < cost) return false;
+            if (Profile.FreeSlag < cost) return false;   // and no purchased Slag pays for one
 
             int baseSeed = ArmorSeed(nowUnix, PlayerProfile.SlotIndex(a.Slot), Profile.OwnedArmor.Count);
             Aspect aspect = ArmorRoller.RollAspect(baseSeed + 1);
@@ -2564,15 +2589,18 @@ namespace Emberfall.Core.Session
 
         public bool CanSummon
         {
-            get { return Profile.Shards >= Balance.SummonCost; }
+            get { return Profile.FreeShards >= Balance.SummonCost; }
         }
 
         public SummonOutcome Summon(int seed, long nowUnix)
         {
             SummonOutcome outcome = new SummonOutcome();
-            if (Profile.Shards < Balance.SummonCost)
+            // A summon is a gamble: it spends FREE Shards only, never the Sealed part of the purse.
+            if (Profile.FreeShards < Balance.SummonCost)
             {
-                outcome.Message = "Not enough Ember Shards.";
+                outcome.Message = Profile.Shards >= Balance.SummonCost
+                    ? "Sealed Shards never enter a summon."
+                    : "Not enough Ember Shards.";
                 return outcome;
             }
 
