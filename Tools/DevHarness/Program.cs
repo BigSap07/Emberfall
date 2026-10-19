@@ -17387,6 +17387,36 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
+        /// THE ENTRY READING OF A STAGE, and the one stage where it has to look ahead. The walk wears
+        /// its best armor at the START of a sitting (EquipBestOwnedArmor), and the entry reading is
+        /// taken before the first sitting. For every stage but one that costs nothing: the line wears
+        /// what it banked last sitting, and the reading lags by at most one drop. The stage right
+        /// after armor opens is the exception. The walk banks every drop from 1-1 on and wears none
+        /// of it until 1-12 is cleared, so at 2-1 the reading found armor 0 while the sitting that
+        /// follows fights in a full set - a median x1.047 where a player who wears what they hold
+        /// reads x1.145 (20 walks, R16). That is a reading artifact, not a gap in the economy, and it
+        /// understated 2-1's entry power, and so the recommendedPower the solver derives from it, by
+        /// the whole armor share. So on that one stage the reading is taken as the player would
+        /// stand once they had worn their best owned set, and the equipment is put back after, which
+        /// leaves the walk itself, its seeds and every later reading exactly as they were.
+        /// </summary>
+        private static int ArrivalTeamPower(ContentDatabase db, GameSession session, StageDef stage)
+        {
+            PlayerProfile profile = session.Profile;
+            StageDef opens = FeatureGate.UnlockStage(db, Feature.Armor);
+            if (opens == null || stage == null || stage.GlobalIndex != opens.GlobalIndex + 1)
+                return profile.EffectiveTeamPower(db);
+
+            string[][] worn = new string[profile.Heroes.Count][];
+            for (int h = 0; h < worn.Length; h++) worn[h] = (string[])profile.Heroes[h].EquippedArmor.Clone();
+            EquipBestOwnedArmor(db, session);
+            int power = profile.EffectiveTeamPower(db);
+            for (int h = 0; h < worn.Length; h++)
+                for (int s = 0; s < worn[h].Length; s++) profile.Heroes[h].EquippedArmor[s] = worn[h][s];
+            return power;
+        }
+
+        /// <summary>
         /// One simulated player, start of the campaign to wherever they stop. Verbose prints the
         /// table; silent is for the responsiveness check, which runs this more than once.
         /// </summary>
@@ -17433,7 +17463,7 @@ namespace Emberfall.DevHarness
                 // Read BEFORE the first sitting of this stage runs. The band the curve guard
                 // enforces is specified at the moment the player first attempts the stage, which
                 // is here and not at the bottom of the loop.
-                outcome.EntryPower = profile.EffectiveTeamPower(db);
+                outcome.EntryPower = ArrivalTeamPower(db, session, stage);
                 outcome.EntryBarePower = profile.TeamPower();
                 outcome.EntryRosterPower = DeployedRosterPowerAtLevelOne(profile, db.Balance);
                 outcome.EntryLine = DescribeLine(session);
@@ -19367,11 +19397,12 @@ namespace Emberfall.DevHarness
         //
         // WHAT IT SETS, per stage, in this order.
         //
-        //   recommendedPower = entry power / the MIDDLE of that stage's band. x1.20 on an ordinary
-        //   chapter 1 stage and on the four tutorial stages, x1.025 on a chapter 1 wall, x1.15 on
-        //   an ordinary chapter 2 stage, x0.985 on a chapter 2 wall. The middle rather than an edge
-        //   is the entire point: an edge is in band on the day it is written and out of band on the
-        //   next thing that moves player power, which is exactly what happened here.
+        //   recommendedPower = entry power / that stage's TARGET RATIO (SolverTargetRatios), the
+        //   per-stage curve of Docs/ECONOMY-PROPOSAL-R4.md as the shipped content reads it. It was the
+        //   MIDDLE of a four-kind band (x1.20 ordinary chapter 1 and tutorial, x1.025 chapter 1 wall,
+        //   x1.15 ordinary later, x0.985 later wall) until the bands became a per-stage table. A target
+        //   inside the band rather than on an edge is the point: an edge is in band on the day it is
+        //   written and out of band on the next thing that moves player power.
         //
         //   The levels underneath it, so the CEIL band still reads in range at the new number.
         //   Required power tracks enemy scale almost exactly - every enemy in enemies.json carries
@@ -19401,13 +19432,47 @@ namespace Emberfall.DevHarness
         // the whole answer is one rounding of one ratio however many walks it takes to settle. See
         // StageBaseline for what re-rounding an already-rounded table did when it was allowed to.
 
-        // THESE FOUR MIDDLES DESCRIBE THE PRE-PROPOSAL BANDS (Docs/ECONOMY-PROPOSAL-R4.md). The shipped table
-        // was moved off them to the per-stage bands of PowerBandFor, and re-running the solver walks it back
-        // toward them and undoes the proposal. Their values are deliberately unchanged.
-        private const float SolverMiddleOrdinaryChapter1 = 1.20f;
-        private const float SolverMiddleWallChapter1 = 1.025f;
-        private const float SolverMiddleOrdinaryLater = 1.15f;
-        private const float SolverMiddleWallLater = 0.985f;
+        // THE SOLVER AIMS AT A PER-STAGE TARGET RATIO, not at four band middles. The four middles
+        // (x1.20 ordinary chapter 1, x1.025 chapter 1 wall, x1.15 ordinary later, x0.985 later wall)
+        // described the bands before Docs/ECONOMY-PROPOSAL-R4.md. The shipped table was moved off them
+        // to the per-stage bands of PowerBandFor and to the ratios the R4 ratchet converged on, and a
+        // solver that still aimed at the middles walked the table back and undid the proposal.
+        //
+        // The ratchet's per-stage targets were never tabulated (the proposal says so), so this is the
+        // table: entry power over recommendedPower at each of the 72 stages, read off the reference
+        // walk (first seed) on the shipped content, in global stage order. It is the SHAPE of the
+        // curve, kept as data: 1-1 to 1-4 at the tutorial's x1.20, 1-5 to 1-6 breezy, 1-7 to 1-11
+        // falling to x0.965, 1-12 the first wall at x0.897, and chapter 2 on at x1.00 to x1.18 with the
+        // tight and loose stages the ratchet left. Every value sits inside PowerBandFor's band (the
+        // solver prints a line for any that does not). Running the solver on content that already
+        // has this shape changes nothing; running it after a hero or an economy change moves the
+        // recommendedPower of each stage and keeps the ratio.
+        //
+        // A stage past the table's end (a longer campaign) falls back to the middle of its band.
+        private static readonly float[] SolverTargetRatios =
+        {
+            1.1999f,  1.2002f,  1.2001f,  1.1975f,  1.1849f,  1.0116f,
+            1.0683f,  1.0663f,  1.0216f,  0.9847f,  0.9652f,  0.8974f,
+            1.0867f,  1.0227f,  1.0509f,  1.0289f,  1.0213f,  1.0576f,
+            1.0488f,  1.0482f,  1.0670f,  1.0513f,  1.1009f,  1.0535f,
+            1.0257f,  1.0523f,  1.1395f,  1.1701f,  1.0599f,  1.1095f,
+            1.0246f,  1.0220f,  1.0583f,  1.0590f,  1.1299f,  1.1451f,
+            1.0438f,  1.0515f,  1.1258f,  1.1193f,  1.1157f,  1.1338f,
+            1.1788f,  1.1235f,  1.1412f,  1.0938f,  1.0836f,  1.0707f,
+            1.0757f,  1.0766f,  1.0279f,  1.0703f,  1.0247f,  1.0620f,
+            1.1149f,  1.0715f,  1.0236f,  1.1258f,  1.1760f,  1.0694f,
+            1.0171f,  1.0759f,  1.0645f,  1.1058f,  1.0605f,  1.1707f,
+            1.1775f,  1.1248f,  1.0683f,  1.1691f,  1.1116f,  1.0016f
+        };
+
+        /// <summary>
+        /// A SHARED LOOSENING FOR CHAPTER 2 ON, as a multiplier on the target ratio: 1.0 is the
+        /// table as read, 1 / 0.95 is "recommendedPower five percent lower at the same entry power".
+        /// Chapter 1 is never touched (walls 1-6 to 1-12 stay as designed). One number for every
+        /// stage from chapter 2 on, not ten spot fixes: R13 showed that spot fixes cure their own
+        /// stage and re-draw every later one.
+        /// </summary>
+        private const float SolverLooseningLater = 1.0f;
 
         /// <summary>Every enemy in enemies.json carries this. The solver checks it rather than
         /// trusting it: the level-to-power inversion below is only valid while it is one number for
@@ -19453,6 +19518,17 @@ namespace Emberfall.DevHarness
         private const float SolverStuckStep = 1.05f;
 
         /// <summary>
+        /// HOW CLOSE A NEW recommendedPower HAS TO BE TO THE ONE IT REPLACES BEFORE THE STAGE COUNTS AS
+        /// UNMOVED: 0.1%. The target ratios are stored to four decimals and recommendedPower is an
+        /// integer, so a stage the solver has nothing to say about still derives a number a point or
+        /// two away from the one on file, and a point is a "move" that re-runs the level search and
+        /// can shift a level, which re-draws every later seed of the walk (R13: a content edit re-draws
+        /// the walk). Re-solving a solved tree has to change nothing, so a difference this small keeps
+        /// the number already there.
+        /// </summary>
+        private const float SolverRecTolerance = 0.001f;
+
+        /// <summary>
         /// HOW MANY TIMES THE SOLVE RELEASES BANKED STEPS BEFORE IT GIVES UP TRYING: 8, which is
         /// more rounds than any stage has ever banked steps.
         ///
@@ -19478,17 +19554,22 @@ namespace Emberfall.DevHarness
         private const int SolverStepReleaseRounds = 8;
 
         /// <summary>
-        /// The band middle one stage is derived against. The four tutorial stages have no band to
-        /// sit in, and the curve pass put them on chapter 1's ordinary middle: the committed 2,977
-        /// at 1-1 is exactly that stage's entry power over x1.20, which is where the reading comes
-        /// from.
+        /// The ratio one stage is derived against: its entry in SolverTargetRatios, scaled by
+        /// SolverLooseningLater from chapter 2 on, or the middle of its power band for a stage the table
+        /// does not reach. The name stays from the days it was always a band middle.
         /// </summary>
         private static float SolverBandMiddle(StageDef stage, int walkIndex)
         {
-            bool chapterOne = stage != null && stage.ChapterNumber == 1;
-            if (BandKindOf(stage, walkIndex).StartsWith("wall"))
-                return chapterOne ? SolverMiddleWallChapter1 : SolverMiddleWallLater;
-            return chapterOne ? SolverMiddleOrdinaryChapter1 : SolverMiddleOrdinaryLater;
+            float lo, hi;
+            float ratio = 0f;
+            if (stage != null && stage.GlobalIndex >= 0 && stage.GlobalIndex < SolverTargetRatios.Length)
+                ratio = SolverTargetRatios[stage.GlobalIndex];
+            else if (PowerBandFor(stage, out lo, out hi))
+                ratio = (lo + hi) / 2f;
+            else
+                ratio = 1f;
+            if (stage != null && stage.ChapterNumber > 1) ratio *= SolverLooseningLater;
+            return ratio;
         }
 
         private static float EnemyScaleAt(float level) { return 1f + EnemyGrowthPerLevel * (level - 1f); }
@@ -19995,6 +20076,9 @@ namespace Emberfall.DevHarness
 
             p.NewRecommended = (int)Math.Round(p.EntryPower / (double)p.BandMiddle);
             if (p.NewRecommended < 1) p.NewRecommended = 1;
+            if (stage.RecommendedPower > 0
+                && Math.Abs(p.NewRecommended - stage.RecommendedPower) <= SolverRecTolerance * stage.RecommendedPower)
+                p.NewRecommended = stage.RecommendedPower;
 
             float ratio = baseline.Recommended > 0
                 ? p.NewRecommended / (float)baseline.Recommended : 1f;
@@ -20189,6 +20273,11 @@ namespace Emberfall.DevHarness
         {
             float low = rate - CeilBandLow(db, stage);
             float high = CeilBandHigh(db, stage) - rate;
+            // The breezy stretch has no upper edge to miss (see CeilBreezyLastStage): a stage a
+            // player is meant to win at 100% is not asked to come down to 85%, so the search must
+            // not read 100% as a rate with no cushion and walk the levels up.
+            float over;
+            if (IsCeilBreezy(stage) && !_ceilTargetOverride.TryGetValue(stage.Id, out over)) high = float.MaxValue;
             return low < high ? low : high;
         }
 
@@ -20427,11 +20516,18 @@ namespace Emberfall.DevHarness
             if (db == null) return 1;
 
             Line("");
-            Line("  recommendedPower = the simulated player's ENTRY power / the middle of that stage's band.");
-            Line("  Middles: ordinary chapter 1 and tutorial x" + Fmt3(SolverMiddleOrdinaryChapter1)
-                 + ", chapter 1 wall x" + Fmt3(SolverMiddleWallChapter1)
-                 + ", ordinary later x" + Fmt3(SolverMiddleOrdinaryLater)
-                 + ", later wall x" + Fmt3(SolverMiddleWallLater) + ".");
+            Line("  recommendedPower = the simulated player's ENTRY power / that stage's target ratio.");
+            Line("  Target ratios: the per-stage table SolverTargetRatios (" + SolverTargetRatios.Length
+                 + " stages), times " + Fmt3(SolverLooseningLater) + " from chapter 2 on (SolverLooseningLater).");
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                float tlo, thi;
+                float target = SolverBandMiddle(db.AllStages[i], i);
+                if (PowerBandFor(db.AllStages[i], out tlo, out thi)
+                    && (target < tlo - BandTolerance || target > thi + BandTolerance))
+                    Line("  NOTE: " + db.AllStages[i].DisplayCode + " target x" + Ratio3(target)
+                         + " is outside its power band x" + Ratio3(tlo) + "-x" + Ratio3(thi) + ".");
+            }
             Line("  A wall is a chapter finale or one of " + string.Join(", ", MidChapterWallStageIdsOf(db).ToArray())
                  + "; the first " + EconomyTutorialStages + " stages are the tutorial.");
             Line("  floorLevel, ceilingLevel and the authored enemy levels follow by inverting"
@@ -20537,6 +20633,7 @@ namespace Emberfall.DevHarness
                 int moved = 0;
                 int probes = 0;
                 int truncated = 0;
+                List<string> movedText = new List<string>();
                 for (int i = 0; i < run.Stages.Count; i++)
                 {
                     StageBaseline was = baseline[run.Stages[i].Stage.Id];
@@ -20576,7 +20673,12 @@ namespace Emberfall.DevHarness
                     p.NewCeiling = p.Stage.CeilingLevel;
 
                     last[p.Stage.Id] = p;
-                    if (p.ChangesAnything) moved++;
+                    if (p.ChangesAnything)
+                    {
+                        moved++;
+                        movedText.Add(p.Stage.DisplayCode + " " + p.PriorRecommended + "->" + p.NewRecommended
+                                      + " " + p.PriorFloor + "/" + p.PriorCeiling + "->" + p.NewFloor + "/" + p.NewCeiling);
+                    }
                 }
 
                 Line("  iteration " + iterations + ": " + moved + " stage(s) moved, " + probes
@@ -20587,6 +20689,8 @@ namespace Emberfall.DevHarness
                           + " it was going - raise SolverMaxProbesPerStage"
                         : "")
                      + (stuckAt != null ? "; the reference walk stuck at " + stuckAt : ""));
+                if (movedText.Count > 0 && movedText.Count <= 12)
+                    Line("    moved: " + string.Join("; ", movedText.ToArray()));
                 if (moved == 0 && stuckAt != null)
                 {
                     Line("  ABORT: the reference walk is STUCK at " + stuckAt + " and deriving from it moved"
