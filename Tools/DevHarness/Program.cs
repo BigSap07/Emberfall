@@ -20869,9 +20869,9 @@ namespace Emberfall.DevHarness
         /// looked plausible, and still got quoted.
         ///
         /// So the responsiveness is now asserted rather than assumed. Multiply every gold channel
-        /// on the back half of the campaign by 2.5x, re-run the simulation for IncomeProbeSeeds
+        /// from IncomeProbeFirstStage (3-1, a third of the way in) on by 2.5x, re-run the simulation for IncomeProbeSeeds
         /// matched players, and require the entry ratio of the first IncomeProbeEarlyStages scaled
-        /// stages (4-1 to 4-6) to actually move. That early window is the guard: it is read before
+        /// stages (3-1 to 3-6) to actually move. That early window is the guard: it is read before
         /// the hero caps bind, where the response is stable. The late-campaign ratio (the last three
         /// stages reached) is printed with its per-player spread and is NOT guarded, because a
         /// level-capped player there shows the draw, not the income. If a future structural change

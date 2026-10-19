@@ -7,14 +7,14 @@ The owner took four decisions on 2026-10-19 after `Docs/BALANCE-REPORT-R13.md`. 
 How to read the numbers:
 - A ratio is the power a simulated player brings to the first attempt of a stage, over that stage's `recommendedPower`.
 - A walk is one seeded run of the harness economy player over the whole campaign. `WalkSeed(k)` is `1 + k * 1000003`. The reference player never converts and never ascends. The fusing player does both as soon as it can.
-- A tail is the extra sittings a stage costs beyond its own ladder floor. A walk is stuck when it makes no progress for 14 sittings.
+- A tail is the extra sittings a stage costs beyond its own ladder floor. A walk is stuck when it makes no progress for 14 sittings (the walk takes one swap undo first, so a stuck walk shows 14 or 16 sittings).
 - The rest of the method is in `Docs/BALANCE-REPORT-R13.md`. The instruments are the same.
 
 ## 1. Fusion A (owner decision 1)
 
 What changed: `ascensionCurveMultipliers` in `balance.json` goes from `[1, 2.035, 6.175]` to `[1, 2.035, 1.5]` (and the `BalanceConfig` default). A tier 2 five-star walks Levels 46 to 103 where it walked 46 to 281. The caps `[9, 18, 39]`, the Level each tier starts at (1, 10, 46) and `ascensionCopies [1, 4]` did not move. Source: `logs\build-check-builder-task1b.log`, FUSION ECONOMY section.
 
-**Fusing player, median entry power over `recommendedPower`.** Source: `data\fusion-r16.csv`. The first run of the new content in the harness's own 20 fusing walks (`logs\build-check-builder-task1b.log`) reads x6.182, x6.250, x6.338 and x6.019 at 3-12, 4-12, 5-12 and 6-12, within 0.05 of this table.
+**Fusing player, median entry power over `recommendedPower`.** Source: `data\fusion-r16.csv`, taken on the simulation tree WITHOUT the counterattack rule (20 walks). On the run branch with the counterattack rule and the 60 walks of the guard, the fusing player reads 2-12 x2.926, 3-12 x6.211, 4-12 x6.274, 5-12 x6.360 and 6-12 x6.019 (`data\review\review5-tasks1-2-fusion-guard.md`), within 0.04 of the table. The first run of the new content in the harness's own 20 fusing walks (`logs\build-check-builder-task1b.log`) reads x6.182, x6.250, x6.338 and x6.019 at 3-12, 4-12, 5-12 and 6-12, within 0.05 of this table.
 
 | Finale | Before (x6.175) | After (x1.5) |
 |---|---|---|
@@ -51,7 +51,7 @@ Chapters 1 and 2 do not move. The plateau is now x6.0 to x7.0. It equals R13's c
 | Before this run | 5 | walk 23 at 4-2, 46 at 2-9, 48 at 5-3, 51 at 2-6, 59 at 2-4 |
 | After the counterattack rule and fusion A | 8 | walk 1 at 4-2, 6 at 5-4, 16 at 3-7, 20 at 5-9, 23 at 4-2, 46 at 2-9, 51 at 2-6, 59 at 2-4 |
 
-Sources: `logs\fng60-baseline-7a7ae73-seeds.log` (before) and `logs\task2-guard.md` (after).
+Sources: `logs\fng60-before-r16-seeds.log` (before) and `logs\task2-guard.md` (after).
 
 Four stuck walks are in both (23, 46, 51, 59). Walk 48 is cured. Walks 1, 6, 16 and 20 are new. Walks 0 to 19, the old guard, hold three of the new ones (1, 6, 16), which were green before and are the reds after the counterattack rule (section 5). Fusion A cannot move a reference walk: that player never ascends. The check is red until the curve is loosened (section 4). That is the point of widening it.
 
@@ -62,9 +62,9 @@ The solver's stuck scan reads the same 60 walks, so it costs three times as much
 Source: `data\sim-progress.md`, `data\solver-whatif-final.log`.
 
 - The solver now aims at `SolverTargetRatios`, the per-stage entry ratio of the shipped curve (all 72 inside the power band; tightest margins 1-6 0.0116, 1-12 0.0174, 1-7 0.0183). It is a snapshot of the content before this run.
-- The `2-1` armor 0 is a reading artifact. The entry reading was taken before the sitting that wears armor (armor opens at 1-12). `ArrivalTeamPower` now reads it one stage after wearing. Only the reading changed: 60 walks are identical. The `2-1` median goes from x1.061 to x1.146.
-- Run on the shipped content as a what-if: 0 of 72 `recommendedPower` moved. 2 rosters moved by one unit: 1-6 from 20/20/21/20 to 19/20/21/20 (CEIL 71.8 to 84), and 2-12 from 22/22/22/22/22 to 22/21/22/22/22 (CEIL 56.5 to 62). Both are inside the 5 point cushion of a CEIL edge. Nothing was written.
-- **The table is a snapshot, not a fixed point.** On the run branch with the counterattack rule, the same what-if moves 42 stages in iteration 1 and 59 in iteration 2, and had not converged after 590 s (review 4, `D:\Emberfall\tmp\r16-review\review4-task3-solver.md`). The median ratios per stage are the same to 3 digits. The first-seed walk re-draws from 2-11 on, and the solver follows that noise. So the table is refreshed with the content and not trusted across an engine change.
+- The `2-1` armor 0 is a reading artifact. The entry reading was taken before the sitting that wears armor (armor opens at 1-12). `ArrivalTeamPower` now reads `2-1`, the stage right after armor opens, as the player stands once they wear what they hold. Only the reading changed: 60 walks are identical. The `2-1` median goes from x1.061 to x1.146.
+- Run on the shipped content as a what-if: 0 of 72 `recommendedPower` moved. 2 rosters moved by one unit: 1-6 from 20/20/21/20 to 19/20/21/20, and 2-12 from 22/22/22/22/22 to 22/21/22/22/22. The solver's own reading at those two rosters is 84 and 62 percent CEIL. No CEIL before is quoted: the solver's reading and the harness's CEIL check are two instruments and their numbers do not compare. Nothing was written.
+- **The table is a snapshot, not a fixed point.** On the run branch with the counterattack rule, the same what-if moves 42 stages in iteration 1 and 59 in iteration 2, and had not converged after 590 s (review 4, `data\review\review4-task3-solver.md`). The median ratios per stage are the same to 3 digits. The first-seed walk re-draws from 2-11 on, and the solver follows that noise. So the table is refreshed with the content and not trusted across an engine change.
 
 ## 4. Curve (task 4)
 
@@ -80,7 +80,7 @@ Two before columns, because the counterattack rule moved the walks (section 5). 
 | Walls with a worst tail over 12 | 2-6 30, 2-12 28, 4-12 13 | 2-6 30, 2-12 28 |
 | CEIL, graded stages inside band | 70 of 70 (1-1 and 1-2 are floor pinned, not graded) | not measured |
 
-Sources: `data\tails-before.csv` and `data\tails-before-summary.md` (left column, byte identical to R13's baseline per review 2, `D:\Emberfall\tmp\r16-review\review2-task4-before-table.md`); `D:\Emberfall\tmp\r16-review\pair\new-engine-baseline-tails.csv` (right column). Worst tail counts stuck walks as 9999 in the raw rows and is listed here for cleared walks only.
+Sources: `data\tails-before.csv` and `data\tails-before-summary.md` (left column, byte identical to R13's baseline per review 2, `data\review\review2-task4-before-table.md`); `data\tails-new-engine-old-curve.csv` (right column). Worst tail counts stuck walks as 9999 in the raw rows and is listed here for cleared walks only.
 
 **PLACEHOLDER: the after column.** The lead fills in the lever, the package (recommended power down by one shared percentage per chapter from chapter 2, enemy levels re-solved), the after table of stuck walks, worst tails and CEIL per stage, and the guard on 60 seeds.
 
@@ -88,7 +88,7 @@ Sources: `data\tails-before.csv` and `data\tails-before-summary.md` (left column
 
 **The rule.** A counterattack answers the attacker and ignores Taunt. In `ResolveTargetsInner`, `TargetMode.LastAttacker` with a live, legal attacker returns before the Dev Arena's forced pick, the Provoke and the Taunt anchor. With no such attacker it falls back to `FrontEnemy`, an ordinary pick that respects Taunt. The card texts of Caldus's No Uncertain Ground and Defined Duty and Jory's Worn Hinges are unchanged, and the proposals to reword them are withdrawn.
 
-**What it covers.** Four places in the content use the mode: `jory_worn_hinges`, `caldus_defined_duty`, `caldus_no_uncertain_ground` and the guild tech line `line_answer_in_kind` (review 3, `D:\Emberfall\tmp\r16-review\review3-task5-counter-rule.md`). Not covered, on purpose: `LastTarget` (a follow-up on the caster's own blow) and Maera's Keep the Beacon (`EnemyThatLastDamagedAlly`, an authored active whose card names its target). Maera's active stays under Taunt. The owner can overrule that.
+**What it covers.** Four places in the content use the mode: `jory_worn_hinges`, `caldus_defined_duty`, `caldus_no_uncertain_ground` and the guild tech line `line_answer_in_kind` (review 3, `data\review\review3-task5-counter-rule.md`). Not covered, on purpose: `LastTarget` (a follow-up on the caster's own blow) and Maera's Keep the Beacon (`EnemyThatLastDamagedAlly`, an authored active whose card names its target). Maera's active stays under Taunt. The owner can overrule that.
 
 **The define.** Compiling with `EMBERFALL_COUNTER_ANSWERS_TAUNT` restores the old resolution exactly. The default build is the new rule. Proven once, outside the repo: with the define, check (a) (a counter goes to the attacker with a Taunt holder standing) and check (d) (an ally's strike-back at the enemy that hit another ally) fail as they do on the old engine, and all 470 sweep fingerprints match the old baseline (`logs\counter-rollback.md`).
 
@@ -127,10 +127,10 @@ Mirror win rate of the advantaged colour (the wheel control, identical lines):
 
 ## 7. Player size (report only, task 7)
 
-Source: `logs\player-size.md`; sizes file and editor log named there. The reviewer recomputed the sizes from disk (review 1, `D:\Emberfall\tmp\r16-review\review1-task7-player-size.md`).
+Source: `logs\player-size.md`; sizes file and editor log named there. The reviewer recomputed the sizes from disk (review 1, `data\review\review1-task7-player-size.md`).
 
 - Windows release, offline player: **3237.5 MB unzipped, 676.1 MB zipped** (3,394,798,931 and 708,993,753 bytes). Before: 318 MB and 188.5 MB. Growth about 2.9 GB. The zip wins back 4.8x. Over 1 GB unzipped, under 1 GB zipped.
-- Build report: 3132.8 MB packed. The 338 battle sheets are 3018.3 MB of it (12072.9 MB raw, all BC7, about 9.4 MB each). Other sprites 24.8 MB, backgrounds 19.6 MB, everything else 63.4 MB. Textures are 98.0 percent of the editor's report.
+- Build report: 3132.8 MB packed. The 338 battle sheets are 3018.3 MB of it (12072.9 MB raw, all BC7, up to about 9.4 MB each and 8.9 on average). Other sprites 24.8 MB, backgrounds 19.6 MB, everything else 63.4 MB. Textures are 98.0 percent of the editor's report.
 - Top 10 assets: all battle sheets of 9.4 MB (`nereia_the_field_medic` and `celen_the_open_hand` sheets, and one `rheia_the_revision_scribe` sheet). The report sorts ties unordered, so the top of the list is dozens of 9.3 to 9.4 MB sheets.
 - **Proposal, not applied, an owner call.** Set `win_format` of the Units group in `Tools/texture-import-policy.py` to DXT5 Crunched (format 29). The policy chose BC7 on purpose, so this reverses a recorded decision. Measured on one sheet (`kael_the_unyielding_idle.png`): 9.4 MB packed to 1,004,264 bytes. The link from the cache artifact to the sheet is by size and time, not proven (review 1). Extrapolated over 338 sheets the player falls to about 0.4 GB unzipped. That is an extrapolation from one sheet. The result is visibly softer: hair and armour trim smear (`shots\player-size\kael_before_after.png`).
 - Not recommended: lowering `maxTextureSize`. The policy script's comment says it shears the frame grid. That claim is unverified: nobody measured it, and by the script's own model a halving is an integer 2x and does not shear. What it certainly does is halve the texel density, which is the blotch problem again (review 1).

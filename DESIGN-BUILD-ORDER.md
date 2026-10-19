@@ -761,8 +761,8 @@ the result against the owner's target table in the proposal, not against itself.
 The solver aims at `SolverTargetRatios`, the per-stage entry ratio of the content it was taken on (a
 snapshot of the content before R16: on a changed engine or content its single-seed walk moves
 stages, so the table is refreshed with the content, not trusted across it). The `2-1` armor 0 was
-the entry reading taken before the sitting that wears armor; `ArrivalTeamPower` reads that one
-stage after wearing. Run on the shipped content the solver moves 0 of 72 `recommendedPower` and 2
+the entry reading taken before the sitting that wears armor; `ArrivalTeamPower` reads `2-1`, the stage
+right after armor opens, as the player stands once they wear what they hold. Run on the shipped content the solver moves 0 of 72 `recommendedPower` and 2
 rosters by one unit (`Docs/BALANCE-REPORT-R16.md`, Solver).
 
 **The simulated player here is the wall rule's reference player, not the one who fuses.**
@@ -1883,7 +1883,7 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   188.5 MB zipped, with 208 sheets packed as DXT5 Crunched. **The second, taken in R16 with the
   336 by 396 sheets in, is 3237.5 MB unzipped and 676.1 MB zipped**; its build report packs
   3132.8 MB, of which the 338 battle sheets in `Sprites/Units` are 3018.3 MB, all BC7 (12072.9 MB
-  as raw RGBA, each sheet about 9.4 MB packed). The earlier prediction of close to 2.9 GB of growth
+  as raw RGBA, each sheet up to about 9.4 MB packed, 8.9 on average). The earlier prediction of close to 2.9 GB of growth
   held. Portraits, badges and HUD pack to 24.8 MB and the backgrounds to 19.6 MB, so the Units group
   is the whole of the growth. The zip wins back 4.8x, and 676.1 MB zipped is still under 1 GB; only
   the unzipped player is over. **The cheapest fix, not applied and an owner call**: set `win_format` of
