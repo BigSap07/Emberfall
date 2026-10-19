@@ -73,6 +73,19 @@ namespace Emberfall.UI
             return Emberforge.TextGold;
         }
 
+        /// <summary>
+        /// What leads a row: the flat figure, or for an effect priced off the target's health the most
+        /// it can deal ("up to 1,454 damage"), or the bare word when it has neither. The cap is
+        /// AbilityValue.CapAmount, proved against the simulation.
+        /// </summary>
+        public static string Figure(AbilityValue value, bool shortForm)
+        {
+            if (value == null) return "";
+            if (value.HasFlat) return shortForm ? Headline(value) : Headline(value);
+            if (value.CapAmount > 0) return "up to " + Amount(value.CapAmount) + (shortForm ? "" : " " + Word(value.Kind));
+            return Word(value.Kind);
+        }
+
         /// <summary>The main line: "2,231 damage".</summary>
         public static string Headline(AbilityValue value)
         {

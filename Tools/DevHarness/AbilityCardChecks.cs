@@ -206,6 +206,87 @@ namespace Emberfall.DevHarness
             return null;
         }
 
+        /// <summary>
+        /// THE "UP TO" A CARD PRINTS FOR AN EFFECT PRICED OFF THE TARGET'S HEALTH is what the simulation
+        /// deals when the amount reaches the Attack cap. For every damage effect with a cap, the amount is
+        /// pushed past it (a huge flat term, with the conditions and the target-health terms taken off and
+        /// every identity of CheckAbilityNumbersMatchTheSimulation in force) and the blow is read off the
+        /// event list: it must equal AbilityValue.CapAmount.
+        /// </summary>
+        private static void CheckAbilityCapsMatchTheSimulation(ContentDatabase live, string contentDir)
+        {
+            Line("ABILITY CAPS (the most a health-priced effect can deal, against the simulation)");
+            ContentDatabase arena = BuildAbilityNumberArena();
+            StageDef stage = arena == null ? null : arena.GetStage("number_arena");
+            if (arena == null || stage == null) { Check(false, "ability-cap arena built"); Line(""); return; }
+            arena.Balance.DamageVariance = 0f;
+            arena.Balance.SpeedVariance = 0f;
+            EnemyDef dummy = arena.GetEnemy("number_dummy");
+
+            int proved = 0;
+            List<string> wrong = new List<string>();
+            for (int h = 0; h < arena.Heroes.Count; h++)
+            {
+                HeroDef def = arena.Heroes[h];
+                if (def.BasicAttack != null && def.BasicAttack.Id.Contains("placeholder")) continue;
+                List<PassiveDef> passives = new List<PassiveDef>(def.Passives);
+                AbilityDef realBasic = def.BasicAttack, realActive = def.Active;
+                def.Passives.Clear();
+                def.CritChance = 0f;
+                def.StartEnergy = 0;
+                def.Active = null;
+                dummy.Aspect = def.Aspect;
+                UnitStats stats = StatMath.ForHero(def, AbilityNumberLevel);
+
+                List<AbilityDef> abilities = new List<AbilityDef>();
+                abilities.Add(realBasic);
+                abilities.Add(realActive);
+                for (int p = 0; p < passives.Count; p++) abilities.Add(AbilityMath.AsAbility(passives[p]));
+
+                for (int a = 0; a < abilities.Count; a++)
+                {
+                    AbilityDef ability = abilities[a];
+                    if (ability == null) continue;
+                    List<AbilityValue> values = AbilityMath.Values(ability, stats, arena.Balance);
+                    for (int vi = 0; vi < values.Count; vi++)
+                    {
+                        AbilityValue v = values[vi];
+                        if (v.CapAmount <= 0 || v.Kind != AbilityValueKind.Damage) continue;
+                        string who = ability.Id + " effect " + v.EffectIndex;
+                        AbilityDef probe = ProbeAbility(ability, ability.Effects[v.EffectIndex], v);
+                        probe.Effects[0].Flat = 1000000000f;
+                        def.BasicAttack = probe;
+
+                        BattleRequest req = new BattleRequest();
+                        req.Content = arena;
+                        req.Stage = stage;
+                        req.Seed = 91;
+                        req.Team = new List<HeroInstance>();
+                        req.Team.Add(MakeInstance(def, AbilityNumberLevel));
+                        BattleSession live2 = CombatSimulation.Begin(req);
+                        int hero = ActorId(live2);
+                        ActionReport r = live2.Act(hero, ManualChoice.Basic, -1);
+                        def.BasicAttack = realBasic;
+                        if (!r.Accepted) { wrong.Add(who + ": probe refused: " + r.Refusal); continue; }
+                        int dealt = 0;
+                        IList<BattleEvent> ev = live2.Events;
+                        for (int i = r.FirstEventIndex; i < r.FirstEventIndex + r.EventCount && i < ev.Count; i++)
+                            if (ev[i].Type == BattleEventType.Damage && ev[i].SourceId == hero) dealt += ev[i].Value;
+                        if (dealt != v.CapAmount) wrong.Add(who + ": card up to " + v.CapAmount + ", simulation " + dealt);
+                        else proved++;
+                    }
+                }
+                def.BasicAttack = realBasic;
+                def.Active = realActive;
+                for (int p = 0; p < passives.Count; p++) def.Passives.Add(passives[p]);
+            }
+            Check(wrong.Count == 0 && proved > 0,
+                  wrong.Count == 0 && proved > 0
+                    ? "every one of the " + proved + " capped damage effects deals exactly its printed 'up to' once its amount passes the cap"
+                    : wrong.Count + " printed cap(s) do not match the simulation (" + proved + " did): " + string.Join("; ", wrong.ToArray()));
+            Line("");
+        }
+
         private static void CheckAbilityFactsMatchTheSimulation(ContentDatabase live, string contentDir)
         {
             Line("ABILITY FACTS (what the card prints besides its numbers, against the simulation)");
