@@ -7902,7 +7902,7 @@ namespace Emberfall.Core.Combat
                 // recorded before the effect ran, so like the five modes above it is not a
                 // question a Taunt holder can answer for its side. Before this rule the anchor
                 // below intercepted it, and a counter meant for the attacker landed on the
-                // protector instead (126 times in 240 campaign battles for No Uncertain Ground).
+                // protector instead.
                 //
                 // Only a LIVE, legal attacker is answered here. When the attacker is dead, is the
                 // excluded body, or was never recorded, the effect falls through to the ordinary
