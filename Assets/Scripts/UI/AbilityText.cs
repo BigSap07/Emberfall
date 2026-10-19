@@ -21,10 +21,10 @@ namespace Emberfall.UI
     /// 5-star.
     ///
     /// NOTHING HERE READS AN ABILITY'S DESCRIPTION. Every figure comes from the effect data, so a
-    /// prose number that disagrees with the effect beneath it cannot reach a card. The prose is
-    /// left exactly as authored and is not shown on the hero page at all: a good half of the
-    /// roster's descriptions carry drafting notes addressed to a designer, naming repository
-    /// documents and open questions, and those are not sentences to put in front of a player.
+    /// prose number that disagrees with the effect beneath it cannot reach a card. The sentence on
+    /// the ability card comes from AbilityTextConfig.Prose, which never returns a drafting note:
+    /// a good half of the roster's authored descriptions once carried notes addressed to a
+    /// designer, and ability-text.json stands in for those until the owner answers them.
     /// </summary>
     public static class AbilityText
     {
@@ -32,6 +32,10 @@ namespace Emberfall.UI
         /// Defence, crit and variance are properties of a HIT; these are numbers about an
         /// ABILITY, and two of the three belong to whoever is being hit.</summary>
         public const string Caveat = "Before the target's Defence, and before crit and variance.";
+
+        /// <summary>The prompt under the ability row: the cards hold one number each, and a tap opens
+        /// the sentence, the facts and every number (AbilityCardSheet).</summary>
+        public const string TapHint = "Tap an ability for what it does.";
 
         /// <summary>The same sentence for a hero nobody owns yet, where the stat line the numbers
         /// are built from is a level-1 hero with no gear rather than one of the player's.</summary>

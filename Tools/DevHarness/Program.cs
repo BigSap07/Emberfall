@@ -268,6 +268,8 @@ namespace Emberfall.DevHarness
             CheckAuthoredKitExercise(content);
             CheckEveryAuthoredActiveIsCast(content);
             CheckAbilityNumbersMatchTheSimulation(content);
+            CheckAbilityCardTextIsComplete(content, contentDir);
+            CheckAbilityFactsMatchTheSimulation(content, contentDir);
             ReportTalentExercise();
 
             CheckDebrief();

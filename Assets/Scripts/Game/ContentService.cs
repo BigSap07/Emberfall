@@ -34,6 +34,8 @@ namespace Emberfall.Game
             // Outside ContentVersion too: the first session's words and the unlock table are read
             // by no fight (ContentDatabase.Onboarding).
             db.LoadOnboarding(ReadTextOptional("onboarding"));
+            // And the card sentences that stand in for drafting notes (ContentDatabase.AbilityTexts).
+            db.LoadAbilityTexts(ReadTextOptional("ability-text"));
             // And the daily orders, chests and calendar (ContentDatabase.Orders): no fight reads them.
             db.LoadOrders(ReadTextOptional("orders"));
             // And what the Armory and the Archive sell (ContentDatabase.Sinks): no fight reads it.
