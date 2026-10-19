@@ -300,7 +300,7 @@ namespace Emberfall.DevHarness
             CheckQuartermaster(content, contentDir);
             CheckRelicEndgame(content, contentDir);
             CheckWayfarersRoad(content, contentDir);
-            CheckStore(content, contentDir);
+            CheckStoreOffers(content, contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
             CheckCaptureWatchdog(content, contentDir);

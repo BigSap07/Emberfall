@@ -23,7 +23,7 @@ namespace Emberfall.DevHarness
     /// </summary>
     internal static partial class Program
     {
-        private static void CheckStore(ContentDatabase db, string contentDir)
+        private static void CheckStoreOffers(ContentDatabase db, string contentDir)
         {
             Line("");
             Line("THE STORE (Docs/DESIGN-STORE.md: fixed offers, one Sealed grant path, limits and resets that a clock cannot reopen)");
