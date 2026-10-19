@@ -254,6 +254,10 @@ tree on 2026-09-23.
 
 ### W7. The dead-clause pass: Caldus's card, Finn's toll and Kora's extra blow
 
+**R16 settled the Caldus half.** The owner decided counterattacks answer the attacker and ignore
+Taunt, so the card's own words were right and the engine moved. The proposal below to reword the
+card, and the same for Defined Duty and Jory's Worn Hinges, is withdrawn.
+
 The measurements are in `Docs/PINOY-LIST.md` section 2i.
 
 - **Caldus, No Uncertain Ground.** The card says Caldus strikes the enemy that hit the ally. While

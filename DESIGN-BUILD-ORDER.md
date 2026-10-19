@@ -215,6 +215,21 @@ either side** - `BroadcastSubject`, `DefeatedUnit`, `ThresholdUnit`, `SwapAdvanc
 `SwapDelayedUnit` - completing the own-side repair above. `CheckNoAbilityHitsItsOwnCaster` fails if
 any ability lands damage on its own caster without naming Self.
 
+**R16 counterattack rule: a counterattack answers the attacker, not Taunt.** `TargetMode.LastAttacker`
+is the strike-back mode (Jory's Worn Hinges, Caldus's Defined Duty and No Uncertain Ground, the guild
+line's Answer in Kind). In `ResolveTargetsInner` a live, legal attacker now returns before the
+Dev Arena's forced pick, the Provoke and the Taunt anchor, exactly as the five named-body modes above
+do. When the attacker is dead, excluded or was never recorded, the effect falls back to `FrontEnemy`,
+and that fallback is an ordinary pick that respects Taunt. `LastTarget` is deliberately not in the rule:
+it names the body the caster last hit, which is a follow-up and not a strike back, so the anchor still
+outranks it. `EnemyThatLastDamagedAlly` is not in it either: it is an authored active (Maera's Keep the
+Beacon) that picks, and its card says which body it picks. The cards keep their text, because the
+text always said the attacker. `CheckCounterAnswersTheAttackerNotTaunt` proves it on a synthetic arena
+(a counter goes to the attacker with a Taunt holder standing; the same hero's ordinary attack still
+goes to the Taunt holder; the control with no Taunt agrees). Compiling with the define
+`EMBERFALL_COUNTER_ANSWERS_TAUNT` restores the old resolution exactly (the anchor outranks
+`LastAttacker` again); the default build has the new rule and needs no define.
+
 **The round-end repair: `RoundEnd` reads the round it closes.** `CloseRound` used to release the turn
 order before raising `RoundEnd`, and `ApplyTurnShift` returns on a missing order ahead of the branch
 that carries a delay into the next round, so Finn's Aftershock Clock fired every round and never
@@ -574,18 +589,36 @@ the totals against a straight sum over the events (`CheckBattleStatsClearedWave`
   stars, and 9, 18 and 39 tier levels for a 5-star at tiers 0, 1 and 2. Account rank sets none of it.
 - **Ascension** is `GameSession.Ascend`: copies of the same hero only (1 for the first step, 4 for
   the second), and the tier level resets to 1. **A hero's Level stays the one number its stat line
-  is built from** - each tier walks the one level ladder at its own stride, x2.035 and x6.175
+  is built from** - each tier walks the one level ladder at its own stride, x2.035 and x1.5
   Levels per tier level (`StatMath.LevelAt`) - because combat reads Level for Defense mitigation, and
   a multiplier on the stats instead made an ascended line of the same power clear `2-12`'s ceiling
   39% of the time against 63%. The level cost is read off the tier level, times the same multiplier.
+- **Tier 2's stride is x1.5, the owner's decision of 2026-10-19 (R16), not the x6.175 the
+  continuity rule gives.** A tier 2 five-star walks Levels 46 to 103 where it walked 46 to 281. The
+  caps (9, 18 and 39 tier levels), where each tier starts (Levels 1, 10 and 46) and
+  `ascensionCopies` (1 and 4) did not move; only how many Levels a tier 2 tier level buys did, and
+  the level price with it. Candidate A of `Docs/BALANCE-REPORT-R13.md` section 4, one number in
+  `balance.json`: it takes the fusing player's plateau over the reference curve from x13.9 to x15.6
+  at the finales of chapters 4 to 6 down to x6.0 to x6.4 (x6.6 to x6.9 once the loosened curve of
+  R16 asks the reference player for less; `Docs/BALANCE-REPORT-R16.md`, Fusion A).
+  It moved `ContentVersion`, so recorded guild dungeon replays retired. It was migrated and not
+  grandfathered, there being no players: version 18's level clamp takes a tier 2 hero saved above
+  Level 103 to Level 103 on load, and `CheckTierTwoAboveTheNewCapLoadsClampsAndPlays` proves it
+  through the real serializer (a tier 2 five-star saved at Level 281 loads at 103, power 31006 to
+  12075, round-trips, and plays 1-1 and the last battle of 6-12).
 - **Conversion** is `GameSession.Convert`: heroes below five stars worth 100 points (15, 10, 10 and
   18 per body by star tier) for a random 5-star of the chosen aspect. Ember, Tide, Verdant and Gale
   take same-aspect fodder; Umbra and Lumen take one seed of their own and fodder of any aspect.
-- **Every number is derived, not declared**: `CheckFusionEconomyDerivation` rederives each one from
-  the summon weights, the hero growth rate, the starting line and a campaign growth of x7.611,
+- **Every number is derived, not declared, except one**: `CheckFusionEconomyDerivation` rederives each
+  one from the summon weights, the hero growth rate, the starting line and a campaign growth of x7.611,
   prints the F6 crossover for every 5-star, and fails if `balance.json` disagrees. The growth was
   the finale's entry over the starting line until the wall rule made the finale an output of the
-  caps; it is pinned at the value the caps were derived at (`CapDerivationGrowth`).
+  caps; it is pinned at the value the caps were derived at (`CapDerivationGrowth`). The exception is tier 2's stride: no rule in the derivation gives
+  1.5, because it encodes a target (the plateau at about x6) and not a continuity rule. So the
+  derivation pins it (`OwnerPinnedStrideTier`, `OwnerPinnedStride`, dated 2026-10-19), prints the
+  continuity value beside it, derives everything else around it, and a check asserts the pin is the
+  only departure. `ascensionCopies` is priced off the power of a tier's first Level, not off the
+  stride, so it did not move.
   `CheckFusionRules` holds `GameSession` to each rule, to save version 16 and to version 18's
   level clamp.
 - **The fusion screen is built.** `FusionScreen` is two tabs on one page, because fusion's output
@@ -674,13 +707,21 @@ eight first seeds, because a conversion's roll makes one walk's roster one draw.
 decision 4.
 
 **The economy responds to shards now, not gold.** `CheckEconomyRespondsToIncome` scales gold and
-shards together on the back half of the campaign; the late-campaign ratio responds 0.6. Gold alone,
-still printed, responds 0.22, because gold stops at each hero's cap.
+shards together from `IncomeProbeFirstStage` on (a third of the way into the campaign, `3-1`, since
+R16; it was the back half, from `4-1`); the late-campaign ratio responds 0.6. Gold alone, still
+printed, responds 0.22, because gold stops at each hero's cap.
 **Since the economy merge the check reads the early window.** `CheckEconomyRespondsToIncome` walks
-8 matched players at 1x and 2.5x income and guards the mean entry ratio over `4-1` to `4-6`, before
-level caps bind, at a bar of 0.50. Before the merge's content that window read +0.94, after it
-+1.00. The late reading is printed only: it read +0.31 before and -0.11 after, with a per-player
-spread of about 0.5, which is draw noise for players at their caps.
+8 matched players at 1x and 2.5x income and guards the mean entry ratio over the first six scaled
+stages, before level caps bind, at a bar of 0.50. Before the merge's content that window read +0.94
+(at `4-1` to `4-6`), after it +1.00. The late reading is printed only: it read +0.31 before and -0.11
+after, with a per-player spread of about 0.5, which is draw noise for players at their caps.
+**R16 moved the window from `4-1` to `3-1`, and the reason is the fusion plateau (owner decision 1,
+tier 2 stride x1.5).** Under the lower top tier a fusing player stops depending on income from about
+`3-12` on: its roster and levels read the same at 1x and 2.5x, so the response at `4-1` fell to 0.12
+(spread -0.37 to 0.50), which is the plateau working and not the link between income and power being
+severed. The window now sits before the plateau. The three readings: 0.12 with the window at `4-1`,
+0.70 at `3-1` (spread 0.57 to 1.17, kept) and 0.32 at `2-1` (fails, because the early ratios are
+small). The bar is unchanged.
 
 **The R4 economy proposal is applied** (`Docs/ECONOMY-PROPOSAL-R4.md`, candidate F; owner sign-off
 2026-10-17). `1-1` to `1-6`, purses, shards, account XP, the per-wave drip and fusion pacing are
@@ -718,14 +759,19 @@ its neighbour. The CEIL band is read by kind (`IsCeilWall`, `IsCeilBreezy`, `Cei
 `1-1` to `1-6` [70%, 100%], walls (`1-12`, and stages 6 and 12 from chapter 2) [55%, 72%], the rest
 [78%, 92%]. Both checks print every stage's verdict. They were rewritten with the content, so read
 the result against the owner's target table in the proposal, not against itself.
-`Tools/solve-recommended-power.ps1` and the `SolverMiddle*` constants still aim at the old bands:
-re-running the solver would walk the curve back.
+The solver aims at `SolverTargetRatios`, the per-stage entry ratio of the content it was taken on (a
+snapshot of the content before R16: on a changed engine or content its single-seed walk moves
+stages, so the table is refreshed with the content, not trusted across it). The `2-1` armor 0 was
+the entry reading taken before the sitting that wears armor; `ArrivalTeamPower` reads `2-1`, the stage
+right after armor opens, as the player stands once they wear what they hold. Run on the shipped content the solver moves 0 of 72 `recommendedPower` and 2
+rosters by one unit (`Docs/BALANCE-REPORT-R16.md`, Solver).
 
 **The simulated player here is the wall rule's reference player, not the one who fuses.**
 FUSION ACCELERATES A WALL, IT NEVER GATES ONE: every wall must be passable with levels at the cap and
 no conversion and no ascension at all. So the band is read on that player's walk,
-`recommendedPower` is derived from it, and `CheckFusionNeverGates` walks twenty of them and fails if
-any one sticks anywhere. The player who fuses meets every stage above its band, and that is the rule
+`recommendedPower` is derived from it, and `CheckFusionNeverGates` walks sixty of them (`WalkSeed` 0
+to 59, owner decision 2 of R16; it read twenty, and all twenty were green while 5 of 60 stuck) and
+fails if any one sticks anywhere. The player who fuses meets every stage above its band, and that is the rule
 working rather than a failure of it.
 
 **A walk that stalls takes the stage's swaps back once before it is called STUCK.** The per-wave
@@ -765,6 +811,29 @@ stage can be asked for less than it. `recommendedPower` is not monotonic on its 
 of a band is raised to the running maximum of every earlier low, marked with a star in the table,
 and each relaxation prints the `recommendedPower` that would retire it. At the derivation nothing
 needed relaxing.
+
+**R16 loosened the curve from chapter 2 on, and the reference player no longer sticks anywhere.** The
+pre-R16 engine on the pre-R16 curve left 5 of 60 reference walks stuck (seeds 23, 46, 48, 51 and 59,
+at 4-2, 2-9, 5-3, 2-6 and 2-4); the counterattack rule re-drew the walks and left 8 on the same curve.
+`recommendedPower` from `2-1` to `6-12` is now 8 percent lower, capped so that a stage the step moves is
+not taken past about x1.20 on the median of the 60 walks (the band tops out at x1.25; the cap is not a
+ceiling on every median, and `3-4`, which it holds, reads x1.215): 56 of the 60 chapter 2 to 6 stages move,
+`ch3_4`, `ch5_11`, `ch6_7` and `ch6_10` are held by the cap, and chapter 1 is untouched, so walls 1-6
+to 1-12 are as designed. The enemy levels of every moved stage are re-solved with
+`SolveStageLevelsAt` to the CEIL rate the stage read before, and `SolverTargetRatios` is re-read on
+the loosened content. Result over 60 walks: 0 stuck, no stage with a tail over 12 extra sittings (the
+largest is 8, at `2-10`; walls 2-6, 2-12 and 4-12 fall from 30, 28 and 10 to 1, 0 and 0), walk 0
+inside the power band at every stage (highest x1.237, `3-4`), CEIL 70 of 70 graded stages in band, and
+`CheckFusionNeverGates` green on 60 walks. The walls bind in power and CEIL, less in sittings. The 56
+moved stages' opening rosters move, so their stage fingerprints and `ContentVersion` moved, and
+`stage-fingerprint-baseline.txt` was regenerated for them with a stated reason. **The lever is minus 8
+percent with a x1.20 median cap, not one literal shared percentage: 20 of the 56 moved stages get
+less, and six variants were tried against the prompt's three steps.** After the re-solve 10 moved
+stages read x1.202 to x1.210, inside the x1.25 band. **The walls still bind by CEIL (58 to 68
+percent, inside 55 to 72) but no longer cost the reference player sittings** (the median and the 90th
+percentile are 0 at every wall from chapter 2 on, the largest tail is 4, at `4-6`), so pace target B (2 to 4 extra sittings at the finales, reported and
+not failing) reads further off than before. Numbers and tables:
+`Docs/BALANCE-REPORT-R16.md`, Curve. The package was measured whole: R13 proved spot fixes interact.
 
 **Two costs were measured rather than argued, and both are written into `campaign.json` so the next
 pass does not rediscover them.** They are both open decisions now; see below.
@@ -1465,11 +1534,6 @@ campaign power curve, and the walls**.
 
 In order.
 
-0. **What the unlock table's retune left.** The economy merge re-set `recommendedPower` from the
-   harness reference walk, and the walks spend a feature only once a player arriving at the stage
-   has it (`FeatureGate.IsUnlockedArriving`). One point is still open: the `2-1` walk shows armor 0
-   although armor unlocks at `1-12`. The solver (`Tools/solve-recommended-power.ps1`) still aims at
-   the old bands and needs retuning before it is run again.
 1. **What the fidelity passes left.** Pass 3 closed C13 and every finding pass 2 recorded as left
    for later. What remains is **G1, G2 and G3**, the three proposed primitives not built, which
    would close groups 25, 30 and 23, and one unmeasured suspicion: a counter the per-target budget
@@ -1764,33 +1828,12 @@ The harness reads first, then the rest.
 
 Beyond the harness:
 
-- **Counterattacks still go to a Taunt holder.** Defect pass 3 swept every effect named by a
-  broadcast for the wrong-body shape and repaired the named-body modes; `LastAttacker` and
-  `LastTarget` it measured and left, because the engine documents the anchor outranking them as a
-  rule. Caldus's No Uncertain Ground still strikes the Taunt holder when the enemy that hit an ally
-  is not it (126 times in 240 campaign battles he fought in, 72 in his 20 sweep-arena runs), and
-  his Defined Duty and Jory's Worn Hinges do the same. Whether a counterattack answers to Taunt is
-  a rules decision rather than a defect. The rule stays, so it is Caldus's card that is wrong:
-  replacement text is proposed in `Docs/PINOY-LIST.md` section 2i.
 - **Marn's Relief After Loss healed an enemy once in 8,832 campaign battles**, because the
   Coverguard it answers was on an enemy when it was spent. How the Guard got there was not traced.
 
 - **Rheia has no skill clip.** Her delivery included an `idle2` where `skill` should be, so her
   active plays with no animation and the idle continues. Silent, not an error.
 
-- **A save written before the star-gated caps loads heroes above their own cap, and nothing
-  clamps them.** The caps used to be `heroLevelCapBase` 12 plus 4 per account rank, so a rank-30
-  profile capped every hero at 132; they are `fiveStarLevelCaps` now, 9, 18 and 39 tier levels,
-  which is Levels 9, 45 and 281. `SaveSerializer` reads `level` back as written and the version
-  15 to 16 step is documented as needing no migration, which was true of the ascension KEY and not
-  of the cap that moved in the same commit. Measured, not inferred: the live capture profile holds
-  every hero at Level 60, two of them at tier 1 (cap 45) and the rest at tier 0 (cap 9).
-  It is invisible on most of the game, because `GameSession.TierLevelOf` clamps: the fusion hero
-  list prints such a tier-0 hero as `LEVEL 9 / 9` and the hero page reads the same way. The ascend
-  card is where the two meet, since `LevelBefore` is the true Level - a tier-0 hero at Level 60
-  photographs as tier level `9 -> 18` over Level `60 -> 60`, all four figures correct for a hero
-  that should not exist. Whether the fix is a clamp on load, a regrant, or leaving old saves alone
-  is a decision about player progress and has not been taken.
 - **The talent screen reads "no clear change" for talents the harness reads as clear gains, and
   it is resolution, not a sampling bug.** On the local editor save of 2026-10-11 (Kael at Level 10 beside
   Kiva, Isara, Kest and Oris), `TalentTrial` at its 40 seeds reads Kael I +468, t 1.69 and Kael II
@@ -1852,21 +1895,29 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   them is designed today.
 - **A marketplace.** Nothing built, nothing designed.
 - **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
-- **Texture compression, on Android only.** The 855 MB figure this entry used to carry was re-taken
-  against a real Windows player and **does not describe it**. The release-offline player is 318 MB
-  unzipped and 188.5 MB zipped, and its build report packs 213.6 MB, of which 139.4 MB is the battle
-  sheets. All 214 sheet PNGs are packed - none is missing - 208 of them as DXT5 Crunched and 6 as
-  RGBA32, against 3,198.6 MB as raw RGBA. Portraits, badges and HUD pack 126 of 126 PNGs to
-  24.8 MB (94 BC7, 32 RGBA32) and the backgrounds 5 of 5 to 19.6 MB. So the art is compressed on
-  the Standalone target and the small zip is the importer's doing, not the zip's. **That
-  measurement predates the 336 by 396 sheets**, which import as BC7 and cannot be crunched: by
-  `Tools/texture-import-policy.py`'s model the 338 files in `Sprites/Units` now pack to about
-  3,018 MB on Windows (BC7 is 1 byte per pixel and only DXT can be crunched), against the
-  139.4 MB measured, so the unzipped player grows by close to 2.9 GB. How much of that the zip
-  wins back is unmeasured. Re-measure with `Tools/build-windows.ps1` before quoting a player size. `EmberfallBuild`
-  writes this report beside every Windows player, and `Tools/build-windows.ps1` prints it. The APK
-  has not been measured: Android reads its own importer overrides, and the 855 MB may still be
-  true there. Measure an APK the same way before sizing the work.
+- **Texture compression.** The 855 MB figure this entry once carried was re-taken against a real
+  Windows player twice. The first player, before the 336 by 396 sheets, was 318 MB unzipped and
+  188.5 MB zipped, with 208 sheets packed as DXT5 Crunched. **The second, taken in R16 with the
+  336 by 396 sheets in, is 3237.5 MB unzipped and 676.1 MB zipped**; its build report packs
+  3132.8 MB, of which the 338 battle sheets in `Sprites/Units` are 3018.3 MB, all BC7 (12072.9 MB
+  as raw RGBA, each sheet up to about 9.4 MB packed, 8.9 on average). The earlier prediction of close to 2.9 GB of growth
+  held. Portraits, badges and HUD pack to 24.8 MB and the backgrounds to 19.6 MB, so the Units group
+  is the whole of the growth. The zip wins back 4.8x, and 676.1 MB zipped is still under 1 GB; only
+  the unzipped player is over. **The cheapest fix, not applied and an owner call**: set `win_format` of
+  the Units group in `Tools/texture-import-policy.py` from BC7 to DXT5 Crunched. Measured on one
+  sheet, 9.4 MB packed falls to 1,004,264 bytes, and extrapolated over 338 sheets the player falls to
+  about 0.4 GB unzipped (an extrapolation, not measured across all sheets). It is visibly softer:
+  hair strands, face and armour trim smear into blotches in a battle capture, which is why the
+  policy chose BC7 on purpose and why this reverses a recorded decision. Lowering
+  `maxTextureSize` is not a good alternative: it halves the texel density, which is the blotch
+  problem again (that it also shears the frame grid, as the policy comment says, is unverified).
+  The importer metas are owned by the policy script, so the durable form of the change is the policy
+  edit and not a hand edit of the metas.
+  Source: `Tools/build-windows.ps1` at the R16 measurement (`Docs/BALANCE-REPORT-R16.md`, Player
+  size). `EmberfallBuild` writes this report beside every Windows player, and
+  `Tools/build-windows.ps1` prints it. The APK has not been measured: Android reads its own importer
+  overrides, and the 855 MB may still be true there. Measure an APK the same way before sizing the
+  work.
 - **An APK**, once there is a device.
 - **iOS**, once there is a Mac and a developer account.
 

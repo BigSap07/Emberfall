@@ -1,0 +1,184 @@
+# Balance report R16 (2026-10-19)
+
+The merge and smoke results are not in this file; they go in the run's REPORT.md. Every number here is read from a file named next to it. Files are under `D:\Emberfall\handoff\R16-CORE-BALANCE\` unless a path says otherwise: `data\` holds the simulation outputs, `logs\` the build-check and harness runs.
+
+The owner took four decisions on 2026-10-19 after `Docs/BALANCE-REPORT-R13.md`. This report is what they did. Sections 1, 2 and 5 are changes that landed on the run branch. Section 3 is the solver. Section 4 is the curve. Sections 6 and 7 are report only.
+
+How to read the numbers:
+- A ratio is the power a simulated player brings to the first attempt of a stage, over that stage's `recommendedPower`.
+- A walk is one seeded run of the harness economy player over the whole campaign. `WalkSeed(k)` is `1 + k * 1000003`. The reference player never converts and never ascends. The fusing player does both as soon as it can.
+- A tail is the extra sittings a stage costs beyond its own ladder floor. A walk is stuck when it makes no progress for 14 sittings (the walk takes one swap undo first, so a stuck walk shows 14 or 16 sittings).
+- The rest of the method is in `Docs/BALANCE-REPORT-R13.md`. The instruments are the same.
+
+## 1. Fusion A (owner decision 1)
+
+What changed: `ascensionCurveMultipliers` in `balance.json` goes from `[1, 2.035, 6.175]` to `[1, 2.035, 1.5]` (and the `BalanceConfig` default). A tier 2 five-star walks Levels 46 to 103 where it walked 46 to 281. The caps `[9, 18, 39]`, the Level each tier starts at (1, 10, 46) and `ascensionCopies [1, 4]` did not move. Source: `logs\build-check-builder-task1b.log`, FUSION ECONOMY section.
+
+**Fusing player, median entry power over `recommendedPower`.** Source: `data\fusion-r16.csv`, taken on the simulation tree WITHOUT the counterattack rule (20 walks). On the run branch with the counterattack rule and the 60 walks of the guard, the fusing player reads 2-12 x2.926, 3-12 x6.211, 4-12 x6.274, 5-12 x6.360 and 6-12 x6.019 (`data\review\review5-tasks1-2-fusion-guard.md`), within 0.04 of the table. The first run of the new content in the harness's own 20 fusing walks (`logs\build-check-builder-task1b.log`) reads x6.182, x6.250, x6.338 and x6.019 at 3-12, 4-12, 5-12 and 6-12, within 0.05 of this table.
+
+| Finale | Before (x6.175) | After (x1.5) | After, with the loosened curve (section 4) |
+|---|---|---|---|
+| 1-12 | 0.980 | 0.980 | 0.980 |
+| 2-12 | 2.939 | 2.939 | 3.197 |
+| 3-12 | 8.752 | 6.183 | 6.387 |
+| 4-12 | 13.909 | 6.287 | 6.879 |
+| 5-12 | 15.563 | 6.350 | 6.920 |
+| 6-12 | 15.406 | 6.026 | 6.557 |
+
+| Chapter, stage 6 | Before | After (x1.5) | After, with the loosened curve |
+|---|---|---|---|
+| 2-6 | 1.872 | 1.872 | 1.986 |
+| 3-6 | 5.037 | 4.196 | 4.575 |
+| 4-6 | 11.634 | 6.337 | 6.818 |
+| 5-6 | 15.119 | 6.267 | 6.854 |
+| 6-6 | 17.848 | 6.990 | 7.062 |
+
+The third column is the final content (fusion A and the loosened curve), 20 walks, from the last column of `data\fusion-r16.csv`. With fusion A alone chapters 1 and 2 do not move and the plateau is x6.0 to x7.0, equal to R13's candidate A (x2.94, x6.18, x6.29, x6.35, x6.03). The loosened curve asks the reference player for less power, so the fusing player's ratio rises with it: chapter 2 moves (2-12 from 2.939 to 3.197) and the finale plateau of chapters 4 to 6 is x6.6 to x6.9.
+
+**ContentVersion** moves from the version beginning `c1-3015` to the one beginning `c1-e4c0` (`logs\build-check-baseline.log`, `logs\build-check-builder-task1b.log`). Recorded guild dungeon replays retire. Accepted by the owner. No stage, hero sweep or talent fingerprint moved (the same two logs).
+
+**The derivation.** `CheckFusionEconomyDerivation` cannot derive 1.5. No rule in it gives that number: it encodes a target, the fusing player's plateau at about x6, and a target is a decision. So tier 2's multiplier is pinned in the harness as the owner's decision of 2026-10-19. The derivation computes the continuity value (x6.175, Levels 46 to 281), prints it beside the pin, derives every other number around it, and a check asserts the pin is the only departure. A hero at tier 2 at its cap is x12.73 a Level 1 hero, and x6.63 a tier 0 hero at its cap (`logs\build-check-builder-task1b.log`).
+
+**Migration, not grandfather.** A save holding a tier 2 five-star at Level 281 loads through the real serializer and is clamped to Level 103 by the version 18 level clamp. Its power falls from 31006 to 12075 (x0.389). The hero keeps its tier, round-trips, and plays 1-1 and 6-12. The check is `CheckTierTwoAboveTheNewCapLoadsClampsAndPlays` (`logs\build-check-builder-task1b.log`).
+
+**Another check moved with it, and its guard changed.** `CheckEconomyRespondsToIncome` read 0.12 over 8 players (needs more than 0.50) after the change. Its window opened at 4-1, which a fusing player now reaches already on the plateau: under decision 1 a fusing player's power stops depending on income from about 3-12, so 1x and 2.5x income gave the same roster and levels. That is the plateau working, not the income link being severed. The window now opens a third of the way in, at 3-1, before the plateau. The three readings: 0.12 at 4-1 (spread -0.37 to 0.50, fails), 0.70 at 3-1 (spread 0.57 to 1.17, kept) and 0.32 at 2-1 (spread 0.23 to 0.41, fails). The bar of 0.50 is unchanged. This is a default taken, traced to owner decision 1. Source: `logs\build-check-builder-task1.log` (the 0.12), `logs\build-check-builder-task1b.log` (the 0.70) and `logs\task1-income-window.md` (all three windows).
+
+## 2. Guard (owner decision 2)
+
+`CheckFusionNeverGates` reads 60 walks (`WalkSeed` 0 to 59) where it read 20. A stuck walk is now named by stage, walk and seed. Full table: `logs\task2-guard.md`.
+
+| Tree | Stuck walks of 60 | Where |
+|---|---|---|
+| Before this run | 5 | walk 23 at 4-2, 46 at 2-9, 48 at 5-3, 51 at 2-6, 59 at 2-4 |
+| After the counterattack rule and fusion A | 8 | walk 1 at 4-2, 6 at 5-4, 16 at 3-7, 20 at 5-9, 23 at 4-2, 46 at 2-9, 51 at 2-6, 59 at 2-4 |
+
+Sources: `logs\fng60-before-r16-seeds.log` (before) and `logs\task2-guard.md` (after).
+
+Four stuck walks are in both (23, 46, 51, 59). Walk 48 is cured. Walks 1, 6, 16 and 20 are new. Walks 0 to 19, the old guard, hold three of the new ones (1, 6, 16), which were green before and are the reds after the counterattack rule (section 5). Fusion A cannot move a reference walk: that player never ascends. The check was red until the curve was loosened, and is green on 60 walks after it (section 4). That is the point of widening it.
+
+The solver's stuck scan reads the same 60 walks, so it costs three times as much per iteration.
+
+## 3. Solver (task 3)
+
+Source: `data\sim-progress.md`, `data\solver-whatif-final.log`.
+
+- The solver now aims at `SolverTargetRatios`, the per-stage entry ratio of the shipped curve (all 72 inside the power band; tightest margins 1-6 0.0116, 1-12 0.0174, 1-7 0.0183). It is a snapshot of the content before this run: the table was first read on that content (this task), and in task 4 it was re-read on the loosened content (section 4).
+- The `2-1` armor 0 is a reading artifact. The entry reading was taken before the sitting that wears armor (armor opens at 1-12). `ArrivalTeamPower` now reads `2-1`, the stage right after armor opens, as the player stands once they wear what they hold. Only the reading changed: 60 walks are identical. The `2-1` median goes from x1.061 to x1.146.
+- Run on the shipped content as a what-if: 0 of 72 `recommendedPower` moved. 2 rosters moved by one unit: 1-6 from 20/20/21/20 to 19/20/21/20, and 2-12 from 22/22/22/22/22 to 22/21/22/22/22. The solver's own reading at those two rosters is 84 and 62 percent CEIL. No CEIL before is quoted: the solver's reading and the harness's CEIL check are two instruments and their numbers do not compare. Nothing was written.
+- **The table is a snapshot, not a fixed point.** On the run branch with the counterattack rule, the same what-if moves 42 stages in iteration 1 and 59 in iteration 2, and had not converged after 590 s (review 4, `data\review\review4-task3-solver.md`). The median ratios per stage are the same to 3 digits. The first-seed walk re-draws from 2-11 on, and the solver follows that noise. So the table is refreshed with the content and not trusted across an engine change.
+
+## 4. Curve (task 4)
+
+Target (prompt): over 60 reference walks, 0 stuck, no ordinary stage with a worst tail over 12 extra sittings, every banded stage inside its band, the walls binding as designed.
+
+Two before columns, because the counterattack rule moved the walks (section 5). The honest before for the curve lever is the second one. The third column is the result.
+
+| | Old engine, old curve | New engine, old curve | New engine, new curve |
+|---|---|---|---|
+| Stuck walks of 60 | 5 | 8 | **0** |
+| Stuck stages | 2-4, 2-6, 2-9, 4-2, 5-3 | 2-4, 2-6, 2-9, 3-7, 4-2 (twice), 5-4, 5-9 | none |
+| Ordinary stages with a worst tail over 12 | 2-3 21, 2-4 26, 2-5 16, 2-8 29, 2-10 47, 3-7 15, 3-10 21 | 2-3 21, 2-4 26, 2-5 16, 2-8 29, 2-10 47, 2-11 17, 3-4 45, 6-3 17 | none (largest tail 8, at 2-10) |
+| Walls with a worst tail over 12 | 2-6 30, 2-12 28, 4-12 13 | 2-6 30, 2-12 28 | none (largest tail 4, at 4-6) |
+| Power band, walk 0 (the guard reads this one) | inside | inside | 72 of 72 inside; highest x1.237 at 3-4, closest to a low edge 1-6 at x1.012 (low edge 1.00) |
+| CEIL, graded stages inside band | 70 of 70 (1-1 and 1-2 are floor pinned, not graded) | not measured | 70 of 70 (1-1 and 1-2 pinned) |
+| `CheckFusionNeverGates` on 60 walks | red, 5 stuck | red, 8 stuck | green |
+
+Sources: `data\tails-before.csv` and `data\tails-before-summary.md` (left column, byte identical to R13's baseline per review 2, `data\review\review2-task4-before-table.md`); `data\tails-new-engine-old-curve.csv` (middle column); `data\tails-after-summary.txt` and `data\tails-before-after.csv` (right column, all three columns per stage). Worst tail counts cleared walks only; a stuck walk is listed as stuck.
+
+**The lever.** `recommendedPower` from `2-1` to `6-12` is lowered by one shared 8 percent. No stage is taken past x1.20 on the median of the 60 walks: the power band tops out at x1.25 and about 15 stages already sat at a median of x1.14 to x1.21 (`data\curve-summary.md`). That cap holds 4 of the 60 chapter 2 to 6 stages unchanged (`ch3_4`, `ch5_11`, `ch6_7`, `ch6_10`) and lets 20 more move by less than 8 percent, so 56 move: 36 by the full 8 percent, 20 by 0.4 to 7.8 percent (`data\campaign-changes-cap8.csv`). Chapter 1 is untouched, so the walls at 1-6 to 1-12 stay as designed (their tails, CEIL and ratios are identical in the table below). The package was measured whole, after all of tasks 1, 2 and 5, because R13 showed spot fixes interact. The enemy levels of every moved stage are re-solved with `SolveStageLevelsAt` to the CEIL rate the stage read before, and the opening roster of all 56 moved (their `floorLevel` and `ceilingLevel` fall by 1 to 7 levels). `SolverTargetRatios` is re-read on the loosened content, so a solver what-if on it moves nothing. Sum of the change: 56 stages, 42,790 power taken off `recommendedPower`.
+
+Variants tried (`data\curve-summary.md`, `data\sim-progress.md`): the same step uncapped (-8 percent everywhere) leaves 0 stuck but a 22 and a 23 sitting tail at 2-9 and 2-10 and 6 stages over the band top; a looser cap (labelled cap11 in that log) leaves 1 stuck (seed 46 at 3-4, a stage the cap leaves loose). The capped 8 percent step is the one that met the target.
+
+**The walls** (extra sittings median/p90/max, then stuck walks; CEIL percent; median entry ratio). Source: `data\walls-before-after.txt`. Before is the new engine on the old curve (4-12 reads 10 there and in `data\tails-new-engine-old-curve.csv`; the old engine on the old curve reads 13).
+
+| Wall | Before | After | CEIL before to after | Ratio before to after |
+|---|---|---|---|---|
+| 1-6 | 0/1/4, 0 | 0/1/4, 0 | 71.8 to 71.8 | 1.076 to 1.076 |
+| 1-12 | 1/2/4, 0 | 1/2/4, 0 | 59.3 to 59.3 | 0.939 to 0.939 |
+| 2-6 | 0/5/30, 1 | 0/0/1, 0 | 62.7 to 66.6 | 1.106 to 1.194 |
+| 2-12 | 1/5/28, 0 | 0/0/0, 0 | 56.5 to 58.3 | 1.083 to 1.177 |
+| 3-6 | 0/1/3, 0 | 0/0/1, 0 | 68.0 to 65.3 | 1.143 to 1.208 |
+| 3-12 | 0/1/5, 0 | 0/0/3, 0 | 64.6 to 64.5 | 1.160 to 1.196 |
+| 4-6 | 0/0/3, 0 | 0/0/4, 0 | 64.1 to 64.6 | 1.136 to 1.200 |
+| 4-12 | 1/3/10, 0 | 0/0/0, 0 | 64.1 to 61.0 | 1.085 to 1.171 |
+| 5-6 | 0/2/10, 0 | 0/0/0, 0 | 63.2 to 62.4 | 1.083 to 1.175 |
+| 5-12 | 1/2/4, 0 | 0/0/0, 0 | 66.6 to 66.9 | 1.093 to 1.183 |
+| 6-6 | 0/0/1, 0 | 0/0/1, 0 | 62.7 to 58.8 | 1.195 to 1.204 |
+| 6-12 | 0/2/8, 0 | 0/0/0, 0 | 64.1 to 68.4 | 1.033 to 1.125 |
+
+The walls still bind: every chapter 2 to 6 wall keeps a CEIL of 58.8 to 68.4 percent, inside the wall band of 55 to 72, and a median ratio of x1.125 to x1.208, at the top of the band and not past it. The cost is that they bind less in sittings: the worst wall tail is 4 extra sittings, where it was 30.
+
+**Caveats.**
+- 30 stage readings across all 60 walks sit outside the power band, over 20 stages. The ten most frequent stages are 2-1 (four times), 2-11 (three times), 4-7, 3-3, 3-4, 2-6 and 2-7 (twice each) and 3-11, 3-12 and 4-3 (once each); the other ten readings are spread over ten more stages. The guard reads walk 0 only and walk 0 is inside; this is the spread of 60 players, informational (`data\tails-after-summary.txt`).
+- 3-4 is one of the four stages the cap holds, so its `recommendedPower` did not move. Its median rises from x1.202 to x1.215 because walks reach it in a different state after the earlier stages moved. It is the highest chapter 2 to 6 median. The cap applies to the stages the lever moves; it is not a ceiling on every median.
+- The 56 moved stages change their opening battle, so their stage fingerprints move and `stage-fingerprint-baseline.txt` is regenerated for them (reason: this lever). ContentVersion moves as well.
+
+**ContentVersion** across the run, by the first digits of the version string: before R16 it began `c1-3015`, after fusion A alone `c1-e4c0`, and with the loosened curve (the final value, verified by the reviewer, `data\review\review7-task4-curve.md`) it begins `c1-3be1`. It moved twice, by owner decisions 1 and 2. Recorded guild dungeon replays retire. The full strings are in the run's build-check logs.
+
+**Default taken: the lever is not one literal shared percentage.** The prompt asked for one shared percentage per chapter in at most three steps. What landed is minus 8 percent with a x1.20 median target as a cap, so 20 of the 56 moved stages get less than 8 percent (0.4 to 7.8). Six variants were tried against the three steps the prompt allowed: p5, c5, c8, c11, cc8 and cc11 (labels in `data\sim-progress.md`). After the enemy levels were re-solved, 10 moved stages read x1.202 to x1.210 on the 60-walk median, still inside the x1.25 band. Traced to owner decision 2.
+
+**Owner-visible: the walls bind by CEIL, not by sittings.** The wall CEIL stays at 58 to 68 percent, inside the 55 to 72 band, so a wall is still a hard fight. But a wall no longer costs the reference player sittings: the median and the 90th percentile are 0 extra sittings at every wall from chapter 2 on, and the largest tail is 4, at 4-6. Pace target B (2 to 4 extra sittings at the chapter finales, `ReportPaceTargets`) therefore reads further off than before. Target B is reported and not a failing check. The owner may want to decide whether walls should cost the reference player sittings again, and if so by how much; that is a different lever from this one.
+
+## 5. Counterattacks (owner decision 4, task 5)
+
+**The rule.** A counterattack answers the attacker and ignores Taunt. In `ResolveTargetsInner`, `TargetMode.LastAttacker` with a live, legal attacker returns before the Dev Arena's forced pick, the Provoke and the Taunt anchor. With no such attacker it falls back to `FrontEnemy`, an ordinary pick that respects Taunt. The card texts of Caldus's No Uncertain Ground and Defined Duty and Jory's Worn Hinges are unchanged, and the proposals to reword them are withdrawn.
+
+**What it covers.** Four places in the content use the mode: `jory_worn_hinges`, `caldus_defined_duty`, `caldus_no_uncertain_ground` and the guild tech line `line_answer_in_kind` (review 3, `data\review\review3-task5-counter-rule.md`). Not covered, on purpose: `LastTarget` (a follow-up on the caster's own blow) and Maera's Keep the Beacon (`EnemyThatLastDamagedAlly`, an authored active whose card names its target). Maera's active stays under Taunt. The owner can overrule that.
+
+**The define.** Compiling with `EMBERFALL_COUNTER_ANSWERS_TAUNT` restores the old resolution exactly. The default build is the new rule. Proven once, outside the repo: with the define, check (a) (a counter goes to the attacker with a Taunt holder standing) and check (d) (an ally's strike-back at the enemy that hit another ally) fail as they do on the old engine, and all 470 sweep fingerprints match the old baseline (`logs\counter-rollback.md`).
+
+**The harness check.** `CheckCounterAnswersTheAttackerNotTaunt` (a counter and an ally's strike-back go to the attacker with a Taunt holder standing; the same hero's ordinary attack still goes to the Taunt holder; a control with no Taunt agrees). It fails on the old engine and passes on the new (review 3).
+
+**What moved.**
+- Hero sweep: only `jory_the_old_gate`, seeds 1 to 5 (5 of 470). Damage 69495 to 72836, power 80420 to 83761, x0.77 to x0.80 of the 5-star median, still in band. Sources: `logs\build-check-baseline.log` and `logs\build-check-builder-task5b.log`. Caldus did not move in the sweep.
+- Talent fingerprints: 450 of 450 match. Stage fingerprints: 216 of 216 match. ContentVersion unchanged (review 3, reading `logs\build-check-builder-task5b.log`).
+- Arena matrix output: identical.
+- Real campaign (72 stages, first and last battle, 4 seeds, Caldus with Kael, Brenna, Nara and Hale at level 30, 576 battles; review 3): counters that landed on a Taunt holder that was not the attacker. Caldus: 3 of about 190 before, 0 after. Jory: 88 of 149 before, 0 of 152 after. So the fix is large for Jory and small for Caldus on today's content.
+
+**What it cost the walks.** The reference line picks Caldus, and 56 of 60 walks diverge at a stage with a Taunt enemy, after which gold and armor drops re-draw. The paired mean change in sittings per stage over the common cleared prefix is -0.024 (sd 0.238, n 60), so no systematic weakening, and the median entry ratio per stage agrees to 3 digits (review 3). But the stuck count moved from 5 to 8 of 60 (section 2), and the guild tech no-tech check (G5) reads 1 of 6 walks stuck at 4-2 where it read none (`logs\build-check-builder-task5b.log`). Both are the same re-draw, and are cured by section 4 if it works.
+
+## 6. Wheel at 1.05 and 0.95 (report only, task 6)
+
+`AspectChart` stays 1.10 and 0.92 in the game. Source for this whole section: `data\wheel-summary.md`, with the CSVs `data\aspect-grid-r16*.csv` and full tables in `data\wheel\grids.md`. Same method and seeds as R13; the run at 1.10 and 0.92 reproduces all 9 R13 aspect CSVs byte for byte. Noise: 2.2 points per cell, 1.4 per hero.
+
+**The tables below are the first pass, on a tree without the counterattack rule. The rerun on the merged tree (the run branch through the 60 seed guard, `data\wheel-summary.md`) changes nothing that matters:**
+- The wheel control is byte-identical (a counter rule does not touch a mirror of identical lines): 89.8 to 93.4 at 1.10 and 0.92, 73.6 to 80.4 at 1.05 and 0.95.
+- Roster grids move by at most 3.6 points in any cell (noise is 2.2 per cell). Umbra's mean on the merged tree: 21.7, 29.1 and 8.4 at 1.10 and 0.92, and 22.2, 29.7 and 9.0 at 1.05 and 0.95 (3 star pool, 4 star pool, every hero).
+- Dominance is as in the first pass: Ember in the 3 star pool, Lumen in the 4 star pool, nobody at 1.10 and 0.92 and Ember at 1.05 and 0.95 in the every-hero pool.
+- The hero tables on the merged tree and the shipped (not loosened) campaign equal R13 at 1.10 and 0.92, so the counter rule moves no hero's equal-footing win rate here. At 1.05 and 0.95 they equal the first pass. On the loosened campaign the calibrated hero level per line pair moves, so those tables are not comparable with R13 and are not used.
+
+Mirror win rate of the advantaged colour (the wheel control, identical lines):
+
+| Pair | R13, 1.10 and 0.92 | R16, 1.05 and 0.95 |
+|---|---|---|
+| Ember over Verdant | 93.2 | 78.0 |
+| Tide over Gale | 92.8 | 75.4 |
+| Verdant over Tide | 93.4 | 80.4 |
+| Gale over Ember | 89.8 | 73.6 |
+| Range | 89.8 to 93.4 | 73.6 to 80.4 |
+
+- At parity the wheel is still a counter, about 3 wins in 4 against 9 in 10. It is not a tiebreak. Neutral pairs read 47.0 to 53.6 in both runs, as they must. A tiebreak would need a gap well under 1.05 and 0.95, which was not simulated.
+- The mean absolute chart effect over the eight directed ring cells falls from 22.5 to 13.8 points (3 star pool), 33.7 to 23.7 (4 star pool) and 27.1 to 16.1 (every hero).
+- Dominance: in the every-hero pool nobody dominates at 1.10 and 0.92, but Ember does at 1.05 and 0.95 (it beats Gale 56.4). Never quote a dominant aspect without the pool and the chart.
+- Umbra, mean win rate against the other five (roster grid, first pass; the merged-tree values are above): 3 star pool 21.4 to 22.0, 4 star pool 29.7 to 30.2, every hero 7.8 to 8.4. The wheel does not explain Umbra. The chart-off twin reads 21.6, 30.0 and 8.0. The cause is the pool (9 Umbra heroes against 19 per ring colour) and the kits.
+- Brenna and the Bulwark gap: equal stars 23.9 to 22.3 (Brenna 66.6 to 65.2, Kael 42.7 to 42.9). Native stars 25.3 to 23.9 (Brenna 70.1 to 69.7, Kael 44.8 to 45.8). Her lead is her kit, not her colour. Across all 94 heroes the mean absolute move is 0.86 points (equal stars), and the largest single move is 3.5 (Elin).
+- Near-parity modes (the Proving, PvP) are where the gap bites. Read 75 as decisive at parity, not as the PvE effect.
+
+## 7. Player size (report only, task 7)
+
+Source: `logs\player-size.md`; sizes file and editor log named there. The reviewer recomputed the sizes from disk (review 1, `data\review\review1-task7-player-size.md`).
+
+- Windows release, offline player: **3237.5 MB unzipped, 676.1 MB zipped** (3,394,798,931 and 708,993,753 bytes). Before: 318 MB and 188.5 MB. Growth about 2.9 GB. The zip wins back 4.8x. Over 1 GB unzipped, under 1 GB zipped.
+- Build report: 3132.8 MB packed. The 338 battle sheets are 3018.3 MB of it (12072.9 MB raw, all BC7, up to about 9.4 MB each and 8.9 on average). Other sprites 24.8 MB, backgrounds 19.6 MB, everything else 63.4 MB. Textures are 98.0 percent of the editor's report.
+- Top 10 assets: all battle sheets of 9.4 MB (`nereia_the_field_medic` and `celen_the_open_hand` sheets, and one `rheia_the_revision_scribe` sheet). The report sorts ties unordered, so the top of the list is dozens of 9.3 to 9.4 MB sheets.
+- **Proposal, not applied, an owner call.** Set `win_format` of the Units group in `Tools/texture-import-policy.py` to DXT5 Crunched (format 29). The policy chose BC7 on purpose, so this reverses a recorded decision. Measured on one sheet (`kael_the_unyielding_idle.png`): 9.4 MB packed to 1,004,264 bytes. The link from the cache artifact to the sheet is by size and time, not proven (review 1). Extrapolated over 338 sheets the player falls to about 0.4 GB unzipped. That is an extrapolation from one sheet. The result is visibly softer: hair and armour trim smear (`shots\player-size\kael_before_after.png`).
+- Not recommended: lowering `maxTextureSize`. The policy script's comment says it shears the frame grid. That claim is unverified: nobody measured it, and by the script's own model a halving is an integer 2x and does not shear. What it certainly does is halve the texel density, which is the blotch problem again (review 1).
+- The importer metas are owned by `Tools/texture-import-policy.py`, so the durable form of the change is the policy edit and not a hand edit of the metas, which the next policy run would undo.
+- Real save hash before and after every Unity run: unchanged.
+
+## Method notes
+
+- Fusion table: `data\fusion-r16.csv` (20 walks: the first two columns are in-memory candidates on the simulation tree, the last is the final content). The harness figures in section 1 are the harness's own 20 fusing walks.
+- Guard and curve tables: 60 reference walks, `WalkSeed(0..59)`, instrument `--r13-tails`; CEIL from `CheckArmoredCurveDelta`.
+- The R13 instruments live on a local scratch branch and are not on main.
+- Not measured: the CEIL column on the new engine on the old curve.

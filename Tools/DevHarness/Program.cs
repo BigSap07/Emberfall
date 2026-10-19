@@ -2046,6 +2046,7 @@ namespace Emberfall.DevHarness
             CheckStatStatusesExpire();
             CheckNewTargetModesSelect();
             CheckAnchorStillOverridesNewModes();
+            CheckCounterAnswersTheAttackerNotTaunt();
 
             Line("");
         }
@@ -2500,6 +2501,147 @@ namespace Emberfall.DevHarness
                   "and with a Taunt holder standing, the SAME mode collapses onto the anchor instead (got "
                   + (anchored.Count == 0 ? "nobody" : anchored[0]) + ") - unchanged from how every "
                   + "pre-existing single-enemy mode already behaves, and deliberately not altered here");
+        }
+
+        /// <summary>
+        /// R16 owner decision 4: a counterattack answers the attacker, not Taunt.
+        ///
+        /// One hero on the player side counters (OnDamaged, Damage on LastAttacker). The enemy
+        /// side is the attacker in front and a Taunt holder behind it, so the two bodies the
+        /// counter could land on are different and the answer is unambiguous. Zero variance, so the
+        /// order of events is the whole story: the attacker acts first, the counter follows its
+        /// blow, and the hero's own basic comes later.
+        ///
+        /// (a) the counter lands on the attacker although a Taunt holder stands on that side.
+        /// (b) the hero's own ordinary single-enemy pick still lands on the Taunt holder, so the
+        ///     rule moved the counter and nothing else.
+        /// (c) the control: with no Taunt holder the counter lands on the attacker as well, so
+        ///     (a) is not Taunt being absent.
+        /// (d) the other shape of strike back, an ally's passive answering a blow on a THIRD body
+        ///     (OnEnemyDamagedAlly, Caldus's No Uncertain Ground): it too goes to the enemy that
+        ///     hit the ally, past the Taunt holder.
+        /// </summary>
+        private static void CheckCounterAnswersTheAttackerNotTaunt()
+        {
+            for (int variant = 0; variant < 2; variant++)
+            {
+                bool taunt = variant == 0;
+                BattleResult r = RunCounterArena(taunt);
+                if (r == null) return;
+
+                int heroId = -1, watcherId = -1, attackerId = -1, tauntId = -1;
+                for (int i = 0; i < r.Units.Count; i++)
+                {
+                    if (r.Units[i].DefId == "ctr_hero") heroId = r.Units[i].Id;
+                    else if (r.Units[i].DefId == "ctr_watcher") watcherId = r.Units[i].Id;
+                    else if (r.Units[i].DefId == "ctr_attacker") attackerId = r.Units[i].Id;
+                    else if (r.Units[i].DefId == "ctr_taunter") tauntId = r.Units[i].Id;
+                }
+
+                // The first blow the attacker lands on the hero, the counter that follows it, and
+                // the hero's own basic after that.
+                bool hit = false, tauntHeld = false;
+                int counterTarget = -1, basicTarget = -1, watcherTarget = -1;
+                for (int i = 0; i < r.Events.Count; i++)
+                {
+                    BattleEvent e = r.Events[i];
+                    if (e.Type == BattleEventType.StatusApplied && e.Status == StatusKind.Taunt && e.TargetId == tauntId)
+                        tauntHeld = true;
+                    if (e.Type != BattleEventType.Damage || e.Status != StatusKind.None) continue;
+                    if (!hit)
+                    {
+                        if (e.SourceId == attackerId && e.TargetId == heroId) hit = true;
+                        continue;
+                    }
+                    if (e.SourceId == watcherId && watcherTarget < 0) watcherTarget = e.TargetId;
+                    if (e.SourceId != heroId) continue;
+                    if (counterTarget < 0) counterTarget = e.TargetId;
+                    else if (basicTarget < 0) basicTarget = e.TargetId;
+                }
+
+                string counterName = counterTarget < 0 ? "nobody" : r.FindUnit(counterTarget).DefId;
+                string basicName = basicTarget < 0 ? "nobody" : r.FindUnit(basicTarget).DefId;
+                string watcherName = watcherTarget < 0 ? "nobody" : r.FindUnit(watcherTarget).DefId;
+                if (taunt)
+                {
+                    Check(tauntHeld, "counter arena: the enemy Taunt holder really holds Taunt");
+                    Check(hit && counterTarget == attackerId,
+                          "(a) a counterattack goes to the attacker although a Taunt holder stands on that side (got "
+                          + counterName + ")");
+                    Check(basicTarget == tauntId,
+                          "(b) the same hero's ordinary single-enemy attack still respects Taunt (got " + basicName + ")");
+                    Check(hit && watcherTarget == attackerId,
+                          "(d) an ally's strike back at the enemy that hit another ally goes to that enemy past the Taunt holder (got "
+                          + watcherName + ")");
+                }
+                else
+                {
+                    Check(!tauntHeld, "counter arena control: no Taunt anywhere");
+                    Check(hit && counterTarget == attackerId,
+                          "(c) control, no Taunt holder: the counterattack goes to the attacker (got " + counterName + ")");
+                    Check(basicTarget == attackerId,
+                          "(c) and the ordinary attack goes to the front enemy, which is the attacker (got " + basicName + ")");
+                    Check(hit && watcherTarget == attackerId,
+                          "(c) and the ally's strike back goes to the attacker too (got " + watcherName + ")");
+                }
+            }
+        }
+
+        private static BattleResult RunCounterArena(bool tauntHolder)
+        {
+            string taunterPassive = tauntHolder
+                ? ",\n      \"passive\": { \"id\": \"ctr_prime\", \"name\": \"Prime\", \"trigger\": \"BattleStart\","
+                  + " \"effects\": [ { \"kind\": \"ApplyStatus\", \"target\": \"Self\", \"status\": \"Taunt\","
+                  + " \"duration\": 99, \"chance\": 1 } ] }"
+                : "";
+            string heroesJson = @"{
+  ""heroes"": [
+    { ""id"": ""ctr_hero"", ""name"": ""Counterer"", ""aspect"": ""Ember"", ""role"": ""Bulwark"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""ctr_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 } ] },
+      ""passive"": { ""id"": ""ctr_counter"", ""name"": ""Strike Back"", ""trigger"": ""OnDamaged"",
+        ""oncePerBattle"": false, ""limit"": ""OncePerRound"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LastAttacker"", ""power"": 1 } ] } },
+    { ""id"": ""ctr_watcher"", ""name"": ""Watcher"", ""aspect"": ""Ember"", ""role"": ""Striker"", ""startingHero"": true,
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 1, ""critChance"": 0, ""critDamage"": 1.5, ""startEnergy"": 0,
+      ""basic"": { ""id"": ""ctr_watcher_basic"", ""name"": ""Tap"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.5 } ] },
+      ""passive"": { ""id"": ""ctr_watch"", ""name"": ""No Uncertain Ground"", ""trigger"": ""OnEnemyDamagedAlly"",
+        ""oncePerBattle"": false, ""limit"": ""OncePerRound"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""LastAttacker"", ""power"": 1 } ] } }
+  ]
+}";
+            string enemiesJson = @"{
+  ""enemies"": [
+    { ""id"": ""ctr_attacker"", ""name"": ""Attacker"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 100, ""defense"": 0, ""speed"": 500, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""ctr_attacker_basic"", ""name"": ""Strike"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 1 } ] } },
+    { ""id"": ""ctr_taunter"", ""name"": ""Taunter"", ""aspect"": ""Ember"",
+      ""hp"": 1000000, ""attack"": 1, ""defense"": 0, ""speed"": 5, ""critChance"": 0, ""critDamage"": 1.5,
+      ""basic"": { ""id"": ""ctr_taunter_basic"", ""name"": ""Nudge"",
+        ""effects"": [ { ""kind"": ""Damage"", ""target"": ""FrontEnemy"", ""power"": 0.001 } ] }" + taunterPassive + @" }
+  ]
+}";
+            string campaignJson = @"{
+  ""chapters"": [
+    { ""id"": ""ctr_ch"", ""name"": ""Counter Arena"", ""stages"": [
+        { ""id"": ""ctr_arena"", ""index"": 1, ""enemies"": [
+            { ""id"": ""ctr_attacker"", ""level"": 1 }, { ""id"": ""ctr_taunter"", ""level"": 1 } ] }
+    ] }
+  ]
+}";
+            string balanceJson = @"{
+  ""defenseConstant"": 300, ""defensePerLevel"": 0, ""damageVariance"": 0, ""speedVariance"": 0,
+  ""minDamage"": 1, ""maxRounds"": 3, ""energyMax"": 100, ""energyPerBasicAttack"": 0, ""energyOnDamaged"": 0, ""maxTeamSize"": 5
+}";
+            ContentDatabase db = LoadSyntheticContent(heroesJson, enemiesJson, campaignJson, balanceJson, "CounterArena");
+            if (db == null) return null;
+            List<HeroInstance> team = new List<HeroInstance>();
+            team.Add(MakeInstance(db.GetHero("ctr_hero"), 1));
+            team.Add(MakeInstance(db.GetHero("ctr_watcher"), 1));
+            return RunWith(db, db.GetStage("ctr_arena"), 909, team);
         }
 
         /// <summary>
@@ -17245,6 +17387,36 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
+        /// THE ENTRY READING OF A STAGE, and the one stage where it has to look ahead. The walk wears
+        /// its best armor at the START of a sitting (EquipBestOwnedArmor), and the entry reading is
+        /// taken before the first sitting. For every stage but one that costs nothing: the line wears
+        /// what it banked last sitting, and the reading lags by at most one drop. The stage right
+        /// after armor opens is the exception. The walk banks every drop from 1-1 on and wears none
+        /// of it until 1-12 is cleared, so at 2-1 the reading found armor 0 while the sitting that
+        /// follows fights in a full set - a median x1.047 where a player who wears what they hold
+        /// reads x1.145 (20 walks, R16). That is a reading artifact, not a gap in the economy, and it
+        /// understated 2-1's entry power, and so the recommendedPower the solver derives from it, by
+        /// the whole armor share. So on that one stage the reading is taken as the player would
+        /// stand once they had worn their best owned set, and the equipment is put back after, which
+        /// leaves the walk itself, its seeds and every later reading exactly as they were.
+        /// </summary>
+        private static int ArrivalTeamPower(ContentDatabase db, GameSession session, StageDef stage)
+        {
+            PlayerProfile profile = session.Profile;
+            StageDef opens = FeatureGate.UnlockStage(db, Feature.Armor);
+            if (opens == null || stage == null || stage.GlobalIndex != opens.GlobalIndex + 1)
+                return profile.EffectiveTeamPower(db);
+
+            string[][] worn = new string[profile.Heroes.Count][];
+            for (int h = 0; h < worn.Length; h++) worn[h] = (string[])profile.Heroes[h].EquippedArmor.Clone();
+            EquipBestOwnedArmor(db, session);
+            int power = profile.EffectiveTeamPower(db);
+            for (int h = 0; h < worn.Length; h++)
+                for (int s = 0; s < worn[h].Length; s++) profile.Heroes[h].EquippedArmor[s] = worn[h][s];
+            return power;
+        }
+
+        /// <summary>
         /// One simulated player, start of the campaign to wherever they stop. Verbose prints the
         /// table; silent is for the responsiveness check, which runs this more than once.
         /// </summary>
@@ -17291,7 +17463,7 @@ namespace Emberfall.DevHarness
                 // Read BEFORE the first sitting of this stage runs. The band the curve guard
                 // enforces is specified at the moment the player first attempts the stage, which
                 // is here and not at the bottom of the loop.
-                outcome.EntryPower = profile.EffectiveTeamPower(db);
+                outcome.EntryPower = ArrivalTeamPower(db, session, stage);
                 outcome.EntryBarePower = profile.TeamPower();
                 outcome.EntryRosterPower = DeployedRosterPowerAtLevelOne(profile, db.Balance);
                 outcome.EntryLine = DescribeLine(session);
@@ -18262,6 +18434,18 @@ namespace Emberfall.DevHarness
         //   that first level is worth against tier 0's, 1 + growth * (Level - 1), and each of its
         //   tier levels walks that many Levels of the one ladder (StatMath.LevelAt).
         //
+        //   ONE EXCEPTION, AN OWNER DECISION AND NOT A DERIVATION. Tier 2's multiplier is PINNED at
+        //   x1.5 (OwnerPinnedStrideTier, OwnerPinnedStride), decided 2026-10-19 in R16 as candidate A
+        //   of Docs/BALANCE-REPORT-R13.md section 4. The continuity rule above gives x6.175 for it
+        //   (Levels 46 to 281), and no rule in this derivation gives 1.5: it encodes a target, the
+        //   fusing player's plateau at about x6 over the reference curve instead of x14 to x18, and
+        //   a target is a decision. So the derivation computes the continuity value, prints it
+        //   beside the pin, asserts balance.json holds the pin, and derives everything else around
+        //   it. What the pin does NOT move: the first Level of every tier (F6 is about where a tier
+        //   starts, not how fast it walks), the caps, and the copies, which are priced off the
+        //   power of a tier's first Level (a copy is one hero's tier-0 level-1 power, F5) and not
+        //   off the stride.
+        //
         //   COPIES (F5). An ascension costs the bodies whose level-1 power it adds: M(t+1) - M(t)
         //   copies, rounded, since one copy is one hero's worth of tier-0 level-1 power. Nothing is
         //   made from nothing.
@@ -18294,6 +18478,8 @@ namespace Emberfall.DevHarness
             public List<int> FiveCaps = new List<int>();
             public List<double> LevelFactors = new List<double>();
             public List<double> Multipliers = new List<double>();
+            /// <summary>What the continuity rule gives each tier's multiplier, pinned or not.</summary>
+            public List<double> ContinuityMultipliers = new List<double>();
             public List<int> BaseLevels = new List<int>();
             public List<int> Copies = new List<int>();
             public List<double> TierLevelOnePower = new List<double>();
@@ -18324,6 +18510,14 @@ namespace Emberfall.DevHarness
         /// number they came from is held where they were derived.
         /// </summary>
         private const double CapDerivationGrowth = 7.611;
+
+        /// <summary>THE ONE PINNED NUMBER: the tier whose curve multiplier is an owner decision and
+        /// not the continuity rule's, and the decision. 2026-10-19, R16 owner decision 1: the fusing
+        /// player's plateau (x14 to x18 over the reference curve from chapter 4 on, x15.4 at 6-12)
+        /// is set to about x6, and the one number that does it is the top tier's stride.</summary>
+        private const int OwnerPinnedStrideTier = 2;
+        private const double OwnerPinnedStride = 1.5;
+        private const string OwnerPinnedStrideDecision = "owner decision 2026-10-19 (R16, candidate A of Docs/BALANCE-REPORT-R13.md section 4)";
 
         private static double MeanPowerAtLevel(ContentDatabase db, int stars, int level)
         {
@@ -18365,13 +18559,17 @@ namespace Emberfall.DevHarness
             int baseLevel = 1;
             for (int t = 0; t < 12; t++)
             {
-                double m = Math.Round(1 + d.Growth * (baseLevel - 1), 4);
+                // The continuity value: what the first Level of this tier is worth against Level 1.
+                // It is the tier's stride too, except where the owner pinned the stride.
+                double first = Math.Round(1 + d.Growth * (baseLevel - 1), 4);
+                double m = t == OwnerPinnedStrideTier ? OwnerPinnedStride : first;
                 double lf = Math.Exp(s / (1 - s) * nonLevel);
                 int cap = Math.Max(1, (int)Math.Floor(1 + (lf - 1) / d.Growth + 1e-9));
                 int capLevel = baseLevel + (int)Math.Round(m * (cap - 1), MidpointRounding.AwayFromZero);
                 d.FiveCaps.Add(cap);
                 d.LevelFactors.Add(lf);
                 d.Multipliers.Add(m);
+                d.ContinuityMultipliers.Add(first);
                 d.BaseLevels.Add(baseLevel);
                 double l1 = MeanPowerAtLevel(db, 5, baseLevel);
                 d.TierLevelOnePower.Add(l1);
@@ -18379,8 +18577,8 @@ namespace Emberfall.DevHarness
                 if (l1 > d.PerHeroDemand) break;
                 int nextBase = capLevel + 1;
                 double next = Math.Round(1 + d.Growth * (nextBase - 1), 4);
-                d.Copies.Add(Math.Max(1, (int)Math.Round(next - m, MidpointRounding.AwayFromZero)));
-                nonLevel += Math.Log(next / m);
+                d.Copies.Add(Math.Max(1, (int)Math.Round(next - first, MidpointRounding.AwayFromZero)));
+                nonLevel += Math.Log(next / first);
                 baseLevel = nextBase;
             }
 
@@ -18661,7 +18859,91 @@ namespace Emberfall.DevHarness
                   + " clamped to tier 0's cap of " + capTier0 + " (" + (up15 != null ? up15.Level.ToString() : "none") + ")");
 
             CheckLevelClampOnLoad(db, five, four, one);
+            CheckTierTwoAboveTheNewCapLoadsClampsAndPlays(db, five);
             Line("");
+        }
+
+        /// <summary>
+        /// R16 owner decision 1 (fusion candidate A): the tier 2 multiplier fell from x6.175 to
+        /// x1.5, so a tier 2 hero's cap fell from Level 281 to Level 103. The decision is MIGRATE,
+        /// NOT GRANDFATHER (there are no players), and this is the proof that the migration is
+        /// safe: a save holding a tier 2 five-star at the Level 281 the old curve allowed loads
+        /// through the real serializer, is clamped to the new cap, and the clamped hero plays.
+        ///
+        /// "Written by the old build" is made literal. The old curve is rebuilt from the live
+        /// balance with the one number put back, its cap is read off StatMath, and the Level the
+        /// save holds is that cap (281), so the check also fails if 281 was ever not legal under the
+        /// old numbers rather than trusting the figure from the report.
+        /// </summary>
+        private static void CheckTierTwoAboveTheNewCapLoadsClampsAndPlays(ContentDatabase db, HeroDef five)
+        {
+            BalanceConfig b = db.Balance;
+            int top = StatMath.MaxAscensionTier(b);
+            Check(top >= 2, "the build authors a tier 2 to migrate (top tier " + top + ")");
+            if (top < 2) return;
+
+            BalanceConfig old = new BalanceConfig();
+            old.FiveStarLevelCaps = b.FiveStarLevelCaps;
+            old.AscensionCurveMultipliers = new float[] { 1f, 2.035f, 6.175f };
+            int oldCap = StatMath.CapLevel(old, 5, 2);
+            int newCap = StatMath.CapLevel(b, 5, 2);
+            Check(oldCap == 281 && newCap == 103 && Math.Abs(b.AscensionCurveMultipliers[2] - 1.5f) < 1e-6f,
+                  "tier 2's 5-star cap is Level " + oldCap + " under the x6.175 curve and Level " + newCap
+                  + " under the x" + b.AscensionCurveMultipliers[2].ToString("0.###", CultureInfo.InvariantCulture) + " curve in balance.json");
+
+            GameSession s = new GameSession(db, GameSession.CreateNewProfile(db, 0));
+            HeroInstance h = s.GrantHeroDirect(five, 0);
+            h.Ascension = 2;
+            h.Level = oldCap;
+            int powerBefore = StatMath.PowerScore(StatMath.ForHero(five, oldCap));
+            s.Profile.AssignToTeam(0, h.Uid);
+            string json = SaveSerializer.Serialize(s.Profile);
+
+            string err;
+            PlayerProfile back = SaveSerializer.Deserialize(json, db, out err);
+            HeroInstance hb = back != null ? back.FindHeroByDefId(five.Id) : null;
+            Check(back != null && hb != null && hb.Ascension == 2,
+                  "the save holding a tier 2 five-star at Level " + oldCap + " loads through the real serializer, still at tier 2"
+                  + (back == null ? " (" + err + ")" : ""));
+            if (hb == null) return;
+
+            GameSession bs = new GameSession(db, back);
+            int powerAfter = StatMath.PowerScore(StatMath.ForHero(five, hb.Level));
+            Check(hb.Level == newCap && bs.HeroLevelCapOf(hb) == newCap && bs.TierLevelOf(hb) == StatMath.HeroLevelCap(b, 5, 2),
+                  "and it is clamped to the new cap: Level " + hb.Level + " (cap " + newCap + "), tier level "
+                  + bs.TierLevelOf(hb) + " of " + StatMath.HeroLevelCap(b, 5, 2));
+            Line("    accepted loss, power " + powerBefore + " at Level " + oldCap + " to " + powerAfter + " at Level " + hb.Level
+                 + " (x" + ((double)powerAfter / Math.Max(1, powerBefore)).ToString("0.000", CultureInfo.InvariantCulture) + ")");
+            Check(powerAfter < powerBefore, "the clamp costs the hero power, which is the accepted migration and not a side effect");
+            string again = SaveSerializer.Serialize(back);
+            Check(SaveSerializer.Serialize(SaveSerializer.Deserialize(again, db, out err)) == again,
+                  "the migrated profile round-trips byte for byte");
+
+            // And it plays: the opening of the campaign and the finale's last battle, with the hero
+            // deployed in slot 0, resolve to a finished fight in which the hero acts.
+            StageDef finale = db.AllStages[db.AllStages.Count - 1];
+            StageDef[] fights =
+            {
+                Opening(db.AllStages[0]),
+                CampaignWaveGenerator.BuildBattle(finale, Math.Max(1, finale.WaveCount), Math.Max(1, finale.BattleCount))
+            };
+            for (int i = 0; i < fights.Length; i++)
+            {
+                BattleResult r = CombatSimulation.Run(bs.BuildBattleRequest(fights[i], 20261019 + i));
+                int heroId = -1;
+                if (r != null)
+                    for (int u = 0; u < r.Units.Count; u++)
+                        if (r.Units[u].IsPlayer && r.Units[u].DefId == five.Id) heroId = r.Units[u].Id;
+                int blows = 0;
+                if (r != null)
+                    for (int e = 0; e < r.Events.Count; e++)
+                        if (r.Events[e].Type == BattleEventType.Damage && r.Events[e].SourceId == heroId) blows++;
+                Check(r != null && r.Events.Count > 0 && r.Rounds > 0 && heroId >= 0 && blows > 0
+                      && r.FindUnit(heroId).Level == newCap,
+                      "the clamped hero plays " + fights[i].DisplayCode + ": a finished fight of " + (r != null ? r.Rounds : 0)
+                      + " round(s) in which Level " + (heroId >= 0 && r != null ? r.FindUnit(heroId).Level : -1) + " lands " + blows
+                      + " blow(s) (" + (r != null && r.Victory ? "won" : "lost") + ")");
+            }
         }
 
         /// <summary>
@@ -18811,12 +19093,29 @@ namespace Emberfall.DevHarness
                      + (t < d.Copies.Count ? d.Copies[t].ToString() : "-").PadLeft(17)
                      + ((int)Math.Round(d.TierLevelOnePower[t])).ToString().PadLeft(25)
                      + ((int)Math.Round(d.TierCapPower[t])).ToString().PadLeft(9)
-                     + (t == d.FiveCaps.Count - 1 ? "   last: its Lv1 already exceeds the finale's " + (int)Math.Round(d.PerHeroDemand) + " per hero" : ""));
+                     + (t == d.FiveCaps.Count - 1 ? "   last: its Lv1 already exceeds the finale's " + (int)Math.Round(d.PerHeroDemand) + " per hero" : "")
+                     + (Math.Abs(d.Multipliers[t] - d.ContinuityMultipliers[t]) > 1e-9
+                        ? "   PINNED, continuity would give x" + Fmt3((float)d.ContinuityMultipliers[t]) : ""));
             }
             Line("    cap_t = floor(1 + (factor - 1) / growth), factor_t = exp(0.35/0.65 * (0.65 ln G + ln M_t));"
                  + " a tier's first Level is one past the last tier's cap, M_t = 1 + growth * (that Level - 1),"
                  + " each tier level walks M_t Levels, copies_t = round(M(t+1) - M(t)).");
             Line("");
+            if (d.Multipliers.Count > OwnerPinnedStrideTier)
+            {
+                int pinTop = d.BaseLevels[OwnerPinnedStrideTier]
+                             + (int)Math.Round(d.Multipliers[OwnerPinnedStrideTier] * (d.FiveCaps[OwnerPinnedStrideTier] - 1), MidpointRounding.AwayFromZero);
+                int contTop = d.BaseLevels[OwnerPinnedStrideTier]
+                              + (int)Math.Round(d.ContinuityMultipliers[OwnerPinnedStrideTier] * (d.FiveCaps[OwnerPinnedStrideTier] - 1), MidpointRounding.AwayFromZero);
+                double fullFactor = 1 + d.Growth * (pinTop - 1), tier0Factor = 1 + d.Growth * (d.FiveCaps[0] - 1);
+                Line("  PINNED: tier " + OwnerPinnedStrideTier + "'s curve multiplier x" + Fmt3((float)OwnerPinnedStride) + " is not derived. It is the "
+                     + OwnerPinnedStrideDecision + ": the continuity rule gives x" + Fmt3((float)d.ContinuityMultipliers[OwnerPinnedStrideTier])
+                     + " and Levels " + d.BaseLevels[OwnerPinnedStrideTier] + "-" + contTop + "; the pin gives Levels "
+                     + d.BaseLevels[OwnerPinnedStrideTier] + "-" + pinTop + ", a fully ascended hero at cap x"
+                     + Fmt3((float)fullFactor) + " a Level 1 hero, x" + Fmt3((float)(fullFactor / tier0Factor)) + " a tier-0 hero at cap.");
+                Line("    Everything else is derived around it: the caps, the other multipliers, the copies and the fodder below.");
+                Line("");
+            }
             Line("  below five stars   Lv1 power share of a 5-star   cap = round(" + d.FiveCaps[0] + " x share)");
             for (int st = 1; st <= 4; st++)
                 Line("    " + st + "-star " + Fmt3((float)d.StarShare[st - 1]).PadLeft(33) + d.LowCaps[st - 1].ToString().PadLeft(22));
@@ -18871,7 +19170,15 @@ namespace Emberfall.DevHarness
                   "balance.json fiveStarLevelCaps " + IntList(b.FiveStarLevelCaps) + " is the derived " + IntList(d.FiveCaps.ToArray()));
             Check(SameMultipliers(b.AscensionCurveMultipliers, d.Multipliers),
                   "balance.json ascensionCurveMultipliers " + FloatList(b.AscensionCurveMultipliers) + " is the derived "
-                  + FloatList(ToFloats(d.Multipliers)));
+                  + FloatList(ToFloats(d.Multipliers)) + " with tier " + OwnerPinnedStrideTier + " PINNED at x"
+                  + Fmt3((float)OwnerPinnedStride) + " by the " + OwnerPinnedStrideDecision);
+            bool pinOnlyDeparture = d.Multipliers.Count > OwnerPinnedStrideTier;
+            for (int t = 0; t < d.Multipliers.Count; t++)
+                if (t != OwnerPinnedStrideTier && Math.Abs(d.Multipliers[t] - d.ContinuityMultipliers[t]) > 1e-9) pinOnlyDeparture = false;
+            Check(pinOnlyDeparture && d.Multipliers[OwnerPinnedStrideTier] < d.ContinuityMultipliers[OwnerPinnedStrideTier],
+                  "the pin is the ONLY departure from the continuity rule: tier " + OwnerPinnedStrideTier + " alone is not derived, and it is "
+                  + "slower than continuity would have it (x" + Fmt3((float)OwnerPinnedStride) + " against x"
+                  + (d.Multipliers.Count > OwnerPinnedStrideTier ? Fmt3((float)d.ContinuityMultipliers[OwnerPinnedStrideTier]) : "-") + ")");
             bool ladderAgrees = true;
             for (int t = 0; t < d.BaseLevels.Count && t <= maxTier; t++)
                 if (StatMath.TierBaseLevel(b, t) != d.BaseLevels[t]) ladderAgrees = false;
@@ -19090,11 +19397,12 @@ namespace Emberfall.DevHarness
         //
         // WHAT IT SETS, per stage, in this order.
         //
-        //   recommendedPower = entry power / the MIDDLE of that stage's band. x1.20 on an ordinary
-        //   chapter 1 stage and on the four tutorial stages, x1.025 on a chapter 1 wall, x1.15 on
-        //   an ordinary chapter 2 stage, x0.985 on a chapter 2 wall. The middle rather than an edge
-        //   is the entire point: an edge is in band on the day it is written and out of band on the
-        //   next thing that moves player power, which is exactly what happened here.
+        //   recommendedPower = entry power / that stage's TARGET RATIO (SolverTargetRatios), the
+        //   per-stage curve of Docs/ECONOMY-PROPOSAL-R4.md as the shipped content reads it. It was the
+        //   MIDDLE of a four-kind band (x1.20 ordinary chapter 1 and tutorial, x1.025 chapter 1 wall,
+        //   x1.15 ordinary later, x0.985 later wall) until the bands became a per-stage table. A target
+        //   inside the band rather than on an edge is the point: an edge is in band on the day it is
+        //   written and out of band on the next thing that moves player power.
         //
         //   The levels underneath it, so the CEIL band still reads in range at the new number.
         //   Required power tracks enemy scale almost exactly - every enemy in enemies.json carries
@@ -19124,13 +19432,44 @@ namespace Emberfall.DevHarness
         // the whole answer is one rounding of one ratio however many walks it takes to settle. See
         // StageBaseline for what re-rounding an already-rounded table did when it was allowed to.
 
-        // THESE FOUR MIDDLES DESCRIBE THE PRE-PROPOSAL BANDS (Docs/ECONOMY-PROPOSAL-R4.md). The shipped table
-        // was moved off them to the per-stage bands of PowerBandFor, and re-running the solver walks it back
-        // toward them and undoes the proposal. Their values are deliberately unchanged.
-        private const float SolverMiddleOrdinaryChapter1 = 1.20f;
-        private const float SolverMiddleWallChapter1 = 1.025f;
-        private const float SolverMiddleOrdinaryLater = 1.15f;
-        private const float SolverMiddleWallLater = 0.985f;
+        // THE SOLVER AIMS AT A PER-STAGE TARGET RATIO, not at four band middles. The four middles
+        // (x1.20 ordinary chapter 1, x1.025 chapter 1 wall, x1.15 ordinary later, x0.985 later wall)
+        // described the bands before Docs/ECONOMY-PROPOSAL-R4.md. The shipped table was moved off them
+        // to the per-stage bands of PowerBandFor and to the ratios the R4 ratchet converged on, and a
+        // solver that still aimed at the middles walked the table back and undid the proposal.
+        //
+        // The ratchet's per-stage targets were never tabulated (the proposal says so), so this is the
+        // table: entry power over recommendedPower at each of the 72 stages, read off the reference
+        // walk (first seed) on the shipped content, in global stage order. It is the SHAPE of the
+        // curve, kept as data: 1-1 to 1-4 at the tutorial's x1.20, 1-5 to 1-6 breezy, 1-7 to 1-11
+        // falling to x0.965, 1-12 the first wall at x0.897, and chapter 2 on at x1.10 to x1.24. Chapter
+        // 2 on was loosened in R16 by one shared step (recommendedPower five to eight percent lower,
+        // never taking a stage past x1.20 on the median of 60 walks) so no reference walk is stuck; the
+        // values here are the first-seed readings of that content. Every value sits inside
+        // PowerBandFor's band (the solver prints a line for any that does not).
+        //
+        // THE TABLE IS A SNAPSHOT of first-seed readings of ONE engine and ONE content state. It goes
+        // stale after any engine or content change: recommendedPower follows a single-seed walk, and a
+        // level edit or a combat change re-draws that walk (the counterattack rule alone moved 42 stages
+        // on a what-if). Re-read it after any such change, together with the content it describes. On
+        // the exact content and engine it was read from, a what-if moves nothing; that is all it claims.
+        //
+        // A stage past the table's end (a longer campaign) falls back to the middle of its band.
+        private static readonly float[] SolverTargetRatios =
+        {
+            1.1999f,  1.2002f,  1.2001f,  1.1975f,  1.1849f,  1.0116f,
+            1.0683f,  1.0663f,  1.0216f,  0.9847f,  0.9652f,  0.8974f,
+            1.1378f,  1.1136f,  1.1420f,  1.1310f,  1.1153f,  1.1821f,
+            1.1780f,  1.1356f,  1.1571f,  1.1407f,  1.1821f,  1.1553f,
+            1.1516f,  1.1885f,  1.2263f,  1.2368f,  1.2011f,  1.2353f,
+            1.1545f,  1.1495f,  1.1892f,  1.1772f,  1.2040f,  1.2157f,
+            1.1518f,  1.1632f,  1.2258f,  1.2117f,  1.2115f,  1.2059f,
+            1.2086f,  1.2023f,  1.1979f,  1.1824f,  1.1772f,  1.1568f,
+            1.1651f,  1.1669f,  1.1122f,  1.1544f,  1.1079f,  1.1482f,
+            1.1699f,  1.1592f,  1.1102f,  1.1747f,  1.1708f,  1.1675f,
+            1.1110f,  1.1741f,  1.1687f,  1.1891f,  1.1724f,  1.1873f,
+            1.2076f,  1.1932f,  1.1928f,  1.1948f,  1.1946f,  1.1040f
+        };
 
         /// <summary>Every enemy in enemies.json carries this. The solver checks it rather than
         /// trusting it: the level-to-power inversion below is only valid while it is one number for
@@ -19176,6 +19515,17 @@ namespace Emberfall.DevHarness
         private const float SolverStuckStep = 1.05f;
 
         /// <summary>
+        /// HOW CLOSE A NEW recommendedPower HAS TO BE TO THE ONE IT REPLACES BEFORE THE STAGE COUNTS AS
+        /// UNMOVED: 0.1%. The target ratios are stored to four decimals and recommendedPower is an
+        /// integer, so a stage the solver has nothing to say about still derives a number a point or
+        /// two away from the one on file, and a point is a "move" that re-runs the level search and
+        /// can shift a level, which re-draws every later seed of the walk (R13: a content edit re-draws
+        /// the walk). Re-solving a solved tree has to change nothing, so a difference this small keeps
+        /// the number already there.
+        /// </summary>
+        private const float SolverRecTolerance = 0.001f;
+
+        /// <summary>
         /// HOW MANY TIMES THE SOLVE RELEASES BANKED STEPS BEFORE IT GIVES UP TRYING: 8, which is
         /// more rounds than any stage has ever banked steps.
         ///
@@ -19201,17 +19551,20 @@ namespace Emberfall.DevHarness
         private const int SolverStepReleaseRounds = 8;
 
         /// <summary>
-        /// The band middle one stage is derived against. The four tutorial stages have no band to
-        /// sit in, and the curve pass put them on chapter 1's ordinary middle: the committed 2,977
-        /// at 1-1 is exactly that stage's entry power over x1.20, which is where the reading comes
-        /// from.
+        /// The ratio one stage is derived against: its entry in SolverTargetRatios, or the middle of its
+        /// power band for a stage the table does not reach. The name stays from the days it was always a band middle.
         /// </summary>
         private static float SolverBandMiddle(StageDef stage, int walkIndex)
         {
-            bool chapterOne = stage != null && stage.ChapterNumber == 1;
-            if (BandKindOf(stage, walkIndex).StartsWith("wall"))
-                return chapterOne ? SolverMiddleWallChapter1 : SolverMiddleWallLater;
-            return chapterOne ? SolverMiddleOrdinaryChapter1 : SolverMiddleOrdinaryLater;
+            float lo, hi;
+            float ratio = 0f;
+            if (stage != null && stage.GlobalIndex >= 0 && stage.GlobalIndex < SolverTargetRatios.Length)
+                ratio = SolverTargetRatios[stage.GlobalIndex];
+            else if (PowerBandFor(stage, out lo, out hi))
+                ratio = (lo + hi) / 2f;
+            else
+                ratio = 1f;
+            return ratio;
         }
 
         private static float EnemyScaleAt(float level) { return 1f + EnemyGrowthPerLevel * (level - 1f); }
@@ -19287,6 +19640,9 @@ namespace Emberfall.DevHarness
             /// seed. Zero means the arithmetic landed in band on its own.</summary>
             public int UnitsMoved;
             public bool FloorPinned;
+            /// <summary>The new recommendedPower is the one on file, so the committed levels stand and
+            /// no level search ran: there is no CEIL reading to print.</summary>
+            public bool Kept;
 
             /// <summary>What the stage held when this iteration started, captured before the
             /// proposal overwrote it. The loop has settled when no stage's four numbers move, and
@@ -19718,6 +20074,9 @@ namespace Emberfall.DevHarness
 
             p.NewRecommended = (int)Math.Round(p.EntryPower / (double)p.BandMiddle);
             if (p.NewRecommended < 1) p.NewRecommended = 1;
+            if (stage.RecommendedPower > 0
+                && Math.Abs(p.NewRecommended - stage.RecommendedPower) <= SolverRecTolerance * stage.RecommendedPower)
+                p.NewRecommended = stage.RecommendedPower;
 
             float ratio = baseline.Recommended > 0
                 ? p.NewRecommended / (float)baseline.Recommended : 1f;
@@ -19912,6 +20271,11 @@ namespace Emberfall.DevHarness
         {
             float low = rate - CeilBandLow(db, stage);
             float high = CeilBandHigh(db, stage) - rate;
+            // The breezy stretch has no upper edge to miss (see CeilBreezyLastStage): a stage a
+            // player is meant to win at 100% is not asked to come down to 85%, so the search must
+            // not read 100% as a rate with no cushion and walk the levels up.
+            float over;
+            if (IsCeilBreezy(stage) && !_ceilTargetOverride.TryGetValue(stage.Id, out over)) high = float.MaxValue;
             return low < high ? low : high;
         }
 
@@ -20150,11 +20514,17 @@ namespace Emberfall.DevHarness
             if (db == null) return 1;
 
             Line("");
-            Line("  recommendedPower = the simulated player's ENTRY power / the middle of that stage's band.");
-            Line("  Middles: ordinary chapter 1 and tutorial x" + Fmt3(SolverMiddleOrdinaryChapter1)
-                 + ", chapter 1 wall x" + Fmt3(SolverMiddleWallChapter1)
-                 + ", ordinary later x" + Fmt3(SolverMiddleOrdinaryLater)
-                 + ", later wall x" + Fmt3(SolverMiddleWallLater) + ".");
+            Line("  recommendedPower = the simulated player's ENTRY power / that stage's target ratio.");
+            Line("  Target ratios: the per-stage table SolverTargetRatios (" + SolverTargetRatios.Length + " stages).");
+            for (int i = 0; i < db.AllStages.Count; i++)
+            {
+                float tlo, thi;
+                float target = SolverBandMiddle(db.AllStages[i], i);
+                if (PowerBandFor(db.AllStages[i], out tlo, out thi)
+                    && (target < tlo - BandTolerance || target > thi + BandTolerance))
+                    Line("  NOTE: " + db.AllStages[i].DisplayCode + " target x" + Ratio3(target)
+                         + " is outside its power band x" + Ratio3(tlo) + "-x" + Ratio3(thi) + ".");
+            }
             Line("  A wall is a chapter finale or one of " + string.Join(", ", MidChapterWallStageIdsOf(db).ToArray())
                  + "; the first " + EconomyTutorialStages + " stages are the tutorial.");
             Line("  floorLevel, ceilingLevel and the authored enemy levels follow by inverting"
@@ -20260,6 +20630,7 @@ namespace Emberfall.DevHarness
                 int moved = 0;
                 int probes = 0;
                 int truncated = 0;
+                List<string> movedText = new List<string>();
                 for (int i = 0; i < run.Stages.Count; i++)
                 {
                     StageBaseline was = baseline[run.Stages[i].Stage.Id];
@@ -20280,7 +20651,13 @@ namespace Emberfall.DevHarness
                     SolverApplyCeiling(p.Stage, seededCeiling, ramp);
 
                     p.FloorPinned = IsFloorPinned(db, p.Stage);
-                    if (!p.FloorPinned)
+                    // A stage whose recommendedPower is the one on file is a stage already solved: the
+                    // committed levels were searched against exactly this number. Searching it again would
+                    // only chase the 5 point cushion, and one level moved on any stage re-draws every later
+                    // seed of the walk, so re-solving a solved tree would not be a no-op.
+                    bool solvedAlready = p.NewRecommended == was.Recommended;
+                    p.Kept = solvedAlready;
+                    if (!p.FloorPinned && !solvedAlready)
                     {
                         int stageProbes = 0;
                         // THE FLAT CEILING, not the grant ladder, and the choice is measured rather
@@ -20299,7 +20676,12 @@ namespace Emberfall.DevHarness
                     p.NewCeiling = p.Stage.CeilingLevel;
 
                     last[p.Stage.Id] = p;
-                    if (p.ChangesAnything) moved++;
+                    if (p.ChangesAnything)
+                    {
+                        moved++;
+                        movedText.Add(p.Stage.DisplayCode + " " + p.PriorRecommended + "->" + p.NewRecommended
+                                      + " " + p.PriorFloor + "/" + p.PriorCeiling + "->" + p.NewFloor + "/" + p.NewCeiling);
+                    }
                 }
 
                 Line("  iteration " + iterations + ": " + moved + " stage(s) moved, " + probes
@@ -20310,6 +20692,8 @@ namespace Emberfall.DevHarness
                           + " it was going - raise SolverMaxProbesPerStage"
                         : "")
                      + (stuckAt != null ? "; the reference walk stuck at " + stuckAt : ""));
+                if (movedText.Count > 0 && movedText.Count <= 12)
+                    Line("    moved: " + string.Join("; ", movedText.ToArray()));
                 if (moved == 0 && stuckAt != null)
                 {
                     Line("  ABORT: the reference walk is STUCK at " + stuckAt + " and deriving from it moved"
@@ -20433,7 +20817,7 @@ namespace Emberfall.DevHarness
                      + (was.Ceiling + "->" + s.CeilingLevel).PadRight(10)
                      + (p == null ? "?" : p.SeededCeiling.ToString()).PadLeft(5)
                      + (p == null ? "?" : p.UnitsMoved.ToString()).PadLeft(6)
-                     + (p == null ? "?" : (p.FloorPinned ? "PINNED" : Pct(p.LandedCeilRate))).PadLeft(10)
+                     + (p == null ? "?" : (p.FloorPinned ? "PINNED" : p.Kept ? "kept" : Pct(p.LandedCeilRate))).PadLeft(10)
                      + "   " + (rosterMoved ? (wasRoster[s.Id] + " -> " + roster) : (roster + " unmoved")));
             }
 
@@ -20592,9 +20976,9 @@ namespace Emberfall.DevHarness
         /// looked plausible, and still got quoted.
         ///
         /// So the responsiveness is now asserted rather than assumed. Multiply every gold channel
-        /// on the back half of the campaign by 2.5x, re-run the simulation for IncomeProbeSeeds
+        /// from IncomeProbeFirstStage (3-1, a third of the way in) on by 2.5x, re-run the simulation for IncomeProbeSeeds
         /// matched players, and require the entry ratio of the first IncomeProbeEarlyStages scaled
-        /// stages (4-1 to 4-6) to actually move. That early window is the guard: it is read before
+        /// stages (3-1 to 3-6) to actually move. That early window is the guard: it is read before
         /// the hero caps bind, where the response is stable. The late-campaign ratio (the last three
         /// stages reached) is printed with its per-player spread and is NOT guarded, because a
         /// level-capped player there shows the draw, not the income. If a future structural change
@@ -20648,8 +21032,17 @@ namespace Emberfall.DevHarness
             // that is quiet is information about the caps; it is just not a reading to fail a build on.
             const float MinimumResponse = 0.50f;
 
+            // WHERE THE SCALED STAGES START MOVED IN R16, with the fusion plateau (owner decision 1,
+            // tier 2's multiplier x6.175 to x1.5). The window used to open at the campaign's
+            // midpoint, 4-1, because that was before a fusing player's caps bound. Under the lower
+            // top tier that player reaches its plateau (about x6 over the reference curve) by 3-12,
+            // so at 4-1 both the 1x and the 2.5x walk stand on the same cap, the roster and levels
+            // read identically at both incomes, and the response is zero by design: 0.12 over 8
+            // players, spread -0.37 to 0.50. That is the plateau working, not the link being
+            // severed. The window opens a third of the way in (IncomeProbeFirstStage), at 3-1,
+            // which is again before the caps bind.
             List<StageDef> scaled = new List<StageDef>();
-            for (int i = db.AllStages.Count / 2; i < db.AllStages.Count; i++) scaled.Add(db.AllStages[i]);
+            for (int i = IncomeProbeFirstStage(db); i < db.AllStages.Count; i++) scaled.Add(db.AllStages[i]);
             if (scaled.Count == 0)
             {
                 Line("  no stages to scale - campaign content is empty.");
@@ -20715,7 +21108,7 @@ namespace Emberfall.DevHarness
             }
             EconomyRun rich = richRuns[0];
 
-            int firstScaled = db.AllStages.Count / 2;
+            int firstScaled = IncomeProbeFirstStage(db);
             float[] lateResponse = new float[IncomeProbeSeeds];
             float[] earlyResponse = new float[IncomeProbeSeeds];
             float[] goldOnlyLate = new float[IncomeProbeSeeds];
@@ -20731,7 +21124,7 @@ namespace Emberfall.DevHarness
             float response = Mean(lateResponse);
             float earlyMean = Mean(earlyResponse);
 
-            Line("  " + scaled.Count + " stages (the back half of the campaign) at " + Fmt(Multiplier)
+            Line("  " + scaled.Count + " stages (from " + db.AllStages[firstScaled].DisplayCode + " on) at " + Fmt(Multiplier)
                  + "x income - gold and shards, reward, first clear and idle rate together, "
                  + IncomeProbeSeeds + " matched players.");
             Line("  late-campaign power ratio (last three stages reached): x" + Fmt(poorRatio) + " -> x" + Fmt(richRatio)
@@ -20825,6 +21218,11 @@ namespace Emberfall.DevHarness
             string delta = poor == 0 ? "-" : (rich >= poor ? "+" : "") + Pct((rich - poor) / (float)poor);
             Line(label + poor.ToString().PadLeft(12) + rich.ToString().PadLeft(12) + delta.PadLeft(12));
         }
+
+        /// <summary>The first stage the income probe scales, and the first of the early window it
+        /// reads: a third of the way into the campaign (3-1 on 72 stages). See CheckEconomyRespondsToIncome
+        /// for why it is not the midpoint any more.</summary>
+        private static int IncomeProbeFirstStage(ContentDatabase db) { return db.AllStages.Count / 3; }
 
         private static float CapBlockedShare(EconomyRun run)
         {

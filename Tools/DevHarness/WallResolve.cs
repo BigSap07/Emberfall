@@ -151,12 +151,14 @@ namespace Emberfall.DevHarness
             }
         }
 
-        /// <summary>Walks behind the rule's guard: target B's own count, so the rule and the target
-        /// are read over the same number of players.</summary>
-        private const int FusionNeverGatesWalks = PaceSeeds;
+        /// <summary>Walks behind the rule's guard: WalkSeed 0 to 59. It was PaceSeeds (20), target B's
+        /// own count, and all 20 were green while R13's 60 walks found 5 stuck (about 8 percent), so the
+        /// guard saw nothing. R16 owner decision 2 reads 60, which is also what the solver's stuck
+        /// scan reads (RunRecommendedPowerSolver walks the same list).</summary>
+        private const int FusionNeverGatesWalks = 60;
 
         /// <summary>
-        /// FUSION ACCELERATES A WALL. IT NEVER GATES ONE. The rule as a guard: twenty walks by the
+        /// FUSION ACCELERATES A WALL. IT NEVER GATES ONE. The rule as a guard: sixty walks by the
         /// reference player - pulls, gold into levels up to the caps, armor, and no conversion and
         /// no ascension at all - and every one of them finishes the campaign. A walk that sticks
         /// is a wall only a conversion roll or a lucky duplicate could open, which is the thing the
@@ -179,8 +181,14 @@ namespace Emberfall.DevHarness
             }
             int stuck = 0;
             List<string> where = new List<string>();
+            // Each stuck walk is named by its index and its seed as well as its stage, because the
+            // stage alone cannot be re-walked and the seed can: WalkSeed(k) is what SimulateEconomyUnder takes.
             for (int k = 0; k < refs.Count; k++)
-                if (refs[k].StuckAt >= 0) { stuck++; where.Add(db.AllStages[refs[k].StuckAt].DisplayCode); }
+                if (refs[k].StuckAt >= 0)
+                {
+                    stuck++;
+                    where.Add(db.AllStages[refs[k].StuckAt].DisplayCode + " walk " + k + " seed " + WalkSeed(k));
+                }
 
             Line("  wall    reference: extra sittings med/p90/max   entry xRec med     fusing: extra med/p90/max   entry xRec med");
             for (int s = 0; s < db.AllStages.Count; s++)

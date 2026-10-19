@@ -17,12 +17,14 @@
 # COMPOSITION, or one line of the file's commentary. It never touches heroes.json, enemies.json
 # or any code.
 #
-# BEFORE YOU RUN IT, READ Docs/ECONOMY-PROPOSAL-R4.md. The solver still aims at the bands it was written
-# for (SolverMiddleOrdinaryChapter1 and its siblings: about x1.2 for ordinary stages, walls near x1.0). The
-# shipped table was moved off those by Tools/economy_r4_levers.py to the per-stage power bands in
-# CheckCampaignPowerCurve (PowerBandFor) and the ratchet in Tools/economy_r4_ratchet.py. Running this solver
-# on the current content walks the table back toward the old bands and fails the power band check. A retune
-# of chapter 2 and later goes through the ratchet, not through here.
+# BEFORE YOU RUN IT, READ Docs/ECONOMY-PROPOSAL-R4.md. The solver aims at the per-stage curve that proposal
+# shipped: SolverTargetRatios in Program.cs is entry power over recommendedPower at each of the 72 stages,
+# read off the reference walk on the shipped content. The CEIL band is read by kind (IsCeilWall, IsCeilBreezy, CeilKindOf; breezy has no upper edge) and
+# the power band by stage (PowerBandFor). SolverTargetRatios is a SNAPSHOT of first-seed readings of one engine
+# and one content state: it goes stale after any engine or content change (the counterattack rule alone moved 42
+# stages on a what-if, because recommendedPower follows a single-seed walk that any level or combat edit re-draws),
+# so re-read it after any such change, together with the content it describes. On the exact engine and content it
+# was read from, -WhatIf moves nothing; that is all it claims.
 #
 # WHEN TO RUN IT. After any change to a hero the balance line fields, and after any change to the
 # economy. See DESIGN-CAMPAIGN-STRUCTURE.md.

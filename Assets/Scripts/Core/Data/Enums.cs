@@ -76,6 +76,13 @@ namespace Emberfall.Core.Data
         /// The enemy that last damaged the caster - or, inside a broadcast about another body, the
         /// enemy that last damaged THAT body, which is the unit ConditionSubject.LastAttacker names
         /// in the same window. Falls through to FrontEnemy when nobody qualifies.
+        ///
+        /// A COUNTERATTACK ANSWERS THE ATTACKER, NOT TAUNT (R16, owner decision 4). A living,
+        /// legal attacker resolves BEFORE the Provoke and Taunt anchor, like the modes that name
+        /// one body the engine already chose. Only when there is no such attacker does the effect
+        /// fall back to FrontEnemy, and that fallback is an ordinary pick that respects Taunt.
+        /// LastTarget is not part of this: it is a follow-up on the caster's own last blow, not a
+        /// strike back, so the anchor still outranks it.
         /// </summary>
         LastAttacker,
         LastTarget,

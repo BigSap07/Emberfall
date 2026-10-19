@@ -118,7 +118,7 @@ Six rules, each applied to numbers measured off the tree:
 | 5-star cap at tier 0 | levels may be 35% of the campaign's growth (pace target A): the finale's entry at its band middle over the starting line was x7.611 when this was derived, x7.611^0.35 = x2.035, and the cap is the last level inside it. **The x7.611 is pinned now** (`CapDerivationGrowth`): under the wall rule the finale is set by what a line at these caps reaches, so reading the caps back off the finale is a loop that settles near 9,000, under chapter 1's own finale | 9 |
 | 5-star caps above | the same 35%, as if the line sat at that tier, on top of every ascension below it, so they rise because the rule holds still | 18, 39 |
 | tiers authored | up to and including the first whose level 1 out-powers the finale's per-hero demand | 3 (tier 0, 1, 2) |
-| curve multiplier | tier t's first Level is one past tier t - 1's cap; M = 1 + growth * (that Level - 1) | x1, x2.035, x6.175 (Levels 1-9, 10-45, 46-281) |
+| curve multiplier | tier t's first Level is one past tier t - 1's cap; M = 1 + growth * (that Level - 1) | x1, x2.035, x1.5 (Levels 1-9, 10-45, 46-103). **Tier 2's x1.5 is not derived: it is the owner's decision of 2026-10-19 (R16), where the rule gives x6.175 and Levels 46-281.** See `Docs/BALANCE-REPORT-R16.md`, Fusion A |
 | copies to ascend | an ascension costs the bodies whose level-1 power it adds: M(t+1) - M(t), rounded | 1, 4 |
 | caps below five stars | the tier's measured share of a 5-star's level-1 power, times the 5-star tier-0 cap | 5, 6, 7, 8 |
 | fodder points | a body is worth what it cost to pull against a 5-star: 100 * w5 / ws, so each lower tier's pulls make one conversion per 5-star's worth of pulls | 15, 10, 10, 18 of 100 |
