@@ -4912,8 +4912,6 @@ namespace Emberfall.DevHarness
                 db.LoadWallChests(File.Exists(wallChestsPath) ? File.ReadAllText(wallChestsPath) : null);
                 string sinksPath = Path.Combine(dir, "sinks.json");
                 db.LoadSinks(File.Exists(sinksPath) ? File.ReadAllText(sinksPath) : null);
-                string wallChestsPath = Path.Combine(dir, "wall-chests.json");
-                db.LoadWallChests(File.Exists(wallChestsPath) ? File.ReadAllText(wallChestsPath) : null);
                 string quartermasterPath = Path.Combine(dir, "quartermaster.json");
                 db.LoadQuartermaster(File.Exists(quartermasterPath) ? File.ReadAllText(quartermasterPath) : null);
                 string relicShopPath = Path.Combine(dir, "relic-shop.json");
