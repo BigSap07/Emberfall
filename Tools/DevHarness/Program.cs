@@ -19442,37 +19442,32 @@ namespace Emberfall.DevHarness
         // table: entry power over recommendedPower at each of the 72 stages, read off the reference
         // walk (first seed) on the shipped content, in global stage order. It is the SHAPE of the
         // curve, kept as data: 1-1 to 1-4 at the tutorial's x1.20, 1-5 to 1-6 breezy, 1-7 to 1-11
-        // falling to x0.965, 1-12 the first wall at x0.897, and chapter 2 on at x1.00 to x1.18 with the
-        // tight and loose stages the ratchet left. Every value sits inside PowerBandFor's band (the
-        // solver prints a line for any that does not). Running the solver on content that already
-        // has this shape changes nothing; running it after a hero or an economy change moves the
-        // recommendedPower of each stage and keeps the ratio.
+        // falling to x0.965, 1-12 the first wall at x0.897, and chapter 2 on at x1.10 to x1.24. Chapter
+        // 2 on was loosened in R16 by one shared step (recommendedPower five to eight percent lower,
+        // never taking a stage past x1.20 on the median of 60 walks) so no reference walk is stuck; the
+        // values here are the first-seed readings of that content. Every value sits inside
+        // PowerBandFor's band (the solver prints a line for any that does not). Running the solver on
+        // content that already has this shape changes nothing; running it after a hero or an economy
+        // change moves the recommendedPower of each stage and keeps the ratio. A new shape is a change
+        // to this table made together with the content it describes, because the first-seed reading
+        // moves with every level edit (a content edit re-draws the walk).
         //
         // A stage past the table's end (a longer campaign) falls back to the middle of its band.
         private static readonly float[] SolverTargetRatios =
         {
             1.1999f,  1.2002f,  1.2001f,  1.1975f,  1.1849f,  1.0116f,
             1.0683f,  1.0663f,  1.0216f,  0.9847f,  0.9652f,  0.8974f,
-            1.0867f,  1.0227f,  1.0509f,  1.0289f,  1.0213f,  1.0576f,
-            1.0488f,  1.0482f,  1.0670f,  1.0513f,  1.1009f,  1.0535f,
-            1.0257f,  1.0523f,  1.1395f,  1.1701f,  1.0599f,  1.1095f,
-            1.0246f,  1.0220f,  1.0583f,  1.0590f,  1.1299f,  1.1451f,
-            1.0438f,  1.0515f,  1.1258f,  1.1193f,  1.1157f,  1.1338f,
-            1.1788f,  1.1235f,  1.1412f,  1.0938f,  1.0836f,  1.0707f,
-            1.0757f,  1.0766f,  1.0279f,  1.0703f,  1.0247f,  1.0620f,
-            1.1149f,  1.0715f,  1.0236f,  1.1258f,  1.1760f,  1.0694f,
-            1.0171f,  1.0759f,  1.0645f,  1.1058f,  1.0605f,  1.1707f,
-            1.1775f,  1.1248f,  1.0683f,  1.1691f,  1.1116f,  1.0016f
+            1.1378f,  1.1136f,  1.1420f,  1.1310f,  1.1153f,  1.1821f,
+            1.1780f,  1.1356f,  1.1571f,  1.1407f,  1.1821f,  1.1553f,
+            1.1516f,  1.1885f,  1.2263f,  1.2368f,  1.2011f,  1.2353f,
+            1.1545f,  1.1495f,  1.1892f,  1.1772f,  1.2040f,  1.2157f,
+            1.1518f,  1.1632f,  1.2258f,  1.2117f,  1.2115f,  1.2059f,
+            1.2086f,  1.2023f,  1.1979f,  1.1824f,  1.1772f,  1.1568f,
+            1.1651f,  1.1669f,  1.1122f,  1.1544f,  1.1079f,  1.1482f,
+            1.1699f,  1.1592f,  1.1102f,  1.1747f,  1.1708f,  1.1675f,
+            1.1110f,  1.1741f,  1.1687f,  1.1891f,  1.1724f,  1.1873f,
+            1.2076f,  1.1932f,  1.1928f,  1.1948f,  1.1946f,  1.1040f
         };
-
-        /// <summary>
-        /// A SHARED LOOSENING FOR CHAPTER 2 ON, as a multiplier on the target ratio: 1.0 is the
-        /// table as read, 1 / 0.95 is "recommendedPower five percent lower at the same entry power".
-        /// Chapter 1 is never touched (walls 1-6 to 1-12 stay as designed). One number for every
-        /// stage from chapter 2 on, not ten spot fixes: R13 showed that spot fixes cure their own
-        /// stage and re-draw every later one.
-        /// </summary>
-        private const float SolverLooseningLater = 1.0f;
 
         /// <summary>Every enemy in enemies.json carries this. The solver checks it rather than
         /// trusting it: the level-to-power inversion below is only valid while it is one number for
@@ -19554,9 +19549,8 @@ namespace Emberfall.DevHarness
         private const int SolverStepReleaseRounds = 8;
 
         /// <summary>
-        /// The ratio one stage is derived against: its entry in SolverTargetRatios, scaled by
-        /// SolverLooseningLater from chapter 2 on, or the middle of its power band for a stage the table
-        /// does not reach. The name stays from the days it was always a band middle.
+        /// The ratio one stage is derived against: its entry in SolverTargetRatios, or the middle of its
+        /// power band for a stage the table does not reach. The name stays from the days it was always a band middle.
         /// </summary>
         private static float SolverBandMiddle(StageDef stage, int walkIndex)
         {
@@ -19568,7 +19562,6 @@ namespace Emberfall.DevHarness
                 ratio = (lo + hi) / 2f;
             else
                 ratio = 1f;
-            if (stage != null && stage.ChapterNumber > 1) ratio *= SolverLooseningLater;
             return ratio;
         }
 
@@ -20517,8 +20510,7 @@ namespace Emberfall.DevHarness
 
             Line("");
             Line("  recommendedPower = the simulated player's ENTRY power / that stage's target ratio.");
-            Line("  Target ratios: the per-stage table SolverTargetRatios (" + SolverTargetRatios.Length
-                 + " stages), times " + Fmt3(SolverLooseningLater) + " from chapter 2 on (SolverLooseningLater).");
+            Line("  Target ratios: the per-stage table SolverTargetRatios (" + SolverTargetRatios.Length + " stages).");
             for (int i = 0; i < db.AllStages.Count; i++)
             {
                 float tlo, thi;

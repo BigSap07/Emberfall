@@ -19,8 +19,7 @@
 #
 # BEFORE YOU RUN IT, READ Docs/ECONOMY-PROPOSAL-R4.md. The solver aims at the per-stage curve that proposal
 # shipped: SolverTargetRatios in Program.cs is entry power over recommendedPower at each of the 72 stages,
-# read off the reference walk on the shipped content (SolverLooseningLater scales chapter 2 on in one shared
-# step). The CEIL band is read by kind (IsCeilWall, IsCeilBreezy, CeilKindOf; breezy has no upper edge) and
+# read off the reference walk on the shipped content. The CEIL band is read by kind (IsCeilWall, IsCeilBreezy, CeilKindOf; breezy has no upper edge) and
 # the power band by stage (PowerBandFor). Running it on content that already has that shape changes
 # nothing; -WhatIf proves it (R16: a what-if on the shipped content moves no stage). A hero, rarity or
 # economy change moves each stage's recommendedPower and keeps its ratio. Reshaping the curve itself is a
