@@ -65,7 +65,7 @@ namespace Emberfall.DevHarness
                     if (AbilityTextConfig.IsDraftingNote(prose)) notes.Add(who);
                     for (int c = 0; c < prose.Length; c++)
                         if (char.IsDigit(prose[c]) || prose[c] == '%') { numbers.Add(who); break; }
-                    if (prose.IndexOf('—') >= 0 || prose.IndexOf('–') >= 0) dashes.Add(who);
+                    if (prose.IndexOf((char)0x2014) >= 0 || prose.IndexOf((char)0x2013) >= 0) dashes.Add(who);
                 }
             }
             foreach (string id in overlay.Lines.Keys) if (!needed.Contains(id)) unused.Add(id);

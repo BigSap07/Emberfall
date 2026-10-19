@@ -4902,6 +4902,8 @@ namespace Emberfall.DevHarness
                 db.LoadOnboarding(File.Exists(onboardingPath) ? File.ReadAllText(onboardingPath) : null);
                 string ordersPath = Path.Combine(dir, "orders.json");
                 db.LoadOrders(File.Exists(ordersPath) ? File.ReadAllText(ordersPath) : null);
+                string wallChestsPath = Path.Combine(dir, "wall-chests.json");
+                db.LoadWallChests(File.Exists(wallChestsPath) ? File.ReadAllText(wallChestsPath) : null);
                 string sinksPath = Path.Combine(dir, "sinks.json");
                 db.LoadSinks(File.Exists(sinksPath) ? File.ReadAllText(sinksPath) : null);
                 return db;

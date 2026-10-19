@@ -1579,6 +1579,10 @@ namespace Emberfall.EditorTools
             }
 
             string name = list[slot];
+            // R17: ChestResult is Result with a line that wins the stage, so the first clear of a wall
+            // stage can be photographed with its chest on the result. Same pump, same name below.
+            bool chestResult = name == "ChestResult";
+            if (chestResult) name = "Result";
             int showAt = 10 + slot * Step;
             int shotAt = showAt + Settle;
 
@@ -1612,6 +1616,12 @@ namespace Emberfall.EditorTools
                     case "GuildRequests": id = ScreenId.GuildRequests; break;
                     case "GuildChat": id = ScreenId.GuildChat; break;
                     case "Battle": id = ScreenId.Battle; break;
+                    // R17 ability card and wall chest targets. BattleCard=<stage id> fights it and opens a
+                    // unit's card a moment in; AbilityCard=<hero id> opens the hero's busiest ability card;
+                    // StageCard=<stage id> selects that stage on the campaign page.
+                    case "BattleCard": id = ScreenId.Battle; break;
+                    case "AbilityCard": id = ScreenId.HeroDetail; break;
+                    case "StageCard": id = ScreenId.Campaign; break;
                     case "Orders":
                     case "OrdersHalf":
                     case "OrdersClaimed":
@@ -1685,6 +1695,21 @@ namespace Emberfall.EditorTools
                 // the profile actually owns, through the same SetHero the game calls. Skipped
                 // rather than faked if the profile owns nobody: a detail page for a hero the
                 // player does not have is a screenshot of something no player can reach.
+                if (name == "AbilityCard")
+                {
+                    HeroDef cardDef = app.Session.Content.GetHero(SessionState.GetString(BattleStageKey, ""));
+                    if (cardDef == null)
+                    {
+                        Debug.LogWarning("PlayModeScreenshot: no hero '" + SessionState.GetString(BattleStageKey, "")
+                                         + "' for AbilityCard (Screen:AbilityCard=<hero id>), skipping it.");
+                        SessionState.SetInt(StageKey, slot + 1);
+                        return;
+                    }
+                    HeroInstance cardHero = app.Session.Profile.FindHeroByDefId(cardDef.Id);
+                    if (cardHero != null) app.Router.HeroDetail.SetHero(cardHero);
+                    else app.Router.HeroDetail.SetLockedHero(cardDef);
+                    SessionState.SetString(AbilityKey, "1");
+                }
                 if (name == "HeroDetail" || name == "AbilityNumbers")
                 {
                     List<HeroInstance> owned = app.Session.Profile.Heroes;
@@ -1779,8 +1804,18 @@ namespace Emberfall.EditorTools
                     Feel.ForceForCapture(MomentHasToken(momentSpec, "v1") ? (bool?)false : (MomentHasToken(momentSpec, "v2") ? (bool?)true : null));
                 }
 
-                if (name == "Battle" || name == "Result" || name == "AudioFight" || name == "BattleMoment")
+                if (name == "Battle" || name == "Result" || name == "AudioFight" || name == "BattleMoment" || name == "BattleCard")
                 {
+                    if (chestResult)
+                    {
+                        if (Application.persistentDataPath.IndexOf("Emberfall Scratch", StringComparison.OrdinalIgnoreCase) < 0)
+                        {
+                            Debug.LogError("PlayModeScreenshot: ChestResult fields a line and rewrites progress, so it only runs on the scratch identity. Skipping.");
+                            SessionState.SetInt(StageKey, slot + 1);
+                            return;
+                        }
+                        FieldLine(app.Session, WaveLine);
+                    }
                     string asked = SessionState.GetString(BattleStageKey, "");
                     StageDef next = asked.Length > 0 ? app.Session.Content.GetStage(asked) : app.Session.NextStage;
                     if (next == null)
@@ -1811,6 +1846,7 @@ namespace Emberfall.EditorTools
                                          + " for " + name + ", not Resolved.");
                 }
                 else app.Router.Show(id);
+                if (name == "StageCard") app.Router.Campaign.SelectStageForCapture(SessionState.GetString(BattleStageKey, ""));
                 if (IsSinksScreen(name)) OpenSinksPicker(app, name);
                 Debug.Log("PlayModeScreenshot: showing " + name);
             }
@@ -1866,6 +1902,30 @@ namespace Emberfall.EditorTools
             // Battle takes over the schedule from here: it arms when the round starts, or when
             // the ceiling runs out, and shoots BattlePaintDelay frames later so the strip has a
             // frame to lay out and paint before it is photographed.
+            // R17: the unit card, paused over a fight. Waits for the first round like Battle, lets the
+            // fight play a moment, opens the first player unit's card (which stops the clock) and shoots
+            // once the sheet has painted.
+            if (name == "BattleCard")
+            {
+                if (frame <= shotAt) return;
+                int cardArmed = SessionState.GetInt(BattleArmKey, 0);
+                if (cardArmed == 0)
+                {
+                    BattleScreen cardBattle = app.Router.Battle;
+                    if (cardBattle != null && cardBattle.RoundUnderway) SessionState.SetInt(BattleArmKey, frame);
+                    else if (frame > showAt + BattleWaitCeiling)
+                    {
+                        SessionState.SetInt(BattleArmKey, frame);
+                        Debug.LogWarning("PlayModeScreenshot: no round started within " + BattleWaitCeiling + " frames. Opening the card anyway.");
+                    }
+                    return;
+                }
+                if (frame == cardArmed + 40) app.Router.Battle.OpenUnitCardForCapture();
+                if (frame == cardArmed + 60) Canvas.ForceUpdateCanvases();
+                if (frame == cardArmed + 70) Shoot(name, frame, slot);
+                return;
+            }
+
             if (name == "Battle")
             {
                 // Everything below this block is the fixed-frame path and Battle must not reach

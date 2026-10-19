@@ -276,6 +276,27 @@ namespace Emberfall.UI.Screens
             _stageIndex = Mathf.Max(0, chapters[_chapterIndex].Stages.Count - 1);
         }
 
+#if UNITY_EDITOR
+        /// <summary>Selects a stage on the stepper, for the capture tool: the same refresh OnShow does,
+        /// from a chosen chapter and stage rather than the frontier. Editor only.</summary>
+        public void SelectStageForCapture(string stageId)
+        {
+            List<ChapterDef> chapters = App.Session.Content.Chapters;
+            for (int c = 0; c < chapters.Count; c++)
+                for (int s = 0; s < chapters[c].Stages.Count; s++)
+                {
+                    if (chapters[c].Stages[s].Id != stageId) continue;
+                    _chapterIndex = c;
+                    _stageIndex = s;
+                    RefreshChips();
+                    RefreshDiorama();
+                    RefreshStepper();
+                    RefreshStageLabel();
+                    return;
+                }
+        }
+#endif
+
         private ChapterDef ActiveChapter
         {
             get
