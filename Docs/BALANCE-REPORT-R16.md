@@ -1,6 +1,6 @@
 # Balance report R16 (2026-10-19)
 
-FIRST DRAFT. Sections 4 (after column) and the merged-tree rerun of section 6 are placeholders, marked below. Every number here is read from a file named next to it. Files are under `D:\Emberfall\handoff\R16-CORE-BALANCE\` unless a path says otherwise: `data\` holds the simulation outputs, `logs\` the build-check and harness runs.
+DRAFT for the final review. The merge and smoke results are not in this file; they go in the run's REPORT.md. Every number here is read from a file named next to it. Files are under `D:\Emberfall\handoff\R16-CORE-BALANCE\` unless a path says otherwise: `data\` holds the simulation outputs, `logs\` the build-check and harness runs.
 
 The owner took four decisions on 2026-10-19 after `Docs/BALANCE-REPORT-R13.md`. This report is what they did. Sections 1, 2 and 5 are changes that landed on the run branch. Section 3 is the solver. Section 4 is the curve. Sections 6 and 7 are report only.
 
@@ -16,23 +16,24 @@ What changed: `ascensionCurveMultipliers` in `balance.json` goes from `[1, 2.035
 
 **Fusing player, median entry power over `recommendedPower`.** Source: `data\fusion-r16.csv`, taken on the simulation tree WITHOUT the counterattack rule (20 walks). On the run branch with the counterattack rule and the 60 walks of the guard, the fusing player reads 2-12 x2.926, 3-12 x6.211, 4-12 x6.274, 5-12 x6.360 and 6-12 x6.019 (`data\review\review5-tasks1-2-fusion-guard.md`), within 0.04 of the table. The first run of the new content in the harness's own 20 fusing walks (`logs\build-check-builder-task1b.log`) reads x6.182, x6.250, x6.338 and x6.019 at 3-12, 4-12, 5-12 and 6-12, within 0.05 of this table.
 
-| Finale | Before (x6.175) | After (x1.5) |
-|---|---|---|
-| 1-12 | 0.980 | 0.980 |
-| 2-12 | 2.939 | 2.939 |
-| 3-12 | 8.752 | 6.183 |
-| 4-12 | 13.909 | 6.287 |
-| 5-12 | 15.563 | 6.350 |
-| 6-12 | 15.406 | 6.026 |
+| Finale | Before (x6.175) | After (x1.5) | After, with the loosened curve (section 4) |
+|---|---|---|---|
+| 1-12 | 0.980 | 0.980 | 0.980 |
+| 2-12 | 2.939 | 2.939 | 3.197 |
+| 3-12 | 8.752 | 6.183 | 6.387 |
+| 4-12 | 13.909 | 6.287 | 6.879 |
+| 5-12 | 15.563 | 6.350 | 6.920 |
+| 6-12 | 15.406 | 6.026 | 6.557 |
 
-| Chapter, stage 6 | Before | After |
-|---|---|---|
-| 3-6 | 5.037 | 4.196 |
-| 4-6 | 11.634 | 6.337 |
-| 5-6 | 15.119 | 6.267 |
-| 6-6 | 17.848 | 6.990 |
+| Chapter, stage 6 | Before | After (x1.5) | After, with the loosened curve |
+|---|---|---|---|
+| 2-6 | 1.872 | 1.872 | 1.986 |
+| 3-6 | 5.037 | 4.196 | 4.575 |
+| 4-6 | 11.634 | 6.337 | 6.818 |
+| 5-6 | 15.119 | 6.267 | 6.854 |
+| 6-6 | 17.848 | 6.990 | 7.062 |
 
-Chapters 1 and 2 do not move. The plateau is now x6.0 to x7.0. It equals R13's candidate A (x2.94, x6.18, x6.29, x6.35, x6.03).
+The third column is the final content (fusion A and the loosened curve), 20 walks, from the last column of `datausion-r16.csv`. With fusion A alone chapters 1 and 2 do not move and the plateau is x6.0 to x7.0, equal to R13's candidate A (x2.94, x6.18, x6.29, x6.35, x6.03). The loosened curve asks the reference player for less power, so the fusing player's ratio rises with it: chapter 2 moves (2-12 from 2.939 to 3.197) and the finale plateau of chapters 4 to 6 is x6.6 to x6.9.
 
 **ContentVersion** moves from the version beginning `c1-3015` to the one beginning `c1-e4c0` (`logs\build-check-baseline.log`, `logs\build-check-builder-task1b.log`). Recorded guild dungeon replays retire. Accepted by the owner. No stage, hero sweep or talent fingerprint moved (the same two logs).
 
@@ -140,7 +141,11 @@ The walls still bind: every chapter 2 to 6 wall keeps a CEIL of 58.8 to 68.4 per
 
 `AspectChart` stays 1.10 and 0.92 in the game. Source for this whole section: `data\wheel-summary.md`, with the CSVs `data\aspect-grid-r16*.csv` and full tables in `data\wheel\grids.md`. Same method and seeds as R13; the run at 1.10 and 0.92 reproduces all 9 R13 aspect CSVs byte for byte. Noise: 2.2 points per cell, 1.4 per hero.
 
-**PLACEHOLDER: these numbers were taken on a tree without the counterattack rule.** The sim reruns them on the merged tree (about 1 minute); replace them if they move.
+**The tables below are the first pass, on a tree without the counterattack rule. The rerun on the merged tree (the run branch through the 60 seed guard, `data\wheel-summary.md`) changes nothing that matters:**
+- The wheel control is byte-identical (a counter rule does not touch a mirror of identical lines): 89.8 to 93.4 at 1.10 and 0.92, 73.6 to 80.4 at 1.05 and 0.95.
+- Roster grids move by at most 3.6 points in any cell (noise is 2.2 per cell). Umbra's mean on the merged tree: 21.7, 29.1 and 8.4 at 1.10 and 0.92, and 22.2, 29.7 and 9.0 at 1.05 and 0.95 (3 star pool, 4 star pool, every hero).
+- Dominance is as in the first pass: Ember in the 3 star pool, Lumen in the 4 star pool, nobody at 1.10 and 0.92 and Ember at 1.05 and 0.95 in the every-hero pool.
+- The hero tables on the merged tree and the shipped (not loosened) campaign equal R13 at 1.10 and 0.92, so the counter rule moves no hero's equal-footing win rate here. At 1.05 and 0.95 they equal the first pass. On the loosened campaign the calibrated hero level per line pair moves, so those tables are not comparable with R13 and are not used.
 
 Mirror win rate of the advantaged colour (the wheel control, identical lines):
 
@@ -173,7 +178,7 @@ Source: `logs\player-size.md`; sizes file and editor log named there. The review
 
 ## Method notes
 
-- Fusion table: `data\fusion-r16.csv` (the simulation's in-memory candidate on 20 walks). The harness figures in section 1 are the harness's own 20 fusing walks.
+- Fusion table: `data\fusion-r16.csv` (20 walks: the first two columns are in-memory candidates on the simulation tree, the last is the final content). The harness figures in section 1 are the harness's own 20 fusing walks.
 - Guard and curve tables: 60 reference walks, `WalkSeed(0..59)`, instrument `--r13-tails`; CEIL from `CheckArmoredCurveDelta`.
 - The R13 instruments live on a local scratch branch and are not on main.
-- Not measured: the CEIL column on the new engine, the curve after, the wheel on the merged tree.
+- Not measured: the CEIL column on the new engine on the old curve.

@@ -599,7 +599,8 @@ the totals against a straight sum over the events (`CheckBattleStatsClearedWave`
   `ascensionCopies` (1 and 4) did not move; only how many Levels a tier 2 tier level buys did, and
   the level price with it. Candidate A of `Docs/BALANCE-REPORT-R13.md` section 4, one number in
   `balance.json`: it takes the fusing player's plateau over the reference curve from x13.9 to x15.6
-  at the finales of chapters 4 to 6 down to x6.0 to x6.4 (`Docs/BALANCE-REPORT-R16.md`, Fusion A).
+  at the finales of chapters 4 to 6 down to x6.0 to x6.4 (x6.6 to x6.9 once the loosened curve of
+  R16 asks the reference player for less; `Docs/BALANCE-REPORT-R16.md`, Fusion A).
   It moved `ContentVersion`, so recorded guild dungeon replays retired. It was migrated and not
   grandfathered, there being no players: version 18's level clamp takes a tier 2 hero saved above
   Level 103 to Level 103 on load, and `CheckTierTwoAboveTheNewCapLoadsClampsAndPlays` proves it
