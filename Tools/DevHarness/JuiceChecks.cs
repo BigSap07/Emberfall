@@ -462,7 +462,7 @@ namespace Emberfall.DevHarness
         private static void CheckJuiceMomentTracker(ContentDatabase db)
         {
             List<JuiceFight> fights = JuiceFights(db);
-            MomentKind[] kinds = { MomentKind.Hit, MomentKind.Crit, MomentKind.Skill, MomentKind.Heal, MomentKind.Death };
+            MomentKind[] kinds = { MomentKind.Hit, MomentKind.Crit, MomentKind.Skill, MomentKind.Heal, MomentKind.Death, MomentKind.Buff, MomentKind.Debuff, MomentKind.Shield };
             int cases = 0, wrong = 0, arrivals = 0, midWrong = 0;
             string first = "";
             for (int f = 0; f < fights.Count; f++)
@@ -775,23 +775,24 @@ namespace Emberfall.DevHarness
                     row[k] = CombatSimulation.Run(session.BuildBattleRequest(Opening(stages[s]), 4100000 + s * 101 + k));
                 fights.Add(row);
             }
-            MomentKind[] kinds = { MomentKind.Hit, MomentKind.Crit, MomentKind.Skill, MomentKind.Heal, MomentKind.Death };
+            MomentKind[] kinds = { MomentKind.Hit, MomentKind.Crit, MomentKind.Skill, MomentKind.Heal, MomentKind.Death, MomentKind.Buff, MomentKind.Debuff, MomentKind.Shield };
             string[] aspects = Enum.GetNames(typeof(Aspect));
             for (int k = 0; k < kinds.Length; k++)
             {
                 bool byAspect = kinds[k] != MomentKind.Hit && kinds[k] != MomentKind.Crit;
-                if (!byAspect) { Line(kinds[k] + ": " + JuiceSurveyStages(stages, fights, kinds[k], null)); continue; }
+                if (!byAspect) { Line(kinds[k] + ": " + JuiceSurveyStages(stages, fights, kinds[k], null) + "   | chapters 1 and 2: " + JuiceSurveyStages(stages, fights, kinds[k], null, 2)); continue; }
                 for (int a = 0; a < aspects.Length; a++)
-                    Line(kinds[k] + "." + aspects[a].ToLowerInvariant() + ": " + JuiceSurveyStages(stages, fights, kinds[k], (Aspect)a));
+                    Line(kinds[k] + "." + aspects[a].ToLowerInvariant() + ": " + JuiceSurveyStages(stages, fights, kinds[k], (Aspect)a) + "   | chapters 1 and 2: " + JuiceSurveyStages(stages, fights, kinds[k], (Aspect)a, 2));
             }
             return 0;
         }
 
-        private static string JuiceSurveyStages(List<StageDef> stages, List<BattleResult[]> fights, MomentKind kind, Aspect? aspect)
+        private static string JuiceSurveyStages(List<StageDef> stages, List<BattleResult[]> fights, MomentKind kind, Aspect? aspect, int maxChapter = 0)
         {
             List<KeyValuePair<int, string>> ranked = new List<KeyValuePair<int, string>>();
             for (int s = 0; s < stages.Count; s++)
             {
+                if (maxChapter > 0 && (stages[s].ChapterNumber < 1 || stages[s].ChapterNumber > maxChapter)) continue;
                 int hits = 0, roundSum = 0;
                 for (int k = 0; k < fights[s].Length; k++)
                 {

@@ -91,6 +91,22 @@ namespace Emberfall.Battle
         private readonly Stack<FlipQuad> _quadPool = new Stack<FlipQuad>();
         private readonly List<FlipQuad> _quadLive = new List<FlipQuad>();
 
+        /// <summary>R15 v2: one effect quad alive on one unit. The per-unit cap counts these.</summary>
+        private sealed class FxHandle
+        {
+            public FlipQuad Quad;
+            public int Unit;
+            public int Priority;
+            public float Born;
+            public bool Retired;
+        }
+
+        private readonly Dictionary<int, List<FxHandle>> _unitFx = new Dictionary<int, List<FxHandle>>();
+        private static readonly List<int> ScratchPriorities = new List<int>();
+        private static readonly List<float> ScratchBorn = new List<float>();
+        private static Texture2D _arrowTexture;
+        private static Texture2D _shellTexture;
+
         // vfx.json, read once. Static so a second battle does not re-parse it; the file is
         // presentation only and cannot change under a running game.
         private static VfxConfig _config;
@@ -140,6 +156,7 @@ namespace Emberfall.Battle
                 _quadPool.Push(_quadLive[i]);
             }
             _quadLive.Clear();
+            _unitFx.Clear();
             if (_chips != null) _chips.Clear();
             if (_streaks != null) _streaks.Clear();
             if (_rings != null) _rings.Clear();
@@ -168,6 +185,7 @@ namespace Emberfall.Battle
                 case BattleEventType.AbilityCast:
                     _skillSourceId = e.SourceId;
                     _skillMomentDone = false;
+                    if (Feel.V2) PlayCastGlow(e.SourceId >= 0 ? _stage.Find(e.SourceId) : null);
                     break;
                 case BattleEventType.BasicAttack:
                 case BattleEventType.TurnStart:
@@ -177,13 +195,19 @@ namespace Emberfall.Battle
                     PlayDamage(e, target);
                     break;
                 case BattleEventType.ShieldAbsorb:
-                    if (target != null) PlayShield(e, target, target.DisplayShield <= e.Value);
+                    if (target != null && Feel.V2) PlayShell(target, target.DisplayShield <= e.Value);
+                    else if (target != null) PlayShield(e, target, target.DisplayShield <= e.Value);
+                    break;
+                case BattleEventType.ShieldGain:
+                    if (Feel.V2) PlayShellGain(target);
                     break;
                 case BattleEventType.Heal:
-                    if (e.Value > 0) PlayBenefit(target, "heal", 0.35f);
+                    if (e.Value > 0 && Feel.V2) PlayHealLook(target);
+                    else if (e.Value > 0) PlayBenefit(target, "heal", 0.35f);
                     break;
                 case BattleEventType.StatusApplied:
-                    PlayStatus(e, target);
+                    if (Feel.V2) PlayStatusLook(e, target);
+                    else PlayStatus(e, target);
                     break;
                 case BattleEventType.Death:
                     PlayKill(e, target);
@@ -317,6 +341,14 @@ namespace Emberfall.Battle
                 if (shakeStrength > 0f) _stage.ShakeAtLeast(shakeStrength, shakeSeconds);
             }
             else if (crit) _stage.ShakeAtLeast(0.14f, 0.2f);
+
+            // R15 v2: one look per class replaces everything below (the sheet or shape, the crit ring
+            // and streaks): a small puff for a hit, a bigger one for a crit, the burst sheet for a skill.
+            if (Feel.V2)
+            {
+                PlayHitLook(e, source, target, crit, skill);
+                return;
+            }
 
             Color tint = Accent(source);
             VfxEntry entry = Resolve(e);
@@ -461,8 +493,328 @@ namespace Emberfall.Battle
             Camera cam = _stage.Camera;
             Vector3 behind = caster.CenterPosition + (cam != null ? cam.transform.forward * 0.6f : Vector3.zero);
             Color accent = Accent(caster);
+            // R15 v2: the geometric ring gives way to one soft glow in the caster's accent.
+            if (Feel.V2)
+            {
+                FeelProfile fp = Feel.Profile;
+                _stage.Vfx.Glow(behind, accent, fp.SkillGlowRadius, p.RingSeconds, fp.SkillGlowAlpha, true, false);
+                return;
+            }
             _stage.Vfx.Glow(behind, accent, p.RingRadius * 0.75f, p.RingSeconds, 1f, true, true);
             _stage.Vfx.Glow(behind, accent, p.RingRadius * 0.45f, p.RingSeconds, 0.55f, true, false);
+        }
+
+        // ------------------------------------------------------------------ R15 v2: one look per class
+
+        // Every method here starts with if (!Feel.V2) return, so with the preset at v1 none of it
+        // runs (FeelChecks proves the guard). Each effect is one quad under the caps: the per-unit
+        // cap (FeelMath.CapDecision, two by default) and the live cap, on top of the R12 pool cap.
+
+        /// <summary>A body measured against the humanoid the sizes were authored for.</summary>
+        private static float BodyUnit(UnitActor actor)
+        {
+            float h = actor.HeadPosition.y - actor.transform.position.y;
+            return Mathf.Max(0.5f, h) / UnitRig.HumanoidTop;
+        }
+
+        /// <summary>Where a blow lands: the target centre, a quarter of a body toward the attacker.</summary>
+        private Vector3 StrikePoint(UnitActor source, UnitActor target)
+        {
+            Vector3 p = FxPoint(target);
+            if (source == null) return p;
+            Vector3 d = source.transform.position - target.transform.position;
+            d.y = 0f;
+            if (d.sqrMagnitude < 0.0001f) return p;
+            return p + d.normalized * (0.3f * BodyUnit(target));
+        }
+
+        /// <summary>Starts one effect quad on a unit, or returns null when a cap drops it. A stronger
+        /// class retires the oldest weaker effect on a full unit.</summary>
+        private FxHandle BeginFx(UnitActor target, string cls, Texture2D texture, Color tint, bool additive)
+        {
+            if (!Feel.V2 || target == null || target.Snapshot == null || texture == null) return null;
+            FeelProfile fp = Feel.Profile;
+            if (fp.VfxMaxLive > 0 && _quadLive.Count >= fp.VfxMaxLive) return null;
+            int unit = target.Snapshot.Id;
+            List<FxHandle> mine;
+            if (!_unitFx.TryGetValue(unit, out mine))
+            {
+                mine = new List<FxHandle>();
+                _unitFx[unit] = mine;
+            }
+            int priority = FeelMath.ClassPriority(cls);
+            ScratchPriorities.Clear();
+            ScratchBorn.Clear();
+            for (int i = 0; i < mine.Count; i++)
+            {
+                ScratchPriorities.Add(mine[i].Priority);
+                ScratchBorn.Add(mine[i].Born);
+            }
+            int decision = FeelMath.CapDecision(fp.VfxMaxPerUnit, ScratchPriorities, ScratchBorn, priority);
+            if (decision == -2) return null;
+            if (decision >= 0)
+            {
+                mine[decision].Retired = true;
+                mine.RemoveAt(decision);
+            }
+            FxHandle h = new FxHandle();
+            h.Quad = TakeQuad(texture, tint);
+            h.Quad.Material.mainTextureScale = Vector2.one;
+            h.Quad.Material.mainTextureOffset = Vector2.zero;
+            h.Quad.Material.SetFloat("_DstBlend", additive ? 1f : 10f);
+            h.Unit = unit;
+            h.Priority = priority;
+            h.Born = Time.time;
+            mine.Add(h);
+            return h;
+        }
+
+        private void EndFx(FxHandle h)
+        {
+            List<FxHandle> mine;
+            if (_unitFx.TryGetValue(h.Unit, out mine)) mine.Remove(h);
+            _quadLive.Remove(h.Quad);
+            h.Quad.Go.SetActive(false);
+            _quadPool.Push(h.Quad);
+        }
+
+        private void FaceCameraQuad(FlipQuad quad, float roll)
+        {
+            Camera cam = _stage != null ? _stage.Camera : null;
+            if (cam != null) quad.T.rotation = cam.transform.rotation * Quaternion.Euler(0f, 0f, roll);
+        }
+
+        /// <summary>A soft blob that grows to size and fades: the basic impact puff, and the glows.</summary>
+        private IEnumerator PuffRoutine(FxHandle h, Vector3 point, Color tint, float size, float seconds, float startFrac, float alpha)
+        {
+            if (h == null) yield break;
+            FlipQuad q = h.Quad;
+            q.T.position = point;
+            FaceCameraQuad(q, 0f);
+            float duration = Mathf.Max(0.02f, seconds) / PlaybackSpeed();
+            float t = 0f;
+            while (t < duration && !h.Retired)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / duration);
+                float s = size * Mathf.Lerp(startFrac, 1f, 1f - (1f - k) * (1f - k));
+                q.T.localScale = new Vector3(s, s, s);
+                q.Material.SetColor("_Color", new Color(tint.r, tint.g, tint.b, alpha * (1f - k)));
+                yield return null;
+            }
+            EndFx(h);
+        }
+
+        /// <summary>The skill burst: a sheet played once at a point, larger and slower than a hit.</summary>
+        private IEnumerator SheetRoutine(FxHandle h, int columns, int rows, int frames, float fps, Vector3 point, float size, Color tint)
+        {
+            if (h == null) yield break;
+            FlipQuad q = h.Quad;
+            q.T.position = point;
+            FaceCameraQuad(q, 0f);
+            q.T.localScale = new Vector3(size, size, size);
+            Vector2 cell = new Vector2(1f / columns, 1f / rows);
+            q.Material.mainTextureScale = cell;
+            q.Material.SetColor("_Color", tint);
+            float duration = Mathf.Max(1, frames) / Mathf.Max(1f, fps) / PlaybackSpeed();
+            float t = 0f;
+            while (t < duration && !h.Retired)
+            {
+                t += Time.deltaTime;
+                int frame = Mathf.Min(frames - 1, (int)(t / duration * frames));
+                int col = frame % columns;
+                int row = frame / columns;
+                q.Material.mainTextureOffset = new Vector2(col * cell.x, 1f - (row + 1) * cell.y);
+                yield return null;
+            }
+            EndFx(h);
+        }
+
+        /// <summary>A band that travels up or down the body, bell shaped in alpha.</summary>
+        private IEnumerator PulseRoutine(FxHandle h, UnitActor target, Color tint, float size, float seconds, float travel, bool up, float alpha)
+        {
+            if (h == null) yield break;
+            FlipQuad q = h.Quad;
+            FaceCameraQuad(q, 0f);
+            float body = target.HeadPosition.y - target.transform.position.y;
+            Vector3 basePoint = FxPoint(target);
+            float lo = target.transform.position.y + body * 0.18f - basePoint.y;
+            float hi = lo + body * travel;
+            float duration = Mathf.Max(0.02f, seconds) / PlaybackSpeed();
+            float t = 0f;
+            while (t < duration && !h.Retired)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / duration);
+                float along = up ? k : 1f - k;
+                q.T.position = basePoint + Vector3.up * Mathf.Lerp(lo, hi, 1f - (1f - along) * (1f - along));
+                q.T.localScale = new Vector3(size * 1.1f, size * 0.55f, 1f);
+                q.Material.SetColor("_Color", new Color(tint.r, tint.g, tint.b, alpha * Mathf.Sin(k * Mathf.PI)));
+                yield return null;
+            }
+            EndFx(h);
+        }
+
+        /// <summary>The arrow chip: a badge with an arrow that drifts up (buff) or down (debuff) off the head.</summary>
+        private IEnumerator ArrowRoutine(FxHandle h, UnitActor target, Color tint, float size, float seconds, float travel, bool up)
+        {
+            if (h == null) yield break;
+            FlipQuad q = h.Quad;
+            FaceCameraQuad(q, up ? 0f : 180f);
+            q.T.localScale = new Vector3(size, size, size);
+            float body = target.HeadPosition.y - target.transform.position.y;
+            Vector3 start = FxPoint(target) + Vector3.up * (body * 0.62f);
+            float drift = body * travel * 0.35f * (up ? 1f : -1f);
+            float duration = Mathf.Max(0.02f, seconds) / PlaybackSpeed();
+            float t = 0f;
+            while (t < duration && !h.Retired)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / duration);
+                q.T.position = start + Vector3.up * (drift * (1f - (1f - k) * (1f - k)));
+                float a = k < 0.15f ? k / 0.15f : 1f - Mathf.Clamp01((k - 0.55f) / 0.45f);
+                q.Material.SetColor("_Color", new Color(tint.r, tint.g, tint.b, a));
+                yield return null;
+            }
+            EndFx(h);
+        }
+
+        /// <summary>A shell around the body: an outline and a faint fill that swell a little and fade.</summary>
+        private IEnumerator ShellRoutine(FxHandle h, UnitActor target, Color tint, float seconds, float alpha)
+        {
+            if (h == null) yield break;
+            FlipQuad q = h.Quad;
+            FaceCameraQuad(q, 0f);
+            float body = target.HeadPosition.y - target.transform.position.y;
+            q.T.position = FxPoint(target);
+            float duration = Mathf.Max(0.02f, seconds) / PlaybackSpeed();
+            float t = 0f;
+            while (t < duration && !h.Retired)
+            {
+                t += Time.deltaTime;
+                float k = Mathf.Clamp01(t / duration);
+                float swell = Mathf.Lerp(0.86f, 1.04f, 1f - (1f - k) * (1f - k));
+                q.T.localScale = new Vector3(body * 0.85f * swell, body * 1.25f * swell, 1f);
+                float a = k < 0.12f ? k / 0.12f : 1f - (k - 0.12f) / 0.88f;
+                q.Material.SetColor("_Color", new Color(tint.r, tint.g, tint.b, alpha * a));
+                yield return null;
+            }
+            EndFx(h);
+        }
+
+        // ---- the looks, one per class
+
+        private void PlayHitLook(BattleEvent e, UnitActor source, UnitActor target, bool crit, bool skill)
+        {
+            if (!Feel.V2) return;
+            FeelProfile fp = Feel.Profile;
+            Color accent = Accent(source);
+            float u = BodyUnit(target);
+            float power = Mathf.Clamp(e.AspectFactor, 0.8f, 1.3f);
+            Texture2D dot = BattleAssets.SoftDot;
+            Vector3 centre = FxPoint(target);
+            Vector3 behind = _stage != null && _stage.Camera != null ? _stage.Camera.transform.forward * 0.4f : Vector3.zero;
+
+            if (skill)
+            {
+                // The aspect-tinted burst, larger and slower, over a soft glow. The dim and the
+                // caster's glow come from SkillMoment.
+                Texture2D sheet = fp.SkillSheet.Length > 0 ? LoadSheet(fp.SkillSheet) : null;
+                if (sheet != null)
+                {
+                    FxHandle burst = BeginFx(target, "skill", sheet, accent, true);
+                    StartCoroutine(SheetRoutine(burst, fp.SkillColumns, fp.SkillRows, fp.SkillFrames, fp.SkillFps, centre, fp.SkillScale * u * power, accent));
+                }
+                FxHandle glow = BeginFx(target, "skill", dot, accent, true);
+                StartCoroutine(PuffRoutine(glow, centre + behind, accent, fp.CritGlowRadius * 2f * u * power, 0.30f, 0.8f, 0.7f));
+                return;
+            }
+
+            Color puff = new Color(FeelMath.TowardWhite(accent.r, fp.PuffWhite), FeelMath.TowardWhite(accent.g, fp.PuffWhite), FeelMath.TowardWhite(accent.b, fp.PuffWhite), 1f);
+            Vector3 at = StrikePoint(source, target);
+            if (crit)
+            {
+                // The basic impact, bigger, with a soft glow under it. The crit number is the other half.
+                FxHandle glow = BeginFx(target, "crit", dot, accent, true);
+                StartCoroutine(PuffRoutine(glow, centre + behind, accent, fp.CritGlowRadius * 2f * u * power, fp.CritPuffSeconds * 1.2f, 0.7f, 0.55f));
+                FxHandle big = BeginFx(target, "crit", dot, puff, true);
+                StartCoroutine(PuffRoutine(big, at, puff, fp.CritPuffSize * u * power, fp.CritPuffSeconds, 0.45f, 1f));
+                return;
+            }
+            FxHandle small = BeginFx(target, "hit", dot, puff, true);
+            StartCoroutine(PuffRoutine(small, at, puff, fp.HitPuffSize * u * power, fp.HitPuffSeconds, 0.45f, 0.95f));
+        }
+
+        /// <summary>The cast itself: a soft glow on the caster in their accent, in place of the ring that swept up the body.</summary>
+        private void PlayCastGlow(UnitActor caster)
+        {
+            if (!Feel.V2 || caster == null || !caster.Alive) return;
+            FeelProfile fp = Feel.Profile;
+            Color accent = Accent(caster);
+            Vector3 behind = _stage != null && _stage.Camera != null ? _stage.Camera.transform.forward * 0.4f : Vector3.zero;
+            FxHandle glow = BeginFx(caster, "buff", BattleAssets.SoftDot, accent, true);
+            StartCoroutine(PuffRoutine(glow, FxPoint(caster) + behind, accent, fp.CastGlowRadius * 2f * BodyUnit(caster), fp.CastGlowSeconds, 0.6f, 0.6f));
+        }
+
+        /// <summary>Heal: a soft green glow and a few chips rising off the target. No ring, no sheet.</summary>
+        private void PlayHealLook(UnitActor target)
+        {
+            if (!Feel.V2 || target == null || !target.Alive) return;
+            FeelProfile fp = Feel.Profile;
+            Color green = UITheme.Success;
+            float u = BodyUnit(target);
+            Vector3 centre = FxPoint(target);
+            FxHandle glow = BeginFx(target, "heal", BattleAssets.SoftDot, green, true);
+            StartCoroutine(PuffRoutine(glow, centre, green, fp.HealGlowRadius * 2f * u, fp.HealGlowSeconds, 0.6f, 0.55f));
+            Vector3 belly = centre - Vector3.up * (0.4f * u);
+            EmitChips(belly, new Color(0.78f, 1f, 0.84f, 1f), fp.HealSparks, fp.HealSparkRise * u, 0.2f * u, fp.HealSparkSeconds, Direction.Rise);
+        }
+
+        /// <summary>Buff: a gold band rising through the body and an up arrow chip. Debuff: a dark band
+        /// sinking and a down arrow chip. Neither plays the heal sparkle.</summary>
+        private void PlayStatusLook(BattleEvent e, UnitActor target)
+        {
+            if (!Feel.V2 || target == null || !target.Alive) return;
+            if (e.Status == StatusKind.None || e.Status == StatusKind.Shield) return;
+            FeelProfile fp = Feel.Profile;
+            bool harmful = StatusInfo.IsHarmful(e.Status);
+            string cls = harmful ? "debuff" : "buff";
+            Color tint = harmful ? new Color(0.50f, 0.15f, 0.34f, 1f) : UITheme.Gold;
+            bool additive = !harmful;     // a darker tint only shows when drawn over the scene, not added to it
+            float u = BodyUnit(target);
+            if (_arrowTexture == null) _arrowTexture = MakeArrowChip();
+            FxHandle band = BeginFx(target, cls, BattleAssets.SoftDot, tint, additive);
+            StartCoroutine(PulseRoutine(band, target, tint, fp.PulseSize * u, fp.PulseSeconds, fp.PulseTravel, !harmful, harmful ? 0.7f : 0.8f));
+            FxHandle chip = BeginFx(target, cls, _arrowTexture, tint, additive);
+            StartCoroutine(ArrowRoutine(chip, target, tint, fp.ArrowSize * u, fp.ArrowSeconds, fp.PulseTravel, !harmful));
+        }
+
+        /// <summary>Shield: a short shell flash around the body. An absorb is the lighter flash, a
+        /// break the full one with a short freeze.</summary>
+        private void PlayShell(UnitActor target, bool broke)
+        {
+            if (!Feel.V2 || target == null || !target.Alive) return;
+            FeelProfile fp = Feel.Profile;
+            if (broke)
+            {
+                target.Flash(0.5f, UITheme.Shield);
+                target.HitStop(0.07f / PlaybackSpeed());
+            }
+            SpawnShell(target, broke ? fp.ShellAlpha : fp.ShellAbsorbAlpha);
+        }
+
+        private void PlayShellGain(UnitActor target)
+        {
+            if (!Feel.V2 || target == null || !target.Alive) return;
+            SpawnShell(target, Feel.Profile.ShellAlpha);
+        }
+
+        private void SpawnShell(UnitActor target, float alpha)
+        {
+            if (!Feel.V2) return;
+            if (_shellTexture == null) _shellTexture = MakeShell();
+            FxHandle shell = BeginFx(target, "shield", _shellTexture, UITheme.Shield, true);
+            StartCoroutine(ShellRoutine(shell, target, UITheme.Shield, Feel.Profile.ShellSeconds, alpha));
         }
 
         // ------------------------------------------------------------------ resolution
@@ -856,6 +1208,68 @@ namespace Emberfall.Battle
                     float d = Mathf.Abs(u) + Mathf.Abs(v);                  // 0 centre, 1 at the diamond's edge
                     float a = Mathf.Clamp01((1f - d) * 5f);
                     px[y * n + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            }
+            tex.SetPixels32(px);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>R15: a badge with an arrow pointing up (the debuff turns it over). The disc is
+        /// half strength and the arrow full, so the arrow reads on its own plate.</summary>
+        private static Texture2D MakeArrowChip()
+        {
+            const int n = 64;
+            Texture2D tex = new Texture2D(n, n, TextureFormat.RGBA32, false);
+            Color32[] px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float arrow = 0f;
+                    for (int sy = 0; sy < 3; sy++)
+                    {
+                        for (int sx = 0; sx < 3; sx++)
+                        {
+                            float u = (x + (sx + 0.5f) / 3f) / n * 2f - 1f;
+                            float v = (y + (sy + 0.5f) / 3f) / n * 2f - 1f;
+                            bool head = v >= 0.0f && v <= 0.62f && Mathf.Abs(u) <= (0.62f - v) * 0.86f;
+                            bool shaft = Mathf.Abs(u) <= 0.15f && v >= -0.5f && v <= 0.08f;
+                            if (head || shaft) arrow += 1f / 9f;
+                        }
+                    }
+                    float ux = (x + 0.5f) / n * 2f - 1f;
+                    float vy = (y + 0.5f) / n * 2f - 1f;
+                    float disc = Mathf.Clamp01((0.94f - Mathf.Sqrt(ux * ux + vy * vy)) * 12f) * 0.5f;
+                    px[y * n + x] = new Color32(255, 255, 255, (byte)(Mathf.Max(disc, arrow) * 255f));
+                }
+            }
+            tex.SetPixels32(px);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>R15: the shield shell, a bright rim and a faint fill. Stretched to the body it
+        /// reads as an outline flash around the unit.</summary>
+        private static Texture2D MakeShell()
+        {
+            const int n = 128;
+            Texture2D tex = new Texture2D(n, n, TextureFormat.RGBA32, false);
+            Color32[] px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = (x + 0.5f) / n * 2f - 1f;
+                    float v = (y + 0.5f) / n * 2f - 1f;
+                    float d = Mathf.Sqrt(u * u + v * v);
+                    float rim = Mathf.Exp(-Mathf.Pow((d - 0.9f) / 0.06f, 2f));
+                    float fill = Mathf.Clamp01((0.92f - d) * 8f) * 0.16f * (0.6f + 0.4f * Mathf.Clamp01(v * 0.5f + 0.5f));
+                    px[y * n + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(Mathf.Max(rim, fill)) * 255f));
                 }
             }
             tex.SetPixels32(px);

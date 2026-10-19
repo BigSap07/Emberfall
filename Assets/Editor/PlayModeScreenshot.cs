@@ -2729,6 +2729,9 @@ namespace Emberfall.EditorTools
                     else if (p == "skill") kind = MomentKind.Skill;
                     else if (p == "heal") kind = MomentKind.Heal;
                     else if (p == "death") kind = MomentKind.Death;
+                    else if (p == "buff") kind = MomentKind.Buff;
+                    else if (p == "debuff") kind = MomentKind.Debuff;
+                    else if (p == "shield") kind = MomentKind.Shield;
                     else return false;
                 }
                 else if (p == "off") off = true;
@@ -2748,6 +2751,21 @@ namespace Emberfall.EditorTools
         /// the ring are at their strongest for a skill, the heal ring is out, a death is mid-sink.</summary>
         private static int MomentSettleFrames(MomentKind kind)
         {
+            // R15 v2: a hit flash is a 0.06 s tint and a basic puff lasts 0.14 s, so those shots are
+            // taken early; the skill burst and the buff, debuff and shield looks are shot near their peak.
+            if (Feel.V2)
+            {
+                switch (kind)
+                {
+                    case MomentKind.Hit: return 2;
+                    case MomentKind.Crit: return 2;
+                    case MomentKind.Skill: return 8;
+                    case MomentKind.Heal: return 8;
+                    case MomentKind.Buff: return 12;
+                    case MomentKind.Debuff: return 12;
+                    case MomentKind.Shield: return 5;
+                }
+            }
             switch (kind)
             {
                 case MomentKind.Skill: return 4;
@@ -2774,7 +2792,7 @@ namespace Emberfall.EditorTools
             bool off;
             if (!ParseMoment(spec, out kind, out aspect, out off))
             {
-                Debug.LogError("PlayModeScreenshot: [FAIL] " + requested + ": '" + spec + "' is not kind[.aspect][.off][.v1|.v2] with kind hit, crit, skill, heal or death. Not shooting.");
+                Debug.LogError("PlayModeScreenshot: [FAIL] " + requested + ": '" + spec + "' is not kind[.aspect][.off][.v1|.v2] with kind hit, crit, skill, heal, buff, debuff, shield or death. Not shooting.");
                 SkipMoment(slot);
                 return;
             }
