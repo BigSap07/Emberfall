@@ -552,8 +552,7 @@ Pinoy's.
   attacker and ignore Taunt, so the card is right as written and the proposed wording below is
   withdrawn, for Defined Duty and Jory's Worn Hinges too.) The card says Caldus "strikes it", meaning the Declared Target
   that hit the ally. The strike aims at `LastAttacker`, and the engine's Taunt anchor outranks that
-  mode, so while an enemy holds Provoke, the strike lands on that enemy instead. READ from
-  `DESIGN-BUILD-ORDER.md`: 126 times in 240 campaign battles. **The Taunt rule stays; the card is
+  mode, so while an enemy holds Provoke, the strike lands on that enemy instead. **The Taunt rule stays; the card is
   wrong.** Proposed: *"When his Declared Target damages another ally, Caldus strikes back and gains
   Energy, and the ally it hit gains a Ward worth a share of Caldus's Max HP. An enemy with Provoke
   draws the strike."* READ from `DESIGN-BUILD-ORDER.md`: Caldus's Defined Duty and Jory's Worn

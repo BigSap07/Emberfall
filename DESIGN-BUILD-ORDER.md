@@ -589,18 +589,35 @@ the totals against a straight sum over the events (`CheckBattleStatsClearedWave`
   stars, and 9, 18 and 39 tier levels for a 5-star at tiers 0, 1 and 2. Account rank sets none of it.
 - **Ascension** is `GameSession.Ascend`: copies of the same hero only (1 for the first step, 4 for
   the second), and the tier level resets to 1. **A hero's Level stays the one number its stat line
-  is built from** - each tier walks the one level ladder at its own stride, x2.035 and x6.175
+  is built from** - each tier walks the one level ladder at its own stride, x2.035 and x1.5
   Levels per tier level (`StatMath.LevelAt`) - because combat reads Level for Defense mitigation, and
   a multiplier on the stats instead made an ascended line of the same power clear `2-12`'s ceiling
   39% of the time against 63%. The level cost is read off the tier level, times the same multiplier.
+- **Tier 2's stride is x1.5, the owner's decision of 2026-10-19 (R16), not the x6.175 the
+  continuity rule gives.** A tier 2 five-star walks Levels 46 to 103 where it walked 46 to 281. The
+  caps (9, 18 and 39 tier levels), where each tier starts (Levels 1, 10 and 46) and
+  `ascensionCopies` (1 and 4) did not move; only how many Levels a tier 2 tier level buys did, and
+  the level price with it. Candidate A of `Docs/BALANCE-REPORT-R13.md` section 4, one number in
+  `balance.json`: it takes the fusing player's plateau over the reference curve from x13.9 to x15.6
+  at the finales of chapters 4 to 6 down to x6.0 to x6.4 (`Docs/BALANCE-REPORT-R16.md`, Fusion A).
+  It moved `ContentVersion`, so recorded guild dungeon replays retired. It was migrated and not
+  grandfathered, there being no players: version 18's level clamp takes a tier 2 hero saved above
+  Level 103 to Level 103 on load, and `CheckTierTwoAboveTheNewCapLoadsClampsAndPlays` proves it
+  through the real serializer (a tier 2 five-star saved at Level 281 loads at 103, power 31006 to
+  12075, round-trips, and plays 1-1 and the last battle of 6-12).
 - **Conversion** is `GameSession.Convert`: heroes below five stars worth 100 points (15, 10, 10 and
   18 per body by star tier) for a random 5-star of the chosen aspect. Ember, Tide, Verdant and Gale
   take same-aspect fodder; Umbra and Lumen take one seed of their own and fodder of any aspect.
-- **Every number is derived, not declared**: `CheckFusionEconomyDerivation` rederives each one from
-  the summon weights, the hero growth rate, the starting line and a campaign growth of x7.611,
+- **Every number is derived, not declared, except one**: `CheckFusionEconomyDerivation` rederives each
+  one from the summon weights, the hero growth rate, the starting line and a campaign growth of x7.611,
   prints the F6 crossover for every 5-star, and fails if `balance.json` disagrees. The growth was
   the finale's entry over the starting line until the wall rule made the finale an output of the
-  caps; it is pinned at the value the caps were derived at (`CapDerivationGrowth`).
+  caps; it is pinned at the value the caps were derived at (`CapDerivationGrowth`). The exception is tier 2's stride: no rule in the derivation gives
+  1.5, because it encodes a target (the plateau at about x6) and not a continuity rule. So the
+  derivation pins it (`OwnerPinnedStrideTier`, `OwnerPinnedStride`, dated 2026-10-19), prints the
+  continuity value beside it, derives everything else around it, and a check asserts the pin is the
+  only departure. `ascensionCopies` is priced off the power of a tier's first Level, not off the
+  stride, so it did not move.
   `CheckFusionRules` holds `GameSession` to each rule, to save version 16 and to version 18's
   level clamp.
 - **The fusion screen is built.** `FusionScreen` is two tabs on one page, because fusion's output
@@ -733,14 +750,19 @@ its neighbour. The CEIL band is read by kind (`IsCeilWall`, `IsCeilBreezy`, `Cei
 `1-1` to `1-6` [70%, 100%], walls (`1-12`, and stages 6 and 12 from chapter 2) [55%, 72%], the rest
 [78%, 92%]. Both checks print every stage's verdict. They were rewritten with the content, so read
 the result against the owner's target table in the proposal, not against itself.
-`Tools/solve-recommended-power.ps1` and the `SolverMiddle*` constants still aim at the old bands:
-re-running the solver would walk the curve back.
+The solver aims at `SolverTargetRatios`, the per-stage entry ratio of the content it was taken on (a
+snapshot of the content before R16: on a changed engine or content its single-seed walk moves
+stages, so the table is refreshed with the content, not trusted across it). The `2-1` armor 0 was
+the entry reading taken before the sitting that wears armor; `ArrivalTeamPower` reads that one
+stage after wearing. Run on the shipped content the solver moves 0 of 72 `recommendedPower` and 2
+rosters by one unit (`Docs/BALANCE-REPORT-R16.md`, Solver).
 
 **The simulated player here is the wall rule's reference player, not the one who fuses.**
 FUSION ACCELERATES A WALL, IT NEVER GATES ONE: every wall must be passable with levels at the cap and
 no conversion and no ascension at all. So the band is read on that player's walk,
-`recommendedPower` is derived from it, and `CheckFusionNeverGates` walks twenty of them and fails if
-any one sticks anywhere. The player who fuses meets every stage above its band, and that is the rule
+`recommendedPower` is derived from it, and `CheckFusionNeverGates` walks sixty of them (`WalkSeed` 0
+to 59, owner decision 2 of R16; it read twenty, and all twenty were green while 5 of 60 stuck) and
+fails if any one sticks anywhere. The player who fuses meets every stage above its band, and that is the rule
 working rather than a failure of it.
 
 **A walk that stalls takes the stage's swaps back once before it is called STUCK.** The per-wave
@@ -780,6 +802,13 @@ stage can be asked for less than it. `recommendedPower` is not monotonic on its 
 of a band is raised to the running maximum of every earlier low, marked with a star in the table,
 and each relaxation prints the `recommendedPower` that would retire it. At the derivation nothing
 needed relaxing.
+
+**PLACEHOLDER, R16 task 4 (loosening the curve): the lead fills this in from the task 4 result.**
+Two before columns exist, both over 60 reference walks. The pre-R16 engine on the pre-R16 curve: 5
+stuck (seeds 23, 46, 48, 51 and 59, at 4-2, 2-9, 5-3, 2-6 and 2-4). The R16 engine, with the
+counterattack rule, on the same curve: 8 stuck (`CheckFusionNeverGates` is red on exactly these
+until task 4 lands). The after column is not written yet.
+(`Docs/BALANCE-REPORT-R16.md`, Curve.)
 
 **Two costs were measured rather than argued, and both are written into `campaign.json` so the next
 pass does not rediscover them.** They are both open decisions now; see below.
@@ -1480,11 +1509,6 @@ campaign power curve, and the walls**.
 
 In order.
 
-0. **What the unlock table's retune left.** The economy merge re-set `recommendedPower` from the
-   harness reference walk, and the walks spend a feature only once a player arriving at the stage
-   has it (`FeatureGate.IsUnlockedArriving`). One point is still open: the `2-1` walk shows armor 0
-   although armor unlocks at `1-12`. The solver (`Tools/solve-recommended-power.ps1`) still aims at
-   the old bands and needs retuning before it is run again.
 1. **What the fidelity passes left.** Pass 3 closed C13 and every finding pass 2 recorded as left
    for later. What remains is **G1, G2 and G3**, the three proposed primitives not built, which
    would close groups 25, 30 and 23, and one unmeasured suspicion: a counter the per-target budget
@@ -1779,14 +1803,6 @@ The harness reads first, then the rest.
 
 Beyond the harness:
 
-- **Counterattacks still go to a Taunt holder.** Defect pass 3 swept every effect named by a
-  broadcast for the wrong-body shape and repaired the named-body modes; `LastAttacker` and
-  `LastTarget` it measured and left, because the engine documents the anchor outranking them as a
-  rule. Caldus's No Uncertain Ground still strikes the Taunt holder when the enemy that hit an ally
-  is not it (126 times in 240 campaign battles he fought in, 72 in his 20 sweep-arena runs), and
-  his Defined Duty and Jory's Worn Hinges do the same. Whether a counterattack answers to Taunt is
-  a rules decision rather than a defect. The rule stays, so it is Caldus's card that is wrong:
-  replacement text is proposed in `Docs/PINOY-LIST.md` section 2i.
 - **Marn's Relief After Loss healed an enemy once in 8,832 campaign battles**, because the
   Coverguard it answers was on an enemy when it was spent. How the Guard got there was not traced.
 
@@ -1867,21 +1883,26 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   them is designed today.
 - **A marketplace.** Nothing built, nothing designed.
 - **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
-- **Texture compression, on Android only.** The 855 MB figure this entry used to carry was re-taken
-  against a real Windows player and **does not describe it**. The release-offline player is 318 MB
-  unzipped and 188.5 MB zipped, and its build report packs 213.6 MB, of which 139.4 MB is the battle
-  sheets. All 214 sheet PNGs are packed - none is missing - 208 of them as DXT5 Crunched and 6 as
-  RGBA32, against 3,198.6 MB as raw RGBA. Portraits, badges and HUD pack 126 of 126 PNGs to
-  24.8 MB (94 BC7, 32 RGBA32) and the backgrounds 5 of 5 to 19.6 MB. So the art is compressed on
-  the Standalone target and the small zip is the importer's doing, not the zip's. **That
-  measurement predates the 336 by 396 sheets**, which import as BC7 and cannot be crunched: by
-  `Tools/texture-import-policy.py`'s model the 338 files in `Sprites/Units` now pack to about
-  3,018 MB on Windows (BC7 is 1 byte per pixel and only DXT can be crunched), against the
-  139.4 MB measured, so the unzipped player grows by close to 2.9 GB. How much of that the zip
-  wins back is unmeasured. Re-measure with `Tools/build-windows.ps1` before quoting a player size. `EmberfallBuild`
-  writes this report beside every Windows player, and `Tools/build-windows.ps1` prints it. The APK
-  has not been measured: Android reads its own importer overrides, and the 855 MB may still be
-  true there. Measure an APK the same way before sizing the work.
+- **Texture compression.** The 855 MB figure this entry once carried was re-taken against a real
+  Windows player twice. The first player, before the 336 by 396 sheets, was 318 MB unzipped and
+  188.5 MB zipped, with 208 sheets packed as DXT5 Crunched. **The second, taken in R16 with the
+  336 by 396 sheets in, is 3237.5 MB unzipped and 676.1 MB zipped**; its build report packs
+  3132.8 MB, of which the 338 battle sheets in `Sprites/Units` are 3018.3 MB, all BC7 (12072.9 MB
+  as raw RGBA, each sheet about 9.4 MB packed). The earlier prediction of close to 2.9 GB of growth
+  held. Portraits, badges and HUD pack to 24.8 MB and the backgrounds to 19.6 MB, so the Units group
+  is the whole of the growth. The zip wins back 4.8x, and 676.1 MB zipped is still under 1 GB; only
+  the unzipped player is over. **The cheapest fix, not applied and an owner call**: set `win_format` of
+  the Units group in `Tools/texture-import-policy.py` from BC7 to DXT5 Crunched. Measured on one
+  sheet, 9.4 MB packed falls to 1,004,264 bytes, and extrapolated over 338 sheets the player falls to
+  about 0.4 GB unzipped (an extrapolation, not measured across all sheets). It is visibly softer:
+  hair strands, face and armour trim smear into blotches in a battle capture, which is why the
+  policy chose BC7 on purpose and why this reverses a recorded decision. Lowering
+  `maxTextureSize` is not an alternative: it rescales the whole sheet and shears the frame grid.
+  Source: `Tools/build-windows.ps1` at the R16 measurement (`Docs/BALANCE-REPORT-R16.md`, Player
+  size). `EmberfallBuild` writes this report beside every Windows player, and
+  `Tools/build-windows.ps1` prints it. The APK has not been measured: Android reads its own importer
+  overrides, and the 855 MB may still be true there. Measure an APK the same way before sizing the
+  work.
 - **An APK**, once there is a device.
 - **iOS**, once there is a Mac and a developer account.
 
