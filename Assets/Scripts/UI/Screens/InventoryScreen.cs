@@ -244,7 +244,7 @@ namespace Emberfall.UI.Screens
             _pickerRelic = relic;
             _pickerArmorUid = "";
             _pickerArmorPiece = null;
-            _pickerRelicDef = App.Session.Content.GetRelic(relic.RelicId);
+            _pickerRelicDef = App.Session.Profile.RelicAtOwnedTier(relic.RelicId, App.Session.Content);
             RelicDef def = App.Session.Content.GetRelic(relic.RelicId);
             OpenPickerFor(def != null ? def.Name : relic.RelicId,
                           App.Session.Profile.HeroHoldingRelic(relic.RelicId));
