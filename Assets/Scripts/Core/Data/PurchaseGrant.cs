@@ -18,6 +18,10 @@ namespace Emberfall.Core.Data
         Slag,
         /// <summary>Amount Relic Dust, fixed. Not marked: Dust only buys the relic shop's fixed items.</summary>
         Dust,
+        /// <summary>Amount sweeps of the buyer's OWN frontier: each is one repeat-clear payout of the frontier
+        /// stage (WayfarersRoad.DustPerSweep), paid as Relic Dust at the moment of the grant. Not marked: Dust only
+        /// buys the relic shop's fixed items.</summary>
+        DustSweeps,
         /// <summary>Amount hours of the buyer's OWN frontier idle Gold at the moment of the grant
         /// (GameSession.IdleYield). Gold only, never the Shards the same hour would pay. Sealed.</summary>
         IdleGoldHours,
@@ -94,8 +98,9 @@ namespace Emberfall.Core.Data
                     case GrantKind.Slag:
                     case GrantKind.Dust:
                     case GrantKind.IdleGoldHours:
+                    case GrantKind.DustSweeps:
                         if (!(it.Amount > 0.0) || double.IsInfinity(it.Amount)) return it.Kind + " needs a positive amount";
-                        if (it.Kind != GrantKind.IdleGoldHours && it.Amount != Math.Floor(it.Amount)) return it.Kind + " is a whole number";
+                        if (it.Kind != GrantKind.IdleGoldHours && it.Kind != GrantKind.DustSweeps && it.Amount != Math.Floor(it.Amount)) return it.Kind + " is a whole number";
                         break;
                     case GrantKind.HeroCopy:
                         if (db != null && db.GetHero(it.HeroId) == null) return "HeroCopy names no hero (" + it.HeroId + ")";

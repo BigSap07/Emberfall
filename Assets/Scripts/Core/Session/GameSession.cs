@@ -2630,6 +2630,8 @@ namespace Emberfall.Core.Session
             Profile.Gold += report.Gold;
             Profile.Shards += report.Shards;
             Profile.LastIdleClaimUnix = nowUnix;
+            // The Ember Ledger card's share of the Gold, Sealed. Nothing without a card or with the Store off.
+            StoreOffers.OnIdleClaim(this, report, nowUnix);
             return report;
         }
 

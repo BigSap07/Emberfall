@@ -48,6 +48,8 @@ namespace Emberfall.Game
             db.LoadRelicShop(ReadTextOptional("relic-shop"));
             // And the season pass (ContentDatabase.WayfarersRoad): no fight reads it.
             db.LoadWayfarersRoad(ReadTextOptional("wayfarers-road"));
+            // And what the Store sells (ContentDatabase.Store): no fight reads it.
+            db.LoadStore(ReadTextOptional("store"));
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

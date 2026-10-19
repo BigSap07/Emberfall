@@ -110,6 +110,12 @@ namespace Emberfall.Core.Progression
                         r.Dust += (long)it.Amount;
                         r.Lines.Add(Group((long)it.Amount) + " Relic Dust");
                         break;
+                    case GrantKind.DustSweeps:
+                        long swept = (long)Math.Round(it.Amount * WayfarersRoad.DustPerSweep(session));
+                        session.Profile.RelicDust += swept;
+                        r.Dust += swept;
+                        r.Lines.Add(Sweeps(it.Amount) + " of Relic Dust = " + Group(swept) + " Relic Dust");
+                        break;
                     case GrantKind.HeroCopy:
                         HeroDef fixedHero = session.Content.GetHero(it.HeroId);
                         SealedGrants.GrantHeroCopy(session, fixedHero, nowUnix);
@@ -152,6 +158,10 @@ namespace Emberfall.Core.Progression
                     if (session != null)
                         text += " (now " + Group(session.IdleYield((long)Math.Round(it.Amount * 3600.0)).Gold) + " Gold)";
                     return text;
+                case GrantKind.DustSweeps:
+                    string sweepText = Sweeps(it.Amount) + " of Relic Dust";
+                    if (session != null) sweepText += " (now " + Group((long)Math.Round(it.Amount * WayfarersRoad.DustPerSweep(session))) + " Relic Dust)";
+                    return sweepText;
                 case GrantKind.HeroCopy: return "One copy of " + HeroName(session, it.HeroId);
                 case GrantKind.HeroChoice:
                     List<string> names = new List<string>();
@@ -173,6 +183,11 @@ namespace Emberfall.Core.Progression
         private static string Group(long v)
         {
             return v.ToString("N0", CultureInfo.InvariantCulture);
+        }
+
+        private static string Sweeps(double n)
+        {
+            return n.ToString("0.#", CultureInfo.InvariantCulture) + (n == 1.0 ? " sweep" : " sweeps");
         }
 
         private static string Hours(double h)

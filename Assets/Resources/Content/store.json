@@ -1,0 +1,88 @@
+{
+  // THE STORE - Docs/DESIGN-STORE.md. Every offer is FIXED: a number of hours, a number of sweeps, a named list
+  // of heroes. There is no chance, no pool and no roll anywhere in this file, and StoreConfig has no field that
+  // could hold one. Everything an offer grants is marked SEALED when it is paid (StoreOffers.Fulfil, through
+  // SealedGrants), so it never enters a summon, a Conversion, a forge gamble or any roll. Dust is the one good
+  // not marked, because its only sink sells fixed relics.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, for guild-path.json's reason: nothing here is read by a fight.
+  // ContentDatabase.LoadStore reads it after Load. The Store is behind StoreSwitch (on by default;
+  // EMBERFALL_STORE_OFF rolls it back); the hero_contract offer is behind its own define,
+  // EMBERFALL_HERO_CONTRACT, which stays OFF until the owner re-measures the curve with paid copies.
+  //
+  // PRICES ARE PLACEHOLDERS. "tiers" names euro tiers; the owner sets real prices when store accounts exist.
+  // "productId" is a PLACEHOLDER and never a real store key.
+  //
+  // SIZING. hours = hours of the buyer's own idle Gold at their frontier (the one idle formula,
+  // GameSession.IdleYield), paid as Sealed Gold and never Shards (a Sealed Shard has no sink: a summon
+  // refuses it). dustSweeps = repeat-clear payouts of the frontier stage, as Wayfarer's Road counts them.
+  // Both scale with the player, so nothing here needs retuning when the frontier moves. The value of every
+  // offer in days of frontier income, per chapter, is in handoff R19-STORE data/offer-values.md.
+  //
+  // NO SLAG IN THE SHIPPED OFFERS. A Sealed Slag has no sink (a reroll and a combine both refuse it, by the
+  // rule), so a Slag line would be a fixed, fully shown, and worthless item. The "slag" field exists and works;
+  // add it back the day a deterministic Slag sink does.
+  //
+  // limit and reset: how many a buyer may take in a period. reset is never, week (Monday to Sunday by reward
+  // day), month (calendar month of the reward day, UTC), season (Wayfarer's Road) or expiry (a card: one at
+  // a time). Every counter only moves forward, so a clock wound back reopens nothing.
+  "tiers": { "low": 0.99, "small": 1.99, "mid": 4.99, "high": 9.99, "top": 19.99 },
+
+  "offers": [
+    {
+      "id": "starter_pact", "name": "Starter Pact", "kind": "starter", "tier": "mid",
+      "productId": "placeholder.emberfall.store.starter_pact",
+      "blurb": "A 5-star of your choice and a head start. Once per profile.",
+      "limit": 1, "reset": "never",
+      "hours": 6,
+      "heroChoices": [ "brenna_the_remaining_wall", "vaelis_the_unfixed_blade", "nereia_the_field_medic" ]
+    },
+    {
+      "id": "weekly_pack", "name": "Weekly Pack", "kind": "pack", "tier": "small",
+      "productId": "placeholder.emberfall.store.weekly_pack",
+      "blurb": "Idle Gold and Dust sized to your own frontier. Comes back every Monday.",
+      "limit": 1, "reset": "week",
+      "hours": 24, "dustSweeps": 10
+    },
+    {
+      "id": "monthly_pack", "name": "Monthly Pack", "kind": "pack", "tier": "high",
+      "productId": "placeholder.emberfall.store.monthly_pack",
+      "blurb": "The larger pack. Comes back on the first of the month.",
+      "limit": 1, "reset": "month",
+      "hours": 120, "dustSweeps": 60
+    },
+    {
+      "id": "ember_ledger", "name": "Ember Ledger", "kind": "ledger", "tier": "mid",
+      "productId": "placeholder.emberfall.store.ember_ledger",
+      "blurb": "A 30 day card. Claim it each day, and every idle claim pays 10 percent more Gold.",
+      "limit": 1, "reset": "expiry",
+      "days": 30, "hoursPerDay": 2, "idleBonusPct": 10
+    },
+    {
+      "id": "growth_fund", "name": "Growth Fund", "kind": "growth", "tier": "high",
+      "productId": "placeholder.emberfall.store.growth_fund",
+      "blurb": "Fixed rewards as you clear the last stage of each chapter. Once per profile.",
+      "limit": 1, "reset": "never",
+      "milestones": [
+        { "stage": "ch2_12", "hours": 12, "dustSweeps": 10 },
+        { "stage": "ch3_12", "hours": 24, "dustSweeps": 15 },
+        { "stage": "ch4_12", "hours": 36, "dustSweeps": 20 },
+        { "stage": "ch5_12", "hours": 48, "dustSweeps": 25 },
+        { "stage": "ch6_12", "hours": 72, "dustSweeps": 30 }
+      ]
+    },
+    {
+      "id": "pass_premium", "name": "Wayfarer's Road Premium", "kind": "pass", "tier": "high",
+      "productId": "placeholder.emberfall.store.pass_premium",
+      "blurb": "The paid track of this season's pass, beside the free one. Every tier is listed.",
+      "limit": 1, "reset": "season"
+    },
+    {
+      "id": "hero_contract", "name": "Hero Contract", "kind": "contract", "tier": "top",
+      "productId": "placeholder.emberfall.store.hero_contract",
+      "blurb": "One more copy of a 5-star you already own, for its ascension only.",
+      "limit": 2, "reset": "month",
+      "stars": 5, "heroCopies": 1
+    }
+  ]
+}
