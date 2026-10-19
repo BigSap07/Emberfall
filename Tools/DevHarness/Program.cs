@@ -291,6 +291,7 @@ namespace Emberfall.DevHarness
             CheckDailyLoop(content, contentDir);
             CheckSinks(content, contentDir);
             CheckSealed(content, contentDir);
+            CheckQuartermaster(content, contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
             CheckCaptureWatchdog(content, contentDir);
@@ -324,6 +325,7 @@ namespace Emberfall.DevHarness
             CheckFusionRules(content);
             EconomyRun economy = RunCampaignBalancePass(content);
             ReportPowerSources(content, economy);
+            ReportQuartermasterGold(content, economy);
             // The band is graded on the REFERENCE player's walk, the one recommendedPower is derived
             // from: see CheckFusionNeverGates. The fusing walk above is what every other table reads.
             CheckCampaignPowerCurve(content, SimulateEconomyUnder(content, 1, false, false));
@@ -4900,6 +4902,8 @@ namespace Emberfall.DevHarness
                 db.LoadOrders(File.Exists(ordersPath) ? File.ReadAllText(ordersPath) : null);
                 string sinksPath = Path.Combine(dir, "sinks.json");
                 db.LoadSinks(File.Exists(sinksPath) ? File.ReadAllText(sinksPath) : null);
+                string quartermasterPath = Path.Combine(dir, "quartermaster.json");
+                db.LoadQuartermaster(File.Exists(quartermasterPath) ? File.ReadAllText(quartermasterPath) : null);
                 return db;
             }
             catch (Exception ex)
@@ -17300,6 +17304,9 @@ namespace Emberfall.DevHarness
             public int Conversions, Ascensions, Swaps;
             /// <summary>Cumulative income ledger as it stood at that same instant.</summary>
             public EconomyLedger EntryLedger;
+            /// <summary>The Gold in hand at that same instant. The Quartermaster's sizing reads it
+            /// (QuartermasterChecks.ReportQuartermasterGold).</summary>
+            public long EntryGold;
             /// <summary>The same instant split by what BOUGHT each Level rather than by where it
             /// stands: the deployed five at Level 1 (not tier level 1), the bare power gold's Levels
             /// add, and the bare power ascension's Levels add. Gold plus copies is bare power less
@@ -17470,6 +17477,7 @@ namespace Emberfall.DevHarness
                 outcome.EntryLine = DescribeLine(session);
                 outcome.EntryIds = profile.TeamHeroes().ConvertAll(h => h.DefId).ToArray();
                 outcome.EntryLedger = run.Ledger.Snapshot();
+                outcome.EntryGold = profile.Gold;
                 AttributeEntryLevels(run, outcome);
                 ProbeWallAtCap(db, session, outcome, stageIdx);
                 string[] entryTeam = (string[])profile.Team.Clone();

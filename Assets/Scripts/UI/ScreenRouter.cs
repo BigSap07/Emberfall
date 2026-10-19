@@ -39,7 +39,8 @@ namespace Emberfall.UI
         WaveResult,
         Orders,
         Armory,
-        Archive
+        Archive,
+        Quartermaster
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -149,6 +150,10 @@ namespace Emberfall.UI
         /// SinksSwitch is on, so a build with the switch off has no such screens, and
         /// Show(ScreenId.Armory) or Show(ScreenId.Archive) is a no-op.</summary>
         public Screens.ArmoryScreen Armory;
+
+        /// <summary>The Quartermaster (Gold), Docs/DESIGN-QUARTERMASTER.md. Null unless
+        /// QuartermasterSwitch is on; Show(ScreenId.Quartermaster) is then a no-op.</summary>
+        public Screens.QuartermasterScreen Quartermaster;
         public Screens.ArchiveScreen Archive;
 
         public UIScreen Current { get; private set; }
@@ -227,6 +232,10 @@ namespace Emberfall.UI
                 Armory = Create<Screens.ArmoryScreen>();
                 Archive = Create<Screens.ArchiveScreen>();
             }
+
+            // The Quartermaster (Docs/DESIGN-QUARTERMASTER.md). Built only with the switch on: off,
+            // this build has no such screen at all and nothing leads to it.
+            if (Emberfall.Core.Session.QuartermasterSwitch.Enabled) Quartermaster = Create<Screens.QuartermasterScreen>();
         }
 
         /// <summary>

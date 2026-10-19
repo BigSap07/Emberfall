@@ -460,6 +460,9 @@ namespace Emberfall.Core.Save
         ///  - the Sealed marks (SealedState): the `sealed` block, `sealedCopies` on a hero and
         ///    `sealed` on an armor piece. They record what a purchase granted, so a build that drops
         ///    them would turn purchased goods into earned ones and let them into a summon.
+        ///  - the Quartermaster's shelf (QuartermasterState): the `quartermaster` block, today's rolled
+        ///    stock and which pieces are sold. A build that drops it would let a player buy the same
+        ///    day's pieces again.
         ///  - any other R17 state, each added to HoldsVersion24Data when it is written.
         /// Upgrade needs NO migration step: every key's absence is the empty state. A save that
         /// holds none of it is byte for byte the document the build before wrote, version included.
@@ -490,6 +493,7 @@ namespace Emberfall.Core.Save
         {
             if (profile == null) return false;
             if (SealedState.ProfileHoldsAny(profile)) return true;
+            if (profile.Quartermaster != null && !profile.Quartermaster.IsEmpty) return true;
             return false;
         }
 
@@ -1072,6 +1076,10 @@ namespace Emberfall.Core.Save
             if (profile.Sealed != null && !profile.Sealed.IsEmpty)
                 root.Set("sealed", profile.Sealed.Write());
 
+            // Version 24: the Quartermaster's shelf, only once it holds a stock.
+            if (profile.Quartermaster != null && !profile.Quartermaster.IsEmpty)
+                root.Set("quartermaster", profile.Quartermaster.Write());
+
             return root.ToJson(true);
         }
 
@@ -1433,6 +1441,9 @@ namespace Emberfall.Core.Save
             // Version 24. Absent reads as the empty block, which is true of every save written
             // before it and of every player who never held a purchased good.
             profile.Sealed = SealedState.Read(root["sealed"]);
+
+            // Version 24. Absent reads as no stock, so the shop rolls one the first time it is opened.
+            profile.Quartermaster = QuartermasterState.Read(root["quartermaster"]);
 
             List<JsonValue> lines = root.GetList("lines");
             for (int l = 0; l < lines.Count; l++) profile.Lines.Add(ReadLine(lines[l]));

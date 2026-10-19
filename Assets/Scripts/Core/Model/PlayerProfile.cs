@@ -276,6 +276,24 @@ namespace Emberfall.Core.Model
         public string Name = "Armor";
         public ArmorSlot Slot = ArmorSlot.Weapon;
 
+        /// <summary>An independent copy: the same slot, temper, aspect, name and rolls, a fresh set of
+        /// roll objects. Uid and the Sealed mark are copied as they stand. The Quartermaster adds a
+        /// copy of a stocked piece to the bag so the bag's piece and the shelf's are never one object.</summary>
+        public ArmorPiece Clone()
+        {
+            ArmorPiece c = new ArmorPiece();
+            c.Uid = Uid;
+            c.Name = Name;
+            c.Slot = Slot;
+            c.Aspect = Aspect;
+            c.Temper = Temper;
+            c.Sealed = Sealed;
+            c.Primary = new ArmorStatRoll(Primary.Stat, Primary.Mode, Primary.Value);
+            for (int i = 0; i < SubStats.Count; i++)
+                c.SubStats.Add(new ArmorStatRoll(SubStats[i].Stat, SubStats[i].Mode, SubStats[i].Value));
+            return c;
+        }
+
         /// <summary>The piece's own aspect tag, rolled at drop and independent of its slot. Matched
         /// against the WEARER's aspect for attunement (DESIGN-ARMOR section 6) and used for nothing
         /// else - it never touches AspectChart and never affects combat directly.</summary>
@@ -491,6 +509,14 @@ namespace Emberfall.Core.Model
         /// (SaveSerializer.VersionOf).
         /// </summary>
         public SealedState Sealed = new SealedState();
+
+        /// <summary>
+        /// The Quartermaster's shelf: today's stock of rolled armor and which pieces are sold
+        /// (Docs/DESIGN-QUARTERMASTER.md). NEVER NULL. Empty for every profile that never opened the
+        /// shop, and an empty one is not written to the save. Saved from version 24, and only a save
+        /// that carries a stock says 24 (SaveSerializer.VersionOf).
+        /// </summary>
+        public QuartermasterState Quartermaster = new QuartermasterState();
 
         /// <summary>Gold a random mechanic may spend: the purse less its Sealed part.</summary>
         public long FreeGold { get { return Gold - Math.Min(Math.Max(0, Sealed.Gold), Gold); } }
