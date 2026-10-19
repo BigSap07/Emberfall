@@ -106,6 +106,8 @@ namespace Emberfall.Battle
         private static readonly List<float> ScratchBorn = new List<float>();
         private static Texture2D _arrowTexture;
         private static Texture2D _shellTexture;
+        private static Texture2D _discTexture;
+        private ParticleSystem _dots;
 
         // vfx.json, read once. Static so a second battle does not re-parse it; the file is
         // presentation only and cannot change under a running game.
@@ -160,6 +162,7 @@ namespace Emberfall.Battle
             if (_chips != null) _chips.Clear();
             if (_streaks != null) _streaks.Clear();
             if (_rings != null) _rings.Clear();
+            if (_dots != null) _dots.Clear();
         }
 
         private void OnDestroy()
@@ -747,8 +750,11 @@ namespace Emberfall.Battle
                 StartCoroutine(PuffRoutine(big, at, puff, fp.CritPuffSize * u * power, fp.CritPuffSeconds, fp.CritPuffStart, 1f));
                 return;
             }
-            FxHandle small = BeginFx(target, "hit", dot, puff, true);
-            StartCoroutine(PuffRoutine(small, at, puff, fp.HitPuffSize * u * power, fp.HitPuffSeconds, 0.45f, 0.95f));
+            // A soft disc with a solid core, alpha blended so it shows on a bright sprite, and already
+            // most of its size on the frame after the blow.
+            if (_discTexture == null) _discTexture = MakeSoftDisc();
+            FxHandle small = BeginFx(target, "hit", _discTexture, puff, false);
+            StartCoroutine(PuffRoutine(small, at, puff, fp.HitPuffSize * u * power, fp.HitPuffSeconds, fp.HitPuffStart, 1f));
         }
 
         /// <summary>The cast itself: a soft glow on the caster in their accent, in place of the ring that swept up the body.</summary>
@@ -772,8 +778,7 @@ namespace Emberfall.Battle
             Vector3 centre = FxPoint(target);
             FxHandle glow = BeginFx(target, "heal", BattleAssets.SoftDot, green, true);
             StartCoroutine(PuffRoutine(glow, centre, green, fp.HealGlowRadius * 2f * u, fp.HealGlowSeconds, 0.6f, 0.55f));
-            Vector3 belly = centre - Vector3.up * (0.55f * u);
-            EmitChips(belly, new Color(0.78f, 1f, 0.84f, 1f), fp.HealSparks, fp.HealSparkRise * u, fp.HealSparkSize * u, fp.HealSparkSeconds, Direction.Rise);
+            EmitDots(centre, new Color(0.78f, 1f, 0.84f, 1f), fp.HealSparks, fp.HealSparkRise * u, fp.HealSparkSize * u, fp.HealSparkSeconds, fp.HealSparkSpread * u);
         }
 
         /// <summary>Buff: a gold band rising through the body and an up arrow chip. Debuff: a dark band
@@ -1224,6 +1229,59 @@ namespace Emberfall.Battle
                     float v = (y + 0.5f) / n * 2f - 1f;
                     float d = Mathf.Abs(u) + Mathf.Abs(v);                  // 0 centre, 1 at the diamond's edge
                     float a = Mathf.Clamp01((1f - d) * 5f);
+                    px[y * n + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                }
+            }
+            tex.SetPixels32(px);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            tex.Apply();
+            return tex;
+        }
+
+        /// <summary>R15: round soft dots rising from around a point: the heal sparkle. Its own particle
+        /// system and texture, so no chip diamond ever shows as a flat square.</summary>
+        private void EmitDots(Vector3 centre, Color tint, int count, float rise, float size, float life, float spread)
+        {
+            if (!Feel.V2 || count <= 0) return;
+            if (_dots == null)
+            {
+                if (_discTexture == null) _discTexture = MakeSoftDisc();
+                _dots = BuildSystem("Dots", _discTexture, 48, 0f, false, AnimationCurve.Linear(0f, 1f, 1f, 0.35f));
+            }
+            if (_dots == null) return;
+            Vector3 right, up;
+            CameraPlane(out right, out up);
+            for (int i = 0; i < count; i++)
+            {
+                float a = (i / (float)count) * 6.2832f + Random.Range(-0.4f, 0.4f);
+                Vector3 offset = right * (Mathf.Cos(a) * spread * Random.Range(0.4f, 1f)) + up * (Random.Range(-0.4f, 0.3f) * spread);
+                ParticleSystem.EmitParams p = new ParticleSystem.EmitParams();
+                p.position = centre + offset;
+                p.velocity = up * (rise * Random.Range(0.7f, 1.2f));
+                p.startLifetime = life * Random.Range(0.8f, 1.2f);
+                p.startSize = size * Random.Range(0.7f, 1.3f);
+                p.startColor = tint;
+                p.rotation = 0f;
+                _dots.Emit(p, 1);
+            }
+        }
+
+        /// <summary>R15: a round disc with a solid core and a soft edge: the hit puff and the heal dots.</summary>
+        private static Texture2D MakeSoftDisc()
+        {
+            const int n = 64;
+            Texture2D tex = new Texture2D(n, n, TextureFormat.RGBA32, false);
+            Color32[] px = new Color32[n * n];
+            for (int y = 0; y < n; y++)
+            {
+                for (int x = 0; x < n; x++)
+                {
+                    float u = (x + 0.5f) / n * 2f - 1f;
+                    float v = (y + 0.5f) / n * 2f - 1f;
+                    float d = Mathf.Sqrt(u * u + v * v);
+                    float k = Mathf.Clamp01((0.98f - d) / 0.5f);
+                    float a = k * k * (3f - 2f * k);
                     px[y * n + x] = new Color32(255, 255, 255, (byte)(a * 255f));
                 }
             }

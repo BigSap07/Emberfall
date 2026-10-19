@@ -10,11 +10,11 @@
     "vfx": {
       "maxPerUnit": 2,
       "maxLive": 14,
-      "puffWhite": 0.35,
-      "hit":   { "size": 0.5, "seconds": 0.14 },
+      "puffWhite": 0.5,
+      "hit":   { "size": 0.7, "seconds": 0.14, "start": 0.7 },
       "crit":  { "size": 1.25, "seconds": 0.20, "glowRadius": 0.8, "start": 0.75 },
       "skill": { "sheet": "Art/Vfx/burst_puff", "columns": 4, "rows": 4, "frames": 16, "fps": 30, "scale": 2.4, "glowRadius": 1.0, "glowAlpha": 0.5, "castGlowRadius": 0.9, "castGlowSeconds": 0.30 },
-      "heal":  { "glowRadius": 0.85, "glowSeconds": 0.45, "sparks": 7, "rise": 1.6, "seconds": 0.9, "size": 0.3 },
+      "heal":  { "glowRadius": 0.85, "glowSeconds": 0.45, "sparks": 7, "rise": 1.6, "seconds": 0.9, "size": 0.3, "spread": 0.35 },
       "pulse": { "size": 1.0, "seconds": 0.42, "travel": 0.8, "arrowSize": 0.5, "arrowSeconds": 0.8, "arrowTravel": 0.7, "debuffTint": 0.45, "debuffTintSeconds": 0.30 },
       "shield": { "seconds": 0.26, "alpha": 0.85, "absorbAlpha": 0.55 }
     },

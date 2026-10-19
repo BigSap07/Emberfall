@@ -45,10 +45,12 @@ namespace Emberfall.Core.Data
         public int VfxMaxLive = 14;
 
         // basic hit: one small soft puff at the strike point, no ring, no streak, no sheet.
-        public float HitPuffSize = 0.5f;
+        public float HitPuffSize = 0.7f;
+        /// <summary>Where a hit puff starts, as a fraction of its size, so the frame after the blow already shows it.</summary>
+        public float HitPuffStart = 0.7f;
         public float HitPuffSeconds = 0.14f;
         /// <summary>How far the puff colour is pulled toward white (0 is the pure aspect accent).</summary>
-        public float PuffWhite = 0.35f;
+        public float PuffWhite = 0.5f;
         // crit: the same puff, bigger and a touch longer, with a soft glow.
         public float CritPuffSize = 1.25f;
         /// <summary>Where a crit puff starts, as a fraction of its size, so even its first frames read big.</summary>
@@ -77,6 +79,8 @@ namespace Emberfall.Core.Data
         public float HealSparkRise = 1.6f;
         public float HealSparkSeconds = 0.9f;
         public float HealSparkSize = 0.3f;
+        /// <summary>Radius around the chest the heal dots start in.</summary>
+        public float HealSparkSpread = 0.35f;
 
         // buff and debuff: a pulse that travels up or down the body, and an arrow chip.
         public float PulseSize = 1.0f;
@@ -132,6 +136,7 @@ namespace Emberfall.Core.Data
                 p.VfxMaxLive = 0;
                 p.HitPuffSize = 0f;
                 p.HitPuffSeconds = 0f;
+                p.HitPuffStart = 0f;
                 p.PuffWhite = 0f;
                 p.CritPuffSize = 0f;
                 p.CritPuffSeconds = 0f;
@@ -153,6 +158,7 @@ namespace Emberfall.Core.Data
                 p.HealSparkRise = 0f;
                 p.HealSparkSeconds = 0f;
                 p.HealSparkSize = 0f;
+                p.HealSparkSpread = 0f;
                 p.PulseSize = 0f;
                 p.PulseSeconds = 0f;
                 p.PulseTravel = 0f;
@@ -208,6 +214,7 @@ namespace Emberfall.Core.Data
             JsonValue hit = vx["hit"];
             p.HitPuffSize = hit.GetFloat("size", p.HitPuffSize);
             p.HitPuffSeconds = hit.GetFloat("seconds", p.HitPuffSeconds);
+            p.HitPuffStart = hit.GetFloat("start", p.HitPuffStart);
             JsonValue crit = vx["crit"];
             p.CritPuffSize = crit.GetFloat("size", p.CritPuffSize);
             p.CritPuffSeconds = crit.GetFloat("seconds", p.CritPuffSeconds);
@@ -231,6 +238,7 @@ namespace Emberfall.Core.Data
             p.HealSparkRise = he.GetFloat("rise", p.HealSparkRise);
             p.HealSparkSeconds = he.GetFloat("seconds", p.HealSparkSeconds);
             p.HealSparkSize = he.GetFloat("size", p.HealSparkSize);
+            p.HealSparkSpread = he.GetFloat("spread", p.HealSparkSpread);
             JsonValue pu = vx["pulse"];
             p.PulseSize = pu.GetFloat("size", p.PulseSize);
             p.PulseSeconds = pu.GetFloat("seconds", p.PulseSeconds);
