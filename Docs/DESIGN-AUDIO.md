@@ -9,8 +9,8 @@ The game used to make nine tones in code (`Sfx`). It now plays the owner's sound
 every screen and battle event, with volume settings. The packs sit in `D:\Emberfall\audio-in`. That
 folder is the owner's. Files are only ever copied from it.
 
-There is no music yet. `audio-in` has no `music` folder, so every music cue and both stingers are
-empty, which means silent. No sound effect stands in for music.
+There is music now: the owner's five tracks from `audio-in/music`, wired to every screen and fight
+(see **Music** below). The two stingers are still empty, because `audio-in` holds no jingle.
 
 ## The pieces
 
@@ -31,9 +31,9 @@ finds a clip by name without an editor-made reference list.
 
 ## The cue map in short
 
-- **Music:** hub, map, battle, battle at a wall or boss (`music.battle.boss`), summon, recital,
-  proving, guild, prologue. Victory and defeat stingers (`music.stinger.victory`,
-  `music.stinger.defeat`). All empty.
+- **Music:** hub, map, battle (chapter 1 and the default), `music.battle.ch2`, battle at a wall
+  or boss (`music.battle.boss`), summon, recital, proving, guild, prologue. Victory and defeat
+  stingers (`music.stinger.victory`, `music.stinger.defeat`), both empty.
 - **Interface:** tap, confirm, back, locked, reward, level up, unlock.
 - **Summon:** start, a charge loop while the light builds, a reveal per tier (`summon.reveal.1` to
   `summon.reveal.5`, each a different sound, the 5-star the biggest), a star ping.
@@ -42,8 +42,37 @@ finds a clip by name without an editor-made reference list.
   (`battle.cast.ember`, `battle.impact.tide`, and so on).
 
 Screens choose music through `musicByScreen`. A screen with no entry leaves the music alone. The
-battle screen asks for `Battle.campaign`, `Battle.boss`, `Battle.recital`, `Battle.proving`,
-`Battle.prologue` or `Battle.guild`, from `BattleMusicKind` in `BattleScreen`.
+battle screen asks for `Battle.campaign.ch<N>`, `Battle.boss`, `Battle.recital`, `Battle.proving`,
+`Battle.prologue` or `Battle.guild`, from `BattleMusicKind` in `BattleScreen`, which takes the
+campaign kind from `AudioCueConfig.CampaignBattleKind`. `AudioCueConfig.BattleMusicCue` looks the
+kind up and drops one dot segment at a time when there is no entry (`Battle.campaign.ch9`, then
+`Battle.campaign`, then `Battle`).
+
+## Music
+
+The owner made five tracks with Suno: hub, battle_ch1, battle_ch2, boss and summon (48 kHz FLAC in
+`audio-in/music`). Each is copied into `Assets/Audio/Resources/music` as a 16 bit 48 kHz WAV loop,
+`<name>_loop`, cut with pymusiclooper on a beat and checked for a level step at the seam, with a
+50 ms crossfade into its own start. Four tracks keep an intro, `<name>_intro`, which is the track
+from its start up to the loop start, so it runs into the loop sample for sample. Summon has no
+intro: its loop is a calm 49 s stretch. Every loop is normalised to -20 LUFS, and each intro keeps
+its track's gain. Every music cue has `volume` 0.5, so music sits under every battle sound effect
+at the default sliders. The map: the hub and the map play hub, and so do the Recital, Proving and
+Guild screens. Chapter 1 fights play battle_ch1 and chapter 2 fights battle_ch2. Chapters 3 to 6
+alternate between the two, and any later chapter plays battle_ch1. A wall (a miniboss stage) or
+a chapter finale (a boss stage) plays boss, and the summon screen plays summon. Recital, Proving,
+Guild and prologue fights play battle_ch1. On a screen change the old track fades out and the new
+one fades in over `musicFade` (1.0 s). When the next cue names the same file, the track carries
+on with no restart, and the log says `same-track carry`. An intro plays the first time its file
+is heard in a session; after that the cue starts on the loop, which `PlayScheduled` starts on the
+dsp clock. A skill moment (`VfxDirector.SkillMoment`) and a victory duck the music by `duckDb`
+(6 dB) over `duckIn` (0.08 s). The duck holds for the skill moment's dim or `duckVictoryHold`
+(0.8 s), then comes back over `duckOut` (0.5 s), and every duck writes a `DUCK` line to the cue
+log. A stinger's `stopMusic` ends the track only when the stinger has a file, so with both stingers
+empty the battle track plays on under the result. The rollback is `"music": false` in
+`audio.json`: every music cue is then silent, logged `SILENT`, exactly as before the tracks
+arrived, and the duck does nothing. A missing key reads as true. `AudioChecks` proves the files,
+headers, lengths, the stage to track map, the rollback and the duck envelope.
 
 ## How a sound plays
 
@@ -121,8 +150,9 @@ sounds at once.
 
 Other line kinds: `SILENT` (a music cue with no files, by design), `NOFILE` (a sound cue with no
 usable file, a defect), `UNKNOWN` (a cue id the map does not hold, a defect), `MUTED`, `DROP`
-(pool full), `MUSIC`, `LOOP+` and `LOOP-`, and `RATE` (a cue fired more than eight times in one
-second, a defect). A summary line is written when the service is destroyed.
+(pool full), `MUSIC` (with `same-track carry` when the file stays, and `intro=` on a track's
+first start), `DUCK`, `STOP ... skipped, stinger silent`, `LOOP+` and `LOOP-`, and `RATE` (a cue
+fired more than eight times in one second, a defect). A summary line is written when the service is destroyed.
 
 ### Play proof targets
 
@@ -141,6 +171,10 @@ menu item and no literal `Begin` call in `PlayModeScreenshot`, so the nightly sw
   wave stages: a won battle mid-stage shows the wave progress and plays no victory cue. The victory
   and defeat cues play on a stage clear or a lost wave, which the `Screen:WaveResultCleared` and
   `Screen:WaveResultLost` targets show.
+- `Screen:AudioRoundTrip=<stage id>` holds the hub for about 4 s and the map for about 3 s, plays
+  the stage's fight in real time, then holds the hub again for about 4 s. The log must show
+  `MUSIC music.hub`, `MUSIC music.map same-track carry`, the fight's track with a fade, and the hub
+  again with a fade.
 
 ## How to add a sound
 
@@ -158,11 +192,12 @@ menu item and no literal `Begin` call in `PlayModeScreenshot`, so the nightly sw
 To add music: put tracks in `audio-in/music`, copy them to `Assets/Audio/Resources/music`, list
 each file on a music cue (one track for one place where possible), and run the import script. A
 looping track needs to loop cleanly; if it does not, cut a loop with a short crossfade and keep the
-original name plus `_loop`.
+original name plus `_loop` (and `_intro` for an opening that plays once, named on the cue's
+`intro`). `AudioChecks` requires every music file to be named after a track in `audio-in/music`.
 
 ## Decisions taken without the owner
 
-- No music was supplied, so music cues are empty. The victory and defeat stingers are music, so
+- Before the owner's tracks arrived, the music cues were empty. The victory and defeat stingers are music, so
   `battle.victory` and `battle.defeat` are separate sound effects (a loot chime, a dark thud).
 - The packs have no error, back, level up, unlock or death sound. The closest sound is used and the
   cue's `note` in `audio.json` says which.
