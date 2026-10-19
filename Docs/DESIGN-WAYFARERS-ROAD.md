@@ -13,9 +13,15 @@ FREE track. The paid track exists in data and as a locked row, and has no purcha
 - **Points come only from the daily loop's claims** (`DailyLoop.ClaimOrder`, `ClaimDailyChest`,
   `ClaimWeeklyChest` call `WayfarersRoad.OnClaim`): 8 for an order, 12 for the daily chest, 40 for the weekly
   chest. Nothing else feeds it. `CheckPassWiring` proves `OnClaim` is called from those three places only.
-- **A tier is 40 points**, 30 tiers are 1,200 points. An active day (five orders and the chest) is 52 points,
-  so **24 active days finish the track (1,248) and 23 do not (1,196)**, without the weekly chest. The weekly chest
-  is a bonus on top. `CheckPassSizing` plays 24 and 23 real days through the loop and asserts both.
+- **A tier is 46 points**, 30 tiers are 1,380 points. An active day (five orders and the chest) is 52 points.
+  **The track is sized on a player who also claims the weekly chest** (40 points on a week of five complete days,
+  four whole weeks a season): **24 active days are 24 x 52 + 4 x 40 = 1,408 and finish it, 23 are 1,356 and do not**.
+  Without the weekly chests 24 days reach 1,248, tier 27. The first sizing (tier 40 points, weekly chest left out)
+  let a diligent player finish in 20 days; review caught it and the lead set 46. `CheckPassSizing` plays 24 and 23
+  real days through the loop, weekly chests opened, and asserts both.
+- **The selectors reset every season.** A player who finishes the track gets a free 4-star and a free 5-star every
+  28 days, as plain earned copies. That is the price of "a 5-star selector at tier 30" in a repeating season, and
+  it is the number to watch in the balance pass.
 - **It needs the daily loop, and the loop is off by default.** The points are the loop's claims, so the pass earns
   nothing while `DailyLoopSwitch` is off, and it is off unless `EMBERFALL_DAILY_LOOP_ON` is defined. **The pass is
   on but inert until the build defines `EMBERFALL_DAILY_LOOP_ON`.** Its door is a button in the header of

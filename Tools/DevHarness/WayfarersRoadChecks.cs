@@ -96,6 +96,24 @@ namespace Emberfall.DevHarness
             return s.Profile.WayfarersRoad.Points - before;
         }
 
+        /// <summary>Plays one season from its first reward day: every day active but the listed rest days (0 based),
+        /// opening the weekly chest as soon as the loop allows. perDay is the points the first active day paid.</summary>
+        private static GameSession PassPlaySeason(ContentDatabase db, long start, int[] rest, out int perDay)
+        {
+            GameSession s = PassSession(db, 0, 0, 0);
+            perDay = 0;
+            bool first = true;
+            for (int d = 0; d < db.WayfarersRoad.SeasonDays; d++)
+            {
+                if (Array.IndexOf(rest, d) >= 0) continue;
+                long now = start + d * 86400L + 600;
+                int gained = PassPlayDay(s, now);
+                if (first) { perDay = gained; first = false; }
+                DailyLoop.ClaimWeeklyChest(s, now + 60);
+            }
+            return s;
+        }
+
         private static string PassSnapshot(GameSession s) { return SaveSerializer.Serialize(s.Profile); }
 
         // ------------------------------------------------------------------ 1. content
@@ -137,31 +155,32 @@ namespace Emberfall.DevHarness
             WayfarersRoadConfig c = db.WayfarersRoad;
             long start = PassSeasonStart(db, 5);
 
-            // Twenty-four active days, no weekly chest: the track is done.
-            GameSession s24 = PassSession(db, 0, 0, 0);
-            int perDay = 0;
-            for (int d = 0; d < 24; d++)
-            {
-                int gained = PassPlayDay(s24, start + d * 86400L + 600);
-                if (d == 0) perDay = gained;
-            }
+            // THE TRACK IS SIZED ON A PLAYER WHO ALSO CLAIMS THE WEEKLY CHEST. A season is four whole
+            // Monday to Sunday weeks. 24 active days rest on the Sundays (days 6, 13, 20, 27), so every week
+            // has six complete days and its weekly chest opens; 23 rest one more day (day 5), so every week
+            // still has five complete days and its chest still opens.
+            int perDay;
+            GameSession s24 = PassPlaySeason(db, start, new[] { 6, 13, 20, 27 }, out perDay);
             Check(perDay == 5 * c.OrderPoints + c.DailyChestPoints && s24.Profile.DailyLoop.Orders.Count == 5,
                   "an active day (five orders and the daily chest) is " + perDay + " points: 5 x " + c.OrderPoints + " + " + c.DailyChestPoints);
+            int fullWeeks = 4 * (6 * perDay) + 4 * c.WeeklyChestPoints;
             Check(WayfarersRoad.Reached(s24) == 30 && s24.Profile.WayfarersRoad.Points >= WayfarersRoad.TotalPoints(s24),
-                  "24 ACTIVE DAYS FINISH THE TRACK: " + s24.Profile.WayfarersRoad.Points + " points reach tier " + WayfarersRoad.Reached(s24) + " of 30, with no weekly chest and no bought tier");
+                  "24 ACTIVE DAYS FINISH THE TRACK: " + s24.Profile.WayfarersRoad.Points + " points (24 x " + perDay + " + 4 weekly chests x " + c.WeeklyChestPoints
+                  + ") reach tier " + WayfarersRoad.Reached(s24) + " of 30 with no bought tier, against " + WayfarersRoad.TotalPoints(s24) + " needed");
+            Check(fullWeeks == 1408 && fullWeeks >= WayfarersRoad.TotalPoints(s24) && s24.Profile.DailyLoop.WeekChestClaimed, "and the arithmetic is the sizing's: 24 x 52 + 4 x " + c.WeeklyChestPoints + " = " + fullWeeks + " against " + WayfarersRoad.TotalPoints(s24) + " (the weekly chest of the last week was opened)");
 
-            GameSession s23 = PassSession(db, 0, 0, 0);
-            for (int d = 0; d < 23; d++) PassPlayDay(s23, start + d * 86400L + 600);
+            int perDay23;
+            GameSession s23 = PassPlaySeason(db, start, new[] { 5, 6, 13, 20, 27 }, out perDay23);
             Check(WayfarersRoad.Reached(s23) < 30 && WayfarersRoad.Reached(s23) >= 29,
-                  "and 23 do not: " + s23.Profile.WayfarersRoad.Points + " points reach tier " + WayfarersRoad.Reached(s23));
+                  "and 23 do not, weekly chests counted: " + s23.Profile.WayfarersRoad.Points + " points reach tier " + WayfarersRoad.Reached(s23));
 
-            // The weekly chest is a bonus on top: a full week adds a tier's worth.
+            // The weekly chest adds its points to a week of five complete days.
             GameSession weekly = PassSession(db, 0, 0, 0);
             for (int d = 0; d < 7; d++) PassPlayDay(weekly, start + d * 86400L + 600);
             int pointsBeforeChest = weekly.Profile.WayfarersRoad.Points;
             LoopPayout chest = DailyLoop.ClaimWeeklyChest(weekly, start + 6 * 86400L + 700);
             Check(chest.Success && weekly.Profile.WayfarersRoad.Points - pointsBeforeChest == c.WeeklyChestPoints,
-                  "the weekly chest adds " + c.WeeklyChestPoints + " points on a week of five complete days (a bonus; the sizing above does not count on it)");
+                  "the weekly chest adds " + c.WeeklyChestPoints + " points on a week of five complete days");
 
             // Half a day counts for what it did.
             GameSession half = PassSession(db, 0, 0, 0);
@@ -437,7 +456,7 @@ namespace Emberfall.DevHarness
 
             ContentDatabase other = LoadContent(contentDir);
             string version = other.ContentVersion;
-            other.LoadWayfarersRoad(File.ReadAllText(Path.Combine(contentDir, "wayfarers-road.json")).Replace("\"tierPoints\": 40", "\"tierPoints\": 50"));
+            other.LoadWayfarersRoad(File.ReadAllText(Path.Combine(contentDir, "wayfarers-road.json")).Replace("\"tierPoints\": 46", "\"tierPoints\": 50"));
             Check(other.WayfarersRoad.TierPoints == 50 && other.ContentVersion == version && version == db.ContentVersion,
                   "so retuning the pass moves the pass (a tier is 50 points) and not ContentVersion, which keeps every recorded guild dungeon replay");
             other.LoadWayfarersRoad(null);

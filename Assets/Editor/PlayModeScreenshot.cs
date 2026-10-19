@@ -2261,7 +2261,7 @@ namespace Emberfall.EditorTools
                 PassPaidSwitch.Enabled = name == "WayfarersRoadPaid";
                 profile.Valor = 5000;
                 profile.Coda = 5000;
-                int orders = name == "WayfarersRoadPicker" ? 80 : 50;   // 8 points each: 640 points is tier 16, 400 is tier 10
+                int orders = name == "WayfarersRoadPicker" ? 90 : 50;   // 8 points each, 46 a tier: 720 points is tier 15, 400 is tier 8
                 for (int i = 0; i < orders; i++) WayfarersRoad.OnClaim(session, PassPointSource.Order, now);
                 for (int t = 1; t <= 6; t++) WayfarersRoad.Claim(session, t, null, now);
             }

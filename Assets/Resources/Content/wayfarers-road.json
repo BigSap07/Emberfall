@@ -13,9 +13,12 @@
   // lapse with the season.
   //
   // SIZING. A day on which a player claims all five orders and the daily chest is 5 x 8 + 12 = 52
-  // points; a tier is 40 points, so 30 tiers are 1,200 points, and 24 such days finish the track
-  // (24 x 52 = 1,248) while 23 do not (1,196). The weekly chest adds 40 points on a week of five
-  // complete days. CheckWayfarersRoadSizing proves both numbers against orders.json.
+  // points; a tier is 46 points, so 30 tiers are 1,380 points. THE TRACK IS SIZED ON A PLAYER WHO ALSO
+  // CLAIMS THE WEEKLY CHEST (40 points on a week of five complete days, four weeks a season): 24 active
+  // days are 24 x 52 + 4 x 40 = 1,408 and finish the track, 23 are 1,356 and do not. Without weekly
+  // chests 24 days reach 1,248 (tier 27). CheckPassSizing plays both through the real loop.
+  // SELECTORS RESET EVERY SEASON: a player who finishes the track gets a free 4-star and a free 5-star
+  // every 28 days.
   //
   // REWARDS. hourglass: hours of idle income at the frontier (the one idle formula, as the loop pays).
   // dust: that many repeat-clear payouts of the frontier stage (RelicDustForRepeatClear), so it scales
@@ -29,7 +32,7 @@
   // purse's income (SinkPricing), at most maxPerSeason a season.
   "seasonDays": 28,
   "epoch": "2026-01-05",
-  "tierPoints": 40,
+  "tierPoints": 46,
   "points": { "order": 8, "dailyChest": 12, "weeklyChest": 40 },
   "buyTier": { "days": 2, "maxPerSeason": 3 },
   "priceRound": 5,

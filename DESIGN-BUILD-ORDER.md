@@ -1162,8 +1162,10 @@ is a placeholder, reached from an Orders door on the `MainMenuScreen` rail. All 
 
 **Wayfarer's Road, the free track (R17, `Docs/DESIGN-WAYFARERS-ROAD.md`).** A 28 day season of 30 tiers
 whose only points are this loop's claims: `DailyLoop.ClaimOrder`, `ClaimDailyChest` and `ClaimWeeklyChest`
-call `WayfarersRoad.OnClaim` (8, 12 and 40 points), and nothing else does. A tier is 40 points, so 24 active
-days (52 points each) finish the track and 23 do not (`CheckPassSizing` plays both through the real loop).
+call `WayfarersRoad.OnClaim` (8, 12 and 40 points), and nothing else does. A tier is 46 points and the track is
+sized on a player who also claims the weekly chest: 24 active days (52 points each, plus four weekly chests)
+finish it and 23 do not (`CheckPassSizing` plays both through the real loop). Selectors reset every season, so a
+full-track player gets a free 4-star and 5-star every 28 days.
 Every reward is fixed and shown up front in `wayfarers-road.json` (`WayfarersRoadConfig`, not hashed):
 hourglasses, Slag, Dust in sweeps of the frontier stage, a 4-star of the player's choice at tier 15 and a
 5-star at tier 30, both plain earned copies and **never Sealed**. A tier can be bought with Valor or Coda
