@@ -408,6 +408,22 @@ namespace Emberfall.Core.Progression
 
         // ------------------------------------------------------------------ what the screen reads
 
+        /// <summary>
+        /// The same view as View, READ ONLY: the season is rolled on a copy of the road's state, so a stored season
+        /// older than the one the clock is in reads as no points and no claims, and nothing is written to the profile.
+        /// The Hub's Store badge and StoreOffers.View read the road this way, so seeing the Hub never moves a save
+        /// (a roll writes the season, and a save holding a season is a version 24 document). Opening the Pass tab uses
+        /// View, which rolls, as the road's own screen does.
+        /// </summary>
+        public static PassView Peek(GameSession session, long nowUnix)
+        {
+            if (!Active(session)) return new PassView();
+            WayfarersRoadState real = session.Profile.WayfarersRoad;
+            session.Profile.WayfarersRoad = real.Clone();
+            try { return View(session, nowUnix); }
+            finally { session.Profile.WayfarersRoad = real; }
+        }
+
         public static PassView View(GameSession session, long nowUnix)
         {
             PassView v = new PassView();

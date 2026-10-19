@@ -194,6 +194,19 @@ namespace Emberfall.Core.Progression
 
         // ------------------------------------------------------------------ the one grant
 
+        /// <summary>Makes room for a receipt. The oldest receipt of an offer that is NOT restorable goes first: a
+        /// restorable offer's receipt (the Starter Pact, the Growth Fund) is what stops a restore granting it
+        /// twice, so it goes only when nothing else can.</summary>
+        private static void EvictOldestReceipt(StoreState store, IStoreRules rules)
+        {
+            for (int i = 0; i < store.Receipts.Count; i++)
+            {
+                StoreOffer o = rules.Find(store.Receipts[i].OfferId);
+                if (o == null || !o.Restorable) { store.Receipts.RemoveAt(i); return; }
+            }
+            store.Receipts.RemoveAt(0);
+        }
+
         private PurchaseResult Deliver(GameSession session, StoreOffer offer, string receiptId, string choiceHeroId, long nowUnix, bool restored)
         {
             PurchaseResult r = new PurchaseResult();
@@ -227,7 +240,7 @@ namespace Emberfall.Core.Progression
             receipt.OfferId = offer.Id;
             receipt.GrantedUnix = nowUnix;
             receipt.Restored = restored;
-            if (store.Receipts.Count >= StoreState.ReceiptsMax) store.Receipts.RemoveAt(0);
+            if (store.Receipts.Count >= StoreState.ReceiptsMax) EvictOldestReceipt(store, _rules);
             store.Receipts.Add(receipt);
             _rules.RecordPurchase(session, offer.Id, choiceHeroId, nowUnix);
             r.Success = true;

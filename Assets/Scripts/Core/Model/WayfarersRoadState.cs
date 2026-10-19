@@ -35,6 +35,11 @@ namespace Emberfall.Core.Model
         /// <summary>Bit (tier - 1) is set once that tier's PAID reward has been claimed. Saved under `paidClaimed`.</summary>
         public int PaidClaimedMask;
 
+        public WayfarersRoadState Clone()
+        {
+            return (WayfarersRoadState)MemberwiseClone();
+        }
+
         public bool IsEmpty
         {
             get { return SeasonIndex == 0 && Points == 0 && ClaimedMask == 0 && Bought == 0 && PaidSeason == 0 && PaidClaimedMask == 0; }

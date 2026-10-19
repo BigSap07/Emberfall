@@ -794,7 +794,7 @@ namespace Emberfall.Core.Progression
 
         private static void FillPass(GameSession session, StoreView v, long nowUnix)
         {
-            PassView road = WayfarersRoad.View(session, nowUnix);   // rolls the road's season stamp forward, as the road's own screen does
+            PassView road = WayfarersRoad.Peek(session, nowUnix);   // read only: drawing the Hub must never write the save
             v.PassOpen = road.Active;
             v.PassNeedsLoop = !DailyLoop.Active(session);
             if (!road.Active) return;

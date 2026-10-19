@@ -637,6 +637,15 @@ namespace Emberfall.DevHarness
             rules.Limit = int.MaxValue;
             rules.Add("tiny", false, StoreGrantOf(new GrantItem(GrantKind.Dust, 1)));
             for (int i = 0; i < StoreState.ReceiptsMax + 3; i++) { ledger.Begin(cap, "tiny", null, now); ledger.Complete(cap, "tiny", "cap-" + i, now); }
+            // A restorable offer's receipt is kept longest: it is what stops a restore granting it twice.
+            GameSession keep = StoreSession(db);
+            ledger.Begin(keep, "starter", five[0].Id, now);
+            ledger.Complete(keep, "starter", "keep-starter", now);
+            for (int i = 0; i < StoreState.ReceiptsMax + 3; i++) { ledger.Begin(keep, "tiny", null, now); ledger.Complete(keep, "tiny", "keep-" + i, now); }
+            PurchaseResult reissued = ledger.Restore(keep, rules.Find("starter").ProductId, "keep-starter-reissued", five[0].Id, now);
+            Check(keep.Profile.Store.Receipts.Count == StoreState.ReceiptsMax && keep.Profile.Store.FindReceipt("keep-starter") != null
+                  && !reissued.Success && reissued.Reason == PurchaseRefusal.AlreadyGranted,
+                  "when the list is full the oldest receipt of a NON-restorable offer goes first: the Starter Pact's receipt survives " + (StoreState.ReceiptsMax + 3) + " later purchases and a restore still owes nothing");
             Check(cap.Profile.Store.Receipts.Count == StoreState.ReceiptsMax && cap.Profile.Store.FindReceipt("cap-0") == null && cap.Profile.Store.FindReceipt("cap-" + (StoreState.ReceiptsMax + 2)) != null,
                   "the receipt list never grows past " + StoreState.ReceiptsMax + ": the oldest are dropped");
         }
@@ -1009,6 +1018,40 @@ namespace Emberfall.DevHarness
                 GameSession on = StoreSession(db);
                 for (int d = 0; d < 3; d++) PassPlayDay(on, now + d * 86400L);
                 Check(StoreSnapshot(on) == offJson, "ON WITH NOTHING BOUGHT IS OFF: three days of play with the Store on is the off save, byte for byte, version included");
+
+                // A profile that never played the road: merely drawing the Hub (the Store badge reads StoreOffers.View on every
+                // refresh) must not write the save. It used to roll the road's season and move the save from 22 to 24.
+                bool roadWas = WayfarersRoadSwitch.Enabled, loopWas = DailyLoopSwitch.Enabled;
+                try
+                {
+                    WayfarersRoadSwitch.Enabled = true;
+                    DailyLoopSwitch.Enabled = false;
+                    GameSession seen = StoreSession(db);
+                    string fresh = StoreSnapshot(seen);
+                    StoreOffers.Bind(seen);
+                    StoreView v1 = StoreOffers.View(seen, now);
+                    StoreView v2 = StoreOffers.View(seen, now + 40 * 86400L);
+                    PassView peek = WayfarersRoad.Peek(seen, now);
+                    Check(v1.Active && v2.Active && peek.Active && StoreSnapshot(seen) == fresh && SaveSerializer.VersionOf(seen.Profile) == SaveSerializer.BaseVersion
+                          && seen.Profile.WayfarersRoad.IsEmpty,
+                          "SEEING THE HUB WRITES NOTHING: with the shipped switches a fresh profile viewed through StoreOffers.View (the badge path) and WayfarersRoad.Peek is byte for byte the same save, still version " + SaveSerializer.BaseVersion);
+                    PassView opened = WayfarersRoad.View(seen, now);
+                    Check(opened.Active && !seen.Profile.WayfarersRoad.IsEmpty,
+                          "and opening the Pass tab (View) still rolls the season, as the road's own screen does");
+                    // A stored older season reads as no points and no claims through the peek, and the state is left alone.
+                    GameSession old = StoreSession(db);
+                    WayfarersRoad.OnClaim(old, PassPointSource.Order, now);
+                    old.Profile.WayfarersRoad.ClaimedMask = 3;
+                    string oldJson = StoreSnapshot(old);
+                    PassView later = WayfarersRoad.Peek(old, now + db.WayfarersRoad.SeasonDays * 86400L);
+                    Check(later.Active && later.Points == 0 && later.Reached == 0 && later.Season == old.Profile.WayfarersRoad.SeasonIndex + 1 && StoreSnapshot(old) == oldJson,
+                          "a peek into a later season reads no points and no claims, and writes nothing");
+                }
+                finally
+                {
+                    WayfarersRoadSwitch.Enabled = roadWas;
+                    DailyLoopSwitch.Enabled = loopWas;
+                }
             }
             finally
             {
