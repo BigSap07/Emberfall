@@ -143,7 +143,6 @@ namespace Emberfall.Core.Data
         /// <summary>True for a product a store can hand back to a new profile of the same account (a
         /// non-consumable): the Starter Pact, the Growth Fund. A pack that resets is not restorable.</summary>
         public bool Restorable;
-        /// <summary>True when the buyer must pick a hero before buying (Starter Pact, Hero Contract).</summary>
-        public bool NeedsChoice;
+        public PurchaseGrant Grant = new PurchaseGrant();
     }
 }
