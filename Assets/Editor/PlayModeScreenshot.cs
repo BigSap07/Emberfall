@@ -405,6 +405,11 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/R19 store/Hub with the Store door", false, 139)]
         public static void CaptureHubStore() { Begin("Screen:HubStore"); }
 
+        // R19 B: the purchase path's own target. A paid Starter Pact the debug store delivered with no pick: nothing is granted,
+        // the Packs tab offers the pick, and the picker asks for the hero.
+        [MenuItem("Emberfall/Capture/R19 store/Packs, a paid purchase waiting for its pick", false, 140)]
+        public static void CaptureStorePickWaiting() { Begin("Screen:StorePickWaiting"); }
+
         [MenuItem("Emberfall/Capture/Heroes", false, 61)]
         public static void CaptureHeroes() { Begin("Screen:Heroes"); }
 
@@ -1705,6 +1710,7 @@ namespace Emberfall.EditorTools
                     case "StorePacksGrowth":
                     case "StorePurchase":
                     case "StoreComingSoon":
+                    case "StorePickWaiting":
                     case "StoreShops": id = ScreenId.Store; break;
                     case "HubStore": id = ScreenId.MainMenu; break;
                     case "Result": id = ScreenId.Battle; break;
@@ -2333,6 +2339,7 @@ namespace Emberfall.EditorTools
                 case "StorePurchase":
                 case "StoreComingSoon":
                 case "StoreShops":
+                case "StorePickWaiting":
                 case "HubStore":
                     return true;
             }
@@ -2414,6 +2421,17 @@ namespace Emberfall.EditorTools
             {
                 StoreBuy(app, "ember_ledger", "");   // so the dot on the door has something to say
             }
+            else if (name == "StorePickWaiting")
+            {
+                // R19 B: the store finishes a Starter Pact purchase and the app never had the pick (a restart, a timeout).
+                PurchaseService waitSvc = PurchaseService.Instance;
+                StoreOffer starter = StoreRules.Shared.Find("starter_pact");
+                if (waitSvc != null && waitSvc.DebugStore != null && starter != null)
+                {
+                    waitSvc.DebugStore.Purchase(starter.ProductId);
+                    waitSvc.Tick(1f);
+                }
+            }
             app.RefreshHud();
             Debug.Log("PlayModeScreenshot: seeded the Store for " + name);
         }
@@ -2428,6 +2446,7 @@ namespace Emberfall.EditorTools
                 case "StorePass":
                 case "StorePassPremium": store.OpenTab(StoreScreen.Tab.Pass); break;
                 case "StoreShops": store.OpenTab(StoreScreen.Tab.Shops); break;
+                case "StorePickWaiting": store.WaitingPickForCapture("brenna_the_remaining_wall"); break;
                 case "StorePacks": store.SelectForCapture("starter_pact"); break;
                 case "StorePacksLedger": store.SelectForCapture("ember_ledger"); break;
                 case "StorePacksGrowth": store.SelectForCapture("growth_fund"); break;

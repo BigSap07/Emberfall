@@ -514,7 +514,74 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Box(restore.Root, 0f, 0f, ListWidth, 48f, new Vector2(0f, 0f));
                 restore.OnClick(delegate { App.Audio.Tap(); _service.Flow.Restore(delegate (string offerId) { return ""; }); App.Notify("Asking the store for earlier purchases."); Rebuild(); });
             }
+            BuildWaitingPicks();
         }
+
+        /// <summary>A paid purchase (or a restore) the store delivered with no pick waits in the flow, granted nothing
+        /// and still open in the store. One button per waiting entry asks the player for the hero and finishes it.
+        /// The screen decides nothing: FinishPurchase and FinishRestore grant, the flow confirms.</summary>
+        private void BuildWaitingPicks()
+        {
+            if (_service == null || _service.Flow == null) return;
+            List<string[]> waiting = new List<string[]>();
+            List<bool> restore = new List<bool>();
+            for (int i = 0; i < _service.Flow.PurchaseWaiting.Count; i++) { waiting.Add(_service.Flow.PurchaseWaiting[i]); restore.Add(false); }
+            for (int i = 0; i < _service.Flow.RestoreWaiting.Count; i++) { waiting.Add(_service.Flow.RestoreWaiting[i]); restore.Add(true); }
+            for (int i = 0; i < waiting.Count && i < 2; i++)
+            {
+                string[] entry = waiting[i];
+                bool isRestore = restore[i];
+                StoreOffer offer = StoreRules.Shared.FindByProduct(entry[0]);
+                string name = offer == null ? "PURCHASE" : App.Session.Content.Store.Offer(offer.Id) != null ? App.Session.Content.Store.Offer(offer.Id).Name.ToUpperInvariant() : offer.Id.ToUpperInvariant();
+                UIButton pick = EmberforgeUI.Button("Waiting" + i, _body, (isRestore ? "RESTORED: " : "PAID: ") + name + "  -  CHOOSE YOUR HERO", UITheme.FontTiny, ForgeButtonKind.Primary);
+                UIBuilder.Box(pick.Root, ListWidth + 24f, i * 56f, 620f, 48f, new Vector2(0f, 0f));
+                pick.OnClick(delegate { OpenWaitingPicker(entry, isRestore); });
+            }
+        }
+
+        private void OpenWaitingPicker(string[] entry, bool isRestore)
+        {
+            StoreOffer offer = StoreRules.Shared.FindByProduct(entry[0]);
+            StoreOfferDef def = offer == null ? null : App.Session.Content.Store.Offer(offer.Id);
+            if (def == null || def.HeroChoices.Count == 0) { App.Notify("Nothing to choose."); return; }
+            App.Audio.Tap();
+            _pickHeroes.Clear();
+            for (int i = 0; i < def.HeroChoices.Count; i++)
+            {
+                HeroDef h = App.Session.Content.GetHero(def.HeroChoices[i]);
+                if (h != null) _pickHeroes.Add(h);
+            }
+            _pickTitle = def.Name.ToUpperInvariant() + "  -  YOU HAVE PAID, CHOOSE YOUR HERO";
+            _pickConfirmLabel = "TAKE ";
+            _pickPage = 0;
+            _chosen = null;
+            _picking = true;
+            string productId = entry[0];
+            _pickConfirm = delegate (string heroId)
+            {
+                PurchaseResult r = isRestore ? _service.Flow.FinishRestore(productId, heroId) : _service.Flow.FinishPurchase(productId, heroId);
+                _picking = false;
+                _chosen = null;
+                if (!r.Success && r.Reason != PurchaseRefusal.AlreadyGranted) { App.Audio.Locked(); App.Notify("That could not be finished. Nothing was lost."); }
+                Rebuild();
+            };
+            Rebuild();
+        }
+
+#if UNITY_EDITOR
+        /// <summary>CAPTURE ONLY: opens the pick prompt of the first waiting paid purchase.</summary>
+        public void WaitingPickForCapture(string heroId)
+        {
+            _tab = Tab.Packs;
+            _picking = false;
+            Rebuild();
+            if (_service == null || _service.Flow == null) return;
+            if (_service.Flow.PurchaseWaiting.Count > 0) OpenWaitingPicker(_service.Flow.PurchaseWaiting[0], false);
+            else if (_service.Flow.RestoreWaiting.Count > 0) OpenWaitingPicker(_service.Flow.RestoreWaiting[0], true);
+            _chosen = heroId;
+            Rebuild();
+        }
+#endif
 
         private void BuildRow(StoreOfferView o, int index)
         {
