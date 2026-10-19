@@ -27,6 +27,7 @@ namespace Emberfall.Game
         private readonly List<StoreOffer> _offers = new List<StoreOffer>();
         private readonly Dictionary<string, PendingOrder> _open = new Dictionary<string, PendingOrder>();
         private bool _ready;
+        private bool _restoring;
 
         public string Name { get { return "Unity IAP (" + UnityIAPServices.GetDefaultStore() + ")"; } }
         public bool IsReady { get { return _ready; } }
@@ -78,9 +79,12 @@ namespace Emberfall.Game
         public void Restore()
         {
             if (_controller == null || !_ready) { if (_listener != null) _listener.OnRestoreFinished(false, "The store is not ready."); return; }
+            // Confirmed orders are handed back as restored purchases ONLY while a restore the player asked for
+            // is running, so a new profile never gets a purchase back by itself at start-up.
+            _restoring = true;
             _controller.RestoreTransactions((ok, error) =>
             {
-                if (!ok && _listener != null) _listener.OnRestoreFinished(false, error ?? "");
+                if (!ok && _listener != null) { _restoring = false; _listener.OnRestoreFinished(false, error ?? ""); }
             });
             _controller.FetchPurchases();
         }
@@ -142,6 +146,8 @@ namespace Emberfall.Game
         private void OnFetched(Orders orders)
         {
             if (_listener == null || orders == null) return;
+            if (!_restoring) return;
+            _restoring = false;
             // Orders the store finished and the game has not confirmed arrive through OnPending; confirmed
             // orders of a non-consumable product are what a restore hands back.
             for (int i = 0; i < orders.ConfirmedOrders.Count; i++)
