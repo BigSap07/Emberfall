@@ -65,6 +65,7 @@ namespace Emberfall.DevHarness
         private sealed class StoreTestRules : IStoreRules
         {
             public readonly Dictionary<string, StoreOffer> Offers = new Dictionary<string, StoreOffer>();
+            public readonly Dictionary<string, PurchaseGrant> Grants = new Dictionary<string, PurchaseGrant>();
             public int Limit = 1;
             public int Recorded;
 
@@ -75,8 +76,9 @@ namespace Emberfall.DevHarness
                 o.ProductId = "placeholder." + id;
                 o.PriceTier = "4.99";
                 o.Restorable = restorable;
-                o.Grant = grant;
+                o.NeedsChoice = grant.NeedsChoice;
                 Offers[id] = o;
+                Grants[id] = grant;
                 return o;
             }
 
@@ -88,18 +90,42 @@ namespace Emberfall.DevHarness
                 return null;
             }
 
-            public bool CanBuy(GameSession s, string offerId, long nowUnix, out string reason)
+            public bool CanBuy(GameSession s, string offerId, string choiceHeroId, long nowUnix, out string reason, out bool badChoice)
             {
+                badChoice = false;
+                reason = null;
+                PurchaseGrant g;
+                if (!Grants.TryGetValue(offerId, out g)) { reason = "Not for sale."; return false; }
+                for (int i = 0; i < g.Items.Count; i++)
+                {
+                    GrantItem it = g.Items[i];
+                    bool ok = true;
+                    if (it.Kind == GrantKind.HeroChoice) ok = !string.IsNullOrEmpty(choiceHeroId) && it.HeroIds.Contains(choiceHeroId);
+                    if (it.Kind == GrantKind.OwnedHeroCopy)
+                    {
+                        HeroDef d = string.IsNullOrEmpty(choiceHeroId) ? null : s.Content.GetHero(choiceHeroId);
+                        ok = d != null && d.Stars == it.Stars && s.Profile.FindHeroByDefId(choiceHeroId) != null;
+                    }
+                    if (!ok) { badChoice = true; reason = "Pick a hero first."; return false; }
+                }
                 OfferRecord r = s.Profile.Store.Find(offerId);
                 if (r != null && r.Count >= Limit) { reason = "Limit reached."; return false; }
-                reason = null;
                 return true;
             }
 
-            public void RecordPurchase(GameSession s, string offerId, long nowUnix)
+            public FulfilOutcome Fulfil(GameSession s, string offerId, string choiceHeroId, long nowUnix)
             {
+                FulfilOutcome o = new FulfilOutcome();
+                string why;
+                bool bad;
+                if (!CanBuy(s, offerId, choiceHeroId, nowUnix, out why, out bad)) { o.BadChoice = bad; o.Reason = why; return o; }
+                GrantResult g = PurchaseGrants.Apply(s, Grants[offerId], choiceHeroId, nowUnix);
+                if (!g.Success) { o.BadChoice = g.Reason == GrantRefusal.BadChoice; o.Reason = g.Reason.ToString(); return o; }
+                o.Lines.AddRange(g.Lines);
                 s.Profile.Store.Record(offerId).Count++;
                 Recorded++;
+                o.Success = true;
+                return o;
             }
         }
 
@@ -285,7 +311,7 @@ namespace Emberfall.DevHarness
             Check(done.Success && done.CanConfirm && !ledger.IsPending("weekly") && p.Gold == weeklyGold && p.Sealed.Gold == weeklyGold && p.Slag == 200 && p.Sealed.Slag == 200
                   && p.Store.FindReceipt("receipt-001") != null && p.Store.Record("weekly").Count == 1 && rules.Recorded == 1,
                   "COMPLETE GRANTS: " + weeklyGold + " Sealed Gold and 200 Sealed Slag, one receipt kept, the offer's own rules told once");
-            Check(done.Grant != null && done.Grant.Lines.Count == 3 && done.Grant.Lines[0].Contains("Sealed"), "and the result carries the receipt lines the screen shows (" + string.Join(" / ", done.Grant.Lines.ToArray()) + ")");
+            Check(done.Fulfilled != null && done.Fulfilled.Lines.Count == 3 && done.Fulfilled.Lines[0].Contains("Sealed"), "and the result carries the receipt lines the screen shows (" + string.Join(" / ", done.Fulfilled.Lines.ToArray()) + ")");
 
             string afterOne = StoreSnapshot(s);
             PurchaseResult again = ledger.Complete(s, "weekly", "receipt-001", now);

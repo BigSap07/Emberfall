@@ -6,18 +6,33 @@ using Emberfall.Core.Session;
 
 namespace Emberfall.Core.Progression
 {
+    /// <summary>What the Store's rules did with a delivered purchase.</summary>
+    public sealed class FulfilOutcome
+    {
+        public bool Success;
+        /// <summary>True when the refusal is a missing or wrong pick of a hero, so the store should keep
+        /// the purchase open until the player picks.</summary>
+        public bool BadChoice;
+        /// <summary>One plain sentence per line granted, for the receipt: "3,400 Gold (Sealed)".</summary>
+        public readonly List<string> Lines = new List<string>();
+        public string Reason = "";
+    }
+
     /// <summary>
     /// What the Store's offer rules (limits, weekly and monthly resets, the Ember Ledger, the Growth Fund)
-    /// answer to the purchase path. Implemented by the offer rules; the ledger knows nothing of a limit.
+    /// answer to the purchase path. Implemented by the offer rules (StoreRules over StoreOffers); the ledger
+    /// knows nothing of a limit and nothing of what an offer contains.
     /// </summary>
     public interface IStoreRules
     {
-        /// <summary>True when the offer may be bought now. On false, reason is a sentence a player can read.</summary>
-        bool CanBuy(GameSession session, string offerId, long nowUnix, out string reason);
+        /// <summary>True when the offer may be bought now with this pick. On false, reason is a sentence a
+        /// player can read and badChoice says the pick is what is missing or wrong. Reads, writes nothing.</summary>
+        bool CanBuy(GameSession session, string offerId, string choiceHeroId, long nowUnix, out string reason, out bool badChoice);
 
-        /// <summary>Called once, after a grant is applied: the offer counts the purchase (its limit, its
-        /// period, a card's first day). Writes through PlayerProfile.Store.Record.</summary>
-        void RecordPurchase(GameSession session, string offerId, long nowUnix);
+        /// <summary>Grants the offer once and counts the purchase (its limit, its period, a card's first
+        /// day), all or nothing. Every good it grants must be made through PurchaseGrants.Apply, so it is
+        /// Sealed. A refusal writes nothing.</summary>
+        FulfilOutcome Fulfil(GameSession session, string offerId, string choiceHeroId, long nowUnix);
 
         StoreOffer Find(string offerId);
         StoreOffer FindByProduct(string productId);
@@ -54,7 +69,7 @@ namespace Emberfall.Core.Progression
         public PurchaseRefusal Reason = PurchaseRefusal.None;
         public string OfferId = "";
         public string Message = "";
-        public GrantResult Grant;
+        public FulfilOutcome Fulfilled;
 
         /// <summary>True when the store may be told the purchase is finished (confirmed): it was granted now
         /// or was granted before. False on every other refusal, so the store keeps the purchase open and
@@ -76,7 +91,7 @@ namespace Emberfall.Core.Progression
     ///    byte for byte as it was. Pending purchases live in memory only.
     ///  - ONCE PER RECEIPT. The receipt id is kept in PlayerProfile.Store; a receipt seen again grants
     ///    nothing, whatever delivers it (the store re-delivering at startup, a restore, a replay).
-    ///  - EVERYTHING GRANTED IS SEALED, because every grant goes through PurchaseGrants.Apply.
+    ///  - EVERYTHING GRANTED IS SEALED, because the rules grant through PurchaseGrants.Apply and nowhere else.
     ///  - NOTHING HERE IS RANDOM. See PurchaseGrants and CheckStoreNoRandomPath.
     ///  - RESTORE re-delivers a restorable offer (a non-consumable) to a profile that has no receipt for it,
     ///    once. A pack that resets is not restorable.
@@ -84,7 +99,7 @@ namespace Emberfall.Core.Progression
     ///
     /// THE CHOICE IS MADE BEFORE THE PURCHASE (Begin takes it), so a purchase the store delivers again after
     /// the app was closed has no choice to apply. DEFAULT TAKEN: such a delivery for an offer that needs a
-    /// hero is refused as BadChoice and is not confirmed, so the store keeps it open until the player is
+    /// hero is refused by the rules as BadChoice and is not confirmed, so the store keeps it open until the player is
     /// asked again; nothing is lost and nothing is guessed.
     /// </summary>
     public sealed class PurchaseLedger
@@ -124,16 +139,11 @@ namespace Emberfall.Core.Progression
             StoreOffer offer = _rules.Find(offerId);
             if (offer == null) { r.Reason = PurchaseRefusal.NoSuchOffer; return r; }
             string why;
-            if (!_rules.CanBuy(session, offerId, nowUnix, out why))
+            bool badChoice;
+            if (!_rules.CanBuy(session, offerId, choiceHeroId, nowUnix, out why, out badChoice))
             {
-                r.Reason = PurchaseRefusal.NotAvailable;
+                r.Reason = badChoice ? PurchaseRefusal.BadChoice : PurchaseRefusal.NotAvailable;
                 r.Message = why ?? "";
-                return r;
-            }
-            if (offer.Grant.NeedsChoice && !ChoiceIsValid(session, offer, choiceHeroId))
-            {
-                r.Reason = PurchaseRefusal.BadChoice;
-                r.Message = "Pick a hero first.";
                 return r;
             }
             _pending[offerId] = choiceHeroId ?? "";
@@ -190,18 +200,15 @@ namespace Emberfall.Core.Progression
             StoreState store = session.Profile.Store;
             if (store.FindReceipt(receiptId) != null) { r.Reason = PurchaseRefusal.AlreadyGranted; return r; }
 
-            if (offer.Grant.NeedsChoice && !ChoiceIsValid(session, offer, choiceHeroId))
+            // The rules grant and count in one all-or-nothing call. A refusal writes nothing and leaves no
+            // receipt, so the store keeps the purchase open (a charged purchase the game could not grant is
+            // never confirmed, which is what lets a store refund it).
+            FulfilOutcome g = _rules.Fulfil(session, offer.Id, choiceHeroId, nowUnix);
+            r.Fulfilled = g;
+            if (g == null || !g.Success)
             {
-                r.Reason = PurchaseRefusal.BadChoice;
-                r.Message = "Pick a hero first.";
-                return r;
-            }
-
-            GrantResult g = PurchaseGrants.Apply(session, offer.Grant, choiceHeroId, nowUnix);
-            r.Grant = g;
-            if (!g.Success)
-            {
-                r.Reason = g.Reason == GrantRefusal.BadChoice ? PurchaseRefusal.BadChoice : PurchaseRefusal.BadGrant;
+                r.Reason = g != null && g.BadChoice ? PurchaseRefusal.BadChoice : PurchaseRefusal.BadGrant;
+                r.Message = g == null ? "" : g.Reason ?? "";
                 return r;
             }
 
@@ -214,25 +221,8 @@ namespace Emberfall.Core.Progression
             receipt.Restored = restored;
             if (store.Receipts.Count >= StoreState.ReceiptsMax) store.Receipts.RemoveAt(0);
             store.Receipts.Add(receipt);
-            _rules.RecordPurchase(session, offer.Id, nowUnix);
             r.Success = true;
             return r;
-        }
-
-        private static bool ChoiceIsValid(GameSession session, StoreOffer offer, string heroId)
-        {
-            if (string.IsNullOrEmpty(heroId)) return false;
-            for (int i = 0; i < offer.Grant.Items.Count; i++)
-            {
-                GrantItem it = offer.Grant.Items[i];
-                if (it.Kind == GrantKind.HeroChoice) return it.HeroIds.Contains(heroId);
-                if (it.Kind == GrantKind.OwnedHeroCopy)
-                {
-                    HeroDef d = session.Content.GetHero(heroId);
-                    return d != null && d.Stars == it.Stars && session.Profile.FindHeroByDefId(heroId) != null;
-                }
-            }
-            return true;
         }
     }
 }
