@@ -917,7 +917,19 @@ namespace Emberfall.Core.Progression
             }
             else if (d.Kind == StoreOfferKind.Growth)
             {
-                for (int i = 0; i < d.Milestones.Count; i++) { hours += d.Milestones[i].Hours; sweeps += d.Milestones[i].DustSweeps; }
+                // Fixed at each milestone's own stage, so what it is worth to THIS buyer is those amounts over THEIR
+                // frontier's income: most to an early buyer, who is paid chapter 2 to 6 rates against chapter 1 income.
+                long gold = 0, dust = 0;
+                for (int i = 0; i < d.Milestones.Count; i++) { gold += MilestoneGold(session, d.Milestones[i]); dust += MilestoneDust(session, d.Milestones[i]); }
+                double perHour = Math.Max(1.0, session.IdleGoldPerHour);
+                v.GoldHours = gold / perHour;
+                v.GoldDays = gold / (perHour * dayHours);
+                v.DustSweeps = 0.0;
+                v.DustDays = dust / DustDay(session);
+                v.HeroCopies = 0;
+                v.HeroDays = 0.0;
+                v.TotalDays = v.GoldDays + v.DustDays;
+                return v;
             }
             else if (d.Kind == StoreOfferKind.Pass)
             {
