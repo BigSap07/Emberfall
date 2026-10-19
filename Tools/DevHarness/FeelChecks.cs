@@ -315,7 +315,9 @@ namespace Emberfall.DevHarness
                 "if (!Feel.V2) _world.Vfx.Aura(source.transform.position, AspectTint(source), 2.2f);",
                 "if (!Feel.V2) _world.Vfx.Motes(target.transform.position, UITheme.Success, 6, 2.2f);",
                 "if (!Feel.V2) _world.Vfx.Aura(target.transform.position, UITheme.Shield, 2f);",
-                "if (!Feel.V2) _world.Vfx.Aura(target.transform.position, tint, 1.8f);"
+                "if (!Feel.V2) _world.Vfx.Aura(target.transform.position, tint, 1.8f);",
+                "if (!Feel.V2) _world.Vfx.Aura(source.transform.position, UITheme.Gold, 2f);",
+                "if (!Feel.V2) _world.Vfx.Aura(heir.transform.position, UITheme.Danger, 1.8f);"
             };
             List<string> lost = new List<string>();
             for (int i = 0; i < stillThere.Length; i++) if (!battle.Contains(stillThere[i])) lost.Add(stillThere[i]);
@@ -337,6 +339,10 @@ namespace Emberfall.DevHarness
             Check(p.HitPuffSize < p.CritPuffSize && p.CritPuffSize < p.SkillScale && p.HitPuffSeconds < p.CritPuffSeconds && p.CritPuffSeconds < skillSeconds,
                   "FE8 LOOKS: a basic puff (" + Fmt(p.HitPuffSize) + ", " + Fmt(p.HitPuffSeconds) + " s) is smaller and faster than a crit (" + Fmt(p.CritPuffSize) + ", " + Fmt(p.CritPuffSeconds)
                   + " s), which is smaller and faster than the skill burst (" + Fmt(p.SkillScale) + ", " + Fmt(skillSeconds) + " s)");
+            Check(p.CritPuffSize >= p.HitPuffSize * 1.6f && p.CritPuffStart > 0.45f,
+                  "FE8 a crit puff is at least 1.6x a hit puff (" + Fmt(p.CritPuffSize / p.HitPuffSize) + "x) and starts at " + Fmt(p.CritPuffStart) + " of its size, so even its first frames read bigger");
+            Check(p.HealSparkRise >= 1.5f && p.HealSparkSize >= 0.28f && p.HealSparks >= 6 && p.DebuffTint > 0.3f && p.DebuffTintSeconds >= 0.2f && FeelProfile.V1.DebuffTint == 0f,
+                  "FE8 the heal sparks are larger and rise further (" + Fmt(p.HealSparkSize) + ", rising at " + Fmt(p.HealSparkRise) + ") and a debuff darkens the body by " + Fmt(p.DebuffTint) + " for " + Fmt(p.DebuffTintSeconds) + " s");
             Check(p.PuffWhite >= 0f && p.PuffWhite <= 0.6f && p.PulseTravel > 0f && p.ArrowTravel > 0f && p.ShellSeconds > 0f && p.ShellSeconds < 0.5f && p.HealSparks > 0,
                   "FE8 the buff and debuff pulses travel, the shield shell is a short flash (" + Fmt(p.ShellSeconds) + " s), and the heal throws sparks (" + p.HealSparks + ")");
 
@@ -439,10 +445,25 @@ namespace Emberfall.DevHarness
             string battle = ReadJuiceSource(Path.Combine(root, "Assets", "Scripts"), "UI", "Screens", "BattleScreen.cs");
             string sfx = ReadJuiceSource(Path.Combine(root, "Assets", "Scripts"), "Game", "Sfx.cs");
             bool calls = Regex.IsMatch(battle, @"SpawnFloatingText\(target\.HeadPosition, ""\+"" \+ e\.Value, UITheme\.Success, 1f\);[^}]*App\.Audio\.Heal\(\);")
-                         && Regex.IsMatch(battle, @"App\.Audio\.Shield\(\);") && battle.Contains("if (StatusInfo.IsHarmful(e.Status)) App.Audio.Debuff();")
-                         && battle.Contains("else App.Audio.Buff();") && battle.Contains("App.Audio.Death();")
+                         && Regex.IsMatch(battle, @"App\.Audio\.Shield\(\);") && battle.Contains("if (!Feel.V2 || !_debuffSounded) App.Audio.Debuff();")
+                         && battle.Contains("if (!Feel.V2 || !_buffSounded) App.Audio.Buff();") && battle.Contains("App.Audio.Death();")
                          && sfx.Contains("Cue(\"battle.heal\"") && sfx.Contains("Cue(\"battle.buff\")") && sfx.Contains("Cue(\"battle.debuff\")")
                          && sfx.Contains("Cue(\"battle.shield\")") && sfx.Contains("Cue(\"battle.death\"") && sfx.Contains("Cue(\"battle.impact.\" + AspectKey(aspect))");
+            // One buff and one debuff sound per action in v2: the flags are cleared where an action begins
+            // (a turn, a basic attack, a cast) and set where the sound plays.
+            int clears = System.Text.RegularExpressions.Regex.Matches(battle, @"_buffSounded = false;").Count;
+            int clearsD = System.Text.RegularExpressions.Regex.Matches(battle, @"_debuffSounded = false;").Count;
+            Check(clears == 3 && clearsD == 3 && battle.Contains("_buffSounded = true;") && battle.Contains("_debuffSounded = true;"),
+                  "FE9 WIRING (reads source): in v2 a buff and a debuff each sound once per action (cleared at TurnStart, BasicAttack and AbilityCast), not once per target or icon");
+
+            // No ring aura is left in v2: every Vfx.Aura call in BattleScreen is behind !Feel.V2 (the one in
+            // PlayAreaVfxOn is reached only through PlayTargetedVfx, which returns first in v2).
+            List<string> rings = new List<string>();
+            string[] battleLines = battle.Split('\n');
+            for (int i = 0; i < battleLines.Length; i++)
+                if (battleLines[i].Contains("Vfx.Aura(") && !battleLines[i].Contains("!Feel.V2") && !battleLines[i].Contains("case \"buff\"")) rings.Add(battleLines[i].Trim());
+            Check(rings.Count == 0,
+                  "FE9 RINGS (reads source): no aura ring is drawn in v2, the passive trigger and the status spread included" + (rings.Count > 0 ? ": UNGATED " + string.Join(" | ", rings.ToArray()) : ""));
             Check(calls && battle.Contains("if (e.Critical && !Feel.V2) App.Audio.Crit();"),
                   "FE9 WIRING (reads source): heal, shield, buff, debuff, death and skill impact each call their own cue, and in v2 a critical skill plays the skill impact alone");
         }

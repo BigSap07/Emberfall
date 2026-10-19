@@ -45,12 +45,14 @@ namespace Emberfall.Core.Data
         public int VfxMaxLive = 14;
 
         // basic hit: one small soft puff at the strike point, no ring, no streak, no sheet.
-        public float HitPuffSize = 0.55f;
+        public float HitPuffSize = 0.5f;
         public float HitPuffSeconds = 0.14f;
         /// <summary>How far the puff colour is pulled toward white (0 is the pure aspect accent).</summary>
         public float PuffWhite = 0.35f;
         // crit: the same puff, bigger and a touch longer, with a soft glow.
-        public float CritPuffSize = 1.05f;
+        public float CritPuffSize = 1.25f;
+        /// <summary>Where a crit puff starts, as a fraction of its size, so even its first frames read big.</summary>
+        public float CritPuffStart = 0.75f;
         public float CritPuffSeconds = 0.20f;
         public float CritGlowRadius = 0.8f;
 
@@ -71,9 +73,10 @@ namespace Emberfall.Core.Data
         // heal: a soft glow and a few chips rising off the target.
         public float HealGlowRadius = 0.85f;
         public float HealGlowSeconds = 0.45f;
-        public int HealSparks = 5;
-        public float HealSparkRise = 1.1f;
-        public float HealSparkSeconds = 0.75f;
+        public int HealSparks = 7;
+        public float HealSparkRise = 1.6f;
+        public float HealSparkSeconds = 0.9f;
+        public float HealSparkSize = 0.3f;
 
         // buff and debuff: a pulse that travels up or down the body, and an arrow chip.
         public float PulseSize = 1.0f;
@@ -82,6 +85,9 @@ namespace Emberfall.Core.Data
         public float ArrowSize = 0.5f;
         public float ArrowSeconds = 0.8f;
         public float ArrowTravel = 0.7f;
+        /// <summary>A debuff darkens the target body for a moment: how far toward the dark tint, and for how long.</summary>
+        public float DebuffTint = 0.45f;
+        public float DebuffTintSeconds = 0.30f;
 
         // shield: a short shell flash around the body (alpha scales it for an absorb or a break).
         public float ShellSeconds = 0.26f;
@@ -130,6 +136,7 @@ namespace Emberfall.Core.Data
                 p.CritPuffSize = 0f;
                 p.CritPuffSeconds = 0f;
                 p.CritGlowRadius = 0f;
+                p.CritPuffStart = 0f;
                 p.SkillSheet = "";
                 p.SkillColumns = 1;
                 p.SkillRows = 1;
@@ -145,12 +152,15 @@ namespace Emberfall.Core.Data
                 p.HealSparks = 0;
                 p.HealSparkRise = 0f;
                 p.HealSparkSeconds = 0f;
+                p.HealSparkSize = 0f;
                 p.PulseSize = 0f;
                 p.PulseSeconds = 0f;
                 p.PulseTravel = 0f;
                 p.ArrowSize = 0f;
                 p.ArrowSeconds = 0f;
                 p.ArrowTravel = 0f;
+                p.DebuffTint = 0f;
+                p.DebuffTintSeconds = 0f;
                 p.ShellSeconds = 0f;
                 p.ShellAlpha = 0f;
                 p.ShellAbsorbAlpha = 0f;
@@ -202,6 +212,7 @@ namespace Emberfall.Core.Data
             p.CritPuffSize = crit.GetFloat("size", p.CritPuffSize);
             p.CritPuffSeconds = crit.GetFloat("seconds", p.CritPuffSeconds);
             p.CritGlowRadius = crit.GetFloat("glowRadius", p.CritGlowRadius);
+            p.CritPuffStart = crit.GetFloat("start", p.CritPuffStart);
             JsonValue sk = vx["skill"];
             p.SkillSheet = sk.GetString("sheet", p.SkillSheet);
             p.SkillColumns = sk.GetInt("columns", p.SkillColumns);
@@ -219,6 +230,7 @@ namespace Emberfall.Core.Data
             p.HealSparks = he.GetInt("sparks", p.HealSparks);
             p.HealSparkRise = he.GetFloat("rise", p.HealSparkRise);
             p.HealSparkSeconds = he.GetFloat("seconds", p.HealSparkSeconds);
+            p.HealSparkSize = he.GetFloat("size", p.HealSparkSize);
             JsonValue pu = vx["pulse"];
             p.PulseSize = pu.GetFloat("size", p.PulseSize);
             p.PulseSeconds = pu.GetFloat("seconds", p.PulseSeconds);
@@ -226,6 +238,8 @@ namespace Emberfall.Core.Data
             p.ArrowSize = pu.GetFloat("arrowSize", p.ArrowSize);
             p.ArrowSeconds = pu.GetFloat("arrowSeconds", p.ArrowSeconds);
             p.ArrowTravel = pu.GetFloat("arrowTravel", p.ArrowTravel);
+            p.DebuffTint = pu.GetFloat("debuffTint", p.DebuffTint);
+            p.DebuffTintSeconds = pu.GetFloat("debuffTintSeconds", p.DebuffTintSeconds);
             JsonValue sh = vx["shield"];
             p.ShellSeconds = sh.GetFloat("seconds", p.ShellSeconds);
             p.ShellAlpha = sh.GetFloat("alpha", p.ShellAlpha);

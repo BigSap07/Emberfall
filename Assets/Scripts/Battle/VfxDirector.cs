@@ -209,6 +209,12 @@ namespace Emberfall.Battle
                     if (Feel.V2) PlayStatusLook(e, target);
                     else PlayStatus(e, target);
                     break;
+                case BattleEventType.StatusSpread:
+                    if (Feel.V2) PlayStatusLook(e, target);
+                    break;
+                case BattleEventType.PassiveTrigger:
+                    if (Feel.V2) PlayPassiveGlow(e.SourceId >= 0 ? _stage.Find(e.SourceId) : null);
+                    break;
                 case BattleEventType.Death:
                     PlayKill(e, target);
                     break;
@@ -638,7 +644,7 @@ namespace Emberfall.Battle
             FaceCameraQuad(q, 0f);
             float body = target.HeadPosition.y - target.transform.position.y;
             Vector3 basePoint = FxPoint(target);
-            float lo = target.transform.position.y + body * 0.18f - basePoint.y;
+            float lo = target.transform.position.y + body * 0.30f - basePoint.y;
             float hi = lo + body * travel;
             float duration = Mathf.Max(0.02f, seconds) / PlaybackSpeed();
             float t = 0f;
@@ -648,7 +654,7 @@ namespace Emberfall.Battle
                 float k = Mathf.Clamp01(t / duration);
                 float along = up ? k : 1f - k;
                 q.T.position = basePoint + Vector3.up * Mathf.Lerp(lo, hi, 1f - (1f - along) * (1f - along));
-                q.T.localScale = new Vector3(size * 1.1f, size * 0.55f, 1f);
+                q.T.localScale = new Vector3(size * 0.9f, size * 1.25f, 1f);
                 q.Material.SetColor("_Color", new Color(tint.r, tint.g, tint.b, alpha * Mathf.Sin(k * Mathf.PI)));
                 yield return null;
             }
@@ -738,7 +744,7 @@ namespace Emberfall.Battle
                 FxHandle glow = BeginFx(target, "crit", dot, accent, true);
                 StartCoroutine(PuffRoutine(glow, centre + behind, accent, fp.CritGlowRadius * 2f * u * power, fp.CritPuffSeconds * 1.2f, 0.7f, 0.55f));
                 FxHandle big = BeginFx(target, "crit", dot, puff, true);
-                StartCoroutine(PuffRoutine(big, at, puff, fp.CritPuffSize * u * power, fp.CritPuffSeconds, 0.45f, 1f));
+                StartCoroutine(PuffRoutine(big, at, puff, fp.CritPuffSize * u * power, fp.CritPuffSeconds, fp.CritPuffStart, 1f));
                 return;
             }
             FxHandle small = BeginFx(target, "hit", dot, puff, true);
@@ -766,8 +772,8 @@ namespace Emberfall.Battle
             Vector3 centre = FxPoint(target);
             FxHandle glow = BeginFx(target, "heal", BattleAssets.SoftDot, green, true);
             StartCoroutine(PuffRoutine(glow, centre, green, fp.HealGlowRadius * 2f * u, fp.HealGlowSeconds, 0.6f, 0.55f));
-            Vector3 belly = centre - Vector3.up * (0.4f * u);
-            EmitChips(belly, new Color(0.78f, 1f, 0.84f, 1f), fp.HealSparks, fp.HealSparkRise * u, 0.2f * u, fp.HealSparkSeconds, Direction.Rise);
+            Vector3 belly = centre - Vector3.up * (0.55f * u);
+            EmitChips(belly, new Color(0.78f, 1f, 0.84f, 1f), fp.HealSparks, fp.HealSparkRise * u, fp.HealSparkSize * u, fp.HealSparkSeconds, Direction.Rise);
         }
 
         /// <summary>Buff: a gold band rising through the body and an up arrow chip. Debuff: a dark band
@@ -787,6 +793,17 @@ namespace Emberfall.Battle
             StartCoroutine(PulseRoutine(band, target, tint, fp.PulseSize * u, fp.PulseSeconds, fp.PulseTravel, !harmful, harmful ? 0.7f : 0.8f));
             FxHandle chip = BeginFx(target, cls, _arrowTexture, tint, additive);
             StartCoroutine(ArrowRoutine(chip, target, tint, fp.ArrowSize * u, fp.ArrowSeconds, fp.PulseTravel, !harmful));
+            // The darker tint of a debuff: the body darkens for a moment, the counterpart of a hit flash.
+            if (harmful) target.TintFor(fp.DebuffTint, tint * 0.35f, fp.DebuffTintSeconds);
+        }
+
+        /// <summary>A passive firing: a soft gold glow on the unit, in place of the ring that swept up the body.</summary>
+        private void PlayPassiveGlow(UnitActor unit)
+        {
+            if (!Feel.V2 || unit == null || !unit.Alive) return;
+            Vector3 behind = _stage != null && _stage.Camera != null ? _stage.Camera.transform.forward * 0.4f : Vector3.zero;
+            FxHandle glow = BeginFx(unit, "buff", BattleAssets.SoftDot, UITheme.Gold, true);
+            StartCoroutine(PuffRoutine(glow, FxPoint(unit) + behind, UITheme.Gold, 0.9f * 2f * BodyUnit(unit), 0.35f, 0.6f, 0.6f));
         }
 
         /// <summary>Shield: a short shell flash around the body. An absorb is the lighter flash, a
