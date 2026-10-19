@@ -492,6 +492,17 @@ namespace Emberfall.UI.Screens
             _aspectBadgeGlyph.sprite = TextureLab.Sigil(AspectSigil(def.Aspect), 128);
             _aspectBadgeGlyph.color = accent;
 
+            // THE UI KIT'S ASPECT BADGE replaces the jewel and its glyph: a finished round badge, drawn white.
+            Sprite kitAspect = UiKit.AspectBadge(def.Aspect.ToString());
+            if (kitAspect != null)
+            {
+                _aspectBadge.sprite = kitAspect;
+                _aspectBadge.color = Color.white;
+                Transform edge = _aspectBadge.transform.parent.Find("Edge");
+                if (edge != null) edge.gameObject.SetActive(false);
+                _aspectBadgeGlyph.enabled = false;
+            }
+
             for (int i = _starHost.childCount - 1; i >= 0; i--) Destroy(_starHost.GetChild(i).gameObject);
             Widgets.StarRow("Stars", _starHost, def.Stars, 26f);
 
@@ -602,8 +613,11 @@ namespace Emberfall.UI.Screens
                 Color accent = UITheme.AspectAccent(other);
                 float x = -width * 0.5f + step * (i + 0.5f);
 
-                Image icon = UIBuilder.Img("A" + i, _aspectRow, TextureLab.Sigil(AspectSigil(other), 128), accent);
-                UIBuilder.Box(icon.rectTransform, x, 12f, 30f, 30f, new Vector2(0.5f, 0.5f));
+                // The kit's aspect badge (painted in colour, so white) when the kit is on; the tinted sigil otherwise.
+                Sprite kitIcon = UiKit.AspectBadge(other.ToString());
+                Image icon = UIBuilder.Img("A" + i, _aspectRow, kitIcon != null ? kitIcon : TextureLab.Sigil(AspectSigil(other), 128),
+                                           kitIcon != null ? Color.white : accent);
+                UIBuilder.Box(icon.rectTransform, x, 12f, kitIcon != null ? 34f : 30f, kitIcon != null ? 34f : 30f, new Vector2(0.5f, 0.5f));
 
                 float multiplier = AspectChart.Multiplier(def.Aspect, other);
                 int pips = multiplier > 1.001f ? 3 : (multiplier < 0.999f ? 1 : 2);
