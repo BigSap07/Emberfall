@@ -1,0 +1,64 @@
+# kind|def id|sheet drawn facing|confidence|note
+# What the delivered sheets show, read from every clip of every sheet (R15 stage audit). R means the unit in the art faces the
+# viewer's right as drawn. The renderer shows a sheet AS DRAWN when UnitRig.SpriteFlipped is true and MIRRORED when false, so a
+# hero line needs raw R with spriteMirror true, and the enemy line needs raw L with spriteMirror false (the same flag serves both
+# sides). "undecided" rows are left to the roster sheet capture (Screen:RosterSheet) and are not flipped.
+# Read by Tools/DevHarness/StageChecks.cs.
+hero|hale_the_relentless_hunter|R|medium|symmetric canvas margins, read from the attack poses
+hero|kael_the_unyielding|R|medium|symmetric canvas margins, read from the attack poses
+hero|kiva_the_forsaken_oath|R|medium|symmetric canvas margins, read from the attack poses
+hero|marrow_the_irrevocable_vow|R|medium|symmetric canvas margins, read from the attack poses
+hero|seraphine_the_closed_volume|R|medium|symmetric canvas margins, read from the attack poses
+hero|nereia_the_field_medic|R|high|attack effects and weapons point right in every clip
+hero|rheia_the_revision_scribe|?|undecided|near front-facing, no skill clip
+hero|rovan_the_adaptive_commander|R|high|attack effects and weapons point right in every clip
+hero|talren_the_wayfinder|R|high|attack effects and weapons point right in every clip
+hero|vaelis_the_unfixed_blade|R|high|attack effects and weapons point right in every clip
+hero|celen_the_open_hand|R|high|attack effects and weapons point right in every clip
+hero|brenna_the_remaining_wall|?|undecided|mace and skill arc on the left, ambiguous
+hero|edrin_the_distant_bell|R|high|attack effects and weapons point right in every clip
+hero|elyra_the_patient_warden|R|high|attack effects and weapons point right in every clip
+hero|isara_the_second_chance|R|high|attack effects and weapons point right in every clip
+hero|sylven_the_unfading_blade|?|undecided|attack clips read left, idle reads right; one flip cannot fix both
+hero|aeron_the_unbroken_stride|R|high|attack effects and weapons point right in every clip
+hero|dahlia_the_wayward_hymn|R|high|attack effects and weapons point right in every clip
+hero|merek_the_sequence_thief|R|high|attack effects and weapons point right in every clip
+hero|oris_the_unwritten_path|R|high|attack effects and weapons point right in every clip
+hero|zella_the_slow_argument|R|high|attack effects and weapons point right in every clip
+hero|cyrra_the_burden_bearer|R|high|attack effects and weapons point right in every clip
+hero|darian_the_hidden_bulwark|R|high|attack effects and weapons point right in every clip
+hero|mireth_the_erased_name|R|high|attack effects and weapons point right in every clip
+hero|nysera_the_missing_arrow|R|high|attack effects and weapons point right in every clip
+hero|velis_the_hollow_vow|R|high|attack effects and weapons point right in every clip
+hero|altheon_the_first_witness|R|high|attack effects and weapons point right in every clip
+hero|aminah_the_true_measure|R|high|attack effects and weapons point right in every clip
+hero|arden_the_precise_measure|R|high|attack effects and weapons point right in every clip
+hero|caldus_the_appointed_guard|R|high|attack effects and weapons point right in every clip
+hero|isolde_the_slow_fading|R|high|attack effects and weapons point right in every clip
+enemy|forest_boar|L|high|weapons, effects and head point left in every clip
+enemy|forest_spider|L|high|weapons, effects and head point left in every clip
+enemy|goblin_slinger|L|high|weapons, effects and head point left in every clip
+enemy|grey_wolf|L|high|weapons, effects and head point left in every clip
+enemy|highway_thief|L|high|weapons, effects and head point left in every clip
+enemy|hollowed_guard|L|high|weapons, effects and head point left in every clip
+enemy|hollowed_hunter|L|high|weapons, effects and head point left in every clip
+enemy|hollowed_mage|L|high|weapons, effects and head point left in every clip
+enemy|outlaw_archer|L|high|weapons, effects and head point left in every clip
+enemy|road_goblin|L|high|weapons, effects and head point left in every clip
+enemy|the_forsaken|L|high|weapons, effects and head point left in every clip
+enemy|the_collector|L|high|weapons, effects and head point left in every clip
+enemy|dire_wolf|L|high|weapons, effects and head point left in every clip
+enemy|thornback_boar|L|high|weapons, effects and head point left in every clip
+enemy|goblin_scavenger|L|high|weapons, effects and head point left in every clip
+enemy|goblin_trapper|L|high|weapons, effects and head point left in every clip
+enemy|road_marauder|L|high|weapons, effects and head point left in every clip
+enemy|marauder_crossbowman|L|high|weapons, effects and head point left in every clip
+enemy|bog_crawler|L|high|weapons, effects and head point left in every clip
+enemy|carrion_vulture|L|high|weapons, effects and head point left in every clip
+enemy|drifting_pilgrim|L|high|weapons, effects and head point left in every clip
+enemy|hollowed_woodsman|L|high|weapons, effects and head point left in every clip
+enemy|hollowed_apothecary|L|high|weapons, effects and head point left in every clip
+enemy|hollowed_sentinel|L|high|weapons, effects and head point left in every clip
+enemy|the_waykeeper|L|high|weapons, effects and head point left in every clip
+enemy|the_shepherd|L|high|weapons, effects and head point left in every clip
+mannequin|placeholder_dummy|R|high|eye dot on the right of the head

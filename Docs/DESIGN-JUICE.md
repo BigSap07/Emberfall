@@ -77,3 +77,37 @@ flag on or off.
   that line.
 - Sprite units have no shader dissolve; they fade with a sink.
 - The optional freeze of a flipbook during the hit stop was not built.
+
+## v2: the feel pass (R15, 2026-10-19)
+
+The owner watched the R12 and R14 showcases and found the fights sloppy at 1x: a white-out on every
+hit, thin streaks and geometric rings over painted sprites, small units, placeholder figures and heroes
+facing the wrong way. v2 is the answer, still presentation only. **`"feelPreset"` at the top of
+`vfx.json` is the one switch**: `"v2"` is shipped, `"v1"` plays the R12 battle on this page exactly,
+and a missing key reads v1. `EMBERFALL_FEEL=v1` or `v2` overrides it for one editor or development
+launch, and `.v1` or `.v2` on a `Screen:BattleMoment` or `Screen:RosterSheet` target forces it for one
+shot. v2 needs `juice.enabled`: with juice off the battle is the pre-R12 one. `Feel.V2` is what the code
+asks, and `FeelProfile` reads the `v2` block of `vfx.json` (`FeelProfile.V1` holds the R12 values).
+Who a unit looks like (stand-ins, flips, a per-unit scale) lives in
+`Assets/Resources/Content/stage-v2.json`; neither file is hashed. The formation, camera, unit scale
+and melee step are constants in `BattleFraming`. In v2 the hit
+flash is a tint (0.35 toward white, 0.55 on a crit) that falls in 0.06 s on real time, so hit stop never
+holds it. Each event class has one look and its own cue: a basic hit is a small solid puff at the strike
+point with no ring or streak; a crit is the same puff about 1.8 times bigger with a soft glow; a skill
+hit is the `burst_puff` sheet in the caster's aspect, larger and slower, with the dim and a soft glow
+where the ring was; a heal is round green dots rising from the chest and a green number; a buff is an
+upward pulse with an up arrow chip just above the head; a debuff is a downward pulse, a down arrow chip
+and a short dark tint on the body; a shield is a shell flash around the body; a death is unchanged. The
+passive trigger ring became a soft gold glow, and a status spread plays the buff or debuff look on the
+unit it reaches. At most 2 effects live per unit and 14 in all.
+Damage numbers are 1.25 times larger. A basic hit plays one sound with no layer, buff and debuff sound
+once per action, and at most 6 effect voices play at once. Units are drawn 1.2 times larger on a
+re-solved formation (about 1.18 times on screen at 1920x1080 and 2400x1080, with no overlap of bodies,
+bars or names; a narrower screen zooms out), and the melee step shrinks so the contact gap stays R12's.
+Chapter 1's two placeholders borrow finished art (Lost Villager draws Drifting Pilgrim, Wild Bear draws
+Thornback Boar) with ids, stats and fights unchanged; enemy mannequins face the heroes; six heroes whose
+art faced the wrong way are flipped, and four (Sylven, Brenna, Marrow, Oris) get a flip on the clips
+whose art is drawn the other way. New players already start at 1x (`Emberfall.Battle.Speed` defaults
+to 1). Proof: `FeelChecks.cs` (FE checks) and `StageChecks.cs` (S checks), the capture targets
+`Screen:BattleMoment` (kinds hit, crit, skill, heal, buff, debuff, shield, death, with `.v1` or
+`.v2`) and `Screen:RosterSheet`, both described in `Docs/CAPTURE.md`.

@@ -57,14 +57,13 @@ namespace Emberfall.Battle
             // Orthographic at 28 degrees of pitch. Every number and the derivation behind it is in
             // BattleFraming, next to the slots it was solved against.
             Camera.orthographic = true;
-            Camera.orthographicSize = BattleFraming.OrthographicSize;
+            Camera.orthographicSize = BattleFraming.OrthographicSizeFor(false, 0f);
             Camera.nearClipPlane = 0.3f;
             Camera.farClipPlane = 120f;
             Camera.depth = -10f;
             _cameraRig = cameraObject.transform;
-            _cameraHome = new Vector3(BattleFraming.CameraX, BattleFraming.CameraY, BattleFraming.CameraZ);
-            _cameraRig.localPosition = _cameraHome;
             _cameraRig.localRotation = Quaternion.Euler(BattleFraming.CameraPitch, 0f, 0f);
+            ApplyFraming();
 
             GameObject vfxHost = new GameObject("Vfx");
             vfxHost.transform.SetParent(transform, false);
@@ -75,6 +74,22 @@ namespace Emberfall.Battle
             directorHost.transform.SetParent(transform, false);
             Director = directorHost.AddComponent<VfxDirector>();
             Director.Attach(this);
+        }
+
+        /// <summary>
+        /// Which preset the camera and the slots were last set for. R15: the v2 look (StageFeel) has
+        /// larger units on a re-solved formation, so its camera is a little higher and its
+        /// orthographic size is its own (BattleFraming.OrthographicSizeFor, which also widens it for a
+        /// narrow viewport). v1 is the camera this class always built.
+        /// </summary>
+        private bool _framingV2;
+
+        private void ApplyFraming()
+        {
+            _framingV2 = StageFeel.V2;
+            Camera.orthographicSize = BattleFraming.OrthographicSizeFor(_framingV2, Camera.aspect);
+            _cameraHome = new Vector3(BattleFraming.CameraX, BattleFraming.CameraYFor(_framingV2), BattleFraming.CameraZ);
+            _cameraRig.localPosition = _cameraHome;
         }
 
         // ------------------------------------------------------------------ world
@@ -169,6 +184,9 @@ namespace Emberfall.Battle
             // its frame is wider than 16:9 (12.98 / 7.30 becomes about 1.96 at 1920x1080 under a
             // 100-unit bar) and WIDTH is the exact fit there, with the painting cropped top and
             // bottom. Same rule, different frame; nothing here changed for it.
+            // v2 only: the viewport's shape sets the frame (a narrow one zooms out so the wider
+            // formation is not cut off). v1 keeps the size it was built with.
+            if (_framingV2) Camera.orthographicSize = BattleFraming.OrthographicSizeFor(true, Camera.aspect);
             float frameH = Camera.orthographicSize * 2f;
             float frameW = frameH * Camera.aspect;
             const float ShakeMargin = 0.30f;
@@ -211,10 +229,13 @@ namespace Emberfall.Battle
         public void Populate(BattleResult result)
         {
             ClearActors();
+            // The preset can change between two fights of one session (a capture target forces it), so
+            // it is read again here and the camera, which was set for the last one, follows.
+            if (StageFeel.V2 != _framingV2) { ApplyFraming(); FitBackdrop(); }
             for (int i = 0; i < result.Units.Count; i++)
             {
                 UnitSnapshot snapshot = result.Units[i];
-                BattleFraming.SlotPoint slot = BattleFraming.Slot(snapshot.IsPlayer, snapshot.Slot);
+                BattleFraming.SlotPoint slot = BattleFraming.Slot(snapshot.IsPlayer, snapshot.Slot, _framingV2);
 
                 GameObject host = new GameObject((snapshot.IsPlayer ? "Ally_" : "Enemy_") + snapshot.Name);
                 host.transform.SetParent(_world, false);

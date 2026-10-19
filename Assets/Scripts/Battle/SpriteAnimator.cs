@@ -100,6 +100,9 @@ namespace Emberfall.Battle
         private Transform _quad;
         private float _canvasHeight;
 
+        private HashSet<string> _clipFlip;
+        private bool _baseNegative;
+
         private SpriteAnimClip _current;
         private string _currentId;
         private float _frameTime;
@@ -209,8 +212,32 @@ namespace Emberfall.Battle
             _material = material;
             _quad = quad;
             _canvasHeight = canvasHeight;
+            _baseNegative = quad.localScale.x < 0f;
             ApplyFrame(0);
             ApplyFootPosition();
+            ApplyClipFlip();
+        }
+
+        /// <summary>
+        /// R15 v2: the clips of this unit that are drawn facing the other way from the rest of its
+        /// sheet. The unit's own facing (the sign UnitRig.BuildSprite gave the quad) is inverted
+        /// while one of them plays and restored when any other starts, so the sign is still written
+        /// in exactly two places and both live here and in BuildSprite. Null clears it.
+        /// </summary>
+        public void SetClipFlips(HashSet<string> clips)
+        {
+            _clipFlip = clips;
+            ApplyClipFlip();
+        }
+
+        private void ApplyClipFlip()
+        {
+            if (_quad == null) return;
+            bool invert = _clipFlip != null && _currentId != null && _clipFlip.Contains(_currentId);
+            Vector3 scale = _quad.localScale;
+            float width = Mathf.Abs(scale.x);
+            scale.x = (_baseNegative != invert) ? -width : width;
+            _quad.localScale = scale;
         }
 
         private SpriteAnimClip GetOrLoad(string clipId)
@@ -235,6 +262,7 @@ namespace Emberfall.Battle
             _returnToIdleOnFinish = false;
             ApplyFrame(0);
             ApplyFootPosition();
+            ApplyClipFlip();
         }
 
         /// <summary>
@@ -260,6 +288,7 @@ namespace Emberfall.Battle
             _returnToIdleOnFinish = !holdOnFinish;
             ApplyFrame(0);
             ApplyFootPosition();
+            ApplyClipFlip();
         }
 
         public void Update(float deltaTime)

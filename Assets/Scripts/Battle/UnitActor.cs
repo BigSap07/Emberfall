@@ -50,6 +50,10 @@ namespace Emberfall.Battle
         private float _knockScale = 1f;
         private float _knockWorld;
         private float _flash;
+        /// <summary>R15 v2: true while _flash is a hit's tint falling at _flashRate on the play
+        /// clock, ahead of the hit-stop test. False is the R12 flash, held by hit stop.</summary>
+        private bool _flashFree;
+        private float _flashRate;
         private float _bobSpeed = 1.6f;
         private float _bobHeight = 0.09f;
         private Coroutine _motion;
@@ -80,8 +84,12 @@ namespace Emberfall.Battle
             // wears instead of a face, and what a broken sprite is reported under; the aspect
             // is what tints the mannequin. Both come off the snapshot the simulation already
             // produced, so no screen has to look a unit up a second time to draw it.
-            Rig = UnitRig.Build("Rig", transform, snapshot.Visual, facingForward,
+            // StageFeel.Resolve is the snapshot's own VisualDef, the same object, unless the v2 look
+            // is on: then a stand-in's art, a corrected facing and the larger scale (StagePresentation).
+            Rig = UnitRig.Build("Rig", transform, StageFeel.Resolve(snapshot), facingForward,
                                 snapshot.Name, snapshot.Aspect);
+            // v2: clips whose art faces the other way from the rest of the sheet (null in v1).
+            if (Rig.Animation != null) Rig.Animation.SetClipFlips(StageFeel.ClipFlips(snapshot.DefId));
 
             _idlePhase = (snapshot.Id * 0.73f) % 6.28f;
             _bobSpeed = snapshot.IsBoss ? 1.1f : 1.5f + (snapshot.Id % 3) * 0.16f;
@@ -96,6 +104,18 @@ namespace Emberfall.Battle
             // the flash decay all wait, so the flash holds at its peak for the duration. Counted in
             // unscaled time so it is a real-time pause whatever the game clock is doing, and the
             // motion coroutines below wait on the same counter.
+            // R15 v2: a hit's flash is a short tint on the real-time clock. It falls before the freeze
+            // test, so hit stop can hold the motion but never the flash past its seconds.
+            if (_flashFree && _flash > 0f)
+            {
+                // Real time, so slow motion cannot stretch it. A paused game (timeScale 0, which is
+                // how a capture freezes a frame) holds it.
+                float step = Time.timeScale > 0f ? Time.unscaledDeltaTime : 0f;
+                _flash = Mathf.Max(0f, _flash - step * _flashRate);
+                Rig.SetFlash(_flash);
+                if (_flash <= 0f) _flashFree = false;
+            }
+
             if (_hitStop > 0f)
             {
                 _hitStop -= Time.unscaledDeltaTime;
@@ -116,7 +136,7 @@ namespace Emberfall.Battle
                 Rig.Body.localRotation = Quaternion.Euler(0f, sway, Mathf.Sin(_idlePhase * 0.8f) * 3.0f);
             }
 
-            if (_flash > 0f)
+            if (_flash > 0f && !_flashFree)
             {
                 if (Juice.On) _flash = Mathf.Max(0f, _flash - Time.deltaTime * JuiceMath.FlashDecayRate(Juice.Profile));
                 else _flash = Mathf.Max(0f, _flash - Time.deltaTime * 5.5f);
@@ -207,6 +227,10 @@ namespace Emberfall.Battle
 
         private IEnumerator LungeRoutine(Vector3 towards, float outSeconds, float backSeconds, float speed, float distance)
         {
+            // v2: the front pairs stand 2.30 apart, not 2.80, and the units are 1.2x larger, so the
+            // R12 step of 0.85 would put the bodies inside each other at contact. The step is scaled
+            // to leave the gap R12 left in world units (2.80 - 0.85 = 1.95 = 2.30 - 0.34).
+            if (StageFeel.V2) distance *= BattleFraming.ApproachScaleV2;
             Vector3 home = Vector3.zero;
             Vector3 direction = towards - transform.position;
             direction.y = 0f;
@@ -270,6 +294,16 @@ namespace Emberfall.Battle
             if (!Alive) return;
             _flash = critical ? 1f : 0.75f;
             if (Juice.On) _flash = JuiceMath.FlashPeak(Juice.Profile, critical);
+            // R15 v2: a tint (about 35 percent, crit about 55) that lasts FlashSeconds and is not
+            // held by hit stop. The white-out above is what v1 plays.
+            if (Feel.V2)
+            {
+                FeelProfile fp = Feel.Profile;
+                _flash = FeelMath.FlashPeak(fp, critical);
+                _flashRate = FeelMath.FlashDecayRate(fp, critical);
+                _flashFree = true;
+            }
+            else _flashFree = false;
             if (Rig != null) Rig.SetFlash(_flash);
             // Priority, highest first: death, the unit's own action, the hit reaction. A blow
             // landing while this unit is still swinging or casting flashes it and nothing more.
@@ -289,7 +323,22 @@ namespace Emberfall.Battle
         {
             if (Rig == null || !Alive) return;
             Rig.SetFlashColor(color);
+            _flashFree = false;                  // R15: only a blow's flash runs on its own clock
             _flash = Mathf.Max(_flash, amount);
+            Rig.SetFlash(_flash);
+        }
+
+        /// <summary>
+        /// R15 v2: a tint toward a colour that lasts `seconds` on the real-time clock, held by no hit
+        /// stop: the debuff darkening of the body for a moment, the counterpart of a hit flash.
+        /// </summary>
+        public void TintFor(float amount, Color color, float seconds)
+        {
+            if (Rig == null || !Alive || amount <= 0f) return;
+            Rig.SetFlashColor(color);
+            _flash = Mathf.Max(_flash, amount);
+            _flashRate = _flash / Mathf.Max(0.01f, seconds);
+            _flashFree = true;
             Rig.SetFlash(_flash);
         }
 
@@ -370,6 +419,7 @@ namespace Emberfall.Battle
             if (Director != null) Director.NoteDeath(this);
             Alive = false;
             _acting = false;
+            _flashFree = false;                  // R15: the death flash is the R12 one, held by its hit stop
             if (_motion != null) StopCoroutine(_motion);
             _motion = null;
             if (Rig == null) yield break;

@@ -356,6 +356,8 @@ showed - and the enemy line is that same file mirrored. `spriteMirror` keeps the
 document gives it, "this file is authored facing the other way", and applies on both sides, so a
 hero carrying it still turns to face the opposing line wherever it stands.
 
+**Correction (R15 facing audit, read from every clip of every sheet).** The paragraph above describes what the rule was meant to do, not what the renderer shows. A sprite is a quad seen from behind (the rig turns it about 180 degrees), so `SpriteFlipped` true shows the sheet AS DRAWN and false shows it MIRRORED. Read that way: a hero sheet drawn facing right needs `spriteMirror: true` to face right on the player's line, and 24 of the 31 delivered hero sheets carry it. The other seven were delivered without it; six of them (Edrin, Oris, Zella, Nysera, Velis, Arden) face left on the player's line, and the R15 "v2" look inverts their mirror in `stage-v2.json` (`faceFlip`) rather than editing `heroes.json`. All 31 hero sheets and the placeholder mannequin are drawn facing right; all 26 enemy sheets are drawn facing left, with `spriteMirror` false, which is what puts them facing left on the enemy line. So "draw facing right" is still the instruction for a hero, and an enemy sheet is the exception to it: draw it facing left. `Tools/DevHarness/facing-audit.txt` records the reading, and `Screen:RosterSheet` (Docs/CAPTURE.md) photographs it.
+
 One consequence for art already delivered: the three enemy defs that carry sprites
 (`hollow_husk`, `grave_moth`, `sundered_colossus`) now render mirrored in campaign battles, which
 is what this section has always said would happen. If any of them was drawn pre-compensated, it

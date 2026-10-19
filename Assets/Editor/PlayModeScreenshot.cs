@@ -561,6 +561,7 @@ namespace Emberfall.EditorTools
             SessionState.SetString(MomentKey, moment);
             SessionState.SetInt(MomentStageKey, 0);
             Juice.ForceForCapture(null);
+            Feel.ForceForCapture(null);
             Time.captureFramerate = 0;
 
             if (!EditorScratchIdentity.Enter(ScratchProduct))
@@ -1325,6 +1326,7 @@ namespace Emberfall.EditorTools
             SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetInt(MomentStageKey, 0);
             Juice.ForceForCapture(null);
+            Feel.ForceForCapture(null);
             Time.captureFramerate = 0;
             SessionState.SetBool(ActiveKey, false);
             SessionState.SetBool(TelemetryService.PromptInEditorKey, false);
@@ -1647,6 +1649,16 @@ namespace Emberfall.EditorTools
                     case "AbilityNumbers": id = ScreenId.HeroDetail; break;
                 }
 
+                // THE ROSTER SHEET (R15): every unit of one side in one clip, built through the battle's own
+                // door, with no UI over it. Screen:RosterSheet=<side>[.<clip>][.v1|.v2]. It shows no screen,
+                // so nothing is routed; the generic shot below photographs it. See RosterSheetShots.
+                if (name == "RosterSheet")
+                {
+                    RosterSheetShots.Build(app, SessionState.GetString(BattleStageKey, ""));
+                    Debug.Log("PlayModeScreenshot: showing " + name);
+                    return;
+                }
+
                 // THE HUB'S THREE LAYERS ABOVE THE MAP are targets of their own, because none of
                 // them is a screen the router owns: a popup, a panel sheet and a menu are opened
                 // BY the Hub, over it, and a capture schedule that only ever calls Router.Show
@@ -1758,8 +1770,14 @@ namespace Emberfall.EditorTools
 
                 // A moment shot may ask for the Legacy profile (".off"), and that has to be in force
                 // before the fight is shown, because the profile is read as the fight plays.
+                // ".v1" and ".v2" do the same for the R15 feel preset, so one batch can shoot both
+                // looks of the same moment whatever vfx.json says.
                 if (name == "BattleMoment")
-                    Juice.ForceForCapture(SessionState.GetString(MomentKey, "").EndsWith(".off", StringComparison.Ordinal) ? (bool?)false : null);
+                {
+                    string momentSpec = SessionState.GetString(MomentKey, "");
+                    Juice.ForceForCapture(MomentHasToken(momentSpec, "off") ? (bool?)false : null);
+                    Feel.ForceForCapture(MomentHasToken(momentSpec, "v1") ? (bool?)false : (MomentHasToken(momentSpec, "v2") ? (bool?)true : null));
+                }
 
                 if (name == "Battle" || name == "Result" || name == "AudioFight" || name == "BattleMoment")
                 {
@@ -2694,7 +2712,17 @@ namespace Emberfall.EditorTools
 
         private const string ReplayStageKey = "PlayModeScreenshot.ReplayStage";
 
-        /// <summary>"kind[.aspect][.off]" to its parts. False for anything else.</summary>
+        /// <summary>True when a dotted moment spec carries a suffix token ("off", "v1", "v2") after
+        /// the kind. The first part is the kind and never a suffix.</summary>
+        private static bool MomentHasToken(string spec, string token)
+        {
+            string[] parts = spec.Split('.');
+            for (int i = 1; i < parts.Length; i++)
+                if (string.Equals(parts[i], token, StringComparison.OrdinalIgnoreCase)) return true;
+            return false;
+        }
+
+        /// <summary>"kind[.aspect][.off][.v1|.v2]" to its parts. False for anything else.</summary>
         private static bool ParseMoment(string spec, out MomentKind kind, out Aspect? aspect, out bool off)
         {
             kind = MomentKind.None;
@@ -2711,9 +2739,13 @@ namespace Emberfall.EditorTools
                     else if (p == "skill") kind = MomentKind.Skill;
                     else if (p == "heal") kind = MomentKind.Heal;
                     else if (p == "death") kind = MomentKind.Death;
+                    else if (p == "buff") kind = MomentKind.Buff;
+                    else if (p == "debuff") kind = MomentKind.Debuff;
+                    else if (p == "shield") kind = MomentKind.Shield;
                     else return false;
                 }
                 else if (p == "off") off = true;
+                else if (p == "v1" || p == "v2") { }     // the R15 feel preset, read by MomentHasToken
                 else
                 {
                     Aspect a;
@@ -2729,6 +2761,21 @@ namespace Emberfall.EditorTools
         /// the ring are at their strongest for a skill, the heal ring is out, a death is mid-sink.</summary>
         private static int MomentSettleFrames(MomentKind kind)
         {
+            // R15 v2: a hit flash is a 0.06 s tint and a basic puff lasts 0.14 s, so those shots are
+            // taken early; the skill burst and the buff, debuff and shield looks are shot near their peak.
+            if (Feel.V2)
+            {
+                switch (kind)
+                {
+                    case MomentKind.Hit: return 1;
+                    case MomentKind.Crit: return 1;
+                    case MomentKind.Skill: return 8;
+                    case MomentKind.Heal: return 8;
+                    case MomentKind.Buff: return 12;
+                    case MomentKind.Debuff: return 12;
+                    case MomentKind.Shield: return 5;
+                }
+            }
             switch (kind)
             {
                 case MomentKind.Skill: return 4;
@@ -2755,7 +2802,7 @@ namespace Emberfall.EditorTools
             bool off;
             if (!ParseMoment(spec, out kind, out aspect, out off))
             {
-                Debug.LogError("PlayModeScreenshot: [FAIL] " + requested + ": '" + spec + "' is not kind[.aspect][.off] with kind hit, crit, skill, heal or death. Not shooting.");
+                Debug.LogError("PlayModeScreenshot: [FAIL] " + requested + ": '" + spec + "' is not kind[.aspect][.off][.v1|.v2] with kind hit, crit, skill, heal, buff, debuff, shield or death. Not shooting.");
                 SkipMoment(slot);
                 return;
             }
@@ -2777,7 +2824,7 @@ namespace Emberfall.EditorTools
                     }
                     battle.ArmMomentCapture(kind, aspect);
                     Debug.Log("BattleMoment: line aspects " + battle.DescribeLineForCapture() + "; waiting for " + kind
-                              + (aspect != null ? " by " + aspect.Value : "") + (off ? " with the pre-R12 profile" : "") + ".");
+                              + (aspect != null ? " by " + aspect.Value : "") + (off ? " with the pre-R12 profile" : "") + ", Feel.V2 " + Feel.V2 + ".");
                     // Frames mean game time from here to the shot, whatever the editor's speed.
                     Time.captureFramerate = 60;
                     SessionState.SetInt(MomentFrameKey, Time.frameCount);
@@ -2843,10 +2890,11 @@ namespace Emberfall.EditorTools
             {
                 Color backdrop = app.Router.Battle != null ? app.Router.Battle.BackdropColorForCapture : Color.white;
                 Debug.Log("BattleMoment: shot taken, backdrop _Color (" + backdrop.r.ToString("0.00") + ", " + backdrop.g.ToString("0.00") + ", " + backdrop.b.ToString("0.00")
-                          + ") (1.00 is undimmed, 0.70 is the full skill dim), Juice.On " + Juice.On + ".");
+                          + ") (1.00 is undimmed, 0.70 is the full skill dim), Juice.On " + Juice.On + ", Feel.V2 " + Feel.V2 + ".");
                 Shoot(name, frame, slot);
                 SessionState.SetInt(MomentStageKey, 0);
                 Juice.ForceForCapture(null);
+                Feel.ForceForCapture(null);
                 Time.captureFramerate = 0;
                 Time.timeScale = 1f;
             }
@@ -2858,6 +2906,7 @@ namespace Emberfall.EditorTools
             SessionState.SetInt(MomentStageKey, 0);
             SessionState.SetInt(BattleArmKey, 0);
             Juice.ForceForCapture(null);
+            Feel.ForceForCapture(null);
             Time.captureFramerate = 0;
             Time.timeScale = 1f;
             SessionState.SetInt(StageKey, slot + 1);

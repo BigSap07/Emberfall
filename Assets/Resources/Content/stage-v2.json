@@ -1,0 +1,68 @@
+{
+  // R15 "v2" presentation: who a unit looks like. NOT part of ContentVersion: ContentDatabase never
+  // reads this file (StagePresentation does, through StageFeel), so editing it retires no recorded
+  // replay and moves no fingerprint. heroes.json and enemies.json are never edited for any of it.
+  // Everything here applies only while the feel preset is "v2"; "v1" draws what R12 drew.
+  //
+  // standIns: a unit with no art yet (spriteStatus "pending") draws a finished enemy's art instead,
+  // as that enemy looks. Unit id, stats and fights are unchanged. Remove a line the day the unit's own
+  // sheet is delivered. Only chapter 1 and 2 placeholders are mapped; chapter 3 to 6 stay mannequins
+  // (listed for Pinoy in D:\Emberfall\handoff\R15-FEEL-CLEANUP\PINOY-PLACEHOLDERS.md).
+  //   lost_villager -> drifting_pilgrim: humanoid, unarmed commoner shape, the same "keep walking,
+  //     rally the others" ability shape. The Pilgrim first appears in 2-7, the Villager only in 1-4,
+  //     1-6, 1-8, 1-10 and 1-11, so they never share a fight.
+  //   wild_bear -> thornback_boar: the biggest finished clawed quadruped. The Boar first appears in
+  //     2-1, the Bear only in 1-7, 1-8, 1-9, 1-11 and 1-12, so they never share a fight.
+  "standIns": {
+    "lost_villager": "drifting_pilgrim",
+    "wild_bear": "thornback_boar"
+  },
+
+  // faceFlip: heroes whose sheet is drawn facing right but whose spriteMirror is false, so the
+  // ally line shows them mirrored, facing left (the sprite renders as drawn when the flip is true
+  // and mirrored when it is false). v2 inverts their spriteMirror. Found by reading every clip of
+  // every sheet; the roster sheet capture (Screen:RosterSheet=allies) is the proof. Not listed on
+  // purpose, because the art reads both ways and one flip cannot fix it: sylven_the_unfading_blade,
+  // brenna_the_remaining_wall, rheia_the_revision_scribe.
+  "faceFlip": [
+    "edrin_the_distant_bell",
+    "oris_the_unwritten_path",
+    "zella_the_slow_argument",
+    "nysera_the_missing_arrow",
+    "velis_the_hollow_vow",
+    "arden_the_precise_measure"
+  ],
+
+  // clipFlip: a sheet that is drawn facing right in one clip and left in another cannot be fixed by one
+  // flip, so these clips of these units are inverted on top of the unit's own mirror (faceFlip and
+  // spriteMirror) while they play. Found in the first roster sheets (shotsoster1) and checked against
+  // the art: sylven and brenna attack to the left in basic and skill (brenna basic2 too, the mace stays
+  // on the left), marrow's skill swings the hammer to the left, and oris is already flipped as a whole
+  // by faceFlip but her basic holds the instrument pointing the other way, so that one clip is un-flipped.
+  // Each is also listed for Pinoy in PINOY-PLACEHOLDERS.md as art that faces the wrong way in that clip.
+  "clipFlip": {
+    "sylven_the_unfading_blade": [ "basic", "skill" ],
+    "brenna_the_remaining_wall": [ "basic", "basic2", "skill" ],
+    "marrow_the_irrevocable_vow": [ "skill" ],
+    "oris_the_unwritten_path": [ "basic" ]
+  },
+
+  // scaleMul: a unit's own factor on top of the v2 scale (1.2). The Carrion Vulture's wings span 2.7
+  // world units at 1.2x, wider than any slot of the v2 formation clears, so it is drawn at 0.8 of that
+  // (0.96 of its R12 size, so the bird is 4 percent bigger than before and not 20). Shrinking one bird is
+  // cheaper than widening five slots for it, and the harness (StageChecks) proves no two bodies overlap with it at 0.8.
+  "scaleMul": {
+    "carrion_vulture": 0.8
+  },
+
+  // mannequinScale: an undrawn unit with no stand-in is drawn at 0.7 of the v2 scale, 0.84 of its R12
+  // size, so a placeholder is smaller than R12 drew it. At the full 1.2 a golem-shaped boss mannequin
+  // (scale 1.2) was 2.7 tall in chapter 4 and its legs covered its own name plate; at 0.8 the tallest
+  // one in the lower middle slot still put its feet a few pixels into its name.
+  "mannequinScale": 0.7,
+
+  // The mannequin is drawn facing right with its eye on the right, and an enemy normally shows a
+  // sheet as drawn, so every placeholder enemy faced away from the heroes. true mirrors the
+  // mannequin on both sides so it faces its opponent.
+  "mannequinFacesOpponent": true
+}
