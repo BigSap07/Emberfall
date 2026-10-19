@@ -51,6 +51,7 @@ namespace Emberfall.DevHarness
                 CheckOfferNotHashed(db, contentDir);
                 CheckOfferSave(db);
                 CheckOfferOff(db);
+                CheckOfferWiring(contentDir);
                 CheckOfferValueReport(db);
             }
             finally
@@ -778,6 +779,60 @@ namespace Emberfall.DevHarness
             {
                 StoreSwitch.Enabled = was;
             }
+        }
+
+        // ------------------------------------------------------------------ 15b. the wiring
+
+        private static string OfferSource(string root, string relative)
+        {
+            string path = Path.Combine(root, relative.Replace('/', Path.DirectorySeparatorChar));
+            return File.Exists(path) ? File.ReadAllText(path) : "";
+        }
+
+        private static void CheckOfferWiring(string contentDir)
+        {
+            string root = SealedRepoRoot(contentDir);
+            if (root == null) { Check(false, "THE STORE: the repository root was not found from " + contentDir); return; }
+            string router = OfferSource(root, "Assets/Scripts/UI/ScreenRouter.cs");
+            string hub = OfferSource(root, "Assets/Scripts/UI/Screens/MainMenuScreen.cs");
+            string screen = OfferSource(root, "Assets/Scripts/UI/Screens/StoreScreen.cs");
+            string session = OfferSource(root, "Assets/Scripts/Core/Session/GameSession.cs");
+            string shots = OfferSource(root, "Assets/Editor/PlayModeScreenshot.cs");
+
+            Check(router.Contains("if (Emberfall.Core.Session.StoreSwitch.Enabled) Store = Create<Screens.StoreScreen>();"),
+                  "THE STORE SCREEN IS BUILT ONLY INSIDE THE SWITCH: the router has no Store screen when StoreSwitch is off");
+            int doorGuard = hub.IndexOf("if (StoreSwitch.Enabled)", StringComparison.Ordinal);
+            int doorButton = hub.IndexOf("HudWidgets.RailButton(\"Store\"", StringComparison.Ordinal);
+            Check(doorGuard >= 0 && doorButton > doorGuard && hub.IndexOf("OpenStore", StringComparison.Ordinal) > 0,
+                  "and the Hub's Store door is drawn only inside the same switch, so a build with it off has no door");
+
+            string[] banned = { "SealedGrants", "PurchaseGrants.Apply", "StoreOffers.Fulfil", "StoreOffers.Record", "Random", ".Summon(" };
+            List<string> hits = new List<string>();
+            for (int i = 0; i < banned.Length; i++) if (screen.Contains(banned[i])) hits.Add(banned[i]);
+            Check(screen.Length > 0 && hits.Count == 0 && screen.Contains("_service.Flow.Buy(") && screen.Contains("StoreOffers.View("),
+                  "THE SCREEN DECIDES NOTHING AND GRANTS NOTHING: it reads StoreOffers.View and buys only through the purchase flow (Flow.Buy), and names no grant, no record and no random call" + (hits.Count > 0 ? " (" + string.Join(", ", hits.ToArray()) + ")" : ""));
+
+            List<string> callers = new List<string>();
+            string[] files = Directory.GetFiles(Path.Combine(root, "Assets"), "*.cs", SearchOption.AllDirectories);
+            for (int i = 0; i < files.Length; i++)
+            {
+                string name = Path.GetFileName(files[i]);
+                if (name == "StoreOffers.cs") continue;
+                if (File.ReadAllText(files[i]).Contains("StoreOffers.Fulfil(")) callers.Add(name);
+            }
+            Check(callers.Count == 0, "NOTHING UNDER ASSETS CALLS THE HARNESS'S DIRECT FULFILMENT (StoreOffers.Fulfil is internal to Core): a purchase is only ever the purchase flow's" + (callers.Count > 0 ? " (" + string.Join(", ", callers.ToArray()) + ")" : ""));
+
+            Check(session.Contains("StoreOffers.OnIdleClaim(this, report, nowUnix);"), "the Ember Ledger's idle share is paid from the one idle claim, GameSession.ClaimIdle, and nowhere else");
+
+            string[] targets = { "Screen:StorePass", "Screen:StorePassPremium", "Screen:StorePacks", "Screen:StorePacksPicker", "Screen:StorePacksLedger", "Screen:StorePacksGrowth",
+                                 "Screen:StorePurchase", "Screen:StoreComingSoon", "Screen:StoreShops", "Screen:HubStore" };
+            List<string> missing = new List<string>();
+            for (int i = 0; i < targets.Length; i++) if (!shots.Contains("Begin(\"" + targets[i] + "\")")) missing.Add(targets[i]);
+            Check(missing.Count == 0 && shots.Contains("refusing to seed the Store on a real identity"),
+                  "every Store capture target exists and seeds the scratch identity only" + (missing.Count > 0 ? " (missing " + string.Join(", ", missing.ToArray()) + ")" : ""));
+
+            // The sinks are on, so the Shops tab links real screens.
+            Check(SinksSwitch.Enabled, "THE R9 SINKS ARE ON BY DEFAULT, so the Shops tab links the Armory and the Archive (EMBERFALL_SINKS_OFF rolls them back)");
         }
 
         // ------------------------------------------------------------------ 16. the value report

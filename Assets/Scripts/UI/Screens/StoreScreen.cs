@@ -120,6 +120,7 @@ namespace Emberfall.UI.Screens
             _tab = tab;
             _page = 0;
             _picking = false;
+            Rebuild();
         }
 
         /// <summary>CAPTURE ONLY: selects an offer on the Packs tab, as a tap on its row does.</summary>
@@ -201,14 +202,31 @@ namespace Emberfall.UI.Screens
 
         // ------------------------------------------------------------------ the frame
 
+#if UNITY_EDITOR
+        /// <summary>CAPTURE ONLY: draws the release build's look (every offer COMING SOON, no buy button) in the editor.</summary>
+        public static bool CaptureComingSoon;
+#endif
+
         private StoreMode Mode
         {
-            get { return _service != null ? _service.Mode : StoreMode.ComingSoon; }
+            get
+            {
+#if UNITY_EDITOR
+                if (CaptureComingSoon) return StoreMode.ComingSoon;
+#endif
+                return _service != null ? _service.Mode : StoreMode.ComingSoon;
+            }
         }
 
         private bool CanBuy
         {
-            get { return _service != null && _service.Flow != null && _service.Flow.CanBuy; }
+            get
+            {
+#if UNITY_EDITOR
+                if (CaptureComingSoon) return false;
+#endif
+                return _service != null && _service.Flow != null && _service.Flow.CanBuy;
+            }
         }
 
         private void Rebuild()
