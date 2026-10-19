@@ -1284,6 +1284,17 @@ namespace Emberfall.UI.Screens
                            true, ResumeAfterCard);
         }
 
+#if UNITY_EDITOR
+        /// <summary>Opens the unit card on the first player unit, for the capture tool. Editor
+        /// only, for the reason HeroDetailScreen.OpenAbilityForCapture is.</summary>
+        public void OpenUnitCardForCapture()
+        {
+            if (_result == null) return;
+            for (int i = 0; i < _result.Units.Count; i++)
+                if (_result.Units[i].IsPlayer) { OpenUnitCard(_result.Units[i].Id); return; }
+        }
+#endif
+
         private static AbilityCardSheet.Entry CardEntry(string kind, Color tint, AbilityDef ability, PassiveDef passive)
         {
             AbilityCardSheet.Entry entry = new AbilityCardSheet.Entry();
