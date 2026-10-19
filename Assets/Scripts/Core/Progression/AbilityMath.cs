@@ -71,6 +71,14 @@ namespace Emberfall.Core.Progression
 
         /// <summary>True when one firing lands this on more than one body.</summary>
         public bool Area;
+
+        /// <summary>
+        /// The most this damage effect can deal in one firing (Hits times the capped amount, Skill
+        /// Damage and Holy Damage applied as the simulation applies them), or 0 when the effect has no
+        /// Attack cap. It is what a card prints as "up to N" for an effect priced off the target's
+        /// health, whose own figure the card cannot know. CheckAbilityCapsMatchTheSimulation proves it.
+        /// </summary>
+        public int CapAmount;
     }
 
     /// <summary>
@@ -227,6 +235,22 @@ namespace Emberfall.Core.Progression
                 v.PerHit = Round(raw);
                 float floor = cfg != null ? cfg.MinDamage : 1f;
                 if (v.PerHit < floor) v.PerHit = (int)floor;
+
+                // The ceiling the Attack cap puts on one firing, run through the same two steps after it.
+                if (effect.AttackCap > 0f)
+                {
+                    float ceiling = attack * effect.AttackCap;
+                    if (abilityKind != AbilityKind.BasicAttack)
+                    {
+                        float capSkill = stats.SkillDamage;
+                        if (capSkill < -0.9f) capSkill = -0.9f;
+                        if (capSkill != 0f) ceiling *= 1f + capSkill;
+                    }
+                    ceiling += stats.HolyDamage;
+                    int perHitCap = Round(ceiling);
+                    if (perHitCap < floor) perHitCap = (int)floor;
+                    v.CapAmount = perHitCap * v.Hits;
+                }
             }
             else
             {

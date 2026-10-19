@@ -38,8 +38,10 @@ namespace Emberfall.UI
         }
 
         private const float SheetWidth = 900f;
-        private const float SheetHeight = 760f;
+        private const float SheetHeight = 860f;
         private const float RowHeight = 48f;
+        private const float TallRowHeight = 84f;
+        private const int WrapAfter = 44;
         private const float HeaderHeight = 44f;
         private const float FactLabelShare = 0.22f;
         private const float NumberFigureShare = 0.4f;
@@ -134,6 +136,13 @@ namespace Emberfall.UI
                 List<AbilityValue> values = AbilityMath.Values(entry.Ability, stats, balance);
                 if (values.Count == 0 && facts.Count == 0 && prose.Length == 0)
                     AddRow("", Emberforge.TextQuiet, AbilityText.NoNumbers, Emberforge.TextQuiet, NumberFigureShare);
+
+                // Rows that say exactly the same thing (four equal hits of one effect list) are one row
+                // with a count, so a kit that repeats itself does not push the rest off the card.
+                List<string> lefts = new List<string>(), rights = new List<string>();
+                List<Color> tints = new List<Color>();
+                List<int> counts = new List<int>();
+                List<AbilityValueKind> kinds = new List<AbilityValueKind>();
                 for (int i = 0; i < values.Count; i++)
                 {
                     AbilityValue v = values[i];
@@ -142,12 +151,19 @@ namespace Emberfall.UI
                     string riders = AbilityText.Riders(v);
                     if (riders.Length > 0)
                         secondary = secondary.Length > 0 ? secondary + ", " + riders : riders;
-                    // An effect with no caster-side term of its own has no figure to lead with - its
-                    // whole payout is a share of somebody else's health - so the workings ARE its line
-                    // rather than a footnote under one.
-                    AddRow(v.HasFlat ? AbilityText.Headline(v) : AbilityText.Word(v.Kind), AbilityText.Tint(v.Kind),
-                           secondary, Emberforge.TextQuiet, NumberFigureShare);
+                    // An effect with no caster-side term of its own has no figure to lead with: its whole
+                    // payout is a share of somebody else's health, so the card leads with the most it can
+                    // deal and the workings are its line.
+                    string left = AbilityText.Figure(v, false);
+                    int found = -1;
+                    for (int k = 0; k < lefts.Count; k++)
+                        if (lefts[k] == left && rights[k] == secondary && kinds[k] == v.Kind) { found = k; break; }
+                    if (found >= 0) { counts[found]++; continue; }
+                    lefts.Add(left); rights.Add(secondary); tints.Add(AbilityText.Tint(v.Kind)); kinds.Add(v.Kind); counts.Add(1);
                 }
+                for (int k = 0; k < lefts.Count; k++)
+                    AddRow(counts[k] > 1 ? lefts[k] + "  x" + counts[k] : lefts[k], tints[k], rights[k],
+                           Emberforge.TextQuiet, NumberFigureShare);
             }
 
             _sheet.gameObject.SetActive(true);
@@ -214,7 +230,7 @@ namespace Emberfall.UI
         private void AddRow(string left, Color leftTint, string right, Color rightTint, float split)
         {
             RectTransform row = UIBuilder.Node("Row", _list);
-            UIBuilder.Sized(row, 0f, RowHeight);
+            UIBuilder.Sized(row, 0f, right.Length > WrapAfter && split >= 0.3f ? TallRowHeight : RowHeight);
             EmberforgeUI.SunkenOn(row);
 
             Text value = EmberforgeUI.Label("Value", row, left, UITheme.FontBody, leftTint,

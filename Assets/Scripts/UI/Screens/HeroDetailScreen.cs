@@ -766,7 +766,7 @@ namespace Emberfall.UI.Screens
             else if (values.Count > 0)
             {
                 EffectDef effect = ability.Effects[values[0].EffectIndex];
-                main = AbilityText.Word(values[0].Kind);
+                main = AbilityText.Figure(values[0], true);
                 secondary = AbilityText.Secondary(values[0], effect);
                 tint = AbilityText.Tint(values[0].Kind);
             }
@@ -793,6 +793,9 @@ namespace Emberfall.UI.Screens
                                             Emberforge.TextQuiet, TextAnchor.MiddleCenter);
             UIBuilder.Box(under.rectTransform, 0f, main.Length > 0 ? -42f : -30f,
                           cardWidth - 8f, 16f, new Vector2(0.5f, 0.5f));
+            // A card is about 150 wide and the authored-terms line of a health-priced effect is the longest
+            // thing on it: shrink to fit rather than print past the card's edge.
+            UIBuilder.BestFit(under, 8, UITheme.FontTiny - 8);
             UIBuilder.Outlined(under, Emberforge.Outline, Emberforge.StrokeThin);
         }
 

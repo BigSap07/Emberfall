@@ -1815,6 +1815,11 @@ namespace Emberfall.EditorTools
                             return;
                         }
                         FieldLine(app.Session, WaveLine);
+                        // A win on purpose: the first clear of a wall stage is what shows the chest, so the
+                        // fielded line is levelled to its cap (the starters at level 1 lost 1-6).
+                        List<HeroInstance> fielded = app.Session.Profile.TeamHeroes();
+                        for (int h = 0; h < fielded.Count; h++)
+                            fielded[h].Level = Math.Max(fielded[h].Level, app.Session.HeroLevelCapOf(fielded[h]));
                     }
                     string asked = SessionState.GetString(BattleStageKey, "");
                     StageDef next = asked.Length > 0 ? app.Session.Content.GetStage(asked) : app.Session.NextStage;
