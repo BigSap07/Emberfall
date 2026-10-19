@@ -63,12 +63,15 @@ def png_size(path):
     return struct.unpack(">II", head[16:24])
 
 
-def max_texture_size(w, h):
-    side = max(w, h)
-    for size in (256, 512, 1024, 2048, 4096):
-        if side <= size:
-            return size
-    return 4096
+def max_texture_size(key):
+    """The ceiling Tools/texture-import-policy.py states for the folder a key lives in. The files are already at
+    their shipping size, so a ceiling at or above it never resamples; stating the policy's number keeps the
+    policy script's --report at zero files to write."""
+    if key.startswith("store/"):
+        return 1024
+    if key.startswith("relics/"):
+        return 256
+    return 2048
 
 
 def read_template():
@@ -185,7 +188,7 @@ def main():
         border, ppu = border_and_ppu(base, (w, h), nine)
         out_png = os.path.join(DEST, key.replace("/", os.sep) + ".png")
         write(out_png, raw, binary=True)
-        write(out_png + ".meta", meta_for(template, guid_for(key + ".png"), max_texture_size(w, h), border, ppu))
+        write(out_png + ".meta", meta_for(template, guid_for(key + ".png"), max_texture_size(key), border, ppu))
         folders.add(os.path.dirname(key))
         written += 1
         report.append("%-40s %4dx%-4d border=%s ppu=%g" % (key, w, h, border, ppu))
@@ -196,7 +199,7 @@ def main():
     with open(atlas_src, "rb") as f:
         write(os.path.join(DEST, "ability_atlas.png"), f.read(), binary=True)
     write(os.path.join(DEST, "ability_atlas.png.meta"),
-          meta_for(template, guid_for("ability_atlas.png"), max_texture_size(aw, ah), (0, 0, 0, 0), 100.0))
+          meta_for(template, guid_for("ability_atlas.png"), max_texture_size("ability_atlas"), (0, 0, 0, 0), 100.0))
     written += 1
     report.append("%-40s %4dx%-4d (atlas, %d unique icons)" % ("ability_atlas", aw, ah, atlas["unique_icons"]))
 

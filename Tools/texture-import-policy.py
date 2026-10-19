@@ -185,6 +185,38 @@ GROUPS = [
         crunch_quality=50,
         note="5 paintings, all five currently stretched to a power of two",
     ),
+    # R20 UI KIT, three groups because the policy walks one folder each and the three want different ceilings.
+    # Tools/uikit-import.py writes these metas and states the same numbers, so --report on them says
+    # "0 to write"; the .png files are already at their shipping size, so the ceiling never resamples
+    # (Unity would only halve a file larger than it). BC7 on Windows and ASTC 4x4 on Android for all of
+    # them: hard edges and gold filigree on alpha, the same call the UI art group makes, and the explicit
+    # entries are what keep these out of the RGBA32 trap this file's header describes.
+    Group(
+        name="UI kit (R20): kit, atlas, icons",
+        folder="Assets/Resources/Art/UIKit",
+        # 2048 is the ability atlas (2048x896, 109 icons for all 254 abilities). Every other file here is
+        # 512 or less and is never touched by this ceiling.
+        max_size=2048,
+        npot=0, mipmap=0, filter_mode=1,
+        win_format=BC7, android_format=ASTC_4x4, crunch_quality=50,
+        note="50 sprites and the ability atlas",
+    ),
+    Group(
+        name="UI kit (R20): Store art",
+        folder="Assets/Resources/Art/UIKit/store",
+        max_size=1024,     # the Wayfarer's Road header is 1024x340; the six offer cards are 512 tall
+        npot=0, mipmap=0, filter_mode=1,
+        win_format=BC7, android_format=ASTC_4x4, crunch_quality=50,
+        note="6 masked offer cards and the header",
+    ),
+    Group(
+        name="UI kit (R20): relic icons",
+        folder="Assets/Resources/Art/UIKit/relics",
+        max_size=256,
+        npot=0, mipmap=0, filter_mode=1,
+        win_format=BC7, android_format=ASTC_4x4, crunch_quality=50,
+        note="10 relic icons",
+    ),
 ]
 
 PLATFORM_ENTRY = """  - serializedVersion: 4
