@@ -74,7 +74,7 @@ Median entry power over `recommendedPower`. The first four columns are 60 walks,
 | 5-12 (wall) | x1.191 | x1.192 | x6.913 | x6.908 | x6.928 |
 | 6-12 (wall) | x1.122 | x1.126 | x6.535 | x6.552 | x6.549 |
 
-Stuck walks of 60: reference non-spender 1, reference spender 1, fusing non-spender 0, fusing spender 0. The reference walk that sticks is the same one with or without purchases (the spender does not add a stuck walk and does not cure it). Total sittings (median) are 260 to 262 in every column.
+Stuck walks of 60: reference non-spender 1, reference spender 1, fusing non-spender 0, fusing spender 0. The reference walk that sticks is walk 51 (seed 51000154) at 3-4, with and without purchases (the spender neither adds a stuck walk nor cures it). It belongs to the CALENDAR clock the curve check runs on, which rerolls the armor drops: on the plain clock the guard uses (`CheckFusionNeverGates`, same seeds) the same 60 reference walks are 0 stuck. Total sittings (median) are 260 to 262 in every column.
 
 What it says:
 

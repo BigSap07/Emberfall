@@ -2369,7 +2369,11 @@ namespace Emberfall.EditorTools
             // A CLEAN SCRATCH PROFILE for every Store target: the scratch identity's save carries the last target's purchases
             // (SOLD OUT, BOUGHT, 71K Gold, a Starter hero), so a fresh profile is written over it and adopted before anything
             // is seeded. Scratch identity only (the guard above); the real save is never touched.
-            SaveService.Save(GameSession.CreateNewProfile(app.Session.Content, TimeUtil.NowUnix()));
+            // Marked past the first session exactly as GameApp marks a scratch profile under the capture tools'
+            // SuppressFirstRunKey (CreateNewProfile, then Onboarding.MarkComplete), or the story intro covers every shot.
+            PlayerProfile fresh = GameSession.CreateNewProfile(app.Session.Content, TimeUtil.NowUnix());
+            Onboarding.MarkComplete(fresh);
+            SaveService.Save(fresh);
             app.AdoptSaveFromDisk();
             GameSession session = app.Session;
             PlayerProfile profile = session.Profile;
