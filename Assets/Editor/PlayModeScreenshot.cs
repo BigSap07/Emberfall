@@ -2460,7 +2460,7 @@ namespace Emberfall.EditorTools
         /// <summary>
         /// AudioRoundTrip (R14-MUSIC), started as Screen:AudioRoundTrip=&lt;stage id&gt; (the next
         /// stage when none is named): the hub, the map, one whole fight, and the hub again, each calm
-        /// screen held long enough to hear it. The cue log (EMBERFALL_CUE_LOG) must show music.hub, then
+        /// screen held long enough to hear it (about 4 s, 3 s, and 4 s on the way back). The cue log (EMBERFALL_CUE_LOG) must show music.hub, then
         /// music.map as a same-track carry, then the fight's battle track (a crossfade), the victory
         /// duck and stinger, and the hub again after the fight. The fight is played in real time like
         /// AudioFight, so a skill moment in it writes its DUCK line too. Nothing here decides anything:
@@ -2468,7 +2468,9 @@ namespace Emberfall.EditorTools
         /// </summary>
         private static void PumpAudioRoundTrip(GameApp app, string name, int frame, int showAt, int slot)
         {
-            const int Hold = 150;
+            const int HubHold = 240;   // about 4 s at 60 fps
+            const int MapHold = 180;   // about 3 s: long enough to see the carry and no restart
+            const int Hold = 60;       // a beat on the result before leaving it
             const int FightCeiling = 14400;
             const int PaintDelay = 20;
 
@@ -2483,14 +2485,14 @@ namespace Emberfall.EditorTools
             switch (_roundTripPhase)
             {
                 case 0:
-                    if (frame - _roundTripAt < Hold) return;
+                    if (frame - _roundTripAt < HubHold) return;
                     app.Router.Show(ScreenId.Campaign);
                     Debug.Log("PlayModeScreenshot: AudioRoundTrip is on the map at frame " + frame + ".");
                     _roundTripPhase = 1;
                     _roundTripAt = frame;
                     return;
                 case 1:
-                    if (frame - _roundTripAt < Hold) return;
+                    if (frame - _roundTripAt < MapHold) return;
                     string asked = SessionState.GetString(BattleStageKey, "");
                     StageDef next = asked.Length > 0 ? app.Session.Content.GetStage(asked) : app.Session.NextStage;
                     if (next == null)
@@ -2523,7 +2525,7 @@ namespace Emberfall.EditorTools
                     _roundTripAt = frame;
                     return;
                 case 4:
-                    if (frame - _roundTripAt < Hold) return;
+                    if (frame - _roundTripAt < HubHold) return;
                     _roundTripPhase = 5;
                     _roundTripAt = frame;
                     return;

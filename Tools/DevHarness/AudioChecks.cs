@@ -953,6 +953,16 @@ namespace Emberfall.DevHarness
             Check(duckBody.Contains("!_config.Music") && duckBody.Contains("AudioCueLog.Record(\"DUCK\"") && service.Contains("_duck.Step(_config, dt)"),
                   "WIRING (reads source): AudioService.Duck does nothing with the music flag off, writes a DUCK line every time, and the music volume follows the envelope");
 
+            // A music slot is one fader over two sources (the intro and the loop). Fades, the duck and
+            // a stinger's stop all go through the fader, so whichever source is sounding follows.
+            int stepAt = service.IndexOf("private static void StepFader(", StringComparison.Ordinal);
+            int stopAt = service.IndexOf("public void StopMusic(", StringComparison.Ordinal);
+            string stepBody = stepAt >= 0 ? service.Substring(stepAt, Math.Min(900, service.Length - stepAt)) : "";
+            string stopBody = stopAt >= 0 ? service.Substring(stopAt, Math.Min(400, service.Length - stopAt)) : "";
+            Check(stepBody.Contains("f.Source.volume = volume;") && stepBody.Contains("f.Lead.volume = volume;") && stepBody.Contains("f.Lead.Stop();")
+                  && stopBody.Contains("BeginFade(_music[i], 0f, fadeSeconds)"),
+                  "WIRING (reads source): the intro and the loop of a music slot share one fader, so a stinger's stop, a crossfade and the duck all reach whichever source is sounding");
+
             int playAt = service.IndexOf("public bool Play(string cueId, float volumeScale)", StringComparison.Ordinal);
             int playEnd = playAt < 0 ? -1 : service.IndexOf("public bool Play(string cueId) {", playAt, StringComparison.Ordinal);
             string playBody = playAt >= 0 && playEnd > playAt ? service.Substring(playAt, playEnd - playAt) : "";
