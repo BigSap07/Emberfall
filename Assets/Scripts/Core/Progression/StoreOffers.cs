@@ -218,7 +218,7 @@ namespace Emberfall.Core.Progression
 
         // The purchase path finds an offer without a session, so the rules keep the content they were last
         // bound to. It is only ever the session's own content.
-        [ThreadStatic] private static StoreConfig _config;
+        private static StoreConfig _config;
 
         /// <summary>Points the session-less lookups (IStoreRules.Find) at a session's content. The game calls it
         /// when it builds the Store; the harness calls it before it drives a PurchaseLedger.</summary>
