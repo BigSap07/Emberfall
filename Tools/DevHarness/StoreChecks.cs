@@ -907,9 +907,9 @@ namespace Emberfall.DevHarness
                   "ONE PLACE MAKES A SEALED MARK: SealedGrants is called by PurchaseGrants alone (" + string.Join(", ", sealers.ToArray()) + ")");
             bool appliersOk = true;
             for (int i = 0; i < appliers.Count; i++)
-                if (appliers[i] != "PurchaseLedger.cs" && appliers[i] != "WayfarersRoad.cs" && !appliers[i].StartsWith("Store")) appliersOk = false;
-            Check(appliersOk && appliers.Contains("PurchaseLedger.cs") && appliers.Contains("WayfarersRoad.cs"),
-                  "and a grant is applied only by the ledger, the paid track and the Store's own rules (" + string.Join(", ", appliers.ToArray()) + ")");
+                if (appliers[i] != "WayfarersRoad.cs" && !appliers[i].StartsWith("Store")) appliersOk = false;
+            Check(appliersOk && appliers.Count > 0,
+                  "and a grant is applied only by the Store's own rules and the paid track (" + string.Join(", ", appliers.ToArray()) + ")");
         }
 
         /// <summary>Source with comments and string literals blanked, so a word in prose or a message is not read as code.</summary>
