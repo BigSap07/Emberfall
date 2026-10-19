@@ -30,6 +30,10 @@ namespace Emberfall.UI.Screens
         {
             public UnitPlate Plate;
 
+            /// <summary>The invisible tap target over the unit's body. A tap opens its ability card
+            /// and pauses the fight; see OpenUnitCard.</summary>
+            public RectTransform Hit;
+
             /// <summary>
             /// One entry per entry the simulation holds, duplicates included, in the order they
             /// first landed. It used to be a set, which is what made Ember's stacking invisible:
@@ -155,6 +159,16 @@ namespace Emberfall.UI.Screens
         private UIButton _speedButton;
         private UIButton _skipButton;
         private RectTransform _barLayer;
+
+        /// <summary>The taps over each unit's body. Between the bars and everything else, so the
+        /// top bar's buttons, the callout and the result panel all sit above it.</summary>
+        private RectTransform _hitLayer;
+
+        /// <summary>The ability card a tap on a unit opens. Shared with the hero page.</summary>
+        private AbilityCardSheet _unitCard;
+
+        /// <summary>Time.timeScale as it stood when the card opened, put back when it closes.</summary>
+        private float _timeScaleBeforeCard = 1f;
         private RectTransform _textLayer;
 
         private RectTransform _callout;
@@ -562,6 +576,10 @@ namespace Emberfall.UI.Screens
         {
             _barLayer = UIBuilder.Node("Bars", Root);
             UIBuilder.FillParent(_barLayer, 0f);
+
+            _hitLayer = UIBuilder.Node("UnitTaps", Root);
+            UIBuilder.FillParent(_hitLayer, 0f);
+            _unitCard = new AbilityCardSheet(Router.OverlayLayer, App.Layers, App.Audio.Tap);
 
             _textLayer = UIBuilder.Node("FloatingText", Root);
             UIBuilder.FillParent(_textLayer, 0f);
@@ -972,6 +990,9 @@ namespace Emberfall.UI.Screens
             if (_chaining) _chaining = false;
             else if (_auto) SetAuto(false);
 
+            // A card left open would leave the clock stopped for the next screen.
+            if (_unitCard != null) _unitCard.Close();
+
             // stops playback plus every death, drain and floating-text routine, so nothing
             // touches the world objects that are about to be destroyed
             StopAllCoroutines();
@@ -1132,7 +1153,10 @@ namespace Emberfall.UI.Screens
         private void ClearBars()
         {
             foreach (KeyValuePair<int, UnitBar> pair in _bars)
+            {
                 if (pair.Value.Plate != null && pair.Value.Plate.Root != null) Destroy(pair.Value.Plate.Root.gameObject);
+                if (pair.Value.Hit != null) Destroy(pair.Value.Hit.gameObject);
+            }
             _bars.Clear();
         }
 
@@ -1168,6 +1192,7 @@ namespace Emberfall.UI.Screens
             UnitBar bar = new UnitBar();
             bar.Plate = UnitPlate.Create(_barLayer, snapshot.Name, snapshot.IsPlayer);
             bar.Plate.SetEnergy(snapshot.EnergyMax > 0 ? snapshot.StartEnergy / (float)snapshot.EnergyMax : 0f);
+            bar.Hit = BuildUnitTap(snapshot.Id);
             return bar;
         }
 
@@ -1182,6 +1207,107 @@ namespace Emberfall.UI.Screens
         {
             if (bar == null || bar.Plate == null) return;
             bar.Plate.SetEnergy(fraction);
+        }
+
+        // ------------------------------------------------------------------ the unit card
+
+        // A TAP ON A UNIT OPENS ITS ABILITY CARD AND PAUSES THE FIGHT. Presentation only: the
+        // fight was resolved up front and the record is being played, so stopping the clock cannot
+        // change the outcome. Time.timeScale is the one lever the whole battle already answers to
+        // (UnitActor reads it for exactly this case, GameApp's slow motion sets it), so a pause is
+        // one assignment and every routine that waits on Time.deltaTime waits with it. The card is
+        // the hero page's own (AbilityCardSheet), over the whole kit of the unit that was tapped.
+
+        private RectTransform BuildUnitTap(int unitId)
+        {
+            RectTransform hit = UIBuilder.Node("Tap_" + unitId, _hitLayer);
+            hit.anchorMin = Vector2.zero;
+            hit.anchorMax = Vector2.zero;
+            hit.pivot = new Vector2(0.5f, 0f);
+            UIBuilder.Size(hit, 0f, 0f);
+            Image target = hit.gameObject.AddComponent<Image>();
+            target.color = new Color(1f, 1f, 1f, 0.003f);
+            Button press = hit.gameObject.AddComponent<Button>();
+            press.transition = Selectable.Transition.None;
+            press.targetGraphic = target;
+            int captured = unitId;
+            press.onClick.AddListener(delegate { OpenUnitCard(captured); });
+            hit.gameObject.SetActive(false);
+            return hit;
+        }
+
+        /// <summary>The tap sits on the unit's body: feet to head, as the camera sees them this
+        /// frame, so it follows a lunge the way the plate does.</summary>
+        private void PlaceUnitTap(UnitBar bar, UnitActor actor, Vector3 feetScreen, bool visible, float scale)
+        {
+            if (bar.Hit == null) return;
+            if (!visible) { bar.Hit.gameObject.SetActive(false); return; }
+            Vector3 head = _world.Camera.WorldToScreenPoint(actor.HeadPosition);
+            float height = Mathf.Max(80f, (head.y - feetScreen.y) / scale);
+            float width = Mathf.Max(110f, height * 0.6f);
+            bar.Hit.gameObject.SetActive(true);
+            bar.Hit.anchoredPosition = new Vector2(feetScreen.x / scale, feetScreen.y / scale);
+            bar.Hit.sizeDelta = new Vector2(width, height);
+        }
+
+        private void OpenUnitCard(int unitId)
+        {
+            if (_result == null || _unitCard == null || _unitCard.IsOpen) return;
+            UnitSnapshot snapshot = _result.FindUnit(unitId);
+            if (snapshot == null) return;
+
+            ContentDatabase content = App.Session.Content;
+            UnitDef def = snapshot.IsPlayer ? (UnitDef)content.GetHero(snapshot.DefId)
+                                            : (UnitDef)content.GetEnemy(snapshot.DefId);
+            if (def == null) return;
+
+            List<AbilityCardSheet.Entry> entries = new List<AbilityCardSheet.Entry>();
+            if (def.BasicAttack != null)
+                entries.Add(CardEntry("BASIC", UITheme.TextMuted, def.BasicAttack, null));
+            if (def.Active != null)
+                entries.Add(CardEntry("ACTIVE", UITheme.Energy, def.Active, null));
+            for (int i = 0; i < def.Passives.Count; i++)
+                entries.Add(CardEntry("PASSIVE", UITheme.StarColor(snapshot.Stars),
+                                      AbilityMath.AsAbility(def.Passives[i]), def.Passives[i]));
+            if (entries.Count == 0) return;
+
+            // The stats the fight started the unit at, so the numbers are the ones this fight deals.
+            UnitStats stats = new UnitStats();
+            stats.MaxHp = snapshot.MaxHp;
+            stats.Attack = snapshot.Attack;
+            stats.Defense = snapshot.Defense;
+            stats.Speed = snapshot.Speed;
+
+            _timeScaleBeforeCard = Time.timeScale > 0f ? Time.timeScale : 1f;
+            Time.timeScale = 0f;
+            _unitCard.Show(snapshot.Name, entries, stats, App.Session.Balance, content.AbilityTexts,
+                           true, ResumeAfterCard);
+        }
+
+#if UNITY_EDITOR
+        /// <summary>Opens the unit card on the first player unit, for the capture tool. Editor
+        /// only, for the reason HeroDetailScreen.OpenAbilityForCapture is.</summary>
+        public void OpenUnitCardForCapture()
+        {
+            if (_result == null) return;
+            for (int i = 0; i < _result.Units.Count; i++)
+                if (_result.Units[i].IsPlayer) { OpenUnitCard(_result.Units[i].Id); return; }
+        }
+#endif
+
+        private static AbilityCardSheet.Entry CardEntry(string kind, Color tint, AbilityDef ability, PassiveDef passive)
+        {
+            AbilityCardSheet.Entry entry = new AbilityCardSheet.Entry();
+            entry.Kind = kind;
+            entry.Tint = tint;
+            entry.Ability = ability;
+            entry.Passive = passive;
+            return entry;
+        }
+
+        private void ResumeAfterCard()
+        {
+            Time.timeScale = _timeScaleBeforeCard;
         }
 
         /// <summary>How far a damage or heal number climbs over its life, in canvas units.</summary>
@@ -1207,6 +1333,7 @@ namespace Emberfall.UI.Screens
 
                 Vector3 screen = _world.Camera.WorldToScreenPoint(actor.transform.position);
                 bool visible = screen.z > 0f && actor.Alive;
+                PlaceUnitTap(bar, actor, screen, visible, scale);
                 CanvasGroup group = bar.Plate.Group;
                 group.alpha = visible ? 1f : Mathf.Max(0f, group.alpha - Time.deltaTime * 4f);
                 if (!visible) continue;
@@ -2850,6 +2977,10 @@ namespace Emberfall.UI.Screens
             if (rewards.PlayerLevelsGained > 0)
                 AddRewardRow(list, "RANK UP", "+" + rewards.PlayerLevelsGained, UITheme.Success);
             if (rewards.UnlockedNextStage) AddRewardRow(list, "NEW STAGE UNLOCKED", "AHEAD", UITheme.Ember);
+            if (rewards.Chest != null && rewards.Chest.Present)
+                AddRewardRow(list, rewards.Chest.Finale ? "FINALE CHEST" : "WALL CHEST",
+                             "+" + rewards.Chest.Gold + " gold  +" + rewards.Chest.Shards + " shards  +"
+                             + rewards.Chest.Slag + " slag", UITheme.Success);
             // Named by its temper rather than just "ARMOR", because the temper is the only part
             // of the drop a player can judge before opening the inventory.
             // The row used to put "HONED BOOTS" in the label and "Roadworn Boots" in the

@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
+using Emberfall.Core.Progression;
 using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
@@ -57,6 +58,7 @@ namespace Emberfall.UI.Screens
         private Text _stageName;
         private Text _aspectName;
         private Image _aspectDot;
+        private Text _chestLine;
         private Text _squadPower;
         private UIButton _enter;
 
@@ -178,6 +180,13 @@ namespace Emberfall.UI.Screens
                                              TextAnchor.UpperLeft);
             UIBuilder.Box(_aspectName.rectTransform, 30f, -86f, 560f, 26f, new Vector2(0f, 1f));
             UIBuilder.Outlined(_aspectName, Emberforge.Outline, Emberforge.StrokeThin);
+
+            // The wall or finale chest, said before the fight: what it holds and whether it is
+            // already opened. Empty on a stage that carries none (WallChests.Preview).
+            _chestLine = EmberforgeUI.Label("Chest", block, "", UITheme.FontTiny, Emberforge.TextGold,
+                                            TextAnchor.UpperLeft);
+            UIBuilder.Box(_chestLine.rectTransform, 0f, -116f, 620f, 26f, new Vector2(0f, 1f));
+            UIBuilder.Outlined(_chestLine, Emberforge.Outline, Emberforge.StrokeThin);
         }
 
         private void BuildSquadPower()
@@ -469,6 +478,7 @@ namespace Emberfall.UI.Screens
                 _stageCode.text = "";
                 _stageName.text = "";
                 _aspectName.text = "";
+                _chestLine.text = "";
                 return;
             }
 
@@ -489,6 +499,10 @@ namespace Emberfall.UI.Screens
                 _aspectDot.color = UITheme.TextDim;
                 _aspectName.text = "";
             }
+
+            WallChestView chest = WallChests.Preview(App.Session, stage);
+            _chestLine.text = chest.Line;
+            _chestLine.color = chest.Opened ? Emberforge.TextQuiet : Emberforge.TextGold;
 
             bool unlocked = App.Session.IsStageUnlocked(stage);
             bool cleared = App.Session.Profile.HasClearedStage(stage.Id);

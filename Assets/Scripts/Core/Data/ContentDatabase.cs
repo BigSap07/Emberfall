@@ -72,6 +72,36 @@ namespace Emberfall.Core.Data
         }
 
         /// <summary>
+        /// The one-time chests on a chapter's wall and finale stages (wall-chests.json). Loaded
+        /// after Load and NOT part of ContentVersion: no fight reads it. Empty (IsUsable false) on a
+        /// database that never loaded it, which means no stage carries a chest.
+        /// </summary>
+        public WallChestConfig WallChests = new WallChestConfig();
+
+        /// <summary>Parses wall-chests.json into WallChests and adds its warnings to Warnings. Does
+        /// not touch ContentVersion; see WallChests.</summary>
+        public void LoadWallChests(string wallChestsJson)
+        {
+            WallChests = WallChestConfig.FromJson(wallChestsJson);
+            for (int i = 0; i < WallChests.Warnings.Count; i++) Warnings.Add(WallChests.Warnings[i]);
+        }
+
+        /// <summary>
+        /// Card sentences for abilities whose authored description is still a drafting note
+        /// (ability-text.json). Loaded after Load and NOT part of ContentVersion: no fight reads
+        /// it. Empty on a database that never loaded it, which leaves those cards without prose.
+        /// </summary>
+        public AbilityTextConfig AbilityTexts = new AbilityTextConfig();
+
+        /// <summary>Parses ability-text.json into AbilityTexts, adds its warnings, and warns for a
+        /// line that names an ability this content does not have. Does not touch ContentVersion.</summary>
+        public void LoadAbilityTexts(string abilityTextJson)
+        {
+            AbilityTexts = AbilityTextConfig.FromJson(abilityTextJson);
+            for (int i = 0; i < AbilityTexts.Warnings.Count; i++) Warnings.Add(AbilityTexts.Warnings[i]);
+        }
+
+        /// <summary>
         /// The first session's words and the feature unlock table (onboarding.json,
         /// DESIGN-ONBOARDING.md). Loaded after Load for guild-path.json's reason and NOT part of
         /// ContentVersion: no fight reads it. Empty (IsUsable false) on a database that never had

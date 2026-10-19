@@ -127,21 +127,6 @@ namespace Emberfall.UI.Screens
         private const float AbilityNoteHeight = 14f;
         private const float AbilityBlockHeight = AbilityCardHeight + AbilityNoteGap + AbilityNoteHeight;
 
-        /// <summary>
-        /// The ability breakdown layer. Sized so the roster's busiest ability - Kael's WHAT BREAKS
-        /// FORWARD, at eight numbers - needs no scrolling, and scrolling anyway so a ninth would
-        /// not be the first thing nobody could read. At 700 tall with 52-unit rows it held seven
-        /// and the eighth was below the fold, which is the same failure as the fixed dialog this
-        /// replaced, only quieter.
-        ///
-        /// 760 fits the shortest canvas this game targets with room over and under it: the layer
-        /// covers the page rather than sitting inside a panel, so the only ceiling is the 966 of
-        /// a 20:9 phone.
-        /// </summary>
-        private const float SheetWidth = 900f;
-        private const float SheetHeight = 760f;
-        private const float SheetRowHeight = 48f;
-
         private HeroInstance _hero;
         private HeroDef _lockedDef;
 
@@ -167,12 +152,8 @@ namespace Emberfall.UI.Screens
         private RectTransform _abilityHost;
         private Text _abilityNote;
 
-        private RectTransform _abilitySheet;
-        private CanvasGroup _abilitySheetGroup;
-        private Text _abilitySheetTitle;
-        private RectTransform _abilitySheetList;
-        private Text _abilitySheetNote;
-        private UiLayerStack.Layer _abilitySheetLayer;
+        /// <summary>The ability card (sentence, facts, numbers). Shared with the battle screen.</summary>
+        private AbilityCardSheet _abilityCard;
 
         private UIButton _openFormation;
         private UIButton _openTalents;
@@ -239,7 +220,7 @@ namespace Emberfall.UI.Screens
             BuildLeftPanel();
             BuildRightPanel();
             BuildActionBar();
-            BuildAbilitySheet();
+            _abilityCard = new AbilityCardSheet(Router.OverlayLayer, App.Layers, App.Audio.Tap);
         }
 
         private void BuildLeftPanel()
@@ -379,7 +360,7 @@ namespace Emberfall.UI.Screens
             // because two of those three belong to whoever is being hit and none of them is a
             // property of the ability. Repeating that on five cards would be five times the words
             // and no more truth, so it lives here, under the row, in the kit's quiet voice.
-            _abilityNote = EmberforgeUI.Label("AbilityNote", _right, AbilityText.Caveat,
+            _abilityNote = EmberforgeUI.Label("AbilityNote", _right, AbilityText.Caveat + "  " + AbilityText.TapHint,
                                               UITheme.FontTiny - 6, Emberforge.TextQuiet,
                                               TextAnchor.UpperCenter);
             UIBuilder.Box(_abilityNote.rectTransform, 0f, -(top + AbilityCardHeight + AbilityNoteGap),
@@ -472,7 +453,7 @@ namespace Emberfall.UI.Screens
         /// the next screen would be a readout about a hero that page has never heard of.</summary>
         public override void OnHide()
         {
-            CloseAbilitySheet();
+            if (_abilityCard != null) _abilityCard.Close();
         }
 
         public override void OnShow()
@@ -658,9 +639,9 @@ namespace Emberfall.UI.Screens
         ///
         /// THE NUMBERS COME FROM THE EFFECT DATA. AbilityMath in Core computes them and the
         /// harness proves every one of them equal to what CombatSimulation deals - see
-        /// CheckAbilityNumbersMatchTheSimulation. Nothing here reads an ability's description, and
-        /// the description is not shown: a good half of the roster's are drafting notes addressed
-        /// to a designer, naming repository documents and open questions.
+        /// CheckAbilityNumbersMatchTheSimulation. The row itself prints numbers only; the sentence
+        /// and the facts (Energy cost, durations, thresholds, status sizes) are one tap away, on
+        /// the shared AbilityCardSheet, because five cards at this width have no room for prose.
         ///
         /// THE HERO'S SIGIL LEFT THE CARD to make room. It was drawn on all five cells from
         /// def.Visual.Sigil, which is a property of the HERO - so a row of five abilities carried
@@ -674,23 +655,24 @@ namespace Emberfall.UI.Screens
         private void RebuildAbilities(HeroDef def, UnitStats stats, bool owned)
         {
             for (int i = _abilityHost.childCount - 1; i >= 0; i--) Destroy(_abilityHost.GetChild(i).gameObject);
-            _abilityNote.text = owned ? AbilityText.Caveat : AbilityText.CaveatLocked;
+            _abilityNote.text = (owned ? AbilityText.Caveat : AbilityText.CaveatLocked) + "  " + AbilityText.TapHint;
 
             // Abilities rather than names now, and a passive reads as one through
             // AbilityMath.AsAbility - the two types still share no base type, but the card needs
             // the EFFECTS as well as the label, and that wrapper is where the game already says
             // how a passive answers an ability-shaped question.
             List<AbilityDef> abilities = new List<AbilityDef>();
+            List<PassiveDef> passiveOf = new List<PassiveDef>();
             List<string> kinds = new List<string>();
             List<Color> tints = new List<Color>();
 
-            if (def.BasicAttack != null) { abilities.Add(def.BasicAttack); kinds.Add("BASIC"); tints.Add(UITheme.TextMuted); }
-            if (def.Active != null) { abilities.Add(def.Active); kinds.Add("ACTIVE"); tints.Add(UITheme.Energy); }
+            if (def.BasicAttack != null) { abilities.Add(def.BasicAttack); passiveOf.Add(null); kinds.Add("BASIC"); tints.Add(UITheme.TextMuted); }
+            if (def.Active != null) { abilities.Add(def.Active); passiveOf.Add(null); kinds.Add("ACTIVE"); tints.Add(UITheme.Energy); }
             // One card per passive rather than one card for "the passive": a hero can carry more
             // than one, and the row already sizes itself from the count. No talent card - talents
             // are selected, not innate, and TalentsScreen is where they are compared and picked.
             for (int i = 0; i < def.Passives.Count; i++)
-            { abilities.Add(AbilityMath.AsAbility(def.Passives[i])); kinds.Add("PASSIVE"); tints.Add(UITheme.StarColor(def.Stars)); }
+            { abilities.Add(AbilityMath.AsAbility(def.Passives[i])); passiveOf.Add(def.Passives[i]); kinds.Add("PASSIVE"); tints.Add(UITheme.StarColor(def.Stars)); }
             _abilityNote.gameObject.SetActive(abilities.Count > 0);
             if (abilities.Count == 0) return;
 
@@ -745,10 +727,14 @@ namespace Emberfall.UI.Screens
                 Button press = tapHost.gameObject.AddComponent<Button>();
                 press.transition = Selectable.Transition.None;
                 press.targetGraphic = target;
-                AbilityDef captured = ability;
-                List<AbilityValue> capturedValues = values;
+                AbilityCardSheet.Entry entry = new AbilityCardSheet.Entry();
+                entry.Kind = kinds[i];
+                entry.Tint = tints[i];
+                entry.Ability = ability;
+                entry.Passive = passiveOf[i];
+                UnitStats capturedStats = stats;
                 bool capturedOwned = owned;
-                press.onClick.AddListener(delegate { ShowAbilityBreakdown(captured, capturedValues, capturedOwned); });
+                press.onClick.AddListener(delegate { ShowAbilityCard(entry, capturedStats, capturedOwned); });
             }
         }
 
@@ -811,144 +797,16 @@ namespace Emberfall.UI.Screens
         }
 
         /// <summary>
-        /// Every number one ability carries, on a layer over the hero page.
-        ///
-        /// A LAYER OF ITS OWN RATHER THAN THE SHARED DIALOG, and the reason is a measurement
-        /// rather than a preference. The first build of this put the breakdown through
-        /// Overlays.ModalPopup, which is the right instinct - a question asked about something
-        /// already on screen, answered in a few lines, is exactly what that dialog is for - and
-        /// the capture showed why it does not hold: the dialog's body is a fixed 700x230 of static
-        /// text, and Kael's WHAT BREAKS FORWARD carries eight numbers. Six of them fitted. The
-        /// other two and the caveat line under them were simply not on screen, which is the one
-        /// failure a readout must not have.
-        ///
-        /// So the list SCROLLS. An ability with one number and an ability with eight are the same
-        /// card on the row above, and they have to be the same answer when it is tapped.
-        ///
-        /// It is still the kit's furniture throughout - a framed panel, a title ribbon, the kit's
-        /// rule, its primary button - so it reads as the same software as the dialog it is not.
+        /// Opens the ability card for one ability: its sentence, its facts and its numbers, from
+        /// the shared <see cref="AbilityCardSheet"/>. The battle screen opens the same card for a
+        /// unit's whole kit.
         /// </summary>
-        private void BuildAbilitySheet()
+        private void ShowAbilityCard(AbilityCardSheet.Entry entry, UnitStats stats, bool owned)
         {
-            // ON THE APP'S OVERLAY LAYER, not on this screen's Root, which is where every other
-            // dialog in the game lives and where this one has to live for the same reason: the
-            // top bar is a sibling of the screen and is drawn over it, so a sheet parented to the
-            // screen slides UNDER it. At 16:9 that was invisible - a 700-tall panel centred on a
-            // 1080 canvas puts its ribbon at 134, four units clear of the bar. At 20:9 the canvas
-            // is 966, the same panel centres 87 units higher, and the title went behind the bar.
-            // Caught by photographing both aspects, which is the whole reason the rule exists.
-            _abilitySheet = UIBuilder.Node("AbilitySheet", Router.OverlayLayer);
-            UIBuilder.FillParent(_abilitySheet, 0f);
-            _abilitySheetGroup = _abilitySheet.gameObject.AddComponent<CanvasGroup>();
-
-            Image dim = _abilitySheet.gameObject.AddComponent<Image>();
-            dim.sprite = TextureLab.White;
-            dim.color = UITheme.ScrimModal;
-
-            RectTransform panel = UIBuilder.Node("Panel", _abilitySheet);
-            UIBuilder.Box(panel, 0f, 0f, SheetWidth, SheetHeight, new Vector2(0.5f, 0.5f));
-            EmberforgeUI.PanelOn(panel, true);
-
-            _abilitySheetTitle = EmberforgeUI.TitleRibbon("Title", panel, "",
-                                                          SheetWidth - Emberforge.RibbonOverhang * 2f);
-
-            ScrollRect scroll;
-            _abilitySheetList = UIBuilder.ScrollList("List", panel, out scroll, 6f,
-                                                     new RectOffset(0, 0, 4, 4));
-            // Clear of the ribbon at the top and of the note and button at the bottom, and inset
-            // past the corner ornaments - four screens have hung a full-width control off a framed
-            // panel and printed it over the two lower diamonds.
-            UIBuilder.FillParent(scroll.GetComponent<RectTransform>(),
-                                 Emberforge.OrnamentClearance, 96f, Emberforge.OrnamentClearance, 190f);
-
-            Image rule = EmberforgeUI.Rule("Rule", panel);
-            UIBuilder.Box(rule.rectTransform, 0f, 172f, SheetWidth - Emberforge.OrnamentClearance * 2f,
-                          Emberforge.RuleHeight, new Vector2(0.5f, 0f));
-
-            _abilitySheetNote = EmberforgeUI.Body("Note", panel, AbilityText.Caveat, UITheme.FontTiny,
-                                                  Emberforge.TextQuiet, TextAnchor.UpperCenter);
-            UIBuilder.Box(_abilitySheetNote.rectTransform, 0f, 128f,
-                          SheetWidth - Emberforge.OrnamentClearance * 2f, 40f, new Vector2(0.5f, 0f));
-            UIBuilder.Outlined(_abilitySheetNote, Emberforge.Outline, Emberforge.StrokeThin);
-
-            UIButton close = EmberforgeUI.Button("Close", panel, "CLOSE", UITheme.FontBody,
-                                                 ForgeButtonKind.Primary);
-            UIBuilder.Box(close.Root, 0f, Emberforge.OrnamentClearance, 400f, 88f, new Vector2(0.5f, 0f));
-            close.OnClick(CloseAbilitySheet);
-
-            _abilitySheet.gameObject.SetActive(false);
-        }
-
-        /// <summary>
-        /// Fills the sheet for one ability and opens it.
-        ///
-        /// One row per number, in the order the effects resolve. The figure carries the kind's
-        /// colour and the authored terms follow it in the kit's quiet voice - which is the same
-        /// two-part reading the card gives, laid out along a row rather than stacked, because at
-        /// this width there is room for both and a column of eight stacked pairs is sixteen lines.
-        /// </summary>
-        private void ShowAbilityBreakdown(AbilityDef ability, List<AbilityValue> values, bool owned)
-        {
-            App.Audio.Tap();
-            for (int i = _abilitySheetList.childCount - 1; i >= 0; i--)
-                Destroy(_abilitySheetList.GetChild(i).gameObject);
-
-            _abilitySheetTitle.text = ability.Name.ToUpperInvariant();
-            _abilitySheetNote.text = owned ? AbilityText.Caveat : AbilityText.CaveatLocked;
-
-            if (values.Count == 0) AddAbilitySheetRow(Emberforge.TextQuiet, "", AbilityText.NoNumbers);
-            for (int i = 0; i < values.Count; i++)
-            {
-                AbilityValue v = values[i];
-                EffectDef effect = ability.Effects[v.EffectIndex];
-                string secondary = AbilityText.Secondary(v, effect);
-                string riders = AbilityText.Riders(v);
-                if (riders.Length > 0)
-                    secondary = secondary.Length > 0 ? secondary + ", " + riders : riders;
-                // An effect with no caster-side term of its own has no figure to lead with - its
-                // whole payout is a share of somebody else's health - so the workings ARE its line
-                // rather than a footnote under one.
-                AddAbilitySheetRow(AbilityText.Tint(v.Kind),
-                                   v.HasFlat ? AbilityText.Headline(v) : AbilityText.Word(v.Kind),
-                                   secondary);
-            }
-
-            _abilitySheet.gameObject.SetActive(true);
-            _abilitySheet.SetAsLastSibling();
-            _abilitySheetGroup.alpha = 1f;
-            if (_abilitySheetLayer == null && App.Layers != null)
-                _abilitySheetLayer = App.Layers.Push("popup:ability", CloseAbilitySheet);
-        }
-
-        private void AddAbilitySheetRow(Color tint, string figure, string terms)
-        {
-            RectTransform row = UIBuilder.Node("Row", _abilitySheetList);
-            UIBuilder.Sized(row, 0f, SheetRowHeight);
-            EmberforgeUI.SunkenOn(row);
-
-            Text value = EmberforgeUI.Label("Value", row, figure, UITheme.FontBody, tint,
-                                            TextAnchor.MiddleLeft);
-            value.rectTransform.anchorMin = new Vector2(0f, 0f);
-            value.rectTransform.anchorMax = new Vector2(0.4f, 1f);
-            value.rectTransform.offsetMin = new Vector2(Emberforge.Space24, 0f);
-            value.rectTransform.offsetMax = new Vector2(-Emberforge.Space8, 0f);
-            UIBuilder.Outlined(value, Emberforge.Outline, Emberforge.StrokeThin);
-
-            Text label = EmberforgeUI.Body("Terms", row, terms, UITheme.FontSmall,
-                                           Emberforge.TextQuiet, TextAnchor.MiddleRight);
-            label.rectTransform.anchorMin = new Vector2(0.4f, 0f);
-            label.rectTransform.anchorMax = new Vector2(1f, 1f);
-            label.rectTransform.offsetMin = new Vector2(Emberforge.Space8, 0f);
-            label.rectTransform.offsetMax = new Vector2(-Emberforge.Space24, 0f);
-            UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
-        }
-
-        private void CloseAbilitySheet()
-        {
-            UiLayerStack.Layer layer = _abilitySheetLayer;
-            _abilitySheetLayer = null;
-            if (layer != null && App.Layers != null) App.Layers.Dismiss(layer);
-            _abilitySheet.gameObject.SetActive(false);
+            List<AbilityCardSheet.Entry> one = new List<AbilityCardSheet.Entry>();
+            one.Add(entry);
+            _abilityCard.Show(entry.Ability.Name, one, stats, App.Session.Balance,
+                              App.Session.Content.AbilityTexts, owned, null);
         }
 
         private void Refresh()
@@ -1323,21 +1181,26 @@ namespace Emberfall.UI.Screens
                 : StatMath.ForHero(def, 1);
 
             List<AbilityDef> abilities = new List<AbilityDef>();
-            if (def.BasicAttack != null) abilities.Add(def.BasicAttack);
-            if (def.Active != null) abilities.Add(def.Active);
-            for (int i = 0; i < def.Passives.Count; i++) abilities.Add(AbilityMath.AsAbility(def.Passives[i]));
+            List<PassiveDef> passiveOf = new List<PassiveDef>();
+            if (def.BasicAttack != null) { abilities.Add(def.BasicAttack); passiveOf.Add(null); }
+            if (def.Active != null) { abilities.Add(def.Active); passiveOf.Add(null); }
+            for (int i = 0; i < def.Passives.Count; i++) { abilities.Add(AbilityMath.AsAbility(def.Passives[i])); passiveOf.Add(def.Passives[i]); }
 
-            AbilityDef best = null;
-            List<AbilityValue> bestValues = null;
+            int bestIndex = -1;
+            int bestCount = -1;
             for (int i = 0; i < abilities.Count; i++)
             {
-                List<AbilityValue> values = AbilityMath.Values(abilities[i], stats, App.Session.Balance);
-                if (bestValues != null && values.Count <= bestValues.Count) continue;
-                best = abilities[i];
-                bestValues = values;
+                int count = AbilityMath.Values(abilities[i], stats, App.Session.Balance).Count;
+                if (count <= bestCount) continue;
+                bestIndex = i;
+                bestCount = count;
             }
-            if (best == null) return;
-            ShowAbilityBreakdown(best, bestValues, owned);
+            if (bestIndex < 0) return;
+            AbilityCardSheet.Entry entry = new AbilityCardSheet.Entry();
+            entry.Kind = "ABILITY";
+            entry.Ability = abilities[bestIndex];
+            entry.Passive = passiveOf[bestIndex];
+            ShowAbilityCard(entry, stats, owned);
         }
 #endif
     }

@@ -157,6 +157,10 @@ namespace Emberfall.Core.Session
         /// here so the UI can name what dropped, not so the UI can grant it.
         /// </summary>
         public ArmorPiece ArmorDrop;
+
+        /// <summary>The wall or finale chest this first clear opened, already paid into the profile,
+        /// or null when the stage carries none or this was not a first clear. See WallChests.</summary>
+        public WallChestView Chest;
     }
 
     /// <summary>
@@ -1347,6 +1351,9 @@ namespace Emberfall.Core.Session
                 Profile.ClearedStageIds.Add(stage.Id);
                 Profile.StagesCleared = CampaignProgress.CountCleared(Profile, Content);
                 rewards.UnlockedNextStage = frontier != null && frontier.Id == stage.Id;
+                // The wall and finale chests open on the first clear, at the frontier this clear
+                // just reached. Null for every other stage and when wall-chests.json is off.
+                rewards.Chest = WallChests.PayFirstClear(this, stage);
             }
 
             // The armor drop rides the repeat cap on exactly the branch Relic Dust does, per
