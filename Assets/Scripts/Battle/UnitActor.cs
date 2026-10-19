@@ -328,6 +328,20 @@ namespace Emberfall.Battle
             Rig.SetFlash(_flash);
         }
 
+        /// <summary>
+        /// R15 v2: a tint toward a colour that lasts `seconds` on the real-time clock, held by no hit
+        /// stop: the debuff darkening of the body for a moment, the counterpart of a hit flash.
+        /// </summary>
+        public void TintFor(float amount, Color color, float seconds)
+        {
+            if (Rig == null || !Alive || amount <= 0f) return;
+            Rig.SetFlashColor(color);
+            _flash = Mathf.Max(_flash, amount);
+            _flashRate = _flash / Mathf.Max(0.01f, seconds);
+            _flashFree = true;
+            Rig.SetFlash(_flash);
+        }
+
         public void SetFlashColor(Color color)
         {
             if (Rig != null) Rig.SetFlashColor(color);

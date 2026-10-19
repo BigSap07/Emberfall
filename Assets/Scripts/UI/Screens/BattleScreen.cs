@@ -122,6 +122,9 @@ namespace Emberfall.UI.Screens
         /// timeline for its first strike, so a five target skill holds once. Reset where
         /// _skillActive is set or cleared.</summary>
         private bool _holdSpent;
+        /// <summary>R15 v2: a buff or a debuff sounds once per action, not once per target or icon.</summary>
+        private bool _buffSounded;
+        private bool _debuffSounded;
 
         /// <summary>R12: the unit the next SpawnFloatingText belongs to, set by the case that
         /// spawns it so the legacy spawn lines stay as they were. Consumed and cleared there.</summary>
@@ -1264,6 +1267,9 @@ namespace Emberfall.UI.Screens
 
         private IEnumerator Playback()
         {
+            // A fight starts with neither sound spent, whatever the last fight left behind.
+            _buffSounded = false;
+            _debuffSounded = false;
             yield return Wait(0.35f);
 
             for (int i = 0; i < _result.Events.Count; i++)
@@ -1291,6 +1297,12 @@ namespace Emberfall.UI.Screens
             // It plays what the record says and decides nothing, so a skip that never reaches
             // this line leaves the fight and its result exactly as they were.
             _world.Director.Play(e);
+            // A battle-start or round-start passive is its own beat: its buff or debuff sounds once too.
+            if (e.Type == BattleEventType.BattleStart || e.Type == BattleEventType.RoundStart)
+            {
+                _buffSounded = false;
+                _debuffSounded = false;
+            }
 #if UNITY_EDITOR
             HitJustPlayed = e.Type == BattleEventType.Damage && e.Status == StatusKind.None;
             if (e.Type == BattleEventType.Heal && e.Value > 0) _lastHealAt = Time.unscaledTime;
@@ -1319,6 +1331,8 @@ namespace Emberfall.UI.Screens
                     AdvanceTurnStrip(e.SourceId);
                     _skillActive = false;
                     _holdSpent = false;
+                    _buffSounded = false;
+                    _debuffSounded = false;
                     if (bar != null) yield return TurnCue(bar);
                     break;
                 }
@@ -1327,6 +1341,8 @@ namespace Emberfall.UI.Screens
                 {
                     _skillActive = false;
                     _holdSpent = false;
+                    _buffSounded = false;
+                    _debuffSounded = false;
                     UnitActor source = ActorOf(e.SourceId);
                     List<int> targetIds = LookaheadTargets(index);
                     UnitActor focus = targetIds.Count > 0 ? ActorOf(targetIds[0]) : null;
@@ -1395,6 +1411,8 @@ namespace Emberfall.UI.Screens
                         source.PlayCast(_speed);
                         _skillActive = true;
                         _holdSpent = false;
+                        _buffSounded = false;
+                        _debuffSounded = false;
                         App.Audio.Cast(source.Snapshot.Aspect);
                         ShowCallout(e.AbilityName, source.Snapshot.Name, false);
                         if (!Feel.V2) _world.Vfx.Aura(source.transform.position, AspectTint(source), 2.2f);
@@ -1431,7 +1449,7 @@ namespace Emberfall.UI.Screens
                     UnitActor source = ActorOf(e.SourceId);
                     if (source != null)
                     {
-                        _world.Vfx.Aura(source.transform.position, UITheme.Gold, 2f);
+                        if (!Feel.V2) _world.Vfx.Aura(source.transform.position, UITheme.Gold, 2f);
                         ShowCallout(e.AbilityName, source.Snapshot.Name, true);
                     }
                     yield return Wait(0.18f);
@@ -1529,8 +1547,16 @@ namespace Emberfall.UI.Screens
                         // A ward has its own sound, from ShieldGain; every other status is a buff or a debuff.
                         if (e.Status != StatusKind.Shield)
                         {
-                            if (StatusInfo.IsHarmful(e.Status)) App.Audio.Debuff();
-                            else App.Audio.Buff();
+                            if (StatusInfo.IsHarmful(e.Status))
+                            {
+                                if (!Feel.V2 || !_debuffSounded) App.Audio.Debuff();
+                                _debuffSounded = true;
+                            }
+                            else
+                            {
+                                if (!Feel.V2 || !_buffSounded) App.Audio.Buff();
+                                _buffSounded = true;
+                            }
                         }
                     }
                     yield return Wait(0.05f);
@@ -1580,7 +1606,7 @@ namespace Emberfall.UI.Screens
                         SpawnFloatingText(heir.HeadPosition,
                                           StatusInfo.DisplayName(e.Status) + " spreads",
                                           UITheme.Danger, 0.8f);
-                        _world.Vfx.Aura(heir.transform.position, UITheme.Danger, 1.8f);
+                        if (!Feel.V2) _world.Vfx.Aura(heir.transform.position, UITheme.Danger, 1.8f);
                     }
                     yield return Wait(0.12f);
                     break;
