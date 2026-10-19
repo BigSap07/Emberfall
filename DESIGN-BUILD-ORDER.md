@@ -586,8 +586,8 @@ count kept for the summary readers. `CheckWaveResolve`, `CheckClearedStagesById`
 
 **Wall chests (R17).** Stage 6 and stage 12 of every chapter carry a fixed one-time chest, shown on the
 campaign stage card before the fight and on both result screens. `WallChests` reads
-`wall-chests.json` (`WallChestConfig`, not hashed into `ContentVersion`): the wall pays 1.5 hours of
-frontier Gold and 12 Slag a chapter, the finale 4 hours and 30 Slag a chapter, the hours paid by
+`wall-chests.json` (`WallChestConfig`, not hashed into `ContentVersion`): the wall pays 1 hour of
+frontier Gold and 12 Slag a chapter, the finale 3 hours and 30 Slag a chapter, the hours paid by
 `GameSession.IdleYield` (its Gold half only) at the frontier the clear reaches. **A chest pays no Shards**:
 with Shards in it, the extra Shards re-drew every later summon of the reference player and 1 of the 60 walks
 that never convert and never ascend stuck at 3-4 (walk 51, seed 51000154: entry power 11,476 and 179 losses in
@@ -595,12 +595,14 @@ that never convert and never ascend stuck at 3-4 (walk 51, seed 51000154: entry 
 chest's size is not a safe lever, since smaller Shard-paying chests each stuck a different walk. **It pays on the first clear, from
 `GameSession.GrantBattleResult`, and there is no save field**: a chest is opened when its stage is in
 `PlayerProfile.ClearedStageIds`, so a stage cleared before this shipped reads as opened and pays
-nothing, and there are no retroactive chests. **The chests ship OFF**:
-`"enabled": false` in the file is the default, and the data stays in it. With them on, the reference walk 0's power
-band went over x1.25 at 2-7, 3-4 and 3-6 (x1.261 to x1.267), even with Gold only; with them off a first clear pays
-what it always paid and the stage card draws no chest line. `CheckWallChestsContentAndCard`, `CheckWallChestsPayOnce`
-and `CheckWallChestsRollBack` assert the shipped default is off and prove the payout, the card and the rollback by
-turning the chests on explicitly inside the check. To turn them on, set `"enabled": true` and re-run the walks.
+nothing, and there are no retroactive chests. **The chests ship ON at 1 hour and 3 hours.**
+At 1.5 and 4 hours, even paying Gold only, the reference walk 0's power band went over x1.25 at 2-7, 3-4 and
+3-6 (x1.261 to x1.267), so the hours were cut: at 1 and 3 the band's highest is x1.226 at 2-6 (2-7 x1.209, 3-4
+x1.188, 3-6 x1.183) and 0 of the 60 reference walks stick (worst 139.04 days). `"enabled": false` is the rollback
+and a first clear then pays what it always paid, with no chest line on the stage card.
+`CheckWallChestsContentAndCard`, `CheckWallChestsPayOnce` and `CheckWallChestsRollBack` assert the shipped default
+is on at 1 and 3 hours, that exactly the 12 wall and finale stages show a chest line, and prove the payout and the
+rollback, all on throwaway databases.
 
 **Battle stats.** `WaveResolution.Stats` (a `WaveStats`) holds what each hero dealt, took, healed,
 shielded and killed, per battle and summed over the battles that resolve fought. `GameSession.ResolveWave`

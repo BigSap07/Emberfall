@@ -25,8 +25,8 @@ namespace Emberfall.DevHarness
         private static string ChestJson(bool enabled)
         {
             return "{ \"enabled\": " + (enabled ? "true" : "false") + ", \"wallStageIndex\": 6, \"finaleStageIndex\": 12,"
-                   + " \"wall\": { \"hours\": 1.5, \"slagPerChapter\": 12 },"
-                   + " \"finale\": { \"hours\": 4, \"slagPerChapter\": 30 } }";
+                   + " \"wall\": { \"hours\": 1, \"slagPerChapter\": 12 },"
+                   + " \"finale\": { \"hours\": 3, \"slagPerChapter\": 30 } }";
         }
 
         private static ContentDatabase LoadWallChestContent(string contentDir, string chestJson)
@@ -55,28 +55,37 @@ namespace Emberfall.DevHarness
             ContentDatabase shippedDb = LoadWallChestContent(contentDir, shipped);
             WallChestConfig shippedCfg = shippedDb.WallChests;
 
-            // THE SHIPPED DEFAULT IS OFF: with the chests on, the reference walks' power band at walk 0 went
-            // over x1.25 at 2-7, 3-4 and 3-6. The file and its numbers stay; only the switch is off. Every
-            // other check here turns them on explicitly, from the file's own numbers.
+            // THE SHIPPED DEFAULT IS ON, at 1 hour (wall) and 3 hours (finale) of Gold. At 1.5 and 4 hours the
+            // reference walk 0's power band went over x1.25 at 2-7, 3-4 and 3-6; at 1 and 3 it does not.
             Check(shippedCfg.Warnings.Count == 0, shippedCfg.Warnings.Count == 0 ? "wall-chests.json parses without a warning"
                   : "wall-chests.json warns: " + string.Join("; ", shippedCfg.Warnings.ToArray()));
-            Check(!shippedCfg.Enabled && !shippedCfg.IsUsable && shippedCfg.Wall.Hours > 0.0 && shippedCfg.Finale.Hours > 0.0,
-                  "the shipped switch is OFF and the data is still in the file (wall " + shippedCfg.Wall.Hours + " h, finale "
-                  + shippedCfg.Finale.Hours + " h)");
-            GameSession offSession = new GameSession(shippedDb, GameSession.CreateNewProfile(shippedDb, 0));
-            int shown = 0;
-            for (int i = 0; i < shippedDb.AllStages.Count; i++)
-            {
-                WallChestView off = WallChests.Preview(offSession, shippedDb.AllStages[i]);
-                if (off.Present || off.Line.Length != 0) shown++;
-            }
-            Check(shown == 0, "with the shipped default no stage card shows a chest line (" + shown + " of " + shippedDb.AllStages.Count + " stages do)");
+            Check(shippedCfg.Enabled && shippedCfg.IsUsable && shippedCfg.Wall.Hours == 1.0 && shippedCfg.Finale.Hours == 3.0,
+                  "the shipped switch is ON, the wall chest is 1 hour and the finale chest 3 hours (found wall "
+                  + shippedCfg.Wall.Hours + " h, finale " + shippedCfg.Finale.Hours + " h)");
 
-            string enabledText = shipped.Replace("\"enabled\": false", "\"enabled\": true");
-            Check(enabledText != shipped, "the shipped file's switch reads \"enabled\": false, which is what turns it on for the checks below");
-            ContentDatabase on = LoadWallChestContent(contentDir, enabledText);
-            WallChestConfig cfg = on.WallChests;
-            Check(cfg.IsUsable && cfg.Enabled, "with the switch turned on the file is usable");
+            // Exactly the 12 wall and finale stages show a card line, and it says the new hours.
+            ContentDatabase on = shippedDb;
+            WallChestConfig cfg = shippedCfg;
+            GameSession cardSession = new GameSession(on, GameSession.CreateNewProfile(on, 0));
+            int shown = 0, wrongHours = 0;
+            for (int i = 0; i < on.AllStages.Count; i++)
+            {
+                StageDef st = on.AllStages[i];
+                WallChestView v = WallChests.Preview(cardSession, st);
+                if (v.Present || v.Line.Length != 0) shown++;
+                if (v.Present && v.Line.IndexOf(v.Finale ? "3 hours of Gold" : "1 hour of Gold", StringComparison.Ordinal) < 0) wrongHours++;
+            }
+            Check(shown == 12 && wrongHours == 0,
+                  "with the shipped default exactly 12 stages show a chest line (" + shown + " do) and each reads 1 hour (wall) or 3 hours (finale) of Gold ("
+                  + wrongHours + " do not)");
+
+            // The switch off still draws nothing and pays nothing: the rollback, on a throwaway database.
+            ContentDatabase offDb = LoadWallChestContent(contentDir, shipped.Replace("\"enabled\": true", "\"enabled\": false"));
+            GameSession offSession = new GameSession(offDb, GameSession.CreateNewProfile(offDb, 0));
+            int offShown = 0;
+            for (int i = 0; i < offDb.AllStages.Count; i++)
+                if (WallChests.Preview(offSession, offDb.AllStages[i]).Present) offShown++;
+            Check(offDb.WallChests.IsUsable == false && offShown == 0, "and with the switch turned off no stage shows a chest (" + offShown + ")");
             Check(cfg.Finale.Hours > cfg.Wall.Hours && cfg.Finale.SlagPerChapter > cfg.Wall.SlagPerChapter,
                   "the finale chest is larger than the wall chest in both hours (" + cfg.Finale.Hours + " against "
                   + cfg.Wall.Hours + ") and Slag per chapter (" + cfg.Finale.SlagPerChapter + " against "

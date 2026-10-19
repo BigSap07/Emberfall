@@ -1,8 +1,8 @@
 {
   "note": "The one-time chest on a chapter's wall stage and finale stage (R17 task 5), opened on the first clear. Hours are hours of idle GOLD at the frontier the clear reaches (the Gold half of GameSession.IdleYield); the chest pays NO Shards, because Shards in a chest re-draw every later summon and 1 of the 60 reference walks stuck at 3-4. Slag scales with the chapter number. enabled=false is the shipped default (DEFAULT TAKEN: with the chests on, the reference walks' power band at walk 0 went over x1.25 at 2-7, 3-4 and 3-6); the data stays, set enabled=true to turn the chests on, and a first clear with it false pays what it paid before this file. Not hashed into ContentVersion.",
-  "enabled": false,
+  "enabled": true,
   "wallStageIndex": 6,
   "finaleStageIndex": 12,
-  "wall": { "hours": 1.5, "slagPerChapter": 12 },
-  "finale": { "hours": 4, "slagPerChapter": 30 }
+  "wall": { "hours": 1, "slagPerChapter": 12 },
+  "finale": { "hours": 3, "slagPerChapter": 30 }
 }
