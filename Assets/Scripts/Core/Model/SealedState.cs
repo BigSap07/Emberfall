@@ -20,8 +20,8 @@ namespace Emberfall.Core.Model
     ///  - a hero copy: HeroInstance.SealedCopies, a count inside Copies.
     ///  - an armor piece: ArmorPiece.Sealed.
     ///
-    /// No purchase path exists yet. SealedGrants is the debug grant that makes the marks, and the
-    /// harness is its only caller. Saved from version 24 under the key `sealed`, written only once
+    /// SealedGrants makes the marks. Since R19 PurchaseGrants.Apply is the one game file that calls it
+    /// (the purchase path), and the harness calls it to build test saves. Saved from version 24 under the key `sealed`, written only once
     /// it holds something (the hero and armor marks ride on their own records the same way).
     /// </summary>
     public sealed class SealedState

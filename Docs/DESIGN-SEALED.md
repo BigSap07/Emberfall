@@ -2,7 +2,7 @@
 
 Decision record, dated 2026-10-19 (R17). Source: `IDEAS-ECONOMY-PACKS.md` section 2. Nothing bought with
 money may ever enter a random mechanic, directly or through a conversion. This is a rule in code, not
-a flag. No purchase path exists yet; this is the mark every later paid offer depends on.
+a flag. The mark every paid offer depends on; the purchase path R19 built grants only through it.
 
 ## What is marked
 
@@ -34,12 +34,14 @@ purse, so a spend that forgot to lower it errs toward Sealed.
 
 ## The debug grant
 
-`SealedGrants` makes the marks. Nothing under `Assets` calls it; the harness does
-(`CheckSealedNothingCallsTheGrant`). A purchase path, when one exists, grants through it.
+`SealedGrants` makes the marks. Since R19 exactly one game file calls it, `PurchaseGrants.Apply`, the one place a
+purchase becomes goods (`CheckSealedNothingCallsTheGrant`, `CheckStoreNoRandomPath`); the harness calls it directly
+to build test saves. Every grant of every paid offer goes through `Apply`, so a purchase cannot skip the mark.
 
 ## The save
 
-Version 24, the one bump of the R17 run. `SaveSerializer.HoldsVersion24Data` is the single place that
+Version 24, the one bump of the R17 run (R19 added version 25 for the Store; a save holding only Sealed goods still
+says 24). `SaveSerializer.HoldsVersion24Data` is the single place that
 decides a document is version 24; a document says 24 only when it holds data a version 23 build would
 drop, so a save with no Sealed good is byte for byte the document the build before wrote, version
 included. Keys: `sealed` (the three parts), `sealedCopies` on a hero, `sealed` on an armor piece, each

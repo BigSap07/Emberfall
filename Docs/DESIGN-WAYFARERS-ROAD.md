@@ -58,9 +58,12 @@ earned, never bought, so this is not a route for money into anything.
 ## The paid track
 
 Exists in `wayfarers-road.json` and as a **locked row** on the screen, drawn only with `PassPaidSwitch` on
-(define `EMBERFALL_PASS_PAID`, which stays off). **There is no purchase path.** `WayfarersRoad.ClaimPaid` refuses
-every call, and `WayfarersRoadState` has no field that could record an unlock, so no save can carry one.
-`CheckPassPaidTrack` proves all three. A Sealed 5-star copy at tier 30 is listed there because a purchased hero
+(define `EMBERFALL_PASS_PAID`, which stays off). **R19 added the purchase path** (`Docs/DESIGN-STORE.md`): the
+season premium grants `GrantKind.PassPremium`, which sets `WayfarersRoadState.PaidSeason` to the season, and
+`WayfarersRoad.ClaimPaid` (the four argument form) is open only with `StoreSwitch` on and that field equal to the
+season the clock is in. A new season locks it again with no step to run and `Roll` clears the paid claims
+(`PaidClaimedMask`). Every paid reward is paid through `PurchaseGrants.Apply`, so it is Sealed. The two argument
+`ClaimPaid` still refuses every call. `CheckPassPaidTrack` and `CheckStorePass` prove it. A Sealed 5-star copy at tier 30 is listed there because a purchased hero
 is Sealed (`DESIGN-SEALED.md`).
 
 ## The flag

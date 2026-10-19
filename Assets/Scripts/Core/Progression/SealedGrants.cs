@@ -6,10 +6,9 @@ using Emberfall.Core.Session;
 namespace Emberfall.Core.Progression
 {
     /// <summary>
-    /// THE DEBUG GRANT for Sealed goods (SealedState). No purchase path exists yet, so nothing in
-    /// the game calls this: the harness does, to put each kind of Sealed good in a save and prove
-    /// every random mechanic refuses it. When a purchase path is built it grants through these
-    /// methods and not around them, so there is one place that makes a Sealed mark.
+    /// THE GRANT for Sealed goods (SealedState). PurchaseGrants.Apply (R19) is the one game file that
+    /// calls this, so there is one place that makes a Sealed mark. The harness calls it too, to put
+    /// each kind of Sealed good in a save and prove every random mechanic refuses it.
     ///
     /// A grant adds to the purse or the collection exactly as an earned one would and then marks
     /// the part Sealed, so a Sealed good is always also a real good a deterministic sink accepts.

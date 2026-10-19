@@ -894,10 +894,11 @@ part of the Gold, Shards and Slag purses, `HeroInstance.SealedCopies` a count in
 `RerollArmor`, `CombineArmor` and `PlayerProfile.ArmorCombineCandidates` refuse a Sealed piece and Sealed Slag, and the
 Quartermaster refuses Sealed Gold. A deterministic sink takes it: `SpendGoldDeterministic` (a level-up)
 and `Ascend` take the Sealed part first, equip and salvage accept a Sealed piece, and salvaging one pays
-Sealed Slag so a purchase cannot be washed into Slag a reroll accepts. **No purchase path exists.**
-`SealedGrants` is the debug grant, called by nothing under `Assets` (the harness proves it). It is a rule
-and has no flag. `CheckSealed` is one check per refusal, each proving the save is byte for byte unchanged
-after it.
+Sealed Slag so a purchase cannot be washed into Slag a reroll accepts. **A purchase path exists since R19,
+behind `StoreSwitch` (off).** `SealedGrants` is called by `PurchaseGrants` alone, the one place a purchase
+becomes goods (`CheckStoreNoRandomPath` proves it, and that no file of the purchase path names a random
+mechanic). The Sealed rule itself is a rule and has no flag. `CheckSealed` is one check per refusal, each
+proving the save is byte for byte unchanged after it.
 
 **The Quartermaster** (`Docs/DESIGN-QUARTERMASTER.md`, the build of `DESIGN-SHOP.md`). A daily shelf of six
 rolled armor pieces, one per slot, sold for Gold, restocked at the reward day. `Quartermaster.Open` rolls a
@@ -982,6 +983,14 @@ document's own version. Absence of every key is the empty state, so there is no 
 round trip, the version and a rollback. **The owner must raise the server's `save_limits` row to 24 before a
 cloud player holds any of it**: `update public.save_limits set max_save_version = 24, updated_at = now();`
 (`save_limits_24.sql` in the R17 handoff, not applied).
+Version 25 is R19's one bump (the Store): the `store` block (`StoreState`: one counter record per offer and every
+purchase receipt) and, inside `wayfarersRoad`, `paid` and `paidClaimed` (a bought paid track).
+`SaveSerializer.HoldsVersion25Data` is the one place that decides a document is a version 25 document, exactly as
+`HoldsVersion24Data` is for 24: a document holding only R17 data still says 24, and one holding none says 22 or
+23. `CheckStoreSave` proves the three cases, the round trip, damaged blocks and the receipt cap. **The owner must
+raise the server's `save_limits` row to 25 before a cloud player holds any of it**:
+`update public.save_limits set max_save_version = 25, updated_at = now();` (`save_limits_25.sql` in the R19
+handoff, not applied).
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -1182,10 +1191,24 @@ hourglasses, Slag, Dust in sweeps of the frontier stage, a 4-star of the player'
 a Monday epoch, so every player is in the same one; its stamp only moves forward, a wound-back clock reopens
 nothing and unclaimed tiers lapse (`CheckPassRollover`). The paid track is in the data and a locked row on
 `WayfarersRoadScreen`, drawn only with `PassPaidSwitch` (define `EMBERFALL_PASS_PAID`, off); `ClaimPaid`
-refuses every call and the saved state has no field that could record an unlock. `WayfarersRoadSwitch` is on
+refuses every call unless the Store (R19, `StoreSwitch`) is on and the player bought this season's premium
+(`WayfarersRoadState.PaidSeason`), and then pays the paid tier through `PurchaseGrants.Apply`, so a paid reward is
+Sealed (`CheckStorePass`). `WayfarersRoadSwitch` is on
 by default (`EMBERFALL_WAYFARERS_ROAD_OFF` rolls it back), **but the pass is inert until the build defines
 `EMBERFALL_DAILY_LOOP_ON`**, because the loop that feeds it is off by default; its door is a button in the
 header of `OrdersScreen`, which exists only with the loop. That default is the lead's call of 2026-10-19.
+
+**The purchase path (R19, `Docs/DESIGN-STORE.md`).** Behind `StoreSwitch` (define `EMBERFALL_STORE_ON`, off) and
+with no real money in this run. All of it is Core and proven by the harness without Unity: `PurchaseGrants.Apply`
+turns a fixed `PurchaseGrant` (a closed list of `GrantKind` lines, none random, no Shards) into Sealed goods, all or
+nothing; `PurchaseLedger` grants once per receipt id, writes nothing in `Begin`, and restores a non-consumable on a
+new profile; `PurchaseFlow` wires a store backend to the ledger and abandons a purchase the store never completes
+after 120 seconds; `SimulatedStore` is the debug store. `StoreModes.Resolve` picks what a build does: the editor and
+a development build are the test store, a release build is coming soon with no buy path. The Unity IAP adapter
+(`UnityIapBackend`, `Assets/Scripts/Game/Store`) is a thin layer behind `EMBERFALL_UNITY_IAP` (set by
+`Assets/csc.rsp`) and Unity IAP's fake store in the editor; `PurchaseService` builds the flow. `CheckStore` is the
+proof: grants, ledger, restore, every random mechanic refusing a profile that holds only purchased goods, the
+paid track, the save, the build modes, the flow and a rollback.
 
 ### The first session, and the unlock table
 
