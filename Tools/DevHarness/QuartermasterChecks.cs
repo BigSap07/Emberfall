@@ -471,7 +471,7 @@ namespace Emberfall.DevHarness
             Check(back != null && error == null && SaveSerializer.Serialize(back) == json
                   && back.Quartermaster.Slots.Count == 6 && back.Quartermaster.Slots[1].Sold && !back.Quartermaster.Slots[0].Sold,
                   "SAVE ROUND TRIP: a stock with one shelf sold saves, loads back identical and saves again byte for byte (" + json.Length + " characters)");
-            Check(JsonValue.Parse(json).GetInt("version", 0) == SaveSerializer.CurrentVersion && SaveSerializer.VersionOfJson(json) == 24 && json.Contains("\"quartermaster\""),
+            Check(JsonValue.Parse(json).GetInt("version", 0) == 24 && SaveSerializer.VersionOfJson(json) == 24 && json.Contains("\"quartermaster\""),
                   "and the document claims version 24, the version that holds the shelf");
             Check(back != null && back.Quartermaster.Slots[0].Piece.Uid == "" && back.OwnedArmor.Count == s.Profile.OwnedArmor.Count,
                   "the stocked pieces carry no uid and the bought one is in the bag");

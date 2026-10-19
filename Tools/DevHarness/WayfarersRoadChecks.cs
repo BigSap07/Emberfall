@@ -415,7 +415,7 @@ namespace Emberfall.DevHarness
             Check(back != null && error == null && SaveSerializer.Serialize(back) == json
                   && back.WayfarersRoad.Points == s.Profile.WayfarersRoad.Points && back.WayfarersRoad.HasClaimed(1) && back.WayfarersRoad.HasClaimed(2) && !back.WayfarersRoad.HasClaimed(3),
                   "SAVE ROUND TRIP: a season with points and two tiers claimed saves, loads back identical and saves again byte for byte");
-            Check(JsonValue.Parse(json).GetInt("version", 0) == SaveSerializer.CurrentVersion && SaveSerializer.VersionOfJson(json) == 24 && json.Contains("\"wayfarersRoad\""),
+            Check(JsonValue.Parse(json).GetInt("version", 0) == 24 && SaveSerializer.VersionOfJson(json) == 24 && json.Contains("\"wayfarersRoad\""),
                   "and the document claims version 24, the version that holds the pass");
 
             string[] damaged = { "\"wayfarersRoad\": \"x\"", "\"wayfarersRoad\": 7", "\"wayfarersRoad\": []", "\"wayfarersRoad\": { \"season\": \"x\", \"points\": [], \"claimed\": { } }" };
@@ -494,13 +494,13 @@ namespace Emberfall.DevHarness
             Check(allRefused && PassSnapshot(s) == before,
                   "NO PURCHASE PATH: every paid claim, with the define on or off, is refused as PaidLocked and the save is byte for byte as it was");
 
-            // Nothing in the state could hold an unlock.
+            // Only the Store (R19) can write an unlock: the state's two paid fields, and ClaimPaid reads them only with StoreSwitch on.
             FieldInfo[] fields = typeof(WayfarersRoadState).GetFields(BindingFlags.Public | BindingFlags.Instance);
             List<string> names = new List<string>();
             for (int i = 0; i < fields.Length; i++) names.Add(fields[i].Name);
             names.Sort();
-            Check(string.Join(",", names.ToArray()) == "Bought,ClaimedMask,Points,SeasonIndex",
-                  "and the saved state has no field that could record an unlock (" + string.Join(", ", names.ToArray()) + "), so no save can carry a paid track");
+            Check(string.Join(",", names.ToArray()) == "Bought,ClaimedMask,PaidClaimedMask,PaidSeason,Points,SeasonIndex",
+                  "and the only fields that record an unlock are PaidSeason and PaidClaimedMask (" + string.Join(", ", names.ToArray()) + "), written by a purchase alone (CheckStorePass)");
         }
 
         // ------------------------------------------------------------------ 10. rollback

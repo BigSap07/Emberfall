@@ -61,6 +61,12 @@ namespace Emberfall.Core.Data
         public StoreOfferKind Kind;
         public int Limit = 1;
         public StoreReset Reset = StoreReset.Never;
+        /// <summary>True for a product a store can hand back to a new profile of the same account.</summary>
+        public bool Restorable;
+
+        /// <summary>The offer as the purchase path needs it: id, placeholder product id, price tier and the
+        /// fixed grant. Built from the fields below by StoreConfig; never written by hand.</summary>
+        public StoreOffer Built = new StoreOffer();
 
         /// <summary>Hours of idle Gold at the buyer's frontier, paid as Sealed Gold.</summary>
         public double Hours;
@@ -179,6 +185,7 @@ namespace Emberfall.Core.Data
                 default: c.Warnings.Add(where + " has unknown reset '" + reset + "' and is dropped"); return null;
             }
             d.Limit = Math.Max(1, j.GetInt("limit", 1));
+            d.Restorable = j.GetBool("restorable", false);
 
             double eur;
             if (!c.Tiers.TryGetValue(d.Tier, out eur)) { c.Warnings.Add(where + " names price tier '" + d.Tier + "' that the file does not define and is dropped"); return null; }
@@ -243,7 +250,51 @@ namespace Emberfall.Core.Data
                     if (d.Reset != StoreReset.Month) { c.Warnings.Add(where + " is a contract that does not reset monthly and is dropped"); return null; }
                     break;
             }
+            Build(d);
             return d;
+        }
+
+        /// <summary>Fills Built from the offer's fields: the purchase's fixed grant. A pack gives idle Gold hours,
+        /// Slag and Dust sweeps; a starter adds one hero of a named list; a ledger, a fund and the pass give
+        /// nothing at purchase (Activate, or the pass's premium) and pay later through the same grant path; a
+        /// contract is a copy of an owned hero of its star count. Nothing here can be a roll: the kinds are the
+        /// closed set of GrantKind.</summary>
+        public static void Build(StoreOfferDef d)
+        {
+            StoreOffer o = new StoreOffer();
+            o.Id = d.Id;
+            o.ProductId = d.ProductId;
+            o.PriceTier = d.PriceEur.ToString("0.00", CultureInfo.InvariantCulture);
+            o.Restorable = d.Restorable;
+            PurchaseGrant g = o.Grant;
+            switch (d.Kind)
+            {
+                case StoreOfferKind.Pack:
+                case StoreOfferKind.Starter:
+                    if (d.Hours > 0.0) g.Add(new GrantItem(GrantKind.IdleGoldHours, d.Hours));
+                    if (d.Slag > 0) g.Add(new GrantItem(GrantKind.Slag, d.Slag));
+                    if (d.DustSweeps > 0.0) g.Add(new GrantItem(GrantKind.DustSweeps, d.DustSweeps));
+                    if (d.Kind == StoreOfferKind.Starter)
+                    {
+                        GrantItem pick = new GrantItem(GrantKind.HeroChoice, 0);
+                        pick.HeroIds.AddRange(d.HeroChoices);
+                        g.Add(pick);
+                    }
+                    break;
+                case StoreOfferKind.Ledger:
+                case StoreOfferKind.Growth:
+                    g.Add(new GrantItem(GrantKind.Activate, 0));
+                    break;
+                case StoreOfferKind.Pass:
+                    g.Add(new GrantItem(GrantKind.PassPremium, 0));
+                    break;
+                case StoreOfferKind.Contract:
+                    GrantItem owned = new GrantItem(GrantKind.OwnedHeroCopy, 0);
+                    owned.Stars = d.Stars;
+                    g.Add(owned);   // one copy: a grant takes at most one pick from the buyer
+                    break;
+            }
+            d.Built = o;
         }
 
         /// <summary>Drops what this content cannot honour: a hero that is not in the roster, not of the offer's
@@ -266,6 +317,7 @@ namespace Emberfall.Core.Data
                         }
                     }
                     if (d.HeroChoices.Count == 0) { Warnings.Add("store.json: offer '" + d.Id + "' has no valid hero left and is dropped"); Offers.RemoveAt(i); continue; }
+                    Build(d);
                 }
                 if (d.Kind == StoreOfferKind.Growth)
                 {

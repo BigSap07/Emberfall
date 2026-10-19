@@ -159,6 +159,7 @@ namespace Emberfall.Core.Progression
             st.Points = 0;
             st.ClaimedMask = 0;
             st.Bought = 0;
+            st.PaidClaimedMask = 0;
             return true;
         }
 
@@ -299,12 +300,67 @@ namespace Emberfall.Core.Progression
             return r;
         }
 
-        /// <summary>The paid track. There is no purchase path, so this refuses every call, with the
-        /// switch on or off, and writes nothing.</summary>
+        /// <summary>The paid track without a clock or a choice: refuses every call, with the switch on or
+        /// off, and writes nothing. A paid claim needs the four argument form below.</summary>
         public static PassResult ClaimPaid(GameSession session, int tier)
         {
             PassResult r = new PassResult();
             r.Reason = PassRefusal.PaidLocked;
+            return r;
+        }
+
+        /// <summary>
+        /// Claims one reached tier of the PAID track (R19). Open only when StoreSwitch is on and the player
+        /// bought this season's premium (WayfarersRoadState.PaidSeason equals the season the clock is in);
+        /// otherwise it refuses PaidLocked and writes nothing, not even a season roll. Its reward is paid
+        /// through PurchaseGrants.Apply like every purchase, so it is SEALED (a Sealed 5-star copy at tier
+        /// 30). A cosmetic marks the tier claimed and grants nothing. heroId is the pick for a selector.
+        /// </summary>
+        public static PassResult ClaimPaid(GameSession session, int tier, string heroId, long nowUnix)
+        {
+            PassResult r = new PassResult();
+            r.Reason = PassRefusal.PaidLocked;
+            if (!StoreSwitch.Enabled || !Active(session)) return r;
+            WayfarersRoadState st = session.Profile.WayfarersRoad;
+            long season = SeasonOf(session, nowUnix);
+            if (season == 0 || st.PaidSeason != season) return r;
+            Roll(session, nowUnix);
+            PassRewardDef d = session.Content.WayfarersRoad.PaidAt(tier);
+            if (d == null) { r.Reason = PassRefusal.NoSuchTier; return r; }
+            if (st.HasClaimedPaid(tier)) { r.Reason = PassRefusal.Claimed; return r; }
+            if (tier > Reached(session)) { r.Reason = PassRefusal.NotReached; return r; }
+
+            PurchaseGrant grant = new PurchaseGrant();
+            switch (d.Kind)
+            {
+                case PassRewardKind.Hourglass:
+                    grant.Add(new GrantItem(GrantKind.IdleGoldHours, d.Amount));
+                    break;
+                case PassRewardKind.Dust:
+                    grant.Add(new GrantItem(GrantKind.Dust, Math.Round(d.Amount * DustPerSweep(session))));
+                    break;
+                case PassRewardKind.Slag:
+                    grant.Add(new GrantItem(GrantKind.Slag, Math.Round(d.Amount)));
+                    break;
+                case PassRewardKind.Selector:
+                    GrantItem pick = new GrantItem(GrantKind.HeroChoice, 0);
+                    List<HeroDef> pool = SelectorHeroes(session, d.Stars);
+                    for (int i = 0; i < pool.Count; i++) pick.HeroIds.Add(pool[i].Id);
+                    grant.Add(pick);
+                    break;
+                default:
+                    grant.Add(new GrantItem(GrantKind.Activate, 0));
+                    break;
+            }
+            GrantResult g = PurchaseGrants.Apply(session, grant, heroId, nowUnix);
+            if (!g.Success) { r.Reason = g.Reason == GrantRefusal.BadChoice ? PassRefusal.BadChoice : PassRefusal.Closed; return r; }
+            st.PaidClaimedMask |= 1 << (tier - 1);
+            r.Gold = (int)Math.Min(int.MaxValue, g.Gold);
+            r.Slag = (int)g.Slag;
+            r.Dust = (int)g.Dust;
+            r.Hero = g.HeroId.Length > 0 ? session.Profile.FindHeroByDefId(g.HeroId) : null;
+            r.Reason = PassRefusal.None;
+            r.Success = true;
             return r;
         }
 

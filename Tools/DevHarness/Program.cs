@@ -301,6 +301,7 @@ namespace Emberfall.DevHarness
             CheckRelicEndgame(content, contentDir);
             CheckWayfarersRoad(content, contentDir);
             CheckStoreOffers(content, contentDir);
+            CheckStore(content, contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
             CheckCaptureWatchdog(content, contentDir);

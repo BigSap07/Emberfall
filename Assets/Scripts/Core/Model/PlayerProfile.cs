@@ -527,9 +527,9 @@ namespace Emberfall.Core.Model
         public WayfarersRoadState WayfarersRoad = new WayfarersRoadState();
 
         /// <summary>
-        /// The Store's counters, ledger card, growth fund and paid-track claims (Docs/DESIGN-STORE.md). NEVER NULL.
-        /// Empty for every profile that never bought anything, and an empty one is not written to the save. The
-        /// save key `store` and the version it needs belong to SaveSerializer.
+        /// The Store's counters and receipts (R19, Docs/DESIGN-STORE.md). NEVER NULL. Empty for every profile
+        /// that never bought anything, and an empty one is not written to the save. Saved from version 25, and
+        /// only a save that carries one says 25 (SaveSerializer.VersionOf).
         /// </summary>
         public StoreState Store = new StoreState();
 

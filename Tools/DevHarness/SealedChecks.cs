@@ -288,9 +288,9 @@ namespace Emberfall.DevHarness
                   && backHero != null && backHero.SealedCopies == 2 && backHero.Copies == 2
                   && back.OwnedArmor.Count == 1 && back.OwnedArmor[0].Sealed,
                   "SEALED SAVE ROUND TRIP: three purse parts, two Sealed copies of a hero and a Sealed piece save, load back identical and save again byte for byte");
-            Check(JsonValue.Parse(json).GetInt("version", 0) == SaveSerializer.CurrentVersion && SaveSerializer.VersionOfJson(json) == SaveSerializer.CurrentVersion
-                  && SaveSerializer.CurrentVersion == 24,
-                  "and the document claims version " + SaveSerializer.CurrentVersion + ", the version that holds Sealed data");
+            Check(JsonValue.Parse(json).GetInt("version", 0) == SaveSerializer.CoreGapsVersion && SaveSerializer.VersionOfJson(json) == SaveSerializer.CoreGapsVersion
+                  && SaveSerializer.CoreGapsVersion == 24,
+                  "and the document claims version " + SaveSerializer.CoreGapsVersion + ", the version that holds Sealed data");
 
             // Each mark alone is enough to claim 24.
             GameSession g1 = SealedSession(db); SealedGrants.GrantGold(g1, 1);
@@ -354,12 +354,13 @@ namespace Emberfall.DevHarness
             string[] files = Directory.GetFiles(Path.Combine(root, "Assets"), "*.cs", SearchOption.AllDirectories);
             for (int i = 0; i < files.Length; i++)
             {
-                // StoreOffers is the one purchase grant path (Docs/DESIGN-STORE.md): it grants only through SealedGrants.
-                if (Path.GetFileName(files[i]) == "SealedGrants.cs" || Path.GetFileName(files[i]) == "StoreOffers.cs") continue;
+                // R19: PurchaseGrants.cs is the ONE game file that grants Sealed goods (CheckStoreNoRandomPath
+                // proves the rest of what it may and may not call).
+                if (Path.GetFileName(files[i]) == "SealedGrants.cs" || Path.GetFileName(files[i]) == "PurchaseGrants.cs") continue;
                 if (File.ReadAllText(files[i]).Contains("SealedGrants.Grant")) hits.Add(Path.GetFileName(files[i]));
             }
             Check(hits.Count == 0,
-                  "ONE GRANT PATH: nothing under Assets calls SealedGrants but StoreOffers, the Store's one purchase grant path" + (hits.Count > 0 ? " (" + string.Join(", ", hits.ToArray()) + ")" : ""));
+                  "ONE GRANT PATH: nothing under Assets calls SealedGrants but PurchaseGrants, the one place a purchase becomes Sealed goods" + (hits.Count > 0 ? " (" + string.Join(", ", hits.ToArray()) + ")" : ""));
         }
 
         private static string SealedRepoRoot(string contentDir)
