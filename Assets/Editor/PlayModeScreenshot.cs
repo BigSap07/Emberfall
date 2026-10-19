@@ -2155,6 +2155,7 @@ namespace Emberfall.EditorTools
 
             if ((name == "Toast" || name == "ToastLong") && frame == shotAt - 30) app.Notify(ToastSample(name));
 
+            if (IsStoreScreen(name)) PumpStore(app, name, frame, showAt);
             if (frame == shotAt - 20) Canvas.ForceUpdateCanvases();
             if (frame == shotAt) Shoot(name, frame, slot);
         }
@@ -2436,6 +2437,38 @@ namespace Emberfall.EditorTools
             Debug.Log("PlayModeScreenshot: seeded the Store for " + name);
         }
 
+        /// <summary>
+        /// Frame-based help for the Store targets (R19 A). 15 frames after the Show it says which screen is up and
+        /// puts the Store back if anything else is (a shot of the Hub is a failed shot, and the log must say why). The
+        /// purchase target buys the Weekly Pack 30 frames after the Show, through the debug store and the flow exactly
+        /// as the Buy button does, and the screen refreshes on the flow's own Finished event; the shot is 60 frames later.
+        /// </summary>
+        private static void PumpStore(GameApp app, string name, int frame, int showAt)
+        {
+            StoreScreen store = app.Router.Store;
+            if (store == null) return;
+            if (frame == showAt + 15)
+            {
+                UIScreen current = app.Router.Current;
+                Debug.Log("PlayModeScreenshot: " + name + " frame " + frame + ": screen is " + (current != null ? current.Id.ToString() : "none")
+                          + ", gold " + app.Session.Profile.Gold + ", sealed gold " + app.Session.Profile.Sealed.Gold);
+                if (name != "HubStore" && (current == null || current.Id != ScreenId.Store))
+                {
+                    Debug.LogWarning("PlayModeScreenshot: " + name + " is not showing the Store; showing it again.");
+                    app.Router.Show(ScreenId.Store);
+                    OpenStoreView(app, name);
+                }
+            }
+            if (name == "StorePurchase" && frame == showAt + 30)
+            {
+                long goldBefore = app.Session.Profile.Gold;
+                bool done = StoreBuy(app, "weekly_pack", "");
+                Debug.Log("PlayModeScreenshot: StorePurchase bought the Weekly Pack in the debug store: finished " + done + ", gold " + goldBefore + " to " + app.Session.Profile.Gold
+                          + ", sealed gold " + app.Session.Profile.Sealed.Gold);
+                store.SelectForCapture("weekly_pack");
+            }
+        }
+
         /// <summary>Opens the tab a target photographs, after the Show.</summary>
         private static void OpenStoreView(GameApp app, string name)
         {
@@ -2452,9 +2485,7 @@ namespace Emberfall.EditorTools
                 case "StorePacksGrowth": store.SelectForCapture("growth_fund"); break;
                 case "StoreComingSoon": store.SelectForCapture("weekly_pack"); break;
                 case "StorePurchase":
-                    store.SelectForCapture("weekly_pack");
-                    StoreBuy(app, "weekly_pack", "");
-                    store.SelectForCapture("weekly_pack");
+                    store.SelectForCapture("weekly_pack");   // the buy itself runs later, on a frame (PumpStore)
                     break;
                 case "StorePacksPicker":
                     store.PickForCapture("starter_pact", "brenna_the_remaining_wall");
