@@ -508,8 +508,10 @@ namespace Emberfall.Battle
             // rendered image without going invisible from reversed winding - the only visible
             // effect is the mirror.
             //
-            // THE SIGN IS THE FACING, and nothing else may write it. SpriteAnimator repositions
-            // this quad on every clip change, but only ever through localPosition.y
+            // THE SIGN IS THE FACING, and nothing else may write it (but the one v2 exception:
+            // SpriteAnimator.ApplyClipFlip inverts it for the clips a unit's stage-v2.json clipFlip
+            // names, and restores it when another clip starts). SpriteAnimator repositions
+            // this quad on every clip change, but otherwise only through localPosition.y
             // (ApplyFootPosition), never through localScale - so the flip survives a basic, a hit
             // reaction and a death without being reapplied. The frame itself is chosen in UV space
             // (ApplyFrame writes mainTextureOffset/Scale), which a negative X scale mirrors along

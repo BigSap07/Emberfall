@@ -15,11 +15,17 @@ namespace Emberfall.EditorTools
     /// THE ROSTER SHEET (R15, task 4b): every unit of one side in one picture, in one clip, standing
     /// the way a battle stands it, so a tester can see at a glance which of them faces the wrong way.
     ///
-    ///   Screen:RosterSheet=allies            the whole hero roster, idle
-    ///   Screen:RosterSheet=enemies.skill     every enemy, at the strike frame of its skill
+    ///   Screen:RosterSheet=allies            the first twelve heroes, idle
+    ///   Screen:RosterSheet=allies.b          the next twelve, and allies.c the rest
+    ///   Screen:RosterSheet=enemies.skill.d   the last enemies, at the strike frame of their skill
     ///   Screen:RosterSheet=allies.death.v1   the R12 look, the last frame of the death clip
     ///
-    /// The text after the = is "side[.clip][.preset]". side is allies or enemies. clip is idle (the
+    /// A sheet holds twelve units, six across and two deep, each in a cell of its own, so no body
+    /// overlaps another and every name is readable. The log says how many sheets a side has (allies
+    /// three, enemies four) and, per unit, what was applied: the mirror, the stand-in, and the flip
+    /// of every clip, so the log carries the facing as well as the picture.
+    ///
+    /// The text after the = is "side[.a|b|c|d][.clip][.preset]". side is allies or enemies. clip is idle (the
     /// default), basic, skill, hit or death. preset is v1 or v2 and forces the stage look for the
     /// shot; without it the look is whatever vfx.json "feelPreset" says. The dots are dots because the text becomes
     /// part of the PNG's name and a colon cannot be in a Windows file name.
@@ -42,9 +48,13 @@ namespace Emberfall.EditorTools
     /// </summary>
     public static class RosterSheetShots
     {
-        private const int Columns = 8;
-        private const float CellWidth = 2.9f;
-        private const float CellDepth = 3.6f;
+        // One unit to a cell and no cell touches another: a cell is wider than the widest unit (a
+        // scaled vulture is about 2.7 across) and deep enough that a unit's head clears the name of
+        // the unit behind it (2.3 tall x cos 28 = 2.0, plus the label, over sin 28 = 5.5 of z).
+        private const int Columns = 6;
+        private const int Rows = 2;
+        private const float CellWidth = 3.4f;
+        private const float CellDepth = 5.8f;
 
         private static GameObject _root;
 
@@ -53,10 +63,12 @@ namespace Emberfall.EditorTools
             string[] parts = (spec ?? "").Split('.');
             bool allies = parts.Length == 0 || parts[0] != "enemies";
             string clip = "idle";
+            int page = 0;
             bool? v2 = null;
             for (int i = 1; i < parts.Length; i++)
             {
-                if (parts[i] == "v1") v2 = false;
+                if (parts[i].Length == 1 && parts[i][0] >= 'a' && parts[i][0] <= 'd') page = parts[i][0] - 'a';
+                else if (parts[i] == "v1") v2 = false;
                 else if (parts[i] == "v2") v2 = true;
                 else if (parts[i] == "idle" || parts[i] == "basic" || parts[i] == "skill" || parts[i] == "hit" || parts[i] == "death") clip = parts[i];
                 else Debug.LogWarning("RosterSheet: '" + parts[i] + "' is not a clip (idle, basic, skill, hit, death) or a preset (v1, v2), ignored.");
@@ -67,7 +79,11 @@ namespace Emberfall.EditorTools
             if (_root != null) UnityEngine.Object.Destroy(_root);
             _root = new GameObject("RosterSheet");
 
-            List<UnitSnapshot> units = allies ? AllyUnits(app.Content) : EnemyUnits(app.Content);
+            List<UnitSnapshot> everyone = allies ? AllyUnits(app.Content) : EnemyUnits(app.Content);
+            int perSheet = Columns * Rows;
+            int sheets = (everyone.Count + perSheet - 1) / perSheet;
+            if (page >= sheets) { Debug.LogWarning("RosterSheet: " + (allies ? "allies" : "enemies") + " has " + sheets + " sheets, so '" + (char)('a' + page) + "' is shown as the last."); page = sheets - 1; }
+            List<UnitSnapshot> units = everyone.GetRange(page * perSheet, Math.Min(perSheet, everyone.Count - page * perSheet));
             int rows = (units.Count + Columns - 1) / Columns;
 
             float width = Columns * CellWidth;
@@ -84,9 +100,9 @@ namespace Emberfall.EditorTools
             camera.transform.localRotation = Quaternion.Euler(BattleFraming.CameraPitch, 0f, 0f);
             float aspect = Mathf.Max(0.5f, (float)Screen.width / Mathf.Max(1, Screen.height));
             float byWidth = width * 0.5f / aspect;
-            float byHeight = (depth * Mathf.Sin(BattleFraming.CameraPitch * Mathf.Deg2Rad) + 3.4f) * 0.5f;
+            float byHeight = ((rows - 1) * CellDepth * Mathf.Sin(BattleFraming.CameraPitch * Mathf.Deg2Rad) + 3.4f) * 0.5f;
             camera.orthographicSize = Mathf.Max(byWidth, byHeight);
-            Vector3 centre = new Vector3(0f, 1.2f, (rows - 1) * CellDepth * 0.5f);
+            Vector3 centre = new Vector3(0f, 0.6f, (rows - 1) * CellDepth * 0.5f);
             camera.transform.localPosition = centre - camera.transform.forward * 30f;
 
             StringBuilder log = new StringBuilder();
@@ -106,15 +122,40 @@ namespace Emberfall.EditorTools
                 if (actor.Rig != null && actor.Rig.Nameplate != null) actor.Rig.Nameplate.gameObject.SetActive(false);
 
                 Label(host.transform, at, snapshot, allies);
-                log.AppendLine("RosterSheet: unit " + snapshot.DefId + " drawn as "
-                               + (actor.Rig != null && actor.Rig.Animation != null ? "a sheet" : "a still or a rig")
-                               + (actor.Rig != null ? ", height " + actor.Rig.Height.ToString("0.00") : "")
-                               + ", clip " + (actor.Rig != null && actor.Rig.Animation != null ? actor.Rig.Animation.CurrentClip : "none"));
+                log.AppendLine(UnitLine(actor, snapshot, allies));
             }
 
-            Debug.Log("RosterSheet: " + (allies ? "allies" : "enemies") + " " + clip + " " + (StageFeel.V2 ? "v2" : "v1") + ", " + units.Count
+            Debug.Log("RosterSheet: " + (allies ? "allies" : "enemies") + " sheet " + (char)('a' + page) + " of " + sheets + ", " + clip + " " + (StageFeel.V2 ? "v2" : "v1") + ", " + units.Count
                       + " units in " + rows + " rows of " + Columns + ", orthographic size " + camera.orthographicSize.ToString("0.00"));
             Debug.Log(log.ToString());
+        }
+
+        /// <summary>One log line per unit: what the stage resolved it to and every clip's flip, as the
+        /// rig applies it (UnitRig.SpriteFlipped of the mirror, inverted for the unit's clipFlip clips).</summary>
+        private static string UnitLine(UnitActor actor, UnitSnapshot snapshot, bool allies)
+        {
+            VisualDef own = snapshot.Visual;
+            VisualDef drawn = StageFeel.Resolve(snapshot);
+            HashSet<string> inverted = StageFeel.ClipFlips(snapshot.DefId);
+            bool baseFlip = UnitRig.SpriteFlipped(drawn.SpriteMirror, allies);
+            string standIn = own.SpritePending && !drawn.SpritePending ? drawn.Sprite : "-";
+            StringBuilder sb = new StringBuilder();
+            sb.Append("RosterSheet: unit ").Append(snapshot.DefId)
+              .Append(" side=").Append(allies ? "ally" : "enemy")
+              .Append(" mirror=").Append(drawn.SpriteMirror ? "true" : "false")
+              .Append(" (own ").Append(own.SpriteMirror ? "true" : "false").Append(")")
+              .Append(" standIn=").Append(standIn)
+              .Append(" scale=").Append(drawn.Scale.ToString("0.00"))
+              .Append(actor.Rig != null && actor.Rig.Animation != null ? " sheet" : " still-or-rig")
+              .Append(" flip(");
+            string[] clips = { "idle", "basic", "basic2", "skill", "hit_reaction", "death" };
+            for (int i = 0; i < clips.Length; i++)
+            {
+                bool flip = baseFlip != (inverted != null && inverted.Contains(clips[i]));
+                sb.Append(i > 0 ? " " : "").Append(clips[i]).Append("=").Append(flip ? "asDrawn" : "mirrored");
+            }
+            sb.Append(") clip=").Append(actor.Rig != null && actor.Rig.Animation != null ? actor.Rig.Animation.CurrentClip : "none");
+            return sb.ToString();
         }
 
         // ------------------------------------------------------------------ the roster

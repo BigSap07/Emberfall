@@ -277,6 +277,29 @@ namespace Emberfall.DevHarness
             Line("  S3 in v1 " + v1WrongNames.Count + " units face the wrong way on at least one side (the six listed heroes and every mannequin enemy);"
                  + " " + undecided + " sheets are undecided in the audit and left to the roster sheet capture");
 
+            // clipFlip names units that have a sheet and clips that sheet ships.
+            string unitsDir = Path.Combine(root, "Assets", "Resources", "Sprites", "Units");
+            List<string> badClips = new List<string>();
+            int clipCount = 0;
+            foreach (KeyValuePair<string, HashSet<string>> pair in cfg.ClipFlip)
+            {
+                UnitDef unit = (UnitDef)db.GetHero(pair.Key) ?? db.GetEnemy(pair.Key);
+                if (unit == null || !StagePresentation.IsFinishedArt(unit.Visual)) { badClips.Add(pair.Key + " has no sheet"); continue; }
+                foreach (string clip in pair.Value)
+                {
+                    clipCount++;
+                    if (!File.Exists(Path.Combine(unitsDir, unit.Visual.Sprite + "_" + clip + ".png"))) badClips.Add(pair.Key + " ships no " + clip + " clip");
+                }
+            }
+            Check(badClips.Count == 0, "S3 every clipFlip names a unit with a sheet and a clip that sheet ships (" + cfg.ClipFlip.Count + " units, " + clipCount + " clips)"
+                  + (badClips.Count > 0 ? ": " + string.Join(", ", badClips.ToArray()) : ""));
+            string actorSource = File.ReadAllText(Path.Combine(root, "Assets", "Scripts", "Battle", "UnitActor.cs"));
+            string animSource = File.ReadAllText(Path.Combine(root, "Assets", "Scripts", "Battle", "SpriteAnimator.cs"));
+            Check(actorSource.Contains("SetClipFlips(StageFeel.ClipFlips(snapshot.DefId))") && animSource.Contains("ApplyClipFlip();")
+                  && actorSource.Contains("distance *= BattleFraming.ApproachScaleV2"),
+                  "S3 the unit hands its clipFlip clips to its animator, and a v2 melee step is scaled to the closer front pair (x"
+                  + F2(BattleFraming.ApproachScaleV2) + ")");
+
             // The rule the model above uses is the rule the rig uses.
             string rigPath = Path.Combine(root, "Assets", "Scripts", "Battle", "UnitRig.cs");
             Check(File.Exists(rigPath) && File.ReadAllText(rigPath).Contains("return spriteMirror ^ !facingForward;"),

@@ -33,6 +33,20 @@
     "arden_the_precise_measure"
   ],
 
+  // clipFlip: a sheet that is drawn facing right in one clip and left in another cannot be fixed by one
+  // flip, so these clips of these units are inverted on top of the unit's own mirror (faceFlip and
+  // spriteMirror) while they play. Found in the first roster sheets (shotsoster1) and checked against
+  // the art: sylven and brenna attack to the left in basic and skill (brenna basic2 too, the mace stays
+  // on the left), marrow's skill swings the hammer to the left, and oris is already flipped as a whole
+  // by faceFlip but her basic holds the instrument pointing the other way, so that one clip is un-flipped.
+  // Each is also listed for Pinoy in PINOY-PLACEHOLDERS.md as art that faces the wrong way in that clip.
+  "clipFlip": {
+    "sylven_the_unfading_blade": [ "basic", "skill" ],
+    "brenna_the_remaining_wall": [ "basic", "basic2", "skill" ],
+    "marrow_the_irrevocable_vow": [ "skill" ],
+    "oris_the_unwritten_path": [ "basic" ]
+  },
+
   // scaleMul: a unit's own factor on top of the v2 scale (1.2). The Carrion Vulture's wings span 2.7
   // world units at 1.2x, wider than any slot of the v2 formation clears, so it is drawn at 0.8 of that
   // (0.96 of its R12 size, so the bird is 4 percent bigger than before and not 20). Shrinking one bird is

@@ -88,6 +88,8 @@ namespace Emberfall.Battle
             // is on: then a stand-in's art, a corrected facing and the larger scale (StagePresentation).
             Rig = UnitRig.Build("Rig", transform, StageFeel.Resolve(snapshot), facingForward,
                                 snapshot.Name, snapshot.Aspect);
+            // v2: clips whose art faces the other way from the rest of the sheet (null in v1).
+            if (Rig.Animation != null) Rig.Animation.SetClipFlips(StageFeel.ClipFlips(snapshot.DefId));
 
             _idlePhase = (snapshot.Id * 0.73f) % 6.28f;
             _bobSpeed = snapshot.IsBoss ? 1.1f : 1.5f + (snapshot.Id % 3) * 0.16f;
@@ -225,6 +227,10 @@ namespace Emberfall.Battle
 
         private IEnumerator LungeRoutine(Vector3 towards, float outSeconds, float backSeconds, float speed, float distance)
         {
+            // v2: the front pairs stand 2.30 apart, not 2.80, and the units are 1.2x larger, so the
+            // R12 step of 0.85 would put the bodies inside each other at contact. The step is scaled
+            // to leave the gap R12 left in world units (2.80 - 0.85 = 1.95 = 2.30 - 0.34).
+            if (StageFeel.V2) distance *= BattleFraming.ApproachScaleV2;
             Vector3 home = Vector3.zero;
             Vector3 direction = towards - transform.position;
             direction.y = 0f;
