@@ -112,7 +112,11 @@ The walls still bind: every chapter 2 to 6 wall keeps a CEIL of 58.8 to 68.4 per
 - 3-4 is one of the four stages the cap holds, so its `recommendedPower` did not move. Its median rises from x1.202 to x1.215 because walks reach it in a different state after the earlier stages moved. It is the highest chapter 2 to 6 median. The cap applies to the stages the lever moves; it is not a ceiling on every median.
 - The 56 moved stages change their opening battle, so their stage fingerprints move and `stage-fingerprint-baseline.txt` is regenerated for them (reason: this lever). ContentVersion moves as well.
 
-**PLACEHOLDER: the ContentVersion after value of the loosened curve, and the build-check run on the merged tree.** The lead fills these in when the sim sends them.
+**ContentVersion** across the run, by the first digits of the version string: before R16 it began `c1-3015`, after fusion A alone `c1-e4c0`, and with the loosened curve (the final value, verified by the reviewer, review 7) it begins `c1-3be1`. It moved twice, by owner decisions 1 and 2. Recorded guild dungeon replays retire. The full strings are in the run's build-check logs.
+
+**Default taken: the lever is not one literal shared percentage.** The prompt asked for one shared percentage per chapter in at most three steps. What landed is minus 8 percent with a x1.20 median target as a cap, so 20 of the 56 moved stages get less than 8 percent (0.4 to 7.8). Six variants were tried against the three steps the prompt allowed: p5, c5, c8, c11, cc8 and cc11 (labels in `data\sim-progress.md`). After the enemy levels were re-solved, 10 moved stages read x1.202 to x1.210 on the 60-walk median, still inside the x1.25 band. Traced to owner decision 2.
+
+**Owner-visible: the walls bind by CEIL, not by sittings.** The wall CEIL stays at 58 to 68 percent, inside the 55 to 72 band, so a wall is still a hard fight. But a wall no longer costs the reference player sittings: the median and the 90th percentile are 0 extra sittings at every wall from chapter 2 on, and the largest tail is 4, at 4-6. Pace target B (2 to 4 extra sittings at the chapter finales, `ReportPaceTargets`) therefore reads further off than before. Target B is reported and not a failing check. The owner may want to decide whether walls should cost the reference player sittings again, and if so by how much; that is a different lever from this one.
 
 ## 5. Counterattacks (owner decision 4, task 5)
 

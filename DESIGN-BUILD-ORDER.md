@@ -825,7 +825,13 @@ largest is 8, at `2-10`; walls 2-6, 2-12 and 4-12 fall from 30, 28 and 10 to 1, 
 inside the power band at every stage (highest x1.237, `3-4`), CEIL 70 of 70 graded stages in band, and
 `CheckFusionNeverGates` green on 60 walks. The walls bind in power and CEIL, less in sittings. The 56
 moved stages' opening rosters move, so their stage fingerprints and `ContentVersion` moved, and
-`stage-fingerprint-baseline.txt` was regenerated for them with a stated reason. Numbers and tables:
+`stage-fingerprint-baseline.txt` was regenerated for them with a stated reason. **The lever is minus 8
+percent with a x1.20 median cap, not one literal shared percentage: 20 of the 56 moved stages get
+less, and six variants were tried against the prompt's three steps.** After the re-solve 10 moved
+stages read x1.202 to x1.210, inside the x1.25 band. **The walls still bind by CEIL (58 to 68
+percent, inside 55 to 72) but no longer cost the reference player sittings** (the median and the 90th
+percentile are 0 at every wall from chapter 2 on, the largest tail is 4, at `4-6`), so pace target B (2 to 4 extra sittings at the finales, reported and
+not failing) reads further off than before. Numbers and tables:
 `Docs/BALANCE-REPORT-R16.md`, Curve. The package was measured whole: R13 proved spot fixes interact.
 
 **Two costs were measured rather than argued, and both are written into `campaign.json` so the next
