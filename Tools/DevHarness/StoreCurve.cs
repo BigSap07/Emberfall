@@ -28,12 +28,15 @@ namespace Emberfall.DevHarness
     /// times, so a non-spender at the base walks exactly as at 0; the study checks that and says so.
     ///
     /// ENV (all optional): EMBERFALL_STORE_WALKS (default 6), EMBERFALL_STORE_SCALE (pack hours multiplier, default 1),
-    /// EMBERFALL_STORE_OUT (a file to write the report to).
+    /// EMBERFALL_STORE_MODE (ref, fusing or both; default both), EMBERFALL_STORE_NOHERO (1: the spender takes no hero
+    /// from the Starter Pact or the pass, to tell the heroes' effect from the Gold's), EMBERFALL_STORE_OUT (a file to
+    /// write the report to).
     /// </summary>
     internal static partial class Program
     {
         private static Action<EconomyRun> _walkSpender;
         private static long _walkClockBase;
+        private static bool _spenderNoHero;
 
         private sealed class SpendLog
         {
@@ -54,6 +57,8 @@ namespace Emberfall.DevHarness
             int walks = StoreEnvInt("EMBERFALL_STORE_WALKS", 6);
             double scale = StoreEnvDouble("EMBERFALL_STORE_SCALE", 1.0);
             string outPath = Environment.GetEnvironmentVariable("EMBERFALL_STORE_OUT");
+            string modeName = Environment.GetEnvironmentVariable("EMBERFALL_STORE_MODE") ?? "both";
+            _spenderNoHero = Environment.GetEnvironmentVariable("EMBERFALL_STORE_NOHERO") == "1";
             long baseNow = (db.WayfarersRoad.EpochDay + 4L * db.WayfarersRoad.SeasonDays) * 86400L;
             StringBuilder report = new StringBuilder();
             Action<string> say = text => { Line(text); report.AppendLine(text); };
@@ -70,6 +75,7 @@ namespace Emberfall.DevHarness
                 for (int mode = 0; mode < 2; mode++)
                 {
                     bool fusing = mode == 1;
+                    if (modeName == "ref" && fusing || modeName == "fusing" && !fusing) continue;
                     say("");
                     say(fusing ? "== FUSING PLAYER (converts and ascends) ==" : "== REFERENCE PLAYER (never converts, never ascends: the player recommendedPower is derived for) ==");
                     List<CurveWalk> plain = new List<CurveWalk>(), plainAtBase = new List<CurveWalk>(), spender = new List<CurveWalk>();
@@ -83,6 +89,8 @@ namespace Emberfall.DevHarness
                     for (int k = 0; k < walks; k++) if (SameWalk(plain[k].Run, plainAtBase[k].Run)) identical++;
                     say("  CONTROL: a non-spender at the clock base walks exactly as at 0 in " + identical + " of " + walks + " walks (stage by stage entry power and sittings)");
                     StoreCurveTables(db, plainAtBase, spender, say);
+                    say("  NOISE FLOOR: the non-spender at the clock base against the non-spender at 0 (the same walks, only the calendar differs):");
+                    StoreNoiseFloor(db, plain, plainAtBase, say);
                 }
             }
             finally
@@ -135,6 +143,7 @@ namespace Emberfall.DevHarness
                 {
                     hero = starter.HeroChoices[0];
                     StoreSpend(s, log, cfg, "starter_pact", hero, now);
+                    if (_spenderNoHero) ForgetSealedHero(s, hero);
                 }
 
                 // Pack, month and card whenever the rules allow it.
@@ -165,6 +174,7 @@ namespace Emberfall.DevHarness
                                 case PassRewardKind.Dust: g.Add(new GrantItem(GrantKind.DustSweeps, paid[i].Amount)); break;
                                 case PassRewardKind.Slag: g.Add(new GrantItem(GrantKind.Slag, Math.Round(paid[i].Amount))); break;
                                 case PassRewardKind.Selector:
+                                    if (_spenderNoHero) continue;
                                 {
                                     pick = hero ?? WayfarersRoad.SelectorHeroes(s, paid[i].Stars)[0].Id;
                                     GrantItem it = new GrantItem(GrantKind.HeroChoice, 0);
@@ -179,6 +189,16 @@ namespace Emberfall.DevHarness
                     }
                 }
             };
+        }
+
+        /// <summary>The NOHERO reading only: takes the Starter Pact's Sealed hero back out, so what is left is the Gold.</summary>
+        private static void ForgetSealedHero(GameSession s, string heroId)
+        {
+            HeroInstance h = s.Profile.FindHeroByDefId(heroId);
+            if (h == null) return;
+            s.Profile.Heroes.Remove(h);
+            for (int i = 0; i < s.Profile.Team.Length; i++) if (s.Profile.Team[i] == h.Uid) s.Profile.Team[i] = null;
+            s.Profile.NormaliseTeam();
         }
 
         private static void StoreSpend(GameSession s, SpendLog log, StoreConfig cfg, string offerId, string choice, long now)
@@ -278,6 +298,27 @@ namespace Emberfall.DevHarness
             say("  A spender buys, per walk on average: " + string.Join(", ", parts.ToArray()) + ", pass seasons " + (pass / (double)spender.Count).ToString("0.0", CultureInfo.InvariantCulture)
                 + ", ledger days claimed " + (ledgerDays / (double)spender.Count).ToString("0.0", CultureInfo.InvariantCulture)
                 + "; placeholder euros per walk " + (eur / spender.Count).ToString("0", CultureInfo.InvariantCulture));
+        }
+
+        private static void StoreNoiseFloor(ContentDatabase db, List<CurveWalk> at0, List<CurveWalk> atBase, Action<string> say)
+        {
+            List<string> cells = new List<string>();
+            for (int chapter = 1; chapter <= 6; chapter++)
+            {
+                foreach (int idx in new[] { 6, 12 })
+                {
+                    int g = StageGlobalIndex(db, chapter + "-" + idx);
+                    List<double> a = new List<double>(), b = new List<double>();
+                    for (int k = 0; k < at0.Count; k++)
+                    {
+                        if (g < at0[k].Run.Stages.Count) a.Add(at0[k].Run.Stages[g].EntryPower / (double)Math.Max(1, at0[k].Run.Stages[g].Stage.RecommendedPower));
+                        if (g < atBase[k].Run.Stages.Count) b.Add(atBase[k].Run.Stages[g].EntryPower / (double)Math.Max(1, atBase[k].Run.Stages[g].Stage.RecommendedPower));
+                    }
+                    if (a.Count == 0 || b.Count == 0) continue;
+                    cells.Add(chapter + "-" + idx + " " + (MedianD(b) - MedianD(a)).ToString("+0.000;-0.000", CultureInfo.InvariantCulture));
+                }
+            }
+            say("    median shift of the entry ratio: " + string.Join(", ", cells.ToArray()));
         }
 
         private static int StageGlobalIndex(ContentDatabase db, string code)
