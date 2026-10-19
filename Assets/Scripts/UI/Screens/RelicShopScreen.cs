@@ -312,21 +312,25 @@ namespace Emberfall.UI.Screens
             rule.rectTransform.offsetMin = new Vector2(UITheme.Space12, 104f);
             rule.rectTransform.offsetMax = new Vector2(-UITheme.Space12, -top);
 
-            // ---- cost chip, in the currency strip's own language
-            RectTransform cost = UIBuilder.Node("Cost", card);
-            UIBuilder.Box(cost, 0f, 62f, CardWidth - UITheme.Space24, 32f, new Vector2(0.5f, 0f));
+            // ---- cost chip, in the currency strip's own language. A relic at its top tier has nothing
+            // left to buy, so it carries no price row above its MAX TIER (or OWNED) chip.
+            if (!owned || upgradable)
+            {
+                RectTransform cost = UIBuilder.Node("Cost", card);
+                UIBuilder.Box(cost, 0f, 62f, CardWidth - UITheme.Space24, 32f, new Vector2(0.5f, 0f));
 
-            Image costPlate = EmberforgeUI.SunkenOn(cost);
-            costPlate.raycastTarget = false;
+                Image costPlate = EmberforgeUI.SunkenOn(cost);
+                costPlate.raycastTarget = false;
 
-            Image costIcon = UIBuilder.Img("Icon", cost, TextureLab.SpiralIcon(64), UITheme.Dust);
-            UIBuilder.Box(costIcon.rectTransform, UITheme.Space8, 0f, 24f, 24f, new Vector2(0f, 0.5f));
+                Image costIcon = UIBuilder.Img("Icon", cost, TextureLab.SpiralIcon(64), UITheme.Dust);
+                UIBuilder.Box(costIcon.rectTransform, UITheme.Space8, 0f, 24f, 24f, new Vector2(0f, 0.5f));
 
-            Text costText = EmberforgeUI.Label("Value", cost, price.ToString(), UITheme.FontTiny,
-                                               (affordable || owned) ? Emberforge.TextGold : UITheme.Danger,
-                                               TextAnchor.MiddleLeft);
-            UIBuilder.FillParent(costText.rectTransform, UITheme.Space8 + 24f + UITheme.Space8, 0f, UITheme.Space8, 0f);
-            UIBuilder.Outlined(costText, Emberforge.Outline, Emberforge.StrokeThin);
+                Text costText = EmberforgeUI.Label("Value", cost, price.ToString(), UITheme.FontTiny,
+                                                   (affordable || owned) ? Emberforge.TextGold : UITheme.Danger,
+                                                   TextAnchor.MiddleLeft);
+                UIBuilder.FillParent(costText.rectTransform, UITheme.Space8 + 24f + UITheme.Space8, 0f, UITheme.Space8, 0f);
+                UIBuilder.Outlined(costText, Emberforge.Outline, Emberforge.StrokeThin);
+            }
 
             // ---- action
             if (owned && !upgradable)
