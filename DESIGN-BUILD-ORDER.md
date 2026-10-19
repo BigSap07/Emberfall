@@ -1221,6 +1221,18 @@ unchanged. Settings has a SCREEN SHAKE toggle (`ScreenShakePrefs`, device only).
 target `Screen:BattleMoment=<stage>.<kind>[.<aspect>][.off]` stops on a hit, crit, skill, heal or
 death. See `Docs/DESIGN-JUICE.md`.
 
+**A fight reads clean at 1x, behind one switch.** `"feelPreset"` in `vfx.json` (not hashed) ships
+`"v2"`; `"v1"` is the R12 battle exactly, and `EMBERFALL_FEEL` overrides it for one editor launch.
+v2 replaces the white-out with a 0.06 s tint, gives each event class (hit, crit, skill, heal, buff,
+debuff, shield, death) one look and its own cue with no geometric rings, caps effects at 2 per unit,
+draws numbers 1.25 times larger, plays one sound per basic hit with at most 6 effect voices, draws
+units 1.2 times larger on a re-solved formation, shows Drifting Pilgrim and Thornback Boar for the two
+chapter 1 placeholders, and fixes facing (six heroes flipped, four with per-clip flips, enemy mannequins
+turned to face the heroes). Stage numbers live in the unhashed `stage-v2.json`. `FeelChecks.cs` and
+`StageChecks.cs` prove v1 equals R12 and that ids, stats, `ContentVersion` and the fingerprints are
+unchanged. `Screen:RosterSheet=<side>[.page][.clip][.v1|.v2]` photographs a whole side for the facing
+proof. See the v2 section of `Docs/DESIGN-JUICE.md`.
+
 **WATCH replays the hardest battle of a resolved wave.** `GameSession.ResolveWave` keeps a
 `WaveReplay` on the `WaveResolution`, in memory only: the lost battle, else the win that left the
 least HP, with its seed from `BattleSeed` and copies of the line that fought it
