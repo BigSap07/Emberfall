@@ -354,11 +354,12 @@ namespace Emberfall.DevHarness
             string[] files = Directory.GetFiles(Path.Combine(root, "Assets"), "*.cs", SearchOption.AllDirectories);
             for (int i = 0; i < files.Length; i++)
             {
-                if (Path.GetFileName(files[i]) == "SealedGrants.cs") continue;
+                // StoreOffers is the one purchase grant path (Docs/DESIGN-STORE.md): it grants only through SealedGrants.
+                if (Path.GetFileName(files[i]) == "SealedGrants.cs" || Path.GetFileName(files[i]) == "StoreOffers.cs") continue;
                 if (File.ReadAllText(files[i]).Contains("SealedGrants.Grant")) hits.Add(Path.GetFileName(files[i]));
             }
             Check(hits.Count == 0,
-                  "NO PURCHASE PATH: nothing under Assets calls SealedGrants, the debug grant is the harness's alone" + (hits.Count > 0 ? " (" + string.Join(", ", hits.ToArray()) + ")" : ""));
+                  "ONE GRANT PATH: nothing under Assets calls SealedGrants but StoreOffers, the Store's one purchase grant path" + (hits.Count > 0 ? " (" + string.Join(", ", hits.ToArray()) + ")" : ""));
         }
 
         private static string SealedRepoRoot(string contentDir)

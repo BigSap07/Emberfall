@@ -607,6 +607,9 @@ namespace Emberfall.Core.Progression
             if (!Active(session)) { r.Reason = StoreRefusal.Off; return r; }
             StoreState st = session.Profile.Store;
             if (st.LedgerStartUnix <= 0) { r.Reason = StoreRefusal.NotBought; return r; }
+            // A card that exists stamps the clock even when the day has nothing to claim, so a clock wound back
+            // after the real one passed the card's end cannot revive it.
+            Stamp(session, EffectiveDay(session, nowUnix));
             if (!LedgerActive(session, nowUnix)) { r.Reason = StoreRefusal.Nothing; return r; }
             if (!LedgerCanClaim(session, nowUnix)) { r.Reason = StoreRefusal.Claimed; return r; }
             StoreOfferDef d = LedgerOffer(session);
@@ -635,6 +638,7 @@ namespace Emberfall.Core.Progression
         public static long OnIdleClaim(GameSession session, IdleReport report, long nowUnix)
         {
             if (report == null) return 0L;
+            if (Active(session) && session.Profile.Store.LedgerStartUnix > 0) Stamp(session, EffectiveDay(session, nowUnix));
             long bonus = IdleBonusFor(session, report.Gold, nowUnix);
             if (bonus > 0) SealedGrants.GrantGold(session, bonus);
             return bonus;
@@ -696,9 +700,9 @@ namespace Emberfall.Core.Progression
             StoreFulfilment r = new StoreFulfilment();
             if (!Active(session)) { r.Reason = StoreRefusal.Off; return r; }
             if (!WayfarersRoad.Active(session)) { r.Reason = StoreRefusal.PassClosed; return r; }
+            if (!PassOwned(session, nowUnix)) { r.Reason = StoreRefusal.NotBought; return r; }
             WayfarersRoad.Roll(session, nowUnix);
             if (session.Profile.WayfarersRoad.SeasonIndex == 0) { r.Reason = StoreRefusal.PassClosed; return r; }
-            if (!PassOwned(session, nowUnix)) { r.Reason = StoreRefusal.NotBought; return r; }
             PassRewardDef p = session.Content.WayfarersRoad.PaidAt(tier);
             if (p == null) { r.Reason = StoreRefusal.Unknown; return r; }
             StoreState st = session.Profile.Store;
@@ -908,7 +912,7 @@ namespace Emberfall.Core.Progression
         }
 
         /// <summary>Days of frontier Shards income one random 5-star costs at the base summon rate, for this player.</summary>
-        public static double DaysPerRandomFiveStar(GameSession session)
+        public static double DaysPerFiveStarPull(GameSession session)
         {
             BalanceConfig b = session.Balance;
             double total = b.SummonWeight1 + b.SummonWeight2 + b.SummonWeight3 + b.SummonWeight4 + b.SummonWeight5;
@@ -956,7 +960,7 @@ namespace Emberfall.Core.Progression
             v.DustSweeps = sweeps;
             v.DustDays = sweeps / Math.Max(1, session.Balance.RepeatFullClearsPerDay);
             v.HeroCopies = copies;
-            v.HeroDays = copies * DaysPerRandomFiveStar(session);
+            v.HeroDays = copies * DaysPerFiveStarPull(session);
             v.TotalDays = v.GoldDays + v.DustDays + v.HeroDays;
             return v;
         }
