@@ -473,7 +473,21 @@ namespace Emberfall.Core.Save
         /// Upgrade needs NO migration step: every key's absence is the empty state. A save that
         /// holds none of it is byte for byte the document the build before wrote, version included.
         /// The server's save_limits row must be raised to 24 before a cloud player holds any of it.
-        public const int CurrentVersion = 24;
+        ///
+        /// 25: the Store (R19, Docs/DESIGN-STORE.md). The one bump of the R19 run, stamped ONLY on a document
+        /// that holds data a version 24 build would drop, exactly as 23 and 24 are (HoldsVersion25Data):
+        ///  - the `store` block (StoreState): one counter record per offer and every purchase receipt. A build
+        ///    that drops it would let a limited offer be bought again and a receipt grant a second time.
+        ///  - the paid track of Wayfarer's Road (`paid` and `paidClaimed` inside `wayfarersRoad`): a build that
+        ///    drops it would lock a track the player bought.
+        /// Upgrade needs NO migration step: every key's absence is the empty state. A save that holds none of
+        /// it is byte for byte the document the build before wrote, version included. The server's save_limits
+        /// row must be raised to 25 before a cloud player holds any of it (save_limits_25.sql, never applied).
+        public const int CurrentVersion = 25;
+
+        /// <summary>The version of the R17 core gaps, which a save says when it holds any of their data and
+        /// none of the version 25 data.</summary>
+        public const int CoreGapsVersion = 24;
 
         /// <summary>The version a save WITHOUT a sinks block says, which is the version before the
         /// sinks existed. See CurrentVersion.</summary>
@@ -488,8 +502,21 @@ namespace Emberfall.Core.Save
         /// existed. A document claims a version only when it holds data from it.</summary>
         public static int VersionOf(PlayerProfile profile)
         {
-            if (HoldsVersion24Data(profile)) return CurrentVersion;
+            if (HoldsVersion25Data(profile)) return CurrentVersion;
+            if (HoldsVersion24Data(profile)) return CoreGapsVersion;
             return profile != null && profile.Sinks != null && !profile.Sinks.IsEmpty ? SinksVersion : BaseVersion;
+        }
+
+        /// <summary>True when the profile holds anything a version 24 build would drop. THE ONE PLACE that
+        /// decides a save is a version 25 save, as HoldsVersion24Data is for 24: a store block with a receipt or
+        /// a counter in it, or a bought paid track. A task of the R19 run that adds saved state adds its clause
+        /// here and writes the data only when the clause is true.</summary>
+        public static bool HoldsVersion25Data(PlayerProfile profile)
+        {
+            if (profile == null) return false;
+            if (profile.Store != null && !profile.Store.IsEmpty) return true;
+            if (profile.WayfarersRoad != null && profile.WayfarersRoad.HoldsPaidData) return true;
+            return false;
         }
 
         /// <summary>True when the profile holds anything a version 23 build would drop. THE ONE PLACE
@@ -1093,6 +1120,10 @@ namespace Emberfall.Core.Save
             if (profile.WayfarersRoad != null && !profile.WayfarersRoad.IsEmpty)
                 root.Set("wayfarersRoad", profile.WayfarersRoad.Write());
 
+            // Version 25: the Store's counters and receipts, only once it holds something.
+            if (profile.Store != null && !profile.Store.IsEmpty)
+                root.Set("store", profile.Store.Write());
+
             return root.ToJson(true);
         }
 
@@ -1460,6 +1491,9 @@ namespace Emberfall.Core.Save
 
             // Version 24. Absent reads as no season, so the pass starts at the first point earned.
             profile.WayfarersRoad = WayfarersRoadState.Read(root["wayfarersRoad"]);
+
+            // Version 25. Absent reads as nothing bought.
+            profile.Store = StoreState.Read(root["store"]);
 
             List<JsonValue> lines = root.GetList("lines");
             for (int l = 0; l < lines.Count; l++) profile.Lines.Add(ReadLine(lines[l]));

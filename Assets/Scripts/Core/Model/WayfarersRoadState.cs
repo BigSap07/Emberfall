@@ -27,9 +27,28 @@ namespace Emberfall.Core.Model
         /// <summary>Tiers bought this season with Valor or Coda.</summary>
         public int Bought;
 
+        /// <summary>The season whose paid track the player bought (R19), or 0. The paid track is open exactly
+        /// when this equals SeasonIndex, so a new season locks it again with no step to run. Saved from
+        /// version 25 under `paid`, written only once set.</summary>
+        public long PaidSeason;
+
+        /// <summary>Bit (tier - 1) is set once that tier's PAID reward has been claimed. Saved under `paidClaimed`.</summary>
+        public int PaidClaimedMask;
+
         public bool IsEmpty
         {
-            get { return SeasonIndex == 0 && Points == 0 && ClaimedMask == 0 && Bought == 0; }
+            get { return SeasonIndex == 0 && Points == 0 && ClaimedMask == 0 && Bought == 0 && PaidSeason == 0 && PaidClaimedMask == 0; }
+        }
+
+        /// <summary>True when the paid track data is what makes this block a version 25 block.</summary>
+        public bool HoldsPaidData
+        {
+            get { return PaidSeason != 0 || PaidClaimedMask != 0; }
+        }
+
+        public bool HasClaimedPaid(int tier)
+        {
+            return tier >= 1 && tier <= 30 && (PaidClaimedMask & (1 << (tier - 1))) != 0;
         }
 
         public bool HasClaimed(int tier)
@@ -44,6 +63,8 @@ namespace Emberfall.Core.Model
             o.Set("points", Points);
             o.Set("claimed", ClaimedMask);
             o.Set("bought", Bought);
+            if (PaidSeason != 0) o.Set("paid", PaidSeason);
+            if (PaidClaimedMask != 0) o.Set("paidClaimed", PaidClaimedMask);
             return o;
         }
 
@@ -58,6 +79,9 @@ namespace Emberfall.Core.Model
             long mask = o.GetLong("claimed", 0);
             s.ClaimedMask = (int)(Math.Max(0L, mask) & ((1L << 30) - 1));
             s.Bought = Math.Max(0, Math.Min(30, o.GetInt("bought", 0)));
+            s.PaidSeason = Math.Max(0, o.GetLong("paid", 0));
+            long paidMask = o.GetLong("paidClaimed", 0);
+            s.PaidClaimedMask = (int)(Math.Max(0L, paidMask) & ((1L << 30) - 1));
             return s;
         }
     }
