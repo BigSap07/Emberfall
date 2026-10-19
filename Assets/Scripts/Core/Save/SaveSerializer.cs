@@ -463,6 +463,9 @@ namespace Emberfall.Core.Save
         ///  - the Quartermaster's shelf (QuartermasterState): the `quartermaster` block, today's rolled
         ///    stock and which pieces are sold. A build that drops it would let a player buy the same
         ///    day's pieces again.
+        ///  - an upgraded relic (OwnedRelic.Tier above 1, Docs/DESIGN-RELIC-ENDGAME.md). The `tier` key has
+        ///    always been written, but a build before 24 never authored a tier above 1, so one that
+        ///    reads it shows an upgrade the build cannot price or fight with.
         ///  - any other R17 state, each added to HoldsVersion24Data when it is written.
         /// Upgrade needs NO migration step: every key's absence is the empty state. A save that
         /// holds none of it is byte for byte the document the build before wrote, version included.
@@ -494,6 +497,8 @@ namespace Emberfall.Core.Save
             if (profile == null) return false;
             if (SealedState.ProfileHoldsAny(profile)) return true;
             if (profile.Quartermaster != null && !profile.Quartermaster.IsEmpty) return true;
+            for (int i = 0; i < profile.OwnedRelics.Count; i++)
+                if (profile.OwnedRelics[i].Tier > 1) return true;
             return false;
         }
 

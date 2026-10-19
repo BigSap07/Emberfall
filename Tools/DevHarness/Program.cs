@@ -292,6 +292,7 @@ namespace Emberfall.DevHarness
             CheckSinks(content, contentDir);
             CheckSealed(content, contentDir);
             CheckQuartermaster(content, contentDir);
+            CheckRelicEndgame(content, contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
             CheckCaptureWatchdog(content, contentDir);
@@ -4875,7 +4876,7 @@ namespace Emberfall.DevHarness
 
         /// <summary>The content in dir. eventsOverride, when given, stands in for events.json's
         /// text, so a check can load the game under a retuned event without writing the file.</summary>
-        private static ContentDatabase LoadContent(string dir, string eventsOverride = null, string campaignOverride = null)
+        private static ContentDatabase LoadContent(string dir, string eventsOverride = null, string campaignOverride = null, string relicsOverride = null)
         {
             try
             {
@@ -4884,7 +4885,7 @@ namespace Emberfall.DevHarness
                 string campaign = campaignOverride ?? File.ReadAllText(Path.Combine(dir, "campaign.json"));
                 string balance = File.ReadAllText(Path.Combine(dir, "balance.json"));
                 string relicsPath = Path.Combine(dir, "relics.json");
-                string relics = File.Exists(relicsPath) ? File.ReadAllText(relicsPath) : null;
+                string relics = relicsOverride ?? (File.Exists(relicsPath) ? File.ReadAllText(relicsPath) : null);
                 string eventsPath = Path.Combine(dir, "events.json");
                 string events = eventsOverride ?? (File.Exists(eventsPath) ? File.ReadAllText(eventsPath) : null);
                 string armorPath = Path.Combine(dir, "armor.json");
@@ -4904,6 +4905,8 @@ namespace Emberfall.DevHarness
                 db.LoadSinks(File.Exists(sinksPath) ? File.ReadAllText(sinksPath) : null);
                 string quartermasterPath = Path.Combine(dir, "quartermaster.json");
                 db.LoadQuartermaster(File.Exists(quartermasterPath) ? File.ReadAllText(quartermasterPath) : null);
+                string relicShopPath = Path.Combine(dir, "relic-shop.json");
+                db.LoadRelicShop(File.Exists(relicShopPath) ? File.ReadAllText(relicShopPath) : null);
                 return db;
             }
             catch (Exception ex)
@@ -14638,6 +14641,17 @@ namespace Emberfall.DevHarness
         /// code can no longer write.
         /// </summary>
         private static void CheckRelicInventoryModel(ContentDatabase db)
+        {
+            // These pin the relic mechanics as they were before the relic endgame (balance.json's prices,
+            // tier 1 only, a tier that changes no fight): the build with the switch off. The endgame has
+            // its own checks (CheckRelicEndgame), and running these with it off is the rollback proof.
+            bool endgameWas = RelicEndgameSwitch.Enabled;
+            RelicEndgameSwitch.Enabled = false;
+            try { CheckRelicInventoryModelBody(db); }
+            finally { RelicEndgameSwitch.Enabled = endgameWas; }
+        }
+
+        private static void CheckRelicInventoryModelBody(ContentDatabase db)
         {
             Line("RELIC INVENTORY");
 

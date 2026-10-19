@@ -1,0 +1,34 @@
+{
+  // THE RELIC ENDGAME - Docs/DESIGN-RELIC-ENDGAME.md. What the Relic Shop charges for a relic and for
+  // each upgrade tier, and what an upgrade is worth in a fight.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, for guild-path.json's reason: the guild dungeon fights
+  // with no relics at all, so no recorded replay reads this file, and a retune of a price must not
+  // retire them. ContentDatabase.LoadRelicShop reads it after Load. With RelicEndgameSwitch off the
+  // shop reads balance.json's relicShopPrice and relicMythicShopPrice and relicMaxTier again, and an
+  // owned tier is ignored in a fight: the build before this file.
+  //
+  // THE EFFECT VALUES IN relics.json DO NOT MOVE. Tier 1 is the relic as shipped. A higher tier scales
+  // the relic's STAT BLOCK by statScale (a mythic relic's hook is a rule and never scales).
+  //
+  // PRICES ARE RELIC DUST. Relics are endgame content (they open at 3-1) and Dust must stay worth
+  // earning between relic batches, so the prices were sized from the Dust a committed player earns
+  // (D:\Emberfall\handoff\R17-CORE-GAPS\data\relic-pricing.md): buying every current relic takes a
+  // committed player about seven weeks from 3-1, three and a half at 4-12 and two and a third at
+  // 6-12. A tier costs priceMultiplier times the relic's own price, each tier about double the one
+  // before, so the upgrades are the long tail that absorbs Dust between relic batches.
+  //
+  // price: by grade, and per relic in "overrides" for a relic that should not follow its grade. A new
+  // relic in relics.json is on sale at its grade's price with no entry here and no code.
+  "prices": {
+    "Legendary": 5000,
+    "Mythic": 20000
+  },
+  "overrides": { },
+  "upgrades": {
+    "tiers": [
+      { "tier": 2, "priceMultiplier": 2, "statScale": 1.25 },
+      { "tier": 3, "priceMultiplier": 4, "statScale": 1.50 }
+    ]
+  }
+}

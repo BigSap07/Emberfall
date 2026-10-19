@@ -1714,10 +1714,22 @@ namespace Emberfall.Core.Session
             return dust > 0 ? dust : 0;
         }
 
-        /// <summary>Highest tier a relic may be owned at. 1 until the balance pass authors tier 2.</summary>
+        /// <summary>True when the relic endgame is on and relic-shop.json is there to price it:
+        /// prices come from that file and upgrades exist.</summary>
+        public bool RelicEndgameActive
+        {
+            get { return RelicEndgameSwitch.Enabled && Content.RelicShop.IsUsable; }
+        }
+
+        /// <summary>Highest tier a relic may be owned at: balance.json's relicMaxTier (1), or with the
+        /// relic endgame on the tiers relic-shop.json authors (3 today).</summary>
         public int RelicMaxTier
         {
-            get { return Math.Max(1, Balance.RelicMaxTier); }
+            get
+            {
+                int max = Math.Max(1, Balance.RelicMaxTier);
+                return RelicEndgameActive ? Math.Max(max, Content.RelicShop.MaxTier) : max;
+            }
         }
 
         /// <summary>
@@ -1998,8 +2010,57 @@ namespace Emberfall.Core.Session
         /// </summary>
         public int RelicPrice(RelicDef relic)
         {
-            if (relic == null) return Balance.RelicShopPrice;
-            return relic.Grade == RelicGrade.Mythic ? Balance.RelicMythicShopPrice : Balance.RelicShopPrice;
+            if (relic != null && RelicEndgameActive)
+            {
+                // The relic endgame (Docs/DESIGN-RELIC-ENDGAME.md): a price for this relic, else its
+                // grade's, from relic-shop.json. A relic added to relics.json is on sale at its grade's.
+                int overridden;
+                if (Content.RelicShop.Overrides.TryGetValue(relic.Id, out overridden)) return overridden;
+            }
+            return RelicGradePrice(relic != null ? relic.Grade : RelicGrade.Legendary);
+        }
+
+        /// <summary>What a relic of this grade costs when nothing overrides it: relic-shop.json's with
+        /// the relic endgame on, balance.json's relicShopPrice and relicMythicShopPrice otherwise.</summary>
+        public int RelicGradePrice(RelicGrade grade)
+        {
+            if (RelicEndgameActive)
+                return grade == RelicGrade.Mythic ? Content.RelicShop.MythicPrice : Content.RelicShop.LegendaryPrice;
+            return grade == RelicGrade.Mythic ? Balance.RelicMythicShopPrice : Balance.RelicShopPrice;
+        }
+
+        /// <summary>
+        /// The Relic Dust it costs to raise a relic TO this tier: the relic's own price times the tier's
+        /// multiplier, so each tier is about double the one before. Zero for a tier that is not an
+        /// upgrade (tier 1 is the purchase) or that the file does not author, and for every relic with
+        /// the relic endgame off.
+        /// </summary>
+        public int RelicUpgradePrice(RelicDef relic, int toTier)
+        {
+            if (relic == null || !RelicEndgameActive) return 0;
+            RelicTierDef tier = Content.RelicShop.TierDef(toTier);
+            if (tier == null) return 0;
+            double price = Math.Ceiling(RelicPrice(relic) * tier.PriceMultiplier);
+            return price > int.MaxValue ? int.MaxValue : (int)price;
+        }
+
+        /// <summary>
+        /// Raises an owned relic one tier and takes the Dust for it. Checked before anything is written:
+        /// the relic endgame is on, the relic is owned and known to content, it is below the top tier,
+        /// and the purse covers the price. A refusal leaves the profile exactly as it was.
+        /// </summary>
+        public bool UpgradeRelic(string relicId, long nowUnix)
+        {
+            if (string.IsNullOrEmpty(relicId) || !RelicEndgameActive) return false;
+            RelicDef relic = Content.GetRelic(relicId);
+            OwnedRelic owned = Profile.FindOwnedRelic(relicId);
+            if (relic == null || owned == null) return false;
+            if (owned.Tier >= RelicMaxTier) return false;
+            int price = RelicUpgradePrice(relic, owned.Tier + 1);
+            if (price <= 0 || Profile.RelicDust < price) return false;
+            SpendRelicDust(price, nowUnix);
+            owned.Tier++;
+            return true;
         }
 
         /// <summary>
@@ -2021,11 +2082,9 @@ namespace Emberfall.Core.Session
         }
 
         /// <summary>
-        /// The one choke point every Relic Dust expenditure routes through — today only BuyRelic
-        /// above, since relic upgrades (DESIGN-RELIC-PROGRESSION section 2, RelicMaxTier) are not
-        /// built yet. Whoever builds the upgrade spend should call this rather than decrementing
-        /// Profile.RelicDust directly, so RelicDustSpent events keep seeing every Dust expenditure
-        /// without a second call site to remember.
+        /// The one choke point every Relic Dust expenditure routes through: BuyRelic and UpgradeRelic.
+        /// Anything that spends Dust calls this rather than decrementing Profile.RelicDust directly, so
+        /// RelicDustSpent events keep seeing every Dust expenditure without a second call site to remember.
         /// </summary>
         private void SpendRelicDust(long amount, long nowUnix)
         {

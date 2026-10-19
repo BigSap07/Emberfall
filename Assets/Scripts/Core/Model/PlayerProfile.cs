@@ -896,8 +896,7 @@ namespace Emberfall.Core.Model
             {
                 HeroInstance hero = team[i];
                 if (hero.Def == null) continue;
-                RelicDef relic = content != null && !string.IsNullOrEmpty(hero.EquippedRelicId)
-                    ? content.GetRelic(hero.EquippedRelicId) : null;
+                RelicDef relic = EquippedRelicOf(hero, content);
                 // Guild tech is IN the power score now. DESIGN-GUILD-TECH retires the rule that
                 // guild progression changes no fight, so a line that fights harder has to read as
                 // stronger - a power score that ignored the tree would understate every member of
@@ -930,6 +929,32 @@ namespace Emberfall.Core.Model
             if (string.IsNullOrEmpty(relicId)) return null;
             for (int i = 0; i < OwnedRelics.Count; i++) if (OwnedRelics[i].RelicId == relicId) return OwnedRelics[i];
             return null;
+        }
+
+        /// <summary>
+        /// The relic a hero wears AS IT STANDS: the content's relic, scaled to the owned relic's upgrade
+        /// tier when the relic endgame is on (Docs/DESIGN-RELIC-ENDGAME.md). THE ONE RESOLVER for a
+        /// hero's relic, read by the simulation's setup, the power score and every preview, so the number
+        /// a player reads on a card is by construction the number the fight uses. Null for an empty slot
+        /// or an id content no longer names. A tier 1 relic, and every relic with the switch off, is the
+        /// content's own object, which is what keeps every fight that does not use an upgrade identical.
+        /// </summary>
+        public RelicDef EquippedRelicOf(HeroInstance hero, ContentDatabase content)
+        {
+            if (hero == null) return null;
+            return RelicAtOwnedTier(hero.EquippedRelicId, content);
+        }
+
+        /// <summary>An owned relic as it stands at its tier (EquippedRelicOf's rule, by relic id), for a
+        /// card that describes the relic the player holds. The content's own relic at tier 1, with the
+        /// switch off, and for a relic the player does not own.</summary>
+        public RelicDef RelicAtOwnedTier(string relicId, ContentDatabase content)
+        {
+            if (content == null || string.IsNullOrEmpty(relicId)) return null;
+            RelicDef relic = content.GetRelic(relicId);
+            if (relic == null || !Session.RelicEndgameSwitch.Enabled || !content.RelicShop.IsUsable) return relic;
+            int tier = RelicTier(relicId);
+            return tier > 1 ? relic.AtScale(content.RelicShop.StatScaleOf(Math.Min(tier, content.RelicShop.MaxTier))) : relic;
         }
 
         public bool OwnsRelic(string relicId)

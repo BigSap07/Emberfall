@@ -127,6 +127,19 @@ namespace Emberfall.Core.Data
         /// LoadQuartermaster is called.</summary>
         public QuartermasterConfig Quartermaster = new QuartermasterConfig();
 
+        /// <summary>What the Relic Shop charges and what an upgrade tier is worth (relic-shop.json).
+        /// NOT part of ContentVersion, for Sinks' reason: the guild dungeon fights with no relics, so
+        /// no recorded replay reads it. Empty (IsUsable false) until LoadRelicShop is called.</summary>
+        public RelicShopConfig RelicShop = new RelicShopConfig();
+
+        /// <summary>Parses relic-shop.json into RelicShop and adds its warnings to Warnings. Does not
+        /// touch ContentVersion.</summary>
+        public void LoadRelicShop(string relicShopJson)
+        {
+            RelicShop = RelicShopConfig.FromJson(relicShopJson);
+            for (int i = 0; i < RelicShop.Warnings.Count; i++) Warnings.Add(RelicShop.Warnings[i]);
+        }
+
         /// <summary>Parses quartermaster.json into Quartermaster and adds its warnings to Warnings.
         /// Does not touch ContentVersion.</summary>
         public void LoadQuartermaster(string quartermasterJson)

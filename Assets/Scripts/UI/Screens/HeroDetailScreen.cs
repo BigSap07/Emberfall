@@ -965,8 +965,7 @@ namespace Emberfall.UI.Screens
             // relic's whole contribution is these numbers, so a card that showed the unrelicced
             // line would be showing a stat block the simulation does not use. Both calls take it,
             // so the per-level deltas stay honest too.
-            RelicDef relic = string.IsNullOrEmpty(_hero.EquippedRelicId)
-                           ? null : session.Content.GetRelic(_hero.EquippedRelicId);
+            RelicDef relic = session.Profile.EquippedRelicOf(_hero, session.Content);
 
             // Armor is folded in for exactly the reason the relic above it is.
             List<ArmorPiece> armor = session.Profile.EquippedArmorOf(_hero);
@@ -1319,8 +1318,7 @@ namespace Emberfall.UI.Screens
             bool owned = _hero != null;
             UnitStats stats = owned
                 ? StatMath.ForHero(def, _hero.Level,
-                                   string.IsNullOrEmpty(_hero.EquippedRelicId)
-                                     ? null : App.Session.Content.GetRelic(_hero.EquippedRelicId),
+                                   App.Session.Profile.EquippedRelicOf(_hero, App.Session.Content),
                                    App.Session.Profile.EquippedArmorOf(_hero), App.Session.Content.Armor)
                 : StatMath.ForHero(def, 1);
 

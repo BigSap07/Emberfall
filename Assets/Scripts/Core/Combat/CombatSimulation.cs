@@ -1315,7 +1315,9 @@ namespace Emberfall.Core.Combat
                     // can drop a relic without bricking a save that still names it.
                     RelicDef relic = null;
                     if (_request.Content != null && !string.IsNullOrEmpty(hero.EquippedRelicId))
-                        relic = _request.Content.GetRelic(hero.EquippedRelicId);
+                        relic = _request.Profile != null
+                            ? _request.Profile.EquippedRelicOf(hero, _request.Content)   // scaled to the owned tier, or the content's own at tier 1
+                            : _request.Content.GetRelic(hero.EquippedRelicId);
 
                     // A relic's stat block, whichever grade carries one, is folded into the stat
                     // line here and then forgotten - the simulation below never learns it existed,

@@ -490,7 +490,7 @@ namespace Emberfall.UI.Screens
         private void FillCards(HeroInstance hero)
         {
             HeroDef def = hero.Def;
-            RelicDef relic = string.IsNullOrEmpty(hero.EquippedRelicId) ? null : App.Session.Content.GetRelic(hero.EquippedRelicId);
+            RelicDef relic = App.Session.Profile.EquippedRelicOf(hero, App.Session.Content);
             // The numbers are this hero's own, at its own level and with its own relic and armour,
             // exactly the stat line the hero page prints its ability numbers from.
             UnitStats stats = StatMath.ForHero(def, hero.Level, relic, App.Session.Profile.EquippedArmorOf(hero),

@@ -5,6 +5,11 @@ stays a pure function) are decided and shipped. See DESIGN-RELICS and DESIGN-HOO
 This document covers everything else: how the player acquires relics, how relics grow, and how
 the inventory and assignment model works. None of this exists in code yet.
 
+**Status (R17, 2026-10-19): built.** The shop, the owned-relics collection, assignment and the tier ladder all
+exist. Tiers went to three, priced as multiples of the relic's own price and scaled in a fight; the numbers and
+the reasoning are in `Docs/DESIGN-RELIC-ENDGAME.md`. Read this document for the reasoning that stands and that one for what is
+built.
+
 The four relics in `relics.json` are: **Splitting Prism**, **Warden's Debt**, **Stormlance Oath**,
 **Verdict Sigil**. (Tidewrought Metronome and Green Hour Vessel were cut; see
 `relics.json` comment and DESIGN-HOOK-RESOLUTION sections 2 and 3.)
