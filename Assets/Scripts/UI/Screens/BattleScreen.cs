@@ -2985,8 +2985,7 @@ namespace Emberfall.UI.Screens
             if (rewards.UnlockedNextStage) AddRewardRow(list, "NEW STAGE UNLOCKED", "AHEAD", UITheme.Ember);
             if (rewards.Chest != null && rewards.Chest.Present)
                 AddRewardRow(list, rewards.Chest.Finale ? "FINALE CHEST" : "WALL CHEST",
-                             "+" + rewards.Chest.Gold + " gold  +" + rewards.Chest.Shards + " shards  +"
-                             + rewards.Chest.Slag + " slag", UITheme.Success);
+                             "+" + rewards.Chest.Gold + " gold  +" + rewards.Chest.Slag + " slag", UITheme.Success);
             // Named by its temper rather than just "ARMOR", because the temper is the only part
             // of the drop a player can judge before opening the inventory.
             // The row used to put "HONED BOOTS" in the label and "Roadworn Boots" in the

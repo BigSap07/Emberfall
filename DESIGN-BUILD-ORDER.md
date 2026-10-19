@@ -587,8 +587,12 @@ count kept for the summary readers. `CheckWaveResolve`, `CheckClearedStagesById`
 **Wall chests (R17).** Stage 6 and stage 12 of every chapter carry a fixed one-time chest, shown on the
 campaign stage card before the fight and on both result screens. `WallChests` reads
 `wall-chests.json` (`WallChestConfig`, not hashed into `ContentVersion`): the wall pays 1.5 hours of
-frontier income and 12 Slag a chapter, the finale 4 hours and 30 Slag a chapter, the hours paid by
-`GameSession.IdleYield` at the frontier the clear reaches. **It pays on the first clear, from
+frontier Gold and 12 Slag a chapter, the finale 4 hours and 30 Slag a chapter, the hours paid by
+`GameSession.IdleYield` (its Gold half only) at the frontier the clear reaches. **A chest pays no Shards**:
+with Shards in it, the extra Shards re-drew every later summon of the reference player and 1 of the 60 walks
+that never convert and never ascend stuck at 3-4 (walk 51, seed 51000154: entry power 11,476 and 179 losses in
+293 battles, where without Shards it finishes at 12,163 with none); `CheckFusionNeverGates` is the guard and a
+chest's size is not a safe lever, since smaller Shard-paying chests each stuck a different walk. **It pays on the first clear, from
 `GameSession.GrantBattleResult`, and there is no save field**: a chest is opened when its stage is in
 `PlayerProfile.ClearedStageIds`, so a stage cleared before this shipped reads as opened and pays
 nothing, and there are no retroactive chests. `"enabled": false` in the file is the rollback and a

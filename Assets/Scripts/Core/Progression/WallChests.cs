@@ -14,7 +14,7 @@ namespace Emberfall.Core.Progression
         /// <summary>True for the chapter's finale chest, the larger of the two.</summary>
         public bool Finale;
 
-        /// <summary>Hours of idle income at the frontier the chest is opened at.</summary>
+        /// <summary>Hours of idle Gold at the frontier the chest is opened at.</summary>
         public double Hours;
 
         public int Slag;
@@ -24,12 +24,13 @@ namespace Emberfall.Core.Progression
         /// extra for it.</summary>
         public bool Opened;
 
-        /// <summary>What the hours paid in Gold and Shards. Zero in a preview, because the rate is
-        /// read at the moment of the clear.</summary>
+        /// <summary>What the hours paid in Gold. Zero in a preview, because the rate is read at the
+        /// moment of the clear. THE CHEST PAYS NO SHARDS: Shards in a chest re-draw the summons of every
+        /// later pull and one of the 60 reference walks stuck at 3-4 (CheckFusionNeverGates), so the
+        /// chest is Gold and Slag only.</summary>
         public int Gold;
-        public int Shards;
 
-        /// <summary>The stage card's line, e.g. "Wall chest: 2 hours of income and 12 Slag".</summary>
+        /// <summary>The stage card's line, e.g. "Wall chest: 2 hours of Gold and 12 Slag".</summary>
         public string Line
         {
             get
@@ -37,7 +38,7 @@ namespace Emberfall.Core.Progression
                 if (!Present) return "";
                 string name = Finale ? "Finale chest" : "Wall chest";
                 if (Opened) return name + ": opened";
-                return name + ": " + HoursText(Hours) + " of income and " + Slag + " Slag";
+                return name + ": " + HoursText(Hours) + " of Gold and " + Slag + " Slag";
             }
         }
 
@@ -54,8 +55,8 @@ namespace Emberfall.Core.Progression
     /// THE WALL CHESTS (R17 task 5): a fixed one-time chest on stage 6 and stage 12 of every
     /// chapter, shown on the stage card before the fight and paid on the first clear.
     ///
-    /// Paid in hours of frontier income, through the one idle formula (GameSession.IdleYield), plus
-    /// Slag. The frontier is read after the clear lands, so the chest pays at the depth the player
+    /// Paid in hours of frontier Gold, through the one idle formula (GameSession.IdleYield, its Gold half
+    /// only), plus Slag. No Shards: see WallChestView.Gold. The frontier is read after the clear lands, so the chest pays at the depth the player
     /// has just reached, the way the daily chest pays at claim time (DailyLoop.Pay).
     ///
     /// NO SAVE STATE. The chest opens on a stage's first clear and a first clear happens once, so
@@ -104,10 +105,8 @@ namespace Emberfall.Core.Progression
 
             IdleReport yield = session.IdleYield((long)Math.Round(view.Hours * 3600.0));
             view.Gold = yield.Gold;
-            view.Shards = yield.Shards;
             view.Opened = true;
             session.Profile.Gold += view.Gold;
-            session.Profile.Shards += view.Shards;
             session.Profile.Slag += view.Slag;
             return view;
         }

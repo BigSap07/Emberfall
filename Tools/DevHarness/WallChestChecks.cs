@@ -74,8 +74,10 @@ namespace Emberfall.DevHarness
                 if (!v.Present) { if (v.Line.Length != 0) wrong.Add(st.DisplayCode + " has a card line without a chest"); continue; }
                 if (v.Finale != expectFinale) wrong.Add(st.DisplayCode + " finale flag wrong");
                 if (v.Opened) wrong.Add(st.DisplayCode + " reads opened on a fresh profile");
-                if (v.Line.IndexOf("Slag", StringComparison.Ordinal) < 0 || v.Line.IndexOf("hour", StringComparison.Ordinal) < 0)
-                    wrong.Add(st.DisplayCode + " card line lacks hours or Slag: " + v.Line);
+                if (v.Line.IndexOf("Slag", StringComparison.Ordinal) < 0 || v.Line.IndexOf("hour", StringComparison.Ordinal) < 0
+                    || v.Line.IndexOf("of Gold", StringComparison.Ordinal) < 0 || v.Line.IndexOf("hours of income", StringComparison.Ordinal) >= 0
+                    || v.Line.IndexOf("Shard", StringComparison.Ordinal) >= 0)
+                    wrong.Add(st.DisplayCode + " card line must say hours of Gold and Slag and name no Shards: " + v.Line);
                 if (expectWall) walls++; else finales++;
             }
             Check(wrong.Count == 0 && walls == chapters && finales == chapters,
@@ -123,13 +125,13 @@ namespace Emberfall.DevHarness
             if (chest != null)
             {
                 IdleReport expect = session.IdleYield((long)Math.Round(db.WallChests.Wall.Hours * 3600.0));
-                Check(chest.Gold == expect.Gold && chest.Shards == expect.Shards && chest.Gold > 0,
-                      "it pays " + db.WallChests.Wall.Hours + " hours of income at the frontier it reached: " + chest.Gold
-                      + " gold and " + chest.Shards + " shards (the idle formula says " + expect.Gold + " and " + expect.Shards + ")");
-                Check(p.Gold == goldBefore + r.Gold + chest.Gold && p.Shards == shardsBefore + r.Shards + chest.Shards
+                Check(chest.Gold == expect.Gold && chest.Gold > 0 && expect.Shards > 0,
+                      "it pays " + db.WallChests.Wall.Hours + " hours of Gold at the frontier it reached: " + chest.Gold
+                      + " gold (the idle formula's Gold half says " + expect.Gold + ")");
+                Check(p.Gold == goldBefore + r.Gold + chest.Gold && p.Shards == shardsBefore + r.Shards
                       && p.Slag == slagBefore + 12 * six.ChapterNumber,
-                      "the purse moved by the stage reward plus the chest, and Slag by 12 x chapter " + six.ChapterNumber
-                      + " = " + (p.Slag - slagBefore));
+                      "GOLD AND SLAG ARE PAID AND SHARDS ARE NOT: the Gold purse moved by the stage reward plus the chest, the Shards purse by the stage reward alone (the chest holds none, though "
+                      + expect.Shards + " Shards of idle income were on offer), and Slag by 12 x chapter " + six.ChapterNumber + " = " + (p.Slag - slagBefore));
             }
 
             // Once. Clearing it again pays the repeat purse and no chest.
@@ -178,8 +180,8 @@ namespace Emberfall.DevHarness
             Check(same, same ? "with the switch off, " + n + " first clears pay exactly what a database without the file pays (gold "
                               + po.Gold + ", shards " + po.Shards + ", Slag " + po.Slag + ")"
                             : "switch off differs from before at " + why);
-            Check(pn.Slag > po.Slag && pn.Gold > po.Gold && pn.Shards > po.Shards,
-                  "and with it on the same " + n + " clears are richer: gold " + pn.Gold + ", shards " + pn.Shards + ", Slag " + pn.Slag);
+            Check(pn.Slag > po.Slag && pn.Gold > po.Gold && pn.Shards == po.Shards,
+                  "and with it on the same " + n + " clears are richer in Gold and Slag and exactly as rich in Shards: gold " + pn.Gold + ", shards " + pn.Shards + " (" + po.Shards + " off), Slag " + pn.Slag);
             Line("");
         }
     }

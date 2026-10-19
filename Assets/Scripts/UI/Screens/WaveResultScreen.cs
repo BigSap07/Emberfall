@@ -672,14 +672,13 @@ namespace Emberfall.UI.Screens
         {
             if (rewards == null) return y;
             List<RectTransform> tiles = new List<RectTransform>();
-            // The wall or finale chest this clear opened pays into the same two tiles, plus Slag of
-            // its own; it is a part of what the clear paid, not a second screen.
+            // The wall or finale chest this clear opened pays into the Gold tile, plus Slag of its own
+            // (the chest pays no Shards); it is a part of what the clear paid, not a second screen.
             int chestGold = rewards.Chest != null ? rewards.Chest.Gold : 0;
-            int chestShards = rewards.Chest != null ? rewards.Chest.Shards : 0;
             if (rewards.Gold + chestGold > 0)
                 tiles.Add(CurrencyTile("Gold", TextureLab.CoinIcon(64), UITheme.Gold, "+" + (rewards.Gold + chestGold), "GOLD"));
-            if (rewards.Shards + chestShards > 0)
-                tiles.Add(CurrencyTile("Shards", TextureLab.CrystalIcon(64), UITheme.Shard, "+" + (rewards.Shards + chestShards), "EMBER SHARDS"));
+            if (rewards.Shards > 0)
+                tiles.Add(CurrencyTile("Shards", TextureLab.CrystalIcon(64), UITheme.Shard, "+" + rewards.Shards, "EMBER SHARDS"));
             if (rewards.Chest != null && rewards.Chest.Slag > 0)
                 tiles.Add(CurrencyTile("Slag", TextureLab.IngotIcon(64), UITheme.Slag, "+" + rewards.Chest.Slag,
                                        rewards.Chest.Finale ? "SLAG - FINALE CHEST" : "SLAG - WALL CHEST"));
