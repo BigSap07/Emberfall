@@ -16,9 +16,12 @@ FREE track. The paid track exists in data and as a locked row, and has no purcha
 - **A tier is 40 points**, 30 tiers are 1,200 points. An active day (five orders and the chest) is 52 points,
   so **24 active days finish the track (1,248) and 23 do not (1,196)**, without the weekly chest. The weekly chest
   is a bonus on top. `CheckPassSizing` plays 24 and 23 real days through the loop and asserts both.
-- **It needs the daily loop.** The points are the loop's claims, so the pass earns nothing while
-  `DailyLoopSwitch` is off (it is off unless `EMBERFALL_DAILY_LOOP_ON` is defined). Say so when deciding the
-  friends build's defines.
+- **It needs the daily loop, and the loop is off by default.** The points are the loop's claims, so the pass earns
+  nothing while `DailyLoopSwitch` is off, and it is off unless `EMBERFALL_DAILY_LOOP_ON` is defined. **The pass is
+  on but inert until the build defines `EMBERFALL_DAILY_LOOP_ON`.** Its door is a button in the header of
+  `OrdersScreen`, which exists only with the loop, so without the define there is no way to reach it either. This
+  is the lead's default of 2026-10-19: the loop keeps its owner default (off) and turning it on is a build-define
+  decision, not a change to this feature.
 
 ## The free track
 
