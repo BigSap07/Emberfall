@@ -814,8 +814,9 @@ needed relaxing.
 **R16 loosened the curve from chapter 2 on, and the reference player no longer sticks anywhere.** The
 pre-R16 engine on the pre-R16 curve left 5 of 60 reference walks stuck (seeds 23, 46, 48, 51 and 59,
 at 4-2, 2-9, 5-3, 2-6 and 2-4); the counterattack rule re-drew the walks and left 8 on the same curve.
-`recommendedPower` from `2-1` to `6-12` is now 8 percent lower, capped so that no stage's median over
-the 60 walks passes about x1.20 (the band tops out at x1.25): 56 of the 60 chapter 2 to 6 stages move,
+`recommendedPower` from `2-1` to `6-12` is now 8 percent lower, capped so that a stage the step moves is
+not taken past about x1.20 on the median of the 60 walks (the band tops out at x1.25; the cap is not a
+ceiling on every median, and `3-4`, which it holds, reads x1.215): 56 of the 60 chapter 2 to 6 stages move,
 `ch3_4`, `ch5_11`, `ch6_7` and `ch6_10` are held by the cap, and chapter 1 is untouched, so walls 1-6
 to 1-12 are as designed. The enemy levels of every moved stage are re-solved with
 `SolveStageLevelsAt` to the CEIL rate the stage read before, and `SolverTargetRatios` is re-read on

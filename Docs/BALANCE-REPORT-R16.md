@@ -88,7 +88,7 @@ Sources: `data\tails-before.csv` and `data\tails-before-summary.md` (left column
 
 Variants tried (`data\sim-progress.md`): the same step uncapped (-8 percent everywhere) leaves 0 stuck but a 22 and a 23 sitting tail at 2-9 and 2-10 and 6 stages over the band top; a looser cap (labelled cap11 in that log) leaves 1 stuck (seed 46 at 3-4, a stage the cap leaves loose). The capped 8 percent step is the one that met the target.
 
-**The walls** (extra sittings median/p90/max, then stuck walks; CEIL percent; median entry ratio). Source: `data\walls-before-after.txt`. Before is the new engine on the old curve.
+**The walls** (extra sittings median/p90/max, then stuck walks; CEIL percent; median entry ratio). Source: `data\walls-before-after.txt`. Before is the new engine on the old curve (4-12 reads 10 there and in `data	ails-new-engine-old-curve.csv`; the old engine on the old curve reads 13).
 
 | Wall | Before | After | CEIL before to after | Ratio before to after |
 |---|---|---|---|---|
@@ -109,7 +109,7 @@ The walls still bind: every chapter 2 to 6 wall keeps a CEIL of 58.8 to 68.4 per
 
 **Caveats.**
 - 30 stage readings across all 60 walks sit outside the power band (2-1 four times, 2-11 three times, 4-7, 3-3, 3-4, 2-6 and 2-7 twice each, three stages once). The guard reads walk 0 only and walk 0 is inside; this is the spread of 60 players, informational (`data\tails-after-summary.txt`).
-- 3-4 was already at x1.202 before the lever and is held by the cap; it reads x1.215 after, which is inside the noise of the re-draw, and it is the highest chapter 2 to 6 median.
+- 3-4 is one of the four stages the cap holds, so its `recommendedPower` did not move. Its median rises from x1.202 to x1.215 because walks reach it in a different state after the earlier stages moved. It is the highest chapter 2 to 6 median. The cap applies to the stages the lever moves; it is not a ceiling on every median.
 - The 56 moved stages change their opening battle, so their stage fingerprints move and `stage-fingerprint-baseline.txt` is regenerated for them (reason: this lever). ContentVersion moves as well.
 
 **PLACEHOLDER: the ContentVersion after value of the loosened curve, and the build-check run on the merged tree.** The lead fills these in when the sim sends them.
