@@ -17,6 +17,20 @@ namespace Emberfall.Core.Model
         public long AcquiredUnix;
 
         /// <summary>
+        /// How many of Copies are SEALED: granted by a purchase, so they may never enter a random
+        /// mechanic (SealedState). Always read through SealedCopiesHeld, which caps it at Copies,
+        /// so a spend that forgot to lower it can only ever err toward "more sealed". Zero for every
+        /// hero that was earned, and zero is not written to the save.
+        /// </summary>
+        public int SealedCopies;
+
+        /// <summary>SealedCopies, never above Copies and never below zero.</summary>
+        public int SealedCopiesHeld
+        {
+            get { return Math.Max(0, Math.Min(SealedCopies, Copies)); }
+        }
+
+        /// <summary>
         /// Ascension tier, 0 until the hero first ascends. Only a 5-star ever has anything else
         /// (F2). It sets the hero's level cap (F7), and it sets how far along the one level
         /// ladder each of its levels moves the hero: see StatMath.LevelAt for why Level stays the
@@ -149,6 +163,7 @@ namespace Emberfall.Core.Model
             c.DefId = DefId;
             c.Level = Level;
             c.Copies = Copies;
+            c.SealedCopies = SealedCopies;
             c.AcquiredUnix = AcquiredUnix;
             c.Ascension = Ascension;
             c.EquippedRelicId = EquippedRelicId;
@@ -267,6 +282,11 @@ namespace Emberfall.Core.Model
         public Aspect Aspect = Aspect.Ember;
 
         public ArmorTemper Temper = ArmorTemper.Rough;
+
+        /// <summary>True for a piece granted by a purchase (SealedState). A sealed piece may be
+        /// worn, kept and salvaged, and may never be rerolled or combined: both are a roll. Written
+        /// to the save only when true.</summary>
+        public bool Sealed;
 
         /// <summary>The slot's guaranteed stat, at whatever magnitude this piece rolled. Never
         /// null on a piece the roller produced; a hand-edited save with a missing primary reads as
@@ -462,6 +482,33 @@ namespace Emberfall.Core.Model
         /// only a save that carries one says 23 (SaveSerializer.VersionOf).
         /// </summary>
         public SinksState Sinks = new SinksState();
+
+        /// <summary>
+        /// The Sealed part of each purse (SealedState): what a purchase granted, which a summon, a
+        /// conversion or a forge gamble may never spend. NEVER NULL. Empty for every profile that
+        /// never held a purchased good, and an empty one is not written to the save. Saved from
+        /// version 24, and only a save that carries any Sealed good says 24
+        /// (SaveSerializer.VersionOf).
+        /// </summary>
+        public SealedState Sealed = new SealedState();
+
+        /// <summary>Gold a random mechanic may spend: the purse less its Sealed part.</summary>
+        public long FreeGold { get { return Gold - Math.Min(Math.Max(0, Sealed.Gold), Gold); } }
+
+        /// <summary>Shards a summon may spend: the purse less its Sealed part.</summary>
+        public long FreeShards { get { return Shards - Math.Min(Math.Max(0, Sealed.Shards), Shards); } }
+
+        /// <summary>Slag a forge gamble may spend: the purse less its Sealed part.</summary>
+        public long FreeSlag { get { return Slag - Math.Min(Math.Max(0, Sealed.Slag), Slag); } }
+
+        /// <summary>Spends Gold in a DETERMINISTIC sink (a level-up), Sealed part first, so the
+        /// Gold left is as free as it can be. The caller has checked Gold covers the amount.</summary>
+        public void SpendGoldDeterministic(long amount)
+        {
+            if (amount <= 0) return;
+            Gold -= amount;
+            Sealed.Gold = Math.Max(0, Sealed.Gold - amount);
+        }
 
         /// <summary>Whether this tip or opening is recorded. Null-safe so a caller with no profile
         /// reads "not seen".</summary>
@@ -956,11 +1003,11 @@ namespace Emberfall.Core.Model
         public List<ArmorPiece> ArmorCombineCandidates(ArmorPiece piece)
         {
             List<ArmorPiece> result = new List<ArmorPiece>();
-            if (piece == null) return result;
+            if (piece == null || piece.Sealed) return result;   // a combine is a gamble: nothing Sealed enters it
             for (int i = 0; i < OwnedArmor.Count; i++)
             {
                 ArmorPiece other = OwnedArmor[i];
-                if (other == piece) continue;
+                if (other == piece || other.Sealed) continue;
                 if (other.Slot != piece.Slot || other.Temper != piece.Temper) continue;
                 if (HeroWearingArmor(other.Uid) != null) continue;
                 result.Add(other);

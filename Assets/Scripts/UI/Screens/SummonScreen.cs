@@ -355,7 +355,7 @@ namespace Emberfall.UI.Screens
             _currencies.Refresh(App.Session, now);
 
             long unit = App.Session.Balance.SummonCost;
-            long shards = App.Session.Profile.Shards;
+            long shards = App.Session.Profile.FreeShards;   // Sealed Shards never enter a summon
 
             RefreshPullButton(_pullOne, unit, shards);
             RefreshPullButton(_pullTen, unit * 10L, shards);
@@ -488,7 +488,7 @@ namespace Emberfall.UI.Screens
 
             long unit = App.Session.Balance.SummonCost;
             long cost = unit * count;
-            if (App.Session.Profile.Shards < cost)
+            if (App.Session.Profile.FreeShards < cost)
             {
                 App.Notify("You need " + cost + " Ember Shards for " + count + " pulls.");
                 return;

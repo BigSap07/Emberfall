@@ -741,7 +741,7 @@ namespace Emberfall.UI.Screens
 
         private int SpareOf(HeroInstance hero)
         {
-            return hero.Copies - (App.Session.Profile.IsDeployed(hero.Uid) ? 1 : 0);
+            return App.Session.ConversionSpare(hero);   // Sealed copies never enter a conversion
         }
 
         private int OfferedOf(HeroInstance hero)
