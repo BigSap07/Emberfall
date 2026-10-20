@@ -21,7 +21,7 @@
 
 param(
     # From build-check.ps1. Keys: ExitCode (int), Failures (string[]), HarnessRan (bool),
-    # HarnessNote (string), HarnessLines (string[]).
+    # HarnessNote (string), HarnessLines (string[]), Mode ('full' or 'quick'), WallSeconds (int).
     [hashtable]$BuildCheck
 )
 
@@ -128,6 +128,16 @@ Section 'build-check' {
     $failures = @($BuildCheck.Failures | Where-Object { $_ })
     Add ('Source: the `Tools/build-check.ps1` run that generated this file. Exit code ' + $BuildCheck.ExitCode +
          ', **' + $failures.Count + ' failure(s)**.')
+    if ($BuildCheck.Mode -eq 'quick') {
+        Add ''
+        Add ('**QUICK RUN, NOT THE FULL CHECK.** `Tools/build-check.ps1 -Quick` walked 20 reference seeds behind the ' +
+             'walk guard instead of 60. Every other check ran, but a green quick run does not stand for a green ' +
+             'full run: only the full check (no flag) is a merge result.')
+    } elseif ($BuildCheck.Mode) {
+        Add ''
+        Add 'Mode: **full** (the 60-walk guard).'
+    }
+    if ($BuildCheck.WallSeconds) { Add ''; Add ('Wall time: ' + $BuildCheck.WallSeconds + ' s.') }
     if ($BuildCheck.HarnessNote) { Add ''; Add ('Harness: ' + $BuildCheck.HarnessNote) }
     if ($failures.Count -gt 0) {
         Add ''

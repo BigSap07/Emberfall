@@ -20,8 +20,14 @@ namespace Emberfall.DevHarness
         /// table reads; the rule's reference player converts nothing and ascends nothing, so its
         /// power is pulls, levels to the caps and armor, and a wall that player cannot pass is a
         /// wall fusion gates.</summary>
-        private static bool _walkConverts = true;
-        private static bool _walkAscends = true;
+        // THREAD-STATIC, because the walks run on worker threads (SimulateEconomies): each thread's two
+        // policy flags are its own, so a worker narrowing them for a reference walk cannot reach the walk
+        // beside it. They are stored inverted so that a thread that never set them reads the default, true,
+        // which a [ThreadStatic] field cannot say for itself (it starts at false on every new thread).
+        [ThreadStatic] private static bool _walkConvertsOff;
+        [ThreadStatic] private static bool _walkAscendsOff;
+        private static bool _walkConverts { get { return !_walkConvertsOff; } set { _walkConvertsOff = !value; } }
+        private static bool _walkAscends { get { return !_walkAscendsOff; } set { _walkAscendsOff = !value; } }
 
         private static EconomyRun SimulateEconomyUnder(ContentDatabase db, int firstSeed, bool converts, bool ascends)
         {
@@ -30,6 +36,111 @@ namespace Emberfall.DevHarness
             _walkAscends = ascends;
             try { return SimulateEconomy(db, false, firstSeed); }
             finally { _walkConverts = c; _walkAscends = a; }
+        }
+
+        // ---------------------------------------------------------------- walks on worker threads
+
+        /// <summary>How many walks run at once: EMBERFALL_WALK_WORKERS if it names a count, else the
+        /// logical cores less two (the machine keeps two for itself), never under two. 1 forces the
+        /// serial path, the one every output was first recorded from, so the identity of the two can be
+        /// proved again at any time.</summary>
+        private static int WalkWorkers()
+        {
+            string v = Environment.GetEnvironmentVariable("EMBERFALL_WALK_WORKERS");
+            int n;
+            if (!string.IsNullOrEmpty(v) && int.TryParse(v.Trim(), out n) && n >= 1) return n;
+            return Math.Max(2, Environment.ProcessorCount - 2);
+        }
+
+        /// <summary>Runs body(0) to body(count - 1), up to WalkWorkers() at once on the thread pool, and returns when
+        /// every one has finished. For trials that are independent of each other and write nothing the
+        /// others read: each fills its own slot of an array the caller made, or adds to a total with
+        /// Interlocked. With one worker, or fewer than four trials, it is the plain loop. A trial that
+        /// throws rethrows here as itself, not wrapped.</summary>
+        private static void ForEachTrial(int count, Action<int> body)
+        {
+            int workers = Math.Min(WalkWorkers(), count);
+            if (workers <= 1 || count < 4)
+            {
+                for (int i = 0; i < count; i++) body(i);
+                return;
+            }
+            try
+            {
+                System.Threading.Tasks.Parallel.For(0, count,
+                    new System.Threading.Tasks.ParallelOptions { MaxDegreeOfParallelism = workers }, body);
+            }
+            catch (AggregateException e)
+            {
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(e.InnerExceptions[0]).Throw();
+            }
+        }
+
+        /// <summary>How many of count independent trials return true. The total is a sum of integers, so it
+        /// is the same in whatever order the trials finish.</summary>
+        private static int CountTrials(int count, Func<int, bool> trial)
+        {
+            int total = 0;
+            ForEachTrial(count, delegate(int i) { if (trial(i)) System.Threading.Interlocked.Increment(ref total); });
+            return total;
+        }
+
+        /// <summary>
+        /// One economy walk per first seed, in the order the seeds are given, whatever order they
+        /// finish in. Each is exactly SimulateEconomyUnder(db, seed, converts, ascends): a walk draws
+        /// every one of its seeds from its own EconomyRun and writes no static the others read (the
+        /// policy flags above are thread-static, NoteResolvedOrdinal locks its table), so a walk is the
+        /// same walk on any thread and the array is element for element what a serial loop builds.
+        /// Nothing is printed from inside a walk (only the verbose walk prints, and that one is never
+        /// batched); the caller prints from the array, in seed order, so every line is where it was.
+        ///
+        /// Serial when one worker is asked for, when there is a single walk, and under the store
+        /// curve's spender (StoreCurve.cs), which flips global switches around each sitting.
+        /// A walk that throws rethrows here, the lowest seed index first, as the serial loop would
+        /// have reached it.
+        /// </summary>
+        private static EconomyRun[] SimulateEconomies(ContentDatabase db, int[] seeds, bool converts, bool ascends)
+        {
+            EconomyRun[] runs = new EconomyRun[seeds.Length];
+            int workers = Math.Min(WalkWorkers(), seeds.Length);
+            if (workers <= 1 || _walkStoreMode != 0)
+            {
+                for (int i = 0; i < seeds.Length; i++) runs[i] = SimulateEconomyUnder(db, seeds[i], converts, ascends);
+                return runs;
+            }
+
+            Exception[] failed = new Exception[seeds.Length];
+            int next = -1;
+            System.Threading.ThreadStart body = delegate
+            {
+                int i;
+                while ((i = System.Threading.Interlocked.Increment(ref next)) < seeds.Length)
+                {
+                    try { runs[i] = SimulateEconomyUnder(db, seeds[i], converts, ascends); }
+                    catch (Exception e) { failed[i] = e; }
+                }
+            };
+            // A walk nests a battle inside a session inside a sitting; give the worker the stack room the
+            // main thread has to spare rather than the default.
+            System.Threading.Thread[] pool = new System.Threading.Thread[workers];
+            for (int w = 0; w < workers; w++)
+            {
+                pool[w] = new System.Threading.Thread(body, 64 * 1024 * 1024);
+                pool[w].Start();
+            }
+            for (int w = 0; w < workers; w++) pool[w].Join();
+            for (int i = 0; i < failed.Length; i++)
+                if (failed[i] != null)
+                    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failed[i]).Throw();
+            return runs;
+        }
+
+        /// <summary>The walks at WalkSeed(0) to WalkSeed(count - 1), the list every guard reads.</summary>
+        private static EconomyRun[] SimulateEconomies(ContentDatabase db, int count, bool converts, bool ascends)
+        {
+            int[] seeds = new int[count];
+            for (int k = 0; k < count; k++) seeds[k] = WalkSeed(k);
+            return SimulateEconomies(db, seeds, converts, ascends);
         }
 
         private static string _wallModes = null;
@@ -151,11 +262,19 @@ namespace Emberfall.DevHarness
             }
         }
 
+        /// <summary>build-check.ps1 -Quick, for work in progress: EMBERFALL_QUICK_WALKS=1 cuts the guard's
+        /// walks (and the solver's stuck scan, which reads the same count) from 60 to 20. It is announced
+        /// on the first line of the run and on the RESULT line, so a quick run cannot be mistaken for the
+        /// full check, and nothing but the count changes: every check still runs and asserts what it
+        /// asserts. Unset, or anything but 1, is the full check.</summary>
+        private static readonly bool QuickWalks = Environment.GetEnvironmentVariable("EMBERFALL_QUICK_WALKS") == "1";
+
         /// <summary>Walks behind the rule's guard: WalkSeed 0 to 59. It was PaceSeeds (20), target B's
         /// own count, and all 20 were green while R13's 60 walks found 5 stuck (about 8 percent), so the
         /// guard saw nothing. R16 owner decision 2 reads 60, which is also what the solver's stuck
-        /// scan reads (RunRecommendedPowerSolver walks the same list).</summary>
-        private const int FusionNeverGatesWalks = 60;
+        /// scan reads (RunRecommendedPowerSolver walks the same list). 20 in a quick run (QuickWalks),
+        /// declared after it because static fields initialise in textual order.</summary>
+        private static readonly int FusionNeverGatesWalks = QuickWalks ? 20 : 60;
 
         /// <summary>
         /// FUSION ACCELERATES A WALL. IT NEVER GATES ONE. The rule as a guard: sixty walks by the
@@ -173,12 +292,9 @@ namespace Emberfall.DevHarness
             Line("");
             Line("FUSION NEVER GATES A WALL (" + FusionNeverGatesWalks + " walks that never convert and never ascend, against "
                  + FusionNeverGatesWalks + " that do)");
-            List<EconomyRun> refs = new List<EconomyRun>(), fused = new List<EconomyRun>();
-            for (int k = 0; k < FusionNeverGatesWalks; k++)
-            {
-                refs.Add(SimulateEconomyUnder(db, WalkSeed(k), false, false));
-                fused.Add(SimulateEconomy(db, false, WalkSeed(k)));
-            }
+            // Both lists are walked on worker threads (SimulateEconomies) and read in seed order.
+            List<EconomyRun> refs = new List<EconomyRun>(SimulateEconomies(db, FusionNeverGatesWalks, false, false));
+            List<EconomyRun> fused = new List<EconomyRun>(SimulateEconomies(db, FusionNeverGatesWalks, _walkConverts, _walkAscends));
             int stuck = 0;
             List<string> where = new List<string>();
             // Each stuck walk is named by its index and its seed as well as its stage, because the

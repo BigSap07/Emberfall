@@ -4,13 +4,32 @@
 # Tools/UnityShim, and the engine-free core is compiled and executed by Tools/DevHarness.
 # This catches typos, bad signatures and missing usings long before the editor opens.
 #
-#   pwsh Tools/build-check.ps1            # compile everything, then run the core harness
+#   pwsh Tools/build-check.ps1            # compile everything, then run the core harness (the FULL check)
 #   pwsh Tools/build-check.ps1 -NoRun     # compile only
+#   pwsh Tools/build-check.ps1 -Quick     # for work in progress: compile and every harness check, but the
+#                                         # reference-walk guard (CheckFusionNeverGates) walks 20 seeds, not 60
+#
+# -QUICK IS NOT THE FULL CHECK and says so in its output and in STATUS.md. Every compile, every harness
+# check and every assertion runs; only the number of reference walks behind the 60-walk guard drops
+# (the harness reads EMBERFALL_QUICK_WALKS, set below). A merge candidate gets the full check, always.
+#
+# The reference walks run on worker threads: EMBERFALL_WALK_WORKERS=1 forces them serial (the default is
+# the logical cores less two). Compiles are skipped when a stamp says nothing they read has changed:
+# see Tools/compile-cache.ps1; EMBERFALL_NO_COMPILE_CACHE=1 turns that off.
 
-param([switch]$NoRun)
+param([switch]$NoRun, [switch]$Quick)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
+. (Join-Path $PSScriptRoot "compile-cache.ps1")
+$wall = [Diagnostics.Stopwatch]::StartNew()
+$mode = if ($Quick) { "quick" } else { "full" }
+if ($Quick) {
+    Write-Host "[build-check] QUICK MODE: the reference-walk guard walks 20 seeds instead of 60. This is NOT the full check and is not a merge result." -ForegroundColor Yellow
+    $env:EMBERFALL_QUICK_WALKS = "1"
+} else {
+    $env:EMBERFALL_QUICK_WALKS = "0"
+}
 $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 $out = Join-Path $root "Tools\DevHarness\bin"
 New-Item -ItemType Directory -Force $out | Out-Null
@@ -44,10 +63,13 @@ $harnessLines = @()
 if (-not $lintOk) { $failures.Add("doc-lint: new violations (listed above the compile steps)") }
 
 function Finish([int]$code) {
+    Write-Host ("[build-check] " + $mode.ToUpper() + " check finished, exit " + $code + ", " + [int]$wall.Elapsed.TotalSeconds + " s wall")
+    if ($Quick) { Write-Host "[build-check] That was a QUICK run (20 walks): it does not stand for the full check." -ForegroundColor Yellow }
     try {
         & (Join-Path $PSScriptRoot "status.ps1") -BuildCheck @{
             ExitCode = $code; Failures = $failures.ToArray(); HarnessRan = $harnessRan
             HarnessNote = $harnessNote; HarnessLines = $harnessLines
+            Mode = $mode; WallSeconds = [int]$wall.Elapsed.TotalSeconds
         }
     } catch {
         Write-Host ("[status] STATUS.md was not written: " + $_.Exception.Message + " - build-check's result is unaffected") -ForegroundColor Yellow
@@ -56,6 +78,14 @@ function Finish([int]$code) {
 }
 
 function Compile($label, $sources, $target, $outputPath, $defines) {
+    $key = Get-CompileKey ([string[]]$sources) $target $outputPath $defines $csc
+    $cached = Test-CompileCache $key $outputPath
+    if ($null -ne $cached) {
+        Write-Host ("[" + $label + "] " + $sources.Count + " files")
+        $cached | ForEach-Object { Write-Host "  $_" }
+        Write-Host ("[" + $label + "] ok (up to date: no input changed since it was last compiled)") -ForegroundColor Green
+        return $true
+    }
     $rsp = Join-Path $env:TEMP ("emberfall_" + $label + ".rsp")
     # UTF-8 WITHOUT A BOM, written through .NET rather than Set-Content -Encoding UTF8, which on
     # Windows PowerShell 5.1 means UTF-8 WITH one. csc.exe happens to tolerate a BOM at the top of
@@ -69,9 +99,13 @@ function Compile($label, $sources, $target, $outputPath, $defines) {
     if ($defines) { $defineArgs = @("-define:$defines") }
     $output = & $csc -nologo "-target:$target" "-out:$outputPath" @defineArgs "@$rsp" 2>&1
     $ok = ($LASTEXITCODE -eq 0)
-    $output | Where-Object { $_ -match "error|warning CS" } | ForEach-Object { Write-Host "  $_" }
+    $shown = @($output | Where-Object { $_ -match "error|warning CS" } | ForEach-Object { "$_" })
+    $shown | ForEach-Object { Write-Host "  $_" }
     if (-not $ok) { Write-Host ("[" + $label + "] FAILED") -ForegroundColor Red }
-    else { Write-Host ("[" + $label + "] ok") -ForegroundColor Green }
+    else {
+        Write-Host ("[" + $label + "] ok") -ForegroundColor Green
+        Write-CompileCache $key $outputPath $shown
+    }
     return $ok
 }
 

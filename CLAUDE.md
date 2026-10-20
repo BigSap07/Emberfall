@@ -54,7 +54,12 @@ campaign progression, summoning, idle income, local saving. Landscape, touch-fir
 - **Code goes on branches, never on `main`.** Branch first, commit there, leave `main` alone.
 - **Design docs commit straight to `main`.** They touch no code, and every agent needs to read
   them.
-- Verify with `Tools/build-check.ps1` before calling work done.
+- Verify with `Tools/build-check.ps1` before calling work done. That is the **full** check (the 60-walk guard)
+  and the only one a merge counts. During work, `Tools/build-check.ps1 -Quick` runs the same compiles and every
+  harness check with 20 reference walks instead of 60; it says QUICK in its output and in `STATUS.md`, and a quick
+  result never stands for a full one. The walks run on `Environment.ProcessorCount` minus 2 threads
+  (`EMBERFALL_WALK_WORKERS=1` forces them serial), and a compile is skipped when no input changed
+  (`Tools/compile-cache.ps1`, `EMBERFALL_NO_COMPILE_CACHE=1` turns it off).
 - Editor captures are forced offline by the capture tooling (`EditorCaptureGuard`); agents no longer need to move `supabase.json`.
 
 ## Nightly run

@@ -560,12 +560,14 @@ namespace Emberfall.DevHarness
         private static void CheckGuildTechNeverGates(ContentDatabase db)
         {
             int walks = GtNeverGatesWalks;
-            List<EconomyRun> bare = new List<EconomyRun>(), teched = new List<EconomyRun>();
-            for (int k = 0; k < walks; k++)
-            {
-                bare.Add(SimulateEconomyUnder(db, WalkSeed(k), false, false));
-                teched.Add(SimulateEconomyWithTech(db, WalkSeed(k), MaxGuildRungs(db.GuildTech)));
-            }
+            // Both arms walk on worker threads (SimulateEconomies) and are read in seed order. The tree
+            // is set before the second arm starts and put back after it: the walks only read it.
+            List<EconomyRun> bare = new List<EconomyRun>(SimulateEconomies(db, walks, false, false));
+            List<EconomyRun> teched;
+            GuildTechState hadTech = _walkGuildTech;
+            _walkGuildTech = MaxGuildRungs(db.GuildTech);
+            try { teched = new List<EconomyRun>(SimulateEconomies(db, walks, false, false)); }
+            finally { _walkGuildTech = hadTech; }
 
             int stuck = 0;
             List<string> where = new List<string>();

@@ -76,6 +76,10 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 Write-Host "[core+harness] ok" -ForegroundColor Green
+# This script rebuilds the same DevHarness.exe build-check.ps1 stamps and does not cache itself, so
+# the stamp is reset: the next build-check compiles instead of trusting an exe it did not build.
+. (Join-Path $PSScriptRoot "compile-cache.ps1")
+Reset-CompileCache $exe
 Write-Host ""
 
 $content = Join-Path $root "Assets\Resources\Content"

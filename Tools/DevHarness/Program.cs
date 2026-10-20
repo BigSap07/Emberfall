@@ -141,6 +141,7 @@ namespace Emberfall.DevHarness
             Console.OutputEncoding = Encoding.UTF8;
             Line("EMBERFALL CORE HARNESS");
             Line("content: " + contentDir);
+            if (QuickWalks) Line("QUICK MODE: the reference-walk guard walks " + FusionNeverGatesWalks + " seeds, not 60. This is NOT the full check.");
             Line("");
 
             ContentDatabase content = LoadContent(contentDir);
@@ -369,8 +370,9 @@ namespace Emberfall.DevHarness
             PrintInstrumentComparison();
 
             Line("");
-            if (_failures == 0) Line("RESULT: all checks passed");
-            else Line("RESULT: " + _failures + " check(s) FAILED");
+            string quickNote = QuickWalks ? " (QUICK MODE: " + FusionNeverGatesWalks + " walks, not the full check)" : "";
+            if (_failures == 0) Line("RESULT: all checks passed" + quickNote);
+            else Line("RESULT: " + _failures + " check(s) FAILED" + quickNote);
             return _failures == 0 ? 0 : 1;
         }
 
@@ -16282,9 +16284,10 @@ namespace Emberfall.DevHarness
         {
             StageDef fought = CampaignWaveGenerator.BuildBattle(stage, wave, battle);
             NoteResolvedOrdinal(coverage, stage, wave, battle);
-            int wins = 0;
-            for (int i = 0; i < samples; i++)
-                if (CombatSimulation.Run(session.BuildBattleRequest(fought, seedBase + i * 31)).Victory) wins++;
+            // The samples are independent fights from one read-only session, so they run on worker threads
+            // (CountTrials); the count of wins is the same whatever order they finish in.
+            int wins = CountTrials(samples, delegate(int i)
+                { return CombatSimulation.Run(session.BuildBattleRequest(fought, seedBase + i * 31)).Victory; });
             return wins / (float)samples;
         }
 
@@ -16385,13 +16388,19 @@ namespace Emberfall.DevHarness
         {
             int battles = Math.Max(1, stage.BattleCount);
             int ordinal = (wave - 1) * battles + battle;
-            HashSet<int> seen;
-            if (!into.TryGetValue(stage.DisplayCode, out seen))
+            // Locked because the economy walks run on worker threads (SimulateEconomies), and every
+            // one of them records into the same table. The table only ever gains ordinals, so what it
+            // holds when they are all done does not depend on who got there first.
+            lock (into)
             {
-                seen = new HashSet<int>();
-                into[stage.DisplayCode] = seen;
+                HashSet<int> seen;
+                if (!into.TryGetValue(stage.DisplayCode, out seen))
+                {
+                    seen = new HashSet<int>();
+                    into[stage.DisplayCode] = seen;
+                }
+                seen.Add(ordinal);
             }
-            seen.Add(ordinal);
         }
 
         /// <summary>
@@ -17790,10 +17799,14 @@ namespace Emberfall.DevHarness
             Line("PACE ACROSS " + PaceSeeds + " WALKS (the same economy, " + PaceSeeds + " first seeds; report only)");
             List<PaceReading> readings = new List<PaceReading>();
             List<string> walls = new List<string>();
+            // The walks run on worker threads; the readings are taken from them here, in seed order.
+            int[] paceSeeds = new int[PaceSeeds];
+            for (int k = 0; k < PaceSeeds; k++) paceSeeds[k] = 1 + k * 1000003;
+            EconomyRun[] paceRuns = SimulateEconomies(db, paceSeeds, _walkConverts, _walkAscends);
             for (int k = 0; k < PaceSeeds; k++)
             {
-                int seed = 1 + k * 1000003;
-                PaceReading r = ReadPace(db, SimulateEconomy(db, false, seed), seed);
+                int seed = paceSeeds[k];
+                PaceReading r = ReadPace(db, paceRuns[k], seed);
                 readings.Add(r);
                 foreach (string w in r.WallExtra.Keys) if (!walls.Contains(w)) walls.Add(w);
             }
@@ -17878,7 +17891,15 @@ namespace Emberfall.DevHarness
             int winsRetested = 0;
             bool healerDeployed = false;
 
-            for (int m = 0; m < MeasureRuns; m++)
+            // The 24 fights are independent and read the session without writing it, so they run on worker
+            // threads (ForEachTrial) into slots of their own; everything order-dependent (the damage table's
+            // insertion order, which fight last set healerDeployed) is then replayed below in fight order.
+            BattleResult[] fights = new BattleResult[MeasureRuns];
+            bool[] deployed = new bool[MeasureRuns];
+            bool[] altLost = new bool[MeasureRuns];
+            NoteResolvedOrdinal(_economyOrdinals, stage,
+                                Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
+            ForEachTrial(MeasureRuns, delegate(int m)
             {
                 int seed = 100000 + m * 37 + stageIdx;
                 // The stage's CEILING battle - its hardest, the one that decides whether the stage
@@ -17886,25 +17907,38 @@ namespace Emberfall.DevHarness
                 // player has already beaten by the time the stage matters.
                 StageDef measured = CampaignWaveGenerator.BuildBattle(
                     stage, Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
-                NoteResolvedOrdinal(_economyOrdinals, stage,
-                                    Math.Max(1, stage.WaveCount), Math.Max(1, stage.BattleCount));
                 BattleResult mr = CombatSimulation.Run(session.BuildBattleRequest(measured, seed));
-                if (mr.Victory) measureWins++;
-                AccumulateDamage(mr, damageByHero);
+                fights[m] = mr;
 
                 if (mr.Victory && noHealMender != null)
                 {
-                    List<HeroInstance> altTeam = BuildTeamWithoutHealing(profile, noHealMender, out healerDeployed);
-                    if (healerDeployed)
+                    bool placed;
+                    List<HeroInstance> altTeam = BuildTeamWithoutHealing(profile, noHealMender, out placed);
+                    deployed[m] = placed;
+                    if (placed)
                     {
                         BattleRequest altRequest = new BattleRequest();
                         altRequest.Content = db;
                         altRequest.Stage = measured;
                         altRequest.Seed = seed;
                         altRequest.Team = altTeam;
-                        BattleResult altResult = CombatSimulation.Run(altRequest);
+                        altLost[m] = !CombatSimulation.Run(altRequest).Victory;
+                    }
+                }
+            });
+            for (int m = 0; m < MeasureRuns; m++)
+            {
+                BattleResult mr = fights[m];
+                if (mr.Victory) measureWins++;
+                AccumulateDamage(mr, damageByHero);
+
+                if (mr.Victory && noHealMender != null)
+                {
+                    healerDeployed = deployed[m];
+                    if (healerDeployed)
+                    {
                         winsRetested++;
-                        if (!altResult.Victory) healerFlips++;
+                        if (altLost[m]) healerFlips++;
                     }
                 }
             }
@@ -20641,11 +20675,11 @@ namespace Emberfall.DevHarness
                 // off seed 1 alone, 6 of the guard's 20 walks stuck at 2-6 and 2-12.
                 HashSet<string> stuckIds = new HashSet<string>();
                 if (run.StuckAt >= 0) stuckIds.Add(db.AllStages[run.StuckAt].Id);
-                for (int k = 1; k < FusionNeverGatesWalks; k++)
-                {
-                    EconomyRun other = SimulateEconomyUnder(db, WalkSeed(k), false, false);
+                // The other 59 walk on worker threads and are read in seed order.
+                int[] scanSeeds = new int[FusionNeverGatesWalks - 1];
+                for (int k = 1; k < FusionNeverGatesWalks; k++) scanSeeds[k - 1] = WalkSeed(k);
+                foreach (EconomyRun other in SimulateEconomies(db, scanSeeds, false, false))
                     if (other.StuckAt >= 0) stuckIds.Add(db.AllStages[other.StuckAt].Id);
-                }
                 foreach (string id in stuckIds)
                 {
                     int had;
@@ -21107,7 +21141,7 @@ namespace Emberfall.DevHarness
             // their first seed (WalkSeed), so a seed is a matched pair; the response is the mean over
             // the pairs and its spread is printed beside it.
             List<EconomyRun> poorRuns = new List<EconomyRun>();
-            for (int k = 0; k < IncomeProbeSeeds; k++) poorRuns.Add(SimulateEconomy(db, false, WalkSeed(k)));
+            poorRuns.AddRange(SimulateEconomies(db, IncomeProbeSeeds, _walkConverts, _walkAscends));
             EconomyRun poor = poorRuns[0];
 
             int[] gold = new int[scaled.Count];
@@ -21136,14 +21170,14 @@ namespace Emberfall.DevHarness
                     scaled[i].FirstClearGold = (int)(firstClear[i] * Multiplier);
                     scaled[i].IdleGoldPerHour = (int)(idle[i] * Multiplier);
                 }
-                for (int k = 0; k < IncomeProbeSeeds; k++) goldRuns.Add(SimulateEconomy(db, false, WalkSeed(k)));
+                goldRuns.AddRange(SimulateEconomies(db, IncomeProbeSeeds, _walkConverts, _walkAscends));
                 for (int i = 0; i < scaled.Count; i++)
                 {
                     scaled[i].RewardShards = (int)(shards[i] * Multiplier);
                     scaled[i].FirstClearShards = (int)(firstShards[i] * Multiplier);
                     scaled[i].IdleShardsPerHour = (int)(idleShards[i] * Multiplier);
                 }
-                for (int k = 0; k < IncomeProbeSeeds; k++) richRuns.Add(SimulateEconomy(db, false, WalkSeed(k)));
+                richRuns.AddRange(SimulateEconomies(db, IncomeProbeSeeds, _walkConverts, _walkAscends));
             }
             finally
             {
