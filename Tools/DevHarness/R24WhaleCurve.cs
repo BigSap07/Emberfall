@@ -209,17 +209,17 @@ namespace Emberfall.DevHarness
             return l;
         }
 
-        /// <summary>Stages cleared before the events are on: 16 is 2-4, where the Proving (a quest) opens. ASSUMPTION: the events
-        /// carry no unlock row of their own yet.</summary>
-        private static int WhaleEventsFromCleared = 16;
+        /// <summary>Stages cleared before the PAID event offers (tracks and packs) are on: 25 is 3-1 cleared (the lead's decision, requiresStage
+        /// ch3_1). The free events, quests and free tracks are open from day one.</summary>
+        private static int WhaleEventsFromCleared = 25;
 
         /// <summary>The free tracks every buyer claims (the quests done, the tiers claimed): plain earned goods, here applied through
         /// the same grant path because the walk plays no quest.</summary>
         private static List<WhaleOffer> WhaleFreeTracks()
         {
             List<WhaleOffer> l = new List<WhaleOffer>();
-            l.Add(new WhaleOffer { Name = "free_weekly", Period = "week", NeedsCleared = WhaleEventsFromCleared, GoldHours = 7, DustSweeps = 8, Source = "builder-a live-events.json free track" });
-            l.Add(new WhaleOffer { Name = "free_monthly", Period = "event28", NeedsCleared = WhaleEventsFromCleared, GoldHours = 24, DustSweeps = 18, Source = "builder-a live-events.json free track" });
+            l.Add(new WhaleOffer { Name = "free_weekly", Period = "week", NeedsCleared = 0, GoldHours = 7, DustSweeps = 8, Source = "builder-a live-events.json free track" });
+            l.Add(new WhaleOffer { Name = "free_monthly", Period = "event28", NeedsCleared = 0, GoldHours = 24, DustSweeps = 18, Source = "builder-a live-events.json free track" });
             return l;
         }
 
@@ -264,7 +264,7 @@ namespace Emberfall.DevHarness
             public long SpentRelicDust, GrantedDust, LastPlayEarned, LastTopUpNow = -1;
             public long ContractMonth = -1;
             public int ContractsThisMonth;
-            public int LastOwned = -1, LastTierSum = -1;
+            public int LastOwned = -1, LastTierSum = -1, LastWorn = -1;
         }
 
         private static WhaleWalk _whaleWalk;
@@ -474,11 +474,18 @@ namespace Emberfall.DevHarness
         private static void WhaleRelicTimeline(long now, PlayerProfile p)
         {
             WhaleWalk w = _whaleWalk;
-            int owned = p.OwnedRelics.Count, tiers = 0;
+            int owned = p.OwnedRelics.Count, tiers = 0, worn = 0;
             for (int i = 0; i < p.OwnedRelics.Count; i++) tiers += p.OwnedRelics[i].Tier;
-            if (owned != w.LastOwned || tiers != w.LastTierSum)
+            List<HeroInstance> line = p.TeamHeroes();
+            for (int i = 0; i < line.Count; i++)
             {
-                w.RelicTimeline.Add(new long[] { now, owned, tiers });
+                OwnedRelic o = string.IsNullOrEmpty(line[i].EquippedRelicId) ? null : p.FindOwnedRelic(line[i].EquippedRelicId);
+                if (o != null) worn += o.Tier;
+            }
+            if (owned != w.LastOwned || tiers != w.LastTierSum || worn != w.LastWorn)
+            {
+                w.LastWorn = worn;
+                w.RelicTimeline.Add(new long[] { now, owned, tiers, worn });
                 w.LastOwned = owned;
                 w.LastTierSum = tiers;
             }
@@ -649,7 +656,7 @@ namespace Emberfall.DevHarness
                 sb.Append("D\t").Append(col).Append('\t').Append(k).Append('\t').Append(w.DustBought[i].Key).Append('\t').Append(w.DustBought[i].Value).Append('\n');
             for (int i = 0; i < w.RelicTimeline.Count; i++)
                 sb.Append("R\t").Append(col).Append('\t').Append(k).Append('\t').Append(w.RelicTimeline[i][0]).Append('\t')
-                  .Append(w.RelicTimeline[i][1]).Append('\t').Append(w.RelicTimeline[i][2]).Append('\n');
+                  .Append(w.RelicTimeline[i][1]).Append('\t').Append(w.RelicTimeline[i][2]).Append('\t').Append(w.RelicTimeline[i][3]).Append('\n');
         }
 
         // ------------------------------------------------------------------ the report
@@ -728,7 +735,7 @@ namespace Emberfall.DevHarness
                             d.Stages.Add(s); break;
                         case "E": d.Spend.Add(new WhaleSpendRow { T = long.Parse(c[3]), Eur = double.Parse(c[4], CultureInfo.InvariantCulture), Label = c[5] }); break;
                         case "D": d.Dust.Add(new KeyValuePair<long, long>(long.Parse(c[3]), long.Parse(c[4]))); break;
-                        case "R": d.Relics.Add(new long[] { long.Parse(c[3]), long.Parse(c[4]), long.Parse(c[5]) }); break;
+                        case "R": d.Relics.Add(new long[] { long.Parse(c[3]), long.Parse(c[4]), long.Parse(c[5]), c.Length > 6 ? long.Parse(c[6]) : 0 }); break;
                     }
                 }
             }
@@ -971,7 +978,18 @@ namespace Emberfall.DevHarness
                 owned.Add((int)r[1]); tiers.Add((int)r[2]);
                 day.Add((d.EntryT[idx] - d.Start) / 86400.0);
             }
-            Line("    " + label.PadRight(8) + " owned " + (owned.Count == 0 ? 0 : Median(owned)) + ", tier sum " + (tiers.Count == 0 ? 0 : Median(tiers)) + ", at walk day " + F1(MedianD(day)));
+            List<double> sat = new List<double>();
+            int never = 0;
+            for (int k = 0; k < walks.Count; k++)
+            {
+                WhaleWalkData d = walks[k];
+                double found = -1;
+                for (int i = 0; i < d.Relics.Count; i++)
+                    if (d.Relics[i][3] >= 15) { found = (d.Relics[i][0] - d.Start) / 86400.0; break; }
+                if (found < 0) never++; else sat.Add(found);
+            }
+            Line("    " + label.PadRight(8) + " owned " + (owned.Count == 0 ? 0 : Median(owned)) + ", tier sum " + (tiers.Count == 0 ? 0 : Median(tiers)) + ", at walk day " + F1(MedianD(day))
+                 + "; line saturated (worn tier sum 15) on walk day " + (sat.Count == 0 ? "never" : F1(MedianD(sat))) + " median (" + sat.Count + " of " + walks.Count + " walks reach it" + (never > 0 ? ", " + never + " never" : "") + ")");
         }
     }
 }
