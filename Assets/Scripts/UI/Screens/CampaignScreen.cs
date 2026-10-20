@@ -452,6 +452,7 @@ namespace Emberfall.UI.Screens
                     RectTransform portrait = EmberforgeUI.PortraitFrame("P" + slot, cell, hero.Def,
                                                                         hero.Def.Stars, PortraitSize);
                     UIBuilder.Box(portrait, 0f, 0f, PortraitSize, PortraitSize, new Vector2(0.5f, 0.5f));
+                    SkinArt.Dress(portrait, App.Session, hero);   // R24: the team strip shows the skin each hero wears
                 }
                 else
                 {

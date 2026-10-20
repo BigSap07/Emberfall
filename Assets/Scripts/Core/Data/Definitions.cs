@@ -126,6 +126,20 @@ namespace Emberfall.Core.Data
         public string Portrait = "";
 
         /// <summary>
+        /// R24, hero skins: an "RRGGBB" colour the battle sprite is multiplied by, so a TEST skin (a hue shift of the
+        /// hero's own art, no new file) reads as a different look. Empty for every unit that wears no such skin, which
+        /// is every unit in every save and fight that does not use one. Written by HeroSkins.VisualFor onto a COPY
+        /// carried by the fight's unit, never onto the hero's content.
+        /// </summary>
+        public string SkinTint = "";
+
+        /// <summary>A shallow copy: every field here is a value or an immutable string.</summary>
+        public VisualDef Copy()
+        {
+            return (VisualDef)MemberwiseClone();
+        }
+
+        /// <summary>
         /// True when this unit should render the shared placeholder mannequin instead of its own
         /// art. Asked rather than compared at each site so the spelling lives in one place.
         /// </summary>

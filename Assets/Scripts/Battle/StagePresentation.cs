@@ -148,6 +148,7 @@ namespace Emberfall.Battle
             c.SpriteMirror = v.SpriteMirror;
             c.SpriteStatus = v.SpriteStatus;
             c.Portrait = v.Portrait;
+            c.SkinTint = v.SkinTint;
             return c;
         }
 
@@ -178,6 +179,7 @@ namespace Emberfall.Battle
             if (own.SpritePending && IsFinishedArt(borrowed))
             {
                 v = Clone(borrowed);
+                v.SkinTint = own.SkinTint;   // a hero in a test skin keeps its tint on a stand-in's art
             }
             else
             {

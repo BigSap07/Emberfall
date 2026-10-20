@@ -1,0 +1,36 @@
+{
+  // HERO SKINS - Docs/DESIGN-STORE.md (R24). A skin is a look for ONE hero plus a small stat bonus on that hero only.
+  //
+  // THE CEILING. No stat of a skin may be above 5 percent (SkinsConfig.HardCapPct), whatever this file says: a skin that
+  // asks for more is DROPPED with a warning at load, not clamped. One skin is worn per hero, so bonuses cannot stack. The
+  // defaults below are +2 percent Attack and +3 percent HP; a skin may set attackPct, hpPct and defensePct itself.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion. A fight reads a skin only through a profile that owns one
+  // (HeroSkins.Worn), and no recorded replay does: the guild dungeon fights scratch heroes under an empty profile, and a
+  // fight against a snapshot opponent (The Proving, friend duels) skips skins. CheckSkinsNotHashed and
+  // CheckSkinsReplaysUntouched prove both. ContentDatabase.LoadSkins reads it after Load, before LoadStore.
+  //
+  // A skin is data only. rarity (rare, epic, legendary) sets the Store price tier (store.json skinTiers, EUR 4.99 to
+  // 9.99); the Store derives one offer per skin that is source "store" or "test". source "event" skins are not sold: an
+  // event track grants them by id through PurchaseGrants.Apply (GrantKind.Skin, GrantItem.SkinId). The art is delivered
+  // later as a battle sprite ("sprite": Resources/Sprites/Units/<id>.png) and a portrait ("portrait"); a skin with none
+  // shows the hero's own art, tinted by "hue" if it sets one. The system works with zero skins.
+  //
+  // THE TWO TEST SKINS below prove equip, the bonus, the portrait swap and the battle sprite swap before any art exists: a
+  // runtime hue shift of an existing hero's own art. "test": true hides them outside the editor and a development build
+  // (SkinsConfig.TestVisible), so a release build lists, sells, equips and fights none of them.
+  "maxBonusPct": 5,
+  "defaults": { "attackPct": 2, "hpPct": 3 },
+  "skins": [
+    {
+      "id": "kael_azure_test", "name": "Azure Kael (test)", "hero": "kael_the_unyielding",
+      "rarity": "rare", "source": "test", "test": true, "hue": 200,
+      "blurb": "A test look: Kael in a cold blue. Proves equipping, the bonus and the battle sprite."
+    },
+    {
+      "id": "kiva_verdant_test", "name": "Verdant Kiva (test)", "hero": "kiva_the_forsaken_oath",
+      "rarity": "epic", "source": "test", "test": true, "hue": 110, "attackPct": 3, "hpPct": 4,
+      "blurb": "A test look: Kiva in green, with a larger bonus to prove the data drives it."
+    }
+  ]
+}

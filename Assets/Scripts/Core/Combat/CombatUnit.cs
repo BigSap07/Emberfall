@@ -265,6 +265,9 @@ namespace Emberfall.Core.Combat
         public int Stars = 5;
         public bool IsBoss;
         public VisualDef Visual = new VisualDef();
+        /// <summary>R24: the hero skin worn in this fight (HeroSkins.Worn), or empty. Set once while the units are
+        /// built and copied onto the snapshot; nothing in the simulation reads it.</summary>
+        public string SkinId = "";
 
         public float MaxHp;
         public float Hp;
@@ -1158,6 +1161,7 @@ namespace Emberfall.Core.Combat
             s.Stars = Stars;
             s.IsBoss = IsBoss;
             s.Visual = Visual;
+            s.SkinId = SkinId;
             s.EnergyMax = EnergyMax;
             s.StartEnergy = Energy;
             s.ActiveAbilityName = Active != null ? Active.Name : "";

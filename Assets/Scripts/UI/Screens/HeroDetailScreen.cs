@@ -163,6 +163,8 @@ namespace Emberfall.UI.Screens
         private UIButton _obtainButton;
         private Text _capNote;
         private UIButton _fusionButton;
+        // R24: the hero's skin, cycled by one tap (none, then each skin of this hero the player owns).
+        private UIButton _skinButton;
 
         /// <summary>True while this screen is showing a prologue hero. Cleared by SetHero and
         /// SetLockedHero, the same discipline BattleScreen's mode setters use, so the three ways
@@ -440,6 +442,13 @@ namespace Emberfall.UI.Screens
             FeatureLockView.Attach(_fusionButton.Root, "herodetail.Fusion", _fusionButton.Label,
                                    new Vector2(-150f, 0f), FeatureLockView.TagSide.Above);
 
+            // R24, HERO SKINS: in the bar's empty left end, clear of LEVEL UP. One tap puts on the next skin of this
+            // hero the player owns (none, then each in turn); the label says which is worn and what it gives. Hidden
+            // for a hero the content has no skin for, so a build with zero skins shows nothing new.
+            _skinButton = EmberforgeUI.Button("Skin", bar, "SKIN", UITheme.FontTiny, ForgeButtonKind.Secondary);
+            UIBuilder.Box(_skinButton.Root, -740f, 14f, 420f, 88f, new Vector2(0.5f, 0f));
+            _skinButton.OnClick(CycleSkin);
+
             _obtainButton = EmberforgeUI.Button("Obtain", bar, "OPEN THE RIFT", UITheme.FontHeading,
                                                 ForgeButtonKind.Primary);
             UIBuilder.Box(_obtainButton.Root, 0f, 14f, 980f, 88f, new Vector2(0.5f, 0f));
@@ -479,6 +488,7 @@ namespace Emberfall.UI.Screens
             RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", _portraitHost, def,
                                                                 def.Stars, PortraitSize);
             UIBuilder.FillParent(portrait, 0f);
+            if (!locked) SkinArt.Dress(portrait, App.Session, _hero);   // R24: the worn skin's look, nothing for a hero in none
             if (locked)
             {
                 // dimmed silhouette - same identity below, but the portrait itself stays a shape,
@@ -862,6 +872,11 @@ namespace Emberfall.UI.Screens
             int cap = session.HeroLevelCapOf(_hero);
             bool atCap = _hero.Level >= cap;
             UnitStats next = atCap ? now : StatMath.ForHero(def, session.NextLevelOf(_hero), relic, armor, armorConfig);
+            // R24: the worn skin's small bonus, folded in by the SAME call the fight makes (HeroSkins.ApplyWorn), last,
+            // so the number printed is the number the simulation uses. The next level is dressed too, so a delta is honest.
+            HeroSkins.ApplyWorn(now, session.Profile, _hero, session.Content);
+            if (!atCap) HeroSkins.ApplyWorn(next, session.Profile, _hero, session.Content);
+            RefreshSkinButton(session);
 
             RefreshArmorBlock(session);
 
@@ -934,6 +949,35 @@ namespace Emberfall.UI.Screens
                 : "On the bench";
             _slotStatus.color = deployedSlot >= 0 ? UITheme.Success : Emberforge.TextQuiet;
             RefreshTalentDoor();
+        }
+
+        /// <summary>Shows which skin this hero wears and what it gives, or hides the button for a hero with no skin in
+        /// the content (zero skins is a working system).</summary>
+        private void RefreshSkinButton(GameSession session)
+        {
+            if (_skinButton == null) return;
+            bool any = _hero != null && !_prologueView && SkinsSwitch.Enabled && session.Content.Skins.SkinsOf(_hero.DefId).Count > 0;
+            _skinButton.Root.gameObject.SetActive(any);
+            if (!any) return;
+            int owned = HeroSkins.OwnedFor(session.Profile, _hero.DefId, session.Content).Count;
+            _skinButton.SetText(owned == 0 ? "SKINS: NONE OWNED\nBuy one in the Store" : SkinArt.Line(session, _hero));
+            _skinButton.Interactable = owned > 0;
+        }
+
+        private void CycleSkin()
+        {
+            if (_hero == null) return;
+            GameSession session = App.Session;
+            System.Collections.Generic.List<SkinDef> owned = HeroSkins.OwnedFor(session.Profile, _hero.DefId, session.Content);
+            if (owned.Count == 0) return;
+            int at = -1;
+            for (int i = 0; i < owned.Count; i++) if (owned[i].Id == _hero.EquippedSkinId) at = i;
+            if (at + 1 >= owned.Count) HeroSkins.Unequip(session, _hero);
+            else HeroSkins.Equip(session, _hero, owned[at + 1].Id);
+            App.Audio.Tap();
+            App.RequestSave();
+            RebuildStatic();
+            Refresh();
         }
 
         /// <summary>
@@ -1050,6 +1094,7 @@ namespace Emberfall.UI.Screens
             RefreshTalentDoor();
             // No HeroInstance behind a locked page, so there is nothing to ascend or to spend.
             if (_fusionButton != null) _fusionButton.Root.gameObject.SetActive(false);
+            if (_skinButton != null) _skinButton.Root.gameObject.SetActive(false);
             _levelLabel.text = "";
             _powerLabel.text = "LOCKED";
             _attunementLabel.text = "";

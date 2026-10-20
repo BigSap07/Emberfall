@@ -936,9 +936,11 @@ namespace Emberfall.Core.Model
                 // guild progression changes no fight, so a line that fights harder has to read as
                 // stronger - a power score that ignored the tree would understate every member of
                 // a levelled guild against the campaign's own recommendedPower.
-                total += StatMath.PowerScore(StatMath.ForHero(hero.Def, hero.Level, relic,
-                                                              EquippedArmorOf(hero), armorConfig,
-                                                              content != null ? content.GuildTech : null, GuildTech));
+                UnitStats line = StatMath.ForHero(hero.Def, hero.Level, relic,
+                                                  EquippedArmorOf(hero), armorConfig,
+                                                  content != null ? content.GuildTech : null, GuildTech);
+                HeroSkins.ApplyWorn(line, this, hero, content);   // R24: the worn skin, last, as the fight folds it in
+                total += StatMath.PowerScore(line);
             }
             return total;
         }
