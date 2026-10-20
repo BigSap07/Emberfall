@@ -47,7 +47,11 @@ namespace Emberfall.DevHarness
         private static string WhaleCol = "ref:non";
         private static string WhaleOut = null, WhaleDir = null;
         private static bool _whaleRelics = true, _whaleCommitted = false, _whaleFreeEvents = true, _whaleChoiceMax = true;
-        private static int _whaleContractFrom = 0;
+        private static int _whaleContractFrom = 37;
+        /// <summary>As the store has it now (lead's default, log 09:14; builder-b c8d987c): the Chest comes 2 a month instead of 1 a week.</summary>
+        private static bool _whaleChestMonthly = true;
+        /// <summary>The most Dust a Relic of Choice pick may be worth (builder-b: the picker is capped at 20,000).</summary>
+        private static int _whaleChoiceCap = 20000;
         private static readonly HashSet<string> _whaleSkip = new HashSet<string>();
         private static readonly Dictionary<string, double> _whaleScale = new Dictionary<string, double>();
 
@@ -69,7 +73,10 @@ namespace Emberfall.DevHarness
             if (a == "--whale-range" && i + 2 < args.Length) { WhaleFrom = int.Parse(args[++i]); WhaleTo = int.Parse(args[++i]); return true; }
             if (a == "--whale-no-relics") { _whaleRelics = false; return true; }
             if (a == "--whale-committed") { _whaleCommitted = true; return true; }
+            if (a == "--whale-weekly-chest") { _whaleChestMonthly = false; return true; }
+            if (a == "--whale-choice-cap" && i + 1 < args.Length) { _whaleChoiceCap = int.Parse(args[++i]); return true; }
             if (a == "--whale-contract-from" && i + 1 < args.Length) { _whaleContractFrom = int.Parse(args[++i]); return true; }
+            if (a == "--whale-events-from" && i + 1 < args.Length) { WhaleEventsFromCleared = int.Parse(args[++i]); return true; }
             if (a == "--whale-no-free-events") { _whaleFreeEvents = false; return true; }
             if (a == "--whale-choice-20k") { _whaleChoiceMax = false; return true; }
             if (a == "--whale-skip" && i + 1 < args.Length) { foreach (string t in args[++i].Split(',')) _whaleSkip.Add(t.Trim()); return true; }
@@ -178,7 +185,8 @@ namespace Emberfall.DevHarness
             public int NeedsCleared;
             public bool NeedsRelicShop;
             public double GoldHours, DustSweeps, FixedDust;
-            public int HeroCopies;
+            /// <summary>How many a buyer may take in one period (1 unless the offer says more).</summary>
+            public int Limit = 1;
             public string Source;
         }
 
@@ -193,7 +201,7 @@ namespace Emberfall.DevHarness
         {
             List<WhaleOffer> l = new List<WhaleOffer>();
             l.Add(new WhaleOffer { Name = "satchel", Eur = 4.99, Period = "week", NeedsRelicShop = true, FixedDust = 5000, Source = "builder-b store.json relic_dust_satchel" });
-            l.Add(new WhaleOffer { Name = "chest", Eur = 19.99, Period = "week", NeedsRelicShop = true, FixedDust = 25000, Source = "builder-b store.json relic_dust_chest" });
+            l.Add(new WhaleOffer { Name = "chest", Eur = 19.99, Period = _whaleChestMonthly ? "month" : "week", Limit = _whaleChestMonthly ? 2 : 1, NeedsRelicShop = true, FixedDust = 25000, Source = "builder-b store.json relic_dust_chest" });
             l.Add(new WhaleOffer { Name = "wtrack", Eur = 4.99, Period = "week", NeedsCleared = WhaleEventsFromCleared, GoldHours = 30, DustSweeps = 22, Source = "builder-a live-events.json ember_trials paid track" });
             l.Add(new WhaleOffer { Name = "mtrack", Eur = 9.99, Period = "event28", NeedsCleared = WhaleEventsFromCleared, GoldHours = 120, DustSweeps = 80, Source = "builder-a live-events.json tidecallers_month paid track" });
             l.Add(new WhaleOffer { Name = "wpack", Eur = 9.99, Period = "week", NeedsCleared = WhaleEventsFromCleared, GoldHours = 48, DustSweeps = 24, Source = "builder-a live-events.json ember_trials pack" });
@@ -203,7 +211,7 @@ namespace Emberfall.DevHarness
 
         /// <summary>Stages cleared before the events are on: 16 is 2-4, where the Proving (a quest) opens. ASSUMPTION: the events
         /// carry no unlock row of their own yet.</summary>
-        private const int WhaleEventsFromCleared = 16;
+        private static int WhaleEventsFromCleared = 16;
 
         /// <summary>The free tracks every buyer claims (the quests done, the tiers claimed): plain earned goods, here applied through
         /// the same grant path because the walk plays no quest.</summary>
@@ -249,6 +257,7 @@ namespace Emberfall.DevHarness
             public List<KeyValuePair<long, long>> DustBought = new List<KeyValuePair<long, long>>();
             public List<long[]> RelicTimeline = new List<long[]>();
             public Dictionary<string, long> LastPeriod = new Dictionary<string, long>();
+            public Dictionary<string, int> PeriodCount = new Dictionary<string, int>();
             public HashSet<string> Skinned = new HashSet<string>();
             public Dictionary<string, float[]> OriginalStats = new Dictionary<string, float[]>();
             public Dictionary<string, HeroDef> SkinnedDefs = new Dictionary<string, HeroDef>();
@@ -339,7 +348,9 @@ namespace Emberfall.DevHarness
                 if (cleared < o.NeedsCleared) continue;
                 long key = PeriodKey(db, o.Period, now);
                 long last;
-                if (w.LastPeriod.TryGetValue(o.Name, out last) && last == key) continue;
+                int taken = 0;
+                if (w.LastPeriod.TryGetValue(o.Name, out last) && last == key) w.PeriodCount.TryGetValue(o.Name, out taken);
+                if (taken >= o.Limit) continue;
                 double f = WhaleScaleOf(o.Name);
                 PurchaseGrant g = new PurchaseGrant();
                 if (o.GoldHours > 0) g.Add(new GrantItem(GrantKind.IdleGoldHours, o.GoldHours * f));
@@ -349,6 +360,7 @@ namespace Emberfall.DevHarness
                 GrantResult r = PurchaseGrants.Apply(s, g, null, now);
                 if (!r.Success) continue;
                 w.LastPeriod[o.Name] = key;
+                w.PeriodCount[o.Name] = taken + 1;
                 WhaleNoteSpend(now, o.Eur, o.Name);
                 // the Dust of this grant is counted by the caller's before/after reading of the purse (WhaleNoteDust)
             }
@@ -382,8 +394,9 @@ namespace Emberfall.DevHarness
                 OwnedRelic o = string.IsNullOrEmpty(team[i].EquippedRelicId) ? null : p.FindOwnedRelic(team[i].EquippedRelicId);
                 if (o == null || o.Tier >= s.RelicMaxTier) continue;
                 int price = s.RelicUpgradePrice(db.GetRelic(o.RelicId), o.Tier + 1);
-                if (price > bestUpPrice) { bestUp = o; bestUpPrice = price; }
+                if (price <= _whaleChoiceCap && price > bestUpPrice) { bestUp = o; bestUpPrice = price; }
             }
+            long worth = bestUpPrice;
             if (bestUp != null) bestUp.Tier++;
             else
             {
@@ -391,11 +404,14 @@ namespace Emberfall.DevHarness
                 for (int k = 0; k < db.Relics.Count; k++)
                 {
                     RelicDef r = db.Relics[k];
-                    if (p.OwnsRelic(r.Id)) continue;
+                    if (p.OwnsRelic(r.Id) || s.RelicPrice(r) > _whaleChoiceCap) continue;
                     if (pick == null || s.RelicPrice(r) > s.RelicPrice(pick)) pick = r;
                 }
                 if (pick == null || !s.GrantRelic(pick.Id)) return;
+                worth = s.RelicPrice(pick);
             }
+            // the pick is worth its Dust price to the buyer: counted in the Dust bought, but not in GrantedDust (no Dust entered the purse)
+            w.DustBought.Add(new KeyValuePair<long, long>(now, worth));
             w.LastPeriod["choice"] = key;
             WhaleNoteSpend(now, 29.99, "choice");
             WhaleRelicTimeline(now, p);
@@ -892,10 +908,10 @@ namespace Emberfall.DevHarness
             Line("  SPEND per chapter window (first stage entry to last stage exit), mean over walks. Recurring = EUR per 30 days of everything but the one-time buys (Starter Pact, Growth Fund, skins); one-time = their total in the window.");
             Line("  chapter | days | spender: recurring/30d, one-time | whale: recurring/30d, one-time | Dust bought a day: spender, whale");
             Dictionary<int, WhaleChapterRow> rowB = new Dictionary<int, WhaleChapterRow>(), rowC = new Dictionary<int, WhaleChapterRow>();
-            string[] names = { "1", "2", "3", "4", "5", "6", "2-3", "4-6", "2-6" };
-            int[] firsts = { 0, 12, 24, 36, 48, 60, 12, 36, 12 };
-            int[] lasts = { 11, 23, 35, 47, 59, 71, 35, 71, 71 };
-            for (int ch = 1; ch <= 9; ch++)
+            string[] names = { "1", "2", "3", "4", "5", "6", "2-3", "4-6", "2-6", "3-6" };
+            int[] firsts = { 0, 12, 24, 36, 48, 60, 12, 36, 12, 24 };
+            int[] lasts = { 11, 23, 35, 47, 59, 71, 35, 71, 71, 71 };
+            for (int ch = 1; ch <= 10; ch++)
             {
                 WhaleChapterRow b = WhaleChapter(B, firsts[ch - 1], lasts[ch - 1]), c = WhaleChapter(C, firsts[ch - 1], lasts[ch - 1]);
                 rowB[ch] = b; rowC[ch] = c;
@@ -904,7 +920,7 @@ namespace Emberfall.DevHarness
             }
             Line("");
             Line("  WHALE recurring EUR per 30 days by offer (mean over walks, windows as above):");
-            for (int ch = 1; ch <= 9; ch++)
+            for (int ch = 1; ch <= 10; ch++)
             {
                 List<KeyValuePair<string, double>> items = new List<KeyValuePair<string, double>>(rowC[ch].ByOffer30);
                 items.Sort(delegate(KeyValuePair<string, double> x, KeyValuePair<string, double> y) { return y.Value.CompareTo(x.Value); });
