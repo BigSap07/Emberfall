@@ -583,7 +583,7 @@ namespace Emberfall.DevHarness
             Check(back != null && error == null && SaveSerializer.Serialize(back) == json && back.Store.Receipts.Count == 2 && back.Store.FindReceipt("receipt-V1") != null
                   && back.Store.Record("starter").Count == 1 && back.WayfarersRoad.PaidSeason == 5,
                   "STORE SAVE ROUND TRIP: two receipts, a counter and a bought pass save, load back identical and save again byte for byte (" + json.Length + " characters)");
-            Check(JsonValue.Parse(json).GetInt("version", 0) == 25 && SaveSerializer.VersionOfJson(json) == 25 && SaveSerializer.CurrentVersion == 25 && json.Contains("\"store\"") && json.Contains("\"paid\""),
+            Check(JsonValue.Parse(json).GetInt("version", 0) == 25 && SaveSerializer.VersionOfJson(json) == 25 && SaveSerializer.StoreVersion == 25 && SaveSerializer.CurrentVersion >= 25 && json.Contains("\"store\"") && json.Contains("\"paid\""),
                   "and the document claims version 25, the version that holds the store");
 
             // Sealed goods alone stay 24; the store alone, or a bought track alone, is 25.
