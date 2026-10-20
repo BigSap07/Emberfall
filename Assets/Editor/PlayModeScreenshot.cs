@@ -1927,7 +1927,12 @@ namespace Emberfall.EditorTools
                     else app.Router.HeroDetail.SetLockedHero(cardDef);
                     SessionState.SetString(AbilityKey, "1");
                 }
-                if (name == "HeroSkin" || skinBattle) SeedSkins(app);
+                if ((name == "HeroSkin" || skinBattle) && !SeedSkins(app))
+                {
+                    Debug.LogError("PlayModeScreenshot: FAILED " + (skinBattle ? "BattleSkin" : name) + ": Azure Kael is not worn, so the shot would prove nothing. Skipping it.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                    return;
+                }
                 if (name == "HeroDetail" || name == "HeroSkin" || name == "AbilityNumbers")
                 {
                     List<HeroInstance> owned = app.Session.Profile.Heroes;
@@ -2617,36 +2622,29 @@ namespace Emberfall.EditorTools
 
         /// <summary>R24: gives the scratch profile Azure Kael (the shipped test skin) through the grant path and puts it on
         /// Kael, so the Hero screen and the battle show the skin. Scratch identity only.</summary>
-        private static void SeedSkins(GameApp app)
+        private static bool SeedSkins(GameApp app)
         {
             if (!EditorScratchIdentity.IsScratch)
             {
                 Debug.LogError("PlayModeScreenshot: refusing to seed a skin on a real identity.");
-                return;
+                return false;
             }
             GameSession session = app.Session;
             HeroInstance kael = session.Profile.FindHeroByDefId("kael_the_unyielding");
             SkinDef skin = session.Content.Skins.Skin("kael_azure_test");
             if (kael == null || skin == null)
             {
-                Debug.LogWarning("PlayModeScreenshot: no Kael or no test skin to seed.");
-                return;
+                Debug.LogError("PlayModeScreenshot: no Kael (" + (kael != null) + ") or no test skin (" + (skin != null) + ") to seed; test skins visible: " + SkinsConfig.TestVisible + ".");
+                return false;
             }
-            // Bought through the debug store like any skin (the grant path is the ledger's alone), then worn.
-            StoreOffers.Bind(session);
-            PurchaseService.ForceDebugStore = true;
-            PurchaseService.DebugAccountPath = Path.Combine(Path.GetTempPath(), "emberfall-capture-skin-account-" + DateTime.UtcNow.Ticks + ".json");
-            if (PurchaseService.Instance == null)
-            {
-                List<StoreOffer> offers = new List<StoreOffer>();
-                for (int i = 0; i < session.Content.Store.Offers.Count; i++) offers.Add(session.Content.Store.Offers[i].Built);
-                PurchaseService.Ensure(StoreRules.Shared, offers);
-            }
-            if (PurchaseService.Instance != null && PurchaseService.Instance.DebugStore != null) PurchaseService.Instance.DebugStore.DelaySeconds = 0.05;
-            StoreBuy(app, "skin_" + skin.Id, "");
-            HeroSkins.Equip(session, kael, skin.Id);
+            // Granted through the one grant path, as a purchase or an event reward is, then worn through the rules.
+            bool granted = StoreOffers.GrantSkinForCapture(session, skin.Id, TimeUtil.NowUnix());
+            bool worn = HeroSkins.Equip(session, kael, skin.Id);
+            SkinDef seen = HeroSkins.Worn(session.Profile, kael, session.Content);
             app.RefreshHud();
-            Debug.Log("PlayModeScreenshot: Kael wears " + skin.Name + " (" + skin.BonusLine() + ")");
+            Debug.Log("PlayModeScreenshot: skin seed: granted " + granted + ", equipped " + worn + ", owned " + session.Profile.OwnsSkin(skin.Id)
+                      + ", Kael wears " + (seen != null ? seen.Name + " (" + seen.BonusLine() + ")" : "NOTHING"));
+            return seen != null;
         }
 
         private static HeroInstance SkinSubject(List<HeroInstance> owned)
