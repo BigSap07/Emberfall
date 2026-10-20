@@ -96,6 +96,9 @@ namespace Emberfall.Core.Progression
         public bool TrackCanBuy;
         /// <summary>True in the last hour of the period: the track and the pack are no longer sold (LiveEvents.SalesCloseSeconds).</summary>
         public bool SalesClosed;
+        /// <summary>"UNLOCKS AT 3-1" while the paid offer waits for its stage (store.json requiresStage), else empty.</summary>
+        public string TrackLock = "";
+        public string PackLock = "";
         public string PackOfferId = "";
         public string PackName = "";
         public string PackBlurb = "";
@@ -740,7 +743,8 @@ namespace Emberfall.Core.Progression
             {
                 v.TrackOfferId = track.Id;
                 v.TrackPrice = StoreConfig.Eur(track.PriceEur);
-                v.TrackCanBuy = !st.TrackBought && !v.SalesClosed;
+                v.TrackLock = StoreOffers.LockLineFor(session, track.Id);
+                v.TrackCanBuy = !st.TrackBought && !v.SalesClosed && v.TrackLock.Length == 0;
             }
             StoreOfferDef pack = OfferOf(session, slot, LiveEventPart.Pack);
             if (pack != null && ev.Pack != null && StoreSwitch.Enabled && session.Content.Store.IsUsable)
@@ -749,7 +753,8 @@ namespace Emberfall.Core.Progression
                 v.PackName = ev.Pack.Name;
                 v.PackBlurb = ev.Pack.Blurb;
                 v.PackPrice = StoreConfig.Eur(pack.PriceEur);
-                v.PackCanBuy = !st.PackBought && !v.SalesClosed;
+                v.PackLock = StoreOffers.LockLineFor(session, pack.Id);
+                v.PackCanBuy = !st.PackBought && !v.SalesClosed && v.PackLock.Length == 0;
                 if (ev.Pack.Hours > 0.0)
                     v.PackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.IdleGoldHours, ev.Pack.Hours), session) + " (Sealed)");
                 if (ev.Pack.DustSweeps > 0.0)

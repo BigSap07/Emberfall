@@ -2522,6 +2522,14 @@ namespace Emberfall.EditorTools
             SeedStore(app, name);
             GameSession session = app.Session;
             long now = TimeUtil.NowUnix();
+            // The paid event offers open at 3-1 (store.json requiresStage): clear the campaign through it, in order.
+            List<StageDef> campaign = session.Content.AllStages;
+            for (int i = 0; i < campaign.Count; i++)
+            {
+                if (!session.Profile.ClearedStageIds.Contains(campaign[i].Id)) session.Profile.ClearedStageIds.Add(campaign[i].Id);
+                if (campaign[i].Id == "ch3_1") break;
+            }
+            session.Profile.StagesCleared = CampaignProgress.CountCleared(session.Profile, session.Content);
             LiveEventSlot slot = name == "LiveEventsMonthly" ? LiveEventSlot.Monthly : LiveEventSlot.Weekly;
             LiveEventDef ev = LiveEvents.EventNow(session, slot, now);
             if (ev == null) { Debug.LogWarning("PlayModeScreenshot: no " + slot + " event is running; nothing to seed."); return; }

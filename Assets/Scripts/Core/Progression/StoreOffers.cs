@@ -465,6 +465,15 @@ namespace Emberfall.Core.Progression
             return stage != null && !session.Profile.HasClearedStage(stage.Id) ? stage : null;
         }
 
+        /// <summary>The lock line of an offer that is locked right now ("UNLOCKS AT 3-1"), else empty. For the Events screen,
+        /// which sells the event offers with its own words.</summary>
+        public static string LockLineFor(GameSession session, string offerId)
+        {
+            if (!Active(session)) return "";
+            StoreOfferDef d = Find(session, offerId);
+            return d != null && IsLocked(session, d) ? LockLineOf(session, d) : "";
+        }
+
         /// <summary>"UNLOCKS AT 3-1": what a locked offer says, from the feature table or the stage it waits for.</summary>
         private static string LockLineOf(GameSession session, StoreOfferDef d)
         {

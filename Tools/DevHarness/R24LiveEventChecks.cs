@@ -48,6 +48,7 @@ namespace Emberfall.DevHarness
                 CheckLivePaymentInFlight(db);
                 CheckLiveFreeSkin(db);
                 CheckLiveSalesCutoff(db);
+                CheckLiveStageGate(db);
                 CheckLiveSealedAndRefused(db);
                 CheckLiveRollover(db);
                 CheckLiveWoundBack(db);
@@ -118,9 +119,17 @@ namespace Emberfall.DevHarness
             return t.Replace('\'', '"');
         }
 
+        /// <summary>The usual test session: the campaign cleared through 3-1, the stage the paid event offers wait for
+        /// (store.json requiresStage; CheckLiveStageGate proves the lock). A save of it loads back identical.</summary>
         private static GameSession LiveSession(ContentDatabase d)
         {
-            return new GameSession(d, GameSession.CreateNewProfile(d, LiveBase));
+            return LiveClearedThrough(d, "ch3_1");
+        }
+
+        /// <summary>A session with nothing cleared: the one the wave resolver can still play 1-1 on.</summary>
+        private static GameSession LivePlain(ContentDatabase d)
+        {
+            return LiveClearedThrough(d, null);
         }
 
         private const long LiveBase = 1760000000L;
@@ -274,7 +283,7 @@ namespace Emberfall.DevHarness
         private static void CheckLiveQuests(ContentDatabase db)
         {
             ContentDatabase d = LiveDb(LiveTestJson(db));
-            GameSession s = LiveSession(d);
+            GameSession s = LivePlain(d);
             long t0 = LiveT0(d);
             string pristine = LiveSnapshot(s);
 
@@ -853,6 +862,85 @@ namespace Emberfall.DevHarness
             Check(delivered.Success && delivered.CanConfirm && slow.Profile.Sealed.Gold - gold == slow.IdleYield(12 * 3600L).Gold, "A SLOW STORE: a payment begun at the last open second and delivered after the turnover is still delivered in full");
         }
 
+        // ------------------------------------------------------------------ 5e. the paid offers wait for 3-1
+
+        /// <summary>A session that has cleared every stage up to and including the given one (campaign order).</summary>
+        private static GameSession LiveClearedThrough(ContentDatabase d, string stageId)
+        {
+            PlayerProfile p = GameSession.CreateNewProfile(d, LiveBase);
+            if (stageId != null)
+            {
+                for (int i = 0; i < d.AllStages.Count; i++)
+                {
+                    p.ClearedStageIds.Add(d.AllStages[i].Id);
+                    if (d.AllStages[i].Id == stageId) break;
+                }
+            }
+            p.StagesCleared = CampaignProgress.CountCleared(p, d);
+            return new GameSession(d, p);
+        }
+
+        private static void CheckLiveStageGate(ContentDatabase db)
+        {
+            // The shipped store.json: the four paid event offers wait for ch3_1.
+            string[] ids = { "event_track_weekly", "event_track_monthly", "event_pack_weekly", "event_pack_monthly" };
+            bool declared = true;
+            for (int i = 0; i < ids.Length; i++) declared = declared && db.Store.Offer(ids[i]) != null && db.Store.Offer(ids[i]).RequiresStage == "ch3_1";
+            Check(declared, "the four paid event offers carry requiresStage ch3_1 in store.json");
+
+            ContentDatabase d = LiveDb(LiveTestJson(db));
+            long t0 = LiveT0(d);
+            string[] offers = { "event_track_weekly", "event_pack_weekly", "event_track_monthly", "event_pack_monthly" };
+
+            // ---- nothing cleared, and 2-12 cleared: every paid offer is locked
+            foreach (string through in new string[] { null, "ch2_12" })
+            {
+                GameSession s = LiveClearedThrough(d, through);
+                string pristine = LiveSnapshot(s);
+                bool allLocked = true;
+                for (int i = 0; i < offers.Length; i++)
+                {
+                    StoreFulfilment f = StoreOffers.Fulfil(s, offers[i], null, t0);
+                    if (f.Success || f.Reason != StoreRefusal.Locked) allLocked = false;
+                }
+                StoreOffers.Bind(s);
+                PurchaseResult begun = new PurchaseLedger(StoreRules.Shared).Begin(s, "event_pack_weekly", null, t0);
+                LiveEventView v = LiveEvents.View(s, LiveEventSlot.Weekly, t0);
+                Check(allLocked && !begun.Success && begun.Reason == PurchaseRefusal.NotAvailable && s.Profile.LiveEvents.Pending.Count == 0 && LiveSnapshot(s) == pristine
+                      && !v.TrackCanBuy && !v.PackCanBuy && v.TrackLock == "UNLOCKS AT 3-1" && v.PackLock == "UNLOCKS AT 3-1",
+                      "WITH " + (through == null ? "NOTHING" : "2-12") + " CLEARED every paid event offer is refused Locked at Begin and at fulfilment, the card says \"" + v.TrackLock + "\", and nothing is written");
+            }
+
+            // ---- the free side is open from the start: quests count and claim, the free track pays
+            GameSession fresh = LiveClearedThrough(d, null);
+            LiveEvents.Record(fresh, EventQuestKind.Stage, 1, t0);
+            Check(LiveEvents.ClaimQuest(fresh, LiveEventSlot.Weekly, "q_stage", t0 + 1).Success, "(free) quests count and claim before 3-1");
+            LiveEvents.RecordStageWin(fresh, t0 + 2);
+            LiveEvents.ClaimQuest(fresh, LiveEventSlot.Weekly, "q_aspect", t0 + 3);
+            LiveEvents.Record(fresh, EventQuestKind.Waves, 2, t0 + 4);
+            LiveEvents.ClaimQuest(fresh, LiveEventSlot.Weekly, "q_waves", t0 + 5);
+            LiveResult free = LiveEvents.ClaimFree(fresh, LiveEventSlot.Weekly, 1, t0 + 6);
+            Check(free.Success && LiveEvents.View(fresh, LiveEventSlot.Weekly, t0 + 7).Active, "THE FREE TRACK IS OPEN FROM THE START: a reached free tier is claimed before 3-1");
+
+            // ---- 3-1 cleared: open
+            GameSession open = LiveClearedThrough(d, "ch3_1");
+            LiveEventView ov = LiveEvents.View(open, LiveEventSlot.Weekly, t0);
+            StoreFulfilment bought = StoreOffers.Fulfil(open, "event_track_weekly", null, t0);
+            StoreFulfilment pack = StoreOffers.Fulfil(open, "event_pack_monthly", null, t0);
+            Check(bought.Success && pack.Success && ov.TrackLock.Length == 0 && ov.PackLock.Length == 0 && ov.TrackCanBuy,
+                  "WITH 3-1 CLEARED the paid offers are open: bought through the store path, no lock line");
+
+            // ---- a track already bought still pays its paid tiers whatever the stage (the gate is on the sale, not on the claims)
+            GameSession kept = LiveClearedThrough(d, "ch3_1");
+            LiveEvents.Record(kept, EventQuestKind.Stage, 1, t0);
+            LiveEvents.ClaimQuest(kept, LiveEventSlot.Weekly, "q_stage", t0 + 1);
+            LiveEvents.RecordStageWin(kept, t0 + 1);
+            LiveEvents.ClaimQuest(kept, LiveEventSlot.Weekly, "q_aspect", t0 + 2);
+            StoreOffers.Fulfil(kept, "event_track_weekly", null, t0 + 3);
+            long sealed0 = kept.Profile.Sealed.Gold;
+            Check(LiveEvents.ClaimPaid(kept, LiveEventSlot.Weekly, 1, t0 + 4).Success && kept.Profile.Sealed.Gold > sealed0, "and a paid tier of a bought track is claimed as before");
+        }
+
         // ------------------------------------------------------------------ 6. Sealed and refused by every random path
 
         private static void CheckLiveSealedAndRefused(ContentDatabase db)
@@ -1118,7 +1206,7 @@ namespace Emberfall.DevHarness
                 LiveEventsSwitch.Enabled = on;
                 try
                 {
-                    GameSession s = LiveSession(cd);
+                    GameSession s = LivePlain(cd);
                     StageDef first = cd.AllStages[0];
                     for (int i = 0; i < 40; i++) if (s.ResolveWave(first, 7100 + i * 101, t0 + i).StageCleared) break;
                     s.Profile.Gold = 1000000000L;
