@@ -344,6 +344,13 @@ Say ('project ' + $Project + ', Unity ' + $unity)
 Say ('real save ' + $savePath + ' hash before ' + $saveBefore)
 Say ('targets (' + $targetList.Count + '): ' + ($targetList -join ';'))
 
+# The Unity AI Assistant MCP bridge is held off for this session and put back in the finally below
+# (Tools/mcp-bridge-pref.ps1 says why and how). Left on when another editor is running.
+. (Join-Path $PSScriptRoot 'mcp-bridge-pref.ps1')
+$otherUnity = @(Get-Process -Name Unity -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
+Say (Disable-McpBridgeForCapture $otherUnity)
+try {
+
 # ------------------------------------------------------------------------------------ one launch
 
 $began = Get-Date
@@ -530,6 +537,10 @@ Start-Sleep -Seconds 3
 $left = @(Get-UnityOnProject)
 if ($left.Count -gt 0) { Say ('WARNING: Unity.exe PID ' + ($left -join ', ') + ' still names the project') }
 Restore-FirstRunPref $pref
+} finally {
+    $mcpNote = Restore-McpBridgeAfterCapture
+    if ($mcpNote) { Say $mcpNote }
+}
 
 # ------------------------------------------------------------------------------------ the results
 

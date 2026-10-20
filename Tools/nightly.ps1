@@ -564,6 +564,10 @@ function Invoke-CaptureSweep {
     # its run and puts it back only if it finishes. If the editor is stopped early the pref stays
     # set, so this script records it first and restores it after.
     $pref = Get-FirstRunPref
+    # The Unity AI Assistant MCP bridge is held off for the sweep and put back after it
+    # (Tools/mcp-bridge-pref.ps1 says why); a run cut short is put back by the next capture session.
+    . (Join-Path $PSScriptRoot 'mcp-bridge-pref.ps1')
+    Say (Disable-McpBridgeForCapture @(Get-Process -Name Unity -ErrorAction SilentlyContinue | ForEach-Object { $_.Id }))
     $began = Get-Date
     $proc = Start-Process -FilePath $unity -ArgumentList $argText -PassThru
     $null = $proc.Handle
@@ -636,6 +640,8 @@ function Invoke-CaptureSweep {
     }
 
     Restore-FirstRunPref $pref
+    $mcpNote = Restore-McpBridgeAfterCapture
+    if ($mcpNote) { Say $mcpNote }
 
     # What Unity said about itself.
     if (Test-Path -LiteralPath $unityLog) {
