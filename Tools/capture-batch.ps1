@@ -39,7 +39,9 @@
 #
 # SWITCHES: EMBERFALL_CAPTURE_WATCHDOG=0 switches off the in-editor watchdog AND the outer one (the
 # stall and ceiling nets below stay). EMBERFALL_CAPTURE_FORCE_MISS=<target> makes that target's first
-# play entry send no heartbeat, to show the recovery on demand.
+# play entry send no heartbeat, to show the recovery on demand. EMBERFALL_CAPTURE_EXTRA_ARGS is
+# appended to the editor's command line (for example -force-d3d12, to test a graphics API).
+# EMBERFALL_CAPTURE_KEEP_MCP=1 leaves the Unity AI Assistant MCP bridge on (Tools/mcp-bridge-pref.ps1).
 #
 # EXIT CODES  0 every target captured and the real save unchanged;  1 ran, with a FAILED or
 # not-reached target or a changed save;  2 refused to start.
@@ -360,6 +362,7 @@ $relaunches = 0
 function Start-Editor([string[]]$queue, [int]$launch) {
     $log = Join-Path $LogDir ('capture-batch-' + $Tag + '-launch' + $launch + '.log')
     $argText = '-projectPath "' + $Project + '" -executeMethod Emberfall.EditorTools.ScratchCaptures.Run -captures "' + ($queue -join ';') + '" -logFile "' + $log + '"'
+    if ($env:EMBERFALL_CAPTURE_EXTRA_ARGS) { $argText += ' ' + $env:EMBERFALL_CAPTURE_EXTRA_ARGS.Trim() }
     Say ('launch ' + $launch + ': ' + $queue.Count + ' target(s)')
     $proc = Start-Process -FilePath $unity -ArgumentList $argText -PassThru
     $null = $proc.Handle
