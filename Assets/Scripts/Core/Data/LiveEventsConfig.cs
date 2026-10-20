@@ -59,13 +59,21 @@ namespace Emberfall.Core.Data
         /// <summary>Amount repeat-clear payouts of the frontier stage, as Relic Dust.</summary>
         Dust,
         /// <summary>Amount Slag.</summary>
-        Slag
+        Slag,
+        /// <summary>FREE TRACK ONLY. The hero skin SkinId, granted through PurchaseGrants.Apply (a look and a small bonus
+        /// on that one hero, nothing random). When the skin is unknown, hidden in this build (a test skin in a release
+        /// build) or already owned, the Fallback reward is granted and shown instead.</summary>
+        Skin
     }
 
     public sealed class EventRewardDef
     {
         public EventRewardKind Kind;
         public double Amount;
+        /// <summary>Skin only: the skin's id in skins.json.</summary>
+        public string SkinId = "";
+        /// <summary>Skin only: the reward granted and shown instead when the skin cannot be granted. Never a skin.</summary>
+        public EventRewardDef Fallback;
     }
 
     public sealed class EventQuestDef
@@ -81,7 +89,7 @@ namespace Emberfall.Core.Data
 
         public string Line
         {
-            get { return Text.Replace("{0}", Target.ToString(CultureInfo.InvariantCulture)); }
+            get { return Text.Replace("{0}", Target.ToString("N0", CultureInfo.InvariantCulture)); }
         }
     }
 
@@ -296,8 +304,8 @@ namespace Emberfall.Core.Data
                 EventTierDef t = new EventTierDef();
                 t.Points = tiers[i].GetInt("points", 0);
                 if (t.Points <= last) { c.Warnings.Add(where + " tier " + (i + 1) + " does not need more points than the one before and is dropped"); continue; }
-                t.Free = ReadReward(tiers[i]["free"], c, where + " tier " + (i + 1) + " free");
-                t.Paid = ReadReward(tiers[i]["paid"], c, where + " tier " + (i + 1) + " paid");
+                t.Free = ReadReward(tiers[i]["free"], c, where + " tier " + (i + 1) + " free", true);
+                t.Paid = ReadReward(tiers[i]["paid"], c, where + " tier " + (i + 1) + " paid", false);
                 if (t.Free == null && t.Paid == null) { c.Warnings.Add(where + " tier " + (i + 1) + " pays nothing and is dropped"); continue; }
                 if (d.Tiers.Count >= MaxTiers) { c.Warnings.Add(where + " has more than " + MaxTiers + " tiers; the rest are dropped"); break; }
                 last = t.Points;
@@ -319,13 +327,24 @@ namespace Emberfall.Core.Data
             return d;
         }
 
-        private static EventRewardDef ReadReward(JsonValue j, LiveEventsConfig c, string where)
+        private static EventRewardDef ReadReward(JsonValue j, LiveEventsConfig c, string where, bool allowSkin)
         {
             if (j == null || !j.IsObject) return null;
             EventRewardDef r = new EventRewardDef();
             string kind = j.GetString("kind", "");
             switch (kind)
             {
+                case "skin":
+                    if (!allowSkin) { c.Warnings.Add(where + " is a skin on the paid track, which can hold none, and is dropped"); return null; }
+                    r.Kind = EventRewardKind.Skin;
+                    r.SkinId = j.GetString("skinId", "");
+                    r.Fallback = ReadReward(j["fallback"], c, where + " fallback", false);
+                    if (r.SkinId.Length == 0 || r.Fallback == null)
+                    {
+                        c.Warnings.Add(where + " is a skin without a skinId or without a fallback reward and is dropped");
+                        return null;
+                    }
+                    return r;
                 case "hourglass": r.Kind = EventRewardKind.Hourglass; break;
                 case "dust": r.Kind = EventRewardKind.Dust; break;
                 case "slag": r.Kind = EventRewardKind.Slag; break;

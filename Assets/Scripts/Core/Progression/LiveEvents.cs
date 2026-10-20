@@ -34,6 +34,8 @@ namespace Emberfall.Core.Progression
         public LiveRefusal Reason = LiveRefusal.None;
         public int Points;
         public long Gold, Shards, Dust, Slag;
+        /// <summary>The skin a free tier granted, or empty.</summary>
+        public string SkinId = "";
     }
 
     /// <summary>One quest as the screen draws it. Read only.</summary>
@@ -303,8 +305,22 @@ namespace Emberfall.Core.Progression
             return r;
         }
 
+        /// <summary>The skin a Skin reward would grant right now, or null when it cannot (unknown, hidden in this build, or
+        /// already owned): the fallback is then what is granted and shown.</summary>
+        private static SkinDef GrantableSkin(GameSession session, EventRewardDef d)
+        {
+            if (d.Kind != EventRewardKind.Skin) return null;
+            SkinDef skin = session.Content.Skins.Skin(d.SkinId);
+            return skin != null && SkinsConfig.Visible(skin) && !session.Profile.OwnsSkin(skin.Id) ? skin : null;
+        }
+
         private static string RewardLine(GameSession session, EventRewardDef d, bool sealedGood)
         {
+            if (d.Kind == EventRewardKind.Skin)
+            {
+                SkinDef skin = GrantableSkin(session, d);
+                return skin != null ? "The skin " + skin.Name + ": " + skin.BonusLine() : RewardLine(session, d.Fallback, sealedGood);
+            }
             switch (d.Kind)
             {
                 case EventRewardKind.Hourglass:
@@ -322,8 +338,13 @@ namespace Emberfall.Core.Progression
             return v.ToString("0.#", CultureInfo.InvariantCulture);
         }
 
-        private static string RewardShort(EventRewardDef d)
+        private static string RewardShort(GameSession session, EventRewardDef d)
         {
+            if (d.Kind == EventRewardKind.Skin)
+            {
+                SkinDef skin = GrantableSkin(session, d);
+                return skin != null ? "Skin: " + skin.Name : RewardShort(session, d.Fallback);
+            }
             switch (d.Kind)
             {
                 case EventRewardKind.Hourglass: return Num(d.Amount) + " h idle Gold";
@@ -350,23 +371,42 @@ namespace Emberfall.Core.Progression
 
             LiveResult r = new LiveResult();
             PlayerProfile p = session.Profile;
-            switch (t.Free.Kind)
+            EventRewardDef pay = t.Free;
+            if (pay.Kind == EventRewardKind.Skin)
             {
-                case EventRewardKind.Hourglass:
-                    IdleReport y = session.IdleYield((long)Math.Round(t.Free.Amount * 3600.0));
-                    p.Gold += y.Gold;
-                    p.Shards += y.Shards;
-                    r.Gold = y.Gold;
-                    r.Shards = y.Shards;
-                    break;
-                case EventRewardKind.Dust:
-                    r.Dust = (long)Math.Round(t.Free.Amount * WayfarersRoad.DustPerSweep(session));
-                    p.RelicDust += r.Dust;
-                    break;
-                case EventRewardKind.Slag:
-                    r.Slag = (long)t.Free.Amount;
-                    p.Slag += r.Slag;
-                    break;
+                // A skin goes through the one grant path (idempotent, never random); when it cannot be granted the
+                // data's own fallback is paid instead, the same reward the tier showed.
+                SkinDef skin = GrantableSkin(session, pay);
+                if (skin != null)
+                {
+                    GrantItem item = new GrantItem(GrantKind.Skin, 0);
+                    item.SkinId = skin.Id;
+                    PurchaseGrant grant = new PurchaseGrant();
+                    grant.Add(item);
+                    if (PurchaseGrants.Apply(session, grant, null, nowUnix).Success) r.SkinId = skin.Id;
+                }
+                pay = r.SkinId.Length > 0 ? null : pay.Fallback;
+            }
+            if (pay != null)
+            {
+                switch (pay.Kind)
+                {
+                    case EventRewardKind.Hourglass:
+                        IdleReport y = session.IdleYield((long)Math.Round(pay.Amount * 3600.0));
+                        p.Gold += y.Gold;
+                        p.Shards += y.Shards;
+                        r.Gold = y.Gold;
+                        r.Shards = y.Shards;
+                        break;
+                    case EventRewardKind.Dust:
+                        r.Dust = (long)Math.Round(pay.Amount * WayfarersRoad.DustPerSweep(session));
+                        p.RelicDust += r.Dust;
+                        break;
+                    case EventRewardKind.Slag:
+                        r.Slag = (long)pay.Amount;
+                        p.Slag += r.Slag;
+                        break;
+                }
             }
             st.FreeMask |= 1 << (tier - 1);
             r.Success = true;
@@ -656,8 +696,8 @@ namespace Emberfall.Core.Progression
                 tv.Reached = st.Points >= t.Points;
                 tv.HasFree = t.Free != null;
                 tv.HasPaid = t.Paid != null;
-                if (tv.HasFree) { tv.FreeLine = RewardLine(session, t.Free, false); tv.FreeShort = RewardShort(t.Free); }
-                if (tv.HasPaid) { tv.PaidLine = RewardLine(session, t.Paid, true); tv.PaidShort = RewardShort(t.Paid); }
+                if (tv.HasFree) { tv.FreeLine = RewardLine(session, t.Free, false); tv.FreeShort = RewardShort(session, t.Free); }
+                if (tv.HasPaid) { tv.PaidLine = RewardLine(session, t.Paid, true); tv.PaidShort = RewardShort(session, t.Paid); }
                 tv.FreeClaimed = LiveEventSlotState.Bit(st.FreeMask, i);
                 tv.FreeCanClaim = tv.HasFree && tv.Reached && !tv.FreeClaimed;
                 tv.PaidClaimed = LiveEventSlotState.Bit(st.PaidMask, i);

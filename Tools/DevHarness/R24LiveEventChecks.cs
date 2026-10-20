@@ -46,6 +46,7 @@ namespace Emberfall.DevHarness
                 CheckLivePack(db);
                 CheckLivePurchasePath(db);
                 CheckLivePaymentInFlight(db);
+                CheckLiveFreeSkin(db);
                 CheckLiveSealedAndRefused(db);
                 CheckLiveRollover(db);
                 CheckLiveWoundBack(db);
@@ -192,7 +193,8 @@ namespace Emberfall.DevHarness
                     if (e.Tiers[t].Points <= last) tidy = false;
                     last = e.Tiers[t].Points;
                     if (e.Tiers[t].Free == null || e.Tiers[t].Paid == null) tidy = false;
-                    if (e.Tiers[t].Free != null && !(e.Tiers[t].Free.Amount > 0.0)) fixedNumbers = false;
+                    if (e.Tiers[t].Free != null && e.Tiers[t].Free.Kind == EventRewardKind.Skin) { if (e.Tiers[t].Free.Fallback == null || !(e.Tiers[t].Free.Fallback.Amount > 0.0)) fixedNumbers = false; }
+                    else if (e.Tiers[t].Free != null && !(e.Tiers[t].Free.Amount > 0.0)) fixedNumbers = false;
                     if (e.Tiers[t].Paid != null && !(e.Tiers[t].Paid.Amount > 0.0)) fixedNumbers = false;
                 }
                 if (last > e.TotalQuestPoints) reachable = false;
@@ -651,6 +653,117 @@ namespace Emberfall.DevHarness
             Check(!nothing.Success && LiveSnapshot(h) == hBefore, "with no live-events.json there is nothing to deliver: refused, nothing written");
         }
 
+        // ------------------------------------------------------------------ 5c. a free skin on the free track
+
+        private static void CheckLiveFreeSkin(ContentDatabase db)
+        {
+            string hero = db.StartingHeroes[0].Id;
+            string skins = ("{ 'skins': ["
+                + "{ 'id': 'evt_skin', 'name': 'Event Skin', 'hero': '" + hero + "', 'rarity': 'rare', 'source': 'event' },"
+                + "{ 'id': 'evt_skin_test', 'name': 'Event Skin (test)', 'hero': '" + hero + "', 'rarity': 'rare', 'source': 'test', 'test': true } ] }").Replace('\'', '"');
+            string events = ("{ 'epoch': '2026-01-05', 'events': [ { 'id': 's_week', 'slot': 'weekly', 'name': 'Skin Week', 'aspect': 'Ember', 'quests': ["
+                + "{ 'id': 'q', 'kind': 'stage', 'target': 1, 'points': 60 } ], 'tiers': ["
+                + "{ 'points': 10, 'free': { 'kind': 'skin', 'skinId': 'evt_skin', 'fallback': { 'kind': 'dust', 'amount': 2 } }, 'paid': { 'kind': 'hourglass', 'amount': 1 } },"
+                + "{ 'points': 20, 'free': { 'kind': 'skin', 'skinId': 'evt_skin_test', 'fallback': { 'kind': 'slag', 'amount': 3 } } },"
+                + "{ 'points': 30, 'free': { 'kind': 'skin', 'skinId': 'no_such_skin', 'fallback': { 'kind': 'hourglass', 'amount': 1 } } },"
+                + "{ 'points': 40, 'free': { 'kind': 'skin', 'skinId': 'evt_skin', 'fallback': { 'kind': 'dust', 'amount': 2 } } } ] } ] }").Replace('\'', '"');
+            ContentDatabase d = LoadContent(_liveContentDir);
+            d.LoadSkins(skins);
+            d.LoadLiveEvents(events);
+            long t0 = LiveT0(d);
+            bool testWas = SkinsConfig.TestVisible;
+            try
+            {
+                SkinsConfig.TestVisible = true;
+                Check(d.LiveEvents.IsUsable && d.LiveEvents.Warnings.Count == 0 && d.Skins.Skin("evt_skin") != null && d.LiveEvents.EventFor(LiveEventSlot.Weekly, 1).Tiers[0].Free.Kind == EventRewardKind.Skin,
+                      "a free tier may be a skin with a fallback reward in the data");
+
+                // ---- granted when visible: the skin arrives through the grant path, the fallback does not
+                GameSession s = LiveSession(d);
+                LiveEvents.Record(s, EventQuestKind.Stage, 1, t0);
+                LiveEvents.ClaimQuest(s, LiveEventSlot.Weekly, "q", t0 + 1);
+                LiveEventView v = LiveEvents.View(s, LiveEventSlot.Weekly, t0 + 2);
+                Check(v.Tiers[0].FreeLine.StartsWith("The skin Event Skin") && v.Tiers[0].FreeShort == "Skin: Event Skin" && v.Tiers[3].FreeShort == "Skin: Event Skin",
+                      "THE TIER SHOWS THE SKIN when it can be granted: \"" + v.Tiers[0].FreeLine + "\"");
+                long dust0 = s.Profile.RelicDust, gold0 = s.Profile.Gold, slag0 = s.Profile.Slag;
+                LiveResult skin = LiveEvents.ClaimFree(s, LiveEventSlot.Weekly, 1, t0 + 3);
+                Check(skin.Success && skin.SkinId == "evt_skin" && s.Profile.OwnsSkin("evt_skin") && s.Profile.RelicDust == dust0 && s.Profile.Gold == gold0 && s.Profile.Slag == slag0
+                      && s.Profile.Sealed.Gold == 0 && s.Profile.Sealed.Slag == 0,
+                      "A FREE SKIN IS GRANTED THROUGH PurchaseGrants.Apply when visible: the skin is owned, the fallback is not paid, and nothing is marked Sealed");
+                string settled = LiveSnapshot(s);
+                Check(!LiveEvents.ClaimFree(s, LiveEventSlot.Weekly, 1, t0 + 4).Success && LiveSnapshot(s) == settled, "and the tier pays once");
+
+                // ---- already owned: the fallback is shown and paid, the skin is not granted twice
+                LiveEventView owned = LiveEvents.View(s, LiveEventSlot.Weekly, t0 + 5);
+                Check(owned.Tiers[3].FreeShort == "2 sweeps Dust" && owned.Tiers[3].FreeLine.Contains("Relic Dust"), "A SKIN ALREADY OWNED shows its fallback reward instead (" + owned.Tiers[3].FreeShort + ")");
+                LiveEvents.Record(s, EventQuestKind.Stage, 1, t0 + 6);
+                LiveResult again = LiveEvents.ClaimFree(s, LiveEventSlot.Weekly, 4, t0 + 7);
+                Check(again.Success && again.SkinId.Length == 0 && s.Profile.RelicDust - dust0 == 2 * WayfarersRoad.DustPerSweep(s) && s.Profile.OwnedSkins.Count == 1,
+                      "and pays the fallback (2 sweeps of Dust) with the skin owned once");
+
+                // ---- unknown skin: the fallback
+                LiveResult unknown = LiveEvents.ClaimFree(s, LiveEventSlot.Weekly, 3, t0 + 8);
+                Check(unknown.Success && unknown.SkinId.Length == 0 && unknown.Gold > 0, "A SKIN THE CONTENT DOES NOT HAVE pays the fallback (an hour of idle income)");
+
+                // ---- a test skin: granted where test skins are visible, fallback where they are hidden
+                GameSession shown = LiveSession(d);
+                LiveEvents.Record(shown, EventQuestKind.Stage, 1, t0);
+                LiveEvents.ClaimQuest(shown, LiveEventSlot.Weekly, "q", t0 + 1);
+                LiveResult testShown = LiveEvents.ClaimFree(shown, LiveEventSlot.Weekly, 2, t0 + 2);
+                Check(testShown.Success && testShown.SkinId == "evt_skin_test" && shown.Profile.OwnsSkin("evt_skin_test"), "A TEST SKIN IS GRANTED where test skins are visible (the editor and a development build)");
+                SkinsConfig.TestVisible = false;
+                GameSession hidden = LiveSession(d);
+                LiveEvents.Record(hidden, EventQuestKind.Stage, 1, t0);
+                LiveEvents.ClaimQuest(hidden, LiveEventSlot.Weekly, "q", t0 + 1);
+                LiveEventView hv = LiveEvents.View(hidden, LiveEventSlot.Weekly, t0 + 2);
+                long slagHidden = hidden.Profile.Slag;
+                LiveResult testHidden = LiveEvents.ClaimFree(hidden, LiveEventSlot.Weekly, 2, t0 + 3);
+                Check(hv.Tiers[1].FreeShort == "3 Slag" && testHidden.Success && testHidden.SkinId.Length == 0 && !hidden.Profile.OwnsSkin("evt_skin_test") && hidden.Profile.Slag - slagHidden == 3,
+                      "A TEST SKIN IN A RELEASE BUILD IS HIDDEN: the tier shows and pays its fallback (3 Slag) and the skin is not granted");
+                SkinsConfig.TestVisible = true;
+
+                // ---- the paid track is unchanged: its reward is the Sealed hour, never a skin
+                GameSession paid = LiveSession(d);
+                LiveEvents.Record(paid, EventQuestKind.Stage, 1, t0);
+                LiveEvents.ClaimQuest(paid, LiveEventSlot.Weekly, "q", t0 + 1);
+                StoreOffers.Fulfil(paid, "event_track_weekly", null, t0 + 2);
+                long sealed0 = paid.Profile.Sealed.Gold;
+                LiveResult p1 = LiveEvents.ClaimPaid(paid, LiveEventSlot.Weekly, 1, t0 + 3);
+                Check(p1.Success && paid.Profile.Sealed.Gold - sealed0 == paid.IdleYield(3600L).Gold && p1.SkinId.Length == 0 && paid.Profile.OwnedSkins.Count == 0,
+                      "THE PAID TRACK IS UNCHANGED: tier 1 pays its Sealed hour and grants no skin");
+
+                // ---- bad data is dropped, never guessed
+                string bad = events.Replace("\"paid\": { \"kind\": \"hourglass\", \"amount\": 1 }", "\"paid\": { \"kind\": \"skin\", \"skinId\": \"evt_skin\", \"fallback\": { \"kind\": \"dust\", \"amount\": 1 } }");
+                ContentDatabase dBad = LoadContent(_liveContentDir);
+                dBad.LoadLiveEvents(bad);
+                ContentDatabase dNone = LoadContent(_liveContentDir);
+                dNone.LoadLiveEvents(events.Replace(", \"fallback\": { \"kind\": \"slag\", \"amount\": 3 }", ""));
+                ContentDatabase dNest = LoadContent(_liveContentDir);
+                dNest.LoadLiveEvents(events.Replace("\"fallback\": { \"kind\": \"slag\", \"amount\": 3 }", "\"fallback\": { \"kind\": \"skin\", \"skinId\": \"evt_skin\", \"fallback\": { \"kind\": \"dust\", \"amount\": 1 } }"));
+                Check(dBad.LiveEvents.Warnings.Count >= 1 && dBad.LiveEvents.EventFor(LiveEventSlot.Weekly, 1).Tiers[0].Paid == null,
+                      "A SKIN ON THE PAID TRACK IS DROPPED with a warning: the paid track can hold none");
+                Check(dNone.LiveEvents.Warnings.Count >= 1 && dNone.LiveEvents.EventFor(LiveEventSlot.Weekly, 1).Tiers.Count == 3,
+                      "A FREE SKIN WITHOUT A FALLBACK IS DROPPED with a warning, so a tier can never pay nothing");
+                Check(dNest.LiveEvents.Warnings.Count >= 1 && dNest.LiveEvents.EventFor(LiveEventSlot.Weekly, 1).Tiers.Count == 3,
+                      "and a fallback that is itself a skin is dropped, so the fallback is always a plain reward");
+
+                // ---- never random: the kinds are a closed set, and a skin tier is one fixed grant line
+                string[] names = Enum.GetNames(typeof(EventRewardKind));
+                Check(names.Length == 4 && Array.IndexOf(names, "Skin") >= 0, "THE EVENT REWARD KINDS ARE A CLOSED SET OF FOUR (hours of idle income, Dust, Slag, a named skin): still no hero, no pull, no pool");
+
+                // ---- the switch: off grants nothing
+                LiveEventsSwitch.Enabled = false;
+                GameSession off = LiveSession(d);
+                LiveResult offClaim = LiveEvents.ClaimFree(off, LiveEventSlot.Weekly, 1, t0);
+                LiveEventsSwitch.Enabled = true;
+                Check(!offClaim.Success && offClaim.Reason == LiveRefusal.Off && off.Profile.OwnedSkins.Count == 0, "with the switch off no skin is granted");
+            }
+            finally
+            {
+                SkinsConfig.TestVisible = testWas;
+            }
+        }
+
         // ------------------------------------------------------------------ 6. Sealed and refused by every random path
 
         private static void CheckLiveSealedAndRefused(ContentDatabase db)
@@ -684,8 +797,8 @@ namespace Emberfall.DevHarness
 
             // The reward kinds are a closed set with no hero in it.
             string[] names = Enum.GetNames(typeof(EventRewardKind));
-            Check(names.Length == 3 && Array.IndexOf(names, "Hourglass") >= 0 && Array.IndexOf(names, "Dust") >= 0 && Array.IndexOf(names, "Slag") >= 0,
-                  "THE EVENT REWARD KINDS ARE A CLOSED SET OF THREE (hours of idle income, Dust, Slag): an event cannot pay a hero, a pull or a pool");
+            Check(names.Length == 4 && Array.IndexOf(names, "Hourglass") >= 0 && Array.IndexOf(names, "Dust") >= 0 && Array.IndexOf(names, "Slag") >= 0 && Array.IndexOf(names, "Skin") >= 0,
+                  "THE EVENT REWARD KINDS ARE A CLOSED SET OF FOUR (hours of idle income, Dust, Slag, and on the free track a named skin): an event cannot pay a hero, a pull or a pool");
             string[] grantNames = Enum.GetNames(typeof(GrantKind));
             bool clean = true;
             for (int i = 0; i < grantNames.Length; i++)
