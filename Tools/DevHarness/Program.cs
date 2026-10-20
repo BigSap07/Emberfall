@@ -9373,7 +9373,7 @@ namespace Emberfall.DevHarness
             // THE UNLOCK TABLE (DESIGN-ONBOARDING.md): a line read at a stage wears armor only if a
             // player arriving there has it, which is 1-12 cleared. Before that the armored line is
             // the bare one, levelled to the same target.
-            if (!FeatureGate.IsUnlockedArriving(db, stage, Feature.Armor)) { _armorWithheldReadings++; return; }
+            if (!FeatureGate.IsUnlockedArriving(db, stage, Feature.Armor)) { System.Threading.Interlocked.Increment(ref _armorWithheldReadings); return; }
             PlayerProfile profile = session.Profile;
             int stageIndex = stage != null ? stage.GlobalIndex : 0;
             int seed = 990000 + stageIndex * 7919;

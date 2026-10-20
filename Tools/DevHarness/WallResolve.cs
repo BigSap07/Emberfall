@@ -85,38 +85,47 @@ namespace Emberfall.DevHarness
             return total;
         }
 
+        /// <summary>One walk to run: its first seed and the two roster-work flags it runs under.</summary>
+        private struct WalkJob
+        {
+            public int Seed;
+            public bool Converts, Ascends;
+            public WalkJob(int seed, bool converts, bool ascends) { Seed = seed; Converts = converts; Ascends = ascends; }
+        }
+
         /// <summary>
-        /// One economy walk per first seed, in the order the seeds are given, whatever order they
-        /// finish in. Each is exactly SimulateEconomyUnder(db, seed, converts, ascends): a walk draws
-        /// every one of its seeds from its own EconomyRun and writes no static the others read (the
-        /// policy flags above are thread-static, NoteResolvedOrdinal locks its table), so a walk is the
-        /// same walk on any thread and the array is element for element what a serial loop builds.
-        /// Nothing is printed from inside a walk (only the verbose walk prints, and that one is never
-        /// batched); the caller prints from the array, in seed order, so every line is where it was.
+        /// One economy walk per job, in the order the jobs are given, whatever order they finish in.
+        /// Each is exactly SimulateEconomyUnder(db, seed, converts, ascends): a walk draws every one of
+        /// its seeds from its own EconomyRun and writes no static the others read (the policy flags
+        /// above are thread-static, NoteResolvedOrdinal locks its table), so a walk is the same walk
+        /// on any thread and the array is element for element what a serial loop builds. Nothing is
+        /// printed from inside a walk (only the verbose walk prints, and that one is never batched);
+        /// the caller prints from the array, in order, so every line is where it was. Jobs are taken
+        /// in order by whichever worker is free, so list the slow walks first.
         ///
         /// Serial when one worker is asked for, when there is a single walk, and under the store
         /// curve's spender (StoreCurve.cs), which flips global switches around each sitting.
-        /// A walk that throws rethrows here, the lowest seed index first, as the serial loop would
+        /// A walk that throws rethrows here, the lowest index first, as the serial loop would
         /// have reached it.
         /// </summary>
-        private static EconomyRun[] SimulateEconomies(ContentDatabase db, int[] seeds, bool converts, bool ascends)
+        private static EconomyRun[] SimulateEconomies(ContentDatabase db, WalkJob[] jobs)
         {
-            EconomyRun[] runs = new EconomyRun[seeds.Length];
-            int workers = Math.Min(WalkWorkers(), seeds.Length);
+            EconomyRun[] runs = new EconomyRun[jobs.Length];
+            int workers = Math.Min(WalkWorkers(), jobs.Length);
             if (workers <= 1 || _walkStoreMode != 0)
             {
-                for (int i = 0; i < seeds.Length; i++) runs[i] = SimulateEconomyUnder(db, seeds[i], converts, ascends);
+                for (int i = 0; i < jobs.Length; i++) runs[i] = SimulateEconomyUnder(db, jobs[i].Seed, jobs[i].Converts, jobs[i].Ascends);
                 return runs;
             }
 
-            Exception[] failed = new Exception[seeds.Length];
+            Exception[] failed = new Exception[jobs.Length];
             int next = -1;
             System.Threading.ThreadStart body = delegate
             {
                 int i;
-                while ((i = System.Threading.Interlocked.Increment(ref next)) < seeds.Length)
+                while ((i = System.Threading.Interlocked.Increment(ref next)) < jobs.Length)
                 {
-                    try { runs[i] = SimulateEconomyUnder(db, seeds[i], converts, ascends); }
+                    try { runs[i] = SimulateEconomyUnder(db, jobs[i].Seed, jobs[i].Converts, jobs[i].Ascends); }
                     catch (Exception e) { failed[i] = e; }
                 }
             };
@@ -133,6 +142,14 @@ namespace Emberfall.DevHarness
                 if (failed[i] != null)
                     System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(failed[i]).Throw();
             return runs;
+        }
+
+        /// <summary>One walk per first seed, all under the same two flags.</summary>
+        private static EconomyRun[] SimulateEconomies(ContentDatabase db, int[] seeds, bool converts, bool ascends)
+        {
+            WalkJob[] jobs = new WalkJob[seeds.Length];
+            for (int i = 0; i < seeds.Length; i++) jobs[i] = new WalkJob(seeds[i], converts, ascends);
+            return SimulateEconomies(db, jobs);
         }
 
         /// <summary>The walks at WalkSeed(0) to WalkSeed(count - 1), the list every guard reads.</summary>
@@ -292,9 +309,21 @@ namespace Emberfall.DevHarness
             Line("");
             Line("FUSION NEVER GATES A WALL (" + FusionNeverGatesWalks + " walks that never convert and never ascend, against "
                  + FusionNeverGatesWalks + " that do)");
-            // Both lists are walked on worker threads (SimulateEconomies) and read in seed order.
-            List<EconomyRun> refs = new List<EconomyRun>(SimulateEconomies(db, FusionNeverGatesWalks, false, false));
-            List<EconomyRun> fused = new List<EconomyRun>(SimulateEconomies(db, FusionNeverGatesWalks, _walkConverts, _walkAscends));
+            // Both lists are walked on worker threads (SimulateEconomies) in ONE batch, the reference walks
+            // first because they are the slow ones, and read back in seed order.
+            WalkJob[] jobs = new WalkJob[2 * FusionNeverGatesWalks];
+            for (int k = 0; k < FusionNeverGatesWalks; k++)
+            {
+                jobs[k] = new WalkJob(WalkSeed(k), false, false);
+                jobs[FusionNeverGatesWalks + k] = new WalkJob(WalkSeed(k), _walkConverts, _walkAscends);
+            }
+            EconomyRun[] walked = SimulateEconomies(db, jobs);
+            List<EconomyRun> refs = new List<EconomyRun>(), fused = new List<EconomyRun>();
+            for (int k = 0; k < FusionNeverGatesWalks; k++)
+            {
+                refs.Add(walked[k]);
+                fused.Add(walked[FusionNeverGatesWalks + k]);
+            }
             int stuck = 0;
             List<string> where = new List<string>();
             // Each stuck walk is named by its index and its seed as well as its stage, because the

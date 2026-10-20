@@ -331,19 +331,32 @@ namespace Emberfall.DevHarness
             _parLadderPowers = new float[live.AllStages.Count];
             double[] pooled = new double[ParLadderFactors.Length];
             int kept = 0;
+            // Every (stage, factor) cell is its own line built from scratch and fought against its own ceiling,
+            // so the 1,296 cells are read on worker threads into slots of their own (ForEachTrial) and the
+            // table is then written below in stage and factor order, as it always was. Each cell's ceiling is
+            // the stage's, built once, as before.
+            int factors = ParLadderFactors.Length;
+            StageDef[] ceils = new StageDef[live.AllStages.Count];
+            for (int si = 0; si < ceils.Length; si++) ceils[si] = TempoCeil(live.AllStages[si]);
+            double[] readings = new double[ceils.Length * factors];
+            ForEachTrial(readings.Length, delegate(int cell)
+            {
+                int si = cell / factors, k = cell % factors;
+                StageDef stage = live.AllStages[si];
+                GameSession s = BuildLineAt(live, stage, true, (int)(stage.RecommendedPower * ParLadderFactors[k]), PinnedLine);
+                ParLadder l = new ParLadder();
+                l.Sessions.Add(s); l.Stages.Add(stage); l.Ceils.Add(ceils[si]); l.Teams.Add(s.Profile.TeamHeroes());
+                readings[cell] = ParMean(ParLadderArm(live, l, null, null, 0, per), x => x.Win);
+            });
             for (int si = 0; si < live.AllStages.Count; si++)
             {
                 StageDef stage = live.AllStages[si];
-                StageDef ceil = TempoCeil(stage);
                 string row = "   " + stage.DisplayCode.PadRight(5);
                 float best = float.NaN; double bestGap = 9, bestWr = 0;
                 for (int k = 0; k < ParLadderFactors.Length; k++)
                 {
                     float f = ParLadderFactors[k];
-                    GameSession s = BuildLineAt(live, stage, true, (int)(stage.RecommendedPower * f), PinnedLine);
-                    ParLadder l = new ParLadder();
-                    l.Sessions.Add(s); l.Stages.Add(stage); l.Ceils.Add(ceil); l.Teams.Add(s.Profile.TeamHeroes());
-                    double wr = ParMean(ParLadderArm(live, l, null, null, 0, per), x => x.Win);
+                    double wr = readings[si * factors + k];
                     pooled[k] += wr / live.AllStages.Count;
                     row += " " + F(wr * 100, "0").PadLeft(3);
                     if (Math.Abs(wr - 0.5) < bestGap) { bestGap = Math.Abs(wr - 0.5); best = f; bestWr = wr; }

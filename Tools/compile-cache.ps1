@@ -64,6 +64,17 @@ function Write-CompileCache([string]$key, [string]$outputPath, [string[]]$compil
     [IO.File]::WriteAllLines($stampPath, [string[]]$all, [Text.UTF8Encoding]::new($false))
 }
 
+# Server GC for the harness: the reference walks allocate heavily on many threads, and the default workstation
+# collector made them queue behind each other (the 60-walk guard ran 85 s on it and 58 s on this, same output).
+# A config file beside the exe, so no source or behaviour changes; written only when it differs.
+function Write-HarnessConfig([string]$exePath) {
+    $text = ("<?xml version=`"1.0`" encoding=`"utf-8`"?>`r`n<configuration>`r`n  <runtime>`r`n" +
+             "    <gcServer enabled=`"true`"/>`r`n    <gcConcurrent enabled=`"false`"/>`r`n  </runtime>`r`n</configuration>`r`n")
+    $path = $exePath + ".config"
+    if ((Test-Path -LiteralPath $path) -and ([IO.File]::ReadAllText($path) -eq $text)) { return }
+    [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
+}
+
 # For a script that rebuilds an output it does not cache (the solver): the stamp then matches nothing.
 function Reset-CompileCache([string]$outputPath) {
     [IO.File]::WriteAllLines($outputPath + ".stamp", [string[]]@("rebuilt outside the cache"), [Text.UTF8Encoding]::new($false))

@@ -80,6 +80,7 @@ Write-Host "[core+harness] ok" -ForegroundColor Green
 # the stamp is reset: the next build-check compiles instead of trusting an exe it did not build.
 . (Join-Path $PSScriptRoot "compile-cache.ps1")
 Reset-CompileCache $exe
+Write-HarnessConfig $exe
 Write-Host ""
 
 $content = Join-Path $root "Assets\Resources\Content"
