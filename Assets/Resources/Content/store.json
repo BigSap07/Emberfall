@@ -91,29 +91,31 @@
     // event that runs now (live-events.json). Kind "event" has no contents of its own: the grant is the track unlock or
     // the running event's fixed pack, applied by PurchaseGrants.Apply, so it is Sealed. The limit is once per event and
     // is counted in the live event state, not here. The Events screen sells them; the Packs tab does not list them.
+    // The paid event offers open at 3-1 (requiresStage ch3_1, listed and locked before): the whale read (R24) put the early lead of
+    // the paid event Gold at +48 percent at 2-6. Free events, quests and free tracks are open to everyone from the start.
     {
       "id": "event_track_weekly", "name": "Weekly Event Track", "kind": "event", "tier": "mid",
       "productId": "placeholder.emberfall.store.event_track_weekly",
       "blurb": "The paid track of this week's event. Every reward is listed on the Events screen.",
-      "eventSlot": "weekly", "eventPart": "track"
+      "eventSlot": "weekly", "eventPart": "track", "requiresStage": "ch3_1"
     },
     {
       "id": "event_track_monthly", "name": "Monthly Event Track", "kind": "event", "tier": "high",
       "productId": "placeholder.emberfall.store.event_track_monthly",
       "blurb": "The paid track of this month's event. Every reward is listed on the Events screen.",
-      "eventSlot": "monthly", "eventPart": "track"
+      "eventSlot": "monthly", "eventPart": "track", "requiresStage": "ch3_1"
     },
     {
       "id": "event_pack_weekly", "name": "Weekly Event Pack", "kind": "event", "tier": "high",
       "productId": "placeholder.emberfall.store.event_pack_weekly",
       "blurb": "One fixed bundle themed on this week's event. Once per event.",
-      "eventSlot": "weekly", "eventPart": "pack"
+      "eventSlot": "weekly", "eventPart": "pack", "requiresStage": "ch3_1"
     },
     {
       "id": "event_pack_monthly", "name": "Monthly Event Pack", "kind": "event", "tier": "high",
       "productId": "placeholder.emberfall.store.event_pack_monthly",
       "blurb": "One fixed bundle themed on this month's event. Once per event.",
-      "eventSlot": "monthly", "eventPart": "pack"
+      "eventSlot": "monthly", "eventPart": "pack", "requiresStage": "ch3_1"
     },
     {
       "id": "hero_contract", "name": "Hero Contract", "kind": "contract", "tier": "top",

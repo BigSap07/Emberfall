@@ -496,6 +496,12 @@ namespace Emberfall.UI.Screens
                                                   TextureLab.Sigil(8, 64), UITheme.Success,
                                                   OpenEvents);
             Place(_eventsButton.Root, top + step * 2f);
+            // A caption under the disc, in the Store door's own style, so the door reads as Events and not as one more icon.
+            Text eventsCaption = EmberforgeUI.Label("EventsCaption", _eventsButton.Root, "EVENTS", UITheme.FontTiny - 6,
+                                                    Emberforge.TextGold, TextAnchor.LowerCenter);
+            UIBuilder.Box(eventsCaption.rectTransform, 0f, -2f, HubStyle.TouchMin, 22f, new Vector2(0.5f, 0f));
+            UIBuilder.Outlined(eventsCaption, Emberforge.Outline, Emberforge.StrokeThin);
+            eventsCaption.raycastTarget = false;
             RefreshEventsBadge();
 
             // THE DAILY ORDERS DOOR, present only with DailyLoopSwitch on. It takes the slot above

@@ -190,19 +190,19 @@ namespace Emberfall.UI.Screens
             EmberforgeUI.PanelOn(summary, true);
 
             Text title = EmberforgeUI.Title("Title", summary, v.Name.ToUpperInvariant(), UITheme.FontBody, Emberforge.TextGold, TextAnchor.UpperLeft);
-            UIBuilder.Box(title.rectTransform, 28f, -14f, 560f, 40f, TopLeft);
+            UIBuilder.Box(title.rectTransform, 48f, -18f, 540f, 40f, TopLeft);
             UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
             RectTransform chip = EmberforgeUI.Chip("Aspect", summary, v.Aspect.ToString().ToUpperInvariant(), UITheme.AspectColor(v.Aspect), UITheme.FontTiny - 4);
-            UIBuilder.Box(chip, 600f, -16f, 120f, 32f, TopLeft);
+            UIBuilder.Box(chip, 610f, -20f, 120f, 32f, TopLeft);
 
             Text blurb = EmberforgeUI.Label("Blurb", summary, v.Blurb, UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(blurb.rectTransform, 28f, -56f, 700f, 26f, TopLeft);
+            UIBuilder.Box(blurb.rectTransform, 48f, -58f, 680f, 26f, TopLeft);
 
             Text points = EmberforgeUI.Label("Points", summary, v.Points + " / " + v.MaxPoints + " " + v.PointsLabel.ToUpperInvariant(),
                                              UITheme.FontSmall, Emberforge.TextBody, TextAnchor.UpperLeft);
-            UIBuilder.Box(points.rectTransform, 28f, -88f, 700f, 30f, TopLeft);
+            UIBuilder.Box(points.rectTransform, 48f, -88f, 680f, 30f, TopLeft);
             Image bar = EmberforgeUI.ProgressBar("Bar", summary);
-            UIBuilder.Box(bar.rectTransform.parent as RectTransform, 28f, -122f, 690f, 22f, TopLeft);
+            UIBuilder.Box(bar.rectTransform.parent as RectTransform, 48f, -122f, 670f, 22f, TopLeft);
             EmberforgeUI.SetProgress(bar, v.MaxPoints > 0 ? Mathf.Clamp01(v.Points / (float)v.MaxPoints) : 0f);
 
             // ---- the paid Event Track: what it gives in all, its price, one button
@@ -212,7 +212,7 @@ namespace Emberfall.UI.Screens
             Text trackBody = EmberforgeUI.Body("TrackBody", summary, string.Join("\n", v.TrackLines.ToArray()), UITheme.FontTiny - 6,
                                                Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(trackBody.rectTransform, 750f, -42f, 480f, 70f, TopLeft);
-            BuyOrOwned(summary, v.TrackOfferId, v.TrackPrice, "BUY EVENT TRACK", v.TrackOwned, v.TrackCanBuy, "TRACK ACTIVE", 750f, -112f, 320f);
+            BuyOrOwned(summary, v.TrackOfferId, v.TrackPrice, "BUY EVENT TRACK", v.TrackOwned, v.TrackCanBuy, "TRACK ACTIVE", v.TrackLock.Length > 0 ? v.TrackLock : v.SalesClosed ? "SALES CLOSED  -  THE EVENT ENDS SOON" : "", 750f, -112f, 320f);
 
             // ---- the event pack: its name, its price, its fixed contents in full, one button
             Text packTitle = EmberforgeUI.Title("PackTitle", summary, v.PackOfferId.Length > 0 ? v.PackName.ToUpperInvariant() + "  -  " + v.PackPrice : "EVENT PACK",
@@ -222,10 +222,10 @@ namespace Emberfall.UI.Screens
                                               UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(packBody.rectTransform, 1260f, -42f, 480f, 70f, TopLeft);
             if (v.PackOfferId.Length > 0)
-                BuyOrOwned(summary, v.PackOfferId, v.PackPrice, "BUY EVENT PACK", v.PackOwned, v.PackCanBuy, "PACK BOUGHT", 1260f, -112f, 320f);
+                BuyOrOwned(summary, v.PackOfferId, v.PackPrice, "BUY EVENT PACK", v.PackOwned, v.PackCanBuy, "PACK BOUGHT", v.PackLock.Length > 0 ? v.PackLock : v.SalesClosed ? "SALES CLOSED  -  THE EVENT ENDS SOON" : "", 1260f, -112f, 320f);
         }
 
-        private void BuyOrOwned(RectTransform parent, string offerId, string price, string label, bool owned, bool canBuy, string ownedLabel, float x, float y, float w)
+        private void BuyOrOwned(RectTransform parent, string offerId, string price, string label, bool owned, bool canBuy, string ownedLabel, string stop, float x, float y, float w)
         {
             if (offerId.Length == 0)
             {
@@ -240,7 +240,7 @@ namespace Emberfall.UI.Screens
                 return;
             }
             bool pending = _service != null && _service.Flow != null && _service.Flow.IsPending(offerId);
-            string text = !CanBuy ? "COMING SOON  -  " + price : pending ? "WAITING FOR THE STORE" : label + "  -  " + price;
+            string text = stop.Length > 0 ? stop : !CanBuy ? "COMING SOON  -  " + price : pending ? "WAITING FOR THE STORE" : label + "  -  " + price;
             UIButton b = EmberforgeUI.Button("Buy_" + offerId, parent, text, UITheme.FontTiny - 4, ForgeButtonKind.Primary);
             UIBuilder.Box(b.Root, x, y, w, 36f, TopLeft);
             b.Interactable = CanBuy && canBuy && !pending;
@@ -277,8 +277,10 @@ namespace Emberfall.UI.Screens
 
             RectTransform tile = UIBuilder.Node((paid ? "Paid_" : "Free_") + t.Index, _body);
             UIBuilder.Box(tile, x, y, width, TileHeight, TopLeft);
-            if (!has || claimed) EmberforgeUI.PlainPanelOn(tile);
-            else EmberforgeUI.PanelOn(tile, false);
+            // Depth carries state, as on the limited-time events page: only a tile that can be claimed now stands up in a frame;
+            // reached-and-taken, locked and empty tiles are all plain.
+            if (canClaim) EmberforgeUI.PanelOn(tile, false);
+            else EmberforgeUI.PlainPanelOn(tile);
 
             Text pts = EmberforgeUI.Label("Points", tile, t.Points + " PTS", UITheme.FontTiny - 6, t.Reached ? Emberforge.TextGold : Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(pts.rectTransform, 0f, -6f, width - 8f, 22f, new Vector2(0.5f, 1f));
@@ -333,7 +335,7 @@ namespace Emberfall.UI.Screens
 
             Text line = EmberforgeUI.Label("Line", row, q.Line, UITheme.FontTiny - 4, q.Claimed ? Emberforge.TextQuiet : Emberforge.TextBody, TextAnchor.MiddleLeft);
             UIBuilder.Box(line.rectTransform, 16f, 0f, width - 400f, QuestRowHeight, new Vector2(0f, 0.5f));
-            Text progress = EmberforgeUI.Label("Progress", row, HudTopBar.Format(q.Progress) + " / " + HudTopBar.Format(q.Target), UITheme.FontTiny - 4,
+            Text progress = EmberforgeUI.Label("Progress", row, q.Progress.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " / " + q.Target.ToString("N0", System.Globalization.CultureInfo.InvariantCulture), UITheme.FontTiny - 4,
                                                q.Done ? Emberforge.TextGold : Emberforge.TextQuiet, TextAnchor.MiddleRight);
             UIBuilder.Box(progress.rectTransform, -248f, 0f, 130f, QuestRowHeight, new Vector2(1f, 0.5f));
             Text pts = EmberforgeUI.Label("Pts", row, "+" + q.Points + " PTS", UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.MiddleRight);

@@ -34,6 +34,8 @@ namespace Emberfall.Core.Progression
         public LiveRefusal Reason = LiveRefusal.None;
         public int Points;
         public long Gold, Shards, Dust, Slag;
+        /// <summary>The skin a free tier granted, or empty.</summary>
+        public string SkinId = "";
     }
 
     /// <summary>One quest as the screen draws it. Read only.</summary>
@@ -92,6 +94,11 @@ namespace Emberfall.Core.Progression
         public string TrackOfferId = "";
         public string TrackPrice = "";
         public bool TrackCanBuy;
+        /// <summary>True in the last hour of the period: the track and the pack are no longer sold (LiveEvents.SalesCloseSeconds).</summary>
+        public bool SalesClosed;
+        /// <summary>"UNLOCKS AT 3-1" while the paid offer waits for its stage (store.json requiresStage), else empty.</summary>
+        public string TrackLock = "";
+        public string PackLock = "";
         public string PackOfferId = "";
         public string PackName = "";
         public string PackBlurb = "";
@@ -129,6 +136,11 @@ namespace Emberfall.Core.Progression
     /// </summary>
     public static class LiveEvents
     {
+        /// <summary>The track and the pack of an event stop selling this long before the event's period ends, so a payment
+        /// that lands after the turnover (LiveEvents.DeliveryOf, the stale path) can only come from a genuinely slow store,
+        /// and buying at the last second is no timing trick. A hard stop at Begin: PurchaseRefusal answers SalesClosed.</summary>
+        public const long SalesCloseSeconds = 3600L;
+
         public static bool Active(GameSession session)
         {
             return LiveEventsSwitch.Enabled && session != null && session.Content.LiveEvents.IsUsable;
@@ -303,8 +315,22 @@ namespace Emberfall.Core.Progression
             return r;
         }
 
+        /// <summary>The skin a Skin reward would grant right now, or null when it cannot (unknown, hidden in this build, or
+        /// already owned): the fallback is then what is granted and shown.</summary>
+        private static SkinDef GrantableSkin(GameSession session, EventRewardDef d)
+        {
+            if (d.Kind != EventRewardKind.Skin) return null;
+            SkinDef skin = session.Content.Skins.Skin(d.SkinId);
+            return skin != null && SkinsConfig.Visible(skin) && !session.Profile.OwnsSkin(skin.Id) ? skin : null;
+        }
+
         private static string RewardLine(GameSession session, EventRewardDef d, bool sealedGood)
         {
+            if (d.Kind == EventRewardKind.Skin)
+            {
+                SkinDef skin = GrantableSkin(session, d);
+                return skin != null ? "The skin " + skin.Name + ": " + skin.BonusLine() : RewardLine(session, d.Fallback, sealedGood);
+            }
             switch (d.Kind)
             {
                 case EventRewardKind.Hourglass:
@@ -322,8 +348,13 @@ namespace Emberfall.Core.Progression
             return v.ToString("0.#", CultureInfo.InvariantCulture);
         }
 
-        private static string RewardShort(EventRewardDef d)
+        private static string RewardShort(GameSession session, EventRewardDef d)
         {
+            if (d.Kind == EventRewardKind.Skin)
+            {
+                SkinDef skin = GrantableSkin(session, d);
+                return skin != null ? "Skin: " + skin.Name : RewardShort(session, d.Fallback);
+            }
             switch (d.Kind)
             {
                 case EventRewardKind.Hourglass: return Num(d.Amount) + " h idle Gold";
@@ -350,23 +381,42 @@ namespace Emberfall.Core.Progression
 
             LiveResult r = new LiveResult();
             PlayerProfile p = session.Profile;
-            switch (t.Free.Kind)
+            EventRewardDef pay = t.Free;
+            if (pay.Kind == EventRewardKind.Skin)
             {
-                case EventRewardKind.Hourglass:
-                    IdleReport y = session.IdleYield((long)Math.Round(t.Free.Amount * 3600.0));
-                    p.Gold += y.Gold;
-                    p.Shards += y.Shards;
-                    r.Gold = y.Gold;
-                    r.Shards = y.Shards;
-                    break;
-                case EventRewardKind.Dust:
-                    r.Dust = (long)Math.Round(t.Free.Amount * WayfarersRoad.DustPerSweep(session));
-                    p.RelicDust += r.Dust;
-                    break;
-                case EventRewardKind.Slag:
-                    r.Slag = (long)t.Free.Amount;
-                    p.Slag += r.Slag;
-                    break;
+                // A skin goes through the one grant path (idempotent, never random); when it cannot be granted the
+                // data's own fallback is paid instead, the same reward the tier showed.
+                SkinDef skin = GrantableSkin(session, pay);
+                if (skin != null)
+                {
+                    GrantItem item = new GrantItem(GrantKind.Skin, 0);
+                    item.SkinId = skin.Id;
+                    PurchaseGrant grant = new PurchaseGrant();
+                    grant.Add(item);
+                    if (PurchaseGrants.Apply(session, grant, null, nowUnix).Success) r.SkinId = skin.Id;
+                }
+                pay = r.SkinId.Length > 0 ? null : pay.Fallback;
+            }
+            if (pay != null)
+            {
+                switch (pay.Kind)
+                {
+                    case EventRewardKind.Hourglass:
+                        IdleReport y = session.IdleYield((long)Math.Round(pay.Amount * 3600.0));
+                        p.Gold += y.Gold;
+                        p.Shards += y.Shards;
+                        r.Gold = y.Gold;
+                        r.Shards = y.Shards;
+                        break;
+                    case EventRewardKind.Dust:
+                        r.Dust = (long)Math.Round(pay.Amount * WayfarersRoad.DustPerSweep(session));
+                        p.RelicDust += r.Dust;
+                        break;
+                    case EventRewardKind.Slag:
+                        r.Slag = (long)pay.Amount;
+                        p.Slag += r.Slag;
+                        break;
+                }
             }
             st.FreeMask |= 1 << (tier - 1);
             r.Success = true;
@@ -415,6 +465,12 @@ namespace Emberfall.Core.Progression
 
         // ------------------------------------------------------------------ what is sold
 
+        /// <summary>True in the last SalesCloseSeconds of the period the state belongs to.</summary>
+        private static bool SalesClosed(GameSession session, LiveEventSlot slot, LiveEventSlotState st, long nowUnix)
+        {
+            return PeriodEndUnix(session, slot, st.Period) - nowUnix < SalesCloseSeconds;
+        }
+
         /// <summary>Why the track or the pack of a slot cannot be bought now, in the Store's own words. None means
         /// it can. Reads, writes nothing.</summary>
         public static StoreRefusal PurchaseRefusal(GameSession session, LiveEventSlot slot, LiveEventPart part, long nowUnix)
@@ -426,9 +482,11 @@ namespace Emberfall.Core.Progression
             if (part == LiveEventPart.Pack)
             {
                 if (ev.Pack == null) return StoreRefusal.NoEvent;
-                return st.PackBought ? StoreRefusal.SoldOut : StoreRefusal.None;
+                if (st.PackBought) return StoreRefusal.SoldOut;
             }
-            return st.TrackBought ? StoreRefusal.SoldOut : StoreRefusal.None;
+            else if (st.TrackBought) return StoreRefusal.SoldOut;
+            if (SalesClosed(session, slot, st, nowUnix)) return StoreRefusal.SalesClosed;
+            return StoreRefusal.None;
         }
 
         // ------------------------------------------------------------------ delivering a payment
@@ -656,8 +714,8 @@ namespace Emberfall.Core.Progression
                 tv.Reached = st.Points >= t.Points;
                 tv.HasFree = t.Free != null;
                 tv.HasPaid = t.Paid != null;
-                if (tv.HasFree) { tv.FreeLine = RewardLine(session, t.Free, false); tv.FreeShort = RewardShort(t.Free); }
-                if (tv.HasPaid) { tv.PaidLine = RewardLine(session, t.Paid, true); tv.PaidShort = RewardShort(t.Paid); }
+                if (tv.HasFree) { tv.FreeLine = RewardLine(session, t.Free, false); tv.FreeShort = RewardShort(session, t.Free); }
+                if (tv.HasPaid) { tv.PaidLine = RewardLine(session, t.Paid, true); tv.PaidShort = RewardShort(session, t.Paid); }
                 tv.FreeClaimed = LiveEventSlotState.Bit(st.FreeMask, i);
                 tv.FreeCanClaim = tv.HasFree && tv.Reached && !tv.FreeClaimed;
                 tv.PaidClaimed = LiveEventSlotState.Bit(st.PaidMask, i);
@@ -677,14 +735,16 @@ namespace Emberfall.Core.Progression
             if (hours > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.IdleGoldHours, hours), session) + " (Sealed)");
             if (sweeps > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.DustSweeps, sweeps), session));
             if (slag > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.Slag, slag), session) + " (Sealed)");
-            v.TrackLines.Add("Paid out tier by tier as you earn points. Nothing in it is random.");
+            v.TrackLines.Add("Paid out tier by tier as you earn points. Nothing in it is random. Sales close 1 hour before the end.");
+            v.SalesClosed = SalesClosed(session, slot, st, nowUnix);
 
             StoreOfferDef track = OfferOf(session, slot, LiveEventPart.Track);
             if (track != null && StoreSwitch.Enabled && session.Content.Store.IsUsable)
             {
                 v.TrackOfferId = track.Id;
                 v.TrackPrice = StoreConfig.Eur(track.PriceEur);
-                v.TrackCanBuy = !st.TrackBought;
+                v.TrackLock = StoreOffers.LockLineFor(session, track.Id);
+                v.TrackCanBuy = !st.TrackBought && !v.SalesClosed && v.TrackLock.Length == 0;
             }
             StoreOfferDef pack = OfferOf(session, slot, LiveEventPart.Pack);
             if (pack != null && ev.Pack != null && StoreSwitch.Enabled && session.Content.Store.IsUsable)
@@ -693,12 +753,13 @@ namespace Emberfall.Core.Progression
                 v.PackName = ev.Pack.Name;
                 v.PackBlurb = ev.Pack.Blurb;
                 v.PackPrice = StoreConfig.Eur(pack.PriceEur);
-                v.PackCanBuy = !st.PackBought;
+                v.PackLock = StoreOffers.LockLineFor(session, pack.Id);
+                v.PackCanBuy = !st.PackBought && !v.SalesClosed && v.PackLock.Length == 0;
                 if (ev.Pack.Hours > 0.0)
                     v.PackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.IdleGoldHours, ev.Pack.Hours), session) + " (Sealed)");
                 if (ev.Pack.DustSweeps > 0.0)
                     v.PackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.DustSweeps, ev.Pack.DustSweeps), session));
-                v.PackLines.Add("Once for this event. Nothing in it is random.");
+                v.PackLines.Add("Once for this event. Nothing in it is random. Sales close 1 hour before the end.");
             }
             v.AnythingToClaim = SlotHasClaim(session, slot, nowUnix);
             return v;

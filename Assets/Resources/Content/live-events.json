@@ -15,6 +15,11 @@
   // PurchaseGrants.Apply and are SEALED, so they never enter a summon, a Conversion, the forge gamble or any roll.
   // There is no chance, no pool and no weight anywhere in this file, and LiveEventsConfig has no field to hold one.
   //
+  // A FREE SKIN. A free tier may be { "kind": "skin", "skinId": "...", "fallback": { ... } } (the free track only; the paid
+  // track and the packs never hold one). The skin is granted through PurchaseGrants.Apply and is idempotent. When the skin is
+  // unknown, hidden in this build (a test skin in a release build) or already owned, the fallback reward is granted and shown
+  // instead, so a tier never pays nothing. The fallback is required and is never a skin.
+  //
   // QUESTS. kind is one of: waves, stage, level, summon, arena (Proving or Recital), proving, spendGold, ascend,
   // claimOrder, aspectWin (a stage won with at least minHeroes heroes of the event's aspect on the team).
   // A claim pays "points"; a tier opens when the event's points reach its "points".
@@ -50,7 +55,7 @@
         { "points": 70,  "free": { "kind": "hourglass", "amount": 1 }, "paid": { "kind": "hourglass", "amount": 6 } },
         { "points": 80,  "free": { "kind": "dust", "amount": 2 },      "paid": { "kind": "dust", "amount": 5 } },
         { "points": 90,  "free": { "kind": "hourglass", "amount": 2 }, "paid": { "kind": "hourglass", "amount": 8 } },
-        { "points": 100, "free": { "kind": "dust", "amount": 2 },      "paid": { "kind": "dust", "amount": 6 } }
+        { "points": 100, "free": { "kind": "skin", "skinId": "kael_azure_test", "fallback": { "kind": "dust", "amount": 2 } }, "paid": { "kind": "dust", "amount": 6 } }
       ],
       "pack": { "name": "Ember Trials Pack", "blurb": "A fixed bundle for the week of fire. Once per event.", "hours": 48, "dustSweeps": 24 }
     },

@@ -46,6 +46,9 @@ namespace Emberfall.DevHarness
                 CheckLivePack(db);
                 CheckLivePurchasePath(db);
                 CheckLivePaymentInFlight(db);
+                CheckLiveFreeSkin(db);
+                CheckLiveSalesCutoff(db);
+                CheckLiveStageGate(db);
                 CheckLiveSealedAndRefused(db);
                 CheckLiveRollover(db);
                 CheckLiveWoundBack(db);
@@ -116,9 +119,17 @@ namespace Emberfall.DevHarness
             return t.Replace('\'', '"');
         }
 
+        /// <summary>The usual test session: the campaign cleared through 3-1, the stage the paid event offers wait for
+        /// (store.json requiresStage; CheckLiveStageGate proves the lock). A save of it loads back identical.</summary>
         private static GameSession LiveSession(ContentDatabase d)
         {
-            return new GameSession(d, GameSession.CreateNewProfile(d, LiveBase));
+            return LiveClearedThrough(d, "ch3_1");
+        }
+
+        /// <summary>A session with nothing cleared: the one the wave resolver can still play 1-1 on.</summary>
+        private static GameSession LivePlain(ContentDatabase d)
+        {
+            return LiveClearedThrough(d, null);
         }
 
         private const long LiveBase = 1760000000L;
@@ -192,7 +203,8 @@ namespace Emberfall.DevHarness
                     if (e.Tiers[t].Points <= last) tidy = false;
                     last = e.Tiers[t].Points;
                     if (e.Tiers[t].Free == null || e.Tiers[t].Paid == null) tidy = false;
-                    if (e.Tiers[t].Free != null && !(e.Tiers[t].Free.Amount > 0.0)) fixedNumbers = false;
+                    if (e.Tiers[t].Free != null && e.Tiers[t].Free.Kind == EventRewardKind.Skin) { if (e.Tiers[t].Free.Fallback == null || !(e.Tiers[t].Free.Fallback.Amount > 0.0)) fixedNumbers = false; }
+                    else if (e.Tiers[t].Free != null && !(e.Tiers[t].Free.Amount > 0.0)) fixedNumbers = false;
                     if (e.Tiers[t].Paid != null && !(e.Tiers[t].Paid.Amount > 0.0)) fixedNumbers = false;
                 }
                 if (last > e.TotalQuestPoints) reachable = false;
@@ -209,6 +221,29 @@ namespace Emberfall.DevHarness
             wQuestKinds = kinds.Contains(EventQuestKind.Stage) && kinds.Contains(EventQuestKind.AspectWin) && kinds.Contains(EventQuestKind.SpendGold)
                           && kinds.Contains(EventQuestKind.ClaimOrder) && kinds.Contains(EventQuestKind.Proving);
             Check(wQuestKinds, "the weekly quests cover clearing stages, winning with the aspect, spending Gold, claiming orders and the Proving");
+
+            // A payment delivered after a restart has no memory of the event it was begun for (LiveEvents.DeliveryOf), so the events
+            // of one slot must hold the same pack contents and the same paid track totals: what the card showed is then what lands.
+            bool equalPacks = true;
+            foreach (LiveEventSlot slot in new[] { LiveEventSlot.Weekly, LiveEventSlot.Monthly })
+            {
+                double hours = -1.0, sweeps = -1.0, paidHours = -1.0, paidSweeps = -1.0, paidSlag = -1.0;
+                for (int i = 0; i < c.Events.Count; i++)
+                {
+                    LiveEventDef e = c.Events[i];
+                    if (e.Slot != slot) continue;
+                    double ph = 0.0, ps = 0.0, pg = 0.0;
+                    for (int t = 0; t < e.Tiers.Count; t++)
+                    {
+                        EventRewardDef r = e.Tiers[t].Paid;
+                        if (r == null) continue;
+                        if (r.Kind == EventRewardKind.Hourglass) ph += r.Amount; else if (r.Kind == EventRewardKind.Dust) ps += r.Amount; else pg += r.Amount;
+                    }
+                    if (hours < 0.0) { hours = e.Pack.Hours; sweeps = e.Pack.DustSweeps; paidHours = ph; paidSweeps = ps; paidSlag = pg; }
+                    else if (e.Pack.Hours != hours || e.Pack.DustSweeps != sweeps || ph != paidHours || ps != paidSweeps || pg != paidSlag) equalPacks = false;
+                }
+            }
+            Check(equalPacks, "THE EVENTS OF A SLOT HOLD THE SAME PACK AND THE SAME PAID TRACK TOTALS, so a payment delivered after a restart lands exactly what its card showed");
 
             // The store sells them: four offers, the right prices, kind event.
             string[] ids = { "event_track_weekly", "event_track_monthly", "event_pack_weekly", "event_pack_monthly" };
@@ -248,7 +283,7 @@ namespace Emberfall.DevHarness
         private static void CheckLiveQuests(ContentDatabase db)
         {
             ContentDatabase d = LiveDb(LiveTestJson(db));
-            GameSession s = LiveSession(d);
+            GameSession s = LivePlain(d);
             long t0 = LiveT0(d);
             string pristine = LiveSnapshot(s);
 
@@ -651,6 +686,261 @@ namespace Emberfall.DevHarness
             Check(!nothing.Success && LiveSnapshot(h) == hBefore, "with no live-events.json there is nothing to deliver: refused, nothing written");
         }
 
+        // ------------------------------------------------------------------ 5c. a free skin on the free track
+
+        private static void CheckLiveFreeSkin(ContentDatabase db)
+        {
+            string hero = db.StartingHeroes[0].Id;
+            string skins = ("{ 'skins': ["
+                + "{ 'id': 'evt_skin', 'name': 'Event Skin', 'hero': '" + hero + "', 'rarity': 'rare', 'source': 'event' },"
+                + "{ 'id': 'evt_skin_test', 'name': 'Event Skin (test)', 'hero': '" + hero + "', 'rarity': 'rare', 'source': 'test', 'test': true } ] }").Replace('\'', '"');
+            string events = ("{ 'epoch': '2026-01-05', 'events': [ { 'id': 's_week', 'slot': 'weekly', 'name': 'Skin Week', 'aspect': 'Ember', 'quests': ["
+                + "{ 'id': 'q', 'kind': 'stage', 'target': 1, 'points': 60 } ], 'tiers': ["
+                + "{ 'points': 10, 'free': { 'kind': 'skin', 'skinId': 'evt_skin', 'fallback': { 'kind': 'dust', 'amount': 2 } }, 'paid': { 'kind': 'hourglass', 'amount': 1 } },"
+                + "{ 'points': 20, 'free': { 'kind': 'skin', 'skinId': 'evt_skin_test', 'fallback': { 'kind': 'slag', 'amount': 3 } } },"
+                + "{ 'points': 30, 'free': { 'kind': 'skin', 'skinId': 'no_such_skin', 'fallback': { 'kind': 'hourglass', 'amount': 1 } } },"
+                + "{ 'points': 40, 'free': { 'kind': 'skin', 'skinId': 'evt_skin', 'fallback': { 'kind': 'dust', 'amount': 2 } } } ] } ] }").Replace('\'', '"');
+            ContentDatabase d = LoadContent(_liveContentDir);
+            d.LoadSkins(skins);
+            d.LoadLiveEvents(events);
+            long t0 = LiveT0(d);
+            bool testWas = SkinsConfig.TestVisible;
+            try
+            {
+                SkinsConfig.TestVisible = true;
+                Check(d.LiveEvents.IsUsable && d.LiveEvents.Warnings.Count == 0 && d.Skins.Skin("evt_skin") != null && d.LiveEvents.EventFor(LiveEventSlot.Weekly, 1).Tiers[0].Free.Kind == EventRewardKind.Skin,
+                      "a free tier may be a skin with a fallback reward in the data");
+
+                // ---- granted when visible: the skin arrives through the grant path, the fallback does not
+                GameSession s = LiveSession(d);
+                LiveEvents.Record(s, EventQuestKind.Stage, 1, t0);
+                LiveEvents.ClaimQuest(s, LiveEventSlot.Weekly, "q", t0 + 1);
+                LiveEventView v = LiveEvents.View(s, LiveEventSlot.Weekly, t0 + 2);
+                Check(v.Tiers[0].FreeLine.StartsWith("The skin Event Skin") && v.Tiers[0].FreeShort == "Skin: Event Skin" && v.Tiers[3].FreeShort == "Skin: Event Skin",
+                      "THE TIER SHOWS THE SKIN when it can be granted: \"" + v.Tiers[0].FreeLine + "\"");
+                long dust0 = s.Profile.RelicDust, gold0 = s.Profile.Gold, slag0 = s.Profile.Slag;
+                LiveResult skin = LiveEvents.ClaimFree(s, LiveEventSlot.Weekly, 1, t0 + 3);
+                Check(skin.Success && skin.SkinId == "evt_skin" && s.Profile.OwnsSkin("evt_skin") && s.Profile.RelicDust == dust0 && s.Profile.Gold == gold0 && s.Profile.Slag == slag0
+                      && s.Profile.Sealed.Gold == 0 && s.Profile.Sealed.Slag == 0,
+                      "A FREE SKIN IS GRANTED THROUGH PurchaseGrants.Apply when visible: the skin is owned, the fallback is not paid, and nothing is marked Sealed");
+                string settled = LiveSnapshot(s);
+                Check(!LiveEvents.ClaimFree(s, LiveEventSlot.Weekly, 1, t0 + 4).Success && LiveSnapshot(s) == settled, "and the tier pays once");
+
+                // ---- already owned: the fallback is shown and paid, the skin is not granted twice
+                LiveEventView owned = LiveEvents.View(s, LiveEventSlot.Weekly, t0 + 5);
+                Check(owned.Tiers[3].FreeShort == "2 sweeps Dust" && owned.Tiers[3].FreeLine.Contains("Relic Dust"), "A SKIN ALREADY OWNED shows its fallback reward instead (" + owned.Tiers[3].FreeShort + ")");
+                LiveEvents.Record(s, EventQuestKind.Stage, 1, t0 + 6);
+                LiveResult again = LiveEvents.ClaimFree(s, LiveEventSlot.Weekly, 4, t0 + 7);
+                Check(again.Success && again.SkinId.Length == 0 && s.Profile.RelicDust - dust0 == 2 * WayfarersRoad.DustPerSweep(s) && s.Profile.OwnedSkins.Count == 1,
+                      "and pays the fallback (2 sweeps of Dust) with the skin owned once");
+
+                // ---- unknown skin: the fallback
+                LiveResult unknown = LiveEvents.ClaimFree(s, LiveEventSlot.Weekly, 3, t0 + 8);
+                Check(unknown.Success && unknown.SkinId.Length == 0 && unknown.Gold > 0, "A SKIN THE CONTENT DOES NOT HAVE pays the fallback (an hour of idle income)");
+
+                // ---- a test skin: granted where test skins are visible, fallback where they are hidden
+                GameSession shown = LiveSession(d);
+                LiveEvents.Record(shown, EventQuestKind.Stage, 1, t0);
+                LiveEvents.ClaimQuest(shown, LiveEventSlot.Weekly, "q", t0 + 1);
+                LiveResult testShown = LiveEvents.ClaimFree(shown, LiveEventSlot.Weekly, 2, t0 + 2);
+                Check(testShown.Success && testShown.SkinId == "evt_skin_test" && shown.Profile.OwnsSkin("evt_skin_test"), "A TEST SKIN IS GRANTED where test skins are visible (the editor and a development build)");
+                SkinsConfig.TestVisible = false;
+                GameSession hidden = LiveSession(d);
+                LiveEvents.Record(hidden, EventQuestKind.Stage, 1, t0);
+                LiveEvents.ClaimQuest(hidden, LiveEventSlot.Weekly, "q", t0 + 1);
+                LiveEventView hv = LiveEvents.View(hidden, LiveEventSlot.Weekly, t0 + 2);
+                long slagHidden = hidden.Profile.Slag;
+                LiveResult testHidden = LiveEvents.ClaimFree(hidden, LiveEventSlot.Weekly, 2, t0 + 3);
+                Check(hv.Tiers[1].FreeShort == "3 Slag" && testHidden.Success && testHidden.SkinId.Length == 0 && !hidden.Profile.OwnsSkin("evt_skin_test") && hidden.Profile.Slag - slagHidden == 3,
+                      "A TEST SKIN IN A RELEASE BUILD IS HIDDEN: the tier shows and pays its fallback (3 Slag) and the skin is not granted");
+                SkinsConfig.TestVisible = true;
+
+                // ---- the paid track is unchanged: its reward is the Sealed hour, never a skin
+                GameSession paid = LiveSession(d);
+                LiveEvents.Record(paid, EventQuestKind.Stage, 1, t0);
+                LiveEvents.ClaimQuest(paid, LiveEventSlot.Weekly, "q", t0 + 1);
+                StoreOffers.Fulfil(paid, "event_track_weekly", null, t0 + 2);
+                long sealed0 = paid.Profile.Sealed.Gold;
+                LiveResult p1 = LiveEvents.ClaimPaid(paid, LiveEventSlot.Weekly, 1, t0 + 3);
+                Check(p1.Success && paid.Profile.Sealed.Gold - sealed0 == paid.IdleYield(3600L).Gold && p1.SkinId.Length == 0 && paid.Profile.OwnedSkins.Count == 0,
+                      "THE PAID TRACK IS UNCHANGED: tier 1 pays its Sealed hour and grants no skin");
+
+                // ---- bad data is dropped, never guessed
+                string bad = events.Replace("\"paid\": { \"kind\": \"hourglass\", \"amount\": 1 }", "\"paid\": { \"kind\": \"skin\", \"skinId\": \"evt_skin\", \"fallback\": { \"kind\": \"dust\", \"amount\": 1 } }");
+                ContentDatabase dBad = LoadContent(_liveContentDir);
+                dBad.LoadLiveEvents(bad);
+                ContentDatabase dNone = LoadContent(_liveContentDir);
+                dNone.LoadLiveEvents(events.Replace(", \"fallback\": { \"kind\": \"slag\", \"amount\": 3 }", ""));
+                ContentDatabase dNest = LoadContent(_liveContentDir);
+                dNest.LoadLiveEvents(events.Replace("\"fallback\": { \"kind\": \"slag\", \"amount\": 3 }", "\"fallback\": { \"kind\": \"skin\", \"skinId\": \"evt_skin\", \"fallback\": { \"kind\": \"dust\", \"amount\": 1 } }"));
+                Check(dBad.LiveEvents.Warnings.Count >= 1 && dBad.LiveEvents.EventFor(LiveEventSlot.Weekly, 1).Tiers[0].Paid == null,
+                      "A SKIN ON THE PAID TRACK IS DROPPED with a warning: the paid track can hold none");
+                Check(dNone.LiveEvents.Warnings.Count >= 1 && dNone.LiveEvents.EventFor(LiveEventSlot.Weekly, 1).Tiers.Count == 3,
+                      "A FREE SKIN WITHOUT A FALLBACK IS DROPPED with a warning, so a tier can never pay nothing");
+                Check(dNest.LiveEvents.Warnings.Count >= 1 && dNest.LiveEvents.EventFor(LiveEventSlot.Weekly, 1).Tiers.Count == 3,
+                      "and a fallback that is itself a skin is dropped, so the fallback is always a plain reward");
+
+                // ---- never random: the kinds are a closed set, and a skin tier is one fixed grant line
+                string[] names = Enum.GetNames(typeof(EventRewardKind));
+                Check(names.Length == 4 && Array.IndexOf(names, "Skin") >= 0, "THE EVENT REWARD KINDS ARE A CLOSED SET OF FOUR (hours of idle income, Dust, Slag, a named skin): still no hero, no pull, no pool");
+
+                // ---- the switch: off grants nothing
+                LiveEventsSwitch.Enabled = false;
+                GameSession off = LiveSession(d);
+                LiveResult offClaim = LiveEvents.ClaimFree(off, LiveEventSlot.Weekly, 1, t0);
+                LiveEventsSwitch.Enabled = true;
+                Check(!offClaim.Success && offClaim.Reason == LiveRefusal.Off && off.Profile.OwnedSkins.Count == 0, "with the switch off no skin is granted");
+            }
+            finally
+            {
+                SkinsConfig.TestVisible = testWas;
+            }
+        }
+
+        // ------------------------------------------------------------------ 5d. sales close an hour before the end
+
+        private static void CheckLiveSalesCutoff(ContentDatabase db)
+        {
+            ContentDatabase d = LiveDb(LiveTestJson(db));
+            long t0 = LiveT0(d);
+            long w0 = LiveEvents.PeriodOf(LiveSession(d), LiveEventSlot.Weekly, t0);
+            long weekEnd = LiveWeekStart(d, w0 + 1);
+            long monthEnd = LiveMonthStart(d, 101);
+            Check(LiveEvents.SalesCloseSeconds == 3600L, "sales close " + LiveEvents.SalesCloseSeconds + " seconds (1 hour) before the end of the period");
+
+            // ---- exactly one hour before the end the offers are still for sale; one second later they are not
+            GameSession open = LiveSession(d);
+            Check(LiveEvents.PurchaseRefusal(open, LiveEventSlot.Weekly, LiveEventPart.Track, weekEnd - 3600L) == StoreRefusal.None
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Weekly, LiveEventPart.Pack, weekEnd - 3600L) == StoreRefusal.None
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Monthly, LiveEventPart.Track, monthEnd - 3600L) == StoreRefusal.None
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Monthly, LiveEventPart.Pack, monthEnd - 3600L) == StoreRefusal.None,
+                  "AN HOUR BEFORE THE END the track and the pack of both slots are still for sale");
+            Check(LiveEvents.PurchaseRefusal(open, LiveEventSlot.Weekly, LiveEventPart.Track, weekEnd - 3599L) == StoreRefusal.SalesClosed
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Weekly, LiveEventPart.Pack, weekEnd - 1L) == StoreRefusal.SalesClosed
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Monthly, LiveEventPart.Track, monthEnd - 3599L) == StoreRefusal.SalesClosed
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Monthly, LiveEventPart.Pack, monthEnd - 1L) == StoreRefusal.SalesClosed,
+                  "IN THE LAST HOUR every track and pack is refused SalesClosed, on the first second of it and on the last");
+
+            // ---- a hard stop at Begin: the ledger refuses, nothing is remembered, nothing is written
+            GameSession late = LiveSession(d);
+            StoreOffers.Bind(late);
+            PurchaseLedger ledger = new PurchaseLedger(StoreRules.Shared);
+            string pristine = LiveSnapshot(late);
+            PurchaseResult refused = ledger.Begin(late, "event_pack_weekly", null, weekEnd - 600L);
+            Check(!refused.Success && refused.Reason == PurchaseRefusal.NotAvailable && refused.Message.Contains("closed") && late.Profile.LiveEvents.Pending.Count == 0 && LiveSnapshot(late) == pristine,
+                  "A HARD STOP AT BEGIN: the purchase is refused with \"" + refused.Message + "\", the event is not remembered and nothing is written");
+            StoreFulfilment direct = StoreOffers.Fulfil(late, "event_track_weekly", null, weekEnd - 600L);
+            Check(!direct.Success && direct.Reason == StoreRefusal.SalesClosed && LiveSnapshot(late) == pristine, "and so is the direct fulfilment");
+            PurchaseResult allowed = ledger.Begin(late, "event_pack_weekly", null, weekEnd - 3600L);
+            Check(allowed.Success && late.Profile.LiveEvents.Pending.Count == 1, "while at the last open second Begin goes through and remembers the event");
+            ledger.Abandon("event_pack_weekly");
+
+            // ---- the card says so, in words, and the view closes the buy
+            LiveEventView closed = LiveEvents.View(LiveSession(d), LiveEventSlot.Weekly, weekEnd - 600L);
+            LiveEventView before = LiveEvents.View(LiveSession(d), LiveEventSlot.Weekly, weekEnd - 4000L);
+            Check(closed.SalesClosed && !closed.TrackCanBuy && !closed.PackCanBuy && !before.SalesClosed && before.TrackCanBuy && before.PackCanBuy
+                  && closed.PackLines[closed.PackLines.Count - 1].Contains("Sales close 1 hour before the end") && closed.TrackLines[closed.TrackLines.Count - 1].Contains("Sales close 1 hour before the end"),
+                  "THE CARD SAYS \"Sales close 1 hour before the end\" on the track and the pack, and in the last hour the view closes both buys");
+            Check(StoreOffers.ReasonText(StoreRefusal.SalesClosed).Contains("1 hour"), "the refusal has a plain sentence (" + StoreOffers.ReasonText(StoreRefusal.SalesClosed) + ")");
+
+            // ---- the last hour still lets a player earn and claim: only the sale stops
+            GameSession earner = LiveSession(d);
+            LiveEvents.Record(earner, EventQuestKind.Stage, 1, weekEnd - 1800L);
+            LiveResult claim = LiveEvents.ClaimQuest(earner, LiveEventSlot.Weekly, "q_stage", weekEnd - 1700L);
+            Check(claim.Success && earner.Profile.LiveEvents.Weekly.Points == 5, "THE LAST HOUR STILL COUNTS AND PAYS: quests are counted and claimed, only the sale is closed");
+
+            // ---- and the new period opens it again
+            Check(LiveEvents.PurchaseRefusal(LiveSession(d), LiveEventSlot.Weekly, LiveEventPart.Track, weekEnd + 5L) == StoreRefusal.None, "the next period sells again from its first second");
+
+            // ---- a payment begun just before the cut-off and delivered after the turnover is still delivered (the slow-store case)
+            GameSession slow = LiveSession(d);
+            StoreOffers.Bind(slow);
+            PurchaseLedger slowLedger = new PurchaseLedger(StoreRules.Shared);
+            slowLedger.Begin(slow, "event_pack_weekly", null, weekEnd - 3600L);
+            long gold = slow.Profile.Sealed.Gold;
+            PurchaseResult delivered = slowLedger.Complete(slow, "event_pack_weekly", "cutoff-1", weekEnd + 30L);
+            Check(delivered.Success && delivered.CanConfirm && slow.Profile.Sealed.Gold - gold == slow.IdleYield(12 * 3600L).Gold, "A SLOW STORE: a payment begun at the last open second and delivered after the turnover is still delivered in full");
+        }
+
+        // ------------------------------------------------------------------ 5e. the paid offers wait for 3-1
+
+        /// <summary>A session that has cleared every stage up to and including the given one (campaign order).</summary>
+        private static GameSession LiveClearedThrough(ContentDatabase d, string stageId)
+        {
+            PlayerProfile p = GameSession.CreateNewProfile(d, LiveBase);
+            if (stageId != null)
+            {
+                for (int i = 0; i < d.AllStages.Count; i++)
+                {
+                    p.ClearedStageIds.Add(d.AllStages[i].Id);
+                    if (d.AllStages[i].Id == stageId) break;
+                }
+            }
+            p.StagesCleared = CampaignProgress.CountCleared(p, d);
+            return new GameSession(d, p);
+        }
+
+        private static void CheckLiveStageGate(ContentDatabase db)
+        {
+            // The shipped store.json: the four paid event offers wait for ch3_1.
+            string[] ids = { "event_track_weekly", "event_track_monthly", "event_pack_weekly", "event_pack_monthly" };
+            bool declared = true;
+            for (int i = 0; i < ids.Length; i++) declared = declared && db.Store.Offer(ids[i]) != null && db.Store.Offer(ids[i]).RequiresStage == "ch3_1";
+            Check(declared, "the four paid event offers carry requiresStage ch3_1 in store.json");
+
+            ContentDatabase d = LiveDb(LiveTestJson(db));
+            long t0 = LiveT0(d);
+            string[] offers = { "event_track_weekly", "event_pack_weekly", "event_track_monthly", "event_pack_monthly" };
+
+            // ---- nothing cleared, and 2-12 cleared: every paid offer is locked
+            foreach (string through in new string[] { null, "ch2_12" })
+            {
+                GameSession s = LiveClearedThrough(d, through);
+                string pristine = LiveSnapshot(s);
+                bool allLocked = true;
+                for (int i = 0; i < offers.Length; i++)
+                {
+                    StoreFulfilment f = StoreOffers.Fulfil(s, offers[i], null, t0);
+                    if (f.Success || f.Reason != StoreRefusal.Locked) allLocked = false;
+                }
+                StoreOffers.Bind(s);
+                PurchaseResult begun = new PurchaseLedger(StoreRules.Shared).Begin(s, "event_pack_weekly", null, t0);
+                LiveEventView v = LiveEvents.View(s, LiveEventSlot.Weekly, t0);
+                Check(allLocked && !begun.Success && begun.Reason == PurchaseRefusal.NotAvailable && s.Profile.LiveEvents.Pending.Count == 0 && LiveSnapshot(s) == pristine
+                      && !v.TrackCanBuy && !v.PackCanBuy && v.TrackLock == "UNLOCKS AT 3-1" && v.PackLock == "UNLOCKS AT 3-1",
+                      "WITH " + (through == null ? "NOTHING" : "2-12") + " CLEARED every paid event offer is refused Locked at Begin and at fulfilment, the card says \"" + v.TrackLock + "\", and nothing is written");
+            }
+
+            // ---- the free side is open from the start: quests count and claim, the free track pays
+            GameSession fresh = LiveClearedThrough(d, null);
+            LiveEvents.Record(fresh, EventQuestKind.Stage, 1, t0);
+            Check(LiveEvents.ClaimQuest(fresh, LiveEventSlot.Weekly, "q_stage", t0 + 1).Success, "(free) quests count and claim before 3-1");
+            LiveEvents.RecordStageWin(fresh, t0 + 2);
+            LiveEvents.ClaimQuest(fresh, LiveEventSlot.Weekly, "q_aspect", t0 + 3);
+            LiveEvents.Record(fresh, EventQuestKind.Waves, 2, t0 + 4);
+            LiveEvents.ClaimQuest(fresh, LiveEventSlot.Weekly, "q_waves", t0 + 5);
+            LiveResult free = LiveEvents.ClaimFree(fresh, LiveEventSlot.Weekly, 1, t0 + 6);
+            Check(free.Success && LiveEvents.View(fresh, LiveEventSlot.Weekly, t0 + 7).Active, "THE FREE TRACK IS OPEN FROM THE START: a reached free tier is claimed before 3-1");
+
+            // ---- 3-1 cleared: open
+            GameSession open = LiveClearedThrough(d, "ch3_1");
+            LiveEventView ov = LiveEvents.View(open, LiveEventSlot.Weekly, t0);
+            StoreFulfilment bought = StoreOffers.Fulfil(open, "event_track_weekly", null, t0);
+            StoreFulfilment pack = StoreOffers.Fulfil(open, "event_pack_monthly", null, t0);
+            Check(bought.Success && pack.Success && ov.TrackLock.Length == 0 && ov.PackLock.Length == 0 && ov.TrackCanBuy,
+                  "WITH 3-1 CLEARED the paid offers are open: bought through the store path, no lock line");
+
+            // ---- a track already bought still pays its paid tiers whatever the stage (the gate is on the sale, not on the claims)
+            GameSession kept = LiveClearedThrough(d, "ch3_1");
+            LiveEvents.Record(kept, EventQuestKind.Stage, 1, t0);
+            LiveEvents.ClaimQuest(kept, LiveEventSlot.Weekly, "q_stage", t0 + 1);
+            LiveEvents.RecordStageWin(kept, t0 + 1);
+            LiveEvents.ClaimQuest(kept, LiveEventSlot.Weekly, "q_aspect", t0 + 2);
+            StoreOffers.Fulfil(kept, "event_track_weekly", null, t0 + 3);
+            long sealed0 = kept.Profile.Sealed.Gold;
+            Check(LiveEvents.ClaimPaid(kept, LiveEventSlot.Weekly, 1, t0 + 4).Success && kept.Profile.Sealed.Gold > sealed0, "and a paid tier of a bought track is claimed as before");
+        }
+
         // ------------------------------------------------------------------ 6. Sealed and refused by every random path
 
         private static void CheckLiveSealedAndRefused(ContentDatabase db)
@@ -684,8 +974,8 @@ namespace Emberfall.DevHarness
 
             // The reward kinds are a closed set with no hero in it.
             string[] names = Enum.GetNames(typeof(EventRewardKind));
-            Check(names.Length == 3 && Array.IndexOf(names, "Hourglass") >= 0 && Array.IndexOf(names, "Dust") >= 0 && Array.IndexOf(names, "Slag") >= 0,
-                  "THE EVENT REWARD KINDS ARE A CLOSED SET OF THREE (hours of idle income, Dust, Slag): an event cannot pay a hero, a pull or a pool");
+            Check(names.Length == 4 && Array.IndexOf(names, "Hourglass") >= 0 && Array.IndexOf(names, "Dust") >= 0 && Array.IndexOf(names, "Slag") >= 0 && Array.IndexOf(names, "Skin") >= 0,
+                  "THE EVENT REWARD KINDS ARE A CLOSED SET OF FOUR (hours of idle income, Dust, Slag, and on the free track a named skin): an event cannot pay a hero, a pull or a pool");
             string[] grantNames = Enum.GetNames(typeof(GrantKind));
             bool clean = true;
             for (int i = 0; i < grantNames.Length; i++)
@@ -916,7 +1206,7 @@ namespace Emberfall.DevHarness
                 LiveEventsSwitch.Enabled = on;
                 try
                 {
-                    GameSession s = LiveSession(cd);
+                    GameSession s = LivePlain(cd);
                     StageDef first = cd.AllStages[0];
                     for (int i = 0; i < 40; i++) if (s.ResolveWave(first, 7100 + i * 101, t0 + i).StageCleared) break;
                     s.Profile.Gold = 1000000000L;
