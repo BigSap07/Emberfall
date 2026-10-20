@@ -21,7 +21,13 @@ namespace Emberfall.Core.Data
         /// <summary>The paid track of Wayfarer's Road, for the season it is bought in.</summary>
         Pass,
         /// <summary>One more copy of a hero the buyer already owns, for ascension.</summary>
-        Contract
+        Contract,
+        /// <summary>R24. One relic the buyer names from a list shown in full: one they do not own, or one more tier on one
+        /// they own (the Relic of Choice).</summary>
+        RelicChoice,
+        /// <summary>R24. One fixed hero skin. Never written in store.json: the Store derives one offer per skin in
+        /// skins.json (StoreConfig.Validate), priced by the skin's rarity (SkinTiers).</summary>
+        Skin
     }
 
     /// <summary>When a purchase limit comes back.</summary>
@@ -63,6 +69,23 @@ namespace Emberfall.Core.Data
         public StoreReset Reset = StoreReset.Never;
         /// <summary>True for a product a store can hand back to a new profile of the same account.</summary>
         public bool Restorable;
+        /// <summary>R24: the switch that lists this offer. "relicPacks" (RelicPacksSwitch) and, for a derived skin
+        /// offer, "skins" (SkinsSwitch). Empty for an offer with no switch of its own.</summary>
+        public string Group = "";
+        /// <summary>R24: a feature that must be open for the offer to be bought (store.json "requires", for example
+        /// "Relics" for the Relic Shop). The offer is still LISTED while it is locked, with the feature's lock line.</summary>
+        public bool HasRequires;
+        public Feature Requires;
+        /// <summary>R24: a stage whose clear opens the offer (store.json "requiresStage", for example "ch4_1" for the Hero
+        /// Contract). Empty for none. Listed while locked, like Requires.</summary>
+        public string RequiresStage = "";
+        /// <summary>Relic Of Choice only: the most Relic Dust a pick may be worth at the Relic Shop ("pickCapDust"). A pick
+        /// dearer than this is not on the list, so one pack never names a whole ladder step. 0 means no cap.</summary>
+        public int PickCapDust;
+        /// <summary>Pack: fixed Relic Dust, paid as Relic Dust (never marked: Dust only buys the Relic Shop's fixed items).</summary>
+        public int Dust;
+        /// <summary>Skin offer only: the skin it sells.</summary>
+        public string SkinId = "";
 
         /// <summary>The offer as the purchase path needs it: id, placeholder product id, price tier and the
         /// fixed grant. Built from the fields below by StoreConfig; never written by hand.</summary>
@@ -91,6 +114,9 @@ namespace Emberfall.Core.Data
 
         /// <summary>Contract: the star count of a hero it may be bought for.</summary>
         public int Stars = 5;
+        /// <summary>Contract: how many may be bought in a period across ALL heroes (the account), on top of Limit per
+        /// hero. 0 means no account cap. R24: 4 a month.</summary>
+        public int AccountLimit;
     }
 
     /// <summary>
@@ -107,6 +133,8 @@ namespace Emberfall.Core.Data
     public sealed class StoreConfig
     {
         public readonly Dictionary<string, double> Tiers = new Dictionary<string, double>();
+        /// <summary>R24: the price tier of a skin by its rarity ("skinTiers" in store.json).</summary>
+        public readonly Dictionary<string, string> SkinTiers = new Dictionary<string, string>();
         public readonly List<StoreOfferDef> Offers = new List<StoreOfferDef>();
         public readonly List<string> Warnings = new List<string>();
 
@@ -137,6 +165,17 @@ namespace Emberfall.Core.Data
                     double eur = tiers[key].AsDouble(0.0);
                     if (eur <= 0.0) { c.Warnings.Add("store.json: price tier '" + key + "' needs a positive euro amount and is dropped"); continue; }
                     c.Tiers[key] = eur;
+                }
+            }
+
+            JsonValue skinTiers = root["skinTiers"];
+            if (skinTiers != null && skinTiers.IsObject)
+            {
+                foreach (string key in skinTiers.Keys)
+                {
+                    string tier = skinTiers[key].AsString("");
+                    if (!c.Tiers.ContainsKey(tier)) { c.Warnings.Add("store.json: skin rarity '" + key + "' names price tier '" + tier + "' that the file does not define and is dropped"); continue; }
+                    c.SkinTiers[key] = tier;
                 }
             }
 
@@ -171,6 +210,7 @@ namespace Emberfall.Core.Data
                 case "growth": d.Kind = StoreOfferKind.Growth; break;
                 case "pass": d.Kind = StoreOfferKind.Pass; break;
                 case "contract": d.Kind = StoreOfferKind.Contract; break;
+                case "relicChoice": d.Kind = StoreOfferKind.RelicChoice; break;
                 default: c.Warnings.Add(where + " has unknown kind '" + kind + "' and is dropped"); return null;
             }
 
@@ -186,6 +226,17 @@ namespace Emberfall.Core.Data
             }
             d.Limit = Math.Max(1, j.GetInt("limit", 1));
             d.Restorable = j.GetBool("restorable", false);
+            d.Group = j.GetString("group", "");
+            d.RequiresStage = j.GetString("requiresStage", "");
+            d.PickCapDust = Math.Max(0, j.GetInt("pickCapDust", 0));
+            string requires = j.GetString("requires", "");
+            if (requires.Length > 0)
+            {
+                Feature f;
+                if (!Enum.TryParse(requires, true, out f)) { c.Warnings.Add(where + " requires unknown feature '" + requires + "' and is dropped"); return null; }
+                d.HasRequires = true;
+                d.Requires = f;
+            }
 
             double eur;
             if (!c.Tiers.TryGetValue(d.Tier, out eur)) { c.Warnings.Add(where + " names price tier '" + d.Tier + "' that the file does not define and is dropped"); return null; }
@@ -194,12 +245,14 @@ namespace Emberfall.Core.Data
 
             d.Hours = Math.Max(0.0, j["hours"].AsDouble(0.0));
             d.Slag = Math.Max(0, j.GetInt("slag", 0));
+            d.Dust = Math.Max(0, j.GetInt("dust", 0));
             d.DustSweeps = Math.Max(0.0, j["dustSweeps"].AsDouble(0.0));
             d.HeroCopies = Math.Max(1, j.GetInt("heroCopies", 1));
             d.Days = Math.Max(1, j.GetInt("days", 30));
             d.HoursPerDay = Math.Max(0.0, j["hoursPerDay"].AsDouble(0.0));
             d.IdleBonusPct = Math.Max(0, Math.Min(100, j.GetInt("idleBonusPct", 0)));
             d.Stars = Math.Max(1, Math.Min(5, j.GetInt("stars", 5)));
+            d.AccountLimit = Math.Max(0, Math.Min(1000, j.GetInt("accountLimit", 0)));
 
             List<JsonValue> choices = j.GetList("heroChoices");
             for (int i = 0; i < choices.Count; i++)
@@ -224,7 +277,7 @@ namespace Emberfall.Core.Data
             }
 
             // Each kind needs what it sells, and a kind that sells a pick needs the list to pick from.
-            bool pays = d.Hours > 0.0 || d.Slag > 0 || d.DustSweeps > 0.0;
+            bool pays = d.Hours > 0.0 || d.Slag > 0 || d.DustSweeps > 0.0 || d.Dust > 0;
             switch (d.Kind)
             {
                 case StoreOfferKind.Pack:
@@ -248,6 +301,9 @@ namespace Emberfall.Core.Data
                     break;
                 case StoreOfferKind.Contract:
                     if (d.Reset != StoreReset.Month) { c.Warnings.Add(where + " is a contract that does not reset monthly and is dropped"); return null; }
+                    break;
+                case StoreOfferKind.RelicChoice:
+                    if (d.Reset != StoreReset.Week && d.Reset != StoreReset.Month) { c.Warnings.Add(where + " is a relic choice that does not reset weekly or monthly and is dropped"); return null; }
                     break;
             }
             Build(d);
@@ -273,6 +329,7 @@ namespace Emberfall.Core.Data
                 case StoreOfferKind.Starter:
                     if (d.Hours > 0.0) g.Add(new GrantItem(GrantKind.IdleGoldHours, d.Hours));
                     if (d.Slag > 0) g.Add(new GrantItem(GrantKind.Slag, d.Slag));
+                    if (d.Dust > 0) g.Add(new GrantItem(GrantKind.Dust, d.Dust));
                     if (d.DustSweeps > 0.0) g.Add(new GrantItem(GrantKind.DustSweeps, d.DustSweeps));
                     if (d.Kind == StoreOfferKind.Starter)
                     {
@@ -293,6 +350,14 @@ namespace Emberfall.Core.Data
                     owned.Stars = d.Stars;
                     g.Add(owned);   // one copy: a grant takes at most one pick from the buyer
                     break;
+                case StoreOfferKind.RelicChoice:
+                    g.Add(new GrantItem(GrantKind.RelicChoice, d.PickCapDust));   // the pick is a relic id, named by the buyer; Amount is its Dust cap
+                    break;
+                case StoreOfferKind.Skin:
+                    GrantItem skin = new GrantItem(GrantKind.Skin, 0);
+                    skin.SkinId = d.SkinId;
+                    g.Add(skin);
+                    break;
             }
             d.Built = o;
         }
@@ -302,9 +367,16 @@ namespace Emberfall.Core.Data
         /// exist. Adds the warnings. Called by ContentDatabase.LoadStore.</summary>
         public void Validate(ContentDatabase db)
         {
+            AddSkinOffers(db);
             for (int i = Offers.Count - 1; i >= 0; i--)
             {
                 StoreOfferDef d = Offers[i];
+                if (d.RequiresStage.Length > 0 && db.GetStage(d.RequiresStage) == null)
+                {
+                    Warnings.Add("store.json: offer '" + d.Id + "' requires stage '" + d.RequiresStage + "' that does not exist and is dropped");
+                    Offers.RemoveAt(i);
+                    continue;
+                }
                 if (d.Kind == StoreOfferKind.Starter)
                 {
                     for (int h = d.HeroChoices.Count - 1; h >= 0; h--)
@@ -329,6 +401,42 @@ namespace Emberfall.Core.Data
                     }
                     if (d.Milestones.Count == 0) { Offers.RemoveAt(i); continue; }
                 }
+            }
+        }
+
+        /// <summary>R24: one offer per skin the Store sells, derived from skins.json (db.Skins, loaded first), so a skin
+        /// is data only. Priced by rarity (SkinTiers); a skin whose rarity has no tier is not sold. A test skin gets an
+        /// offer too, so a development build proves the whole purchase path, and is unlisted wherever the skin is hidden
+        /// (StoreOffers.Listed). Event skins are not sold: their only way in is a grant (PurchaseGrants.Apply).</summary>
+        private void AddSkinOffers(ContentDatabase db)
+        {
+            for (int i = 0; i < db.Skins.Skins.Count; i++)
+            {
+                SkinDef skin = db.Skins.Skins[i];
+                if (skin.Source == SkinSource.Event) continue;
+                string tier;
+                double eur;
+                if (!SkinTiers.TryGetValue(skin.Rarity, out tier) || !Tiers.TryGetValue(tier, out eur))
+                {
+                    Warnings.Add("store.json: skin '" + skin.Id + "' has rarity '" + skin.Rarity + "' with no price tier and is not sold");
+                    continue;
+                }
+                StoreOfferDef d = new StoreOfferDef();
+                d.Id = "skin_" + skin.Id;
+                if (Offer(d.Id) != null) continue;
+                d.Name = skin.Name;
+                d.Blurb = skin.Blurb.Length > 0 ? skin.Blurb : "A skin for one hero. " + skin.BonusLine() + ", on that hero only.";
+                d.ProductId = "placeholder.emberfall.store." + d.Id;
+                d.Tier = tier;
+                d.PriceEur = eur;
+                d.Kind = StoreOfferKind.Skin;
+                d.Limit = 1;
+                d.Reset = StoreReset.Never;
+                d.Restorable = true;
+                d.Group = "skins";
+                d.SkinId = skin.Id;
+                Build(d);
+                Offers.Add(d);
             }
         }
 

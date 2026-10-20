@@ -45,6 +45,7 @@ namespace Emberfall.UI.Screens
         private const int PickPerPage = 14;
         private const float PickCardWidth = 150f;
         private const float PickCardHeight = 196f;
+        private const int RowsPerPage = 6;   // the list's rows a page: the restore button and the pager sit under them
 
         private Text _headerSubtitle;
         private RectTransform _body;
@@ -65,6 +66,11 @@ namespace Emberfall.UI.Screens
         private string _chosen;
         private Action<string> _pickConfirm;
         private string _pickConfirmLabel = "";
+
+        // the relic picker (a Relic of Choice): rows of named relics instead of a grid of heroes
+        private bool _pickingRelic;
+        private readonly List<StoreChoice> _pickRelics = new List<StoreChoice>();
+        private int _listPage;
 
         private PurchaseService _service;
 
@@ -253,7 +259,13 @@ namespace Emberfall.UI.Screens
                 return;
             }
 
-            if (_picking) { _headerSubtitle.text = "CHOOSE A HERO"; BuildPicker(); return; }
+            if (!_picking) _pickingRelic = false;
+            if (_picking)
+            {
+                _headerSubtitle.text = _pickingRelic ? "CHOOSE A RELIC" : "CHOOSE A HERO";
+                if (_pickingRelic) BuildRelicPicker(); else BuildPicker();
+                return;
+            }
             switch (_tab)
             {
                 case Tab.Pass: _headerSubtitle.text = "WAYFARER'S ROAD  -  FREE AND PAID"; BuildPass(view, now); break;
@@ -549,11 +561,35 @@ namespace Emberfall.UI.Screens
 
         private void BuildPacks(StoreView view, long now)
         {
-            if (view.Offers.Count == 0) return;
-            if (Find(view, _selected) == null) _selected = view.Offers[0].Id;
+            // Skins have their own tab; every other offer is a pack. More offers than the list holds go on pages.
+            List<StoreOfferView> shown = new List<StoreOfferView>();
+            for (int i = 0; i < view.Offers.Count; i++) if (view.Offers[i].Kind != StoreOfferKind.Skin) shown.Add(view.Offers[i]);
+            if (shown.Count == 0) return;
+            int selectedIndex = -1;
+            for (int i = 0; i < shown.Count; i++) if (shown[i].Id == _selected) selectedIndex = i;
+            if (selectedIndex < 0) { _selected = shown[0].Id; selectedIndex = 0; }
+            int pages = Mathf.Max(1, (shown.Count + RowsPerPage - 1) / RowsPerPage);
+            if (_listPage * RowsPerPage > selectedIndex || (_listPage + 1) * RowsPerPage <= selectedIndex) _listPage = selectedIndex / RowsPerPage;
+            _listPage = Mathf.Clamp(_listPage, 0, pages - 1);
 
-            for (int i = 0; i < view.Offers.Count; i++) BuildRow(view.Offers[i], i);
+            int first = _listPage * RowsPerPage;
+            for (int i = first; i < first + RowsPerPage && i < shown.Count; i++) BuildRow(shown[i], i - first);
             BuildDetail(Find(view, _selected), now);
+
+            if (pages > 1)
+            {
+                float pagerY = RowsPerPage * (RowHeight + 8f) + 4f;
+                UIButton prev = EmberforgeUI.Button("PrevList", _body, "<", UITheme.FontTiny, ForgeButtonKind.Secondary);
+                UIBuilder.Box(prev.Root, 0f, -pagerY, 80f, 44f, new Vector2(0f, 1f));
+                prev.Interactable = _listPage > 0;
+                prev.OnClick(delegate { _listPage--; App.Audio.Tap(); _selected = shown[Mathf.Max(0, _listPage * RowsPerPage)].Id; Rebuild(); });
+                Text pageLabel = EmberforgeUI.Label("ListPage", _body, "PAGE " + (_listPage + 1) + " OF " + pages, UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
+                UIBuilder.Box(pageLabel.rectTransform, 90f, -pagerY, ListWidth - 180f, 44f, new Vector2(0f, 1f));
+                UIButton next = EmberforgeUI.Button("NextList", _body, ">", UITheme.FontTiny, ForgeButtonKind.Secondary);
+                UIBuilder.Box(next.Root, ListWidth - 80f, -pagerY, 80f, 44f, new Vector2(0f, 1f));
+                next.Interactable = _listPage < pages - 1;
+                next.OnClick(delegate { _listPage++; App.Audio.Tap(); _selected = shown[Mathf.Min(shown.Count - 1, _listPage * RowsPerPage)].Id; Rebuild(); });
+            }
 
             if (_service != null && _service.Flow != null && _service.Flow.CanBuy)
             {
@@ -659,7 +695,7 @@ namespace Emberfall.UI.Screens
             if (_service != null && _service.Flow != null && _service.Flow.IsPending(o.Id)) { stateText = "WAITING"; tint = Emberforge.TextGold; }
             else if (o.Owned && o.Kind == StoreOfferKind.Ledger) { stateText = o.DaysLeft + (o.DaysLeft == 1 ? " DAY LEFT" : " DAYS LEFT"); tint = UITheme.Success; }
             else if (o.Owned) { stateText = "BOUGHT"; tint = UITheme.Success; }
-            else if (!o.Available) { stateText = StateWord(o.Reason); tint = Emberforge.TextQuiet; }
+            else if (!o.Available) { stateText = o.Reason == StoreRefusal.Locked && o.LockLine.Length > 0 ? o.LockLine : StateWord(o.Reason); tint = Emberforge.TextQuiet; }
             else { stateText = o.PriceLabel; tint = Emberforge.TextGold; }
             RectTransform chip = EmberforgeUI.Chip("State", body, stateText, tint, UITheme.FontTiny - 4);
             UIBuilder.Box(chip, -12f, 0f, 170f, 36f, new Vector2(1f, 0.5f));
@@ -673,6 +709,9 @@ namespace Emberfall.UI.Screens
                 case StoreRefusal.PassInert: return "NEEDS ORDERS";
                 case StoreRefusal.PassClosed: return "NO SEASON";
                 case StoreRefusal.NotOwned: return "NO 5-STAR";
+                case StoreRefusal.AccountCap: return "MONTH FULL";
+                case StoreRefusal.Locked: return "LOCKED";
+                case StoreRefusal.NoPick: return "NOTHING TO PICK";
             }
             return "UNAVAILABLE";
         }
@@ -687,6 +726,8 @@ namespace Emberfall.UI.Screens
                 case StoreOfferKind.Growth: return TextureLab.GemIcon(128);
                 case StoreOfferKind.Pass: return TextureLab.Sigil(3, 128);
                 case StoreOfferKind.Contract: return TextureLab.Swords(128);
+                case StoreOfferKind.RelicChoice: return TextureLab.GemIcon(128);
+                case StoreOfferKind.Skin: return TextureLab.Sigil(2, 128);
             }
             return TextureLab.Sigil(0, 128);
         }
@@ -699,6 +740,8 @@ namespace Emberfall.UI.Screens
                 case StoreOfferKind.Ledger: return UITheme.Gold;
                 case StoreOfferKind.Growth: return UITheme.Shard;
                 case StoreOfferKind.Contract: return UITheme.Ember;
+                case StoreOfferKind.RelicChoice: return UITheme.Mythic;
+                case StoreOfferKind.Skin: return UITheme.Shard;
             }
             return UITheme.Gold;
         }
@@ -799,16 +842,17 @@ namespace Emberfall.UI.Screens
         {
             bool pending = _service != null && _service.Flow != null && _service.Flow.IsPending(o.Id);
             string note = "";
-            if (o.Owned && (o.Kind == StoreOfferKind.Growth || o.Kind == StoreOfferKind.Pass))
+            if (o.Owned && (o.Kind == StoreOfferKind.Growth || o.Kind == StoreOfferKind.Pass || o.Kind == StoreOfferKind.Skin))
             {
-                RectTransform chip = EmberforgeUI.Chip("Bought", pane, o.Kind == StoreOfferKind.Pass ? "PREMIUM ACTIVE THIS SEASON" : "BOUGHT", UITheme.Success, UITheme.FontSmall);
+                RectTransform chip = EmberforgeUI.Chip("Bought", pane, o.Kind == StoreOfferKind.Pass ? "PREMIUM ACTIVE THIS SEASON" : o.Kind == StoreOfferKind.Skin ? "YOURS" : "BOUGHT", UITheme.Success, UITheme.FontSmall);
                 UIBuilder.Box(chip, 28f, 24f, 420f, 60f, new Vector2(0f, 0f));
                 return;
             }
             if (!o.Available && !(o.Kind == StoreOfferKind.Ledger && o.Owned))
             {
                 note = StoreOffers.ReasonText(o.Reason);
-                if (o.Reason == StoreRefusal.SoldOut && o.ResetInSeconds > 0) note += " Back in " + Span(o.ResetInSeconds) + ".";
+                if (o.Reason == StoreRefusal.Locked && o.LockLine.Length > 0) note += " " + o.LockLine + ".";
+                if ((o.Reason == StoreRefusal.SoldOut || o.Reason == StoreRefusal.AccountCap) && o.ResetInSeconds > 0) note += " Back in " + Span(o.ResetInSeconds) + ".";
             }
             else if (o.Kind == StoreOfferKind.Ledger && o.Owned) note = "A card is running. Buy another when it ends.";
             else if (!CanBuy) note = "Coming soon. Purchases open with the store; nothing is charged in this build.";
@@ -824,7 +868,9 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Box(soon, 28f, 24f, 560f, 60f, new Vector2(0f, 0f));
                 return;
             }
-            string label = pending ? "WAITING FOR THE STORE" : o.NeedsChoice ? "CHOOSE A HERO  -  " + o.PriceLabel : "BUY  -  " + o.PriceLabel;
+            string label = pending ? "WAITING FOR THE STORE"
+                         : o.NeedsChoice ? (o.Kind == StoreOfferKind.RelicChoice ? "CHOOSE A RELIC  -  " : "CHOOSE A HERO  -  ") + o.PriceLabel
+                         : "BUY  -  " + o.PriceLabel;
             UIButton buy = EmberforgeUI.Button("Buy", pane, label, UITheme.FontSmall, ForgeButtonKind.Primary);
             UIBuilder.Box(buy.Root, 28f, 24f, 560f, 64f, new Vector2(0f, 0f));
             buy.Interactable = o.Available && !pending;
@@ -855,8 +901,81 @@ namespace Emberfall.UI.Screens
             AfterClaim(r.Success, r.Success ? "+" + HudTopBar.Format(r.Grant.Gold) + " Gold (Sealed), +" + HudTopBar.Format(r.Grant.Dust) + " Relic Dust." : StoreOffers.ReasonText(r.Reason));
         }
 
+        /// <summary>The Relic of Choice's picker: every pick named with what it is worth at the shop, shown before the
+        /// purchase. The list is StoreOffers.View's (RelicPacks.Picks); the screen chooses nothing.</summary>
+        private void OpenRelicPicker(StoreOfferView o)
+        {
+            App.Audio.Tap();
+            _pickRelics.Clear();
+            _pickRelics.AddRange(o.Choices);
+            _pickTitle = o.Name.ToUpperInvariant() + "  -  NAME THE RELIC";
+            _pickNote = "Nothing is drawn: you get the relic you name   -   " + o.PriceLabel;
+            _pickConfirmLabel = "BUY, TAKE ";
+            _pickPage = 0;
+            _chosen = null;
+            _picking = true;
+            _pickingRelic = true;
+            string offerId = o.Id;
+            _pickConfirm = delegate (string relicId) { Buy(offerId, relicId); };
+            Rebuild();
+        }
+
+        private void BuildRelicPicker()
+        {
+            Text prompt = EmberforgeUI.Label("Prompt", _body, _pickTitle, UITheme.FontHeading - 4, Emberforge.TextGold, TextAnchor.UpperCenter);
+            UIBuilder.Box(prompt.rectTransform, 0f, 0f, ContentWidth, 48f, new Vector2(0.5f, 1f));
+            Text note = EmberforgeUI.Label("Note", _body, _pickNote, UITheme.FontTiny, Emberforge.TextBody, TextAnchor.UpperCenter);
+            UIBuilder.Box(note.rectTransform, 0f, -50f, ContentWidth, 30f, new Vector2(0.5f, 1f));
+
+            const int columns = 2;
+            const int rows = 5;
+            const float colWidth = 860f;
+            const float rowHeight = 70f;
+            int perPage = columns * rows;
+            int pages = Mathf.Max(1, (_pickRelics.Count + perPage - 1) / perPage);
+            _pickPage = Mathf.Clamp(_pickPage, 0, pages - 1);
+            int first = _pickPage * perPage;
+            for (int i = first; i < first + perPage && i < _pickRelics.Count; i++)
+            {
+                int slot = i - first;
+                int col = slot / rows, row = slot % rows;
+                StoreChoice c = _pickRelics[i];
+                string id = c.HeroId;
+                ForgeCard card = EmberforgeUI.SelectableCard("Relic_" + id, _body, delegate { App.Audio.Tap(); _chosen = id; Rebuild(); });
+                EmberforgeUI.SetCardSelected(card, _chosen == id);
+                UIBuilder.Box(card.Root, (col - 0.5f) * (colWidth + 20f), -(92f + row * (rowHeight + 8f)), colWidth, rowHeight, new Vector2(0.5f, 1f));
+                Text name = EmberforgeUI.Label("Name", card.Body, c.Name.ToUpperInvariant(), UITheme.FontSmall - 2, Emberforge.TextBody, TextAnchor.UpperLeft);
+                UIBuilder.Box(name.rectTransform, 16f, -6f, colWidth - 32f, 28f, new Vector2(0f, 1f));
+                Text role = EmberforgeUI.Label("Worth", card.Body, c.Role, UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+                UIBuilder.Box(role.rectTransform, 16f, -36f, colWidth - 32f, 24f, new Vector2(0f, 1f));
+            }
+
+            float y = 92f + rows * (rowHeight + 8f) + 20f;
+            UIButton back = EmberforgeUI.Button("Back", _body, "BACK", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIBuilder.Box(back.Root, -380f, -y, 200f, 56f, new Vector2(0.5f, 1f));
+            back.OnClick(delegate { TryStepBack(); });
+            UIButton prev = EmberforgeUI.Button("PrevPick", _body, "<", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIBuilder.Box(prev.Root, -270f, -y, 80f, 56f, new Vector2(0.5f, 1f));
+            prev.Interactable = _pickPage > 0;
+            prev.OnClick(delegate { _pickPage--; App.Audio.Tap(); Rebuild(); });
+            UIButton next = EmberforgeUI.Button("NextPick", _body, ">", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIBuilder.Box(next.Root, -180f, -y, 80f, 56f, new Vector2(0.5f, 1f));
+            next.Interactable = _pickPage < pages - 1;
+            next.OnClick(delegate { _pickPage++; App.Audio.Tap(); Rebuild(); });
+
+            string chosenName = null;
+            for (int i = 0; i < _pickRelics.Count; i++) if (_pickRelics[i].HeroId == _chosen) chosenName = _pickRelics[i].Name.ToUpperInvariant();
+            UIButton confirm = EmberforgeUI.Button("Confirm", _body, chosenName == null ? "CHOOSE A RELIC" : _pickConfirmLabel + chosenName, UITheme.FontSmall, ForgeButtonKind.Primary);
+            UIBuilder.Box(confirm.Root, 190f, -y, 760f, 56f, new Vector2(0.5f, 1f));
+            confirm.Interactable = chosenName != null;
+            string pick = _chosen;
+            Action<string> action = _pickConfirm;
+            confirm.OnClick(delegate { if (action != null) action(pick); });
+        }
+
         private void OpenOfferPicker(StoreOfferView o)
         {
+            if (o.Kind == StoreOfferKind.RelicChoice) { OpenRelicPicker(o); return; }
             App.Audio.Tap();
             _pickHeroes.Clear();
             for (int i = 0; i < o.Choices.Count; i++)

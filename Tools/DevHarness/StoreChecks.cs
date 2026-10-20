@@ -35,7 +35,7 @@ namespace Emberfall.DevHarness
             Line("");
             Line("STORE (R19: a purchase grants fixed Sealed goods once per receipt, writes nothing until the store completes it, and reaches no random mechanic)");
             bool shipped = StoreSwitch.Enabled, contractShipped = HeroContractSwitch.Enabled;
-            Check(shipped && !contractShipped, "SHIPPED: StoreSwitch is ON unless the build defines EMBERFALL_STORE_OFF, and HeroContractSwitch is OFF unless it defines EMBERFALL_HERO_CONTRACT");
+            Check(shipped && contractShipped, "SHIPPED: StoreSwitch is ON unless the build defines EMBERFALL_STORE_OFF, and HeroContractSwitch is ON (R24) unless it defines EMBERFALL_HERO_CONTRACT_OFF");
             try
             {
                 StoreSwitch.Enabled = true;
@@ -583,7 +583,7 @@ namespace Emberfall.DevHarness
             Check(back != null && error == null && SaveSerializer.Serialize(back) == json && back.Store.Receipts.Count == 2 && back.Store.FindReceipt("receipt-V1") != null
                   && back.Store.Record("starter").Count == 1 && back.WayfarersRoad.PaidSeason == 5,
                   "STORE SAVE ROUND TRIP: two receipts, a counter and a bought pass save, load back identical and save again byte for byte (" + json.Length + " characters)");
-            Check(JsonValue.Parse(json).GetInt("version", 0) == 25 && SaveSerializer.VersionOfJson(json) == 25 && SaveSerializer.CurrentVersion == 25 && json.Contains("\"store\"") && json.Contains("\"paid\""),
+            Check(JsonValue.Parse(json).GetInt("version", 0) == 25 && SaveSerializer.VersionOfJson(json) == 25 && SaveSerializer.StoreVersion == 25 && SaveSerializer.CurrentVersion >= 25 && json.Contains("\"store\"") && json.Contains("\"paid\""),
                   "and the document claims version 25, the version that holds the store");
 
             // Sealed goods alone stay 24; the store alone, or a bought track alone, is 25.
@@ -969,7 +969,8 @@ namespace Emberfall.DevHarness
         private static void CheckStoreRealContract(ContentDatabase db)
         {
             long monday = OfferMonday(db);
-            GameSession s = StoreRealSession(db, monday);
+            GameSession s = OfferSession(db, 4);   // the contract opens at 4-1 (store.json requiresStage)
+            StoreOffers.Bind(s);
             PurchaseLedger ledger = new PurchaseLedger(StoreRules.Shared);
             string a = db.Store.Offer("starter_pact").HeroChoices[0], b = db.Store.Offer("starter_pact").HeroChoices[1];
             s.GrantHeroDirect(db.GetHero(a), monday);
@@ -1064,7 +1065,7 @@ namespace Emberfall.DevHarness
         private static void CheckStoreNoRandomPath(string contentDir)
         {
             string[] kinds = Enum.GetNames(typeof(GrantKind));
-            string expected = "Gold,Slag,Dust,DustSweeps,IdleGoldHours,HeroCopy,HeroChoice,OwnedHeroCopy,PassPremium,Activate";
+            string expected = "Gold,Slag,Dust,DustSweeps,IdleGoldHours,HeroCopy,HeroChoice,OwnedHeroCopy,PassPremium,Activate,RelicChoice,Skin";   // R24 appended RelicChoice and Skin: both fixed, both reviewed
             Check(string.Join(",", kinds) == expected,
                   "THE GRANT KINDS ARE A CLOSED LIST OF FIXED LINES (" + string.Join(", ", kinds) + "): adding one is a decision for review, and none rolls, draws or summons");
 

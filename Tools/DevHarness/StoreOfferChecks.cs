@@ -598,7 +598,7 @@ namespace Emberfall.DevHarness
         private static void CheckOfferHeroContract(ContentDatabase db)
         {
             long now = OfferMonday(db);
-            GameSession s = OfferSession(db, 2);
+            GameSession s = OfferSession(db, 4);   // the contract opens at 4-1 (store.json requiresStage)
             string hero = db.Store.Offer("starter_pact").HeroChoices[0];
             s.GrantHeroDirect(db.GetHero(hero), now);
 
@@ -609,7 +609,7 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < off.Offers.Count; i++) if (off.Offers[i].Id == "hero_contract") listed = true;
             Check(!HeroContractSwitch.Enabled && !listed && StoreOffers.Check(s, "hero_contract", hero, now) == StoreRefusal.Unknown
                   && !StoreOffers.Fulfil(s, "hero_contract", hero, now).Success && OfferSnapshot(s) == before,
-                  "THE HERO CONTRACT IS OFF BY DEFAULT: with its define off it is not listed, cannot be bought and writes nothing");
+                  "THE HERO CONTRACT SWITCH OFF IS THE ROLLBACK: it is not listed, cannot be bought and writes nothing");
 
             HeroContractSwitch.Enabled = true;
             try

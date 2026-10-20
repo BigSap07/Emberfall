@@ -35,7 +35,15 @@ namespace Emberfall.Core.Data
         PassPremium,
         /// <summary>Grants nothing now. Starts an offer whose payouts come later (Ember Ledger, Growth
         /// Fund); each payout is granted through PurchaseGrants.Apply, so it is Sealed too.</summary>
-        Activate
+        Activate,
+        /// <summary>R24. One relic the buyer NAMES from a list shown in full before purchase (RelicPacks.Picks): a relic
+        /// they do not own is added at tier 1, an owned one below the top tier is raised one tier. Both are what the
+        /// Relic Shop sells for Relic Dust; nothing is drawn. Amount is the most Dust a pick may be worth at the shop
+        /// (0 for no cap). No random mechanic can consume a relic.</summary>
+        RelicChoice,
+        /// <summary>R24. The fixed hero skin SkinId, owned by the buyer. A look and a small stat bonus on that hero only
+        /// (SkinsConfig). No random mechanic can consume a skin.</summary>
+        Skin
     }
 
     /// <summary>One line of a grant. Plain data, filled from store.json.</summary>
@@ -46,6 +54,8 @@ namespace Emberfall.Core.Data
         public string HeroId = "";
         public List<string> HeroIds = new List<string>();
         public int Stars;
+        /// <summary>Skin only: the fixed skin the grant gives.</summary>
+        public string SkinId = "";
 
         public GrantItem() { }
 
@@ -58,7 +68,7 @@ namespace Emberfall.Core.Data
         /// <summary>True when the buyer must name a hero for this line.</summary>
         public bool NeedsChoice
         {
-            get { return Kind == GrantKind.HeroChoice || Kind == GrantKind.OwnedHeroCopy; }
+            get { return Kind == GrantKind.HeroChoice || Kind == GrantKind.OwnedHeroCopy || Kind == GrantKind.RelicChoice; }
         }
     }
 
@@ -115,6 +125,13 @@ namespace Emberfall.Core.Data
                     case GrantKind.OwnedHeroCopy:
                         choices++;
                         if (it.Stars < 1) return "OwnedHeroCopy needs a star count";
+                        break;
+                    case GrantKind.RelicChoice:
+                        choices++;
+                        break;
+                    case GrantKind.Skin:
+                        if (string.IsNullOrEmpty(it.SkinId)) return "Skin names no skin";
+                        if (db != null && db.Skins.Skin(it.SkinId) == null) return "Skin names no skin (" + it.SkinId + ")";
                         break;
                     case GrantKind.PassPremium:
                     case GrantKind.Activate:

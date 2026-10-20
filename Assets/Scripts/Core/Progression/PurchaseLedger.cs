@@ -136,7 +136,7 @@ namespace Emberfall.Core.Progression
             if (offer.Grant.NeedsChoice && !ChoiceIsValid(session, offer, choiceHeroId))
             {
                 r.Reason = PurchaseRefusal.BadChoice;
-                r.Message = "Pick a hero first.";
+                r.Message = PickWords(offer);
                 return r;
             }
             _pending[offerId] = choiceHeroId ?? "";
@@ -221,7 +221,7 @@ namespace Emberfall.Core.Progression
             if (offer.Grant.NeedsChoice && !ChoiceIsValid(session, offer, choiceHeroId))
             {
                 r.Reason = PurchaseRefusal.BadChoice;
-                r.Message = "Pick a hero first.";
+                r.Message = PickWords(offer);
                 return r;
             }
 
@@ -247,12 +247,21 @@ namespace Emberfall.Core.Progression
             return r;
         }
 
+        /// <summary>What a refused pick says: "Pick a relic first." for a Relic of Choice, "Pick a hero first." otherwise.</summary>
+        private static string PickWords(StoreOffer offer)
+        {
+            for (int i = 0; i < offer.Grant.Items.Count; i++)
+                if (offer.Grant.Items[i].Kind == GrantKind.RelicChoice) return "Pick a relic first.";
+            return "Pick a hero first.";
+        }
+
         private static bool ChoiceIsValid(GameSession session, StoreOffer offer, string heroId)
         {
             if (string.IsNullOrEmpty(heroId)) return false;
             for (int i = 0; i < offer.Grant.Items.Count; i++)
             {
                 GrantItem it = offer.Grant.Items[i];
+                if (it.Kind == GrantKind.RelicChoice) return RelicPacks.Find(session, heroId, (int)it.Amount) != null;
                 if (it.Kind == GrantKind.HeroChoice) return it.HeroIds.Contains(heroId);
                 if (it.Kind == GrantKind.OwnedHeroCopy)
                 {
