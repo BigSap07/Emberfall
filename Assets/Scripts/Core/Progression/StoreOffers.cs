@@ -44,7 +44,9 @@ namespace Emberfall.Core.Progression
         /// <summary>A Relic of Choice with nothing to pick: every relic owned at its top tier (R24).</summary>
         NoPick,
         /// <summary>A skin the buyer already owns (R24).</summary>
-        AlreadyOwned
+        AlreadyOwned,
+        /// <summary>The track and the pack of a live event stop selling an hour before the event ends (R24).</summary>
+        SalesClosed
     }
 
     /// <summary>A hero an offer may give.</summary>
@@ -162,6 +164,12 @@ namespace Emberfall.Core.Progression
     /// instance; it holds no state, everything it knows is in the session's profile and content.</summary>
     public sealed class StoreRules : IStoreRules
     {
+        /// <summary>
+        /// ASKED ONCE, BY PurchaseLedger.Begin, AND IT HAS A SIDE EFFECT: when the purchase is allowed it calls
+        /// StoreOffers.OnBegin, which remembers (in memory only) the event an event offer was begun for, so a payment
+        /// that lands after the period turned over is delivered against it. Nothing may poll this to ask "could it be
+        /// bought"; the reads for that are StoreOffers.Check and StoreOffers.CheckAny, which write nothing.
+        /// </summary>
         public bool CanBuy(GameSession session, string offerId, string choiceHeroId, long nowUnix, out string reason)
         {
             // With a pick the rules check that pick (the Hero Contract's limit is per hero); without one, any.
@@ -520,6 +528,7 @@ namespace Emberfall.Core.Progression
                 case StoreRefusal.Locked: return "Not open yet.";
                 case StoreRefusal.NoPick: return "Every relic you own is at its top tier.";
                 case StoreRefusal.AlreadyOwned: return "You already own this skin.";
+                case StoreRefusal.SalesClosed: return "Sales for this event are closed: they close 1 hour before the end.";
             }
             return "";
         }

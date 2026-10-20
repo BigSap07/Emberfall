@@ -212,7 +212,7 @@ namespace Emberfall.UI.Screens
             Text trackBody = EmberforgeUI.Body("TrackBody", summary, string.Join("\n", v.TrackLines.ToArray()), UITheme.FontTiny - 6,
                                                Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(trackBody.rectTransform, 750f, -42f, 480f, 70f, TopLeft);
-            BuyOrOwned(summary, v.TrackOfferId, v.TrackPrice, "BUY EVENT TRACK", v.TrackOwned, v.TrackCanBuy, "TRACK ACTIVE", 750f, -112f, 320f);
+            BuyOrOwned(summary, v.TrackOfferId, v.TrackPrice, "BUY EVENT TRACK", v.TrackOwned, v.TrackCanBuy, "TRACK ACTIVE", v.SalesClosed, 750f, -112f, 320f);
 
             // ---- the event pack: its name, its price, its fixed contents in full, one button
             Text packTitle = EmberforgeUI.Title("PackTitle", summary, v.PackOfferId.Length > 0 ? v.PackName.ToUpperInvariant() + "  -  " + v.PackPrice : "EVENT PACK",
@@ -222,10 +222,10 @@ namespace Emberfall.UI.Screens
                                               UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(packBody.rectTransform, 1260f, -42f, 480f, 70f, TopLeft);
             if (v.PackOfferId.Length > 0)
-                BuyOrOwned(summary, v.PackOfferId, v.PackPrice, "BUY EVENT PACK", v.PackOwned, v.PackCanBuy, "PACK BOUGHT", 1260f, -112f, 320f);
+                BuyOrOwned(summary, v.PackOfferId, v.PackPrice, "BUY EVENT PACK", v.PackOwned, v.PackCanBuy, "PACK BOUGHT", v.SalesClosed, 1260f, -112f, 320f);
         }
 
-        private void BuyOrOwned(RectTransform parent, string offerId, string price, string label, bool owned, bool canBuy, string ownedLabel, float x, float y, float w)
+        private void BuyOrOwned(RectTransform parent, string offerId, string price, string label, bool owned, bool canBuy, string ownedLabel, bool closed, float x, float y, float w)
         {
             if (offerId.Length == 0)
             {
@@ -240,7 +240,7 @@ namespace Emberfall.UI.Screens
                 return;
             }
             bool pending = _service != null && _service.Flow != null && _service.Flow.IsPending(offerId);
-            string text = !CanBuy ? "COMING SOON  -  " + price : pending ? "WAITING FOR THE STORE" : label + "  -  " + price;
+            string text = closed ? "SALES CLOSED  -  THE EVENT ENDS SOON" : !CanBuy ? "COMING SOON  -  " + price : pending ? "WAITING FOR THE STORE" : label + "  -  " + price;
             UIButton b = EmberforgeUI.Button("Buy_" + offerId, parent, text, UITheme.FontTiny - 4, ForgeButtonKind.Primary);
             UIBuilder.Box(b.Root, x, y, w, 36f, TopLeft);
             b.Interactable = CanBuy && canBuy && !pending;

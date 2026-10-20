@@ -47,6 +47,7 @@ namespace Emberfall.DevHarness
                 CheckLivePurchasePath(db);
                 CheckLivePaymentInFlight(db);
                 CheckLiveFreeSkin(db);
+                CheckLiveSalesCutoff(db);
                 CheckLiveSealedAndRefused(db);
                 CheckLiveRollover(db);
                 CheckLiveWoundBack(db);
@@ -211,6 +212,29 @@ namespace Emberfall.DevHarness
             wQuestKinds = kinds.Contains(EventQuestKind.Stage) && kinds.Contains(EventQuestKind.AspectWin) && kinds.Contains(EventQuestKind.SpendGold)
                           && kinds.Contains(EventQuestKind.ClaimOrder) && kinds.Contains(EventQuestKind.Proving);
             Check(wQuestKinds, "the weekly quests cover clearing stages, winning with the aspect, spending Gold, claiming orders and the Proving");
+
+            // A payment delivered after a restart has no memory of the event it was begun for (LiveEvents.DeliveryOf), so the events
+            // of one slot must hold the same pack contents and the same paid track totals: what the card showed is then what lands.
+            bool equalPacks = true;
+            foreach (LiveEventSlot slot in new[] { LiveEventSlot.Weekly, LiveEventSlot.Monthly })
+            {
+                double hours = -1.0, sweeps = -1.0, paidHours = -1.0, paidSweeps = -1.0, paidSlag = -1.0;
+                for (int i = 0; i < c.Events.Count; i++)
+                {
+                    LiveEventDef e = c.Events[i];
+                    if (e.Slot != slot) continue;
+                    double ph = 0.0, ps = 0.0, pg = 0.0;
+                    for (int t = 0; t < e.Tiers.Count; t++)
+                    {
+                        EventRewardDef r = e.Tiers[t].Paid;
+                        if (r == null) continue;
+                        if (r.Kind == EventRewardKind.Hourglass) ph += r.Amount; else if (r.Kind == EventRewardKind.Dust) ps += r.Amount; else pg += r.Amount;
+                    }
+                    if (hours < 0.0) { hours = e.Pack.Hours; sweeps = e.Pack.DustSweeps; paidHours = ph; paidSweeps = ps; paidSlag = pg; }
+                    else if (e.Pack.Hours != hours || e.Pack.DustSweeps != sweeps || ph != paidHours || ps != paidSweeps || pg != paidSlag) equalPacks = false;
+                }
+            }
+            Check(equalPacks, "THE EVENTS OF A SLOT HOLD THE SAME PACK AND THE SAME PAID TRACK TOTALS, so a payment delivered after a restart lands exactly what its card showed");
 
             // The store sells them: four offers, the right prices, kind event.
             string[] ids = { "event_track_weekly", "event_track_monthly", "event_pack_weekly", "event_pack_monthly" };
@@ -762,6 +786,71 @@ namespace Emberfall.DevHarness
             {
                 SkinsConfig.TestVisible = testWas;
             }
+        }
+
+        // ------------------------------------------------------------------ 5d. sales close an hour before the end
+
+        private static void CheckLiveSalesCutoff(ContentDatabase db)
+        {
+            ContentDatabase d = LiveDb(LiveTestJson(db));
+            long t0 = LiveT0(d);
+            long w0 = LiveEvents.PeriodOf(LiveSession(d), LiveEventSlot.Weekly, t0);
+            long weekEnd = LiveWeekStart(d, w0 + 1);
+            long monthEnd = LiveMonthStart(d, 101);
+            Check(LiveEvents.SalesCloseSeconds == 3600L, "sales close " + LiveEvents.SalesCloseSeconds + " seconds (1 hour) before the end of the period");
+
+            // ---- exactly one hour before the end the offers are still for sale; one second later they are not
+            GameSession open = LiveSession(d);
+            Check(LiveEvents.PurchaseRefusal(open, LiveEventSlot.Weekly, LiveEventPart.Track, weekEnd - 3600L) == StoreRefusal.None
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Weekly, LiveEventPart.Pack, weekEnd - 3600L) == StoreRefusal.None
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Monthly, LiveEventPart.Track, monthEnd - 3600L) == StoreRefusal.None
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Monthly, LiveEventPart.Pack, monthEnd - 3600L) == StoreRefusal.None,
+                  "AN HOUR BEFORE THE END the track and the pack of both slots are still for sale");
+            Check(LiveEvents.PurchaseRefusal(open, LiveEventSlot.Weekly, LiveEventPart.Track, weekEnd - 3599L) == StoreRefusal.SalesClosed
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Weekly, LiveEventPart.Pack, weekEnd - 1L) == StoreRefusal.SalesClosed
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Monthly, LiveEventPart.Track, monthEnd - 3599L) == StoreRefusal.SalesClosed
+                  && LiveEvents.PurchaseRefusal(open, LiveEventSlot.Monthly, LiveEventPart.Pack, monthEnd - 1L) == StoreRefusal.SalesClosed,
+                  "IN THE LAST HOUR every track and pack is refused SalesClosed, on the first second of it and on the last");
+
+            // ---- a hard stop at Begin: the ledger refuses, nothing is remembered, nothing is written
+            GameSession late = LiveSession(d);
+            StoreOffers.Bind(late);
+            PurchaseLedger ledger = new PurchaseLedger(StoreRules.Shared);
+            string pristine = LiveSnapshot(late);
+            PurchaseResult refused = ledger.Begin(late, "event_pack_weekly", null, weekEnd - 600L);
+            Check(!refused.Success && refused.Reason == PurchaseRefusal.NotAvailable && refused.Message.Contains("closed") && late.Profile.LiveEvents.Pending.Count == 0 && LiveSnapshot(late) == pristine,
+                  "A HARD STOP AT BEGIN: the purchase is refused with \"" + refused.Message + "\", the event is not remembered and nothing is written");
+            StoreFulfilment direct = StoreOffers.Fulfil(late, "event_track_weekly", null, weekEnd - 600L);
+            Check(!direct.Success && direct.Reason == StoreRefusal.SalesClosed && LiveSnapshot(late) == pristine, "and so is the direct fulfilment");
+            PurchaseResult allowed = ledger.Begin(late, "event_pack_weekly", null, weekEnd - 3600L);
+            Check(allowed.Success && late.Profile.LiveEvents.Pending.Count == 1, "while at the last open second Begin goes through and remembers the event");
+            ledger.Abandon("event_pack_weekly");
+
+            // ---- the card says so, in words, and the view closes the buy
+            LiveEventView closed = LiveEvents.View(LiveSession(d), LiveEventSlot.Weekly, weekEnd - 600L);
+            LiveEventView before = LiveEvents.View(LiveSession(d), LiveEventSlot.Weekly, weekEnd - 4000L);
+            Check(closed.SalesClosed && !closed.TrackCanBuy && !closed.PackCanBuy && !before.SalesClosed && before.TrackCanBuy && before.PackCanBuy
+                  && closed.PackLines[closed.PackLines.Count - 1].Contains("Sales close 1 hour before the end") && closed.TrackLines[closed.TrackLines.Count - 1].Contains("Sales close 1 hour before the end"),
+                  "THE CARD SAYS \"Sales close 1 hour before the end\" on the track and the pack, and in the last hour the view closes both buys");
+            Check(StoreOffers.ReasonText(StoreRefusal.SalesClosed).Contains("1 hour"), "the refusal has a plain sentence (" + StoreOffers.ReasonText(StoreRefusal.SalesClosed) + ")");
+
+            // ---- the last hour still lets a player earn and claim: only the sale stops
+            GameSession earner = LiveSession(d);
+            LiveEvents.Record(earner, EventQuestKind.Stage, 1, weekEnd - 1800L);
+            LiveResult claim = LiveEvents.ClaimQuest(earner, LiveEventSlot.Weekly, "q_stage", weekEnd - 1700L);
+            Check(claim.Success && earner.Profile.LiveEvents.Weekly.Points == 5, "THE LAST HOUR STILL COUNTS AND PAYS: quests are counted and claimed, only the sale is closed");
+
+            // ---- and the new period opens it again
+            Check(LiveEvents.PurchaseRefusal(LiveSession(d), LiveEventSlot.Weekly, LiveEventPart.Track, weekEnd + 5L) == StoreRefusal.None, "the next period sells again from its first second");
+
+            // ---- a payment begun just before the cut-off and delivered after the turnover is still delivered (the slow-store case)
+            GameSession slow = LiveSession(d);
+            StoreOffers.Bind(slow);
+            PurchaseLedger slowLedger = new PurchaseLedger(StoreRules.Shared);
+            slowLedger.Begin(slow, "event_pack_weekly", null, weekEnd - 3600L);
+            long gold = slow.Profile.Sealed.Gold;
+            PurchaseResult delivered = slowLedger.Complete(slow, "event_pack_weekly", "cutoff-1", weekEnd + 30L);
+            Check(delivered.Success && delivered.CanConfirm && slow.Profile.Sealed.Gold - gold == slow.IdleYield(12 * 3600L).Gold, "A SLOW STORE: a payment begun at the last open second and delivered after the turnover is still delivered in full");
         }
 
         // ------------------------------------------------------------------ 6. Sealed and refused by every random path

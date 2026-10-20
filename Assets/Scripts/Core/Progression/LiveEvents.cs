@@ -94,6 +94,8 @@ namespace Emberfall.Core.Progression
         public string TrackOfferId = "";
         public string TrackPrice = "";
         public bool TrackCanBuy;
+        /// <summary>True in the last hour of the period: the track and the pack are no longer sold (LiveEvents.SalesCloseSeconds).</summary>
+        public bool SalesClosed;
         public string PackOfferId = "";
         public string PackName = "";
         public string PackBlurb = "";
@@ -131,6 +133,11 @@ namespace Emberfall.Core.Progression
     /// </summary>
     public static class LiveEvents
     {
+        /// <summary>The track and the pack of an event stop selling this long before the event's period ends, so a payment
+        /// that lands after the turnover (LiveEvents.DeliveryOf, the stale path) can only come from a genuinely slow store,
+        /// and buying at the last second is no timing trick. A hard stop at Begin: PurchaseRefusal answers SalesClosed.</summary>
+        public const long SalesCloseSeconds = 3600L;
+
         public static bool Active(GameSession session)
         {
             return LiveEventsSwitch.Enabled && session != null && session.Content.LiveEvents.IsUsable;
@@ -455,6 +462,12 @@ namespace Emberfall.Core.Progression
 
         // ------------------------------------------------------------------ what is sold
 
+        /// <summary>True in the last SalesCloseSeconds of the period the state belongs to.</summary>
+        private static bool SalesClosed(GameSession session, LiveEventSlot slot, LiveEventSlotState st, long nowUnix)
+        {
+            return PeriodEndUnix(session, slot, st.Period) - nowUnix < SalesCloseSeconds;
+        }
+
         /// <summary>Why the track or the pack of a slot cannot be bought now, in the Store's own words. None means
         /// it can. Reads, writes nothing.</summary>
         public static StoreRefusal PurchaseRefusal(GameSession session, LiveEventSlot slot, LiveEventPart part, long nowUnix)
@@ -466,9 +479,11 @@ namespace Emberfall.Core.Progression
             if (part == LiveEventPart.Pack)
             {
                 if (ev.Pack == null) return StoreRefusal.NoEvent;
-                return st.PackBought ? StoreRefusal.SoldOut : StoreRefusal.None;
+                if (st.PackBought) return StoreRefusal.SoldOut;
             }
-            return st.TrackBought ? StoreRefusal.SoldOut : StoreRefusal.None;
+            else if (st.TrackBought) return StoreRefusal.SoldOut;
+            if (SalesClosed(session, slot, st, nowUnix)) return StoreRefusal.SalesClosed;
+            return StoreRefusal.None;
         }
 
         // ------------------------------------------------------------------ delivering a payment
@@ -717,14 +732,15 @@ namespace Emberfall.Core.Progression
             if (hours > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.IdleGoldHours, hours), session) + " (Sealed)");
             if (sweeps > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.DustSweeps, sweeps), session));
             if (slag > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.Slag, slag), session) + " (Sealed)");
-            v.TrackLines.Add("Paid out tier by tier as you earn points. Nothing in it is random.");
+            v.TrackLines.Add("Paid out tier by tier as you earn points. Nothing in it is random. Sales close 1 hour before the end.");
+            v.SalesClosed = SalesClosed(session, slot, st, nowUnix);
 
             StoreOfferDef track = OfferOf(session, slot, LiveEventPart.Track);
             if (track != null && StoreSwitch.Enabled && session.Content.Store.IsUsable)
             {
                 v.TrackOfferId = track.Id;
                 v.TrackPrice = StoreConfig.Eur(track.PriceEur);
-                v.TrackCanBuy = !st.TrackBought;
+                v.TrackCanBuy = !st.TrackBought && !v.SalesClosed;
             }
             StoreOfferDef pack = OfferOf(session, slot, LiveEventPart.Pack);
             if (pack != null && ev.Pack != null && StoreSwitch.Enabled && session.Content.Store.IsUsable)
@@ -733,12 +749,12 @@ namespace Emberfall.Core.Progression
                 v.PackName = ev.Pack.Name;
                 v.PackBlurb = ev.Pack.Blurb;
                 v.PackPrice = StoreConfig.Eur(pack.PriceEur);
-                v.PackCanBuy = !st.PackBought;
+                v.PackCanBuy = !st.PackBought && !v.SalesClosed;
                 if (ev.Pack.Hours > 0.0)
                     v.PackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.IdleGoldHours, ev.Pack.Hours), session) + " (Sealed)");
                 if (ev.Pack.DustSweeps > 0.0)
                     v.PackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.DustSweeps, ev.Pack.DustSweeps), session));
-                v.PackLines.Add("Once for this event. Nothing in it is random.");
+                v.PackLines.Add("Once for this event. Nothing in it is random. Sales close 1 hour before the end.");
             }
             v.AnythingToClaim = SlotHasClaim(session, slot, nowUnix);
             return v;
