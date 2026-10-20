@@ -1287,7 +1287,7 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
   active player's save becomes 26: `save_limits_26.sql` must be applied before this build reaches a
   cloud player.
 - **The whale curve** (`R24WhaleCurve.cs`, opt-in, 60 walks): from 4-12 on a whale who buys everything
-  leads a non-spender by under 5 percent at every wall and every wall still binds; the whale spends
+  leads a non-spender by under 6 percent at every wall and every wall still binds; the whale spends
   about EUR 289 a month (EUR 34 for the R19 spender), skins one-time on top. The handoff folder holds
   whale-curve.md and offer-values.md.
 
