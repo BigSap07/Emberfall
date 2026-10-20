@@ -51,14 +51,18 @@ namespace Emberfall.DevHarness
         /// road and claim the paid track. Called by the walk before it claims the idle chest.</summary>
         private static void StoreSpenderStep(ContentDatabase db, GameSession s, long now)
         {
-            if (_walkStoreMode < 2) return;
+            if (_walkStoreMode < 1) return;
+            // the control buys nothing; the whale study (R24WhaleCurve.cs) still lets it spend its own Dust on relics
+            WhaleFreeEvents(db, s, now);
+            if (_walkStoreMode < 2) { WhaleRelicStep(db, s, now); return; }
             bool storeWas = StoreSwitch.Enabled, loopWas = DailyLoopSwitch.Enabled, roadWas = WayfarersRoadSwitch.Enabled, contractWas = HeroContractSwitch.Enabled;
             try
             {
                 StoreSwitch.Enabled = true;
                 DailyLoopSwitch.Enabled = true;
                 WayfarersRoadSwitch.Enabled = true;
-                HeroContractSwitch.Enabled = _walkStoreMode == 3;
+                HeroContractSwitch.Enabled = _walkStoreMode >= 3;
+                long dustBefore = s.Profile.RelicDust;
                 StoreOffers.ClaimLedger(s, now);
                 StoreOfferDef growth = db.Store.Offer("growth_fund");
                 for (int i = 0; growth != null && i < growth.Milestones.Count; i++) StoreOffers.ClaimGrowth(s, i, now);
@@ -67,7 +71,7 @@ namespace Emberfall.DevHarness
                 {
                     string id = SpenderOrder[k];
                     string choice = id == "starter_pact" ? db.Store.Offer(id).HeroChoices[0] : null;
-                    if (StoreOffers.Check(s, id, choice, now) == StoreRefusal.None) StoreOffers.Fulfil(s, id, choice, now);
+                    if (StoreOffers.Check(s, id, choice, now) == StoreRefusal.None && StoreOffers.Fulfil(s, id, choice, now).Success) WhaleNoteBought(db, id, now);
                 }
 
                 if (_walkStoreMode == 3)
@@ -89,6 +93,11 @@ namespace Emberfall.DevHarness
                         WayfarersRoad.ClaimPaid(s, p.Tier, hero, now);
                     }
                 }
+
+                // R24 whale study: the mode-4 buyer's extra shopping, the Dust every purchase put in the purse, and the relic policy
+                if (_walkStoreMode == 4) WhaleStep(db, s, now);
+                WhaleNoteDust(now, s.Profile.RelicDust - dustBefore);
+                WhaleRelicStep(db, s, now);
             }
             finally
             {
