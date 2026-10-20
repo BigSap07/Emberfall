@@ -2632,9 +2632,18 @@ namespace Emberfall.EditorTools
                 Debug.LogWarning("PlayModeScreenshot: no Kael or no test skin to seed.");
                 return;
             }
-            GrantItem item = new GrantItem(GrantKind.Skin, 0);
-            item.SkinId = skin.Id;
-            PurchaseGrants.Apply(session, new PurchaseGrant().Add(item), null, TimeUtil.NowUnix());
+            // Bought through the debug store like any skin (the grant path is the ledger's alone), then worn.
+            StoreOffers.Bind(session);
+            PurchaseService.ForceDebugStore = true;
+            PurchaseService.DebugAccountPath = Path.Combine(Path.GetTempPath(), "emberfall-capture-skin-account-" + DateTime.UtcNow.Ticks + ".json");
+            if (PurchaseService.Instance == null)
+            {
+                List<StoreOffer> offers = new List<StoreOffer>();
+                for (int i = 0; i < session.Content.Store.Offers.Count; i++) offers.Add(session.Content.Store.Offers[i].Built);
+                PurchaseService.Ensure(StoreRules.Shared, offers);
+            }
+            if (PurchaseService.Instance != null && PurchaseService.Instance.DebugStore != null) PurchaseService.Instance.DebugStore.DelaySeconds = 0.05;
+            StoreBuy(app, "skin_" + skin.Id, "");
             HeroSkins.Equip(session, kael, skin.Id);
             app.RefreshHud();
             Debug.Log("PlayModeScreenshot: Kael wears " + skin.Name + " (" + skin.BonusLine() + ")");

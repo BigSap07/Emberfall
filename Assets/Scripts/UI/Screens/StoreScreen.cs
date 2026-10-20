@@ -1041,21 +1041,24 @@ namespace Emberfall.UI.Screens
 
             float y = 92f + rows * (rowHeight + 8f) + 20f;
             UIButton back = EmberforgeUI.Button("Back", _body, "BACK", UITheme.FontSmall, ForgeButtonKind.Secondary);
-            UIBuilder.Box(back.Root, -380f, -y, 200f, 56f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(back.Root, -560f, -y, 200f, 56f, new Vector2(0.5f, 1f));
             back.OnClick(delegate { TryStepBack(); });
-            UIButton prev = EmberforgeUI.Button("PrevPick", _body, "<", UITheme.FontSmall, ForgeButtonKind.Secondary);
-            UIBuilder.Box(prev.Root, -270f, -y, 80f, 56f, new Vector2(0.5f, 1f));
-            prev.Interactable = _pickPage > 0;
-            prev.OnClick(delegate { _pickPage--; App.Audio.Tap(); Rebuild(); });
-            UIButton next = EmberforgeUI.Button("NextPick", _body, ">", UITheme.FontSmall, ForgeButtonKind.Secondary);
-            UIBuilder.Box(next.Root, -180f, -y, 80f, 56f, new Vector2(0.5f, 1f));
-            next.Interactable = _pickPage < pages - 1;
-            next.OnClick(delegate { _pickPage++; App.Audio.Tap(); Rebuild(); });
+            if (pages > 1)
+            {
+                UIButton prev = EmberforgeUI.Button("PrevPick", _body, "<", UITheme.FontSmall, ForgeButtonKind.Secondary);
+                UIBuilder.Box(prev.Root, -440f, -y, 80f, 56f, new Vector2(0.5f, 1f));
+                prev.Interactable = _pickPage > 0;
+                prev.OnClick(delegate { _pickPage--; App.Audio.Tap(); Rebuild(); });
+                UIButton next = EmberforgeUI.Button("NextPick", _body, ">", UITheme.FontSmall, ForgeButtonKind.Secondary);
+                UIBuilder.Box(next.Root, -350f, -y, 80f, 56f, new Vector2(0.5f, 1f));
+                next.Interactable = _pickPage < pages - 1;
+                next.OnClick(delegate { _pickPage++; App.Audio.Tap(); Rebuild(); });
+            }
 
             string chosenName = null;
             for (int i = 0; i < _pickRelics.Count; i++) if (_pickRelics[i].HeroId == _chosen) chosenName = _pickRelics[i].Name.ToUpperInvariant();
             UIButton confirm = EmberforgeUI.Button("Confirm", _body, chosenName == null ? "CHOOSE A RELIC" : _pickConfirmLabel + chosenName, UITheme.FontSmall, ForgeButtonKind.Primary);
-            UIBuilder.Box(confirm.Root, 190f, -y, 760f, 56f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(confirm.Root, 120f, -y, 760f, 56f, new Vector2(0.5f, 1f));
             confirm.Interactable = chosenName != null;
             string pick = _chosen;
             Action<string> action = _pickConfirm;

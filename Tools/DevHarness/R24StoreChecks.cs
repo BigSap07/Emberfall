@@ -101,8 +101,8 @@ namespace Emberfall.DevHarness
             StoreOfferView ov = null;
             for (int i = 0; i < v.Offers.Count; i++) if (v.Offers[i].Id == "hero_contract") ov = v.Offers[i];
             Check(ov != null && !ov.Available && ov.Reason == StoreRefusal.AccountCap && ov.ResetInSeconds > 0
-                  && ov.LimitLabel == "2 a month per hero, 4 a month in all" && StoreOffers.ReasonText(StoreRefusal.AccountCap).Length > 0,
-                  "THE CARD SAYS IT: the limit line reads '2 a month per hero, 4 a month in all', it is not available and says when the month turns");
+                  && ov.LimitLabel == "4 a month (2 per hero)" && StoreOffers.ReasonText(StoreRefusal.AccountCap).Length > 0,
+                  "THE CARD SAYS IT: the limit line reads '4 a month (2 per hero)', it is not available and says when the month turns");
 
             // The cap is the account's, so it also stops a month of single contracts spread over heroes.
             GameSession t = R24ContractSession(db, now, 3);

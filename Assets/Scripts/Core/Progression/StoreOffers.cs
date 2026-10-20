@@ -713,7 +713,7 @@ namespace Emberfall.Core.Progression
             {
                 case StoreOfferKind.Ledger: return "One card at a time";
                 case StoreOfferKind.Contract:
-                    return d.Limit + " a month per hero" + (d.AccountLimit > 0 ? ", " + d.AccountLimit + " a month in all" : "");
+                    return d.AccountLimit > 0 ? d.AccountLimit + " a month (" + d.Limit + " per hero)" : d.Limit + " a month per hero";
                 case StoreOfferKind.Skin: return "Once";
                 case StoreOfferKind.Pass: return "One a season";
             }
