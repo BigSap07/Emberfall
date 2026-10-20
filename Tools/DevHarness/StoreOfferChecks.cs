@@ -598,7 +598,7 @@ namespace Emberfall.DevHarness
         private static void CheckOfferHeroContract(ContentDatabase db)
         {
             long now = OfferMonday(db);
-            GameSession s = OfferSession(db, 2);
+            GameSession s = OfferSession(db, 4);   // the contract opens at 4-1 (store.json requiresStage)
             string hero = db.Store.Offer("starter_pact").HeroChoices[0];
             s.GrantHeroDirect(db.GetHero(hero), now);
 

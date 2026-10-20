@@ -52,6 +52,13 @@ namespace Emberfall.Core.Model
         public string EquippedRelicId = "";
 
         /// <summary>
+        /// R24: the id of the ONE skin this hero wears, or empty for none. A REFERENCE into PlayerProfile.OwnedSkins,
+        /// resolved against skins.json when it is read (HeroSkins.Worn), so a skin that left the file, or that the
+        /// player no longer owns, simply shows and buffs nothing. One field, so two skins cannot stack on one hero.
+        /// </summary>
+        public string EquippedSkinId = "";
+
+        /// <summary>
         /// The six armor slots, positional: index i holds the uid of the ArmorPiece in
         /// ArmorInfo.AllSlots[i], or empty for an empty slot. REFERENCES into
         /// PlayerProfile.OwnedArmor, exactly as EquippedRelicId is a reference into OwnedRelics -
@@ -167,6 +174,7 @@ namespace Emberfall.Core.Model
             c.AcquiredUnix = AcquiredUnix;
             c.Ascension = Ascension;
             c.EquippedRelicId = EquippedRelicId;
+            c.EquippedSkinId = EquippedSkinId;
             for (int i = 0; i < EquippedArmor.Length && i < c.EquippedArmor.Length; i++)
                 c.EquippedArmor[i] = EquippedArmor[i];
             c.SelectedTalent = SelectedTalent;
@@ -568,6 +576,18 @@ namespace Emberfall.Core.Model
         /// entries here by relic id; an entry nothing references is simply unassigned.
         /// </summary>
         public readonly List<OwnedRelic> OwnedRelics = new List<OwnedRelic>();
+
+        /// <summary>
+        /// R24: the ids of every hero skin the player owns, bought, earned from an event or given. A skin is a look and
+        /// a small stat bonus for one hero (SkinsConfig); owning it does nothing until the hero wears it
+        /// (HeroInstance.EquippedSkinId). Saved from version 26 under `ownedSkins`, written only once it holds one.
+        /// </summary>
+        public readonly List<string> OwnedSkins = new List<string>();
+
+        public bool OwnsSkin(string skinId)
+        {
+            return !string.IsNullOrEmpty(skinId) && OwnedSkins.Contains(skinId);
+        }
 
         /// <summary>
         /// Every armor piece the player owns, equipped or not. HeroInstance.EquippedArmor holds

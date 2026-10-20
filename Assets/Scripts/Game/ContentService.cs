@@ -48,6 +48,8 @@ namespace Emberfall.Game
             db.LoadRelicShop(ReadTextOptional("relic-shop"));
             // And the season pass (ContentDatabase.WayfarersRoad): no fight reads it.
             db.LoadWayfarersRoad(ReadTextOptional("wayfarers-road"));
+            // And the hero skins (ContentDatabase.Skins), before the Store, which derives its skin offers from them.
+            db.LoadSkins(ReadTextOptional("skins"));
             // And what the Store sells (ContentDatabase.Store): no fight reads it.
             db.LoadStore(ReadTextOptional("store"));
 

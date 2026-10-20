@@ -314,6 +314,7 @@ namespace Emberfall.DevHarness
             CheckStoreOffers(content, contentDir);
             CheckStore(content, contentDir);
             CheckR24Store(content, contentDir);
+            CheckR24RelicPacks(content, contentDir);
             CheckUiKit(content, contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
@@ -4934,6 +4935,8 @@ namespace Emberfall.DevHarness
                 db.LoadRelicShop(File.Exists(relicShopPath) ? File.ReadAllText(relicShopPath) : null);
                 string wayfarersPath = Path.Combine(dir, "wayfarers-road.json");
                 db.LoadWayfarersRoad(File.Exists(wayfarersPath) ? File.ReadAllText(wayfarersPath) : null);
+                string skinsPath = Path.Combine(dir, "skins.json");
+                db.LoadSkins(File.Exists(skinsPath) ? File.ReadAllText(skinsPath) : null);
                 string storePath = Path.Combine(dir, "store.json");
                 db.LoadStore(File.Exists(storePath) ? File.ReadAllText(storePath) : null);
                 return db;

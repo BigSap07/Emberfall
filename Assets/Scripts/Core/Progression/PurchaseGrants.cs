@@ -29,6 +29,9 @@ namespace Emberfall.Core.Progression
         public long Dust;
         public string HeroId = "";
         public bool PassOpened;
+        /// <summary>R24: the relic a Relic of Choice named, and the skin a Skin line gave. Empty when the grant had none.</summary>
+        public string RelicId = "";
+        public string SkinId = "";
         /// <summary>One plain sentence per line, shown on the receipt: "3,400 Gold (Sealed)".</summary>
         public readonly List<string> Lines = new List<string>();
     }
@@ -59,10 +62,17 @@ namespace Emberfall.Core.Progression
 
             // ---- check everything first
             HeroDef chosen = null;
+            RelicPick relicPick = null;
             for (int i = 0; i < grant.Items.Count; i++)
             {
                 GrantItem it = grant.Items[i];
-                if (it.Kind == GrantKind.HeroChoice)
+                if (it.Kind == GrantKind.RelicChoice)
+                {
+                    // The pick is a relic id; the buyer named it from RelicPacks.Picks, shown in full before the purchase.
+                    relicPick = RelicPacks.Find(session, choiceHeroId, (int)it.Amount);
+                    if (relicPick == null) { r.Reason = GrantRefusal.BadChoice; return r; }
+                }
+                else if (it.Kind == GrantKind.HeroChoice)
                 {
                     chosen = string.IsNullOrEmpty(choiceHeroId) ? null : session.Content.GetHero(choiceHeroId);
                     if (chosen == null || !it.HeroIds.Contains(choiceHeroId)) { r.Reason = GrantRefusal.BadChoice; return r; }
@@ -135,6 +145,17 @@ namespace Emberfall.Core.Progression
                         r.PassOpened = true;
                         r.Lines.Add("The paid track of this season");
                         break;
+                    case GrantKind.RelicChoice:
+                        int tierNow = RelicPacks.Give(session, relicPick);
+                        r.RelicId = relicPick.RelicId;
+                        r.Lines.Add(relicPick.Upgrade ? relicPick.Name + " raised to tier " + tierNow : "The relic " + relicPick.Name);
+                        break;
+                    case GrantKind.Skin:
+                        SkinDef skin = session.Content.Skins.Skin(it.SkinId);
+                        if (!session.Profile.OwnsSkin(skin.Id)) session.Profile.OwnedSkins.Add(skin.Id);
+                        r.SkinId = skin.Id;
+                        r.Lines.Add("The skin " + skin.Name + " (" + skin.BonusLine() + ")");
+                        break;
                     case GrantKind.Activate:
                         break;
                 }
@@ -169,6 +190,10 @@ namespace Emberfall.Core.Progression
                     return "One copy of the hero you pick: " + string.Join(", ", names.ToArray());
                 case GrantKind.OwnedHeroCopy: return "One copy of a " + it.Stars + "-star you already own";
                 case GrantKind.PassPremium: return "The paid track of this season";
+                case GrantKind.RelicChoice: return "One relic of your pick: one you do not own, or one more tier on one you own";
+                case GrantKind.Skin:
+                    SkinDef skin = session == null ? null : session.Content.Skins.Skin(it.SkinId);
+                    return skin == null ? "A hero skin" : "The skin " + skin.Name + ": " + skin.BonusLine();
                 case GrantKind.Activate: return "";
             }
             return "";
