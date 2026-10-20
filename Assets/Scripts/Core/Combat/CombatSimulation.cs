@@ -1355,7 +1355,20 @@ namespace Emberfall.Core.Combat
 
                     UnitStats stats = StatMath.ForHero(hero.Def, hero.Level, relic, armor, armorConfig,
                                                        techTree, guildTech);
+
+                    // THE HERO SKIN (R24), resolved here and then forgotten, last after relic, armor and guild tech
+                    // like the three above it: a small percent of the stat line, on this hero only. Skipped against a
+                    // snapshot opponent (The Proving, friend duels) so two identical lines cannot differ by a
+                    // purchase, and a request with no profile (the guild dungeon's scratch heroes, every synthetic
+                    // harness request) wears nothing, so no recorded replay reads a skin. The unit carries the skin's
+                    // look for the battle screen; the simulation below never learns a skin exists.
+                    SkinDef skin = _request.Opponent == null ? HeroSkins.ApplyWorn(stats, _request.Profile, hero, _request.Content) : null;
                     CombatUnit unit = CombatUnit.FromDef(hero.Def, stats, hero.Level, true, i, id++, _cfg.EnergyMax);
+                    if (skin != null)
+                    {
+                        unit.SkinId = skin.Id;
+                        unit.Visual = HeroSkins.VisualFor(unit.Visual, skin);
+                    }
                     if (relic != null && relic.Grade == RelicGrade.Mythic) unit.Relic = relic;
 
                     // The selected talent, resolved here and then forgotten, exactly the way a

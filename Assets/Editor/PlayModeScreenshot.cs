@@ -426,6 +426,22 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/R19 store/Packs, Growth Fund bought", false, 135)]
         public static void CaptureStorePacksGrowth() { Begin("Screen:StorePacksGrowth"); }
 
+        // R24 RELIC PACKS AND SKINS (Docs/DESIGN-STORE.md). Each target seeds the scratch identity through the rules.
+        [MenuItem("Emberfall/Capture/R24 packs and skins/Store, Packs with the relic packs", false, 170)]
+        public static void CaptureStoreRelicPacks() { Begin("Screen:StoreRelicPacks"); }
+
+        [MenuItem("Emberfall/Capture/R24 packs and skins/Store, Relic of Choice picker", false, 171)]
+        public static void CaptureStoreRelicPicker() { Begin("Screen:StoreRelicPicker"); }
+
+        [MenuItem("Emberfall/Capture/R24 packs and skins/Store, Skins tab", false, 172)]
+        public static void CaptureStoreSkins() { Begin("Screen:StoreSkins"); }
+
+        [MenuItem("Emberfall/Capture/R24 packs and skins/Hero screen, Azure Kael equipped", false, 173)]
+        public static void CaptureHeroSkin() { Begin("Screen:HeroSkin"); }
+
+        [MenuItem("Emberfall/Capture/R24 packs and skins/Battle, Azure Kael in the line", false, 174)]
+        public static void CaptureBattleSkin() { Begin("Screen:BattleSkin=ch1_1"); }
+
         [MenuItem("Emberfall/Capture/R19 store/Packs, after a purchase in the debug store", false, 136)]
         public static void CaptureStorePurchase() { Begin("Screen:StorePurchase"); }
 
@@ -1760,6 +1776,9 @@ namespace Emberfall.EditorTools
             }
 
             string name = list[slot];
+            // R24: BattleSkin is Battle with Azure Kael, an owned test skin, worn by the line's first hero.
+            bool skinBattle = name == "BattleSkin";
+            if (skinBattle) name = "Battle";
             // R17: ChestResult is Result with a line that wins the stage, so the first clear of a wall
             // stage can be photographed with its chest on the result. Same pump, same name below.
             bool chestResult = name == "ChestResult";
@@ -1841,6 +1860,10 @@ namespace Emberfall.EditorTools
                     case "StorePickWaiting":
                     case "StoreShops": id = ScreenId.Store; break;
                     case "HubStore": id = ScreenId.MainMenu; break;
+                    case "StoreRelicPacks":
+                    case "StoreRelicPicker":
+                    case "StoreSkins": id = ScreenId.Store; break;
+                    case "HeroSkin": id = ScreenId.HeroDetail; break;
                     case "Result": id = ScreenId.Battle; break;
                     case "AudioFight": id = ScreenId.Battle; break;
                     case "BattleMoment": id = ScreenId.Battle; break;
@@ -1921,7 +1944,13 @@ namespace Emberfall.EditorTools
                     else app.Router.HeroDetail.SetLockedHero(cardDef);
                     SessionState.SetString(AbilityKey, "1");
                 }
-                if (name == "HeroDetail" || name == "AbilityNumbers")
+                if ((name == "HeroSkin" || skinBattle) && !SeedSkins(app))
+                {
+                    Debug.LogError("PlayModeScreenshot: FAILED " + (skinBattle ? "BattleSkin" : name) + ": Azure Kael is not worn, so the shot would prove nothing. Skipping it.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                    return;
+                }
+                if (name == "HeroDetail" || name == "HeroSkin" || name == "AbilityNumbers")
                 {
                     List<HeroInstance> owned = app.Session.Profile.Heroes;
                     if (owned == null || owned.Count == 0)
@@ -1934,7 +1963,7 @@ namespace Emberfall.EditorTools
                     // first, because the only thing that capture can disprove is that the block
                     // runs out of the panel, and it only can when an ability carries several
                     // numbers. The hero page itself is photographed on owned[0] as before.
-                    app.Router.HeroDetail.SetHero(name == "AbilityNumbers" ? BusiestHero(owned) : owned[0]);
+                    app.Router.HeroDetail.SetHero(name == "AbilityNumbers" ? BusiestHero(owned) : name == "HeroSkin" ? SkinSubject(owned) : owned[0]);
                     // A frame apart from the Show for the same reason the Hub's layers are:
                     // ScreenRouter.Show closes every open layer before it changes screens, so a
                     // dialog opened in this call would be opened and closed again.
@@ -2535,6 +2564,9 @@ namespace Emberfall.EditorTools
                 case "StoreComingSoon":
                 case "StoreShops":
                 case "StorePickWaiting":
+                case "StoreRelicPacks":
+                case "StoreRelicPicker":
+                case "StoreSkins":
                 case "HubStore":
                     return true;
             }
@@ -2637,8 +2669,62 @@ namespace Emberfall.EditorTools
                     waitSvc.Tick(1f);
                 }
             }
+            if (name == "StoreRelicPacks" || name == "StoreRelicPicker" || name == "StoreSkins") SeedR24Store(app, name);
             app.RefreshHud();
             Debug.Log("PlayModeScreenshot: seeded the Store for " + name);
+        }
+
+        /// <summary>R24: chapters 1 to 4 cleared (the Relic Shop opens at 3-1, so the relic packs are open, and the Hero
+        /// Contract at 4-1), then one purchase through the debug store so each target shows both states: a Satchel bought
+        /// (sold out for the week) beside a Chest and a Choice still open, and a skin owned beside skins still for sale.</summary>
+        private static void SeedR24Store(GameApp app, string name)
+        {
+            GameSession session = app.Session;
+            PlayerProfile profile = session.Profile;
+            List<StageDef> stages = session.Content.AllStages;
+            for (int i = 0; i < stages.Count; i++)
+            {
+                int chapter;
+                string chapterId = stages[i].ChapterId;
+                if (chapterId.Length > 2 && int.TryParse(chapterId.Substring(2), out chapter) && chapter <= 4 && !profile.ClearedStageIds.Contains(stages[i].Id))
+                    profile.ClearedStageIds.Add(stages[i].Id);
+            }
+            profile.StagesCleared = CampaignProgress.CountCleared(profile, session.Content);
+            if (name == "StoreSkins") StoreBuy(app, "skin_kael_azure_test", "");
+            else StoreBuy(app, "relic_dust_satchel", "");
+        }
+
+        /// <summary>R24: gives the scratch profile Azure Kael (the shipped test skin) through the grant path and puts it on
+        /// Kael, so the Hero screen and the battle show the skin. Scratch identity only.</summary>
+        private static bool SeedSkins(GameApp app)
+        {
+            if (!EditorScratchIdentity.IsScratch)
+            {
+                Debug.LogError("PlayModeScreenshot: refusing to seed a skin on a real identity.");
+                return false;
+            }
+            GameSession session = app.Session;
+            HeroInstance kael = session.Profile.FindHeroByDefId("kael_the_unyielding");
+            SkinDef skin = session.Content.Skins.Skin("kael_azure_test");
+            if (kael == null || skin == null)
+            {
+                Debug.LogError("PlayModeScreenshot: no Kael (" + (kael != null) + ") or no test skin (" + (skin != null) + ") to seed; test skins visible: " + SkinsConfig.TestVisible + ".");
+                return false;
+            }
+            // Granted through the one grant path, as a purchase or an event reward is, then worn through the rules.
+            bool granted = StoreOffers.GrantSkinForCapture(session, skin.Id, TimeUtil.NowUnix());
+            bool worn = HeroSkins.Equip(session, kael, skin.Id);
+            SkinDef seen = HeroSkins.Worn(session.Profile, kael, session.Content);
+            app.RefreshHud();
+            Debug.Log("PlayModeScreenshot: skin seed: granted " + granted + ", equipped " + worn + ", owned " + session.Profile.OwnsSkin(skin.Id)
+                      + ", Kael wears " + (seen != null ? seen.Name + " (" + seen.BonusLine() + ")" : "NOTHING"));
+            return seen != null;
+        }
+
+        private static HeroInstance SkinSubject(List<HeroInstance> owned)
+        {
+            for (int i = 0; i < owned.Count; i++) if (owned[i].DefId == "kael_the_unyielding") return owned[i];
+            return owned[0];
         }
 
         /// <summary>
@@ -2684,6 +2770,9 @@ namespace Emberfall.EditorTools
                 case "StorePass":
                 case "StorePassPremium": store.OpenTab(StoreScreen.Tab.Pass); break;
                 case "StoreShops": store.OpenTab(StoreScreen.Tab.Shops); break;
+                case "StoreRelicPacks": store.SelectForCapture("relic_of_choice"); break;
+                case "StoreRelicPicker": store.PickForCapture("relic_of_choice", app.Session.Content.Relics.Count > 0 ? app.Session.Content.Relics[0].Id : ""); break;
+                case "StoreSkins": store.OpenTab(StoreScreen.Tab.Skins); break;
                 case "StorePickWaiting": store.WaitingPickForCapture("brenna_the_remaining_wall"); break;
                 case "StorePacks": store.SelectForCapture("starter_pact"); break;
                 case "StorePacksLedger": store.SelectForCapture("ember_ledger"); break;

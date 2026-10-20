@@ -30,7 +30,13 @@ namespace Emberfall.UI.Screens
 
         public override bool HidesTopBar { get { return false; } }
 
-        public enum Tab { Pass, Packs, Shops }
+        public enum Tab { Pass, Packs, Shops, Skins }
+
+        private const int TabCount = 4;
+        private const int SkinPerPage = 8;       // four cards a row, two rows
+        private const float SkinCardWidth = 420f;
+        private const float SkinCardHeight = 300f;
+        private const float SkinGap = 20f;
 
         private const float ContentWidth = 1760f;
         private const float BodyHeight = 700f;   // the body starts about 350 units down: 350 + 700 leaves the buy bar on screen at 1080
@@ -50,7 +56,7 @@ namespace Emberfall.UI.Screens
         private Text _headerSubtitle;
         private RectTransform _body;
         private Text _banner;
-        private readonly ForgeTab[] _tabs = new ForgeTab[3];
+        private readonly ForgeTab[] _tabs = new ForgeTab[TabCount];
 
         private Tab _tab = Tab.Packs;
         private int _page;
@@ -81,10 +87,10 @@ namespace Emberfall.UI.Screens
 
             float top = ScreenChrome.HeaderTop + 108f + UITheme.Space8;
             RectTransform tabRow = UIBuilder.Node("Tabs", Root);
-            UIBuilder.Box(tabRow, 0f, -top, TabWidth * 3f + HubStyle.TabGap * 2f, HubStyle.TabHeight, new Vector2(0.5f, 1f));
+            UIBuilder.Box(tabRow, 0f, -top, TabWidth * TabCount + HubStyle.TabGap * (TabCount - 1), HubStyle.TabHeight, new Vector2(0.5f, 1f));
             UIBuilder.HStack(tabRow, HubStyle.TabGap, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
-            string[] names = { "PASS", "PACKS", "SHOPS" };
-            for (int i = 0; i < 3; i++)
+            string[] names = { "PASS", "PACKS", "SHOPS", "SKINS" };
+            for (int i = 0; i < TabCount; i++)
             {
                 Tab which = (Tab)i;
                 _tabs[i] = EmberforgeUI.Tab(names[i], tabRow, TabWidth, HubStyle.TabHeight, delegate { SetTab(which); });
@@ -251,6 +257,12 @@ namespace Emberfall.UI.Screens
                 default: _banner.text = "COMING SOON  -  PURCHASES OPEN WITH THE STORE"; _banner.color = Emberforge.TextQuiet; break;
             }
 
+            // R24: the SKINS tab exists only while some skin is on sale in this build (zero skins is a working Store).
+            bool anySkin = false;
+            for (int i = 0; i < view.Offers.Count; i++) if (view.Offers[i].Kind == StoreOfferKind.Skin) anySkin = true;
+            _tabs[(int)Tab.Skins].Root.gameObject.SetActive(anySkin);
+            if (_tab == Tab.Skins && !anySkin) { _tab = Tab.Packs; for (int i = 0; i < _tabs.Length; i++) EmberforgeUI.SetTabSelected(_tabs[i], (int)_tab == i); }
+
             if (!view.Active)
             {
                 _headerSubtitle.text = "CLOSED";
@@ -270,6 +282,7 @@ namespace Emberfall.UI.Screens
             {
                 case Tab.Pass: _headerSubtitle.text = "WAYFARER'S ROAD  -  FREE AND PAID"; BuildPass(view, now); break;
                 case Tab.Packs: _headerSubtitle.text = "EVERY PACK IS FIXED AND SHOWN IN FULL"; BuildPacks(view, now); break;
+                case Tab.Skins: _headerSubtitle.text = "A NEW LOOK AND A SMALL BONUS, ONE HERO AT A TIME"; BuildSkins(view, now); break;
                 default: _headerSubtitle.text = "THE SHOPS YOU SPEND EARNED CURRENCY IN"; BuildShops(); break;
             }
         }
@@ -598,6 +611,82 @@ namespace Emberfall.UI.Screens
                 restore.OnClick(delegate { App.Audio.Tap(); _service.Flow.Restore(delegate (string offerId) { return ""; }); App.Notify("Asking the store for earlier purchases."); Rebuild(); });
             }
             BuildWaitingPicks();
+        }
+
+        // ------------------------------------------------------------------ the skins tab (R24)
+
+        /// <summary>One card per skin on sale: the hero in the skin, its name, the bonus in words and the price. Every
+        /// number is StoreOffers.View's and SkinDef.BonusLine's; the screen computes nothing.</summary>
+        private void BuildSkins(StoreView view, long now)
+        {
+            List<StoreOfferView> skins = new List<StoreOfferView>();
+            for (int i = 0; i < view.Offers.Count; i++) if (view.Offers[i].Kind == StoreOfferKind.Skin) skins.Add(view.Offers[i]);
+            if (skins.Count == 0) return;
+            int pages = Mathf.Max(1, (skins.Count + SkinPerPage - 1) / SkinPerPage);
+            _listPage = Mathf.Clamp(_listPage, 0, pages - 1);
+            int first = _listPage * SkinPerPage;
+            for (int i = first; i < first + SkinPerPage && i < skins.Count; i++) BuildSkinCard(skins[i], i - first);
+
+            if (pages > 1)
+            {
+                float pagerY = 2f * (SkinCardHeight + SkinGap) + 4f;
+                UIButton prev = EmberforgeUI.Button("PrevSkins", _body, "<", UITheme.FontTiny, ForgeButtonKind.Secondary);
+                UIBuilder.Box(prev.Root, 0f, -pagerY, 80f, 44f, new Vector2(0f, 1f));
+                prev.Interactable = _listPage > 0;
+                prev.OnClick(delegate { _listPage--; App.Audio.Tap(); Rebuild(); });
+                Text pageLabel = EmberforgeUI.Label("SkinPage", _body, "PAGE " + (_listPage + 1) + " OF " + pages, UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
+                UIBuilder.Box(pageLabel.rectTransform, 90f, -pagerY, 300f, 44f, new Vector2(0f, 1f));
+                UIButton next = EmberforgeUI.Button("NextSkins", _body, ">", UITheme.FontTiny, ForgeButtonKind.Secondary);
+                UIBuilder.Box(next.Root, 400f, -pagerY, 80f, 44f, new Vector2(0f, 1f));
+                next.Interactable = _listPage < pages - 1;
+                next.OnClick(delegate { _listPage++; App.Audio.Tap(); Rebuild(); });
+            }
+        }
+
+        private void BuildSkinCard(StoreOfferView o, int slot)
+        {
+            SkinDef skin = App.Session.Content.Skins.Skin(o.SkinId);
+            HeroDef hero = App.Session.Content.GetHero(o.SkinHeroId);
+            if (skin == null || hero == null) return;
+            int col = slot % 4, row = slot / 4;
+            ForgeCard card = EmberforgeUI.SelectableCard("Skin_" + o.Id, _body, delegate { App.Audio.Tap(); });
+            UIBuilder.Box(card.Root, col * (SkinCardWidth + SkinGap), -(row * (SkinCardHeight + SkinGap)), SkinCardWidth, SkinCardHeight, new Vector2(0f, 1f));
+            EmberforgeUI.SetCardSelected(card, o.Owned);
+            RectTransform body = card.Body;
+
+            RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", body, hero, hero.Stars, 120f);
+            UIBuilder.Box(portrait, 16f, -16f, 120f, 120f, new Vector2(0f, 1f));
+            SkinArt.Dress(portrait, skin);
+
+            Text name = EmberforgeUI.Title("Name", body, skin.Name.ToUpperInvariant(), UITheme.FontSmall - 2, Emberforge.TextGold, TextAnchor.UpperLeft);
+            UIBuilder.Box(name.rectTransform, 150f, -16f, SkinCardWidth - 166f, 34f, new Vector2(0f, 1f));
+            UIBuilder.BestFit(name, 14, UITheme.FontSmall - 2);
+            Text forHero = EmberforgeUI.Label("ForHero", body, "FOR " + hero.Name.ToUpperInvariant() + "   -   " + skin.Rarity.ToUpperInvariant(), UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+            UIBuilder.Box(forHero.rectTransform, 150f, -54f, SkinCardWidth - 166f, 26f, new Vector2(0f, 1f));
+            Text bonus = EmberforgeUI.Label("Bonus", body, skin.BonusLine().ToUpperInvariant(), UITheme.FontTiny - 2, UITheme.Success, TextAnchor.UpperLeft);
+            UIBuilder.Box(bonus.rectTransform, 150f, -84f, SkinCardWidth - 166f, 28f, new Vector2(0f, 1f));
+            Text note = EmberforgeUI.Body("Note", body, (skin.Test ? "TEST SKIN. " : "") + "On that hero only. One skin per hero, never stacked.", UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+            UIBuilder.Box(note.rectTransform, 16f, -150f, SkinCardWidth - 32f, 60f, new Vector2(0f, 1f));
+
+            bool pending = _service != null && _service.Flow != null && _service.Flow.IsPending(o.Id);
+            if (o.Owned)
+            {
+                RectTransform chip = EmberforgeUI.Chip("Owned", body, "YOURS  -  WEAR IT ON THE HERO SCREEN", UITheme.Success, UITheme.FontTiny - 4);
+                UIBuilder.Box(chip, 16f, 16f, SkinCardWidth - 32f, 48f, new Vector2(0f, 0f));
+                return;
+            }
+            if (!o.Available)
+            {
+                RectTransform chip = EmberforgeUI.Chip("State", body, o.Reason == StoreRefusal.NotOwned ? "YOU NEED " + hero.Name.ToUpperInvariant() : StateWord(o.Reason), Emberforge.TextQuiet, UITheme.FontTiny - 4);
+                UIBuilder.Box(chip, 16f, 16f, SkinCardWidth - 32f, 48f, new Vector2(0f, 0f));
+                return;
+            }
+            string text = !CanBuy ? "COMING SOON  -  " + o.PriceLabel : pending ? "WAITING FOR THE STORE" : "BUY  -  " + o.PriceLabel;
+            UIButton buy = EmberforgeUI.Button("Buy", body, text, UITheme.FontTiny, ForgeButtonKind.Primary);
+            UIBuilder.Box(buy.Root, 16f, 16f, SkinCardWidth - 32f, 52f, new Vector2(0f, 0f));
+            buy.Interactable = CanBuy && !pending;
+            string id = o.Id;
+            buy.OnClick(delegate { Buy(id, ""); });
         }
 
         /// <summary>A paid purchase (or a restore) the store delivered with no pick waits in the flow, granted nothing
@@ -952,21 +1041,24 @@ namespace Emberfall.UI.Screens
 
             float y = 92f + rows * (rowHeight + 8f) + 20f;
             UIButton back = EmberforgeUI.Button("Back", _body, "BACK", UITheme.FontSmall, ForgeButtonKind.Secondary);
-            UIBuilder.Box(back.Root, -380f, -y, 200f, 56f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(back.Root, -560f, -y, 200f, 56f, new Vector2(0.5f, 1f));
             back.OnClick(delegate { TryStepBack(); });
-            UIButton prev = EmberforgeUI.Button("PrevPick", _body, "<", UITheme.FontSmall, ForgeButtonKind.Secondary);
-            UIBuilder.Box(prev.Root, -270f, -y, 80f, 56f, new Vector2(0.5f, 1f));
-            prev.Interactable = _pickPage > 0;
-            prev.OnClick(delegate { _pickPage--; App.Audio.Tap(); Rebuild(); });
-            UIButton next = EmberforgeUI.Button("NextPick", _body, ">", UITheme.FontSmall, ForgeButtonKind.Secondary);
-            UIBuilder.Box(next.Root, -180f, -y, 80f, 56f, new Vector2(0.5f, 1f));
-            next.Interactable = _pickPage < pages - 1;
-            next.OnClick(delegate { _pickPage++; App.Audio.Tap(); Rebuild(); });
+            if (pages > 1)
+            {
+                UIButton prev = EmberforgeUI.Button("PrevPick", _body, "<", UITheme.FontSmall, ForgeButtonKind.Secondary);
+                UIBuilder.Box(prev.Root, -440f, -y, 80f, 56f, new Vector2(0.5f, 1f));
+                prev.Interactable = _pickPage > 0;
+                prev.OnClick(delegate { _pickPage--; App.Audio.Tap(); Rebuild(); });
+                UIButton next = EmberforgeUI.Button("NextPick", _body, ">", UITheme.FontSmall, ForgeButtonKind.Secondary);
+                UIBuilder.Box(next.Root, -350f, -y, 80f, 56f, new Vector2(0.5f, 1f));
+                next.Interactable = _pickPage < pages - 1;
+                next.OnClick(delegate { _pickPage++; App.Audio.Tap(); Rebuild(); });
+            }
 
             string chosenName = null;
             for (int i = 0; i < _pickRelics.Count; i++) if (_pickRelics[i].HeroId == _chosen) chosenName = _pickRelics[i].Name.ToUpperInvariant();
             UIButton confirm = EmberforgeUI.Button("Confirm", _body, chosenName == null ? "CHOOSE A RELIC" : _pickConfirmLabel + chosenName, UITheme.FontSmall, ForgeButtonKind.Primary);
-            UIBuilder.Box(confirm.Root, 190f, -y, 760f, 56f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(confirm.Root, 120f, -y, 760f, 56f, new Vector2(0.5f, 1f));
             confirm.Interactable = chosenName != null;
             string pick = _chosen;
             Action<string> action = _pickConfirm;

@@ -255,14 +255,14 @@ namespace Emberfall.Battle
                 rig.BuildSprite(BattleAssets.DummySpriteId,
                                 BattleAssets.DummyBodyFraction, BattleAssets.DummyFootFraction,
                                 SpriteFlipped(visual.SpriteMirror, facingForward), visual.Silhouette,
-                                unitLabel, true, DummyTint(aspect));
+                                unitLabel, true, DummyTint(aspect) * SkinTint(visual));
                 rig.BuildNameplate(unitLabel, facingForward);
             }
             else if (!string.IsNullOrEmpty(visual.Sprite))
             {
                 rig.BuildSprite(visual.Sprite, visual.SpriteBodyFraction, visual.SpriteFootFraction,
                                 SpriteFlipped(visual.SpriteMirror, facingForward), visual.Silhouette,
-                                unitLabel, false, Color.white);
+                                unitLabel, false, SkinTint(visual));
             }
             else
             {
@@ -409,6 +409,13 @@ namespace Emberfall.Battle
         /// top of the body even when the quad extends above it for a raised weapon. See
         /// bodyFraction below for what does extend it, and why.
         /// </summary>
+        /// <summary>The colour a sprite is multiplied by: white for every unit without a skin tint (all of them but a unit
+        /// in a test skin, R24), else the tint HeroSkins.VisualFor wrote onto the fight's own copy of the look.</summary>
+        private static Color SkinTint(VisualDef visual)
+        {
+            return string.IsNullOrEmpty(visual.SkinTint) ? Color.white : UITheme.Hex(visual.SkinTint);
+        }
+
         /// <summary>`flip` is already resolved by SpriteFlipped - the side and the hero's own
         /// authored facing folded into one answer - so this method only has to apply it.</summary>
         /// <summary>`pending` swaps the unit's own art for the shared placeholder mannequin and

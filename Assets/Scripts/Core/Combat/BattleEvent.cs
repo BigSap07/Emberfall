@@ -181,6 +181,9 @@ namespace Emberfall.Core.Combat
         public string ActiveAbilityName = "";
         public int EnergyMax = 100;
         public int StartEnergy;
+        /// <summary>R24: the hero skin this player unit fought in, or empty. Read by the battle screen to dress the unit
+        /// (Visual already carries the look); never read by the simulation.</summary>
+        public string SkinId = "";
     }
 
     public sealed class BattleResult

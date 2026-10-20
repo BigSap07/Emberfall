@@ -815,8 +815,10 @@ namespace Emberfall.DevHarness
         {
             List<string> restorable = new List<string>();
             for (int i = 0; i < db.Store.Offers.Count; i++)
-                if (db.Store.Offers[i].Restorable && db.Store.Offers[i].Built.Restorable) restorable.Add(db.Store.Offers[i].Id);
+                if (db.Store.Offers[i].Restorable && db.Store.Offers[i].Built.Restorable && db.Store.Offers[i].Kind != StoreOfferKind.Skin) restorable.Add(db.Store.Offers[i].Id);
             restorable.Sort();
+            // A skin (R24) is a one-time purchase too: StoreConfig derives its offer as restorable, so a skin is not counted
+            // here; CheckR24SkinStore proves it. Everything written in store.json is still exactly the two.
             Check(string.Join(",", restorable.ToArray()) == "growth_fund,starter_pact",
                   "THE SHIPPED STORE.JSON RESTORES EXACTLY THE TWO ONE-TIME PURCHASES (" + string.Join(", ", restorable.ToArray()) + "): a pack, a card, a pass and a contract are used up");
         }

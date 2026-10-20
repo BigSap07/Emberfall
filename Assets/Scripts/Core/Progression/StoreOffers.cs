@@ -277,6 +277,19 @@ namespace Emberfall.Core.Progression
             return null;
         }
 
+#if UNITY_EDITOR
+        /// <summary>CAPTURE ONLY (editor builds, never a player): gives the session a skin through the one grant path
+        /// (PurchaseGrants.Apply), as a purchase or an event reward does, so a capture target can show a worn skin
+        /// without depending on a store backend. The caller guards the scratch identity.</summary>
+        public static bool GrantSkinForCapture(GameSession session, string skinId, long nowUnix)
+        {
+            if (session == null || string.IsNullOrEmpty(skinId)) return false;
+            GrantItem item = new GrantItem(GrantKind.Skin, 0);
+            item.SkinId = skinId;
+            return PurchaseGrants.Apply(session, new PurchaseGrant().Add(item), null, nowUnix).Success;
+        }
+#endif
+
         // ------------------------------------------------------------------ the clock
 
         /// <summary>The reward day to use: the real one, or the latest the store ever saw if that is later.</summary>
@@ -739,7 +752,7 @@ namespace Emberfall.Core.Progression
             {
                 case StoreOfferKind.Ledger: return "One card at a time";
                 case StoreOfferKind.Contract:
-                    return d.Limit + " a month per hero" + (d.AccountLimit > 0 ? ", " + d.AccountLimit + " a month in all" : "");
+                    return d.AccountLimit > 0 ? d.AccountLimit + " a month (" + d.Limit + " per hero)" : d.Limit + " a month per hero";
                 case StoreOfferKind.Skin: return "Once";
                 case StoreOfferKind.Pass: return "One a season";
             }

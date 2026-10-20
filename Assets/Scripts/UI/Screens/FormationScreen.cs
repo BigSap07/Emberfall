@@ -257,6 +257,7 @@ namespace Emberfall.UI.Screens
                     RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", body, occupant.Def,
                                                                         occupant.Def.Stars, 118f);
                     UIBuilder.Box(portrait, 0f, -38f, 118f, 118f, new Vector2(0.5f, 1f));
+                    SkinArt.Dress(portrait, App.Session, occupant);   // R24: the player's own hero in the skin it wears
 
                     RectTransform stars = Widgets.StarRow("Stars", body, occupant.Def.Stars, 13f);
                     UIBuilder.Box(stars, 0f, -160f, 110f, 15f, new Vector2(0.5f, 1f));
@@ -364,6 +365,7 @@ namespace Emberfall.UI.Screens
             RectTransform portrait = EmberforgeUI.PortraitFrame("Portrait", content, hero.Def,
                                                                 hero.Def.Stars, 76f);
             UIBuilder.Box(portrait, 26f, 0f, 76f, 76f, new Vector2(0f, 0.5f));
+            SkinArt.Dress(portrait, App.Session, hero);   // R24
 
             // Name above the centre line, detail below it. The first draft anchored both near the
             // middle and they printed on top of each other.

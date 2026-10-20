@@ -526,7 +526,17 @@ namespace Emberfall.Core.Save
         public static bool HoldsVersion26Data(PlayerProfile profile)
         {
             if (profile == null) return false;
+            if (HoldsSkinData(profile)) return true;
             if (profile.LiveEvents != null && !profile.LiveEvents.IsEmpty) return true;   // the live events' quests, points and what was bought
+            return false;
+        }
+
+        /// <summary>True when the profile owns a hero skin or a hero wears one (R24): what a version 25 build would drop.</summary>
+        public static bool HoldsSkinData(PlayerProfile profile)
+        {
+            if (profile.OwnedSkins.Count > 0) return true;
+            for (int i = 0; i < profile.Heroes.Count; i++)
+                if (!string.IsNullOrEmpty(profile.Heroes[i].EquippedSkinId)) return true;
             return false;
         }
 
@@ -1021,6 +1031,10 @@ namespace Emberfall.Core.Save
                 // Version 24: how many of the copies are Sealed (SealedState). Absent is none.
                 if (h.SealedCopiesHeld > 0) hj.Set("sealedCopies", h.SealedCopiesHeld);
 
+                // Version 26: the skin this hero wears. Absent is none. A reference into ownedSkins, kept even when the
+                // content no longer names it, like equippedRelicId.
+                if (!string.IsNullOrEmpty(h.EquippedSkinId)) hj.Set("skin", h.EquippedSkinId);
+
                 heroes.Add(hj);
             }
             // Version 15: the heroes this build could not resolve, written back exactly as they
@@ -1150,6 +1164,14 @@ namespace Emberfall.Core.Save
             // Version 25: the Store's counters and receipts, only once it holds something.
             if (profile.Store != null && !profile.Store.IsEmpty)
                 root.Set("store", profile.Store.Write());
+
+            // Version 26: the hero skins the player owns, only once there is one. The skin each hero wears is on its hero.
+            if (profile.OwnedSkins.Count > 0)
+            {
+                JsonValue skins = JsonValue.NewArray();
+                for (int i = 0; i < profile.OwnedSkins.Count; i++) skins.Add(new JsonValue(profile.OwnedSkins[i]));
+                root.Set("ownedSkins", skins);
+            }
 
             return root.ToJson(true);
         }
@@ -1356,6 +1378,7 @@ namespace Emberfall.Core.Save
 
                 // Version 24: Sealed copies, never more than the copies there are. Absent is none.
                 h.SealedCopies = Math.Max(0, Math.Min(h.Copies, hj.GetInt("sealedCopies", 0)));
+                h.EquippedSkinId = hj.GetString("skin", "");
 
                 // THE VERSION 18 CLAMP (see CurrentVersion): a level outside this hero's tier is
                 // illegal state, whatever version wrote it. Not conditioned on the version, so the
@@ -1524,6 +1547,15 @@ namespace Emberfall.Core.Save
 
             // Version 25. Absent reads as nothing bought.
             profile.Store = StoreState.Read(root["store"]);
+
+            // Version 26: the owned skins. Absent is none; a damaged or repeated entry is skipped, and the list is capped far
+            // above any roster of skins.
+            List<JsonValue> ownedSkins = root.GetList("ownedSkins");
+            for (int i = 0; i < ownedSkins.Count && profile.OwnedSkins.Count < 500; i++)
+            {
+                string skinId = ownedSkins[i].AsString("");
+                if (skinId.Length > 0 && skinId.Length <= 100 && !profile.OwnedSkins.Contains(skinId)) profile.OwnedSkins.Add(skinId);
+            }
 
             List<JsonValue> lines = root.GetList("lines");
             for (int l = 0; l < lines.Count; l++) profile.Lines.Add(ReadLine(lines[l]));
