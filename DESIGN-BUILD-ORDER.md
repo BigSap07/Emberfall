@@ -1256,6 +1256,41 @@ receipt or a bought paid track.**
 **The curve.** The spender's reference walk and fusing walk against the non-spender, per chapter, are measured by
 `--store-curve` (`StoreCurve.cs`). Result: to be filled in from the R19 report when the curve check is final.
 
+### Late-game spending (R24)
+
+R24 raised what a committed late-game player can buy, inside the Belgian rule: everything bought is
+Sealed, goes through `PurchaseGrants.Apply`, shows fixed contents with its price, and never enters a
+random mechanic. Every part sits behind its own switch, on by default, with a harness check that the
+switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
+
+- **The Hero Contract is on, capped.** Two a month per hero and four a month for the account
+  (`StoreOfferDef.AccountLimit`, `StoreRefusal.AccountCap`, derived from the per-hero counters), listed
+  from 4-1 on because it alone gave a whale +77 percent at 1-12. `EMBERFALL_HERO_CONTRACT_OFF` rolls back.
+- **Relic packs** (`RelicPacks`, `EMBERFALL_RELIC_PACKS_OFF`): the Relic Dust Satchel (5,000 Dust,
+  EUR 4.99, one a week), the Relic Dust Chest (25,000, EUR 19.99, two a month) and the Relic of Choice
+  (EUR 29.99, one a month: a named relic the player lacks or one tier on an owned one, at most 20,000
+  Dust of shop value). They open with the Relic Shop.
+- **Live events** (`LiveEvents`, `live-events.json`, NOT hashed, `EMBERFALL_LIVE_EVENTS_OFF`): a
+  weekly and a monthly event side by side, each with quests counted at the real call sites, points, a
+  free track (which may name a skin, with a fixed fallback) and a paid Event Track (EUR 4.99 weekly,
+  EUR 9.99 monthly), plus one EUR 9.99 pack per event. The paid offers open at 3-1 (the event Gold gave a whale +48 percent
+  at 2-6); free events are open from the start. A payment in flight across a turnover is still
+  delivered in full and never twice; sales close an hour before an event ends.
+- **Hero skins** (`HeroSkins`, `skins.json`, NOT hashed, `EMBERFALL_SKINS_OFF`): one per hero, default
+  +2 percent Attack and +3 percent HP, never above 5 percent in any stat, applied in
+  `CombatSimulation.BuildUnits` and shown on the Hero screen by the same call. No recorded fight reads
+  a skin (the guild dungeon fights scratch heroes; the Proving and duels skip skins), so
+  `ContentVersion` did not move. Two hue-shifted test skins prove the art path and are hidden outside
+  the editor and development builds; real skins wait on art.
+- **Save version 26**, written only when a save holds live event state or skins
+  (`SaveSerializer.HoldsVersion26Data`). Because quests count from the first stage win, nearly every
+  active player's save becomes 26: `save_limits_26.sql` must be applied before this build reaches a
+  cloud player.
+- **The whale curve** (`R24WhaleCurve.cs`, opt-in, 60 walks): from 4-12 on a whale who buys everything
+  leads a non-spender by under 5 percent at every wall and every wall still binds; the whale spends
+  about EUR 289 a month (EUR 34 for the R19 spender), skins one-time on top. The handoff folder holds
+  whale-curve.md and offer-values.md.
+
 ### The UI kit (R20)
 
 A generated art kit (panels, buttons, tabs, pills, currency and navigation icons, aspect badges, relic icons, ability
