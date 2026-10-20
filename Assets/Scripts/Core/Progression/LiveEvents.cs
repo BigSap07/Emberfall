@@ -735,7 +735,7 @@ namespace Emberfall.Core.Progression
             if (hours > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.IdleGoldHours, hours), session) + " (Sealed)");
             if (sweeps > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.DustSweeps, sweeps), session));
             if (slag > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.Slag, slag), session) + " (Sealed)");
-            v.TrackLines.Add("Paid out tier by tier as you earn points. Nothing in it is random. Sales close 1 hour before the end.");
+            v.TrackLines.Add("Paid tier by tier as you earn points. Nothing is random. Sales close 1 hour before the end.");
             v.SalesClosed = SalesClosed(session, slot, st, nowUnix);
 
             StoreOfferDef track = OfferOf(session, slot, LiveEventPart.Track);

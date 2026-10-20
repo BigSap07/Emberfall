@@ -211,8 +211,8 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(trackTitle.rectTransform, 750f, -12f, 480f, 28f, TopLeft);
             Text trackBody = EmberforgeUI.Body("TrackBody", summary, string.Join("\n", v.TrackLines.ToArray()), UITheme.FontTiny - 6,
                                                Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(trackBody.rectTransform, 750f, -42f, 480f, 70f, TopLeft);
-            BuyOrOwned(summary, v.TrackOfferId, v.TrackPrice, "BUY EVENT TRACK", v.TrackOwned, v.TrackCanBuy, "TRACK ACTIVE", v.TrackLock.Length > 0 ? v.TrackLock : v.SalesClosed ? "SALES CLOSED  -  THE EVENT ENDS SOON" : "", 750f, -112f, 320f);
+            UIBuilder.Box(trackBody.rectTransform, 750f, -40f, 480f, 78f, TopLeft);
+            BuyOrOwned(summary, v.TrackOfferId, v.TrackPrice, "BUY EVENT TRACK", v.TrackOwned, v.TrackCanBuy, "TRACK ACTIVE", v.TrackLock.Length > 0 ? v.TrackLock : v.SalesClosed ? "SALES CLOSED  -  THE EVENT ENDS SOON" : "", 750f, -116f, 320f);
 
             // ---- the event pack: its name, its price, its fixed contents in full, one button
             Text packTitle = EmberforgeUI.Title("PackTitle", summary, v.PackOfferId.Length > 0 ? v.PackName.ToUpperInvariant() + "  -  " + v.PackPrice : "EVENT PACK",
@@ -220,9 +220,9 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(packTitle.rectTransform, 1260f, -12f, 480f, 28f, TopLeft);
             Text packBody = EmberforgeUI.Body("PackBody", summary, v.PackOfferId.Length > 0 ? string.Join("\n", v.PackLines.ToArray()) : "This event has no pack.",
                                               UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(packBody.rectTransform, 1260f, -42f, 480f, 70f, TopLeft);
+            UIBuilder.Box(packBody.rectTransform, 1260f, -40f, 480f, 78f, TopLeft);
             if (v.PackOfferId.Length > 0)
-                BuyOrOwned(summary, v.PackOfferId, v.PackPrice, "BUY EVENT PACK", v.PackOwned, v.PackCanBuy, "PACK BOUGHT", v.PackLock.Length > 0 ? v.PackLock : v.SalesClosed ? "SALES CLOSED  -  THE EVENT ENDS SOON" : "", 1260f, -112f, 320f);
+                BuyOrOwned(summary, v.PackOfferId, v.PackPrice, "BUY EVENT PACK", v.PackOwned, v.PackCanBuy, "PACK BOUGHT", v.PackLock.Length > 0 ? v.PackLock : v.SalesClosed ? "SALES CLOSED  -  THE EVENT ENDS SOON" : "", 1260f, -116f, 320f);
         }
 
         private void BuyOrOwned(RectTransform parent, string offerId, string price, string label, bool owned, bool canBuy, string ownedLabel, string stop, float x, float y, float w)
