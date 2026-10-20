@@ -35,7 +35,7 @@ namespace Emberfall.DevHarness
             Line("");
             Line("STORE (R19: a purchase grants fixed Sealed goods once per receipt, writes nothing until the store completes it, and reaches no random mechanic)");
             bool shipped = StoreSwitch.Enabled, contractShipped = HeroContractSwitch.Enabled;
-            Check(shipped && !contractShipped, "SHIPPED: StoreSwitch is ON unless the build defines EMBERFALL_STORE_OFF, and HeroContractSwitch is OFF unless it defines EMBERFALL_HERO_CONTRACT");
+            Check(shipped && contractShipped, "SHIPPED: StoreSwitch is ON unless the build defines EMBERFALL_STORE_OFF, and HeroContractSwitch is ON (R24) unless it defines EMBERFALL_HERO_CONTRACT_OFF");
             try
             {
                 StoreSwitch.Enabled = true;

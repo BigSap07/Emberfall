@@ -36,7 +36,9 @@ namespace Emberfall.Core.Progression
         /// <summary>A claim with nothing to claim (an expired card, a day already claimed).</summary>
         Nothing,
         /// <summary>No live event runs in the slot the offer sells.</summary>
-        NoEvent
+        NoEvent,
+        /// <summary>The account has used the month's contracts across all heroes (R24).</summary>
+        AccountCap
     }
 
     /// <summary>A hero an offer may give.</summary>
@@ -374,7 +376,21 @@ namespace Emberfall.Core.Progression
                     return LiveEvents.PurchaseRefusal(session, d.EventSlot, d.EventPart, nowUnix);
             }
             if (BoughtIn(session, d, choice, day) >= d.Limit) return StoreRefusal.SoldOut;
+            if (d.Kind == StoreOfferKind.Contract && d.AccountLimit > 0
+                && ContractsInPeriod(session, PeriodOf(session, d, day)) >= d.AccountLimit) return StoreRefusal.AccountCap;
             return StoreRefusal.None;
+        }
+
+        /// <summary>Contracts bought across every hero in the period (the month the store's clock is in). Reads the
+        /// per-hero counters Record keeps, so the account total is derived and never stored: it cannot drift from
+        /// them, and a counter from an earlier month counts for nothing.</summary>
+        public static int ContractsInPeriod(GameSession session, long period)
+        {
+            int total = 0;
+            List<OfferRecord> all = session.Profile.Store.Offers;
+            for (int i = 0; i < all.Count; i++)
+                if (all[i].OfferId.StartsWith(ContractPrefix, StringComparison.Ordinal) && all[i].Period >= period) total += all[i].Count;
+            return total;
         }
 
         /// <summary>Like Check for an offer whose pick is not made yet: open when at least one pick would pass.
@@ -432,6 +448,7 @@ namespace Emberfall.Core.Progression
                 case StoreRefusal.Claimed: return "Already claimed.";
                 case StoreRefusal.Nothing: return "Nothing to claim.";
                 case StoreRefusal.NoEvent: return "No event is running.";
+                case StoreRefusal.AccountCap: return "This month's contracts are used up.";
             }
             return "";
         }
@@ -610,7 +627,8 @@ namespace Emberfall.Core.Progression
             switch (d.Kind)
             {
                 case StoreOfferKind.Ledger: return "One card at a time";
-                case StoreOfferKind.Contract: return d.Limit + " a month per hero";
+                case StoreOfferKind.Contract:
+                    return d.Limit + " a month per hero" + (d.AccountLimit > 0 ? ", " + d.AccountLimit + " a month in all" : "");
                 case StoreOfferKind.Pass: return "One a season";
             }
             switch (d.Reset)
@@ -764,7 +782,7 @@ namespace Emberfall.Core.Progression
                 o.Reason = CheckAny(session, d.Id, nowUnix);
                 o.Available = o.Reason == StoreRefusal.None;
 
-                if (o.Reason == StoreRefusal.SoldOut && d.Kind != StoreOfferKind.Ledger)
+                if ((o.Reason == StoreRefusal.SoldOut || o.Reason == StoreRefusal.AccountCap) && d.Kind != StoreOfferKind.Ledger)
                 {
                     long end = PeriodEnd(session, d, day);
                     o.ResetInSeconds = end > 0 ? Math.Max(0L, end - nowUnix) : 0L;
@@ -937,6 +955,23 @@ namespace Emberfall.Core.Progression
                 v.HeroDays = 0.0;
                 v.TotalDays = v.GoldDays + v.DustDays;
                 return v;
+            }
+            else if (d.Kind == StoreOfferKind.Event)
+            {
+                // The first event of the slot stands for the slot: a pack's fixed bundle, or the sum of a track's paid tiers.
+                LiveEventDef ev = session.Content.LiveEvents.EventFor(d.EventSlot, 1);
+                if (ev != null && d.EventPart == LiveEventPart.Pack && ev.Pack != null) { hours = ev.Pack.Hours; sweeps = ev.Pack.DustSweeps; }
+                else if (ev != null && d.EventPart == LiveEventPart.Track)
+                {
+                    for (int i = 0; i < ev.Tiers.Count; i++)
+                    {
+                        EventRewardDef p = ev.Tiers[i].Paid;
+                        if (p == null) continue;
+                        if (p.Kind == EventRewardKind.Hourglass) hours += p.Amount;
+                        else if (p.Kind == EventRewardKind.Dust) sweeps += p.Amount;
+                        else v.Slag += (int)p.Amount;
+                    }
+                }
             }
             else if (d.Kind == StoreOfferKind.Pass)
             {

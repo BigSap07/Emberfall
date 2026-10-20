@@ -8,7 +8,8 @@
   // NOT PART OF ContentDatabase.ContentVersion, for guild-path.json's reason: nothing here is read by a fight.
   // ContentDatabase.LoadStore reads it after Load. The Store is behind StoreSwitch (on by default;
   // EMBERFALL_STORE_OFF rolls it back); the hero_contract offer is behind its own define,
-  // EMBERFALL_HERO_CONTRACT, which stays OFF until the owner re-measures the curve with paid copies.
+  // HeroContractSwitch, ON by default since R24 (define EMBERFALL_HERO_CONTRACT_OFF rolls it back). The contract
+  // keeps its 2 a month per hero and adds "accountLimit": 4 a month across all heroes of the account.
   //
   // PRICES ARE PLACEHOLDERS. "tiers" names euro tiers; the owner sets real prices when store accounts exist.
   // "productId" is a PLACEHOLDER and never a real store key.
@@ -112,7 +113,7 @@
       "id": "hero_contract", "name": "Hero Contract", "kind": "contract", "tier": "top",
       "productId": "placeholder.emberfall.store.hero_contract",
       "blurb": "One more copy of a 5-star you already own, for its ascension only.",
-      "limit": 2, "reset": "month",
+      "limit": 2, "reset": "month", "accountLimit": 4,
       "stars": 5, "heroCopies": 1
     }
   ]
