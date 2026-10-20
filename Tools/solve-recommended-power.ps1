@@ -97,8 +97,15 @@ if ($WhatIf) {
     $content = $scratch
 }
 
-& $exe $content --solve-recommended-power
-$code = $LASTEXITCODE
+# The full 60-walk stuck scan, whatever a quick build-check left in this shell.
+$quickWalksWas = $env:EMBERFALL_QUICK_WALKS
+$env:EMBERFALL_QUICK_WALKS = "0"
+try {
+    & $exe $content --solve-recommended-power
+    $code = $LASTEXITCODE
+} finally {
+    $env:EMBERFALL_QUICK_WALKS = $quickWalksWas
+}
 if ($code -ne 0) { exit $code }
 
 Write-Host ""

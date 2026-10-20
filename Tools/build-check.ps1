@@ -24,6 +24,9 @@ $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "compile-cache.ps1")
 $wall = [Diagnostics.Stopwatch]::StartNew()
 $mode = if ($Quick) { "quick" } else { "full" }
+# The caller's own value, put back by Finish, so an in-process -Quick run does not leave the shell
+# walking 20 seeds for whatever it runs next.
+$quickWalksWas = $env:EMBERFALL_QUICK_WALKS
 if ($Quick) {
     Write-Host "[build-check] QUICK MODE: the reference-walk guard walks 20 seeds instead of 60. This is NOT the full check and is not a merge result." -ForegroundColor Yellow
     $env:EMBERFALL_QUICK_WALKS = "1"
@@ -34,7 +37,7 @@ $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 $out = Join-Path $root "Tools\DevHarness\bin"
 New-Item -ItemType Directory -Force $out | Out-Null
 
-if (-not (Test-Path $csc)) { Write-Error "C# compiler not found at $csc"; exit 1 }
+if (-not (Test-Path $csc)) { $env:EMBERFALL_QUICK_WALKS = $quickWalksWas; Write-Error "C# compiler not found at $csc"; exit 1 }
 
 # ---- documentation lint.
 #
@@ -63,6 +66,7 @@ $harnessLines = @()
 if (-not $lintOk) { $failures.Add("doc-lint: new violations (listed above the compile steps)") }
 
 function Finish([int]$code) {
+    $env:EMBERFALL_QUICK_WALKS = $quickWalksWas
     Write-Host ("[build-check] " + $mode.ToUpper() + " check finished, exit " + $code + ", " + [int]$wall.Elapsed.TotalSeconds + " s wall")
     if ($Quick) { Write-Host "[build-check] That was a QUICK run (20 walks): it does not stand for the full check." -ForegroundColor Yellow }
     try {
