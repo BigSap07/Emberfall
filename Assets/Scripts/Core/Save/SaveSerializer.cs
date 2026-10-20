@@ -526,6 +526,7 @@ namespace Emberfall.Core.Save
         public static bool HoldsVersion26Data(PlayerProfile profile)
         {
             if (profile == null) return false;
+            if (profile.LiveEvents != null && !profile.LiveEvents.IsEmpty) return true;   // the live events' quests, points and what was bought
             return false;
         }
 

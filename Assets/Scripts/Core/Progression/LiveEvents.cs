@@ -132,14 +132,14 @@ namespace Emberfall.Core.Progression
         // ------------------------------------------------------------------ periods
 
         /// <summary>The period a clock reading falls in: a week index (Monday to Sunday) for the weekly slot, a
-        /// 28 day block counted from the epoch for the monthly slot (1 for the first, 0 before it).</summary>
+        /// 28 day block counted from the epoch for the monthly slot (1 for the first). Both are 0 before the epoch.</summary>
         public static long PeriodOf(GameSession session, LiveEventSlot slot, long nowUnix)
         {
             long dayStart = session.DayStartUnix(nowUnix);
-            if (slot == LiveEventSlot.Weekly) return DailyLoop.WeekOf(session, dayStart);
             LiveEventsConfig cfg = session.Content.LiveEvents;
             long rel = DailyLoop.DayNumber(session, dayStart) - cfg.EpochDay;
-            return rel < 0 ? 0L : rel / cfg.MonthlyDays + 1L;
+            if (rel < 0) return 0L;   // no event runs before the file's epoch, in either slot
+            return slot == LiveEventSlot.Weekly ? DailyLoop.WeekOf(session, dayStart) : rel / cfg.MonthlyDays + 1L;
         }
 
         /// <summary>The first reward day (unix seconds) of the period after this one.</summary>

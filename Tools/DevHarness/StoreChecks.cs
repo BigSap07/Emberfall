@@ -1064,7 +1064,7 @@ namespace Emberfall.DevHarness
         private static void CheckStoreNoRandomPath(string contentDir)
         {
             string[] kinds = Enum.GetNames(typeof(GrantKind));
-            string expected = "Gold,Slag,Dust,DustSweeps,IdleGoldHours,HeroCopy,HeroChoice,OwnedHeroCopy,PassPremium,Activate";
+            string expected = "Gold,Slag,Dust,DustSweeps,IdleGoldHours,HeroCopy,HeroChoice,OwnedHeroCopy,PassPremium,Activate,EventTrack,EventPack";
             Check(string.Join(",", kinds) == expected,
                   "THE GRANT KINDS ARE A CLOSED LIST OF FIXED LINES (" + string.Join(", ", kinds) + "): adding one is a decision for review, and none rolls, draws or summons");
 
@@ -1123,7 +1123,7 @@ namespace Emberfall.DevHarness
                   "ONE PLACE MAKES A SEALED MARK: SealedGrants is called by PurchaseGrants alone (" + string.Join(", ", sealers.ToArray()) + ")");
             bool appliersOk = true;
             for (int i = 0; i < appliers.Count; i++)
-                if (appliers[i] != "PurchaseLedger.cs" && appliers[i] != "WayfarersRoad.cs" && !appliers[i].StartsWith("Store")) appliersOk = false;
+                if (appliers[i] != "PurchaseLedger.cs" && appliers[i] != "WayfarersRoad.cs" && appliers[i] != "LiveEvents.cs" && !appliers[i].StartsWith("Store")) appliersOk = false;
             Check(appliersOk && appliers.Contains("PurchaseLedger.cs") && appliers.Contains("WayfarersRoad.cs"),
                   "and a grant is applied only by the ledger, the paid track and the Store's own rules (" + string.Join(", ", appliers.ToArray()) + ")");
         }

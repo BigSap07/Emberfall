@@ -313,6 +313,7 @@ namespace Emberfall.DevHarness
             CheckWayfarersRoad(content, contentDir);
             CheckStoreOffers(content, contentDir);
             CheckStore(content, contentDir);
+            CheckLiveEvents(content, contentDir);
             CheckUiKit(content, contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
