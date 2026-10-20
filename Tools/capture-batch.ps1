@@ -117,13 +117,23 @@ public static class CaptureFocus
     [DllImport("user32.dll")] static extern bool SwitchToThisWindow(IntPtr h, bool alt);
     [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr h, int c);
     [DllImport("user32.dll")] static extern bool IsIconic(IntPtr h);
+    [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);
 
     // Brings the window to the foreground if it is not already there. The foreground lock is
     // cleared for this session only. With no interactive desktop these calls fail and the result is false.
-    public static bool Raise(IntPtr h)
+    //
+    // Any window of the editor's own process in front counts as raised. The editor has more than one
+    // top-level window (the main one and a floating Game view), and MainWindowHandle may name either;
+    // comparing handles alone fired the Alt key and SwitchToThisWindow every few seconds while the
+    // editor already held the foreground, and editors stalled at Play entry with their main thread
+    // blocked in a cross-thread SendMessage under the window proc (R23, native stacks of two stalls).
+    public static bool Raise(IntPtr h, int pid)
     {
         if (h == IntPtr.Zero) return false;
-        if (GetForegroundWindow() == h) return true;
+        IntPtr front = GetForegroundWindow();
+        if (front == h) return true;
+        uint frontPid;
+        if (front != IntPtr.Zero && GetWindowThreadProcessId(front, out frontPid) != 0 && frontPid == (uint)pid) return true;
         SystemParametersInfo(0x2001, 0, IntPtr.Zero, 0);
         keybd_event(0x12, 0, 0, IntPtr.Zero);
         keybd_event(0x12, 0, 2, IntPtr.Zero);
@@ -385,7 +395,7 @@ function Watch-Editor($proc, [string]$log) {
     while (-not $proc.WaitForExit(3000)) {
         $tick++
         # The Game view only repaints while the editor holds the foreground. By PID, this editor only.
-        if (-not $NoFocus) { try { $proc.Refresh(); [void][CaptureFocus]::Raise($proc.MainWindowHandle) } catch { } }
+        if (-not $NoFocus) { try { $proc.Refresh(); [void][CaptureFocus]::Raise($proc.MainWindowHandle, $proc.Id) } catch { } }
         $now = Get-Date
         if ($now -gt $deadline) { return 'ceiling' }
         if (-not $logSeen) {
