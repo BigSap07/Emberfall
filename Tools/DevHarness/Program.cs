@@ -70,6 +70,7 @@ namespace Emberfall.DevHarness
                 // Docs/ECONOMY-PROPOSAL-R4.md, see RunRelevel.
                 if (args[i] == "--wall-modes" && i + 1 < args.Length) { _wallModes = args[++i]; continue; }
                 if (args[i] == "--store-contracts") { _storeContracts = true; continue; }
+                if (WhaleTakeArg(args, ref i)) continue;   // the R24 whale study's flags (WhaleCurve.cs)
                 if (args[i] == "--store-curve")
                 {
                     storeCurve = 20;
@@ -127,6 +128,7 @@ namespace Emberfall.DevHarness
             if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
             if (wallStudy > 0) return RunWallStudy(contentDir, wallStudy);
             if (storeCurve > 0) return RunStoreCurve(contentDir, storeCurve);
+            if (WhaleRequested) return RunWhaleStudy(contentDir);
             if (_relevelSpec != null) return RunRelevel(contentDir, _relevelSpec);
             if (lineCalibration) return RunLineCalibration(contentDir);
             // Nor this: the probe study measures the level search and writes nothing.
@@ -17356,6 +17358,9 @@ namespace Emberfall.DevHarness
             /// <summary>The Gold in hand at that same instant. The Quartermaster's sizing reads it
             /// (QuartermasterChecks.ReportQuartermasterGold).</summary>
             public long EntryGold;
+            /// <summary>Relic Dust held at that instant and at the stage's exit (the walk buys no relic, so it
+            /// only accrues). Read by the whale study (WhaleCurve.cs); nothing else reads them.</summary>
+            public long EntryRelicDust, ExitRelicDust;
             /// <summary>The same instant split by what BOUGHT each Level rather than by where it
             /// stands: the deployed five at Level 1 (not tier level 1), the bare power gold's Levels
             /// add, and the bare power ascension's Levels add. Gold plus copies is bare power less
@@ -17528,6 +17533,7 @@ namespace Emberfall.DevHarness
                 outcome.EntryIds = profile.TeamHeroes().ConvertAll(h => h.DefId).ToArray();
                 outcome.EntryLedger = run.Ledger.Snapshot();
                 outcome.EntryGold = profile.Gold;
+                outcome.EntryRelicDust = profile.RelicDust;
                 AttributeEntryLevels(run, outcome);
                 ProbeWallAtCap(db, session, outcome, stageIdx);
                 string[] entryTeam = (string[])profile.Team.Clone();
@@ -17685,6 +17691,7 @@ namespace Emberfall.DevHarness
                 outcome.Sessions = sessions;
                 outcome.TeamPower = profile.EffectiveTeamPower(db);
                 outcome.ElapsedSeconds = run.Now - stageStart;
+                outcome.ExitRelicDust = profile.RelicDust;
                 outcome.AvgRounds = outcome.Battles > 0 ? rounds / (float)outcome.Battles : 0f;
                 run.Stages.Add(outcome);
 
