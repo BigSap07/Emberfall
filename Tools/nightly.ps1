@@ -577,6 +577,7 @@ function Invoke-CaptureSweep {
     # The Unity AI Assistant MCP bridge is held off for the sweep and put back after it
     # (Tools/mcp-bridge-pref.ps1 says why); a run cut short is put back by the next capture session.
     . (Join-Path $PSScriptRoot 'mcp-bridge-pref.ps1')
+    try {
     Say (Disable-McpBridgeForCapture @(Get-Process -Name Unity -ErrorAction SilentlyContinue | ForEach-Object { $_.Id }))
     $began = Get-Date
     $proc = Start-Process -FilePath $unity -ArgumentList $argText -PassThru
@@ -588,12 +589,17 @@ function Invoke-CaptureSweep {
     $lastProgress = Get-Date
     $logSeen = $false
     $tick = 0
+    $holdFocus = $false
+    $holdSince = Get-Date
     while (-not $proc.WaitForExit(3000)) {
         # The Game view only repaints while the editor holds the foreground; behind another window
         # it keeps ticking, "captures" on schedule and photographs the previous frame (measured: a
         # Battle capture that was the Hub). Raised every few seconds, by PID, for this editor only.
+        # Never between a play entry request and its first heartbeat (read every fifth tick below),
+        # for at most 150 s: a foreground change while the editor enters Play deadlocked it (R23).
         $tick++
-        if (-not $NoFocus) {
+        if ($holdFocus -and ((Get-Date) - $holdSince).TotalSeconds -ge 150) { $holdFocus = $false }
+        if (-not $NoFocus -and -not $holdFocus) {
             try { $proc.Refresh(); [void][NightlyFocus]::Raise($proc.MainWindowHandle, $proc.Id) } catch { }
         }
         if ($tick % 5 -ne 0) { continue }
@@ -621,6 +627,10 @@ function Invoke-CaptureSweep {
         # dialog), and waiting out the full ceiling would only delay the report.
         $text = Read-SharedText $unityLog
         if ($text) {
+            $entryAt = $text.LastIndexOf('PlayModeScreenshot: play entry requested')
+            $wasHeld = $holdFocus
+            $holdFocus = ($entryAt -ge 0) -and ($entryAt -gt $text.LastIndexOf('PlayModeScreenshot: play heartbeat,'))
+            if ($holdFocus -and -not $wasHeld) { $holdSince = Get-Date }
             if (-not $runStarted -and $text.Contains('ScratchCaptures: scratch identity')) { $runStarted = $true; $lastProgress = Get-Date }
             if ($runStarted) {
                 $now = ([regex]::Matches($text, 'ScratchCaptures: triggered|PlayModeScreenshot: requested')).Count
@@ -650,8 +660,10 @@ function Invoke-CaptureSweep {
     }
 
     Restore-FirstRunPref $pref
-    $mcpNote = Restore-McpBridgeAfterCapture
-    if ($mcpNote) { Say $mcpNote }
+    } finally {
+        $mcpNote = Restore-McpBridgeAfterCapture
+        if ($mcpNote) { Say $mcpNote }
+    }
 
     # What Unity said about itself.
     if (Test-Path -LiteralPath $unityLog) {

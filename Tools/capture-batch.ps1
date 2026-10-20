@@ -360,8 +360,8 @@ Say ('targets (' + $targetList.Count + '): ' + ($targetList -join ';'))
 # (Tools/mcp-bridge-pref.ps1 says why and how). Left on when another editor is running.
 . (Join-Path $PSScriptRoot 'mcp-bridge-pref.ps1')
 $otherUnity = @(Get-Process -Name Unity -ErrorAction SilentlyContinue | ForEach-Object { $_.Id })
-Say (Disable-McpBridgeForCapture $otherUnity)
 try {
+Say (Disable-McpBridgeForCapture $otherUnity)
 
 # ------------------------------------------------------------------------------------ one launch
 
@@ -397,8 +397,9 @@ function Watch-Editor($proc, [string]$log) {
         # The Game view only repaints while the editor holds the foreground. By PID, this editor only.
         # Never between a play entry request and its first heartbeat: a foreground change while the
         # editor enters Play deadlocked it (R23: main thread in a cross-thread SendMessage under its
-        # window proc, 3 of 5 launches; 0 of 6 with no raise at all).
-        $holdFocus = ($lastMark -like '*play entry requested')
+        # window proc, 3 of 5 launches; 0 of 6 with no raise at all). The hold ends when the outer
+        # watchdog would act, so with that watchdog off a stuck entry still gets raises again.
+        $holdFocus = ($lastMark -like '*play entry requested') -and (((Get-Date) - $markAt).TotalSeconds -lt $OuterNoBeatSeconds)
         if (-not $NoFocus -and -not $holdFocus) { try { $proc.Refresh(); [void][CaptureFocus]::Raise($proc.MainWindowHandle, $proc.Id) } catch { } }
         $now = Get-Date
         if ($now -gt $deadline) { return 'ceiling' }
