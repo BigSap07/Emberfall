@@ -483,7 +483,19 @@ namespace Emberfall.Core.Save
         /// Upgrade needs NO migration step: every key's absence is the empty state. A save that holds none of
         /// it is byte for byte the document the build before wrote, version included. The server's save_limits
         /// row must be raised to 25 before a cloud player holds any of it (save_limits_25.sql, never applied).
-        public const int CurrentVersion = 25;
+        ///
+        /// 26: the R24 monetization run (Docs/DESIGN-STORE.md). The one bump of the run, stamped ONLY on a
+        /// document that holds data a version 25 build would drop, exactly as 24 and 25 are (HoldsVersion26Data).
+        /// Each task of the run that adds saved state adds its clause there and writes the data only when the
+        /// clause is true. Upgrade needs NO migration step: every key's absence is the empty state. A save that
+        /// holds none of it is byte for byte the document the build before wrote, version included. The server's
+        /// save_limits row must be raised to 26 before a cloud player holds any of it (save_limits_26.sql, never
+        /// applied).
+        public const int CurrentVersion = 26;
+
+        /// <summary>The version of the Store (R19), which a save says when it holds any of its data and none of
+        /// the version 26 data.</summary>
+        public const int StoreVersion = 25;
 
         /// <summary>The version of the R17 core gaps, which a save says when it holds any of their data and
         /// none of the version 25 data.</summary>
@@ -502,9 +514,19 @@ namespace Emberfall.Core.Save
         /// existed. A document claims a version only when it holds data from it.</summary>
         public static int VersionOf(PlayerProfile profile)
         {
-            if (HoldsVersion25Data(profile)) return CurrentVersion;
+            if (HoldsVersion26Data(profile)) return CurrentVersion;
+            if (HoldsVersion25Data(profile)) return StoreVersion;
             if (HoldsVersion24Data(profile)) return CoreGapsVersion;
             return profile != null && profile.Sinks != null && !profile.Sinks.IsEmpty ? SinksVersion : BaseVersion;
+        }
+
+        /// <summary>True when the profile holds anything a version 25 build would drop. THE ONE PLACE that
+        /// decides a save is a version 26 save, as HoldsVersion25Data is for 25. Empty until a task of the R24
+        /// run writes saved state; each adds its clause here.</summary>
+        public static bool HoldsVersion26Data(PlayerProfile profile)
+        {
+            if (profile == null) return false;
+            return false;
         }
 
         /// <summary>True when the profile holds anything a version 24 build would drop. THE ONE PLACE that
