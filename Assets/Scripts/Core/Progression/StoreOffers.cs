@@ -35,6 +35,8 @@ namespace Emberfall.Core.Progression
         Claimed,
         /// <summary>A claim with nothing to claim (an expired card, a day already claimed).</summary>
         Nothing,
+        /// <summary>No live event runs in the slot the offer sells.</summary>
+        NoEvent,
         /// <summary>The account has used the month's contracts across all heroes (R24).</summary>
         AccountCap,
         /// <summary>The offer needs a feature that is not open yet (the relic packs wait for the Relic Shop) (R24).</summary>
@@ -167,6 +169,7 @@ namespace Emberfall.Core.Progression
                 ? StoreOffers.CheckAny(session, offerId, nowUnix)
                 : StoreOffers.Check(session, offerId, choiceHeroId, nowUnix);
             reason = r == StoreRefusal.None ? "" : StoreOffers.ReasonText(r);
+            if (r == StoreRefusal.None) StoreOffers.OnBegin(session, offerId, nowUnix);
             return r == StoreRefusal.None;
         }
 
@@ -416,6 +419,8 @@ namespace Emberfall.Core.Progression
                     if (session.Profile.FindHeroByDefId(choice) == null) return StoreRefusal.NotOwned;
                     break;
                 }
+                case StoreOfferKind.Event:
+                    return LiveEvents.PurchaseRefusal(session, d.EventSlot, d.EventPart, nowUnix);
             }
             if (BoughtIn(session, d, choice, day) >= d.Limit) return StoreRefusal.SoldOut;
             if (d.Kind == StoreOfferKind.Contract && d.AccountLimit > 0
@@ -523,6 +528,7 @@ namespace Emberfall.Core.Progression
                 case StoreRefusal.NotReached: return "Not reached yet.";
                 case StoreRefusal.Claimed: return "Already claimed.";
                 case StoreRefusal.Nothing: return "Nothing to claim.";
+                case StoreRefusal.NoEvent: return "No event is running.";
                 case StoreRefusal.AccountCap: return "This month's contracts are used up.";
                 case StoreRefusal.Locked: return "Not open yet.";
                 case StoreRefusal.NoPick: return "Every relic you own is at its top tier.";
@@ -533,6 +539,16 @@ namespace Emberfall.Core.Progression
 
         // ------------------------------------------------------------------ recording a purchase
 
+        /// <summary>Called when a purchase is BEGUN and allowed (StoreRules.CanBuy). Writes nothing to the save: an event
+        /// offer remembers, in memory only, which event the buyer saw (LiveEvents.Bind), so a payment that lands after the
+        /// period turned over is delivered against that event.</summary>
+        public static void OnBegin(GameSession session, string offerId, long nowUnix)
+        {
+            if (!Active(session)) return;
+            StoreOfferDef d = Find(session, offerId);
+            if (d != null && d.Kind == StoreOfferKind.Event) LiveEvents.Bind(session, d.EventSlot, d.EventPart, nowUnix);
+        }
+
         /// <summary>Called by the purchase path once a grant is applied (IStoreRules.RecordPurchase): counts the
         /// purchase against its limit, in the period the store's clock is in, and starts a card. Writes only
         /// through PlayerProfile.Store.</summary>
@@ -541,6 +557,7 @@ namespace Emberfall.Core.Progression
             if (!Active(session)) return;
             StoreOfferDef d = Find(session, offerId);
             if (d == null) return;
+            if (d.Kind == StoreOfferKind.Event) return;   // once per event: the grant marked the live event state
             long day = EffectiveDay(session, nowUnix);
             Stamp(session, day);
             StoreState st = session.Profile.Store;
@@ -864,6 +881,7 @@ namespace Emberfall.Core.Progression
             {
                 StoreOfferDef d = all[i];
                 if (!Listed(d, session.Content.Skins)) continue;
+                if (d.Kind == StoreOfferKind.Event) continue;   // sold from the Events screen, with the event's own words
                 StoreOfferView o = new StoreOfferView();
                 o.Id = d.Id;
                 o.Name = d.Name;
@@ -1075,6 +1093,23 @@ namespace Emberfall.Core.Progression
                 v.HeroDays = 0.0;
                 v.TotalDays = v.GoldDays + v.DustDays;
                 return v;
+            }
+            else if (d.Kind == StoreOfferKind.Event)
+            {
+                // The first event of the slot stands for the slot: a pack's fixed bundle, or the sum of a track's paid tiers.
+                LiveEventDef ev = session.Content.LiveEvents.EventFor(d.EventSlot, 1);
+                if (ev != null && d.EventPart == LiveEventPart.Pack && ev.Pack != null) { hours = ev.Pack.Hours; sweeps = ev.Pack.DustSweeps; }
+                else if (ev != null && d.EventPart == LiveEventPart.Track)
+                {
+                    for (int i = 0; i < ev.Tiers.Count; i++)
+                    {
+                        EventRewardDef p = ev.Tiers[i].Paid;
+                        if (p == null) continue;
+                        if (p.Kind == EventRewardKind.Hourglass) hours += p.Amount;
+                        else if (p.Kind == EventRewardKind.Dust) sweeps += p.Amount;
+                        else v.Slag += (int)p.Amount;
+                    }
+                }
             }
             else if (d.Kind == StoreOfferKind.Pass)
             {

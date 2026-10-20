@@ -36,6 +36,12 @@ namespace Emberfall.Core.Data
         /// <summary>Grants nothing now. Starts an offer whose payouts come later (Ember Ledger, Growth
         /// Fund); each payout is granted through PurchaseGrants.Apply, so it is Sealed too.</summary>
         Activate,
+        /// <summary>Unlocks the paid Event Track of the event that runs now in the slot Amount names (0 weekly, 1
+        /// monthly). Grants nothing else; each paid tier is granted later through Apply, Sealed.</summary>
+        EventTrack,
+        /// <summary>The fixed pack of the event that runs now in the slot Amount names (0 weekly, 1 monthly): its
+        /// hours and sweeps are applied by Apply as the lines they are, once per event.</summary>
+        EventPack,
         /// <summary>R24. One relic the buyer NAMES from a list shown in full before purchase (RelicPacks.Picks): a relic
         /// they do not own is added at tier 1, an owned one below the top tier is raised one tier. Both are what the
         /// Relic Shop sells for Relic Dust; nothing is drawn. Amount is the most Dust a pick may be worth at the shop
@@ -135,6 +141,10 @@ namespace Emberfall.Core.Data
                         break;
                     case GrantKind.PassPremium:
                     case GrantKind.Activate:
+                        break;
+                    case GrantKind.EventTrack:
+                    case GrantKind.EventPack:
+                        if (it.Amount != 0.0 && it.Amount != 1.0) return it.Kind + " names a slot that is not 0 or 1";
                         break;
                     default:
                         return "unknown grant kind";

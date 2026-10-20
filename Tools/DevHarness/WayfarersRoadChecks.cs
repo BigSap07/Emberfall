@@ -28,12 +28,13 @@ namespace Emberfall.DevHarness
         {
             Line("");
             Line("WAYFARER'S ROAD (Docs/DESIGN-WAYFARERS-ROAD.md: the free track, 28 days, 30 tiers, points only from the daily loop)");
-            bool was = WayfarersRoadSwitch.Enabled, loopWas = DailyLoopSwitch.Enabled, paidWas = PassPaidSwitch.Enabled;
+            bool was = WayfarersRoadSwitch.Enabled, loopWas = DailyLoopSwitch.Enabled, paidWas = PassPaidSwitch.Enabled, liveWas = LiveEventsSwitch.Enabled;
             try
             {
                 WayfarersRoadSwitch.Enabled = true;
                 DailyLoopSwitch.Enabled = true;
                 PassPaidSwitch.Enabled = false;
+                LiveEventsSwitch.Enabled = false;   // the live events count the same claims and would add their own block to every save compared here
                 CheckPassContent(db);
                 CheckPassSizing(db);
                 CheckPassRewards(db);
@@ -51,6 +52,7 @@ namespace Emberfall.DevHarness
                 WayfarersRoadSwitch.Enabled = was;
                 DailyLoopSwitch.Enabled = loopWas;
                 PassPaidSwitch.Enabled = paidWas;
+                LiveEventsSwitch.Enabled = liveWas;
             }
             Check(WayfarersRoadSwitch.Enabled == was && DailyLoopSwitch.Enabled == loopWas && PassPaidSwitch.Enabled == paidWas,
                   "the switches are put back as the run found them (road " + (was ? "on" : "off") + ", paid " + (paidWas ? "on" : "off") + ")");

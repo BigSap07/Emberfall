@@ -343,6 +343,8 @@ namespace Emberfall.Core.Session
         /// </summary>
         private void OrderEvent(OrderKind kind, int amount, long nowUnix)
         {
+            // The live events' quests count the same moments, and do not depend on the daily loop being on.
+            LiveEvents.RecordOrder(this, kind, amount, nowUnix);
             if (!DailyLoopSwitch.Enabled) return;
             DailyLoop.Record(this, kind, amount, nowUnix);
         }
@@ -438,6 +440,7 @@ namespace Emberfall.Core.Session
             result.Success = result.LevelsGained > 0;
             if (result.Success) TelemetryHooks.HeroLevelUp(result.LevelsGained);
             if (result.Success) OrderEvent(OrderKind.Level, result.LevelsGained, nowUnix);
+            if (result.Success) LiveEvents.Record(this, EventQuestKind.SpendGold, result.GoldSpent, nowUnix);
             if (!result.Success) result.Message = "Not enough gold.";
             else if (hero.Level >= cap) result.Message = "Level cap reached.";
             return result;
@@ -477,6 +480,13 @@ namespace Emberfall.Core.Session
         /// </summary>
         public AscensionResult Ascend(HeroInstance hero)
         {
+            return Ascend(hero, TimeUtil.NowUnix());
+        }
+
+        /// <summary>The ascension with the clock handed in, so the live event quest it counts toward is dated by the
+        /// caller's clock like every other rule here. The one-argument form reads the device clock for it.</summary>
+        public AscensionResult Ascend(HeroInstance hero, long nowUnix)
+        {
             AscensionResult result = new AscensionResult();
             string blocker = AscensionBlocker(hero);
             if (blocker != null) { result.Message = blocker; return result; }
@@ -496,6 +506,7 @@ namespace Emberfall.Core.Session
             result.ToTier = hero.Ascension;
             result.Success = true;
             result.Message = "Ascended to tier " + hero.Ascension + ".";
+            LiveEvents.Record(this, EventQuestKind.Ascend, 1, nowUnix);
             return result;
         }
 
@@ -1341,6 +1352,7 @@ namespace Emberfall.Core.Session
             Profile.RelicDust += rewards.RelicDust;
             Profile.TotalBattlesWon++;
             if (!rewards.RepeatCapped) OrderEvent(OrderKind.Stage, 1, nowUnix);
+            if (!rewards.RepeatCapped) LiveEvents.RecordStageWin(this, nowUnix);
 
             if (firstClear)
             {
@@ -2456,6 +2468,7 @@ namespace Emberfall.Core.Session
             rewards.Victory = victory;
             rewards.Standing = Profile.ProvingStanding;
             OrderEvent(OrderKind.Arena, 1, nowUnix);
+            LiveEvents.Record(this, EventQuestKind.Proving, 1, nowUnix);
 
             // Counted for every attempt, won or lost, before anything else moves - it drives both
             // the ghost bootstrap and the opponent seed, and both need it to advance unconditionally.

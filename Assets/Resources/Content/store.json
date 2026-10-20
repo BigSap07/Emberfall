@@ -87,6 +87,34 @@
       "blurb": "The paid track of this season's pass, beside the free one. Every tier is listed.",
       "limit": 1, "reset": "season"
     },
+    // ---- R24 LIVE EVENTS (builder-a's block): the paid Event Track and the event pack of the weekly and the monthly
+    // event that runs now (live-events.json). Kind "event" has no contents of its own: the grant is the track unlock or
+    // the running event's fixed pack, applied by PurchaseGrants.Apply, so it is Sealed. The limit is once per event and
+    // is counted in the live event state, not here. The Events screen sells them; the Packs tab does not list them.
+    {
+      "id": "event_track_weekly", "name": "Weekly Event Track", "kind": "event", "tier": "mid",
+      "productId": "placeholder.emberfall.store.event_track_weekly",
+      "blurb": "The paid track of this week's event. Every reward is listed on the Events screen.",
+      "eventSlot": "weekly", "eventPart": "track"
+    },
+    {
+      "id": "event_track_monthly", "name": "Monthly Event Track", "kind": "event", "tier": "high",
+      "productId": "placeholder.emberfall.store.event_track_monthly",
+      "blurb": "The paid track of this month's event. Every reward is listed on the Events screen.",
+      "eventSlot": "monthly", "eventPart": "track"
+    },
+    {
+      "id": "event_pack_weekly", "name": "Weekly Event Pack", "kind": "event", "tier": "high",
+      "productId": "placeholder.emberfall.store.event_pack_weekly",
+      "blurb": "One fixed bundle themed on this week's event. Once per event.",
+      "eventSlot": "weekly", "eventPart": "pack"
+    },
+    {
+      "id": "event_pack_monthly", "name": "Monthly Event Pack", "kind": "event", "tier": "high",
+      "productId": "placeholder.emberfall.store.event_pack_monthly",
+      "blurb": "One fixed bundle themed on this month's event. Once per event.",
+      "eventSlot": "monthly", "eventPart": "pack"
+    },
     {
       "id": "hero_contract", "name": "Hero Contract", "kind": "contract", "tier": "top",
       "productId": "placeholder.emberfall.store.hero_contract",

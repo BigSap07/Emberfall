@@ -288,6 +288,7 @@ namespace Emberfall.Core.Progression
             LoopPayout payout = Pay(session, d.Hours);
             if (AllClaimed(session)) st.WeekDays = Math.Min(7, st.WeekDays + 1);
             WayfarersRoad.OnClaim(session, PassPointSource.Order, nowUnix);   // the pass counts the claim
+            LiveEvents.Record(session, EventQuestKind.ClaimOrder, 1, nowUnix);   // and so do the live events' quests
             return payout;
         }
 

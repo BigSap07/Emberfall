@@ -172,6 +172,19 @@ namespace Emberfall.Core.Data
         /// (IsUsable false) until LoadStore is called.</summary>
         public StoreConfig Store = new StoreConfig();
 
+        /// <summary>The weekly and the monthly live event (live-events.json, the events section of
+        /// Docs/DESIGN-STORE.md). NOT part of ContentVersion, for Sinks' reason: no fight reads it. Empty (IsUsable
+        /// false) until LoadLiveEvents is called. events.json (Events) is a separate system.</summary>
+        public LiveEventsConfig LiveEvents = new LiveEventsConfig();
+
+        /// <summary>Parses live-events.json into LiveEvents and adds its warnings to Warnings. Does not touch
+        /// ContentVersion.</summary>
+        public void LoadLiveEvents(string liveEventsJson)
+        {
+            LiveEvents = LiveEventsConfig.FromJson(liveEventsJson);
+            for (int i = 0; i < LiveEvents.Warnings.Count; i++) Warnings.Add(LiveEvents.Warnings[i]);
+        }
+
         /// <summary>The hero skins and their small stat bonuses (skins.json, R24, Docs/DESIGN-STORE.md). NOT part
         /// of ContentVersion: no RECORDED fight reads a skin (SkinsConfig explains why), so a retune must not retire
         /// a guild replay. Empty (IsUsable false) until LoadSkins is called, which the game reads as "no skins".</summary>

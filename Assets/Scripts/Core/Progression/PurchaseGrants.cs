@@ -16,7 +16,9 @@ namespace Emberfall.Core.Progression
         /// <summary>A line needs a hero from the buyer and the one given is not allowed.</summary>
         BadChoice,
         /// <summary>The pass is off, has no usable file, or no season runs, so a premium cannot be applied.</summary>
-        NoSeason
+        NoSeason,
+        /// <summary>An event line while no event runs in that slot, or its track or pack is already bought.</summary>
+        NoEvent
     }
 
     /// <summary>What one applied grant did, for the receipt line and the harness.</summary>
@@ -91,6 +93,15 @@ namespace Emberfall.Core.Progression
                         return r;
                     }
                 }
+                else if (it.Kind == GrantKind.EventTrack || it.Kind == GrantKind.EventPack)
+                {
+                    LiveEventPart part = it.Kind == GrantKind.EventTrack ? LiveEventPart.Track : LiveEventPart.Pack;
+                    if (!LiveEvents.DeliveryOf(session, SlotOf(it), part, nowUnix).Possible)
+                    {
+                        r.Reason = GrantRefusal.NoEvent;
+                        return r;
+                    }
+                }
             }
 
             // ---- the one write block
@@ -158,10 +169,36 @@ namespace Emberfall.Core.Progression
                         break;
                     case GrantKind.Activate:
                         break;
+                    case GrantKind.EventTrack:
+                    case GrantKind.EventPack:
+                        // A charged payment is always delivered (LiveEvents.DeliveryOf): normally the track is unlocked or the
+                        // pack applied and marked bought; a stale one pays its fixed goods out in full and marks nothing. The
+                        // goods are applied here as the fixed lines they are, so each is marked Sealed by the branches above.
+                        LiveEventSlot eventSlot = SlotOf(it);
+                        bool isTrack = it.Kind == GrantKind.EventTrack;
+                        LiveEvents.Delivery dl = LiveEvents.DeliveryOf(session, eventSlot, isTrack ? LiveEventPart.Track : LiveEventPart.Pack, nowUnix);
+                        if (dl.Goods != null)
+                        {
+                            GrantResult inner = Apply(session, dl.Goods, null, nowUnix);
+                            r.Gold += inner.Gold;
+                            r.Dust += inner.Dust;
+                            r.Slag += inner.Slag;
+                            r.Lines.AddRange(inner.Lines);
+                        }
+                        if (!dl.Normal) r.Lines.Add(dl.Note);
+                        else if (isTrack) { LiveEvents.MarkTrackBought(session, eventSlot, nowUnix); r.Lines.Add("The paid Event Track of this event"); }
+                        else LiveEvents.MarkPackBought(session, eventSlot, nowUnix);
+                        LiveEvents.Unbind(session, eventSlot, isTrack ? LiveEventPart.Track : LiveEventPart.Pack);
+                        break;
                 }
             }
             r.Success = true;
             return r;
+        }
+
+        private static LiveEventSlot SlotOf(GrantItem it)
+        {
+            return it.Amount >= 1.0 ? LiveEventSlot.Monthly : LiveEventSlot.Weekly;
         }
 
         /// <summary>The one line a Store card shows for a grant item BEFORE purchase: fixed words, with the
@@ -190,6 +227,8 @@ namespace Emberfall.Core.Progression
                     return "One copy of the hero you pick: " + string.Join(", ", names.ToArray());
                 case GrantKind.OwnedHeroCopy: return "One copy of a " + it.Stars + "-star you already own";
                 case GrantKind.PassPremium: return "The paid track of this season";
+                case GrantKind.EventTrack: return "The paid Event Track of this event";
+                case GrantKind.EventPack: return "The event pack of this event";
                 case GrantKind.RelicChoice: return "One relic of your pick: one you do not own, or one more tier on one you own";
                 case GrantKind.Skin:
                     SkinDef skin = session == null ? null : session.Content.Skins.Skin(it.SkinId);

@@ -1,0 +1,89 @@
+{
+  // THE LIVE EVENTS - Docs/DESIGN-STORE.md, the events section. A weekly event (seven days, Monday to Sunday by
+  // reward day) and a monthly event (28 days from "epoch", a Monday), each with a quest list, event points, a free
+  // reward track, a paid Event Track and one fixed event pack. The events of a slot take turns, one per period, in
+  // the order they are listed here; a slot with one event repeats it. Add an event by adding an entry.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, for guild-path.json's reason: nothing here is read by a fight.
+  // ContentDatabase.LoadLiveEvents reads it after Load. events.json (the limited-time events engine) is a separate
+  // system and is not touched. The whole thing is behind LiveEventsSwitch (on by default;
+  // EMBERFALL_LIVE_EVENTS_OFF rolls it back).
+  //
+  // EVERY REWARD IS A FIXED NUMBER. kinds: hourglass = hours of idle income at the claimant's frontier (the one
+  // idle formula), dust = repeat-clear payouts of the frontier stage (as Wayfarer's Road counts them), slag = Slag.
+  // "free" is paid as plain earned goods. "paid" and the pack are bought: they are paid through
+  // PurchaseGrants.Apply and are SEALED, so they never enter a summon, a Conversion, the forge gamble or any roll.
+  // There is no chance, no pool and no weight anywhere in this file, and LiveEventsConfig has no field to hold one.
+  //
+  // QUESTS. kind is one of: waves, stage, level, summon, arena (Proving or Recital), proving, spendGold, ascend,
+  // claimOrder, aspectWin (a stage won with at least minHeroes heroes of the event's aspect on the team).
+  // A claim pays "points"; a tier opens when the event's points reach its "points".
+  //
+  // SIZING IS A FIRST PASS. The weekly quests total 100 points and its top tier needs 100. The monthly quests total
+  // 360 and its top tier needs 300, so the ascend quest is optional. The prices are in store.json (event_track_*,
+  // event_pack_*), placeholders like every price. The value of each in days of income is in the R24 handoff data.
+  "epoch": "2026-01-05",
+  "monthlyDays": 28,
+
+  "events": [
+    {
+      "id": "ember_trials", "slot": "weekly", "name": "The Ember Trials", "aspect": "Ember",
+      "blurb": "A week of fire. Fight with Ember heroes and the forge answers.",
+      "pointsLabel": "Embers",
+      "quests": [
+        { "id": "et_stage", "kind": "stage", "target": 10, "points": 12, "text": "Win {0} stages" },
+        { "id": "et_aspect", "kind": "aspectWin", "target": 6, "points": 20, "minHeroes": 3, "text": "Win {0} stages with 3 or more Ember heroes on your team" },
+        { "id": "et_waves", "kind": "waves", "target": 40, "points": 10, "text": "Clear {0} waves" },
+        { "id": "et_level", "kind": "level", "target": 15, "points": 10, "text": "Buy {0} hero levels" },
+        { "id": "et_gold", "kind": "spendGold", "target": 20000, "points": 10, "text": "Spend {0} Gold on hero levels" },
+        { "id": "et_orders", "kind": "claimOrder", "target": 7, "points": 12, "text": "Claim {0} daily orders" },
+        { "id": "et_proving", "kind": "proving", "target": 5, "points": 12, "text": "Fight {0} times in the Proving" },
+        { "id": "et_summon", "kind": "summon", "target": 10, "points": 14, "text": "Summon {0} times" }
+      ],
+      "tiers": [
+        { "points": 10,  "free": { "kind": "hourglass", "amount": 1 }, "paid": { "kind": "hourglass", "amount": 5 } },
+        { "points": 20,  "free": { "kind": "dust", "amount": 1 },      "paid": { "kind": "dust", "amount": 3 } },
+        { "points": 30,  "free": { "kind": "hourglass", "amount": 1 }, "paid": { "kind": "hourglass", "amount": 5 } },
+        { "points": 40,  "free": { "kind": "dust", "amount": 1 },      "paid": { "kind": "dust", "amount": 4 } },
+        { "points": 50,  "free": { "kind": "hourglass", "amount": 2 }, "paid": { "kind": "hourglass", "amount": 6 } },
+        { "points": 60,  "free": { "kind": "dust", "amount": 2 },      "paid": { "kind": "dust", "amount": 4 } },
+        { "points": 70,  "free": { "kind": "hourglass", "amount": 1 }, "paid": { "kind": "hourglass", "amount": 6 } },
+        { "points": 80,  "free": { "kind": "dust", "amount": 2 },      "paid": { "kind": "dust", "amount": 5 } },
+        { "points": 90,  "free": { "kind": "hourglass", "amount": 2 }, "paid": { "kind": "hourglass", "amount": 8 } },
+        { "points": 100, "free": { "kind": "dust", "amount": 2 },      "paid": { "kind": "dust", "amount": 6 } }
+      ],
+      "pack": { "name": "Ember Trials Pack", "blurb": "A fixed bundle for the week of fire. Once per event.", "hours": 48, "dustSweeps": 24 }
+    },
+    {
+      "id": "tidecallers_month", "slot": "monthly", "name": "The Tidecaller's Month", "aspect": "Tide",
+      "blurb": "Twenty-eight days of the tide. A long road for those who fight with Tide heroes.",
+      "pointsLabel": "Pearls",
+      "quests": [
+        { "id": "tm_stage", "kind": "stage", "target": 40, "points": 30, "text": "Win {0} stages" },
+        { "id": "tm_aspect", "kind": "aspectWin", "target": 25, "points": 50, "minHeroes": 3, "text": "Win {0} stages with 3 or more Tide heroes on your team" },
+        { "id": "tm_waves", "kind": "waves", "target": 160, "points": 30, "text": "Clear {0} waves" },
+        { "id": "tm_level", "kind": "level", "target": 60, "points": 30, "text": "Buy {0} hero levels" },
+        { "id": "tm_gold", "kind": "spendGold", "target": 120000, "points": 30, "text": "Spend {0} Gold on hero levels" },
+        { "id": "tm_orders", "kind": "claimOrder", "target": 28, "points": 40, "text": "Claim {0} daily orders" },
+        { "id": "tm_proving", "kind": "proving", "target": 20, "points": 40, "text": "Fight {0} times in the Proving" },
+        { "id": "tm_summon", "kind": "summon", "target": 40, "points": 40, "text": "Summon {0} times" },
+        { "id": "tm_ascend", "kind": "ascend", "target": 1, "points": 70, "text": "Ascend a hero" }
+      ],
+      "tiers": [
+        { "points": 25,  "free": { "kind": "hourglass", "amount": 3 }, "paid": { "kind": "hourglass", "amount": 15 } },
+        { "points": 50,  "free": { "kind": "dust", "amount": 2 },      "paid": { "kind": "dust", "amount": 10 } },
+        { "points": 75,  "free": { "kind": "hourglass", "amount": 3 }, "paid": { "kind": "hourglass", "amount": 15 } },
+        { "points": 100, "free": { "kind": "dust", "amount": 2 },      "paid": { "kind": "dust", "amount": 10 } },
+        { "points": 125, "free": { "kind": "hourglass", "amount": 4 }, "paid": { "kind": "hourglass", "amount": 20 } },
+        { "points": 150, "free": { "kind": "dust", "amount": 3 },      "paid": { "kind": "dust", "amount": 12 } },
+        { "points": 175, "free": { "kind": "hourglass", "amount": 4 }, "paid": { "kind": "hourglass", "amount": 20 } },
+        { "points": 200, "free": { "kind": "dust", "amount": 3 },      "paid": { "kind": "dust", "amount": 14 } },
+        { "points": 225, "free": { "kind": "hourglass", "amount": 5 }, "paid": { "kind": "hourglass", "amount": 25 } },
+        { "points": 250, "free": { "kind": "dust", "amount": 4 },      "paid": { "kind": "dust", "amount": 16 } },
+        { "points": 275, "free": { "kind": "hourglass", "amount": 5 }, "paid": { "kind": "hourglass", "amount": 25 } },
+        { "points": 300, "free": { "kind": "dust", "amount": 4 },      "paid": { "kind": "dust", "amount": 18 } }
+      ],
+      "pack": { "name": "Tidecaller's Pack", "blurb": "A fixed bundle for the month of the tide. Once per event.", "hours": 96, "dustSweeps": 60 }
+    }
+  ]
+}

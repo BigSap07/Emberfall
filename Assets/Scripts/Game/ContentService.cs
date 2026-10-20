@@ -52,6 +52,8 @@ namespace Emberfall.Game
             db.LoadSkins(ReadTextOptional("skins"));
             // And what the Store sells (ContentDatabase.Store): no fight reads it.
             db.LoadStore(ReadTextOptional("store"));
+            // And the weekly and monthly live events (ContentDatabase.LiveEvents): no fight reads them.
+            db.LoadLiveEvents(ReadTextOptional("live-events"));
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);

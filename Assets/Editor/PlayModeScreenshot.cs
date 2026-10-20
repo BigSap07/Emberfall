@@ -393,6 +393,19 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/R17 sinks/Wayfarer's Road, selector picker", false, 125)]
         public static void CaptureWayfarersRoadPicker() { Begin("Screen:WayfarersRoadPicker"); }
 
+        // R24 LIVE EVENTS (Docs/DESIGN-STORE.md, the events section): the Events page and the Hub's door.
+        [MenuItem("Emberfall/Capture/R24 events/Events, weekly tab", false, 160)]
+        public static void CaptureLiveEventsWeekly() { Begin("Screen:LiveEventsWeekly"); }
+
+        [MenuItem("Emberfall/Capture/R24 events/Events, monthly tab", false, 161)]
+        public static void CaptureLiveEventsMonthly() { Begin("Screen:LiveEventsMonthly"); }
+
+        [MenuItem("Emberfall/Capture/R24 events/Events, Event Track bought and tiers claimed", false, 162)]
+        public static void CaptureLiveEventsTrack() { Begin("Screen:LiveEventsTrack"); }
+
+        [MenuItem("Emberfall/Capture/R24 events/Hub with the Events dot", false, 163)]
+        public static void CaptureHubEvents() { Begin("Screen:HubEvents"); }
+
         // R19 STORE (Docs/DESIGN-STORE.md). Builder A's block: the Store's three tabs, a pick, a purchase in the
         // debug store, the coming-soon look and the Hub's door. Each seeds the scratch identity through the rules.
         [MenuItem("Emberfall/Capture/R19 store/Pass, premium locked", false, 130)]
@@ -1828,6 +1841,10 @@ namespace Emberfall.EditorTools
                     case "WayfarersRoad":
                     case "WayfarersRoadPaid":
                     case "WayfarersRoadPicker": id = ScreenId.WayfarersRoad; break;
+                    case "LiveEventsWeekly":
+                    case "LiveEventsMonthly":
+                    case "LiveEventsTrack": id = ScreenId.LiveEvents; break;
+                    case "HubEvents": id = ScreenId.MainMenu; break;
                     case "ProvingSinksOn":
                     case "ProvingSinksOff": id = ScreenId.Proving; break;
                     case "RecitalSinksOn":
@@ -2015,6 +2032,7 @@ namespace Emberfall.EditorTools
                 if (IsSinksScreen(name)) SeedSinks(app, name);
                 if (IsR17SinkScreen(name)) SeedR17Sinks(app, name);
                 if (IsStoreScreen(name)) SeedStore(app, name);
+                if (IsLiveEventScreen(name)) SeedLiveEvents(app, name);
                 if (name == "HubLoopOff") CheckLoopIsOff(app);
                 if (name == "ProvingSinksOff" || name == "RecitalSinksOff") CheckSinksAreOff(app);
 
@@ -2080,6 +2098,8 @@ namespace Emberfall.EditorTools
                 if (IsSinksScreen(name)) OpenSinksPicker(app, name);
                 if (name == "WayfarersRoadPicker") OpenRoadPicker(app);
                 if (IsStoreScreen(name)) OpenStoreView(app, name);
+                if (name == "LiveEventsWeekly" || name == "LiveEventsTrack") ShowLiveSlot(app, LiveEventSlot.Weekly);
+                if (name == "LiveEventsMonthly") ShowLiveSlot(app, LiveEventSlot.Monthly);
                 Debug.Log("PlayModeScreenshot: showing " + name);
             }
 
@@ -2474,6 +2494,60 @@ namespace Emberfall.EditorTools
         private static bool IsStorePassScreen(string name)
         {
             return name == "StorePass" || name == "StorePassPremium";
+        }
+
+        private static bool IsLiveEventScreen(string name)
+        {
+            return name == "LiveEventsWeekly" || name == "LiveEventsMonthly" || name == "LiveEventsTrack" || name == "HubEvents";
+        }
+
+        private static void ShowLiveSlot(GameApp app, LiveEventSlot slot)
+        {
+            if (app.Router.LiveEvents == null) { Debug.LogWarning("PlayModeScreenshot: no Events page (LiveEventsSwitch is off)."); return; }
+            app.Router.LiveEvents.ShowSlotForCapture(slot);
+        }
+
+        /// <summary>
+        /// Seeds the live events through the rules: the clean scratch profile and the scripted debug store of the Store
+        /// targets (SeedStore), then quests counted through LiveEvents.Record and claimed through the engine's claims, and
+        /// the Event Track bought through the purchase flow exactly as the Buy button does. Scratch identity only.
+        /// </summary>
+        private static void SeedLiveEvents(GameApp app, string name)
+        {
+            if (!EditorScratchIdentity.IsScratch)
+            {
+                Debug.LogError("PlayModeScreenshot: refusing to seed the live events on a real identity.");
+                return;
+            }
+            SeedStore(app, name);
+            GameSession session = app.Session;
+            long now = TimeUtil.NowUnix();
+            LiveEventSlot slot = name == "LiveEventsMonthly" ? LiveEventSlot.Monthly : LiveEventSlot.Weekly;
+            LiveEventDef ev = LiveEvents.EventNow(session, slot, now);
+            if (ev == null) { Debug.LogWarning("PlayModeScreenshot: no " + slot + " event is running; nothing to seed."); return; }
+
+            // Half of every quest, and the first quests finished; the Track target finishes all of them.
+            for (int i = 0; i < ev.Quests.Count; i++)
+            {
+                EventQuestDef q = ev.Quests[i];
+                bool full = name == "LiveEventsTrack" || i < 3;
+                int amount = full ? q.Target : Mathf.Max(1, q.Target / 2);
+                if (q.Kind == EventQuestKind.AspectWin) { for (int k = 0; k < amount; k++) LiveEvents.RecordStageWin(session, now); }
+                else LiveEvents.Record(session, q.Kind, amount, now);
+            }
+            // The first two quests claimed (the rest wait, so the page shows both states and the Hub's dot is lit);
+            // the Track target claims every quest.
+            for (int i = 0; i < ev.Quests.Count; i++)
+                if (name == "LiveEventsTrack" || i < 2) LiveEvents.ClaimQuest(session, slot, ev.Quests[i].Id, now);
+
+            if (name == "LiveEventsTrack")
+            {
+                StoreBuy(app, "event_track_weekly", "");
+                for (int t = 1; t <= 4; t++) LiveEvents.ClaimFree(session, slot, t, now);
+                for (int t = 1; t <= 3; t++) LiveEvents.ClaimPaid(session, slot, t, now);
+            }
+            app.RefreshHud();
+            Debug.Log("PlayModeScreenshot: seeded the live events for " + name + " (" + ev.Id + ", points " + session.Profile.LiveEvents.Of(slot).Points + ")");
         }
 
         private static bool IsStoreScreen(string name)

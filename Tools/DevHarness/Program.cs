@@ -313,6 +313,7 @@ namespace Emberfall.DevHarness
             CheckWayfarersRoad(content, contentDir);
             CheckStoreOffers(content, contentDir);
             CheckStore(content, contentDir);
+            CheckLiveEvents(content, contentDir);
             CheckR24Store(content, contentDir);
             CheckR24RelicPacks(content, contentDir);
             CheckR24Skins(content, contentDir);
@@ -4940,6 +4941,8 @@ namespace Emberfall.DevHarness
                 db.LoadSkins(File.Exists(skinsPath) ? File.ReadAllText(skinsPath) : null);
                 string storePath = Path.Combine(dir, "store.json");
                 db.LoadStore(File.Exists(storePath) ? File.ReadAllText(storePath) : null);
+                string liveEventsPath = Path.Combine(dir, "live-events.json");
+                db.LoadLiveEvents(File.Exists(liveEventsPath) ? File.ReadAllText(liveEventsPath) : null);
                 return db;
             }
             catch (Exception ex)

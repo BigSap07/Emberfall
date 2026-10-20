@@ -1039,7 +1039,7 @@ namespace Emberfall.DevHarness
         {
             PlayerProfile profile = GameSession.CreateNewProfile(content, 1700000000);
             GameSession session = new GameSession(content, profile);
-            session.LevelUpHero(profile.Heroes[0], 6);
+            session.LevelUpHero(profile.Heroes[0], 6, 1700000050);
             session.GrantBattleResult(content.AllStages[0], true, 1700000100);
             profile.Gold = 123456;
             return profile;
