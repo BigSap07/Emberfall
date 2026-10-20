@@ -71,6 +71,7 @@ namespace Emberfall.UI.Screens
         private HudElement _friendsButton;
         private HudElement _ordersButton;
         private HudElement _storeButton;
+        private HudElement _eventsButton;
         private float _overflowButtonTop;
 
         // ---------- the campaign card ----------
@@ -491,10 +492,11 @@ namespace Emberfall.UI.Screens
             Place(mail.Root, top + step);
             mail.Group.alpha = HubStyle.DimAlpha;
 
-            HudElement events = HudWidgets.RailButton("Events", _hud, HudSkin.IconEvents,
-                                                      TextureLab.Sigil(8, 64), UITheme.Success,
-                                                      OpenEvents);
-            Place(events.Root, top + step * 2f);
+            _eventsButton = HudWidgets.RailButton("Events", _hud, HudSkin.IconEvents,
+                                                  TextureLab.Sigil(8, 64), UITheme.Success,
+                                                  OpenEvents);
+            Place(_eventsButton.Root, top + step * 2f);
+            RefreshEventsBadge();
 
             // THE DAILY ORDERS DOOR, present only with DailyLoopSwitch on. It takes the slot above
             // More and pushes More one slot down; with the switch off there is no fifth button,
@@ -642,6 +644,7 @@ namespace Emberfall.UI.Screens
             RefreshFriendBadge();
             RefreshOrdersBadge();
             RefreshStoreBadge();
+            RefreshEventsBadge();
             FeatureLockView.RefreshAll(App, Root);
             _tick = 0f;
         }
@@ -682,6 +685,7 @@ namespace Emberfall.UI.Screens
             RefreshIdle();
             RefreshOrdersBadge();
             RefreshStoreBadge();
+            RefreshEventsBadge();
             // The popup is not a MonoBehaviour and does not tick itself: while it is open, this is
             // what keeps its stored time honest under the player's eyes.
             if (_claimPopup != null && _claimPopup.IsOpen) _claimPopup.Refresh();
@@ -848,10 +852,20 @@ namespace Emberfall.UI.Screens
             Router.Show(ScreenId.Inventory);
         }
 
+        /// <summary>The Events door opens the live events page (the weekly and monthly events) when it exists, and
+        /// the limited-time events page as it always did when LiveEventsSwitch is off.</summary>
         private void OpenEvents()
         {
             App.Audio.Tap();
-            Router.Show(ScreenId.Events);
+            Router.Show(Router.LiveEvents != null ? ScreenId.LiveEvents : ScreenId.Events);
+        }
+
+        /// <summary>The dot on the Events rail button: lit while a live event quest or tier can be claimed, read from
+        /// the same LiveEvents.View the page draws and without writing the save. Dark with the switch off.</summary>
+        private void RefreshEventsBadge()
+        {
+            if (_eventsButton == null || !SessionReady("RefreshEventsBadge")) return;
+            _eventsButton.SetBadge(LiveEvents.AnythingToClaim(App.Session, TimeUtil.NowUnix()) ? 1 : 0);
         }
 
         private void OpenStore()

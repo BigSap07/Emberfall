@@ -56,8 +56,11 @@ namespace Emberfall.Core.Progression
         public int Points;
         public bool HasFree;
         public string FreeLine = "";
+        /// <summary>The same reward in few words, for a narrow tile: "3 h idle Gold", "2 sweeps Dust", "5 Slag".</summary>
+        public string FreeShort = "";
         public bool HasPaid;
         public string PaidLine = "";
+        public string PaidShort = "";
         public bool Reached;
         public bool FreeClaimed;
         public bool FreeCanClaim;
@@ -96,6 +99,8 @@ namespace Emberfall.Core.Progression
         public bool PackCanBuy;
         /// <summary>The full fixed contents of the pack, in words, before it is bought.</summary>
         public readonly List<string> PackLines = new List<string>();
+        /// <summary>What the whole paid track gives, summed, in words, before it is bought. Every tier is listed on the track itself.</summary>
+        public readonly List<string> TrackLines = new List<string>();
         public bool AnythingToClaim;
     }
 
@@ -308,6 +313,22 @@ namespace Emberfall.Core.Progression
                     return PurchaseGrants.Describe(new GrantItem(GrantKind.DustSweeps, d.Amount), session);
                 case EventRewardKind.Slag:
                     return PurchaseGrants.Describe(new GrantItem(GrantKind.Slag, d.Amount), session) + (sealedGood ? " (Sealed)" : "");
+            }
+            return "";
+        }
+
+        private static string Num(double v)
+        {
+            return v.ToString("0.#", CultureInfo.InvariantCulture);
+        }
+
+        private static string RewardShort(EventRewardDef d)
+        {
+            switch (d.Kind)
+            {
+                case EventRewardKind.Hourglass: return Num(d.Amount) + " h idle Gold";
+                case EventRewardKind.Dust: return Num(d.Amount) + (d.Amount == 1.0 ? " sweep Dust" : " sweeps Dust");
+                case EventRewardKind.Slag: return Num(d.Amount) + " Slag";
             }
             return "";
         }
@@ -529,14 +550,28 @@ namespace Emberfall.Core.Progression
                 tv.Reached = st.Points >= t.Points;
                 tv.HasFree = t.Free != null;
                 tv.HasPaid = t.Paid != null;
-                if (tv.HasFree) tv.FreeLine = RewardLine(session, t.Free, false);
-                if (tv.HasPaid) tv.PaidLine = RewardLine(session, t.Paid, true);
+                if (tv.HasFree) { tv.FreeLine = RewardLine(session, t.Free, false); tv.FreeShort = RewardShort(t.Free); }
+                if (tv.HasPaid) { tv.PaidLine = RewardLine(session, t.Paid, true); tv.PaidShort = RewardShort(t.Paid); }
                 tv.FreeClaimed = LiveEventSlotState.Bit(st.FreeMask, i);
                 tv.FreeCanClaim = tv.HasFree && tv.Reached && !tv.FreeClaimed;
                 tv.PaidClaimed = LiveEventSlotState.Bit(st.PaidMask, i);
                 tv.PaidCanClaim = paidOpen && tv.HasPaid && tv.Reached && !tv.PaidClaimed;
                 v.Tiers.Add(tv);
             }
+
+            double hours = 0.0, sweeps = 0.0, slag = 0.0;
+            for (int i = 0; i < ev.Tiers.Count; i++)
+            {
+                EventRewardDef p = ev.Tiers[i].Paid;
+                if (p == null) continue;
+                if (p.Kind == EventRewardKind.Hourglass) hours += p.Amount;
+                else if (p.Kind == EventRewardKind.Dust) sweeps += p.Amount;
+                else slag += p.Amount;
+            }
+            if (hours > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.IdleGoldHours, hours), session) + " (Sealed)");
+            if (sweeps > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.DustSweeps, sweeps), session));
+            if (slag > 0.0) v.TrackLines.Add(PurchaseGrants.Describe(new GrantItem(GrantKind.Slag, slag), session) + " (Sealed)");
+            v.TrackLines.Add("Paid out tier by tier as you earn points. Nothing in it is random.");
 
             StoreOfferDef track = OfferOf(session, slot, LiveEventPart.Track);
             if (track != null && StoreSwitch.Enabled && session.Content.Store.IsUsable)

@@ -42,7 +42,8 @@ namespace Emberfall.UI
         Archive,
         Quartermaster,
         WayfarersRoad,
-        Store
+        Store,
+        LiveEvents
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -166,6 +167,11 @@ namespace Emberfall.UI
         /// unless StoreSwitch is on; Show(ScreenId.Store) is then a no-op.</summary>
         public Screens.StoreScreen Store;
 
+        /// <summary>The weekly and monthly live events (the events section of Docs/DESIGN-STORE.md). Null unless
+        /// LiveEventsSwitch is on; Show(ScreenId.LiveEvents) is then a no-op and the Hub's Events door opens the
+        /// limited-time events page as it always did.</summary>
+        public Screens.LiveEventsScreen LiveEvents;
+
         public UIScreen Current { get; private set; }
 
         public void Build(GameApp app, RectTransform screenLayer, RectTransform overlayLayer)
@@ -254,6 +260,10 @@ namespace Emberfall.UI
             // The Store (Docs/DESIGN-STORE.md). Built only with the switch on: off, this build has no such
             // screen at all and no door on the Hub leads to it.
             if (Emberfall.Core.Session.StoreSwitch.Enabled) Store = Create<Screens.StoreScreen>();
+
+            // The live events page. Built only with the switch on: off, this build has no such screen at all and the
+            // Hub's Events door opens the page it always opened.
+            if (Emberfall.Core.Session.LiveEventsSwitch.Enabled) LiveEvents = Create<Screens.LiveEventsScreen>();
         }
 
         /// <summary>

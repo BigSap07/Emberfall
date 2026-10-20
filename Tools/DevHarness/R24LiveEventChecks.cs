@@ -52,6 +52,7 @@ namespace Emberfall.DevHarness
                 CheckLiveNotHashed(db, contentDir);
                 CheckLiveOff(db);
                 CheckLiveNothingRandom(contentDir);
+                CheckLiveWiring(contentDir);
             }
             finally
             {
@@ -928,6 +929,30 @@ namespace Emberfall.DevHarness
             string events = File.ReadAllText(Path.Combine(root, files[0].Replace('/', Path.DirectorySeparatorChar)));
             Check(grants.Contains("LiveEvents.MarkTrackBought") && grants.Contains("LiveEvents.MarkPackBought") && events.Contains("PurchaseGrants.Apply"),
                   "the track is unlocked and the pack's lines are applied inside PurchaseGrants.Apply, and a paid tier is claimed through it");
+        }
+
+        // ------------------------------------------------------------------ 13. the wiring
+
+        private static void CheckLiveWiring(string contentDir)
+        {
+            string root = SealedRepoRoot(contentDir);
+            if (root == null) { Check(false, "LIVE EVENTS WIRING: the repository root was not found from " + contentDir); return; }
+            string screenPath = Path.Combine(root, "Assets/Scripts/UI/Screens/LiveEventsScreen.cs".Replace('/', Path.DirectorySeparatorChar));
+            string routerPath = Path.Combine(root, "Assets/Scripts/UI/ScreenRouter.cs".Replace('/', Path.DirectorySeparatorChar));
+            string hubPath = Path.Combine(root, "Assets/Scripts/UI/Screens/MainMenuScreen.cs".Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(screenPath) || !File.Exists(routerPath) || !File.Exists(hubPath)) { Check(false, "LIVE EVENTS WIRING: the screen, the router or the Hub was not found"); return; }
+            string screen = StoreStripCommentsAndStrings(File.ReadAllText(screenPath));
+            string[] banned = { "PurchaseGrants", "SealedGrants", "PurchaseGrant ", "GrantItem", "StoreOffers.Fulfil", ".Gold +=", ".Gold -=", ".RelicDust +=", "Random", "DeterministicRng", ".Summon(", "GrantHeroDirect" };
+            List<string> hits = new List<string>();
+            for (int i = 0; i < banned.Length; i++) if (screen.Contains(banned[i])) hits.Add(banned[i]);
+            Check(hits.Count == 0 && screen.Contains("LiveEvents.View") && screen.Contains("LiveEvents.ClaimQuest") && screen.Contains("LiveEvents.ClaimFree") && screen.Contains("LiveEvents.ClaimPaid") && screen.Contains("Flow.Buy("),
+                  "THE EVENTS SCREEN DECIDES AND GRANTS NOTHING: it reads LiveEvents.View, claims through the engine's claims and buys through the purchase flow, and names no grant, no purchase, no purse and no random call"
+                  + (hits.Count > 0 ? " (" + string.Join(", ", hits.ToArray()) + ")" : ""));
+            string router = File.ReadAllText(routerPath), hub = File.ReadAllText(hubPath);
+            Check(router.Contains("LiveEventsSwitch.Enabled) LiveEvents = Create<Screens.LiveEventsScreen>()") && hub.Contains("Router.LiveEvents != null ? ScreenId.LiveEvents : ScreenId.Events")
+                  && hub.Contains("LiveEvents.AnythingToClaim"),
+                  "the screen is built only with the switch on, the Hub's Events door falls back to the limited-time events page without it, and the door's dot reads LiveEvents.AnythingToClaim");
+            Check(Array.IndexOf(Emberfall.Core.Progression.FeatureEntryPoints.OpenScreens, "LiveEvents") >= 0, "the Events screen is an open screen in the unlock table");
         }
     }
 }
