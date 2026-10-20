@@ -533,6 +533,13 @@ namespace Emberfall.Core.Model
         /// </summary>
         public StoreState Store = new StoreState();
 
+        /// <summary>
+        /// The live events' quests, points, claimed rewards, and the track and pack bought (R24, the events section of
+        /// Docs/DESIGN-STORE.md). NEVER NULL. Empty for every profile that never counted a quest, and an empty one is
+        /// not written to the save. Saved from version 26, and only a save that carries one says 26.
+        /// </summary>
+        public LiveEventsState LiveEvents = new LiveEventsState();
+
         /// <summary>Gold a random mechanic may spend: the purse less its Sealed part.</summary>
         public long FreeGold { get { return Gold - Math.Min(Math.Max(0, Sealed.Gold), Gold); } }
 

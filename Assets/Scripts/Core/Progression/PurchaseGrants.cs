@@ -16,7 +16,9 @@ namespace Emberfall.Core.Progression
         /// <summary>A line needs a hero from the buyer and the one given is not allowed.</summary>
         BadChoice,
         /// <summary>The pass is off, has no usable file, or no season runs, so a premium cannot be applied.</summary>
-        NoSeason
+        NoSeason,
+        /// <summary>An event line while no event runs in that slot, or its track or pack is already bought.</summary>
+        NoEvent
     }
 
     /// <summary>What one applied grant did, for the receipt line and the harness.</summary>
@@ -81,6 +83,15 @@ namespace Emberfall.Core.Progression
                         return r;
                     }
                 }
+                else if (it.Kind == GrantKind.EventTrack || it.Kind == GrantKind.EventPack)
+                {
+                    LiveEventPart part = it.Kind == GrantKind.EventTrack ? LiveEventPart.Track : LiveEventPart.Pack;
+                    if (!LiveEvents.CanGrant(session, SlotOf(it), part, nowUnix))
+                    {
+                        r.Reason = GrantRefusal.NoEvent;
+                        return r;
+                    }
+                }
             }
 
             // ---- the one write block
@@ -137,10 +148,28 @@ namespace Emberfall.Core.Progression
                         break;
                     case GrantKind.Activate:
                         break;
+                    case GrantKind.EventTrack:
+                        LiveEvents.MarkTrackBought(session, SlotOf(it), nowUnix);
+                        r.Lines.Add("The paid Event Track of this event");
+                        break;
+                    case GrantKind.EventPack:
+                        // The pack's own lines are applied here as the fixed lines they are, so each is marked Sealed
+                        // by the branches above; the event then counts its pack as bought.
+                        GrantResult inner = Apply(session, LiveEvents.PackGrant(session, SlotOf(it), nowUnix), null, nowUnix);
+                        r.Gold += inner.Gold;
+                        r.Dust += inner.Dust;
+                        r.Lines.AddRange(inner.Lines);
+                        LiveEvents.MarkPackBought(session, SlotOf(it), nowUnix);
+                        break;
                 }
             }
             r.Success = true;
             return r;
+        }
+
+        private static LiveEventSlot SlotOf(GrantItem it)
+        {
+            return it.Amount >= 1.0 ? LiveEventSlot.Monthly : LiveEventSlot.Weekly;
         }
 
         /// <summary>The one line a Store card shows for a grant item BEFORE purchase: fixed words, with the
@@ -169,6 +198,8 @@ namespace Emberfall.Core.Progression
                     return "One copy of the hero you pick: " + string.Join(", ", names.ToArray());
                 case GrantKind.OwnedHeroCopy: return "One copy of a " + it.Stars + "-star you already own";
                 case GrantKind.PassPremium: return "The paid track of this season";
+                case GrantKind.EventTrack: return "The paid Event Track of this event";
+                case GrantKind.EventPack: return "The event pack of this event";
                 case GrantKind.Activate: return "";
             }
             return "";

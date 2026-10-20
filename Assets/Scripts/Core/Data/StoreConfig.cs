@@ -21,7 +21,11 @@ namespace Emberfall.Core.Data
         /// <summary>The paid track of Wayfarer's Road, for the season it is bought in.</summary>
         Pass,
         /// <summary>One more copy of a hero the buyer already owns, for ascension.</summary>
-        Contract
+        Contract,
+        /// <summary>The paid Event Track or the pack of the weekly or monthly live event that runs now
+        /// (live-events.json). Its contents come from that event; its limit is once per event and is counted in the
+        /// profile's live event state, not in an offer record.</summary>
+        Event
     }
 
     /// <summary>When a purchase limit comes back.</summary>
@@ -91,6 +95,11 @@ namespace Emberfall.Core.Data
 
         /// <summary>Contract: the star count of a hero it may be bought for.</summary>
         public int Stars = 5;
+
+        /// <summary>Event: which live event slot it sells.</summary>
+        public LiveEventSlot EventSlot = LiveEventSlot.Weekly;
+        /// <summary>Event: the paid track, or the pack.</summary>
+        public LiveEventPart EventPart = LiveEventPart.Track;
     }
 
     /// <summary>
@@ -171,6 +180,7 @@ namespace Emberfall.Core.Data
                 case "growth": d.Kind = StoreOfferKind.Growth; break;
                 case "pass": d.Kind = StoreOfferKind.Pass; break;
                 case "contract": d.Kind = StoreOfferKind.Contract; break;
+                case "event": d.Kind = StoreOfferKind.Event; break;
                 default: c.Warnings.Add(where + " has unknown kind '" + kind + "' and is dropped"); return null;
             }
 
@@ -200,6 +210,16 @@ namespace Emberfall.Core.Data
             d.HoursPerDay = Math.Max(0.0, j["hoursPerDay"].AsDouble(0.0));
             d.IdleBonusPct = Math.Max(0, Math.Min(100, j.GetInt("idleBonusPct", 0)));
             d.Stars = Math.Max(1, Math.Min(5, j.GetInt("stars", 5)));
+
+            if (d.Kind == StoreOfferKind.Event)
+            {
+                string slotName = j.GetString("eventSlot", "");
+                string partName = j.GetString("eventPart", "");
+                if (!LiveEventsConfig.TrySlot(slotName, out d.EventSlot)) { c.Warnings.Add(where + " is an event offer with unknown slot '" + slotName + "' and is dropped"); return null; }
+                if (partName == "track") d.EventPart = LiveEventPart.Track;
+                else if (partName == "pack") d.EventPart = LiveEventPart.Pack;
+                else { c.Warnings.Add(where + " is an event offer with unknown part '" + partName + "' and is dropped"); return null; }
+            }
 
             List<JsonValue> choices = j.GetList("heroChoices");
             for (int i = 0; i < choices.Count; i++)
@@ -249,6 +269,10 @@ namespace Emberfall.Core.Data
                 case StoreOfferKind.Contract:
                     if (d.Reset != StoreReset.Month) { c.Warnings.Add(where + " is a contract that does not reset monthly and is dropped"); return null; }
                     break;
+                case StoreOfferKind.Event:
+                    d.Reset = StoreReset.Never;   // once per event, counted by the live event state
+                    d.Limit = 1;
+                    break;
             }
             Build(d);
             return d;
@@ -292,6 +316,9 @@ namespace Emberfall.Core.Data
                     GrantItem owned = new GrantItem(GrantKind.OwnedHeroCopy, 0);
                     owned.Stars = d.Stars;
                     g.Add(owned);   // one copy: a grant takes at most one pick from the buyer
+                    break;
+                case StoreOfferKind.Event:
+                    g.Add(new GrantItem(d.EventPart == LiveEventPart.Track ? GrantKind.EventTrack : GrantKind.EventPack, d.EventSlot == LiveEventSlot.Monthly ? 1 : 0));
                     break;
             }
             d.Built = o;

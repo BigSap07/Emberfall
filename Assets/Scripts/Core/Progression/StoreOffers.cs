@@ -34,7 +34,9 @@ namespace Emberfall.Core.Progression
         /// <summary>A claim already made.</summary>
         Claimed,
         /// <summary>A claim with nothing to claim (an expired card, a day already claimed).</summary>
-        Nothing
+        Nothing,
+        /// <summary>No live event runs in the slot the offer sells.</summary>
+        NoEvent
     }
 
     /// <summary>A hero an offer may give.</summary>
@@ -368,6 +370,8 @@ namespace Emberfall.Core.Progression
                     if (session.Profile.FindHeroByDefId(choice) == null) return StoreRefusal.NotOwned;
                     break;
                 }
+                case StoreOfferKind.Event:
+                    return LiveEvents.PurchaseRefusal(session, d.EventSlot, d.EventPart, nowUnix);
             }
             if (BoughtIn(session, d, choice, day) >= d.Limit) return StoreRefusal.SoldOut;
             return StoreRefusal.None;
@@ -427,6 +431,7 @@ namespace Emberfall.Core.Progression
                 case StoreRefusal.NotReached: return "Not reached yet.";
                 case StoreRefusal.Claimed: return "Already claimed.";
                 case StoreRefusal.Nothing: return "Nothing to claim.";
+                case StoreRefusal.NoEvent: return "No event is running.";
             }
             return "";
         }
@@ -441,6 +446,7 @@ namespace Emberfall.Core.Progression
             if (!Active(session)) return;
             StoreOfferDef d = Find(session, offerId);
             if (d == null) return;
+            if (d.Kind == StoreOfferKind.Event) return;   // once per event: the grant marked the live event state
             long day = EffectiveDay(session, nowUnix);
             Stamp(session, day);
             StoreState st = session.Profile.Store;
@@ -741,6 +747,7 @@ namespace Emberfall.Core.Progression
             {
                 StoreOfferDef d = all[i];
                 if (!Listed(d)) continue;
+                if (d.Kind == StoreOfferKind.Event) continue;   // sold from the Events screen, with the event's own words
                 StoreOfferView o = new StoreOfferView();
                 o.Id = d.Id;
                 o.Name = d.Name;

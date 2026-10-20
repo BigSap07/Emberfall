@@ -1120,6 +1120,10 @@ namespace Emberfall.Core.Save
             if (profile.WayfarersRoad != null && !profile.WayfarersRoad.IsEmpty)
                 root.Set("wayfarersRoad", profile.WayfarersRoad.Write());
 
+            // Version 26: the live events' quests, points, claims and what was bought, only once it holds something.
+            if (profile.LiveEvents != null && !profile.LiveEvents.IsEmpty)
+                root.Set("liveEvents", profile.LiveEvents.Write());
+
             // Version 25: the Store's counters and receipts, only once it holds something.
             if (profile.Store != null && !profile.Store.IsEmpty)
                 root.Set("store", profile.Store.Write());
@@ -1491,6 +1495,9 @@ namespace Emberfall.Core.Save
 
             // Version 24. Absent reads as no season, so the pass starts at the first point earned.
             profile.WayfarersRoad = WayfarersRoadState.Read(root["wayfarersRoad"]);
+
+            // Version 26. Absent reads as no event touched.
+            profile.LiveEvents = LiveEventsState.Read(root["liveEvents"]);
 
             // Version 25. Absent reads as nothing bought.
             profile.Store = StoreState.Read(root["store"]);

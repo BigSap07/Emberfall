@@ -172,6 +172,19 @@ namespace Emberfall.Core.Data
         /// (IsUsable false) until LoadStore is called.</summary>
         public StoreConfig Store = new StoreConfig();
 
+        /// <summary>The weekly and the monthly live event (live-events.json, the events section of
+        /// Docs/DESIGN-STORE.md). NOT part of ContentVersion, for Sinks' reason: no fight reads it. Empty (IsUsable
+        /// false) until LoadLiveEvents is called. events.json (Events) is a separate system.</summary>
+        public LiveEventsConfig LiveEvents = new LiveEventsConfig();
+
+        /// <summary>Parses live-events.json into LiveEvents and adds its warnings to Warnings. Does not touch
+        /// ContentVersion.</summary>
+        public void LoadLiveEvents(string liveEventsJson)
+        {
+            LiveEvents = LiveEventsConfig.FromJson(liveEventsJson);
+            for (int i = 0; i < LiveEvents.Warnings.Count; i++) Warnings.Add(LiveEvents.Warnings[i]);
+        }
+
         /// <summary>Parses store.json into Store, drops what this content cannot honour (a hero that is not a
         /// non-starting 5-star, a milestone at a stage that does not exist) and adds every warning to Warnings.
         /// Does not touch ContentVersion.</summary>

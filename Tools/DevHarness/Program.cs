@@ -4935,6 +4935,8 @@ namespace Emberfall.DevHarness
                 db.LoadWayfarersRoad(File.Exists(wayfarersPath) ? File.ReadAllText(wayfarersPath) : null);
                 string storePath = Path.Combine(dir, "store.json");
                 db.LoadStore(File.Exists(storePath) ? File.ReadAllText(storePath) : null);
+                string liveEventsPath = Path.Combine(dir, "live-events.json");
+                db.LoadLiveEvents(File.Exists(liveEventsPath) ? File.ReadAllText(liveEventsPath) : null);
                 return db;
             }
             catch (Exception ex)
