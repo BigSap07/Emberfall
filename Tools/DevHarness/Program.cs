@@ -70,7 +70,7 @@ namespace Emberfall.DevHarness
                 // Docs/ECONOMY-PROPOSAL-R4.md, see RunRelevel.
                 if (args[i] == "--wall-modes" && i + 1 < args.Length) { _wallModes = args[++i]; continue; }
                 if (args[i] == "--store-contracts") { _storeContracts = true; continue; }
-                if (WhaleTakeArg(args, ref i)) continue;   // the R24 whale study's flags (WhaleCurve.cs)
+                if (WhaleTakeArg(args, ref i)) continue;   // the R24 whale study's flags (R24WhaleCurve.cs)
                 if (args[i] == "--store-curve")
                 {
                     storeCurve = 20;
@@ -17359,7 +17359,7 @@ namespace Emberfall.DevHarness
             /// (QuartermasterChecks.ReportQuartermasterGold).</summary>
             public long EntryGold;
             /// <summary>Relic Dust held at that instant and at the stage's exit (the walk buys no relic, so it
-            /// only accrues). Read by the whale study (WhaleCurve.cs); nothing else reads them.</summary>
+            /// only accrues). Read by the whale study (R24WhaleCurve.cs); nothing else reads them.</summary>
             public long EntryRelicDust, ExitRelicDust;
             /// <summary>The same instant split by what BOUGHT each Level rather than by where it
             /// stands: the deployed five at Level 1 (not tier level 1), the bare power gold's Levels
