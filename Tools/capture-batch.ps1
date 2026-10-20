@@ -395,7 +395,11 @@ function Watch-Editor($proc, [string]$log) {
     while (-not $proc.WaitForExit(3000)) {
         $tick++
         # The Game view only repaints while the editor holds the foreground. By PID, this editor only.
-        if (-not $NoFocus) { try { $proc.Refresh(); [void][CaptureFocus]::Raise($proc.MainWindowHandle, $proc.Id) } catch { } }
+        # Never between a play entry request and its first heartbeat: a foreground change while the
+        # editor enters Play deadlocked it (R23: main thread in a cross-thread SendMessage under its
+        # window proc, 3 of 5 launches; 0 of 6 with no raise at all).
+        $holdFocus = ($lastMark -like '*play entry requested')
+        if (-not $NoFocus -and -not $holdFocus) { try { $proc.Refresh(); [void][CaptureFocus]::Raise($proc.MainWindowHandle, $proc.Id) } catch { } }
         $now = Get-Date
         if ($now -gt $deadline) { return 'ceiling' }
         if (-not $logSeen) {
