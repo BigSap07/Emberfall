@@ -45,6 +45,7 @@ namespace Emberfall.DevHarness
                 CheckLiveTracks(db);
                 CheckLivePack(db);
                 CheckLivePurchasePath(db);
+                CheckLivePaymentInFlight(db);
                 CheckLiveSealedAndRefused(db);
                 CheckLiveRollover(db);
                 CheckLiveWoundBack(db);
@@ -545,21 +546,109 @@ namespace Emberfall.DevHarness
             PurchaseResult pack = ledger.Complete(s, "event_pack_weekly", "receipt-ev-2", t0 + 3);
             Check(pack.Success && s.Profile.LiveEvents.Weekly.PackBought && s.Profile.Sealed.Gold - goldBefore == s.IdleYield(12 * 3600L).Gold && pack.Grant.Lines.Count == 2,
                   "THE PACK COMES THROUGH THE SAME PATH, SEALED, with a receipt line for each part (" + string.Join(" / ", pack.Grant.Lines.ToArray()) + ")");
+        }
 
-            // A paid purchase delivered after the event turned over is granted to the event that runs when it arrives,
-            // when that event has a pack. When it has none the grant is refused, nothing is written and the purchase is
-            // not confirmed, so the store keeps it open and delivers it again (the shipped events all have a pack).
-            GameSession late = LiveSession(d);
-            StoreOffers.Bind(late);
-            PurchaseLedger lateLedger = new PurchaseLedger(StoreRules.Shared);
-            lateLedger.Begin(late, "event_pack_weekly", null, t0);
-            string lateBefore = LiveSnapshot(late);
-            PurchaseResult noPackWeek = lateLedger.Complete(late, "event_pack_weekly", "receipt-ev-3", t0 + 7 * 86400L);
-            Check(!noPackWeek.Success && !noPackWeek.CanConfirm && late.Profile.Store.FindReceipt("receipt-ev-3") == null && late.Profile.LiveEvents.Weekly.IsEmpty && LiveSnapshot(late) == lateBefore,
-                  "A PAID PACK DELIVERED INTO AN EVENT WITH NO PACK IS REFUSED, writes nothing and is not confirmed, so the store delivers it again");
-            PurchaseResult delivered = lateLedger.Complete(late, "event_pack_weekly", "receipt-ev-3", t0 + 14 * 86400L);
-            Check(delivered.Success && late.Profile.LiveEvents.Weekly.PackBought && late.Profile.LiveEvents.Weekly.Period == LiveEvents.PeriodOf(late, LiveEventSlot.Weekly, t0 + 14 * 86400L),
-                  "and delivered again into an event that has one it is granted to the event that runs, not lost");
+        // ------------------------------------------------------------------ 5b. a payment in flight across a turnover
+
+        /// <summary>One purchase of an event offer through the real ledger: begun at beginAt, delivered at deliverAt.</summary>
+        private static PurchaseResult LiveFlight(GameSession s, PurchaseLedger ledger, string offerId, string receipt, long beginAt, long deliverAt)
+        {
+            if (beginAt >= 0) ledger.Begin(s, offerId, null, beginAt);
+            return ledger.Complete(s, offerId, receipt, deliverAt);
+        }
+
+        private static void CheckLivePaymentInFlight(ContentDatabase db)
+        {
+            ContentDatabase d = LiveDb(LiveTestJson(db));
+            long t0 = LiveT0(d);
+            long week = 7 * 86400L;
+            // t_week (a pack, a paid track) runs at t0, t_week2 (no pack, no paid rewards) at t0 + 1 week, t_week again at + 2 weeks.
+
+            // ---- begun and delivered in one period: normal, and the memory is gone afterwards
+            GameSession a = LiveSession(d);
+            StoreOffers.Bind(a);
+            PurchaseLedger ledgerA = new PurchaseLedger(StoreRules.Shared);
+            string pristine = LiveSnapshot(a);
+            ledgerA.Begin(a, "event_pack_weekly", null, t0);
+            Check(a.Profile.LiveEvents.Pending.Count == 1 && LiveSnapshot(a) == pristine,
+                  "BEGINNING AN EVENT PURCHASE REMEMBERS THE EVENT IN MEMORY ONLY: the save is byte for byte as it was");
+            long goldBefore = a.Profile.Sealed.Gold;
+            PurchaseResult normal = ledgerA.Complete(a, "event_pack_weekly", "flight-1", t0 + 5);
+            Check(normal.Success && normal.CanConfirm && a.Profile.LiveEvents.Weekly.PackBought && a.Profile.LiveEvents.Pending.Count == 0
+                  && a.Profile.Sealed.Gold - goldBefore == a.IdleYield(12 * 3600L).Gold,
+                  "BEGUN AND DELIVERED IN ONE PERIOD the pack is applied once, marked bought, and the memory is cleared");
+
+            // ---- a pack paid for in week 1, delivered after the turnover into an event that has NO pack
+            GameSession b = LiveSession(d);
+            StoreOffers.Bind(b);
+            PurchaseLedger ledgerB = new PurchaseLedger(StoreRules.Shared);
+            long gB = b.Profile.Sealed.Gold, dB = b.Profile.RelicDust;
+            long hours12 = b.IdleYield(12 * 3600L).Gold, sweeps6 = 6 * WayfarersRoad.DustPerSweep(b);
+            PurchaseResult stalePack = LiveFlight(b, ledgerB, "event_pack_weekly", "flight-2", t0, t0 + week + 10);
+            Check(stalePack.Success && stalePack.CanConfirm && b.Profile.Store.FindReceipt("flight-2") != null
+                  && b.Profile.Sealed.Gold - gB == hours12 && b.Profile.RelicDust - dB == sweeps6 && !b.Profile.LiveEvents.Weekly.PackBought,
+                  "A PACK PAID FOR BEFORE THE TURNOVER IS DELIVERED IN FULL AFTER IT, though the running event has no pack: " + (b.Profile.Sealed.Gold - gB) + " Sealed Gold and " + (b.Profile.RelicDust - dB)
+                  + " Dust arrive, the payment is confirmed, and nothing is marked, so the running event is untouched");
+            Check(stalePack.Grant != null && stalePack.Grant.Lines.Count == 3 && stalePack.Grant.Lines[2].Contains("paid out in full"),
+                  "and the receipt says so (" + (stalePack.Grant != null ? string.Join(" / ", stalePack.Grant.Lines.ToArray()) : "") + ")");
+            string settled = LiveSnapshot(b);
+            PurchaseResult again = ledgerB.Complete(b, "event_pack_weekly", "flight-2", t0 + week + 20);
+            Check(!again.Success && again.Reason == PurchaseRefusal.AlreadyGranted && again.CanConfirm && LiveSnapshot(b) == settled,
+                  "NEVER TWICE: the same receipt delivered again grants nothing, writes nothing and is confirmed so the store stops");
+
+            // ---- the same payment delivered after a restart (no memory of the event): the running event has no pack, so the first event that has one is delivered
+            GameSession c = LiveSession(d);
+            StoreOffers.Bind(c);
+            PurchaseLedger ledgerC = new PurchaseLedger(StoreRules.Shared);
+            long gC = c.Profile.Sealed.Gold;
+            PurchaseResult restart = ledgerC.Complete(c, "event_pack_weekly", "flight-3", t0 + week + 10);
+            Check(restart.Success && restart.CanConfirm && c.Profile.Sealed.Gold - gC == hours12 && !c.Profile.LiveEvents.Weekly.PackBought,
+                  "A PAYMENT DELIVERED AFTER A RESTART with no memory of its event is still delivered, from the first event of the slot that has a pack");
+
+            // ---- two payments for one event: the second is delivered in full too, and the event stays bought once
+            GameSession e = LiveSession(d);
+            StoreOffers.Bind(e);
+            PurchaseLedger ledgerE = new PurchaseLedger(StoreRules.Shared);
+            PurchaseResult first = LiveFlight(e, ledgerE, "event_pack_weekly", "flight-4", t0, t0 + 5);
+            long gE = e.Profile.Sealed.Gold;
+            PurchaseResult second = ledgerE.Complete(e, "event_pack_weekly", "flight-5", t0 + 6);
+            Check(first.Success && second.Success && second.CanConfirm && e.Profile.Sealed.Gold - gE == hours12 && e.Profile.LiveEvents.Weekly.PackBought,
+                  "TWO PAYMENTS FOR ONE EVENT: the second receipt is a charged payment and is delivered in full, the pack stays marked bought once");
+
+            // ---- a track paid for in week 1 and delivered in week 2: the paid rewards paid out in full, the new event's track still for sale
+            GameSession f = LiveSession(d);
+            StoreOffers.Bind(f);
+            PurchaseLedger ledgerF = new PurchaseLedger(StoreRules.Shared);
+            long gF = f.Profile.Sealed.Gold, dF = f.Profile.RelicDust, slagF = f.Profile.Sealed.Slag, freeF = f.Profile.FreeGold;
+            long paidHours = f.IdleYield(2 * 3600L).Gold, paidSweeps = 5 * WayfarersRoad.DustPerSweep(f);
+            PurchaseResult staleTrack = LiveFlight(f, ledgerF, "event_track_weekly", "flight-6", t0, t0 + week + 10);
+            Check(staleTrack.Success && staleTrack.CanConfirm && f.Profile.Sealed.Gold - gF == paidHours && f.Profile.RelicDust - dF == paidSweeps && f.Profile.Sealed.Slag - slagF == 10
+                  && f.Profile.FreeGold == freeF && !f.Profile.LiveEvents.Weekly.TrackBought,
+                  "A TRACK PAID FOR BEFORE THE TURNOVER PAYS ITS PAID REWARDS OUT IN FULL, Sealed (2 hours, 5 sweeps, 10 Slag, the totals the card showed), because its quests belong to an event that is over");
+            Check(LiveEvents.PurchaseRefusal(f, LiveEventSlot.Weekly, LiveEventPart.Track, t0 + week + 11) == StoreRefusal.None,
+                  "and the running event's own track is still for sale");
+
+            // ---- the monthly slot
+            GameSession g = LiveSession(d);
+            StoreOffers.Bind(g);
+            PurchaseLedger ledgerG = new PurchaseLedger(StoreRules.Shared);
+            long gG = g.Profile.Sealed.Gold;
+            long monthTwo = LiveMonthStart(d, 101) + 30;
+            PurchaseResult month = LiveFlight(g, ledgerG, "event_pack_monthly", "flight-7", t0, monthTwo);
+            Check(month.Success && month.CanConfirm && g.Profile.Sealed.Gold - gG == g.IdleYield(24 * 3600L).Gold && !g.Profile.LiveEvents.Monthly.PackBought,
+                  "A MONTHLY PACK PAID FOR IN MONTH 100 AND DELIVERED IN MONTH 101 is delivered in full and the new month's pack stays for sale");
+
+            // ---- every case above confirmed a charged payment, and every delivered good is a Sealed fixed line
+            bool allConfirmed = stalePack.CanConfirm && restart.CanConfirm && second.CanConfirm && staleTrack.CanConfirm && month.CanConfirm && normal.CanConfirm;
+            Check(allConfirmed && b.Profile.FreeGold == b.Profile.Gold - b.Profile.Sealed.Gold,
+                  "NO CHARGED PAYMENT IS LEFT UNCONFIRMED, and everything delivered is Sealed (no Gold a random mechanic may spend arrived)");
+
+            // ---- an event offer nothing in the file can deliver is still refused, and writes nothing
+            ContentDatabase none = LiveDb(null);
+            GameSession h = LiveSession(none);
+            string hBefore = LiveSnapshot(h);
+            PurchaseResult nothing = new PurchaseLedger(StoreRules.Shared).Complete(h, "event_pack_weekly", "flight-8", t0);
+            Check(!nothing.Success && LiveSnapshot(h) == hBefore, "with no live-events.json there is nothing to deliver: refused, nothing written");
         }
 
         // ------------------------------------------------------------------ 6. Sealed and refused by every random path

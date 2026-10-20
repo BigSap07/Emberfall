@@ -29,6 +29,7 @@ namespace Emberfall.DevHarness
                 WayfarersRoadSwitch.Enabled = true;
                 DailyLoopSwitch.Enabled = true;
                 CheckR24ContractShipped(db, contractShipped);
+                CheckR24ContractUnlock(db);
                 CheckR24ContractCaps(db);
                 CheckR24ContractClock(db);
                 CheckR24ContractPurchasePath(db);
@@ -50,7 +51,7 @@ namespace Emberfall.DevHarness
 
         private static GameSession R24ContractSession(ContentDatabase db, long now, int owned)
         {
-            GameSession s = OfferSession(db, 2);
+            GameSession s = OfferSession(db, 4);   // the contract opens at 4-1
             List<string> picks = db.Store.Offer("starter_pact").HeroChoices;
             for (int i = 0; i < owned && i < picks.Count; i++) s.GrantHeroDirect(db.GetHero(picks[i]), now);
             return s;
@@ -62,6 +63,7 @@ namespace Emberfall.DevHarness
             Check(shipped, "SHIPPED: HeroContractSwitch is ON unless the build defines EMBERFALL_HERO_CONTRACT_OFF");
             Check(c != null && c.Limit == 2 && c.Reset == StoreReset.Month && c.AccountLimit == 4 && c.Stars == 5,
                   "the Hero Contract keeps its 2 a month per hero and store.json adds accountLimit 4 a month across the account");
+            Check(c != null && c.RequiresStage == "ch4_1" && db.GetStage("ch4_1") != null, "and it opens at 4-1 (requiresStage ch4_1, a stage that exists)");
             StoreOfferDef starter = db.Store.Offer("starter_pact");
             Check(starter != null && starter.AccountLimit == 0 && db.Store.Offer("weekly_pack").AccountLimit == 0,
                   "no other offer carries an account cap");
@@ -178,6 +180,25 @@ namespace Emberfall.DevHarness
             Check(error == null && SaveSerializer.Serialize(back) == json && JsonValue.Parse(json).GetInt("version", 0) == SaveSerializer.StoreVersion
                   && StoreOffers.Check(reloaded, "hero_contract", picks[2], now + 3600) == StoreRefusal.AccountCap,
                   "THE CAP SURVIVES THE SAVE: no new key (the account total is read from the per hero counters), the document is still version 25 and a reload is still capped");
+        }
+
+        private static void CheckR24ContractUnlock(ContentDatabase db)
+        {
+            HeroContractSwitch.Enabled = true;
+            long now = OfferMonday(db);
+            GameSession s = OfferSession(db, 3);   // 3-12 cleared, 4-1 not
+            string hero = db.Store.Offer("starter_pact").HeroChoices[0];
+            s.GrantHeroDirect(db.GetHero(hero), now);
+            string before = OfferSnapshot(s);
+            StoreOfferView o = null;
+            StoreView v = StoreOffers.View(s, now);
+            for (int i = 0; i < v.Offers.Count; i++) if (v.Offers[i].Id == "hero_contract") o = v.Offers[i];
+            Check(o != null && !o.Available && o.Reason == StoreRefusal.Locked && o.LockLine == "UNLOCKS AT 4-1"
+                  && StoreOffers.Check(s, "hero_contract", hero, now) == StoreRefusal.Locked && !StoreOffers.Fulfil(s, "hero_contract", hero, now).Success && OfferSnapshot(s) == before,
+                  "THE CONTRACT WAITS FOR 4-1: before it, it is listed with 'UNLOCKS AT 4-1', cannot be bought and a refused attempt writes nothing");
+            s.Profile.ClearedStageIds.Add("ch4_1");
+            Check(StoreOffers.Check(s, "hero_contract", hero, now) == StoreRefusal.None && StoreOffers.Fulfil(s, "hero_contract", hero, now).Success,
+                  "clearing 4-1 opens it");
         }
 
         private static void CheckR24ContractRollback(ContentDatabase db)

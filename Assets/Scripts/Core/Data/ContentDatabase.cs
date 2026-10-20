@@ -185,6 +185,21 @@ namespace Emberfall.Core.Data
             for (int i = 0; i < LiveEvents.Warnings.Count; i++) Warnings.Add(LiveEvents.Warnings[i]);
         }
 
+        /// <summary>The hero skins and their small stat bonuses (skins.json, R24, Docs/DESIGN-STORE.md). NOT part
+        /// of ContentVersion: no RECORDED fight reads a skin (SkinsConfig explains why), so a retune must not retire
+        /// a guild replay. Empty (IsUsable false) until LoadSkins is called, which the game reads as "no skins".</summary>
+        public SkinsConfig Skins = new SkinsConfig();
+
+        /// <summary>Parses skins.json into Skins, drops what this content cannot honour (a skin of a hero the roster
+        /// lacks, a stat above the ceiling) and adds every warning to Warnings. Call it BEFORE LoadStore: the Store
+        /// derives its skin offers from this. Does not touch ContentVersion.</summary>
+        public void LoadSkins(string skinsJson)
+        {
+            Skins = SkinsConfig.FromJson(skinsJson);
+            Skins.Validate(this);
+            for (int i = 0; i < Skins.Warnings.Count; i++) Warnings.Add(Skins.Warnings[i]);
+        }
+
         /// <summary>Parses store.json into Store, drops what this content cannot honour (a hero that is not a
         /// non-starting 5-star, a milestone at a stage that does not exist) and adds every warning to Warnings.
         /// Does not touch ContentVersion.</summary>

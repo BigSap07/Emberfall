@@ -431,24 +431,52 @@ namespace Emberfall.Core.Progression
             return st.TrackBought ? StoreRefusal.SoldOut : StoreRefusal.None;
         }
 
-        /// <summary>True when PurchaseGrants.Apply may grant that part now. Asked in its check phase.</summary>
-        public static bool CanGrant(GameSession session, LiveEventSlot slot, LiveEventPart part, long nowUnix)
+        // ------------------------------------------------------------------ delivering a payment
+
+        /// <summary>The key a purchase in flight is remembered under: its slot and its part.</summary>
+        public static int PendingKey(LiveEventSlot slot, LiveEventPart part)
         {
-            return PurchaseRefusal(session, slot, part, nowUnix) == StoreRefusal.None;
+            return (int)slot * 2 + (int)part;
         }
 
-        /// <summary>Called by PurchaseGrants.Apply for the EventTrack line: the paid track of the event that runs
-        /// now is bought, once.</summary>
-        public static void MarkTrackBought(GameSession session, LiveEventSlot slot, long nowUnix)
+        /// <summary>Called when a purchase of the track or the pack of a slot is BEGUN (StoreOffers.OnBegin, IN MEMORY ONLY):
+        /// remembers the event and period it was begun for, so a payment that arrives after the period turned over is
+        /// delivered against the event the buyer saw, not the one that runs when it lands.</summary>
+        public static void Bind(GameSession session, LiveEventSlot slot, LiveEventPart part, long nowUnix)
         {
-            Roll(session, slot, nowUnix);
-            session.Profile.LiveEvents.Of(slot).TrackBought = true;
+            if (!Active(session)) return;
+            LiveEventSlotState st = Now(session, slot, nowUnix);
+            LivePending p = new LivePending();
+            p.EventId = st.EventId;
+            p.Period = st.Period;
+            session.Profile.LiveEvents.Pending[PendingKey(slot, part)] = p;
         }
 
-        /// <summary>The fixed grant of the event pack of the event that runs now. Null when there is none.</summary>
-        public static PurchaseGrant PackGrant(GameSession session, LiveEventSlot slot, long nowUnix)
+        /// <summary>Forgets the remembered purchase once it is delivered.</summary>
+        public static void Unbind(GameSession session, LiveEventSlot slot, LiveEventPart part)
         {
-            LiveEventDef ev = EventNow(session, slot, nowUnix);
+            session.Profile.LiveEvents.Pending.Remove(PendingKey(slot, part));
+        }
+
+        /// <summary>What a payment for the track or the pack of a slot delivers.</summary>
+        public sealed class Delivery
+        {
+            /// <summary>False only when there is nothing in live-events.json to deliver. A charged payment is otherwise ALWAYS
+            /// delivered.</summary>
+            public bool Possible;
+            /// <summary>True when the payment lands on the event it was begun for, which is running and has not got that part
+            /// yet: the part is unlocked or the pack is marked bought. False is a STALE delivery: the goods below are paid out
+            /// in full and nothing is marked.</summary>
+            public bool Normal;
+            /// <summary>The fixed goods to apply: the pack's, or (stale only) the track's paid rewards summed. Null for a normal
+            /// track, whose rewards are claimed tier by tier.</summary>
+            public PurchaseGrant Goods;
+            /// <summary>A sentence for the receipt line of a stale delivery.</summary>
+            public string Note = "";
+        }
+
+        private static PurchaseGrant PackGoods(LiveEventDef ev)
+        {
             if (ev == null || ev.Pack == null) return null;
             PurchaseGrant g = new PurchaseGrant();
             if (ev.Pack.Hours > 0.0) g.Add(new GrantItem(GrantKind.IdleGoldHours, ev.Pack.Hours));
@@ -456,7 +484,85 @@ namespace Emberfall.Core.Progression
             return g.Items.Count == 0 ? null : g;
         }
 
-        /// <summary>Called by PurchaseGrants.Apply once the pack's lines are applied: the pack of this event is
+        /// <summary>The paid rewards of an event summed into fixed lines: exactly the totals the Events screen shows on the
+        /// card before the track is bought.</summary>
+        private static PurchaseGrant TrackGoods(LiveEventDef ev)
+        {
+            if (ev == null) return null;
+            double hours = 0.0, sweeps = 0.0, slag = 0.0;
+            for (int i = 0; i < ev.Tiers.Count; i++)
+            {
+                EventRewardDef p = ev.Tiers[i].Paid;
+                if (p == null) continue;
+                if (p.Kind == EventRewardKind.Hourglass) hours += p.Amount;
+                else if (p.Kind == EventRewardKind.Dust) sweeps += p.Amount;
+                else slag += Math.Floor(p.Amount);
+            }
+            PurchaseGrant g = new PurchaseGrant();
+            if (hours > 0.0) g.Add(new GrantItem(GrantKind.IdleGoldHours, hours));
+            if (sweeps > 0.0) g.Add(new GrantItem(GrantKind.DustSweeps, sweeps));
+            if (slag > 0.0) g.Add(new GrantItem(GrantKind.Slag, slag));
+            return g.Items.Count == 0 ? null : g;
+        }
+
+        private static LiveEventDef FirstWith(GameSession session, LiveEventSlot slot, LiveEventPart part)
+        {
+            List<LiveEventDef> all = session.Content.LiveEvents.Events;
+            for (int i = 0; i < all.Count; i++)
+                if (all[i].Slot == slot && (part == LiveEventPart.Track ? TrackGoods(all[i]) != null : PackGoods(all[i]) != null)) return all[i];
+            return null;
+        }
+
+        /// <summary>
+        /// WHAT A CHARGED PAYMENT DELIVERS (called by PurchaseGrants.Apply, in its check phase and its write phase). THE RULE:
+        /// a payment the store confirmed is always delivered, exactly the contents shown when it was begun, and never twice
+        /// (the receipt is kept once, PurchaseLedger).
+        ///  - NORMAL: the event it was begun for (or, with no memory of that, the event running now) is running and has not
+        ///    got that part: the track is unlocked, or the pack is applied and marked bought.
+        ///  - STALE: the period turned over while the payment was in flight, or the part is already the buyer's (two payments
+        ///    for one event), or the running event has no pack. The goods the card showed are paid out in full as Sealed
+        ///    lines, from the event it was begun for (else the running one, else the first event of the slot that has them),
+        ///    and nothing is marked, so the running event's own track and pack stay for sale. A track pays out its paid
+        ///    rewards summed, because the quests it would have been claimed against belong to an event that is over.
+        /// </summary>
+        public static Delivery DeliveryOf(GameSession session, LiveEventSlot slot, LiveEventPart part, long nowUnix)
+        {
+            Delivery d = new Delivery();
+            if (!Active(session)) return d;
+            LiveEventSlotState st = Now(session, slot, nowUnix);
+            LiveEventDef current = session.Content.LiveEvents.Event(st.EventId);
+            LivePending bound;
+            session.Profile.LiveEvents.Pending.TryGetValue(PendingKey(slot, part), out bound);
+            bool sameEvent = bound == null || (bound.Period == st.Period && bound.EventId == st.EventId);
+            bool open = current != null && (part == LiveEventPart.Pack ? current.Pack != null && !st.PackBought : !st.TrackBought);
+
+            if (open && sameEvent)
+            {
+                d.Goods = part == LiveEventPart.Pack ? PackGoods(current) : null;
+                d.Possible = part == LiveEventPart.Track || d.Goods != null;
+                d.Normal = d.Possible;
+                return d;
+            }
+
+            LiveEventDef source = bound != null ? session.Content.LiveEvents.Event(bound.EventId) : current;
+            if (source == null || (part == LiveEventPart.Pack ? PackGoods(source) : TrackGoods(source)) == null) source = FirstWith(session, slot, part);
+            if (source == null) return d;
+            d.Goods = part == LiveEventPart.Pack ? PackGoods(source) : TrackGoods(source);
+            d.Possible = d.Goods != null;
+            d.Normal = false;
+            d.Note = (part == LiveEventPart.Pack ? "The pack" : "The paid track") + " of " + source.Name + ", paid out in full: that event has moved on or is already yours";
+            return d;
+        }
+
+        /// <summary>Called by PurchaseGrants.Apply for a normal EventTrack delivery: the paid track of the event that runs
+        /// now is bought, once.</summary>
+        public static void MarkTrackBought(GameSession session, LiveEventSlot slot, long nowUnix)
+        {
+            Roll(session, slot, nowUnix);
+            session.Profile.LiveEvents.Of(slot).TrackBought = true;
+        }
+
+        /// <summary>Called by PurchaseGrants.Apply once a normal pack's lines are applied: the pack of this event is
         /// used up.</summary>
         public static void MarkPackBought(GameSession session, LiveEventSlot slot, long nowUnix)
         {

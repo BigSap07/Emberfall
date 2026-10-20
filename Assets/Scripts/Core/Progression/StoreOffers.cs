@@ -38,7 +38,13 @@ namespace Emberfall.Core.Progression
         /// <summary>No live event runs in the slot the offer sells.</summary>
         NoEvent,
         /// <summary>The account has used the month's contracts across all heroes (R24).</summary>
-        AccountCap
+        AccountCap,
+        /// <summary>The offer needs a feature that is not open yet (the relic packs wait for the Relic Shop) (R24).</summary>
+        Locked,
+        /// <summary>A Relic of Choice with nothing to pick: every relic owned at its top tier (R24).</summary>
+        NoPick,
+        /// <summary>A skin the buyer already owns (R24).</summary>
+        AlreadyOwned
     }
 
     /// <summary>A hero an offer may give.</summary>
@@ -99,6 +105,12 @@ namespace Emberfall.Core.Progression
         public long ResetInSeconds;
         /// <summary>Ledger only: reward days left on a running card (today included), else 0.</summary>
         public int DaysLeft;
+        /// <summary>R24: the feature's lock line ("UNLOCKS AT 3-1") while the offer is locked, else empty.</summary>
+        public string LockLine = "";
+        /// <summary>R24, skin offers: the skin sold, the hero it is for, and whether the buyer owns that hero.</summary>
+        public string SkinId = "";
+        public string SkinHeroId = "";
+        public string SkinHeroName = "";
         /// <summary>Ledger only: today's hours can be claimed.</summary>
         public bool CanClaim;
         public readonly List<StoreMilestoneView> Milestones = new List<StoreMilestoneView>();
@@ -142,6 +154,8 @@ namespace Emberfall.Core.Progression
         public int HeroCopies;
         public double HeroDays;
         public double TotalDays;
+        /// <summary>R24: fixed Relic Dust the offer pays (a Satchel, a Chest), already counted in DustDays.</summary>
+        public long FixedDust;
     }
 
     /// <summary>The store's offer rules, as the purchase path asks for them (IStoreRules). One shared
@@ -155,6 +169,7 @@ namespace Emberfall.Core.Progression
                 ? StoreOffers.CheckAny(session, offerId, nowUnix)
                 : StoreOffers.Check(session, offerId, choiceHeroId, nowUnix);
             reason = r == StoreRefusal.None ? "" : StoreOffers.ReasonText(r);
+            if (r == StoreRefusal.None) StoreOffers.OnBegin(session, offerId, nowUnix);
             return r == StoreRefusal.None;
         }
 
@@ -209,40 +224,48 @@ namespace Emberfall.Core.Progression
             return StoreSwitch.Enabled && session != null && session.Content.Store.IsUsable;
         }
 
-        private static bool Listed(StoreOfferDef d)
+        /// <summary>Whether an offer is on sale in this build: the contract by its switch, the relic packs by theirs, a
+        /// skin by the skins switch and by the skin itself being present (a test skin is hidden in a release build).
+        /// Every switch off leaves the Store listing what it listed before R24.</summary>
+        private static bool Listed(StoreOfferDef d, SkinsConfig skins)
         {
-            return d.Kind != StoreOfferKind.Contract || HeroContractSwitch.Enabled;
+            if (d.Kind == StoreOfferKind.Contract && !HeroContractSwitch.Enabled) return false;
+            if (d.Group == "relicPacks" && !RelicPacksSwitch.Enabled) return false;
+            if (d.Kind == StoreOfferKind.Skin) return SkinsSwitch.Enabled && skins != null && skins.Skin(d.SkinId) != null;
+            return true;
         }
 
         private static StoreOfferDef Find(GameSession session, string offerId)
         {
             StoreOfferDef d = session.Content.Store.Offer(offerId);
-            return d != null && Listed(d) ? d : null;
+            return d != null && Listed(d, session.Content.Skins) ? d : null;
         }
 
         // The purchase path finds an offer without a session, so the rules keep the content they were last
         // bound to. It is only ever the session's own content.
         private static StoreConfig _config;
+        private static SkinsConfig _skins;
 
         /// <summary>Points the session-less lookups (IStoreRules.Find) at a session's content. The game calls it
         /// when it builds the Store; the harness calls it before it drives a PurchaseLedger.</summary>
         public static void Bind(GameSession session)
         {
             _config = session != null ? session.Content.Store : null;
+            _skins = session != null ? session.Content.Skins : null;
         }
 
         public static StoreOffer BuiltOffer(string offerId)
         {
             if (_config == null || offerId == null) return null;
             StoreOfferDef d = _config.Offer(offerId);
-            return d != null && Listed(d) ? d.Built : null;
+            return d != null && Listed(d, _skins) ? d.Built : null;
         }
 
         public static StoreOffer BuiltOfferByProduct(string productId)
         {
             if (_config == null || productId == null) return null;
             for (int i = 0; i < _config.Offers.Count; i++)
-                if (_config.Offers[i].Built.ProductId == productId && Listed(_config.Offers[i])) return _config.Offers[i].Built;
+                if (_config.Offers[i].Built.ProductId == productId && Listed(_config.Offers[i], _skins)) return _config.Offers[i].Built;
             return null;
         }
 
@@ -351,9 +374,20 @@ namespace Emberfall.Core.Progression
             StoreOfferDef d = Find(session, offerId);
             if (d == null) return StoreRefusal.Unknown;
             long day = EffectiveDay(session, nowUnix);
+            if (IsLocked(session, d)) return StoreRefusal.Locked;
 
             switch (d.Kind)
             {
+                case StoreOfferKind.RelicChoice:
+                    if (string.IsNullOrEmpty(choice)) return StoreRefusal.NeedsChoice;
+                    if (RelicPacks.Find(session, choice, d.PickCapDust) == null) return StoreRefusal.BadChoice;
+                    break;
+                case StoreOfferKind.Skin:
+                    if (session.Profile.OwnsSkin(d.SkinId)) return StoreRefusal.AlreadyOwned;
+                    SkinDef skin = session.Content.Skins.Skin(d.SkinId);
+                    if (skin == null) return StoreRefusal.Unknown;
+                    if (session.Profile.FindHeroByDefId(skin.HeroId) == null) return StoreRefusal.NotOwned;
+                    break;
                 case StoreOfferKind.Ledger:
                     return LedgerActive(session, nowUnix) ? StoreRefusal.SoldOut : StoreRefusal.None;
                 case StoreOfferKind.Pass:
@@ -393,6 +427,32 @@ namespace Emberfall.Core.Progression
             return total;
         }
 
+        /// <summary>True when the offer waits for a feature that is not open (the relic packs wait for the Relic Shop).</summary>
+        private static bool IsLocked(GameSession session, StoreOfferDef d)
+        {
+            if (FeatureWaitsFor(session, d) != null) return true;
+            return d.RequiresStage.Length > 0 && !session.Profile.HasClearedStage(d.RequiresStage);
+        }
+
+        /// <summary>The stage the offer's required feature waits for, read from onboarding.json's table through
+        /// FeatureGate.UnlockStage (the one place that decides an unlock), or null when the feature is open or the offer
+        /// requires none. The Store does not decide an unlock itself: it asks the table.</summary>
+        private static StageDef FeatureWaitsFor(GameSession session, StoreOfferDef d)
+        {
+            if (!d.HasRequires) return null;
+            StageDef stage = FeatureGate.UnlockStage(session.Content, d.Requires);
+            return stage != null && !session.Profile.HasClearedStage(stage.Id) ? stage : null;
+        }
+
+        /// <summary>"UNLOCKS AT 3-1": what a locked offer says, from the feature table or the stage it waits for.</summary>
+        private static string LockLineOf(GameSession session, StoreOfferDef d)
+        {
+            if (FeatureWaitsFor(session, d) != null)
+                return FeatureGate.LockLine(session.Content, d.Requires);
+            StageDef stage = d.RequiresStage.Length > 0 ? session.Content.GetStage(d.RequiresStage) : null;
+            return stage != null ? "UNLOCKS AT " + StageLabel(stage) : "";
+        }
+
         /// <summary>Like Check for an offer whose pick is not made yet: open when at least one pick would pass.
         /// What the purchase path asks before it starts a purchase.</summary>
         public static StoreRefusal CheckAny(GameSession session, string offerId, long nowUnix)
@@ -400,10 +460,13 @@ namespace Emberfall.Core.Progression
             if (!Active(session)) return StoreRefusal.Off;
             StoreOfferDef d = Find(session, offerId);
             if (d == null) return StoreRefusal.Unknown;
-            if (d.Kind != StoreOfferKind.Starter && d.Kind != StoreOfferKind.Contract) return Check(session, offerId, null, nowUnix);
+            if (d.Kind != StoreOfferKind.Starter && d.Kind != StoreOfferKind.Contract && d.Kind != StoreOfferKind.RelicChoice)
+                return Check(session, offerId, null, nowUnix);
+            if (IsLocked(session, d)) return StoreRefusal.Locked;
 
             List<string> picks = PicksOf(session, d);
-            if (picks.Count == 0) return d.Kind == StoreOfferKind.Contract ? StoreRefusal.NotOwned : StoreRefusal.BadChoice;
+            if (picks.Count == 0)
+                return d.Kind == StoreOfferKind.Contract ? StoreRefusal.NotOwned : d.Kind == StoreOfferKind.RelicChoice ? StoreRefusal.NoPick : StoreRefusal.BadChoice;
             StoreRefusal first = StoreRefusal.None;
             for (int i = 0; i < picks.Count; i++)
             {
@@ -418,6 +481,11 @@ namespace Emberfall.Core.Progression
         {
             List<string> picks = new List<string>();
             if (d.Kind == StoreOfferKind.Starter) picks.AddRange(d.HeroChoices);
+            else if (d.Kind == StoreOfferKind.RelicChoice)
+            {
+                List<RelicPick> relics = RelicPacks.Picks(session, d.PickCapDust);
+                for (int i = 0; i < relics.Count; i++) picks.Add(relics[i].RelicId);
+            }
             else if (d.Kind == StoreOfferKind.Contract)
             {
                 List<HeroInstance> owned = session.Profile.Heroes;
@@ -449,11 +517,24 @@ namespace Emberfall.Core.Progression
                 case StoreRefusal.Nothing: return "Nothing to claim.";
                 case StoreRefusal.NoEvent: return "No event is running.";
                 case StoreRefusal.AccountCap: return "This month's contracts are used up.";
+                case StoreRefusal.Locked: return "Not open yet.";
+                case StoreRefusal.NoPick: return "Every relic you own is at its top tier.";
+                case StoreRefusal.AlreadyOwned: return "You already own this skin.";
             }
             return "";
         }
 
         // ------------------------------------------------------------------ recording a purchase
+
+        /// <summary>Called when a purchase is BEGUN and allowed (StoreRules.CanBuy). Writes nothing to the save: an event
+        /// offer remembers, in memory only, which event the buyer saw (LiveEvents.Bind), so a payment that lands after the
+        /// period turned over is delivered against that event.</summary>
+        public static void OnBegin(GameSession session, string offerId, long nowUnix)
+        {
+            if (!Active(session)) return;
+            StoreOfferDef d = Find(session, offerId);
+            if (d != null && d.Kind == StoreOfferKind.Event) LiveEvents.Bind(session, d.EventSlot, d.EventPart, nowUnix);
+        }
 
         /// <summary>Called by the purchase path once a grant is applied (IStoreRules.RecordPurchase): counts the
         /// purchase against its limit, in the period the store's clock is in, and starts a card. Writes only
@@ -598,6 +679,27 @@ namespace Emberfall.Core.Progression
                     lines.Add("One copy of a " + d.Stars + "-star you already own (Sealed)");
                     lines.Add("For the ascension of that hero only.");
                     break;
+                case StoreOfferKind.RelicChoice:
+                    List<RelicPick> relicPicks = RelicPacks.Picks(session, d.PickCapDust);
+                    int fresh = 0, raise = 0, least, most;
+                    for (int i = 0; i < relicPicks.Count; i++) { if (relicPicks[i].Upgrade) raise++; else fresh++; }
+                    RelicPacks.WorthRange(relicPicks, out least, out most);
+                    lines.Add("One relic of YOUR pick, named before you buy. Nothing is drawn.");
+                    lines.Add("  A relic you do not own (" + fresh + " to pick from), or");
+                    lines.Add("  one more tier on a relic you own (" + raise + " to pick from).");
+                    if (most > 0)
+                        lines.Add("At the Relic Shop that is " + Big(least) + " to " + Big(most) + " Relic Dust, by your pick.");
+                    break;
+                case StoreOfferKind.Skin:
+                    SkinDef sold = session.Content.Skins.Skin(d.SkinId);
+                    if (sold != null)
+                    {
+                        HeroDef skinHero = session.Content.GetHero(sold.HeroId);
+                        lines.Add("The skin " + sold.Name + " for " + (skinHero != null ? skinHero.Name : sold.HeroId) + " only.");
+                        lines.Add("A new look in battle and on the hero's screen, and " + sold.BonusLine() + " on that hero.");
+                        lines.Add("One skin is worn per hero: it replaces the one worn, it never adds to it.");
+                    }
+                    break;
             }
             return lines;
         }
@@ -629,6 +731,7 @@ namespace Emberfall.Core.Progression
                 case StoreOfferKind.Ledger: return "One card at a time";
                 case StoreOfferKind.Contract:
                     return d.Limit + " a month per hero" + (d.AccountLimit > 0 ? ", " + d.AccountLimit + " a month in all" : "");
+                case StoreOfferKind.Skin: return "Once";
                 case StoreOfferKind.Pass: return "One a season";
             }
             switch (d.Reset)
@@ -764,7 +867,7 @@ namespace Emberfall.Core.Progression
             for (int i = 0; i < all.Count; i++)
             {
                 StoreOfferDef d = all[i];
-                if (!Listed(d)) continue;
+                if (!Listed(d, session.Content.Skins)) continue;
                 if (d.Kind == StoreOfferKind.Event) continue;   // sold from the Events screen, with the event's own words
                 StoreOfferView o = new StoreOfferView();
                 o.Id = d.Id;
@@ -778,9 +881,19 @@ namespace Emberfall.Core.Progression
                 o.LimitLabel = LimitLabel(d);
                 o.Lines.AddRange(ContentLines(session, d));
                 FillChoices(session, d, o);
-                o.NeedsChoice = d.Kind == StoreOfferKind.Starter || d.Kind == StoreOfferKind.Contract;
+                o.NeedsChoice = d.Kind == StoreOfferKind.Starter || d.Kind == StoreOfferKind.Contract || d.Kind == StoreOfferKind.RelicChoice;
                 o.Reason = CheckAny(session, d.Id, nowUnix);
                 o.Available = o.Reason == StoreRefusal.None;
+                if (o.Reason == StoreRefusal.Locked) o.LockLine = LockLineOf(session, d);
+                if (d.Kind == StoreOfferKind.Skin)
+                {
+                    SkinDef sk = session.Content.Skins.Skin(d.SkinId);
+                    o.SkinId = d.SkinId;
+                    o.SkinHeroId = sk != null ? sk.HeroId : "";
+                    HeroDef skHero = sk != null ? session.Content.GetHero(sk.HeroId) : null;
+                    o.SkinHeroName = skHero != null ? skHero.Name : "";
+                    o.Owned = session.Profile.OwnsSkin(d.SkinId);
+                }
 
                 if ((o.Reason == StoreRefusal.SoldOut || o.Reason == StoreRefusal.AccountCap) && d.Kind != StoreOfferKind.Ledger)
                 {
@@ -828,6 +941,18 @@ namespace Emberfall.Core.Progression
             List<string> picks = PicksOf(session, d);
             for (int i = 0; i < picks.Count; i++)
             {
+                if (d.Kind == StoreOfferKind.RelicChoice)
+                {
+                    RelicPick rp = RelicPacks.Find(session, picks[i], d.PickCapDust);
+                    if (rp == null) continue;
+                    StoreChoice rc = new StoreChoice();
+                    rc.HeroId = rp.RelicId;
+                    rc.Name = rp.Name;
+                    rc.Role = rp.Upgrade ? "Tier " + rp.FromTier + " to " + rp.ToTier + ", worth " + Big(rp.DustWorth) + " Relic Dust"
+                                         : "New " + rp.Grade + ", worth " + Big(rp.DustWorth) + " Relic Dust";
+                    o.Choices.Add(rc);
+                    continue;
+                }
                 HeroDef hero = session.Content.GetHero(picks[i]);
                 if (hero == null) continue;
                 StoreChoice c = new StoreChoice();
@@ -987,7 +1112,8 @@ namespace Emberfall.Core.Progression
             v.GoldHours = hours;
             v.GoldDays = hours / dayHours;
             v.DustSweeps = sweeps;
-            v.DustDays = sweeps * WayfarersRoad.DustPerSweep(session) / DustDay(session);
+            v.FixedDust = d.Dust;
+            v.DustDays = (sweeps * WayfarersRoad.DustPerSweep(session) + d.Dust) / DustDay(session);
             v.HeroCopies = copies;
             v.HeroDays = copies * DaysPerFiveStarPull(session);
             v.TotalDays = v.GoldDays + v.DustDays + v.HeroDays;

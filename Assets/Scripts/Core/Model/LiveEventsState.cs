@@ -123,6 +123,13 @@ namespace Emberfall.Core.Model
         }
     }
 
+    /// <summary>The event and period a purchase was begun in.</summary>
+    public sealed class LivePending
+    {
+        public string EventId = "";
+        public long Period;
+    }
+
     /// <summary>
     /// Everything the live events remember (the events section of Docs/DESIGN-STORE.md), saved from version 26
     /// under the key `liveEvents`, written only once it holds something. A profile that never earned a point,
@@ -132,6 +139,11 @@ namespace Emberfall.Core.Model
     {
         public LiveEventSlotState Weekly = new LiveEventSlotState();
         public LiveEventSlotState Monthly = new LiveEventSlotState();
+
+        /// <summary>The event a purchase in flight was begun for, per slot and part (IN MEMORY ONLY: never saved, never
+        /// cloned, so a pending purchase that never completes leaves the save untouched). Keyed by
+        /// LiveEvents.PendingKey. A payment that arrives after the period turned over is delivered against this.</summary>
+        public readonly System.Collections.Generic.Dictionary<int, LivePending> Pending = new System.Collections.Generic.Dictionary<int, LivePending>();
 
         public LiveEventSlotState Of(LiveEventSlot slot)
         {

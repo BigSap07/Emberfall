@@ -969,7 +969,8 @@ namespace Emberfall.DevHarness
         private static void CheckStoreRealContract(ContentDatabase db)
         {
             long monday = OfferMonday(db);
-            GameSession s = StoreRealSession(db, monday);
+            GameSession s = OfferSession(db, 4);   // the contract opens at 4-1 (store.json requiresStage)
+            StoreOffers.Bind(s);
             PurchaseLedger ledger = new PurchaseLedger(StoreRules.Shared);
             string a = db.Store.Offer("starter_pact").HeroChoices[0], b = db.Store.Offer("starter_pact").HeroChoices[1];
             s.GrantHeroDirect(db.GetHero(a), monday);
@@ -1064,7 +1065,7 @@ namespace Emberfall.DevHarness
         private static void CheckStoreNoRandomPath(string contentDir)
         {
             string[] kinds = Enum.GetNames(typeof(GrantKind));
-            string expected = "Gold,Slag,Dust,DustSweeps,IdleGoldHours,HeroCopy,HeroChoice,OwnedHeroCopy,PassPremium,Activate,EventTrack,EventPack";
+            string expected = "Gold,Slag,Dust,DustSweeps,IdleGoldHours,HeroCopy,HeroChoice,OwnedHeroCopy,PassPremium,Activate,EventTrack,EventPack,RelicChoice,Skin";   // R24 appended the events' EventTrack and EventPack, then RelicChoice and Skin: all fixed, all reviewed
             Check(string.Join(",", kinds) == expected,
                   "THE GRANT KINDS ARE A CLOSED LIST OF FIXED LINES (" + string.Join(", ", kinds) + "): adding one is a decision for review, and none rolls, draws or summons");
 

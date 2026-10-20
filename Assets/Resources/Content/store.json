@@ -9,7 +9,9 @@
   // ContentDatabase.LoadStore reads it after Load. The Store is behind StoreSwitch (on by default;
   // EMBERFALL_STORE_OFF rolls it back); the hero_contract offer is behind its own define,
   // HeroContractSwitch, ON by default since R24 (define EMBERFALL_HERO_CONTRACT_OFF rolls it back). The contract
-  // keeps its 2 a month per hero and adds "accountLimit": 4 a month across all heroes of the account.
+  // keeps its 2 a month per hero and adds "accountLimit": 4 a month across all heroes of the account. It opens at 4-1
+  // ("requiresStage", listed and locked before): the whale read (R24) put the early lead of a contract at +50 to +77
+  // percent at 1-12 and 2-12, so it waits until chapter 4.
   //
   // PRICES ARE PLACEHOLDERS. "tiers" names euro tiers; the owner sets real prices when store accounts exist.
   // "productId" is a PLACEHOLDER and never a real store key.
@@ -30,7 +32,11 @@
   //
   // restorable: true only for the two ONE-TIME purchases a store can hand back to a new profile of the same account
   // (starter_pact, growth_fund). A pack, a card, a season pass and a contract are used up and are never restored.
-  "tiers": { "low": 0.99, "small": 1.99, "mid": 4.99, "high": 9.99, "top": 19.99 },
+  "tiers": { "low": 0.99, "small": 1.99, "mid": 4.99, "upper": 7.99, "high": 9.99, "top": 19.99, "premium": 29.99 },
+
+  // R24 SKINS. One Store offer is DERIVED per skin in skins.json (StoreConfig.Validate), priced by the skin's rarity
+  // here, so a skin is data only. EUR 4.99 to 9.99 by rarity. Event skins are not sold and have no offer.
+  "skinTiers": { "rare": "mid", "epic": "upper", "legendary": "high" },
 
   "offers": [
     {
@@ -113,8 +119,34 @@
       "id": "hero_contract", "name": "Hero Contract", "kind": "contract", "tier": "top",
       "productId": "placeholder.emberfall.store.hero_contract",
       "blurb": "One more copy of a 5-star you already own, for its ascension only.",
-      "limit": 2, "reset": "month", "accountLimit": 4,
+      "limit": 2, "reset": "month", "accountLimit": 4, "requiresStage": "ch4_1",
       "stars": 5, "heroCopies": 1
+    },
+    // R24 RELIC PACKS (group relicPacks, RelicPacksSwitch; define EMBERFALL_RELIC_PACKS_OFF rolls them back). They open
+    // with the Relic Shop (requires Relics, onboarding.json's table: 3-1) and are listed, locked, before it. All three are
+    // fixed and shown in full. Dust and relics are not Sealed marks because no random mechanic can spend a Dust or consume
+    // a relic (CheckRelicPacksRefusedByEveryGamble reads the sources to prove it). Amounts are PROVISIONAL until the
+    // whale curve: see D:\Emberfall\handoff\R24-MONETIZE\data\offer-values.md, "Relic packs (R24)".
+    {
+      "id": "relic_dust_satchel", "name": "Relic Dust Satchel", "kind": "pack", "tier": "mid",
+      "productId": "placeholder.emberfall.store.relic_dust_satchel",
+      "blurb": "A fixed amount of Relic Dust for the Relic Shop. Comes back every Monday.",
+      "limit": 1, "reset": "week", "group": "relicPacks", "requires": "Relics",
+      "dust": 5000
+    },
+    {
+      "id": "relic_dust_chest", "name": "Relic Dust Chest", "kind": "pack", "tier": "top",
+      "productId": "placeholder.emberfall.store.relic_dust_chest",
+      "blurb": "Five times the Satchel, in one chest. Twice a month.",
+      "limit": 2, "reset": "month", "group": "relicPacks", "requires": "Relics",
+      "dust": 25000
+    },
+    {
+      "id": "relic_of_choice", "name": "Relic of Choice", "kind": "relicChoice", "tier": "premium",
+      "productId": "placeholder.emberfall.store.relic_of_choice",
+      "blurb": "You name the relic: one you do not own, or one more tier on one you own, worth up to 20,000 Relic Dust at the shop. Once a month.",
+      "limit": 1, "reset": "month", "group": "relicPacks", "requires": "Relics",
+      "pickCapDust": 20000
     }
   ]
 }

@@ -1214,8 +1214,8 @@ nothing; `CheckOfferWiring` proves it names no grant, no record and no random ca
 **The flags.** `StoreSwitch` is on by default and `EMBERFALL_STORE_OFF` rolls it back to the build before R19 (no
 door, every call refuses `Off`, the save is the document the build before wrote; `CheckStoreOff`, `CheckOfferOff`).
 `SinksSwitch` is now on by default too, so the Armory and the Archive exist for the Shops tab, and
-`EMBERFALL_SINKS_OFF` rolls it back. `HeroContractSwitch` is off (define `EMBERFALL_HERO_CONTRACT`): the Hero Contract
-is not listed and cannot be bought until the owner re-measures the curve with paid copies.
+`EMBERFALL_SINKS_OFF` rolls it back. `HeroContractSwitch` is ON since R24 (define `EMBERFALL_HERO_CONTRACT_OFF` rolls it
+back): two a month per hero, four a month for the whole account, listed from 4-1 on (see Docs/DESIGN-STORE.md).
 
 **The seven offers** are in `store.json` (`StoreConfig`, not in `ContentVersion`; every product id and price tier is a
 placeholder): the Starter Pact (once, one of three named 5-stars and 6 hours of idle Gold), the Weekly Pack (resets
