@@ -1683,6 +1683,27 @@ a domain reload (`EMBERFALL_CAPTURE_SKIP_RELOAD=1`) made entries eleven times fa
 captures through destroyed cached textures, so it is marked experimental and not used. The
 nightly still runs its own one-session sweep. See `Docs/CAPTURE.md`.
 
+**The play-entry stall was the capture tool's own focus raise (R23).** About half of all capture
+launches from R19 to R22 stopped right after `entered play mode`. Native stacks of stalled editors
+showed the main thread blocked in a cross-thread `SendMessage` under Unity's window procedure.
+`CaptureFocus.Raise` compared only `MainWindowHandle` with the foreground window, and the editor has
+a second top-level window (the floating Game view), so it pressed Alt and switched windows every
+three seconds while Unity already held the foreground. It now counts any window of the editor's
+process as in front and never raises between a play entry request and its first heartbeat
+(`NightlyFocus.Raise` the same). Measured: 3 of 5 launches stalled before, 7 of 9 with the AI
+Assistant bridge held off, 0 of 20 after the fix with focus on. Capture sessions also hold the
+bridge off through `Tools/mcp-bridge-pref.ps1` and restore the owner's setting after; it was not the
+cause. See `Docs/CAPTURE.md`.
+
+**The gate runs its walks on threads (R23).** `SimulateEconomies` in `WallResolve.cs` runs the
+reference walks on logical cores minus 2 threads and reads the results back in seed order; the
+curve samples (`CurveRate`), the ladder calibration cells and the solver's stuck scan do the same,
+and the harness runs with server GC. Output is byte-identical to the serial run
+(`EMBERFALL_WALK_WORKERS=1`). Compiles are skipped when a SHA256 stamp over every input matches
+(`Tools/compile-cache.ps1`). The full check went from 18 min 19 s to about 4 minutes on a 12-core
+machine. `build-check.ps1 -Quick` runs every check with 20 reference walks instead of 60, for work in
+progress; it says QUICK in its output and in `STATUS.md`, and a merge always uses the full check.
+
 **Editor captures are offline by construction.** The working tree holds a gitignored
 `supabase.json`, so a Play session that did nothing about it signed in as the real account; a
 capture once came back covered by the save-conflict chooser. `SupabaseConfig.ForcedOffline`, a
