@@ -91,6 +91,9 @@ namespace Emberfall.Core.Data
 
         /// <summary>Contract: the star count of a hero it may be bought for.</summary>
         public int Stars = 5;
+        /// <summary>Contract: how many may be bought in a period across ALL heroes (the account), on top of Limit per
+        /// hero. 0 means no account cap. R24: 4 a month.</summary>
+        public int AccountLimit;
     }
 
     /// <summary>
@@ -200,6 +203,7 @@ namespace Emberfall.Core.Data
             d.HoursPerDay = Math.Max(0.0, j["hoursPerDay"].AsDouble(0.0));
             d.IdleBonusPct = Math.Max(0, Math.Min(100, j.GetInt("idleBonusPct", 0)));
             d.Stars = Math.Max(1, Math.Min(5, j.GetInt("stars", 5)));
+            d.AccountLimit = Math.Max(0, Math.Min(1000, j.GetInt("accountLimit", 0)));
 
             List<JsonValue> choices = j.GetList("heroChoices");
             for (int i = 0; i < choices.Count; i++)

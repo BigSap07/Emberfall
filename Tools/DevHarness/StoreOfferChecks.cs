@@ -609,7 +609,7 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < off.Offers.Count; i++) if (off.Offers[i].Id == "hero_contract") listed = true;
             Check(!HeroContractSwitch.Enabled && !listed && StoreOffers.Check(s, "hero_contract", hero, now) == StoreRefusal.Unknown
                   && !StoreOffers.Fulfil(s, "hero_contract", hero, now).Success && OfferSnapshot(s) == before,
-                  "THE HERO CONTRACT IS OFF BY DEFAULT: with its define off it is not listed, cannot be bought and writes nothing");
+                  "THE HERO CONTRACT SWITCH OFF IS THE ROLLBACK: it is not listed, cannot be bought and writes nothing");
 
             HeroContractSwitch.Enabled = true;
             try

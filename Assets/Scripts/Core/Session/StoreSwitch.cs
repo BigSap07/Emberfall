@@ -22,15 +22,17 @@ namespace Emberfall.Core.Session
 
     /// <summary>
     /// THE HERO CONTRACT'S SWITCH: a copy of a 5-star the player already owns, for ascension only, limit two a
-    /// hero a month. OFF, and the owner turns it on after the curve is re-measured with paid copies. Define
-    /// EMBERFALL_HERO_CONTRACT to build it on. With it off the offer is not listed and cannot be bought.
+    /// hero a month and four a month for the whole account (store.json's accountLimit). ON by default since R24,
+    /// with the account cap; before that it was OFF behind EMBERFALL_HERO_CONTRACT. Define
+    /// EMBERFALL_HERO_CONTRACT_OFF to roll back: the offer is not listed and cannot be bought, exactly as it was
+    /// while the switch was off. The field is writable so the harness can force it; whatever sets it puts it back.
     /// </summary>
     public static class HeroContractSwitch
     {
-#if EMBERFALL_HERO_CONTRACT
-        public static bool Enabled = true;
-#else
+#if EMBERFALL_HERO_CONTRACT_OFF
         public static bool Enabled = false;
+#else
+        public static bool Enabled = true;
 #endif
     }
 
