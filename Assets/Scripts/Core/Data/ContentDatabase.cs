@@ -72,6 +72,22 @@ namespace Emberfall.Core.Data
         }
 
         /// <summary>
+        /// How many floors a guild's dungeon has by member count (guild-dungeon-scale.json). Loaded
+        /// after Load and NOT part of ContentVersion: it decides how many floors exist for a guild,
+        /// never what a floor is, so no fight reads it. Empty (IsUsable false) on a database that
+        /// never loaded it, and then every guild reads as the base ladder (GuildDungeonScale).
+        /// </summary>
+        public GuildDungeonScaleConfig GuildDungeonScale = new GuildDungeonScaleConfig();
+
+        /// <summary>Parses guild-dungeon-scale.json into GuildDungeonScale. Does not touch
+        /// ContentVersion; see GuildDungeonScale.</summary>
+        public void LoadGuildDungeonScale(string scaleJson)
+        {
+            GuildDungeonScale = GuildDungeonScaleConfig.FromJson(scaleJson);
+            for (int i = 0; i < GuildDungeonScale.Warnings.Count; i++) Warnings.Add(GuildDungeonScale.Warnings[i]);
+        }
+
+        /// <summary>
         /// The one-time chests on a chapter's wall and finale stages (wall-chests.json). Loaded
         /// after Load and NOT part of ContentVersion: no fight reads it. Empty (IsUsable false) on a
         /// database that never loaded it, which means no stage carries a chest.

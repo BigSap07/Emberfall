@@ -21,7 +21,8 @@ namespace Emberfall.Core.Progression
         Hunt,
         /// <summary>Enemies that hit or afflict the whole line at once. A long fight costs HP everywhere.</summary>
         Attrition,
-        /// <summary>One raised elite and four escorts, the campaign finale shape. Always the last floor.</summary>
+        /// <summary>One raised elite and four escorts, the campaign finale shape. Closes every block
+        /// of five floors, so a five-floor ladder ends on it.</summary>
         Champion
     }
 
@@ -42,12 +43,52 @@ namespace Emberfall.Core.Progression
     /// Nothing here reads heroes.json. The generator cannot target a hero because it never sees one.
     ///
     /// The seed is the only input that varies between guilds and cycles. The floor number fixes the
-    /// power target and, for the last floor, the theme; the seed fixes the order of the other themes and
-    /// which templates fill each one. Every member of a guild derives the same seed (GuildDungeon.SeedFor)
-    /// and so builds the same five floors, byte for byte.
+    /// power target and, for the last floor of a block, the theme; the seed fixes the order of the
+    /// other themes and which templates fill each one. Every member of a guild derives the same seed
+    /// (GuildDungeon.SeedFor) and so builds the same floors, byte for byte.
+    ///
+    /// FLOORS COME IN BLOCKS OF FIVE, and A FLOOR NEVER DEPENDS ON HOW LONG THE LADDER IS. A guild's
+    /// ladder length scales with its size (GuildDungeonScale), so a guild of thirty may see ten
+    /// floors where a guild of four sees five. Floor 3 is the same fight in both: its theme, its
+    /// enemies, its levels and its condition are a function of (seed, floor) and nothing else. Block
+    /// 0 (floors 1 to 5) is exactly the five-floor dungeon that existed before ladders scaled, so no
+    /// recorded replay moved (GuildDungeonChecks pins it). Each later block is the same shape again
+    /// from a stream of its own: four shuffled themes, then a Champion, and the power target climbs
+    /// from floor one's again. MEASURED, not assumed: letting the climb run on past floor 5 took the
+    /// "3 stars or fewer" rosters under the not-a-hero-check guardrail from floor 6, and to 0% clears
+    /// on several floors from 7, which is a star check. A bigger guild clears more floors, not
+    /// harder ones.
     /// </summary>
     public static class GuildDungeonGenerator
     {
+        /// <summary>
+        /// Floors in one block: the four open themes and the Champion that closes them. Derived from
+        /// the theme list, not typed. balance.json's guildDungeonFloors is the base ladder and must
+        /// equal it (GuildDungeonChecks asserts so), because the client passes a ladder length, never
+        /// content, when it asks for a floor's theme.
+        /// </summary>
+        public static readonly int BlockFloors = OpenThemes().Count + 1;
+
+        private static List<GuildDungeonTheme> OpenThemes()
+        {
+            return new List<GuildDungeonTheme>
+            {
+                GuildDungeonTheme.Swarm, GuildDungeonTheme.Wall, GuildDungeonTheme.Hunt, GuildDungeonTheme.Attrition
+            };
+        }
+
+        /// <summary>0-based block a 1-based floor sits in.</summary>
+        public static int BlockOf(int floor) { return (Math.Max(1, floor) - 1) / BlockFloors; }
+
+        /// <summary>1-based position of a floor inside its block: 1 to BlockFloors.</summary>
+        public static int PositionInBlock(int floor) { return (Math.Max(1, floor) - 1) % BlockFloors + 1; }
+
+        /// <summary>The seed a block draws from. Block 0 uses the dungeon seed itself, which is what
+        /// keeps floors 1 to 5 identical to the dungeon before blocks existed.</summary>
+        public static int BlockSeed(int seed, int block)
+        {
+            return block <= 0 ? seed : Mix(seed, 0xB10C0 + block);
+        }
         [Flags]
         public enum Behaviour
         {
@@ -115,28 +156,45 @@ namespace Emberfall.Core.Progression
         }
 
         /// <summary>
-        /// The theme of every floor, 1-based index into the returned array's 0-based slots. The
-        /// last floor is always Champion - the hardest shape at the highest level, so the ladder
-        /// ends on its peak - and the seed shuffles the rest.
+        /// The theme of every floor of a ladder this long, 1-based floor at 0-based slot. Every
+        /// fifth floor is the Champion - the hardest shape at the top of its block's climb, so a
+        /// block ends on its peak - and the seed shuffles the four before it. A five-floor ladder
+        /// therefore ends on the Champion, as it always did; a seven-floor ladder ends two floors
+        /// into its second block.
+        ///
+        /// Slot f is the same theme for every ladder length that reaches it (ThemeOf), which is what
+        /// lets the client pass whatever floor count the server reported and still agree with
+        /// BuildFloor.
         /// </summary>
         public static GuildDungeonTheme[] ThemesFor(int floorCount, int seed)
         {
             int count = Math.Max(1, floorCount);
             GuildDungeonTheme[] themes = new GuildDungeonTheme[count];
-            List<GuildDungeonTheme> open = new List<GuildDungeonTheme>
-            {
-                GuildDungeonTheme.Swarm, GuildDungeonTheme.Wall, GuildDungeonTheme.Hunt, GuildDungeonTheme.Attrition
-            };
-            DeterministicRng rng = new DeterministicRng(Mix(seed, 0x7EA3));
-            // Fisher-Yates, then cycled if there are more floors than themes.
+            for (int f = 1; f <= count; f++) themes[f - 1] = ThemeOf(seed, f);
+            return themes;
+        }
+
+        /// <summary>The theme of one floor, from (seed, floor) alone.</summary>
+        public static GuildDungeonTheme ThemeOf(int seed, int floor)
+        {
+            int position = PositionInBlock(floor);
+            if (position == BlockFloors) return GuildDungeonTheme.Champion;
+            return BlockThemes(BlockSeed(seed, BlockOf(floor)))[position - 1];
+        }
+
+        /// <summary>The four open themes of one block in the order its seed shuffles them. For
+        /// block 0 this is, draw for draw, the shuffle the five-floor dungeon always used.</summary>
+        private static List<GuildDungeonTheme> BlockThemes(int blockSeed)
+        {
+            List<GuildDungeonTheme> open = OpenThemes();
+            DeterministicRng rng = new DeterministicRng(Mix(blockSeed, 0x7EA3));
+            // Fisher-Yates.
             for (int i = open.Count - 1; i > 0; i--)
             {
                 int j = rng.Range(0, i + 1);
                 GuildDungeonTheme t = open[i]; open[i] = open[j]; open[j] = t;
             }
-            for (int f = 0; f < count - 1; f++) themes[f] = open[f % open.Count];
-            themes[count - 1] = GuildDungeonTheme.Champion;
-            return themes;
+            return open;
         }
 
         /// <summary>
@@ -150,10 +208,13 @@ namespace Emberfall.Core.Progression
         /// ProvingGenerator.SolveLevelForPower does for an opponent, puts every theme on one scale.
         /// Power does not capture everything a template does (a Taunt or a passive is worth more
         /// than its stat line says), so the harness still measures the result rather than trusting it.
+        ///
+        /// The climb is per BLOCK: floor 6 is floor 1's target again, floor 10 floor 5's. See the
+        /// class summary for the measurement that set that.
         /// </summary>
         public static int TargetPowerForFloor(BalanceConfig cfg, int floor)
         {
-            int f = Math.Max(1, floor);
+            int f = PositionInBlock(floor);
             double scale = 1.0 + (f - 1) * Math.Max(0f, cfg.GuildDungeonPowerPerFloor);
             return (int)Math.Round(Math.Max(1, cfg.GuildDungeonFloorOnePower) * scale);
         }
@@ -185,16 +246,17 @@ namespace Emberfall.Core.Progression
         }
 
         /// <summary>
-        /// One floor of one cycle. Floor is 1-based and clamped into [1, GuildDungeonFloors].
+        /// One floor of one cycle. Floor is 1-based; below 1 reads as 1. THERE IS NO UPPER CLAMP:
+        /// how many floors a guild may attempt is GuildDungeonScale's rule and the server's, not a
+        /// property of a floor, and floor 7 is the same fight whatever ladder it sits on.
         /// An empty template pool yields an empty stage rather than throwing, as RecitalGenerator
         /// does; the harness asserts it cannot happen with shipped content.
         /// </summary>
         public static StageDef BuildFloor(ContentDatabase content, int seed, int floor)
         {
             BalanceConfig cfg = content.Balance;
-            int floors = Math.Max(1, cfg.GuildDungeonFloors);
-            int f = Math.Min(floors, Math.Max(1, floor));
-            GuildDungeonTheme theme = ThemesFor(floors, seed)[f - 1];
+            int f = Math.Max(1, floor);
+            GuildDungeonTheme theme = ThemeOf(seed, f);
 
             StageDef stage = new StageDef();
             stage.Id = "guild_floor_" + f;
@@ -257,6 +319,8 @@ namespace Emberfall.Core.Progression
                     break;
             }
 
+            NeverOneAspect(line, Or(minions, rank), rng);
+
             int leadBonus = theme == GuildDungeonTheme.Champion ? Math.Max(0, cfg.GuildDungeonChampionLevelBonus) : 0;
             int level = SolveLevel(line, leadBonus, TargetPowerForFloor(cfg, f));
             for (int slot = 0; slot < line.Count; slot++)
@@ -288,15 +352,28 @@ namespace Emberfall.Core.Progression
         /// Which condition a theme may draw is the condition's own "floors" list, set from the
         /// harness's reading (GuildDungeonChecks) and never from here: this file knows shapes of
         /// enemy behaviour, not which of them a condition turns into a puzzle.
+        ///
+        /// This is BLOCK 0, floors 1 to 5. A later block draws its five the same way from its own
+        /// seed (ConditionsForBlock), so floor 3's condition does not depend on whether the ladder
+        /// has a floor 6.
         /// </summary>
         public static FloorConditionDef[] ConditionsFor(ContentDatabase content, int seed)
         {
-            int floors = Math.Max(1, content != null ? content.Balance.GuildDungeonFloors : 1);
+            return ConditionsForBlock(content, seed, 0);
+        }
+
+        /// <summary>The five conditions of one block, 0-based by position. See ConditionsFor; for
+        /// block 0 this is that draw exactly.</summary>
+        public static FloorConditionDef[] ConditionsForBlock(ContentDatabase content, int seed, int block)
+        {
+            int floors = BlockFloors;
             FloorConditionDef[] drawn = new FloorConditionDef[floors];
             if (content == null || content.FloorConditions.Count == 0) return drawn;
 
-            GuildDungeonTheme[] themes = ThemesFor(floors, seed);
-            DeterministicRng rng = new DeterministicRng(Mix(seed, 0xC0D1));
+            int blockSeed = BlockSeed(seed, block);
+            GuildDungeonTheme[] themes = new GuildDungeonTheme[floors];
+            for (int p = 0; p < floors; p++) themes[p] = ThemeOf(seed, block * floors + p + 1);
+            DeterministicRng rng = new DeterministicRng(Mix(blockSeed, 0xC0D1));
             int[] rolls = new int[floors];
             for (int f = 0; f < floors; f++) rolls[f] = rng.Range(0, 1 << 30);
 
@@ -342,12 +419,12 @@ namespace Emberfall.Core.Progression
             return drawn;
         }
 
-        /// <summary>One floor's condition, or null. Floor is 1-based and clamped as BuildFloor clamps it.</summary>
+        /// <summary>One floor's condition, or null. Floor is 1-based; below 1 reads as 1, and there
+        /// is no upper clamp, as BuildFloor has none.</summary>
         public static FloorConditionDef ConditionFor(ContentDatabase content, int seed, int floor)
         {
-            FloorConditionDef[] all = ConditionsFor(content, seed);
-            int f = Math.Min(all.Length, Math.Max(1, floor));
-            return all[f - 1];
+            int f = Math.Max(1, floor);
+            return ConditionsForBlock(content, seed, BlockOf(f))[PositionInBlock(f) - 1];
         }
 
         /// <summary>
@@ -366,6 +443,28 @@ namespace Emberfall.Core.Progression
                 List<EnemyDef> draw = fresh.Count > 0 ? fresh : from;
                 line.Add(draw[rng.Range(0, draw.Count)]);
             }
+        }
+
+        /// <summary>
+        /// A line that came out of one Aspect has its LAST slot redrawn from the same pool, among
+        /// templates of another Aspect it does not already field. Fill avoids repeating a template,
+        /// not an Aspect, so a single-Aspect floor is a draw that happens at a low rate: once in
+        /// 10,000 floors when the harness first measured the ten-floor ladder. A single-Aspect floor
+        /// is a counter-pick check, which GuildDungeonChecks forbids.
+        ///
+        /// It draws from the stream ONLY when the line is single-Aspect, so every floor that was
+        /// already mixed is untouched, draw for draw (the base-block pin proves it on 1,000 floors).
+        /// </summary>
+        private static void NeverOneAspect(List<EnemyDef> line, List<EnemyDef> from, DeterministicRng rng)
+        {
+            if (line.Count < 2) return;
+            Aspect first = line[0].Aspect;
+            for (int i = 1; i < line.Count; i++) if (line[i].Aspect != first) return;
+            List<EnemyDef> other = new List<EnemyDef>();
+            for (int k = 0; k < from.Count; k++)
+                if (from[k].Aspect != first && !line.Contains(from[k])) other.Add(from[k]);
+            if (other.Count == 0) return;
+            line[line.Count - 1] = other[rng.Range(0, other.Count)];
         }
 
         private static List<EnemyDef> With(List<EnemyDef> pool, Behaviour behaviour)

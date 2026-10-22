@@ -4925,6 +4925,8 @@ namespace Emberfall.DevHarness
                 db.LoadGuildPath(File.Exists(pathPath) ? File.ReadAllText(pathPath) : null);
                 string techPath = Path.Combine(dir, "guild-tech.json");
                 db.LoadGuildTech(File.Exists(techPath) ? File.ReadAllText(techPath) : null);
+                string scalePath = Path.Combine(dir, "guild-dungeon-scale.json");
+                db.LoadGuildDungeonScale(File.Exists(scalePath) ? File.ReadAllText(scalePath) : null);
                 string onboardingPath = Path.Combine(dir, "onboarding.json");
                 db.LoadOnboarding(File.Exists(onboardingPath) ? File.ReadAllText(onboardingPath) : null);
                 string ordersPath = Path.Combine(dir, "orders.json");
