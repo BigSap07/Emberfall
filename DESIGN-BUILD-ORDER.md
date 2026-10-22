@@ -1675,7 +1675,8 @@ across every tracked markdown file, with its known debt recorded in `Tools/doc-l
 sweep. **`CheckEveryAuthoredActiveIsCast` is new**: it walks all 74 authored actives over the
 sweep's own arena and seeds, asserts that the set never cast is exactly Roan's - a second hero going
 quiet is a failure now - and then proves his in a dark arena that lets him live to round 4, which
-the sweep does not. CI runs `build-check.ps1` on every push and pull request.
+the sweep does not. CI runs `build-check.ps1` on every push and pull request, on `ubuntu-latest`
+(a Windows job runs by hand only; see CLAUDE.md, "build-check on Linux and macOS").
 `DevHarness.exe --ceil-reconcile [stage [levels]]` is a second development aid: it reads the solver's
 and the guard's CEIL side by side against a 4,000-sample reference, and it is how the `1-12`
 disagreement under **The instruments** was settled.
