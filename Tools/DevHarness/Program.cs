@@ -316,6 +316,7 @@ namespace Emberfall.DevHarness
             CheckStoreOffers(content, contentDir);
             CheckStore(content, contentDir);
             CheckLiveEvents(content, contentDir);
+            CheckNotifications(content, contentDir);
             CheckR24Store(content, contentDir);
             CheckR24RelicPacks(content, contentDir);
             CheckR24Skins(content, contentDir);
