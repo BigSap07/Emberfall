@@ -15,10 +15,6 @@ rebuild" section is the current equivalent of this document's old "What works ri
 numbered build order and "Numbers already decided" section track what's shipped versus what's
 still open, verified against the actual code rather than against its own prior claims.
 
-For everything else this document used to cover — the pitch, individual hero kits, how a battle
-plays — `README.md` covers the same ground, but was not part of tonight's audit and was spot-checked
-only in passing while writing this notice: its "auto 3v3" loop diagram, "No imported art" section,
-and the `1.20 / 0.85` aspect multipliers in "Combat rules" all look stale against the same reality
-this document was rewritten against (5-a-side, real sprite art now exists, and DESIGN-ASPECTS §4
-narrowed the wheel to `1.10 / 0.92`). Not fixed here — out of scope for tonight's pass — but worth
-a look before pointing anyone to it as current.
+For everything else this document used to cover (the pitch, how a battle plays, how to run and
+build the project), `README.md` was rewritten on 2026-10-22 as an overview of the current game. It
+names `DESIGN-BUILD-ORDER.md` as the source of truth and defers to it wherever the two disagree.
