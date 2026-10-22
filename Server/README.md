@@ -51,6 +51,18 @@ project owner:
    needs it. `Tools/supabase-rules-test.py` `check_play_events` needs it applied. The owner reads
    the table with `supabase/queries/play-counts.sql` in the SQL editor.
 
+`0016` to `0019` (account deletion, chat safety, server time, purchase receipts) are written for the
+launch and are not in this folder on main yet. The two files after them come from the security review
+(`Docs/SECURITY-REVIEW-SUPABASE.md`). Both are written, not applied, and both are re-appliable:
+
+20. `0020_security_review.sql` - guild XP counts each account's cycle for one guild only, team
+   snapshots and the save's device id are bounded, friend requests are throttled per account
+   (`social_rate_limits`, `friend_request_tally`), and the trigger functions are revoked. Needs
+   only `0001`-`0015`.
+21. `0021_security_review_launch.sql` - the per-account limit on purchase verification
+   (`purchase_verify_allow`, service role only; the Edge Function change is in the review), and a
+   block that also refuses friend requests. Run after `0019` and `0020`.
+
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
