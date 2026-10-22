@@ -33,7 +33,22 @@ if ($Quick) {
 } else {
     $env:EMBERFALL_QUICK_WALKS = "0"
 }
+# THE COMPILER. On Windows it is the .NET Framework csc.exe that ships with the OS, as it always was.
+# Anywhere else (a Linux sandbox or CI box with Mono installed) it is Mono's mcs, and the compiled
+# harness runs under `mono`. EMBERFALL_CSC names a compiler explicitly on either. Both compilers take
+# the same -target, -out, -define and @response-file arguments, and the code is C# 5, which both read.
+$onWindows = ($PSVersionTable.PSEdition -eq 'Desktop') -or $IsWindows
 $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+if ($env:EMBERFALL_CSC) { $csc = $env:EMBERFALL_CSC }
+elseif (-not $onWindows) {
+    $mcs = Get-Command mcs -ErrorAction SilentlyContinue
+    $csc = if ($mcs) { $mcs.Source } else { "mcs (not installed: apt-get install mono-complete)" }
+}
+# How a compiled .exe is started: directly on Windows, through Mono elsewhere.
+function Invoke-Built([string]$exe) {
+    if ($onWindows) { & $exe } else { & mono $exe }
+}
+$tempDir = if ($env:TEMP) { $env:TEMP } else { [IO.Path]::GetTempPath() }
 $out = Join-Path $root "Tools\DevHarness\bin"
 New-Item -ItemType Directory -Force $out | Out-Null
 
@@ -90,7 +105,7 @@ function Compile($label, $sources, $target, $outputPath, $defines) {
         Write-Host ("[" + $label + "] ok (up to date: no input changed since it was last compiled)") -ForegroundColor Green
         return $true
     }
-    $rsp = Join-Path $env:TEMP ("emberfall_" + $label + ".rsp")
+    $rsp = Join-Path $tempDir ("emberfall_" + $label + ".rsp")
     # UTF-8 WITHOUT A BOM, written through .NET rather than Set-Content -Encoding UTF8, which on
     # Windows PowerShell 5.1 means UTF-8 WITH one. csc.exe happens to tolerate a BOM at the top of
     # a response file, so this was never a visible failure - it is the same mistake that put a
@@ -116,7 +131,7 @@ function Compile($label, $sources, $target, $outputPath, $defines) {
 $core = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs -Recurse | Select-Object -Expand FullName)
 $shim = @(Get-ChildItem (Join-Path $root "Tools\UnityShim") -Filter *.cs -Recurse | Select-Object -Expand FullName)
 $runtime = @(Get-ChildItem (Join-Path $root "Assets\Scripts") -Filter *.cs -Recurse |
-             Where-Object { $_.FullName -notmatch "\\Scripts\\Core\\" } |
+             Where-Object { $_.FullName -notmatch "[\\/]Scripts[\\/]Core[\\/]" } |
              Select-Object -Expand FullName)
 $editor = @()
 if (Test-Path (Join-Path $root "Assets\Editor")) {
@@ -150,7 +165,7 @@ if (Test-Path (Join-Path $root "Assets\Editor")) {
 # BattleFraming.cs, BattleHudMetrics.cs and BattleHudLayout.cs ride with it for BattleClips.cs's
 # reason: they are engine-free on purpose, so BattleHudChecks.cs proves the battle HUD's layout with
 # the very functions the battle screen places it by.
-$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Assets\Scripts\Battle\JuiceMath.cs") + (Join-Path $root "Assets\Scripts\Battle\FeelMath.cs") + (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") + (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs") + (Join-Path $root "Tools\DevHarness\CloudChecks.cs") + (Join-Path $root "Tools\DevHarness\ArenaMatrix.cs") + (Join-Path $root "Tools\DevHarness\WallResolve.cs") + (Join-Path $root "Tools\DevHarness\TempoStudy.cs") + (Join-Path $root "Tools\DevHarness\SolvePrereqs.cs") + (Join-Path $root "Tools\DevHarness\ParityStudy.cs") + (Join-Path $root "Tools\DevHarness\GuildPathChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTechChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentParity.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentThemes.cs") + (Join-Path $root "Tools\DevHarness\TalentTrialChecks.cs") + (Join-Path $root "Tools\DevHarness\OnboardingChecks.cs") + (Join-Path $root "Tools\DevHarness\TelemetryChecks.cs") + (Join-Path $root "Tools\DevHarness\DailyLoopChecks.cs") + (Join-Path $root "Tools\DevHarness\SinkChecks.cs") + (Join-Path $root "Tools\DevHarness\SealedChecks.cs") + (Join-Path $root "Tools\DevHarness\QuartermasterChecks.cs") + (Join-Path $root "Tools\DevHarness\RelicEndgameChecks.cs") + (Join-Path $root "Tools\DevHarness\SummonInflationStudy.cs") + (Join-Path $root "Tools\DevHarness\WayfarersRoadChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreOfferChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreCurve.cs") + (Join-Path $root "Tools\DevHarness\AbilityCardChecks.cs") + (Join-Path $root "Tools\DevHarness\WallChestChecks.cs") + (Join-Path $root "Tools\DevHarness\AudioChecks.cs") + (Join-Path $root "Tools\DevHarness\JuiceChecks.cs") + (Join-Path $root "Tools\DevHarness\FeelChecks.cs") + (Join-Path $root "Tools\DevHarness\StageChecks.cs") + (Join-Path $root "Assets\Scripts\Battle\StagePresentation.cs") + (Join-Path $root "Tools\DevHarness\CaptureWatchdogChecks.cs") + (Join-Path $root "Assets\Editor\CaptureWatchdog.cs") + (Join-Path $root "Assets\Scripts\Battle\BattleFraming.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudMetrics.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudLayout.cs") + (Join-Path $root "Tools\DevHarness\BattleHudChecks.cs") + (Join-Path $root "Tools\DevHarness\UiKitChecks.cs") + @(Get-ChildItem (Join-Path $root "Tools\DevHarness") -Filter R24*.cs | ForEach-Object { $_.FullName }))
+$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Assets\Scripts\Battle\JuiceMath.cs") + (Join-Path $root "Assets\Scripts\Battle\FeelMath.cs") + (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") + (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs") + (Join-Path $root "Tools\DevHarness\CloudChecks.cs") + (Join-Path $root "Tools\DevHarness\ArenaMatrix.cs") + (Join-Path $root "Tools\DevHarness\WallResolve.cs") + (Join-Path $root "Tools\DevHarness\TempoStudy.cs") + (Join-Path $root "Tools\DevHarness\SolvePrereqs.cs") + (Join-Path $root "Tools\DevHarness\ParityStudy.cs") + (Join-Path $root "Tools\DevHarness\GuildPathChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTechChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentParity.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentThemes.cs") + (Join-Path $root "Tools\DevHarness\TalentTrialChecks.cs") + (Join-Path $root "Tools\DevHarness\OnboardingChecks.cs") + (Join-Path $root "Tools\DevHarness\TelemetryChecks.cs") + (Join-Path $root "Tools\DevHarness\DailyLoopChecks.cs") + (Join-Path $root "Tools\DevHarness\SinkChecks.cs") + (Join-Path $root "Tools\DevHarness\SealedChecks.cs") + (Join-Path $root "Tools\DevHarness\QuartermasterChecks.cs") + (Join-Path $root "Tools\DevHarness\RelicEndgameChecks.cs") + (Join-Path $root "Tools\DevHarness\SummonInflationStudy.cs") + (Join-Path $root "Tools\DevHarness\WayfarersRoadChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreOfferChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreCurve.cs") + (Join-Path $root "Tools\DevHarness\LoopCurve.cs") + (Join-Path $root "Tools\DevHarness\AbilityCardChecks.cs") + (Join-Path $root "Tools\DevHarness\WallChestChecks.cs") + (Join-Path $root "Tools\DevHarness\AudioChecks.cs") + (Join-Path $root "Tools\DevHarness\JuiceChecks.cs") + (Join-Path $root "Tools\DevHarness\FeelChecks.cs") + (Join-Path $root "Tools\DevHarness\StageChecks.cs") + (Join-Path $root "Assets\Scripts\Battle\StagePresentation.cs") + (Join-Path $root "Tools\DevHarness\CaptureWatchdogChecks.cs") + (Join-Path $root "Assets\Editor\CaptureWatchdog.cs") + (Join-Path $root "Assets\Scripts\Battle\BattleFraming.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudMetrics.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudLayout.cs") + (Join-Path $root "Tools\DevHarness\BattleHudChecks.cs") + (Join-Path $root "Tools\DevHarness\UiKitChecks.cs") + @(Get-ChildItem (Join-Path $root "Tools\DevHarness") -Filter R24*.cs | ForEach-Object { $_.FullName }))
 $okHarness = Compile "core+harness" $harness "exe" (Join-Path $out "DevHarness.exe")
 if ($okHarness) { Write-HarnessConfig (Join-Path $out "DevHarness.exe") }
 
@@ -209,7 +224,7 @@ if (Test-Path $devDir) {
     }
 
     $shipped = @(Get-ChildItem (Join-Path $root "Assets\Scripts") -Filter *.cs -Recurse |
-                 Where-Object { $_.FullName -notmatch "\\Scripts\\Dev\\" } |
+                 Where-Object { $_.FullName -notmatch "[\\/]Scripts[\\/]Dev[\\/]" } |
                  Where-Object { (Get-Content $_.FullName -Raw) -match 'Emberfall\.Dev|DevArena' })
     foreach ($f in $shipped) {
         $text = Get-Content $f.FullName -Raw
@@ -313,7 +328,7 @@ if ($okEngine) {
         $offlineOk = $false
     }
     else {
-        $offlineLines = @(& $offlineExe)
+        $offlineLines = @(Invoke-Built $offlineExe)
         $offlineCode = $LASTEXITCODE
         foreach ($l in $offlineLines) { Write-Host ("  " + $l) }
         if ($offlineCode -ne 0) { $offlineOk = $false }
@@ -339,7 +354,7 @@ else {
     Write-Host ""
     # Tee rather than a plain call, so STATUS.md can name each failing check. The output still
     # streams to the console line by line; the harness writes plain ASCII, so nothing is re-encoded.
-    & (Join-Path $out "DevHarness.exe") | Tee-Object -Variable harnessLines
+    Invoke-Built (Join-Path $out "DevHarness.exe") | Tee-Object -Variable harnessLines
     $harnessCode = $LASTEXITCODE
     $harnessRan = $true
     $harnessLines = @($harnessLines)

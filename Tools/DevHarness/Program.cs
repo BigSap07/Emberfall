@@ -38,6 +38,8 @@ namespace Emberfall.DevHarness
             bool reconcile = false;
             int wallStudy = 0;
             int storeCurve = 0;
+            int loopCurve = 0;
+            double loopScale = 1.0;
             bool lineCalibration = false;
             bool probeStudy = false;
             bool tempoStudy = false;
@@ -71,6 +73,16 @@ namespace Emberfall.DevHarness
                 if (args[i] == "--wall-modes" && i + 1 < args.Length) { _wallModes = args[++i]; continue; }
                 if (args[i] == "--store-contracts") { _storeContracts = true; continue; }
                 if (WhaleTakeArg(args, ref i)) continue;   // the R24 whale study's flags (R24WhaleCurve.cs)
+                if (args[i] == "--loop-curve")
+                {
+                    // LoopCurve.cs: --loop-curve [walks] [scale], what turning the daily loop on does to the curve
+                    loopCurve = 8;
+                    int n;
+                    double f;
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out n)) { loopCurve = n; i++; }
+                    if (i + 1 < args.Length && double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f)) { loopScale = f; i++; }
+                    continue;
+                }
                 if (args[i] == "--store-curve")
                 {
                     storeCurve = 20;
@@ -128,6 +140,7 @@ namespace Emberfall.DevHarness
             if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
             if (wallStudy > 0) return RunWallStudy(contentDir, wallStudy);
             if (storeCurve > 0) return RunStoreCurve(contentDir, storeCurve);
+            if (loopCurve > 0) return RunLoopCurve(contentDir, loopCurve, loopScale);
             if (WhaleRequested) return RunWhaleStudy(contentDir);
             if (_relevelSpec != null) return RunRelevel(contentDir, _relevelSpec);
             if (lineCalibration) return RunLineCalibration(contentDir);
@@ -17559,6 +17572,7 @@ namespace Emberfall.DevHarness
                     //      One claim per sitting, capped exactly as the game caps it.
                     run.Now += EconomyAwaySeconds;
                     StoreSpenderStep(db, session, run.Now);   // inert unless --store-curve asked for the spender
+                    LoopWalkStep(db, session, run.Now);       // inert unless --loop-curve asked for the loop player (LoopCurve.cs)
                     IdleReport idle = session.ClaimIdle(run.Now);
                     run.Ledger.GoldIdle += idle.Gold;
                     run.Ledger.ShardIdle += idle.Shards;
