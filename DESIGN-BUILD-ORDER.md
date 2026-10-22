@@ -1456,8 +1456,10 @@ recorded. Four of the six that came off were already obeying the rule before it 
 `ForgeScreen` draws Slag, `ProvingScreen` draws Valor, `GuildPathScreen` draws Waymarks,
 `RecitalScreen` draws Coda and Echoes, `EventsScreen` names each event's purse in its own heading.
 The Relic Shop was the one screen with nowhere to read its own currency and now has a Dust plate.
-**Valor and Coda both say, in the bag, that nothing spends them yet**, because a currency banked
-towards nothing should say so where a player goes to look for it.
+**Valor and Coda each name their shop in the bag**: "Spent in the Armory" and "Spent in the
+Archive", read from `SinksSwitch` in `BagPanel`, which has been on by default since R19. With
+`EMBERFALL_SINKS_OFF` defined they say there is nothing to spend them on yet, because a currency
+banked towards nothing should say so where a player goes to look for it.
 
 **The Campaign chip row sizes itself from the chapter count.** `CampaignScreen.RefreshChips` shares
 the row's 1780 units out between however many chapters `campaign.json` holds, clamped to [200, 300]
@@ -1824,7 +1826,10 @@ opaque green disc over the torso. `VfxEntry` now has a start frame (`start` in `
 of that sheet. The ring is now about a third of a second long.
 
 **Open visual issues:** units with no sheet draw as placeholder figures (63 of 94 heroes, and the
-enemies without sheets), and the battles of chapters 2 to 6 (60 stages) have no painted background, so they use a plain generated dusk gradient (only ashen, ember and hollow, the chapter 1 environments, are painted).
+enemies without sheets). **Every chapter has a painted battle background since R21**: chapter 1's
+ashen, ember and hollow, and `crossing`, `city`, `old_kingdom`, `divided_realm` and `sanctuary` for
+chapters 2 to 6, each with an `<id>_boss` painting that stage 12 of its chapter names in
+`campaign.json`'s `environment` field. `BattleAssets` loads them from `Resources/Backgrounds`.
 
 ## In progress
 
@@ -2204,7 +2209,8 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   it later (a marketplace, a sixth floor, a fourth attempt, a guild hall) and says that none of
   them is designed today.
 - **A marketplace.** Nothing built, nothing designed.
-- **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
+- **Chapters 3 to 6's enemy art**, when it exists. The stages are built, and their backgrounds
+  are painted (R21).
 - **Texture compression.** The 855 MB figure this entry once carried was re-taken against a real
   Windows player twice. The first player, before the 336 by 396 sheets, was 318 MB unzipped and
   188.5 MB zipped, with 208 sheets packed as DXT5 Crunched. **The second, taken in R16 with the
