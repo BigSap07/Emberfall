@@ -144,7 +144,9 @@ namespace Emberfall.Core.Progression
 
         private static void AddIdleChest(GameSession session, long nowUnix, List<Candidate> into)
         {
-            if (!FeatureGate.IsUnlocked(session.Content, session.Profile, Feature.Idle)) return;
+            // Asked through the idle chest's own door, the way every screen asks (DailyLoop.Unlocked's rule).
+            List<FeatureEntryPoint> doors = FeatureEntryPoints.Of(Feature.Idle);
+            if (doors.Count > 0 && !FeatureEntryPoints.Allows(session.Content, session.Profile, doors[0].Id)) return;
             long cap = (long)Math.Round(session.Balance.IdleCapHours * 3600.0);
             if (cap <= 0) return;
             long full = session.Profile.LastIdleClaimUnix + cap;
