@@ -75,7 +75,8 @@ function the idle chest itself is paid by. `DailyLoop.Preview` asks it for the f
 Loop rewards are **not capped by `Balance.IdleCapHours`**. That cap limits what sits unclaimed
 in `GameSession.PeekIdle`. A loop reward is granted, not accrued.
 
-All hours below are placeholders for the balance pass. Nothing reads the size of a number.
+**The hours below are final as of the content pass of 2026-10-22, measured rather than chosen** (see
+**Measured on the curve**, below). Nothing in code reads the size of a number.
 
 | Reward | Hours |
 |---|---|
@@ -89,8 +90,80 @@ All hours below are placeholders for the balance pass. Nothing reads the size of
 As set, a player who finishes the loop every day earns about 2.4 hours of idle income a day from
 orders and the daily chest, 17 hours a week, plus 4 for the weekly chest and 6.5 for one lap of
 the calendar. That is 27.5 hours a week, about two fifths of the 70 hours a week one full idle chest a day
-pays at its cap (`idleCapHours` is 10 in `balance.json`).
+pays at its cap (`idleCapHours` is 10 in `balance.json`). The walk measured 26.8 a week (below).
 No item rewards ship. The 4-star selector `IDEAS-ECONOMY-PACKS.md` puts on day 7 is left out.
+
+## Measured on the curve (2026-10-22)
+
+`DevHarness.exe --loop-curve [walks] [scale]` (`Tools/DevHarness/LoopCurve.cs`) walks the reference
+player, the one `recommendedPower` and the power band are derived from, three ways on one clock: loop
+off (the control), loop on, and loop on with Wayfarer's Road. The loop player is diligent: at the end
+of every sitting they claim every finished order, both chests and the calendar. The walk's own waves,
+stage wins, level ups and summons progress the orders through `GameSession`, exactly as in the game;
+the arena order and the level order are credited, because the walk never fights the Proving or the
+Recital and its level-capped line cannot finish a level order on its own (a player levels a cheap
+bench hero for it). That makes the loop's income an upper bound for a twice-a-day player.
+
+Over 8 walks, with the hours as shipped:
+
+| | off | loop | loop and road |
+|---|---|---|---|
+| loop income a day | | 3.84 hours | 3.84 hours |
+| banded stages over their band | 0 of 72 | 0 | 0 |
+| stuck walks | 0 | 0 | 0 |
+| 1-12, the chapter 1 finale (band top x0.99) | x0.937 | x0.960 | x0.960 |
+| 2-1 (band top x1.25) | x1.173 | x1.193 | x1.232 |
+| 2-6 wall | x1.184 | x1.191 | x1.220 |
+| free track seasons finished | | | 34 (74 hero selectors) |
+
+At twice the hours (`--loop-curve 8 2`) nothing leaves its band either, but 1-12 reads x0.988 and 2-1
+x1.243, both at their edge. That is why the hours were kept rather than raised. From chapter 4 the
+reference player piles up Gold it cannot spend, so loop Gold buys little power late, and the
+differences between the columns there (a hundredth or two either way) are draw noise between walks.
+**The free track moves the curve more than the hours do**: its 4-star and 5-star selectors every
+season are what lift 2-1 and the chapter 2 walls.
+
+**One harness defect the study found and worked around.** `GameSession.LevelUpHero(hero, times)`
+reads the device clock, and the economy walk's `SpendGold` calls that form. With the loop on, the
+first level up recorded an order at today's real date, which rolled the board months ahead of the
+walk's clock and froze it: the first run claimed one board in 134 reward days. The study walks a
+season calendar decades ahead (`LoopClockSeason`), so a device-clock call reads as an earlier day,
+which `DailyLoop.Roll` ignores. The plain walk is unaffected because nothing in it claims orders;
+the R24 whale study's live-event quests are counted through the same call and may carry the same
+skew, which is worth checking before its numbers are relied on.
+
+## Turning it on by default: what has to change
+
+Not done here; the switch stays off. What it would take:
+
+1. **The switch.** `DailyLoopSwitch.Enabled` is compile time: add `-define:EMBERFALL_DAILY_LOOP_ON` to
+   `Assets/csc.rsp` (which already carries the store's define), or flip the default in
+   `DailyLoopSwitch`. No harness check asserts that it ships off; the daily loop checks force it on
+   and put it back.
+2. **The screen.** `OrdersScreen` is a working placeholder built from the Emberforge kit, and its door
+   on the Hub rail appears only with the switch. It needs its final layout and a capture of every
+   `Screen:Orders*` target, which is client UI work.
+3. **The economy.** The reference walk does not play the loop, so the curve was solved without it.
+   The table above says the shipped hours keep every stage in its band, which means the curve can stay
+   as it is; it also means the walls cost the loop player even less than they cost today (they already
+   cost the reference player no extra sittings at the median). If the owner wants walls to bite for a
+   loop player, the loop has to enter the reference walk and `recommendedPower` re-solved, which is a
+   balance pass, not a switch.
+4. **The level order.** "Level up a hero" is the one order a level-capped player cannot finish without
+   a hero below its cap. A new player always has one; a long-time player with a capped roster may not,
+   and an unfinished order also keeps the daily chest, the weekly chest and the road's points shut that
+   day. Either drop the level slot after the caps start to bind, or let it count an ascension.
+5. **Wayfarer's Road wakes up.** It is on by default (`WayfarersRoadSwitch`) but earns nothing while the
+   loop is off, because its points are the loop's claims. With the loop on, every season's free track
+   pays its hourglasses, Slag and Dust and a free 4-star at tier 15 and a free 5-star at tier 30. Sized
+   on 24 active days with the weekly chests, the diligent player above finished 34 of about 38
+   seasons. Retuning the loop's hours does not change the road's pace: it counts claims, not hours.
+6. **The paid pass becomes sellable.** The pass premium in the Store refuses to sell while the loop is
+   off; with it on, the PASS tab's premium can be bought once real purchases exist.
+7. **The save and the server.** Version 22 adds the `dailyLoop` block, and nearly every active save is
+   already version 26 for the live events, so the server's `save_limits` row must say 26 in any case.
+8. **The live events.** Their quests already count the same moments with the loop off; the
+   claim-an-order quest kind only starts counting once orders can be claimed.
 
 ## Content: orders.json
 
@@ -145,7 +218,7 @@ Capture targets: `Screen:Orders`, `OrdersHalf`, `OrdersClaimed`, `OrdersCalendar
 
 ## What is a placeholder
 
-Every number in `orders.json`. And the UI. The orders screen is built in code from the Emberforge
+The UI. (The numbers in `orders.json` were placeholders until the content pass of 2026-10-22.) The orders screen is built in code from the Emberforge
 kit and carries no final art or copy. The rules, the data and the save are meant to last. The
 screen is meant to be redone.
 
