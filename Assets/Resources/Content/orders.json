@@ -11,11 +11,17 @@
   // (GameSession.IdleYield). There is no gold or shard amount in this file on purpose: a fixed
   // amount is generous in chapter 1 and worthless by chapter 4, and hours scale by themselves.
   //
-  // EVERY NUMBER BELOW IS A PLACEHOLDER for the balance pass. As set, a player who finishes the
-  // loop every day earns about 2.4 hours of idle income a day from it, 17 hours a week, plus 4
-  // for the weekly chest and 6.5 for one lap of the calendar: about 27.5 hours a week, roughly
-  // two fifths of the 70 hours a week that one full idle chest a day pays at its 10 hour cap
-  // (balance.json idleCapHours). Raise or lower freely; no code reads the size of a number.
+  // THE NUMBERS ARE FINAL as of the content pass of 2026-10-22, MEASURED ON THE CURVE rather than
+  // chosen: DevHarness.exe --loop-curve [walks] [scale] (Tools/DevHarness/LoopCurve.cs) walks the
+  // reference player with the loop on, claiming everything at the end of every sitting. As set, that
+  // player earns 3.84 hours of frontier idle income a day from the loop (26.8 a week, against the 70
+  // a week one full idle chest a day pays at its 10 hour cap), and over 8 walks no banded stage
+  // leaves its power band, with or without Wayfarer's Road, and no walk sticks. The tightest stages
+  // are 2-1 (x1.232 with the road, band top x1.25) and the chapter 1 finale 1-12 (x0.960, band top
+  // x0.99). At twice these hours 1-12 reads x0.988 and 2-1 x1.243, both at their edge, which is why
+  // the hours were kept rather than raised. The reference player piles up Gold from chapter 4 on,
+  // so loop Gold buys little power late (Quartermaster sizing); the free track's hero selectors move the curve more than the
+  // hours do. Docs/DESIGN-DAILY-LOOP.md has the table and what turning the loop on would change.
 
   // THE POOL. A day's board takes ONE entry of each slot, chosen by the day alone, so the same
   // day is the same board for everyone with the same unlocks.
@@ -36,8 +42,8 @@
     { "id": "stage_1",   "slot": 1, "kind": "stage",  "target": 1, "hours": 0.25, "text": "Win a stage" },
     { "id": "stage_2",   "slot": 1, "kind": "stage",  "target": 2, "hours": 0.4,  "text": "Win {0} stages" },
 
-    { "id": "level_1",   "slot": 2, "kind": "level",  "target": 1, "hours": 0.25, "text": "Level a hero up" },
-    { "id": "level_3",   "slot": 2, "kind": "level",  "target": 3, "hours": 0.35, "text": "Level heroes up {0} times" },
+    { "id": "level_1",   "slot": 2, "kind": "level",  "target": 1, "hours": 0.25, "text": "Level up a hero" },
+    { "id": "level_3",   "slot": 2, "kind": "level",  "target": 3, "hours": 0.35, "text": "Buy {0} hero levels" },
 
     { "id": "summon_1",  "slot": 3, "kind": "summon", "target": 1, "hours": 0.25, "text": "Summon once" },
 

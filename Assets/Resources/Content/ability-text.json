@@ -1,33 +1,4 @@
 {
-  "note": "Card sentences for the abilities whose authored description is still a drafting note (the ids pinned as open questions in Docs/PINOY-LIST.md section 2f). Proposed wording from Docs/DECISIONS-OPEN.md section 4a, following Docs/ABILITY-TEXT-STYLE.md. Not hashed into ContentVersion; a description that already reads as player text never consults this file. When the owner answers a question, the answer goes into heroes.json and the line leaves this file in the same commit.",
-  "lines": {
-    "arno_rubble_resolve": "After Arno's basic attack, if the enemy he struck still holds a Ward, he gains Attack Up.",
-    "yara_second_bearing": "Yara never aims at the same enemy twice in a row, and gains Attack Up after each basic attack.",
-    "kora_first_opening": "After Kora's basic attack, if the enemy she struck has not acted this round, she strikes it again.",
-    "sena_unfixed_aim": "After Sena's basic attack, if the enemy she struck is in Mire, she strikes it again.",
-    "adric_no_return_mark": "When an enemy with Lost Route misses Adric, he gains Energy.",
-    "aster_scoring_point": "Strikes the enemy with the highest Attack and applies Fracture. A Fractured enemy takes more damage from every blow.",
-    "quin_stamped_parcel": "Strikes the front enemy and applies Delivered. A Delivered enemy takes more damage from active skills.",
-    "quin_return_to_sender": "Strikes every Delivered enemy and takes Delivered back off them, and Quin gains Energy.",
-    "quin_urgent_matter": "At the start of battle, Quin gains Energy.",
-    "selka_no_extension": "At the start of each round, Overdue is written back onto the enemy carrying it, so it cannot be shaken off.",
-    "bren_take_another_route": "Strikes the enemy with the highest HP.",
-    "cal_ricochet_mark": "Strikes the enemy with the highest Attack and applies Offset, then a ricochet strikes it and the enemies beside it.",
-    "cal_new_sightline": "When Cal defeats an Offset enemy, his next attack is a guaranteed Critical.",
-    "linnet_open_circuit": "At the start of each round, a debuff on the Crossed Line enemy moves to a random enemy, and Linnet gains Energy.",
-    "oswin_useful_scar": "After Oswin casts Reposition the Hurt, every ally gains Guard Up.",
-    "brio_recorded_shot": "Strikes the front enemy and applies Accounted.",
-    "avera_offbeat_note": "Strikes the front enemy and applies Disrupted. The first time each round a Disrupted enemy would gain Energy, it loses Energy instead.",
-    "avera_break_the_measure": "Strikes every Disrupted enemy and delays each of them.",
-    "lydia_no_fixed_departure": "At the start of each of Lydia's turns, she gains Bulwark until her next turn.",
-    "petra_private_address": "When a Withheld enemy strikes an ally, Petra gains Bulwark.",
-    "clara_known_condition": "When Clara takes a debuff off an ally, that ally gains Energy.",
-    "demos_notice_of_loss": "Strikes the front enemy and applies Arrears. As its own turn ends, an enemy in Arrears loses a share of its current HP, up to a limit set by Demos's Attack.",
-    "demos_arrears_tick": "As its own turn ends, an enemy in Arrears loses a share of its current HP, up to a limit set by Demos's Attack.",
-    "hale_field_sign": "Strikes the enemy with the lowest HP and marks it as Quarry. Hale hits a Quarry harder.",
-    "hale_closing_radius": "Strikes the Quarry. If an ally has struck it since Hale's last turn, a second blow lands, harder the more wounded it is, up to a limit.",
-    "seraphine_volume_closed": "When a Footnote record reaches its limit, the enemy takes the whole record as damage, loses Footnote and is Nullified, and Seraphine gains Energy. A Nullified enemy cannot gain buffs.",
-    "altheon_witness_script": "Strikes the enemy with the highest Attack, harder if Altheon has already damaged it this round. If it is the Subject and holds more HP than when he last noted it, he strikes it again.",
-    "altheon_immaculate_record": "Strikes every enemy and marks the enemy with the highest Attack as the Subject. The first time each round Altheon damages the Subject, a share of it is recorded, up to a limit. When the Subject expires, it takes the whole record as damage."
-  }
+  "note": "Card sentences for any ability whose authored description in heroes.json is still a drafting note. Empty since the content pass of 2026-10-22, which wrote player text for all 28 such abilities straight into heroes.json, each checked against the ability's effects. Not hashed into ContentVersion; a description that already reads as player text never consults this file. Docs/ABILITY-TEXT-STYLE.md is the style.",
+  "lines": {}
 }

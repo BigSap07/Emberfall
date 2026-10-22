@@ -61,7 +61,7 @@
             "bypassResist": true
           }
         ],
-        "description": "Deals 250% Attack damage to the enemy with the lowest HP and applies Quarry for 2 rounds. Quarry makes Hale's attacks against that enemy hit 10% harder. Pinoy writes the damage as 120% and Quarry as ignoring 10% Defense; the percentage is the star band's and the engine has no per-attacker armour ignore, so Quarry is a source-keyed Vulnerable of the same size. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
+        "description": "Strikes the enemy with the lowest HP and marks it as Quarry. Hale hits a Quarry harder."
       },
       "active": {
         "id": "hale_closing_radius",
@@ -86,7 +86,7 @@
             "conditionOn3": "Caster"
           }
         ],
-        "description": "Deals 570% Attack damage to the enemy with Quarry. If any ally attacked it since Hale's last turn, deals additional damage equal to 12% of its missing HP, up to 120% of Attack. Pinoy writes the first number as 220%; the percentage is the star band's. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
+        "description": "Strikes the Quarry. If an ally has struck it since Hale's last turn, a second blow lands, harder the more wounded it is, up to a limit."
       },
       "passive": {
         "id": "hale_tracking_habit_stats",
@@ -1465,7 +1465,7 @@
             "conditionOn2": "LastTarget"
           }
         ],
-        "description": "When a Footnote record reaches its cap, the target cannot gain buffs for 1 round, loses turn progress, has Footnote removed and takes damage equal to the whole record, and Seraphine gains 15 Energy. Pinoy writes it in two beats, with the removal and the Energy arriving when the restriction ends, and says nothing about the record being paid out. Both departures are the same repair: the second beat was gated on a Mark that Contrary Evidence - Seraphine's own Dispel - strips on the same trigger that fills the record, so it could never run, and a record that reached its cap was thrown away unread. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
+        "description": "At the start of each of Seraphine's turns, every enemy whose Footnote record is full takes the whole record as damage, loses Footnote and gains Nullify, and Seraphine gains Energy. Nullify stops an enemy gaining buffs."
       },
       "talents": {
         "talentI": {
@@ -1694,7 +1694,7 @@
       "basic": {
         "id": "demos_notice_of_loss",
         "name": "Notice of Loss",
-        "description": "Deals 180% Attack damage and applies Arrears for 2 rounds. At turn end, Arrears loses 4% of its current HP, bounded at 105% of Demos's Attack. The bound is not in Pinoy's sentence and is the only thing holding the clause inside the star band; it is enforced on the Notice of Loss tick passive - see Docs/ENGINE-GAPS.md group 12.",
+        "description": "Strikes the front enemy and applies Arrears. An enemy in Arrears receives less healing, and as its own turn ends it loses a share of its current HP, up to a limit set by Demos's Attack.",
         "effects": [
           {
             "kind": "Damage",
@@ -1780,7 +1780,7 @@
         {
           "id": "demos_arrears_tick",
           "name": "Notice of Loss",
-          "description": "The Arrears tick: a body carrying it loses 4% of its current HP as its own turn ends, bounded at 105% of Demos's Attack. The bound is not in Pinoy's sentence and is the only thing holding the clause inside the band - see Docs/ENGINE-GAPS.md group 12.",
+          "description": "As its own turn ends, an enemy in Arrears loses a share of its current HP, up to a limit set by Demos's Attack.",
           "trigger": "OnEnemyTurnEnd",
           "oncePerBattle": false,
           "effects": [
@@ -2210,7 +2210,7 @@
       "passive1": {
         "id": "adric_no_return_mark",
         "name": "No Return Mark",
-        "description": "When an attack from an enemy carrying Lost Route misses Adric, he gains 8 Energy. Pinoy writes it as any miss by a Lost Route enemy; the engine raises its miss window on the body that dodged, so only Adric dodging reaches him. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 24.",
+        "description": "When an enemy with Lost Route attacks Adric and misses, he gains Energy.",
         "trigger": "OnDodge",
         "oncePerBattle": false,
         "effects": [
@@ -2265,7 +2265,7 @@
       "basic": {
         "id": "aster_scoring_point",
         "name": "Scoring Point",
-        "description": "Deals 350% Attack damage to the highest-Attack enemy and applies Fracture for 2 rounds. A Fractured body takes 15% more damage. Pinoy writes the bonus onto the next critical hit only; the engine has no crit-scoped damage modifier and no per-hit charge on one, so it answers every blow for the duration. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 23.",
+        "description": "Strikes the enemy with the highest Attack and applies Fracture. A Fractured enemy takes more damage from every blow.",
         "effects": [
           {
             "kind": "Damage",
@@ -2377,7 +2377,7 @@
       "basic": {
         "id": "quin_stamped_parcel",
         "name": "Stamped Parcel",
-        "description": "Deals 258% Attack damage and applies Delivered for 2 rounds. Delivered targets take 8% more damage from active skills. Pinoy writes it as the next active skill only; the engine has no per-hit charge on a damage modifier, so it holds for the duration. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 23.",
+        "description": "Strikes the front enemy and applies Delivered. A Delivered enemy takes more damage from active skills.",
         "effects": [
           {
             "kind": "Damage",
@@ -2406,7 +2406,7 @@
         "id": "quin_return_to_sender",
         "name": "Return to Sender",
         "energyCost": 100,
-        "description": "Deals 454% Attack damage to all Delivered enemies and takes Delivered back off them, giving Quin 12 Energy. Pinoy pays the 12 per target; nothing in the engine scales an amount by how many bodies an effect reached, so it pays once. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 25.",
+        "description": "Strikes every Delivered enemy and takes Delivered back off them, and Quin gains Energy.",
         "effects": [
           {
             "kind": "Damage",
@@ -2441,7 +2441,7 @@
       "passive1": {
         "id": "quin_urgent_matter",
         "name": "Urgent Matter",
-        "description": "Quin opens the battle with 15 Energy already banked. Pinoy writes it as his first active skill costing 15 less; an ability cost can only be moved by a talent override, which a 3-star does not carry. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 26.",
+        "description": "At the start of battle, Quin gains Energy.",
         "trigger": "BattleStart",
         "oncePerBattle": true,
         "effects": [
@@ -2542,7 +2542,7 @@
       "passive1": {
         "id": "selka_no_extension",
         "name": "No Extension",
-        "description": "At round start Overdue is written back onto the enemy carrying it, so it cannot be shaken off. Pinoy writes it as Overdue being uncleansable during the round it was applied; the engine has no cleanse immunity, and a renewal is the nearest thing it can say. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 27.",
+        "description": "At the start of each round, Overdue is written back onto the enemy carrying it, so it cannot be shaken off.",
         "trigger": "RoundStart",
         "oncePerBattle": false,
         "effects": [
@@ -2624,7 +2624,7 @@
       "passive1": {
         "id": "arno_rubble_resolve",
         "name": "Rubble Resolve",
-        "description": "When Arno strikes an enemy carrying a Shield, he gains 8% Attack for 2 rounds. Pinoy writes it as the moment an enemy Shield is removed; a break is raised on the body that lost the Shield and on that body's own side, so the unit that broke it never hears about it. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 32.",
+        "description": "After Arno's basic attack, if the enemy he struck still holds a Ward, he gains Attack Up.",
         "trigger": "AfterBasicAttack",
         "oncePerBattle": false,
         "effects": [
@@ -5138,7 +5138,7 @@
         "id": "bren_take_another_route",
         "name": "Take Another Route",
         "energyCost": 100,
-        "description": "Deals 380% Attack damage to the highest-HP enemy. Pinoy swaps the target’s present HP percentage with that body’s; the engine has no two-way exchange and no one-way transfer between two units that are not the caster, so the blow is routed to the big body instead. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 11.",
+        "description": "Strikes the enemy with the highest HP.",
         "effects": [
           {
             "kind": "Damage",
@@ -5204,7 +5204,7 @@
       "basic": {
         "id": "cal_ricochet_mark",
         "name": "Ricochet Mark",
-        "description": "Deals 251% Attack damage to the highest-Attack enemy and applies Offset for 2 rounds, then a 57% Attack ricochet strikes that enemy again and the enemies beside it. Pinoy hangs the ricochet on the next ALLY attack against an Offset body; that shape needs a link and a second passive, which a 3-star does not carry, so Cal’s own shot carries it. Draft, Pinoy to confirm.",
+        "description": "Strikes the enemy with the highest Attack and applies Offset, then a ricochet strikes it and the enemies beside it.",
         "effects": [
           {
             "kind": "Damage",
@@ -5242,7 +5242,7 @@
       "passive1": {
         "id": "cal_new_sightline",
         "name": "New Sightline",
-        "description": "When Cal defeats an Offset enemy, his next attack is a guaranteed Critical Hit. Pinoy names the splash as the killer; the engine does not record which effect of a cast landed the blow. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 28.",
+        "description": "When Cal defeats an Offset enemy, he gains Guaranteed Crit, so his next attack lands as a critical hit.",
         "trigger": "OnEnemyDefeated",
         "oncePerBattle": false,
         "triggerSourceIsSelf": true,
@@ -5340,7 +5340,7 @@
       "passive1": {
         "id": "linnet_open_circuit",
         "name": "Open Circuit",
-        "description": "At round start, one debuff on the Crossed Line enemy is reconnected to a random enemy for 2 rounds and Linnet gains 10 Energy. Pinoy has Crossed Line reroute the first debuff to LAND on that body each round; the engine has no window for a debuff arriving on an enemy, so the reroute is done at round start on whatever is already there, and the 10 Energy pays whether or not anything moved. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md groups 29 and 30.",
+        "description": "At the start of each round, a debuff on the Crossed Line enemy moves to a random enemy, and Linnet gains Energy.",
         "trigger": "RoundStart",
         "oncePerBattle": false,
         "effects": [
@@ -5437,7 +5437,7 @@
       "passive1": {
         "id": "oswin_useful_scar",
         "name": "Useful Scar",
-        "description": "After Reposition the Hurt, every ally gains 8% Defense for 2 rounds. Pinoy pays only the allies who actually lost a debuff to Oswin; the engine records a removal for a cleanse, a dispel and a named strip but not for a move, so the condition that would ask has nothing to read. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 30.",
+        "description": "After Oswin casts Reposition the Hurt, every ally gains Guard Up.",
         "trigger": "AfterActiveCast",
         "oncePerBattle": false,
         "effects": [
@@ -5670,7 +5670,7 @@
       "passive1": {
         "id": "yara_second_bearing",
         "name": "Second Bearing",
-        "description": "Yara never aims twice running at the same enemy, and gains 10% Attack for 1 round each time she takes a new bearing. Pinoy writes it as a reward for changing target and pays it in Energy; nothing lets a hero hear its own target change, and a 2-star has no active skill to spend Energy on, so the switch is made a standing rule and the reward is paid in Attack. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 33.",
+        "description": "Yara never aims at the same enemy twice in a row, and gains Attack Up after each basic attack.",
         "trigger": "AfterBasicAttack",
         "targetBan": "LastTarget",
         "oncePerBattle": false,
@@ -7850,7 +7850,7 @@
       "basic": {
         "id": "brio_recorded_shot",
         "name": "Recorded Shot",
-        "description": "Deals 330% Attack damage and applies Accounted for 2 rounds. Pinoy also has attacks against an Accounted body unable to miss; nothing in the engine negates a miss chance, so that half is carried in the text only. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 31.",
+        "description": "Strikes the front enemy and marks it as Accounted. Brio's other skills seek out an Accounted enemy.",
         "effects": [
           {
             "kind": "Damage",
@@ -10634,7 +10634,7 @@
       "basic": {
         "id": "avera_offbeat_note",
         "name": "Offbeat Note",
-        "description": "Deals 380% Attack damage and applies Disrupted for 2 rounds. A Disrupted enemy loses 8 Energy the first time each round it would gain any. Pinoy has the toll land after the enemy casts an active skill; the engine's Disrupted intercepts an Energy gain instead, and the shape that answers a cast needs a second passive a 3-star does not carry. Draft, Pinoy to confirm.",
+        "description": "Strikes the front enemy and applies Disrupted. The first time each round a Disrupted enemy would gain Energy, it loses Energy instead.",
         "effects": [
           {
             "kind": "Damage",
@@ -10657,7 +10657,7 @@
         "id": "avera_break_the_measure",
         "name": "Break the Measure",
         "energyCost": 100,
-        "description": "Deals 520% Attack damage to all Disrupted enemies and delays each by 15% turn progress. Pinoy gives the delay a 50% chance; EffectDef.Chance is read at the ApplyStatus landing roll and nowhere else, so the delay is certain. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 15.",
+        "description": "Strikes every Disrupted enemy and delays each of them.",
         "effects": [
           {
             "kind": "Damage",
@@ -10773,7 +10773,7 @@
       "passive1": {
         "id": "lydia_no_fixed_departure",
         "name": "No Fixed Departure",
-        "description": "At the start of each of her turns Lydia gains 10% Damage Reduction until her next turn. Pinoy gates it on her acting before the slowest enemy; a condition can compare the caster against the body an effect LANDS on and against nobody else, and this one lands on Lydia. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 6.",
+        "description": "At the start of each of Lydia's turns, she gains Bulwark until her next turn.",
         "trigger": "TurnStart",
         "oncePerBattle": false,
         "effects": [
@@ -11126,7 +11126,7 @@
       "passive1": {
         "id": "kora_first_opening",
         "name": "First Opening",
-        "description": "Kora's strike deals 38% of Attack in additional damage to an enemy that has not acted this round. Pinoy writes it as 10% more damage; the engine's damage modifiers are counted off a status the target carries, and there is none that reads a condition, so the tenth is authored as a second blow. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 35.",
+        "description": "After Kora's basic attack, if the enemy she struck has not acted this round, she strikes it again.",
         "trigger": "AfterBasicAttack",
         "oncePerBattle": false,
         "effects": [
@@ -11202,7 +11202,7 @@
       "passive1": {
         "id": "sena_unfixed_aim",
         "name": "Unfixed Aim",
-        "description": "Sena's shot bites 85% of Attack deeper into a slowed enemy. Pinoy writes it as 10% Critical Chance against the slowed; StatusKind has no Critical Chance entry, so the advantage is paid as damage instead. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 13.",
+        "description": "After Sena's basic attack, if the enemy she struck is in Mire, she strikes it again.",
         "trigger": "AfterBasicAttack",
         "oncePerBattle": false,
         "effects": [
@@ -13295,7 +13295,7 @@
       "passive1": {
         "id": "petra_private_address",
         "name": "Private Address",
-        "description": "When a Withheld enemy strikes an ally, Petra gains 8% Damage Reduction for 1 round. Pinoy writes it on the enemy TARGETING an ally; the window the engine opens is the blow landing, so a strike that misses or is blocked does not reach it. Draft, Pinoy to confirm.",
+        "description": "When a Withheld enemy strikes Petra or an ally, Petra gains Bulwark.",
         "trigger": "OnEnemyDamagedAlly",
         "oncePerBattle": false,
         "includeSelf": true,
@@ -13376,7 +13376,7 @@
             "conditionOn2": "Target"
           }
         ],
-        "description": "Deals 120% Attack damage to the enemy with the highest Attack, and 35% more if Altheon has already damaged that enemy this round. The rider resolves BEFORE the blow it rides, which is what makes its condition a condition: AlreadyDamagedSubjectThisRound reads the round's damage list, and the 120% blow is an entry in that list, so a rider written after it asked a question its own firing had already answered and paid on every basic he ever threw. It was also 42% where Pinoy writes 35%. Ordered this way it fires when something else of his - the Subject's delayed damage, or Fixed in Place - reached that body earlier in the round, which is the sentence the text says. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
+        "description": "Strikes the enemy with the highest Attack, harder if Altheon has already damaged it this round. If it is the Subject and holds more HP than when he last noted it, he strikes it again."
       },
       "active": {
         "id": "altheon_immaculate_record",
@@ -13410,7 +13410,7 @@
             "target": "HighestAttackEnemy"
           }
         ],
-        "description": "Deals 185% Attack damage to all enemies and marks the enemy with the highest Attack as the Subject for 3 rounds. The first time the Subject takes damage from Altheon each round, record 30% of that damage, up to 50% of Altheon's Attack. When the Subject expires it takes damage equal to the whole record. Pinoy writes the Subject as 2 rounds and the ceiling as 120% of Attack; at those numbers the ceiling needs a single blow of four times Altheon's Attack and the Subject outruns him, so the record got one blow a round and never closed. Draft, Pinoy to confirm, see Docs/PINOY-LIST.md section 2d."
+        "description": "Strikes every enemy and marks the enemy with the highest Attack as the Subject. The first time each round Altheon damages the Subject, a share of it is recorded, up to a limit. When the Subject expires, it takes the whole record as damage."
       },
       "passive": {
         "id": "altheon_preserved_moment_stats",
@@ -15055,7 +15055,7 @@
       "passive1": {
         "id": "clara_known_condition",
         "name": "Known Condition",
-        "description": "When Clara takes a debuff off an ally, that ally gains 12 Energy. Pinoy pays only for a CONTROL debuff; no field and no condition carries the kind a removal took, so every debuff pays. Draft, Pinoy to confirm, see Docs/ENGINE-GAPS.md group 18.",
+        "description": "When Clara takes a debuff off an ally, that ally gains Energy.",
         "trigger": "OnStatusRemoved",
         "oncePerBattle": false,
         "effects": [

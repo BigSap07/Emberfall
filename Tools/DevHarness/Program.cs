@@ -26938,25 +26938,14 @@ namespace Emberfall.DevHarness
         /// <summary>
         /// Ability ids whose description is still a drafting note addressed to Pinoy, because the
         /// sentence he wrote and the kit that ships disagree and only he can say which one is the
-        /// intent. Each one is a question in Docs/PINOY-LIST.md section 2f. When he answers, the
-        /// note is replaced by player text and its id comes out of this list in the same commit;
-        /// CheckAbilityTextIsPlayerFacing fails if either half is done without the other.
+        /// intent. Empty since the content pass of 2026-10-22: every one of the 28 now carries
+        /// player text describing what its effects actually do, and the open question each one
+        /// stood for (keep the kit, or change it to Pinoy's sentence) is a mechanics question in
+        /// Docs/PINOY-LIST.md section 2f rather than a gap on the card. A new drafting note is
+        /// pinned here and asked there in the same commit; CheckAbilityTextIsPlayerFacing fails if
+        /// either half is done without the other.
         /// </summary>
-        private static readonly string[] AbilityTextPinnedDraftingNotes =
-        {
-            "arno_rubble_resolve", "yara_second_bearing", "kora_first_opening",
-            "sena_unfixed_aim",
-            "adric_no_return_mark", "aster_scoring_point", "quin_stamped_parcel",
-            "quin_return_to_sender", "quin_urgent_matter", "selka_no_extension",
-            "bren_take_another_route", "cal_ricochet_mark", "cal_new_sightline",
-            "linnet_open_circuit", "oswin_useful_scar", "brio_recorded_shot", "avera_offbeat_note",
-            "avera_break_the_measure", "lydia_no_fixed_departure", "petra_private_address",
-            "clara_known_condition",
-            "demos_notice_of_loss", "demos_arrears_tick",
-            "hale_field_sign", "hale_closing_radius",
-            "seraphine_volume_closed", "altheon_witness_script",
-            "altheon_immaculate_record"
-        };
+        private static readonly string[] AbilityTextPinnedDraftingNotes = { };
 
         /// <summary>Ability ids deliberately left with no description, because their effect data
         /// is ambiguous enough that any sentence would be a guess. Listed in Docs/PINOY-LIST.md

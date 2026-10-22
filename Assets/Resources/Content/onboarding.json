@@ -6,8 +6,11 @@
   // here is read by a fight. A rewritten line or a moved unlock must not retire every guild's
   // replays. ContentDatabase.LoadOnboarding reads it after Load.
   //
-  // EVERY LINE OF TEXT HERE IS A PLACEHOLDER for the designer's pass. Rewrite freely; no code
-  // reads the wording, only the keys.
+  // THE TEXT IS FINAL as of the content pass of 2026-10-22, written to the game as it plays (two
+  // ranks in the formation, fusion as conversion and ascension, the shops each currency feeds) and
+  // with the wake taken from the chapter 1 lore ("Wake up." and "silence. birds. morning." are
+  // Pinoy's own words). Rewrite freely; no code reads the wording, only the keys. No numbers and no
+  // dashes in player text.
 
   // THE UNLOCK TABLE. The ONLY place a feature's opening is decided. A feature unlocks the moment
   // its stage is CLEARED; "" means it is open from the first minute. Every entry point to a
@@ -43,7 +46,7 @@
   "recall": {
     "hero": "kael_the_unyielding",
     "title": "The Cinder remembers.",
-    "body": "Call back someone who once stood here.",
+    "body": "Someone stood here once. Call them back.",
     "button": "RECALL",
     "result": "answers the Cinder.",
     "continue": "CONTINUE"
@@ -53,7 +56,7 @@
   // aspects, fullBattle, boss), fought by its existing squad and left unchanged.
   "prologue": {
     "step": "fullBattle",
-    "line": "Your heroes fight on their own."
+    "line": "Your heroes fight on their own. Watch who they strike."
   },
 
   // 4. THE GUIDED CORE LOOP. Six steps, one pip each, in this order. Each line is the caption
@@ -61,12 +64,12 @@
   // the level up comes after 1-2, when a new player can afford one (780 gold after 1-1 against a
   // 1070 first level on every starter, 1235 after 1-2).
   "steps": [
-    { "id": "team",        "line": "Kael stands in your line now. Tap to confirm it." },
-    { "id": "campaign",    "line": "The road starts here. Fight stage 1-1." },
-    { "id": "waveResult",  "line": "Each wave pays as it falls. Clear the stage." },
-    { "id": "secondStage", "line": "One more stage. Fight 1-2." },
-    { "id": "levelUp",     "line": "Gold makes a hero stronger. Level one up." },
-    { "id": "idle",        "line": "Your heroes earn while you are away. Collect it." }
+    { "id": "team",        "line": "Kael stands in your line now. Confirm it to march." },
+    { "id": "campaign",    "line": "The road starts at the shrine. Fight the first stage." },
+    { "id": "waveResult",  "line": "Each wave pays as it falls. Keep going until the stage is clear." },
+    { "id": "secondStage", "line": "One more step down the road. Fight the next stage." },
+    { "id": "levelUp",     "line": "Gold makes a hero stronger. Level one up now." },
+    { "id": "idle",        "line": "Your heroes keep earning while you are away. Collect what they found." }
   ],
 
   "skip": "SKIP",
@@ -74,20 +77,29 @@
   // 5. FREE PLAY. One line, the first time each screen opens, dismissed by any tap and never
   // shown again (PlayerProfile.SeenTips). Keyed by screen name.
   "tips": {
-    "Campaign":     "Stages unlock in order. A cleared stage can be swept for its spoils.",
-    "Summon":       "Shards call new heroes through the Cinder.",
-    "Formation":    "Slot one is the front. Most enemies swing at whoever stands there.",
-    "Heroes":       "Every hero you have recalled, and every one still waiting.",
-    "HeroDetail":   "Levels cost gold. A hero's star tier sets how high they can go.",
-    "Inventory":    "Armor drops from stages. Wear it to move the numbers.",
-    "Forge":        "Break armor you do not need into slag, and temper what you keep.",
-    "Fusion":       "Spare heroes become stars, and stars raise the level cap.",
-    "Talents":      "A talent changes how a hero fights. Switching is free.",
-    "RelicShop":    "Relics change a rule of battle, not a number.",
-    "Recital":      "An endless climb. Echoes refill with time.",
-    "Proving":      "Fight other lines. Brands refill with time.",
-    "Friends":      "Share your code. Friendly duels cost nothing and pay nothing.",
-    "Guild":        "A guild fights its dungeon together and grows its tech.",
-    "Events":       "Events run for a while and pay for what you already do."
+    "Campaign":      "Stages open in order. A stage you have cleared is swept in one tap for its spoils.",
+    "Summon":        "Shards call new heroes through the Cinder. Your first calls bring heroes you do not have yet.",
+    "Formation":     "Two in front, three behind. Most enemies strike the front rank, so stand your toughest there.",
+    "Heroes":        "Every hero you have recalled, and every one still waiting to be found.",
+    "HeroDetail":    "Levels cost Gold. A hero's stars and ascension set how high they can climb.",
+    "Inventory":     "Armor drops when you clear stages. Equip a piece to raise a hero's stats.",
+    "Forge":         "Salvage armor you do not need for Slag, then spend Slag to reroll a piece or combine three into a better one.",
+    "Fusion":        "Trade spare heroes for a random five star of the aspect you choose, or spend copies to ascend a five star past its cap.",
+    "Talents":       "A talent changes how a hero fights. Switching is free, and ascension opens more slots.",
+    "RelicShop":     "Relics change a rule of battle, not a number. Spend Relic Dust here.",
+    "Recital":       "An endless climb with a Guardian every tenth floor. Echoes refill with time, and Coda buys from the Archive.",
+    "Proving":       "Test your line against others. Brands refill with time, and Valor buys from the Armory.",
+    "Friends":       "Share your code. Friendly duels cost nothing and pay nothing.",
+    "Guild":         "A guild fights its dungeon together and grows its tech.",
+    "GuildDungeon":  "Five floors that open as your guild clears them. Fighting here earns Waymarks.",
+    "GuildTech":     "Spend Waymarks on your heroes' families. Your guild's level opens its talent slots.",
+    "Events":        "Events run for a while and pay for what you already do.",
+    "LiveEvents":    "Weekly and monthly events count what you already do. Claim the free track as you go.",
+    "Armory":        "Valor from the Proving buys here. Every item is fixed, never random.",
+    "Archive":       "Coda from the Deep Recital buys here. Every item is fixed, never random.",
+    "Quartermaster": "A fresh shelf of armor every day, one piece for each slot, sold for Gold.",
+    "Store":         "Every pack shows exactly what is inside before you buy. Nothing you buy is ever random.",
+    "Orders":        "Five small orders a day. Finish them all to open the daily chest.",
+    "WayfarersRoad": "Every order and chest you claim moves you along the road. Claim each tier as you reach it."
   }
 }
