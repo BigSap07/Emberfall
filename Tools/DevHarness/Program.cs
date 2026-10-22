@@ -70,6 +70,7 @@ namespace Emberfall.DevHarness
                 // Docs/ECONOMY-PROPOSAL-R4.md, see RunRelevel.
                 if (args[i] == "--wall-modes" && i + 1 < args.Length) { _wallModes = args[++i]; continue; }
                 if (args[i] == "--store-contracts") { _storeContracts = true; continue; }
+                if (args[i] == "--store-ads" && i + 1 < args.Length) { _storeAds = args[++i]; continue; }   // the ad watcher (StoreCurve.cs)
                 if (WhaleTakeArg(args, ref i)) continue;   // the R24 whale study's flags (R24WhaleCurve.cs)
                 if (args[i] == "--store-curve")
                 {
@@ -17562,6 +17563,7 @@ namespace Emberfall.DevHarness
                     IdleReport idle = session.ClaimIdle(run.Now);
                     run.Ledger.GoldIdle += idle.Gold;
                     run.Ledger.ShardIdle += idle.Shards;
+                    AdWatcherIdleStep(session, idle, run.Now);   // inert unless --store-ads asked for the ad watcher
                     // THE ORDER OF A SITTING'S ROSTER WORK, and it changed with fusion. Gold used to
                     // go first, into the line as it stood, and the pulls came after it, so a hero
                     // pulled this sitting waited for the next one to be levelled. Now the pulls
@@ -17654,11 +17656,13 @@ namespace Emberfall.DevHarness
                         // itself, so the ordinal is recorded here where it is still visible.
                         NoteResolvedOrdinal(_economyOrdinals, farm,
                                             Math.Max(1, farm.WaveCount), Math.Max(1, farm.BattleCount));
+                        long lastFullSweepGold = 0;
                         for (int i = 0; i < allowed; i++)
                         {
                             BattleRewards fr = session.SweepClearedStage(farm, run.NextSeed(), run.Now);
                             run.Ledger.GoldFarm += fr.Gold;
                             run.Ledger.ShardFarm += fr.Shards;
+                            if (fr.Gold > 0) lastFullSweepGold = fr.Gold;
                             if (fr.ArmorDrop != null) run.Ledger.ArmorDrops++;
                             run.TotalBattles++;
                             outcome.Battles++;
@@ -17666,6 +17670,7 @@ namespace Emberfall.DevHarness
                             run.Now += (long)(EconomyBattleOverheadSeconds + 8f * EconomySecondsPerRound);
                             if (!fr.Victory) break;
                         }
+                        AdWatcherSweepStep(session, lastFullSweepGold, run.Now);   // inert unless --store-ads asked for the ad watcher
                     }
 
                     // STALLED means neither power nor the roster moved. Before caps, power was the
