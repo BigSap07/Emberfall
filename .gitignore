@@ -84,3 +84,6 @@ Assets/Resources/BuildStamp.txt.meta
 # The live Supabase rule tests' run records, read by Tools/status.ps1. Local facts about one machine's
 # runs, and they carry the commit each run was made at, not anything about the project's keys.
 /Tools/SupabaseRuns/
+
+# Tools/cockpit: the 5h reset and weekly values typed with keys b and w
+/Tools/cockpit/state.json

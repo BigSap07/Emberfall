@@ -1,15 +1,48 @@
 {
  "usd_to_eur": 0.92,
  "subscriptions": [
-  {"name": "Claude Max 20x", "monthly_eur": 216.00, "start_month": "2026-03", "end_month": null},
-  {"name": "Claude Pro", "monthly_eur": 21.60, "start_month": "2026-01", "end_month": "2026-02"},
-  {"name": "Unity Pro", "monthly_eur": 0, "start_month": "2026-01", "end_month": null}
+  {
+   "name": "Claude Max 20x",
+   "monthly_eur": 216.0,
+   "start_month": "2026-03",
+   "end_month": null
+  },
+  {
+   "name": "Claude Pro",
+   "monthly_eur": 21.6,
+   "start_month": "2026-01",
+   "end_month": "2026-02"
+  },
+  {
+   "name": "Unity Pro",
+   "monthly_eur": 0,
+   "start_month": "2026-01",
+   "end_month": null
+  }
  ],
  "api_topups": [
-  {"date": "2026-02-10", "eur": 50.00, "note": "Console credit for the first ccusage tests"}
+  {
+   "date": "2026-02-10",
+   "eur": 50.0,
+   "note": "Console credit for the first ccusage tests"
+  }
  ],
  "one_off": [
-  {"date": "2026-04-02", "eur": 39.00, "category": "Assets", "note": "Font licence"},
-  {"date": "2026-10-04", "eur": 25.00, "category": "Google Play", "note": "Developer account"}
- ]
+  {
+   "date": "2026-04-02",
+   "eur": 39.0,
+   "category": "Assets",
+   "note": "Font licence"
+  },
+  {
+   "date": "2026-10-04",
+   "eur": 25.0,
+   "category": "Google Play",
+   "note": "Developer account"
+  }
+ ],
+ "api_credit": {
+  "remaining_usd": 31,
+  "expires": "2026-10-31"
+ }
 }

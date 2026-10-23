@@ -9,4 +9,3 @@
 - 09:35 polling STATUS.md
 - 11:30 candidate G recorded
 - 16:00 waiting for owner review of candidate G
-CHAIN: R28-relic-shop
