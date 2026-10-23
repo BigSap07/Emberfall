@@ -479,14 +479,19 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < ladder.Length; i++) known &= stand.Contains("\"" + ladder[i] + "\"");
             Check(five1080 && known, "R28b CAPTURES: the five states GUILD-DUNGEON-SIZE.md asks for are captured at both shapes, and the stand-in backend builds every ladder state by name");
 
+            // Builder a's captures (R28aCaptures) sit in the same menu root; this check holds builder b's own block to its 35 items.
+            int bStart = shots.IndexOf("R28 screens (builder b): guild dungeon ladder, rewarded ads", StringComparison.Ordinal);
+            int bEnd = shots.IndexOf("end of R28 screens (builder b)", StringComparison.Ordinal);
+            string bshots = (bStart > 0 && bEnd > bStart) ? shots.Substring(bStart, bEnd - bStart) : shots;
+            int aStart = shots.IndexOf("public static class R28aCaptures", StringComparison.Ordinal);
             // One menu item per target (the size is the Game view's), all inside the one marked block.
-            MatchCollection items = Regex.Matches(shots, "\\[MenuItem\\(\"Emberfall/Capture/R28 screens/([^\"]+)\", false, (\\d+)\\)\\]\\s*public static void (\\w+)\\(\\) \\{ Begin\\(\"(Screen:[^\"]+)\"\\); \\}");
+            MatchCollection items = Regex.Matches(bshots, "\\[MenuItem\\(\"Emberfall/Capture/R28 screens/([^\"]+)\", false, (\\d+)\\)\\]\\s*public static void (\\w+)\\(\\) \\{ Begin\\(\"(Screen:[^\"]+)\"\\); \\}");
             List<string> beginTargets = new List<string>();
             for (int i = 0; i < items.Count; i++) beginTargets.Add(items[i].Groups[4].Value);
             List<string> noItem = new List<string>();
             for (int i = 0; i < ladder.Length; i++) if (!beginTargets.Contains("Screen:GuildLadder=" + ladder[i])) noItem.Add(ladder[i]);
             for (int p = 0; p < places.Length; p++) for (int i = 0; i < ads.Length; i++) if (!beginTargets.Contains("Screen:" + places[p] + "=" + ads[i])) noItem.Add(places[p] + "=" + ads[i]);
-            Check(items.Count == 35 && noItem.Count == 0 && Regex.Matches(shots, "Emberfall/Capture/R28 screens/").Count == 35,
+            Check(items.Count == 35 && noItem.Count == 0 && Regex.Matches(bshots, "Emberfall/Capture/R28 screens/").Count == 35,
                   "R28b CAPTURES: one MenuItem under Emberfall/Capture/R28 screens/ for each of the 35 states (" + items.Count + " found" + (noItem.Count > 0 ? ", no item for " + noItem[0] : "") + ")");
 
             int start = shots.IndexOf("R28 screens (builder b): guild dungeon ladder, rewarded ads", StringComparison.Ordinal);
@@ -494,7 +499,7 @@ namespace Emberfall.DevHarness
             bool inside = start > 0 && end > start;
             if (inside)
             {
-                foreach (Match m in Regex.Matches(shots, "R28 screens/")) inside &= m.Index > start && m.Index < end;
+                foreach (Match m in Regex.Matches(shots, "R28 screens/")) inside &= (m.Index > start && m.Index < end) || (aStart > end && m.Index > aStart);
                 foreach (Match m in Regex.Matches(shots, "AdsSwitch\\.Enabled\\s*=[^=]")) inside &= m.Index > start && m.Index < end;
                 foreach (Match m in Regex.Matches(shots, "AdBackends\\.Override\\s*=")) inside &= m.Index > start && m.Index < end;
                 foreach (Match m in Regex.Matches(shots, "GuildDungeonBackends\\.Override\\s*=")) inside &= m.Index > start && m.Index < end;
