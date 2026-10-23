@@ -257,6 +257,13 @@ namespace Emberfall.UI.Battle
         /// </summary>
         public static int Compose(IList<StatusKind> statuses, List<StatusIcon> shown)
         {
+            return Compose(statuses, shown, BattleHudMetrics.PlateMaxIcons);
+        }
+
+        /// <summary>Compose with a ceiling of its own: the plate over a head has room for
+        /// BattleHudMetrics.PlateMaxIconsOverHead (see there), the one under the feet for PlateMaxIcons.</summary>
+        public static int Compose(IList<StatusKind> statuses, List<StatusIcon> shown, int maxIcons)
+        {
             shown.Clear();
             List<StatusIcon> all = new List<StatusIcon>();
             if (statuses != null)
@@ -280,7 +287,7 @@ namespace Emberfall.UI.Battle
                 for (int i = 0; i < all.Count; i++)
                 {
                     if ((int)all[i].Role != role) continue;
-                    if (shown.Count < BattleHudMetrics.PlateMaxIcons) shown.Add(all[i]);
+                    if (shown.Count < maxIcons) shown.Add(all[i]);
                 }
             }
             return all.Count - shown.Count;

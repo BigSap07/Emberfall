@@ -294,6 +294,7 @@ namespace Emberfall.Battle
                 GameObject host = new GameObject((snapshot.IsPlayer ? "Ally_" : "Enemy_") + snapshot.Name);
                 host.transform.SetParent(_world, false);
                 UnitActor actor = host.AddComponent<UnitActor>();
+                if (resolved != null) actor.FormationSlot = resolved[i];
                 // Under the formation the position is set by FitFormation below; the legacy slot is
                 // only where the actor starts.
                 actor.Setup(snapshot, new Vector3(slot.X, 0f, slot.Z), snapshot.IsPlayer);

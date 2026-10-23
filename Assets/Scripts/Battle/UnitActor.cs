@@ -26,6 +26,10 @@ namespace Emberfall.Battle
         /// </summary>
         public VfxDirector Director;
 
+        /// <summary>The formation slot BattleStage resolved for this unit (FormationLayout.ResolveSlots);
+        /// negative until it has, when the snapshot's own slot stands in. Set before Setup.</summary>
+        public int FormationSlot = -1;
+
         private float _displayShield;
 
         /// <summary>
@@ -96,7 +100,7 @@ namespace Emberfall.Battle
             // rig's own scale: Rig.Height is the scaled top, so the ratio is the whole correction.
             if (FormationLayout.Enabled && Rig.Height > 0.05f)
             {
-                float k = FormationLayout.WorldHeight(snapshot.IsBoss) / Rig.Height * StageFeel.FormationMul(snapshot.DefId);
+                float k = FormationLayout.WorldHeight(snapshot.IsBoss, FormationSlot >= 0 ? FormationSlot : snapshot.Slot) / Rig.Height * StageFeel.FormationMul(snapshot.DefId);
                 k = Mathf.Clamp(k, 0.5f, 2.5f);
                 Rig.Root.localScale = Rig.Root.localScale * k;
                 Rig.Height *= k;

@@ -22,16 +22,23 @@ namespace Emberfall.Battle
     ///     front row  F1 0.32, 0.69   F2 0.29, 0.84
     ///
     /// A unit is about UnitHeightFraction of the safe height tall, heroes and enemies alike (the rig is
-    /// scaled to it, UnitActor.Setup); a boss is BossScale larger and is meant for the middle back
-    /// slot, B2. The lower unit is drawn in front. Health and energy bars sit just above the head and
-    /// the highest of them stays below BarsCeiling of the height from the top, so the background art
-    /// above stays clear. The centre between the teams stays open, which is where attacks travel.
+    /// scaled to it, UnitActor.Setup); a boss is larger (BossScaleAt). The lower unit is drawn in
+    /// front. Health and energy bars sit just above the head and the highest of them stays below
+    /// BarsCeiling of the height from the top, so the background art above stays clear. The centre
+    /// between the teams stays open, which is where attacks travel.
     ///
     /// GAME SLOT TO CELL. The simulation numbers a side's slots 0 to 4 (front 0 and 1, back 2 to 4).
     /// Before this table, slot 0 stood nearest the camera (the lowest on screen) and slot 4 furthest,
     /// so SlotCell keeps that order rather than reshuffling who stands where: slot 0 is F2, slot 1 is
-    /// F1, slot 2 is B3, slot 3 is B2 (the middle, the boss's) and slot 4 is B1. DEFAULT TAKEN, the
-    /// mapping is one array, flip it there.
+    /// F1, slot 2 is B3, slot 3 is B2 (the middle) and slot 4 is B1. DEFAULT TAKEN, the mapping is
+    /// one array, flip it there.
+    ///
+    /// THE BOSS. The target would have a boss take the middle back cell, B2. The campaign lists a boss
+    /// FIRST in its line (campaign.json, every stage 12 and the minibosses of chapters 1 and 2), which
+    /// is slot 0, and the simulation's FrontEnemy rule targets the lowest slot: a boss drawn in B2
+    /// would be hit as the front unit from behind two others, which the screen must not say. So the
+    /// boss stands in the cell of the slot it has (F2), larger, and the middle back cell (BossSlot) is
+    /// where it would stand if content ever put it in slot 3. DEFAULT TAKEN: no content change.
     /// </summary>
     public static class FormationLayout
     {
@@ -153,18 +160,36 @@ namespace Emberfall.Battle
             return new BattleFraming.CanvasPoint(safe.X + c.X * safe.Width, safe.YMax - c.Y * safe.Height);
         }
 
-        /// <summary>How tall a unit reads on screen: UnitHeightFraction of the safe height, times
-        /// BossScale for a boss.</summary>
-        public static float UnitScreenHeight(float safeHeight, bool boss)
+        /// <summary>What a boss's bars (and the turn lift and the gap under them) need above its head,
+        /// as a fraction of the height: the head may not stand higher than the ceiling plus this.</summary>
+        public const float BarsReserve = 0.055f;
+
+        /// <summary>
+        /// How much larger than an ordinary unit a boss in this slot is drawn: BossScale, held down where
+        /// a taller body would push its bars above the ceiling. The campaign puts a boss first in its
+        /// line (slot 0, the front pair's lower cell), where the full BossScale fits; B2 has room for
+        /// more than BossScale; the highest cell, B1, has room for about 1.1.
+        /// </summary>
+        public static float BossScaleAt(int slot)
         {
-            return UnitHeightFraction * safeHeight * (boss ? BossScale : 1f);
+            int i = slot < 0 ? 0 : slot >= Count ? Count - 1 : slot;
+            float room = Cells[SlotCell[i]].Y - BarsCeiling - BarsReserve;
+            float scale = room / UnitHeightFraction;
+            return scale < 1f ? 1f : scale > BossScale ? BossScale : scale;
         }
 
-        /// <summary>A unit's top in world units: WorldUnitHeight, times BossScale for a boss. UnitActor
-        /// scales the rig to it.</summary>
-        public static float WorldHeight(bool boss)
+        /// <summary>How tall a unit reads on screen: UnitHeightFraction of the safe height, times
+        /// BossScaleAt(slot) for a boss.</summary>
+        public static float UnitScreenHeight(float safeHeight, bool boss, int slot)
         {
-            return WorldUnitHeight * (boss ? BossScale : 1f);
+            return UnitHeightFraction * safeHeight * (boss ? BossScaleAt(slot) : 1f);
+        }
+
+        /// <summary>A unit's top in world units: WorldUnitHeight, times BossScaleAt(slot) for a boss.
+        /// UnitActor scales the rig to it.</summary>
+        public static float WorldHeight(bool boss, int slot)
+        {
+            return WorldUnitHeight * (boss ? BossScaleAt(slot) : 1f);
         }
 
         // ---------------------------------------------------------------- camera

@@ -2203,7 +2203,8 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void RefreshStatusText(UnitBar bar)
         {
-            int overflow = StatusIcons.Compose(bar.Statuses, _iconScratch);
+            int overflow = StatusIcons.Compose(bar.Statuses, _iconScratch,
+                FormationLayout.Enabled ? BattleHudMetrics.PlateMaxIconsOverHead : BattleHudMetrics.PlateMaxIcons);
             bar.Plate.ShowStatuses(_iconScratch, overflow);
         }
 

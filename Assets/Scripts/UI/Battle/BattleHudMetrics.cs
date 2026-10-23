@@ -135,9 +135,14 @@ namespace Emberfall.UI.Battle
         /// <summary>The icon row sits right of the bars, this far from the HP bar's end.</summary>
         public const float PlateIconsInset = 6f;
 
-        /// <summary>Three icons, the "+N" and the spacing between the four: 3 x 16 + 26 + 3 x 3 = 83.</summary>
-        public const float PlateIconsWidth = PlateMaxIcons * PlateIconSize + PlateIconOverflowWidth
-                                           + PlateMaxIcons * PlateIconSpacing;
+        /// <summary>Over a head the icon row reaches toward the centre, where the next plate may be only
+        /// a few units away (a boss's plate sits higher than its neighbours'), so it holds two icons and
+        /// the "+N" for the rest rather than three: a plate's whole width is what the harness keeps clear.</summary>
+        public const int PlateMaxIconsOverHead = 2;
+
+        /// <summary>The icons, the "+N" and the spacing: 2 x 16 + 26 + 2 x 3 = 64.</summary>
+        public const float PlateIconsWidth = PlateMaxIconsOverHead * PlateIconSize + PlateIconOverflowWidth
+                                           + PlateMaxIconsOverHead * PlateIconSpacing;
 
         // ---------------------------------------------------------------- the callout pill
 

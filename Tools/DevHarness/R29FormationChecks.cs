@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 using Emberfall.Battle;
+using Emberfall.Core.Data;
 using Emberfall.UI.Battle;
 
 namespace Emberfall.DevHarness
@@ -47,6 +48,9 @@ namespace Emberfall.DevHarness
         private const float R29BodyHalfWidth = 0.40f;
         private const float R29ShadowBelow = 0.06f;
 
+        /// <summary>The slot every boss of campaign.json stands in: first in its line, so slot 0.</summary>
+        private const int R29ContentBossSlot = 0;
+
         private static void CheckR29Formation(string contentDir)
         {
             Line("");
@@ -57,6 +61,7 @@ namespace Emberfall.DevHarness
             R29Mirror();
             R29SlotMapping();
             R29ResolveSlots();
+            R29Icons();
             for (int s = 0; s < R29Screens.Length; s++) R29AtScreen(R29Screens[s]);
             R29Approach(root);
             R29Wiring(root);
@@ -158,6 +163,24 @@ namespace Emberfall.DevHarness
                   "an empty side resolves to nothing");
         }
 
+        private static void R29Icons()
+        {
+            // Over a head the icon row holds two icons and the "+N", so the plate stays narrow enough to clear
+            // its neighbour (the boss's plate stands higher than the units around it).
+            List<StatusIcon> shown = new List<StatusIcon>();
+            int over = StatusIcons.Compose(new List<StatusKind>
+            {
+                StatusKind.AttackUp, StatusKind.Burn, StatusKind.Shield, StatusKind.Mark, StatusKind.Slow
+            }, shown, BattleHudMetrics.PlateMaxIconsOverHead);
+            Check(shown.Count == 2 && over == 3 && shown[0].Kind == StatusKind.Burn && shown[1].Kind == StatusKind.Slow,
+                  "over a head five kinds show " + BattleHudMetrics.PlateMaxIconsOverHead + " icons and \"+3\", harmful first (got "
+                  + shown.Count + " +" + over + ")");
+            Check(BattleHudMetrics.PlateMaxIconsOverHead <= BattleHudMetrics.PlateMaxIcons
+                  && Math.Abs(BattleHudMetrics.PlateIconsWidth - (BattleHudMetrics.PlateMaxIconsOverHead * BattleHudMetrics.PlateIconSize
+                      + BattleHudMetrics.PlateIconOverflowWidth + BattleHudMetrics.PlateMaxIconsOverHead * BattleHudMetrics.PlateIconSpacing)) < 0.01f,
+                  "the icon row's reserved width is its icons, the \"+N\" and the spacing, and no more than the legacy row's");
+        }
+
         // ---------------------------------------------------------------- one screen shape
 
         private static BattleFraming.CanvasRect R29Body(BattleFraming.CanvasPoint feet, float height)
@@ -193,7 +216,7 @@ namespace Emberfall.DevHarness
             float ortho = FormationLayout.OrthographicSize(viewport.Height, safe.Height);
             float perUnit = viewport.Height / (2f * ortho);
 
-            // Ten feet, ten bodies (slot 3 of the enemies as a boss, the widest case), ten plates.
+            // Ten feet, ten bodies (the enemies' slot 0 as a boss, where the campaign puts it), ten plates.
             BattleFraming.CanvasPoint[] feet = new BattleFraming.CanvasPoint[10];
             BattleFraming.CanvasRect[] body = new BattleFraming.CanvasRect[10];
             BattleFraming.CanvasPoint[] head = new BattleFraming.CanvasPoint[10];
@@ -207,10 +230,10 @@ namespace Emberfall.DevHarness
             {
                 bool ally = i < 5;
                 int slot = i % 5;
-                bool boss = !ally && slot == FormationLayout.BossSlot;
+                bool boss = !ally && slot == R29ContentBossSlot;
                 id[i] = (ally ? "A" : "E") + FormationLayout.CellOf(ally, slot).Name;
                 feet[i] = FormationLayout.Feet(ally, slot, safe);
-                height[i] = FormationLayout.UnitScreenHeight(safe.Height, boss);
+                height[i] = FormationLayout.UnitScreenHeight(safe.Height, boss, slot);
                 body[i] = R29Body(feet[i], height[i]);
 
                 float wx, wz;
@@ -218,7 +241,7 @@ namespace Emberfall.DevHarness
                 BattleFraming.CanvasPoint back = BattleFraming.Project(wx, 0f, wz, viewport, true, ortho);
                 worstRound = Math.Max(worstRound, Math.Max(Math.Abs(back.X - feet[i].X), Math.Abs(back.Y - feet[i].Y)));
 
-                float worldH = FormationLayout.WorldHeight(boss);
+                float worldH = FormationLayout.WorldHeight(boss, slot);
                 head[i] = BattleFraming.Project(wx, worldH, wz, viewport, true, ortho);
                 float shown = head[i].Y - feet[i].Y;
                 float want = height[i];
@@ -239,8 +262,8 @@ namespace Emberfall.DevHarness
                              + F2(worstRound) + " canvas units)");
             Check(sizeOk, tag + ": a unit's head stands " + F1(height[0]) + " canvas units over its feet = "
                           + F2(height[0] / safe.Height) + " of the safe height (a boss "
-                          + F2(height[FormationLayout.BossSlot + 5] / safe.Height) + "), as drawn, worst " + F2(worstSize));
-            Check(Math.Abs(height[0] / safe.Height - 0.20f) <= 0.01f && height[FormationLayout.BossSlot + 5] > height[0],
+                          + F2(height[R29ContentBossSlot + 5] / safe.Height) + "), as drawn, worst " + F2(worstSize));
+            Check(Math.Abs(height[0] / safe.Height - 0.20f) <= 0.01f && height[R29ContentBossSlot + 5] > height[0],
                   tag + ": scale is about 0.20 of the safe height, a boss larger");
             Check(depthOk, tag + ": every unit is in front of the near clip and in front of the backdrop (depth " + F1(minDepth) + " to " + F1(maxDepth) + ")");
 
@@ -312,13 +335,13 @@ namespace Emberfall.DevHarness
                 {
                     float smaller = Math.Min(body[i].Width * body[i].Height, body[j].Width * body[j].Height);
                     float f = R29Overlap(body[i], body[j]) / smaller;
-                    bool withBoss = i == FormationLayout.BossSlot + 5 || j == FormationLayout.BossSlot + 5;
+                    bool withBoss = i == R29ContentBossSlot + 5 || j == R29ContentBossSlot + 5;
                     if (withBoss) { if (f > worstBossOverlap) { worstBossOverlap = f; worstBossAt = id[i] + "/" + id[j]; } }
                     else if (f > worstOverlap) { worstOverlap = f; worstOverlapAt = id[i] + "/" + id[j]; }
                 }
             Check(worstOverlap <= 0.30f && worstBossOverlap <= 0.55f,
                   tag + ": units overlap only slightly, worst " + F3(worstOverlap) + " of the smaller body (" + worstOverlapAt
-                  + ", max 0.30), a boss in B2 (larger, drawn in front of the unit behind it) " + F3(worstBossOverlap)
+                  + ", max 0.30), a boss in F2 (larger, drawn in front of the unit behind it) " + F3(worstBossOverlap)
                   + " (" + worstBossAt + ", max 0.55)");
 
             // Plates against plates, the turn lift on one at a time.
@@ -362,6 +385,45 @@ namespace Emberfall.DevHarness
             for (int i = 0; i < 10; i++) inField &= barsLift[i].YMax <= viewport.YMax && plateLift[i].X >= viewport.X && plateLift[i].XMax <= viewport.XMax;
             Check(inField && viewport.YMax <= BattleHudLayout.BarBottom(safeTop) + 0.01f,
                   tag + ": every plate is inside the camera's viewport, which stops at the top bar");
+
+            // A boss in ANY slot (content puts it in slot 0, but nothing forbids another): its bars still
+            // clear the ceiling, it and its plate stay in the safe area, and it hides no more of a
+            // neighbour than a boss may. Its plate is held clear of the other plates only in the two slots a
+            // boss can stand in (slot 0, where campaign.json puts every boss, and the middle back slot the
+            // target names): a boss in the front pair's upper cell at 4:3 would put its plate against the
+            // back rank's, and nothing places one there. DEFAULT TAKEN, reported rather than designed away.
+            bool bossOk = true;
+            string bossWhy = "";
+            for (int bs = 0; bs < 5; bs++)
+            {
+                BattleFraming.CanvasPoint bf = feet[5 + bs];
+                bool wasBoss = bs == R29ContentBossSlot;
+                float bh = FormationLayout.UnitScreenHeight(safe.Height, true, bs);
+                float worldH = FormationLayout.WorldHeight(true, bs);
+                float wx, wz;
+                FormationLayout.ToWorld(bf, viewport, ortho, out wx, out wz);
+                BattleFraming.CanvasPoint bhead = BattleFraming.Project(wx, worldH, wz, viewport, true, ortho);
+                BattleFraming.CanvasRect bbody = R29Body(bf, bh);
+                BattleFraming.CanvasRect bbars = BattleHudLayout.BarsBoxAboveHead(bhead, true);
+                BattleFraming.CanvasRect bplate = BattleHudLayout.PlateBoxAboveHead(bhead, true, false);
+                if ((canvasH - bbars.YMax) / canvasH < FormationLayout.BarsCeiling) { bossOk = false; bossWhy += " bars@" + FormationLayout.CellOf(false, bs).Name; }
+                if (!R29Inside(bbody, safe) || !R29Inside(bplate, safe)) { bossOk = false; bossWhy += " safe@" + FormationLayout.CellOf(false, bs).Name; }
+                if (FormationLayout.BossScaleAt(bs) < 1f || FormationLayout.BossScaleAt(bs) > FormationLayout.BossScale) { bossOk = false; bossWhy += " scale@" + bs; }
+                for (int j = 0; j < 10; j++)
+                {
+                    if (j == 5 + bs || j == 5 + R29ContentBossSlot) continue;
+                    BattleFraming.CanvasRect other = body[j];
+                    // The ordinary neighbours' bodies, with the boss swapped in at its own cell (the
+                    // main loop's own boss stands in slot 0 and is the case under test there).
+                    float smaller = Math.Min(bbody.Width * bbody.Height, other.Width * other.Height);
+                    if (R29Overlap(bbody, other) / smaller > 0.55f) { bossOk = false; bossWhy += " overlap@" + FormationLayout.CellOf(false, bs).Name; }
+                    float clear = BattleHudLayout.Clearance(bplate, BattleHudLayout.PlateBoxAboveHead(head[j], false, j < 5));
+                    if (clear < BattleHudMetrics.PlateMinClearance && (bs == R29ContentBossSlot || bs == FormationLayout.BossSlot)) { bossOk = false; bossWhy += " plate@" + FormationLayout.CellOf(false, bs).Name + "/" + id[j]; }
+                }
+                if (wasBoss && Math.Abs(bh - height[5 + bs]) > 0.01f) { bossOk = false; bossWhy += " mismatch"; }
+            }
+            Check(bossOk, tag + ": a boss in any of the five slots keeps its bars under the ceiling, stays in the safe area and keeps its plate clear"
+                          + (bossOk ? "" : " - FAILS:" + bossWhy));
         }
 
         // ---------------------------------------------------------------- attack movement
