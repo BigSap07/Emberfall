@@ -62,7 +62,7 @@ $sources = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs 
            (Join-Path $root "Assets\Scripts\Battle\BattleFraming.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudMetrics.cs") +
            (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudLayout.cs") + (Join-Path $root "Tools\DevHarness\BattleHudChecks.cs") +
            (Join-Path $root "Tools\DevHarness\StageChecks.cs") + (Join-Path $root "Assets\Scripts\Battle\StagePresentation.cs") +
-           (Join-Path $root "Tools\DevHarness\UiKitChecks.cs") + @(Get-ChildItem (Join-Path $root "Tools\DevHarness") -Filter R24*.cs | ForEach-Object { $_.FullName })
+           (Join-Path $root "Tools\DevHarness\UiKitChecks.cs") + (Join-Path $root "Tools\DevHarness\R28ScreenChecks.cs") + @(Get-ChildItem (Join-Path $root "Tools\DevHarness") -Filter R24*.cs | ForEach-Object { $_.FullName })
 $rsp = Join-Path $env:TEMP "emberfall_recpwr.rsp"
 $lines = @($sources | ForEach-Object { '"' + $_ + '"' })
 [IO.File]::WriteAllLines($rsp, [string[]]$lines, [Text.UTF8Encoding]::new($false))
