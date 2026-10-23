@@ -1051,6 +1051,8 @@ namespace Emberfall.UI.Screens
             // The viewport BEFORE the world: BuildWorld fits the backdrop to the camera's aspect,
             // and the field has to stop at the top bar's lower edge from its first frame. Setting it
             // afterwards would mean rebuilding, and BattleStage.BuildWorld clears the actors.
+            _world.FormationArea = SafeAreaRect.Current;
+            _world.HasFormationArea = true;
             _world.Camera.rect = FieldViewport();
             _world.BuildWorld(_stage.Environment);
 #if UNITY_EDITOR
@@ -1091,8 +1093,12 @@ namespace Emberfall.UI.Screens
         private void SyncFrame(float scale)
         {
             Rect want = FieldViewport();
-            if (_world.Camera.rect != want)
+            Rect safe = SafeAreaRect.Current;
+            if (_world.Camera.rect != want || _world.FormationArea != safe)
             {
+                // The formation is laid out inside the safe area, so a moved safe area re-places the
+                // units exactly as a moved viewport does (BattleStage.FitFormation, inside FitBackdrop).
+                _world.FormationArea = safe;
                 _world.Camera.rect = want;
                 _world.FitBackdrop();
             }
@@ -1199,6 +1205,12 @@ namespace Emberfall.UI.Screens
             }
         }
 
+        // THE PLATE STANDS ON THE HEAD in the formation (FormationLayout, BattleHudLayout.PlateBoxAboveHead:
+        // the bars just over the head, the highest of them below FormationLayout.BarsCeiling of the height),
+        // which is what the paragraph below was written to get away from, and is safe now because the
+        // formation keeps the whole team in the bottom half, nowhere near the top of the screen. With
+        // FormationLayout.Enabled false it hangs under the feet as follows.
+        //
         // THE PLATE HANGS UNDER THE FEET. It used to float above the head, which put the back
         // rank's tags against the top of the screen (clamped there, over their own units) and
         // every tag in the path of the damage numbers rising off the same heads. Under the feet it
@@ -1358,8 +1370,19 @@ namespace Emberfall.UI.Screens
                 group.alpha = visible ? 1f : Mathf.Max(0f, group.alpha - Time.deltaTime * 4f);
                 if (!visible) continue;
 
-                BattleFraming.CanvasPoint at = BattleHudLayout.PlateOrigin(
-                    new BattleFraming.CanvasPoint(screen.x / scale, screen.y / scale), bar.TurnLift);
+                // In the formation the plate stands on the head; otherwise it hangs under the feet.
+                BattleFraming.CanvasPoint at;
+                if (FormationLayout.Enabled)
+                {
+                    Vector3 head = _world.Camera.WorldToScreenPoint(actor.HeadPosition);
+                    at = BattleHudLayout.PlateOriginAboveHead(
+                        new BattleFraming.CanvasPoint(head.x / scale, head.y / scale), bar.TurnLift);
+                }
+                else
+                {
+                    at = BattleHudLayout.PlateOriginUnderFeet(
+                        new BattleFraming.CanvasPoint(screen.x / scale, screen.y / scale), bar.TurnLift);
+                }
                 bar.Plate.Root.anchoredPosition = new Vector2(at.X, at.Y);
             }
         }
@@ -1377,7 +1400,8 @@ namespace Emberfall.UI.Screens
         private void CheckFramingAgainstCamera(float scale)
         {
             if (_framingChecked || _world.Actors.Count == 0) return;
-            Vector3 home = new Vector3(BattleFraming.CameraX, BattleFraming.CameraY, BattleFraming.CameraZ);
+            Vector3 home = new Vector3(BattleFraming.CameraX,
+                FormationLayout.Enabled ? FormationLayout.CameraY : BattleFraming.CameraY, BattleFraming.CameraZ);
             if ((_world.Camera.transform.localPosition - home).sqrMagnitude > 1e-8f) return;
             _framingChecked = true;
 
@@ -1394,7 +1418,9 @@ namespace Emberfall.UI.Screens
                 for (int p = 0; p < probes.Length; p++)
                 {
                     Vector3 world = probes[p];
-                    BattleFraming.CanvasPoint model = BattleFraming.Project(world.x, world.y, world.z, viewport);
+                    BattleFraming.CanvasPoint model = FormationLayout.Enabled
+                        ? BattleFraming.Project(world.x, world.y, world.z, viewport, true, _world.Camera.orthographicSize)
+                        : BattleFraming.Project(world.x, world.y, world.z, viewport);
                     Vector3 real = _world.Camera.WorldToScreenPoint(world);
                     float error = Mathf.Max(Mathf.Abs(model.X * scale - real.x), Mathf.Abs(model.Y * scale - real.y));
                     points++;
@@ -2334,7 +2360,7 @@ namespace Emberfall.UI.Screens
 
             Vector3 screen = _world.Camera.WorldToScreenPoint(worldPosition);
             Vector2 start = new Vector2(screen.x / canvasScale, screen.y / canvasScale);
-            start.y += BattleHudMetrics.FloatSpawnAboveHead;
+            start.y += BattleHudLayout.FloatSpawnLift(FormationLayout.Enabled);
             start.x += Random.Range(-9f, 9f);
 
             // Make room: the cap first (the oldest numbers on this unit, then overall), then the lane.
@@ -2441,8 +2467,9 @@ namespace Emberfall.UI.Screens
 
             // Callers pass HeadPosition. The number used to have to clear a tag anchored on that
             // same head (the "58 on top of the Sundered Colossus's name" case); the plate now hangs
-            // under the feet, so the head is the number's alone and it starts just above it.
-            start.y += BattleHudMetrics.FloatSpawnAboveHead;
+            // under the feet, so the head is the number's alone and it starts just above it. In the
+            // formation the plate stands on the head, so the number starts above the plate instead.
+            start.y += BattleHudLayout.FloatSpawnLift(FormationLayout.Enabled);
 
             // Jitter was +/-34, which was more than half the old 120-unit tag width, so a number
             // could start closer to a NEIGHBOUR's unit than to the one that produced it. On a five-unit

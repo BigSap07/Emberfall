@@ -62,6 +62,14 @@ namespace Emberfall.Battle
             return Config.ClipFlip.TryGetValue(defId, out set) ? set : null;
         }
 
+        /// <summary>A unit's own factor on the formation's common height: stage-v2.json's scaleMul in v2
+        /// (the Carrion Vulture's wings are too wide for the height every unit shares), 1 otherwise.</summary>
+        public static float FormationMul(string defId)
+        {
+            float mul;
+            return V2 && defId != null && Config.ScaleMul.TryGetValue(defId, out mul) ? mul : 1f;
+        }
+
         /// <summary>The VisualDef a unit's rig is built from: the snapshot's own in v1, the same
         /// object, and the v2 resolution otherwise. stage-v2.json is not touched in v1.</summary>
         public static VisualDef Resolve(UnitSnapshot snapshot)

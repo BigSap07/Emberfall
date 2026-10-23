@@ -110,6 +110,35 @@ namespace Emberfall.UI.Battle
         /// the safe area's bottom edge.</summary>
         public const float PlateMinClearance = 8f;
 
+        // ---------------------------------------------------------------- the plate over the head
+        //
+        // In the formation (FormationLayout) the plate stands on the unit's HEAD instead of hanging
+        // under its feet: from the bottom up the energy bar, the HP bar, the name, with the status
+        // icons beside the bars. The widget is the same; only where its root goes differs.
+
+        /// <summary>The gap between the top of the head and the bottom of the energy bar.</summary>
+        public const float PlateHeadGap = 4f;
+
+        /// <summary>The whole stack over the gap: energy 4, hairline 1, HP 10, gap 2, name 18 = 35.</summary>
+        public const float PlateStackHeight = PlateEnergyHeight + PlateHpToEnergy + PlateHpHeight
+                                            + PlateNameToHp + PlateNameHeight;
+
+        /// <summary>Whether the plate over a head carries the unit's name. DEFAULT TAKEN: no. The target
+        /// shows the two bars alone over each head, and the name over them would cost 20 canvas units of
+        /// height that the rows 0.05 of the height apart cannot spare. The widget still builds the name
+        /// (UnitPlate) and hides it; flip this to bring it back and the harness re-proves the boxes.</summary>
+        public static readonly bool PlateNameOverHead = false;
+
+        /// <summary>The two bars alone: energy 4, hairline 1, HP 10 = 15.</summary>
+        public const float PlateBarsHeight = PlateEnergyHeight + PlateHpToEnergy + PlateHpHeight;
+
+        /// <summary>The icon row sits right of the bars, this far from the HP bar's end.</summary>
+        public const float PlateIconsInset = 6f;
+
+        /// <summary>Three icons, the "+N" and the spacing between the four: 3 x 16 + 26 + 3 x 3 = 83.</summary>
+        public const float PlateIconsWidth = PlateMaxIcons * PlateIconSize + PlateIconOverflowWidth
+                                           + PlateMaxIcons * PlateIconSpacing;
+
         // ---------------------------------------------------------------- the callout pill
 
         /// <summary>The ability callout hangs this far under the top bar, centred on the screen.</summary>
