@@ -12,6 +12,16 @@
 // after any answer that is not "error" or "pending", so Google keeps retrying a purchase the server
 // could not settle.
 //
+// THE SERVER ACKNOWLEDGES EVERY VERIFIED PURCHASE, consumables included (Docs/SECURITY-REVIEW-SUPABASE.md,
+// finding L1, High). Google refunds a purchase nobody acknowledged within three days, so a client that
+// took the grant and never confirmed used to keep the goods and get its money back. Acknowledging here,
+// right after the receipt is recorded, closes that. Consuming stays with the client (ConfirmPendingPurchase),
+// so a consumable can be bought again only after the game has granted it.
+//
+// EVERY ACCOUNT IS THROTTLED before Google is asked (finding L2): purchase_verify_allow (0021) counts the
+// call and answers 429 past 20 calls in 10 minutes, so made-up tokens cannot spend the Play Developer API
+// quota. A throttled answer is status "error", so an honest purchase stays pending and is verified later.
+//
 // Secrets (supabase secrets set ...):
 //   GOOGLE_PLAY_PACKAGE_NAME     the release application id
 //   GOOGLE_SERVICE_ACCOUNT_JSON  the service account key, the whole JSON document
@@ -38,7 +48,7 @@ const REQUIRE_BINDING = flag(Deno.env.get("REQUIRE_ACCOUNT_BINDING"), true);
 const ALLOW_TEST = flag(Deno.env.get("ALLOW_TEST_PURCHASES"), false);
 
 // The service role client. It never leaves this function: it reads store_products and calls the
-// three receipt writers in 0019, which no other role may call.
+// three receipt writers in 0019 and purchase_verify_allow in 0021, which no other role may call.
 const admin = createClient(Deno.env.get("SUPABASE_URL") ?? "", Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "", {
   auth: { persistSession: false, autoRefreshToken: false },
 });
@@ -73,6 +83,13 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
   const parsed = parseVerifyRequest(raw);
   if (!parsed.ok) return fail(400, parsed.reason);
+
+  // L2: one count per call, before any call to Google is spent on it.
+  const { data: allow, error: allowError } = await admin.rpc("purchase_verify_allow", { p_user_id: userId });
+  if (allowError || !allow) return fail(500, "throttle_failed", "error");
+  if (!(allow as { allowed?: boolean }).allowed) {
+    return send({ httpStatus: 429, body: { status: "error", grant: false, reason: "too_many_verifications" } });
+  }
 
   // Refuse a product the server does not sell before asking Google anything.
   const { data: product, error: productError } = await admin
@@ -120,11 +137,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   const reply = replyForRecord(record as Record<string, unknown>, verdict);
 
-  // A non-consumable is acknowledged here, once it is safely recorded. A failure is not fatal: the
-  // purchase is recorded, the client's ConfirmPendingPurchase also acknowledges, and the next
-  // verification of the same token tries again.
+  // L1: EVERY verified purchase is acknowledged here, consumable or not, once it is safely recorded, so
+  // Google's three-day automatic refund can never return the money for goods already granted. A failure
+  // is not fatal: the purchase is recorded, the client's ConfirmPendingPurchase also acknowledges, and the
+  // next verification of the same token tries again.
   if (reply.body.grant || reply.body.status === "already_verified") {
-    if (product.kind === "non_consumable" && !verdict.acknowledged) {
+    if (!verdict.acknowledged) {
       if (await acknowledgeProduct(PACKAGE, parsed.productId, parsed.purchaseToken, accessToken)) {
         await admin.rpc("purchase_receipt_mark_acknowledged", { p_token_sha256: tokenHash });
       }

@@ -13,8 +13,10 @@
 //   one-time product purchased                   -> nothing (the client verifies its own purchases)
 //   test notification, other package, subscription -> nothing
 //
-// Revoking marks the receipt. It takes nothing back from the save, which lives on the device; what
-// a revoked receipt should cost the player is an owner decision (the design doc lists the options).
+// Revoking marks the receipt, and the database claws back what the purchase gave that is still unspent
+// (0024_purchase_clawback.sql, the owner's decision of 2026-10-23): a trigger on purchase_receipts takes
+// it out of the cloud save at once and out of every save that account writes afterwards. Nothing in this
+// function changes for it.
 //
 // Pub/Sub treats 2xx as delivered and retries anything else, so: a request that fails the token
 // check gets 401 (it is not from Google); a malformed message gets 200 and a log line (retrying it
