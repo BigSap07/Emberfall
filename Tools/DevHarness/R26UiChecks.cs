@@ -30,6 +30,7 @@ namespace Emberfall.DevHarness
                 CheckR26KitPolish(root);
                 CheckR26HeroCap(db, root);
                 CheckR26Round2(root);
+                CheckR26Round3(root);
             }
             finally
             {
@@ -364,11 +365,42 @@ namespace Emberfall.DevHarness
             Check(store.Contains("PURCHASES\\nOPEN WITH THE STORE") && store.Contains("-top, 300f, HubStyle.TabHeight") && store.Contains("\"TEST STORE  -  FREE\", Emberforge.TextGold"),
                   "Store BANNER: the coming soon line is two lines in a 300 wide box clear of the SKINS tab, and the TEST STORE chip is gold, not red");
             string hero = R26Read(root, "Assets", "Scripts", "UI", "Screens", "HeroDetailScreen.cs");
-            Check(hero.Contains("UiKit.On ? Emberforge.OrnamentClearance + UITheme.Space8") && hero.Contains("UiKit.On ? 40f : 8f"),
+            Check(hero.Contains("UiKit.On ? Emberforge.OrnamentClearance + UITheme.Space8"),
                   "hero PAGE: with the kit on, LEVEL starts right of the corner and the slot line sits above the frame");
             string doors = R26Read(root, "Assets", "Scripts", "UI", "ShopDoors.cs");
             Check(doors.Contains("lockLine.ToUpperInvariant(), Emberforge.TextBody,"),
                   "Marketplace LOCKS: the UNLOCKS AT line is body-bright, not quiet grey");
+        }
+
+        // ------------------------------------------------------------------ round 3: the frame's thickness
+
+        private static void CheckR26Round3(string root)
+        {
+            float x = KitFrameRule.SmallDrawnX, y = KitFrameRule.SmallDrawnY;
+            Check(System.Math.Abs(KitFrameRule.Drawn(61, 234.615f, 1f) - 26f) < 0.1f && System.Math.Abs(KitFrameRule.Drawn(43, 234.615f, 1f) - 18.3f) < 0.1f
+                  && x < 13.1f && y < 9.2f && x > 12.9f && y > 9.1f,
+                  "frame RULE: panel_small draws 26 by 18 units at full size and half of that (" + x.ToString("0.0") + " by " + y.ToString("0.0") + ") with the small multiplier");
+            Check(KitFrameRule.ContentPad(6f, y) > y && KitFrameRule.ContentPad(6f, y) >= 11f && KitFrameRule.ContentPad(30f, y) == 30f && KitFrameRule.ContentPad(6f, 0f) == 6f,
+                  "frame RULE: content at an edge keeps the drawn frame plus air from it, never less than it asked for, and exactly what it asked for with the kit off");
+            string meta = R26Read(root, "Assets", "Resources", "Art", "UIKit", "panel_small.png.meta");
+            Check(meta.Contains("spriteBorder: {x: " + KitFrameRule.SmallBorderX + ", y: " + KitFrameRule.SmallBorderY + ", z: " + KitFrameRule.SmallBorderX + ", w: " + KitFrameRule.SmallBorderY + "}")
+                  && meta.Contains("spritePixelsToUnits: 234.615"),
+                  "frame RULE: the numbers in KitFrameRule are the ones in panel_small's meta");
+            string ui = R26Read(root, "Assets", "Scripts", "UI", "EmberforgeUI.cs");
+            Check(ui.Contains("pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier") && ui.Contains("card.Plate.pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier"),
+                  "frame WIRING: small panels, plain panels and small cards draw the thinner frame, with the kit on only");
+            string events = R26Read(root, "Assets", "Scripts", "UI", "Screens", "LiveEventsScreen.cs");
+            Check(events.Contains("-Emberforge.SmallPadY(6f), width - 8f") && events.Contains("SmallPadX(16f)") && events.Contains("Emberforge.SmallPadY(6f), width - 8f, 22f"),
+                  "frame WIRING: the Events tiles and quest rows inset their text from the frame (points, track locked, quest line)");
+            string forge = R26Read(root, "Assets", "Scripts", "UI", "Emberforge.cs");
+            Check(forge.Contains("UiKit.On ? KitFrameRule.ContentPad(wanted, KitFrameRule.SmallDrawnX) : wanted"),
+                  "frame WIRING: the content inset applies with the kit on and is exactly the old value with it off");
+            string hero = R26Read(root, "Assets", "Scripts", "UI", "Screens", "HeroDetailScreen.cs");
+            Check(hero.Contains("_slotStatus.alignment = TextAnchor.UpperLeft") && !hero.Contains("UiKit.On ? 40f : 8f"),
+                  "hero PAGE: with the kit on the slot line sits under the LEVEL label, no longer over the attunement line");
+            string toast = R26Read(root, "Assets", "Scripts", "UI", "Overlays.cs");
+            Check(toast.Contains("-(ScreenChrome.HeaderTop + 12f), MinWidth, MinHeight, new Vector2(0.5f, 1f)"),
+                  "toast: the message strip sits in the header band, not over the price buttons at the bottom");
         }
     }
 }

@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
+using Emberfall.Core.Progression;
 
 namespace Emberfall.UI
 {
@@ -120,9 +121,11 @@ namespace Emberfall.UI
             // The kit's big panel has 34-unit corner blocks, which crowd a small fixed-size panel (the player
             // plate, a pass tile, a summary strip). Those take the kit's small panel, whose corners are bolts.
             // Only with the kit on, and only for a rect whose size is fixed and under KitSmallPanel.
-            if (UiKit.Forge(EmberforgeArt.Slot.Panel) != null && IsSmallFixed(rect))
+            bool smallKit = UiKit.Forge(EmberforgeArt.Slot.Panel) != null && IsSmallFixed(rect);
+            if (smallKit)
                 plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.PanelPlain);
             plate.type = Image.Type.Sliced;
+            if (smallKit) plate.pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier;   // a thinner rim on small panels (R26)
             plate.color = Color.white;
             if (ornaments) Ornaments(rect);
             return plate;
@@ -146,6 +149,8 @@ namespace Emberfall.UI
             plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.PanelPlain);
             plate.type = Image.Type.Sliced;
             plate.color = Color.white;
+            // With the kit on a plain panel is a small one: thinner rim, so a label at its edge is not under it (R26).
+            if (UiKit.Forge(EmberforgeArt.Slot.PanelPlain) != null) plate.pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier;
             return plate;
         }
 
@@ -257,6 +262,7 @@ namespace Emberfall.UI
             if (UiKit.Forge(EmberforgeArt.Slot.Panel) != null && IsSmallFixed(card.Root))
             {
                 card.Plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.PanelPlain);
+                card.Plate.pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier;
                 card.Plate.color = selected ? Color.white : new Color(0.7f, 0.7f, 0.7f, 1f);
             }
         }

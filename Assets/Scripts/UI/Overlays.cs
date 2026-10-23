@@ -24,7 +24,8 @@ namespace Emberfall.UI
         {
             _layer = layer;
             _root = UIBuilder.Node("Toast", layer);
-            UIBuilder.Box(_root, 0f, 300f, MinWidth, MinHeight, new Vector2(0.5f, 0f));
+            // Top centre, over the screen header band (R26 round 3): at the bottom it covered the Store's price buttons.
+            UIBuilder.Box(_root, 0f, -(ScreenChrome.HeaderTop + 12f), MinWidth, MinHeight, new Vector2(0.5f, 1f));
             _group = _root.gameObject.AddComponent<CanvasGroup>();
             _group.alpha = 0f;
             _group.blocksRaycasts = false;

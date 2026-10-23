@@ -278,8 +278,15 @@ namespace Emberfall.UI.Screens
 
             _slotStatus = EmberforgeUI.Label("SlotStatus", _left, "", UITheme.FontTiny,
                                              Emberforge.TextQuiet, TextAnchor.UpperCenter);
-            // The kit's frame is 34 units thick, so the line sits above it rather than on it (R26).
-            UIBuilder.Box(_slotStatus.rectTransform, 0f, UiKit.On ? 40f : 8f, PanelWidth - 60f, 26f, new Vector2(0.5f, 0f));
+            // With the kit on the line sits under the LEVEL label at the top left (R26 round 3): the bottom of the
+            // panel is the kit's 34-unit frame and the attunement line, and the two overprinted there. Kit off keeps
+            // the old bottom seat.
+            if (UiKit.On)
+            {
+                _slotStatus.alignment = TextAnchor.UpperLeft;
+                UIBuilder.Box(_slotStatus.rectTransform, Emberforge.OrnamentClearance + UITheme.Space8, -(UITheme.Space16 + 34f), 400f, 26f, new Vector2(0f, 1f));
+            }
+            else UIBuilder.Box(_slotStatus.rectTransform, 0f, 8f, PanelWidth - 60f, 26f, new Vector2(0.5f, 0f));
             UIBuilder.Outlined(_slotStatus, Emberforge.Outline, Emberforge.StrokeThin);
 
             // Teal, because it is the way OUT of this page and into the formation. The one thing

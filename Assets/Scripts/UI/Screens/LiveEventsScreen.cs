@@ -286,28 +286,28 @@ namespace Emberfall.UI.Screens
             else EmberforgeUI.PlainPanelOn(tile);
 
             Text pts = EmberforgeUI.Label("Points", tile, t.Points + " PTS", UITheme.FontTiny - 6, t.Reached ? Emberforge.TextGold : Emberforge.TextQuiet, TextAnchor.UpperCenter);
-            UIBuilder.Box(pts.rectTransform, 0f, -6f, width - 8f, 22f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(pts.rectTransform, 0f, -Emberforge.SmallPadY(6f), width - 8f, 22f, new Vector2(0.5f, 1f));
             if (!has) return;
 
             Text reward = EmberforgeUI.Body("Reward", tile, text, UITheme.FontTiny - 4, claimed ? Emberforge.TextQuiet : Emberforge.TextBody, TextAnchor.UpperCenter);
-            UIBuilder.Box(reward.rectTransform, 0f, -30f, width - 12f, 44f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(reward.rectTransform, 0f, -(Emberforge.SmallPadY(6f) + 24f), width - 12f, 44f, new Vector2(0.5f, 1f));
 
             if (claimed)
             {
                 RectTransform chip = EmberforgeUI.Chip("State", tile, "CLAIMED", UITheme.Success, UITheme.FontTiny - 6);
-                UIBuilder.Box(chip, 0f, 6f, width - 14f, 26f, new Vector2(0.5f, 0f));
+                UIBuilder.Box(chip, 0f, Emberforge.SmallPadY(6f), width - 14f, 26f, new Vector2(0.5f, 0f));
             }
             else if (canClaim)
             {
                 UIButton claim = EmberforgeUI.Button("Claim", tile, "CLAIM", UITheme.FontTiny - 4, ForgeButtonKind.Primary);
-                UIBuilder.Box(claim.Root, 0f, 6f, width - 14f, 30f, new Vector2(0.5f, 0f));
+                UIBuilder.Box(claim.Root, 0f, Emberforge.SmallPadY(6f), width - 14f, 30f, new Vector2(0.5f, 0f));
                 int index = t.Index;
                 claim.OnClick(delegate { if (paid) OnClaimPaid(index); else OnClaimFree(index); });
             }
             else if (paid && !v.TrackOwned)
             {
                 Text locked = EmberforgeUI.Label("Locked", tile, "TRACK LOCKED", UITheme.FontTiny - 8, Emberforge.TextQuiet, TextAnchor.LowerCenter);
-                UIBuilder.Box(locked.rectTransform, 0f, 6f, width - 8f, 22f, new Vector2(0.5f, 0f));
+                UIBuilder.Box(locked.rectTransform, 0f, Emberforge.SmallPadY(6f), width - 8f, 22f, new Vector2(0.5f, 0f));
             }
         }
 
@@ -337,7 +337,7 @@ namespace Emberfall.UI.Screens
             else EmberforgeUI.PlainPanelOn(row);
 
             Text line = EmberforgeUI.Label("Line", row, q.Line, UITheme.FontTiny - 4, q.Claimed ? Emberforge.TextQuiet : Emberforge.TextBody, TextAnchor.MiddleLeft);
-            UIBuilder.Box(line.rectTransform, 16f, 0f, width - 400f, QuestRowHeight, new Vector2(0f, 0.5f));
+            UIBuilder.Box(line.rectTransform, Emberforge.SmallPadX(16f), 0f, width - 400f, QuestRowHeight, new Vector2(0f, 0.5f));
             Text progress = EmberforgeUI.Label("Progress", row, q.Progress.ToString("N0", System.Globalization.CultureInfo.InvariantCulture) + " / " + q.Target.ToString("N0", System.Globalization.CultureInfo.InvariantCulture), UITheme.FontTiny - 4,
                                                q.Done ? Emberforge.TextGold : Emberforge.TextQuiet, TextAnchor.MiddleRight);
             UIBuilder.Box(progress.rectTransform, -248f, 0f, 130f, QuestRowHeight, new Vector2(1f, 0.5f));
@@ -347,12 +347,12 @@ namespace Emberfall.UI.Screens
             if (q.Claimed)
             {
                 RectTransform chip = EmberforgeUI.Chip("State", row, "CLAIMED", UITheme.Success, UITheme.FontTiny - 6);
-                UIBuilder.Box(chip, -12f, 0f, 120f, 32f, new Vector2(1f, 0.5f));
+                UIBuilder.Box(chip, -Emberforge.SmallPadX(12f), 0f, 120f, 32f, new Vector2(1f, 0.5f));
             }
             else if (q.CanClaim)
             {
                 UIButton claim = EmberforgeUI.Button("Claim", row, "CLAIM", UITheme.FontTiny - 4, ForgeButtonKind.Primary);
-                UIBuilder.Box(claim.Root, -12f, 0f, 120f, 38f, new Vector2(1f, 0.5f));
+                UIBuilder.Box(claim.Root, -Emberforge.SmallPadX(12f), 0f, 120f, 38f, new Vector2(1f, 0.5f));
                 string id = q.Id;
                 claim.OnClick(delegate { OnClaimQuest(id); });
             }

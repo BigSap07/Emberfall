@@ -1,5 +1,6 @@
 using UnityEngine;
 using Emberfall.Core.Data;
+using Emberfall.Core.Progression;
 
 namespace Emberfall.UI
 {
@@ -116,6 +117,18 @@ namespace Emberfall.UI
         /// in from the panel's corner, and OrnamentClearance grows with it so a control placed by the clearance still
         /// stays clear. Kit off, the small diamond and its old clearance are unchanged.</summary>
         public const float KitOrnamentSize = 48f;
+
+        /// <summary>The gap content at an edge of a small panel keeps from the frame (R26 round 3): what the call site
+        /// asked for, or the kit's drawn small frame plus air. Kit off, exactly what it asked for.</summary>
+        public static float SmallPadX(float wanted)
+        {
+            return UiKit.On ? KitFrameRule.ContentPad(wanted, KitFrameRule.SmallDrawnX) : wanted;
+        }
+
+        public static float SmallPadY(float wanted)
+        {
+            return UiKit.On ? KitFrameRule.ContentPad(wanted, KitFrameRule.SmallDrawnY) : wanted;
+        }
         public const float KitOrnamentInset = 2f;
 
         // ------------------------------------------------------------------ buttons
