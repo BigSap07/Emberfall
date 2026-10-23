@@ -1577,8 +1577,14 @@ namespace Emberfall.EditorTools
         //   Screen:AdClaim=<state>       A1: the Hub, the idle claim popup opened and CLAIM pressed, the block under it.
         //   Screen:AdProving=<state>     A2: the Proving, with two Brands missing.
         //   Screen:AdStage=<state>       A3: the stage cleared view. The game sweeps a repeat clear (CampaignFlow.Sweep)
-        //                                and never draws it on this view, so the capture resolves the first clear for
-        //                                real and then forges the repeat on the screen's copy of the result.
+        //                                and never draws it on this view, so the capture hands the screen a repeat clear
+        //                                that paid the floor (WaveResultScreen.PrepareClearedForCapture), with no fight,
+        //                                no squad and nothing to wait for.
+        //
+        // THE SCRATCH PROFILE OUTLIVES A TARGET, and an ad grant is written into it (RequestSave), once a reward day. A
+        // run of targets in one editor therefore saw every placement already used after the first granted one, and drew
+        // nothing. Every ad target starts by emptying the profile's ads block (and the claim, the Brands and the stage's
+        // repeats it reads), so its picture does not depend on the targets before it.
         //
         // The ad states are hidden (AdsSwitch off), ready, playing, granted, notfinished, failed, refused. AdsSwitch is
         // flipped ON here and nowhere else, and put back by Stop. Ad targets rewrite the scratch profile, so they only
@@ -1588,6 +1594,8 @@ namespace Emberfall.EditorTools
         private static bool _r28bAdsWas;
         private static bool _r28bAdsForced;
         private static Action<GuildDungeonLadderPresenter> _r28bOverlay;
+        /// <summary>When CLAIM was pressed, in real seconds: the toast it raises is gone before the shot.</summary>
+        private static float _r28bClaimedAt;
 
         private static readonly string[] R28bAdStates = { "hidden", "ready", "playing", "granted", "notfinished", "failed", "refused" };
 
@@ -1656,16 +1664,31 @@ namespace Emberfall.EditorTools
 
                 GameSession session = app.Session;
                 long now = TimeUtil.NowUnix();
+                // Nothing from an earlier target: no ad used today, no impression remembered.
+                session.Profile.Ads.Placements.Clear();
+                session.Profile.Ads.Impressions.Clear();
+                session.Profile.Ads.ClockDay = 0;
+                List<StageDef> stages = session.Content.AllStages;
+                for (int i = 0; i < stages.Count && i < 16; i++) session.GrantBattleResult(stages[i], true, now);
                 if (name == "AdStage")
                 {
-                    StageDef waveStage = SeedWaveResult(app, "WaveResultCleared");
-                    if (waveStage == null) { SessionState.SetInt(StageKey, slot + 1); return; }
-                    CampaignFlow.Launch(app, waveStage);
+                    // A repeat clear that paid the floor: the stage's paid repeats are used up today, and the screen is
+                    // handed the clear itself.
+                    StageDef stage = session.Content.GetStage("ch1_6");
+                    if (stage == null) { Debug.LogError("PlayModeScreenshot: no stage ch1_6 for AdStage. Skipping."); SessionState.SetInt(StageKey, slot + 1); return; }
+                    session.Profile.StageClearsToday[stage.Id] = session.RepeatFullClearsPerDay;
+                    session.Profile.DailyResetUnix = session.DayStartUnix(now);
+                    BattleRewards rewards = new BattleRewards();
+                    rewards.Victory = true;
+                    rewards.StageId = stage.Id;
+                    rewards.FirstClear = false;
+                    rewards.RepeatCapped = true;
+                    app.Router.WaveResult.PrepareClearedForCapture(stage, rewards);
+                    app.Router.Show(ScreenId.WaveResult, false);
+                    app.RefreshHud();
                 }
                 else
                 {
-                    List<StageDef> stages = session.Content.AllStages;
-                    for (int i = 0; i < stages.Count && i < 16; i++) session.GrantBattleResult(stages[i], true, now);
                     if (name == "AdClaim")
                     {
                         session.Profile.LastIdleClaimUnix = now - 5L * 3600L;
@@ -1688,49 +1711,27 @@ namespace Emberfall.EditorTools
             int t = frame;      // frames since the screen was ready, offset so that ShowAt is the moment it was shown
             if (name == "AdClaim")
             {
+                if (frame < ShowAt + 6 && app.Router.Current != app.Router.MainMenu) app.Router.Show(ScreenId.MainMenu);
                 if (frame == ShowAt + 6) app.Router.MainMenu.OpenLayerForCapture("claim");
-                if (frame == ShowAt + 16) app.Router.MainMenu.ClaimPopup.ClaimForCapture();
+                if (frame == ShowAt + 16) { app.Router.MainMenu.ClaimPopup.ClaimForCapture(); _r28bClaimedAt = Time.realtimeSinceStartup; }
                 if (app.Router.MainMenu.ClaimPopup != null) block = app.Router.MainMenu.ClaimPopup.AdBlock;
             }
             else if (name == "AdProving")
             {
+                if (frame < ShowAt + 20 && app.Router.Current != app.Router.Proving) app.Router.Show(ScreenId.Proving);
                 block = app.Router.Proving.AdBlock;
             }
             else
             {
-                // The stage cleared view paints when the wave resolves, and a frame count cannot time that.
-                WaveResultScreen ws = app.Router.WaveResult;
-                int armed = SessionState.GetInt(R28bArmKey, 0);
-                if (armed == 0)
-                {
-                    if (ws != null && ws.Painted && ws.Result != null && ws.Result.StageCleared && ws.Result.Rewards != null)
-                    {
-                        // The repeat clear that paid the floor, forged on the screen's copy of the first clear.
-                        GameSession session = app.Session;
-                        ws.Result.Rewards.FirstClear = false;
-                        ws.Result.Rewards.RepeatCapped = true;
-                        session.Profile.StageClearsToday[ws.Result.StageId] = session.RepeatFullClearsPerDay;
-                        session.Profile.DailyResetUnix = session.DayStartUnix(TimeUtil.NowUnix());
-                        ws.RepaintForCapture();
-                        SessionState.SetInt(R28bArmKey, frame);
-                        Debug.LogWarning("PlayModeScreenshot: AdStage forged a repeat clear on the first clear's result; the game sweeps repeats and never draws them here.");
-                    }
-                    else if (frame > ShowAt + 2400)
-                    {
-                        Debug.LogError("PlayModeScreenshot: the stage cleared view never painted. Skipping AdStage.");
-                        SessionState.SetInt(StageKey, slot + 1);
-                        R28bRestore();
-                    }
-                    return;
-                }
-                block = ws.AdBlock;
-                t = frame - armed + ShowAt;
+                block = app.Router.WaveResult.AdBlock;
             }
 
             int at = ShowAt + (name == "AdClaim" ? 30 : 20);      // the frame the screen is ready for the tap
             if (t == at && block != null && state != "ready" && state != "hidden") block.Watch();
             if (t == at + 40) Canvas.ForceUpdateCanvases();
-            if (t == at + 60) { Shoot(name, frame, slot); R28bRestore(); }
+            // The claim's toast ("Collected ... gold") fades 2 seconds after it appears; the shot waits for that.
+            bool toastGone = name != "AdClaim" || Time.realtimeSinceStartup - _r28bClaimedAt > 3.5f;
+            if (t >= at + 60 && toastGone) { Shoot(name, frame, slot); R28bRestore(); }
         }
 
         [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Offline, no cloud", false, 300)]

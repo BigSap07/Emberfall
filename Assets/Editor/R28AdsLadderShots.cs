@@ -222,6 +222,15 @@ namespace Emberfall.EditorTools
                     b.LiveMembers = 30;
                     break;
                 }
+                case "banner-refused":
+                {
+                    // The ladder as it reloads after a refusal: floor 1's three attempts are spent, which is why the server
+                    // said no, so the banner and the ATTEMPT buttons agree.
+                    for (int k = 0; k < 3; k++) b.Rows.Add(Attempt(Me, "Me", 1, false));
+                    b.StatusRow = Status(5, 4, cap, 3, now);
+                    b.LiveMembers = 4;
+                    break;
+                }
                 case "banner-cycleover":
                     b.StatusRow = Status(5, 4, cap, 0, now);
                     b.StatusRow.EndsUnix = now - 5L;

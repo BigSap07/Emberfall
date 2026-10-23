@@ -37,6 +37,7 @@ namespace Emberfall.DevHarness
             CheckR28bAdBlock(root);
             CheckR28bAdPlaces(root);
             CheckR28bCaptureTargets(root);
+            CheckR28bRoundTwo(root);
         }
 
         // ------------------------------------------------------------------ source helpers
@@ -413,7 +414,7 @@ namespace Emberfall.DevHarness
             // Below the screen's own primary action, never above it.
             int claimButton = claim.IndexOf("_claim = EmberforgeUI.Button(", StringComparison.Ordinal);
             int claimAd = claim.IndexOf("new RewardedAdBlock(", StringComparison.Ordinal);
-            Check(claimButton > 0 && claimAd > claimButton && Regex.IsMatch(claim, "UIBuilder\\.Box\\(adHost, 0f, -\\(PopupHeight \\* 0\\.5f \\+ Emberforge\\.Space16 \\+ RewardedAdBlock\\.Height \\* 0\\.5f\\)")
+            Check(claimButton > 0 && claimAd > claimButton && Regex.IsMatch(claim, "UIBuilder\\.Box\\(adHost, 0f, PopupLift - \\(PopupHeight \\* 0\\.5f \\+ Emberforge\\.Space16 \\+ RewardedAdBlock\\.Height \\* 0\\.5f\\)")
                   && Regex.IsMatch(claim, "_claim = EmberforgeUI\\.Button\\([^;]*ForgeButtonKind\\.Primary"),
                   "AD PLACES A1: the block sits under the claim plate, CLAIM stays the one primary button");
             int fightButton = proving.IndexOf("_fightButton = EmberforgeUI.Button(", StringComparison.Ordinal);
@@ -435,6 +436,63 @@ namespace Emberfall.DevHarness
             Check(Regex.IsMatch(claim, "_claim\\.Interactable = report\\.HasAnything;\\s*if \\(_ad != null\\) _ad\\.Refresh\\(\\)")
                   && Regex.IsMatch(proving, "RefreshLine\\(opponent\\);\\s*if \\(_ad != null\\) _ad\\.Refresh\\(\\)") && Regex.IsMatch(wave, "WaitForSecondsRealtime\\(1f\\)[^}]*_ad\\.Refresh\\(\\)"),
                   "AD PLACES: each screen refreshes its block on its own once a second tick, for the 'Next one in' countdown");
+        }
+
+        // ------------------------------------------------------------------ round two: what the first captures found
+
+        private static void CheckR28bRoundTwo(string root)
+        {
+            // The list ends in the gap under a row at rest, and a divider has its own full height.
+            float row = LadderLayout.RowHeight, gap = 14f, pad = 10f;
+            bool snapOk = true;
+            float[] heights = { 330f, 430f, 520f, 640f, 700f };
+            for (int i = 0; i < heights.Length; i++)
+            {
+                int n = LadderLayout.RowsThatFit(heights[i], row, gap, pad);
+                float snapped = LadderLayout.SnappedViewport(heights[i], 5000f, row, gap, pad);
+                float edge = snapped - pad;
+                float into = edge - (float)Math.Floor(edge / (row + gap)) * (row + gap);
+                snapOk &= n >= 1 && snapped <= heights[i] + 0.001f && into >= row - 0.001f && into <= row + gap + 0.001f
+                          && Math.Abs(snapped - (pad + n * (row + gap) - gap * 0.5f)) < 0.001f;
+            }
+            Check(snapOk && LadderLayout.SnappedViewport(900f, 600f, row, gap, pad) == 900f && LadderLayout.RowsThatFit(10f, row, gap, pad) == 1,
+                  "LADDER LIST: at rest the viewport ends half a spacing under a whole row (never through a row or a divider), one row at least, and a list that fits is left alone");
+            string screenSource = R28bSource(root, "Assets/Scripts/UI/Screens/GuildDungeonScreen.cs");
+            string screen = R28bCode(screenSource);
+            float divider = R28bConst(screenSource, "DividerHeight");
+            Check(divider >= 48f && screen.Contains("LadderLayout.SnappedViewport(") && Regex.IsMatch(screen, "BottomBarHeight \\+ slack"),
+                  "LADDER LIST: the SECOND BLOCK divider has its own full height (" + divider + ") and the list is snapped to whole rows");
+
+            string claimSource = R28bSource(root, "Assets/Scripts/UI/Hud/IdleClaimPopup.cs");
+            string claim = R28bCode(claimSource);
+            float lift = R28bConst(claimSource, "PopupLift");
+            Check(lift >= 100f && Regex.IsMatch(claim, "PopupWidth, PopupHeight,\\s*0f, PopupLift,") && claim.Contains("PopupLift - (PopupHeight"),
+                  "AD PLACES A1: the plate sits " + lift + " above the centre so its foot clears the claim toast, and the ad block follows it");
+            string block = R28bCode(R28bSource(root, "Assets/Scripts/UI/RewardedAdBlock.cs"));
+            Check(Regex.IsMatch(block, "v\\.ResultIsReward \\? HubStyle\\.ValueGold : Emberforge\\.TextQuiet") && Regex.IsMatch(block, "showingResult && v\\.ResultIsReward\\) UIBuilder\\.Outlined"),
+                  "AD BLOCK: a reward result is HubStyle.ValueGold with the kit outline, a no-reward result muted");
+
+            string shots = R28bSource(root, "Assets/Editor/PlayModeScreenshot.cs");
+            int start = shots.IndexOf("R28 screens (builder b): guild dungeon ladder, rewarded ads", StringComparison.Ordinal);
+            int end = shots.IndexOf("end of R28 screens (builder b)", StringComparison.Ordinal);
+            string region = start > 0 && end > start ? shots.Substring(start, end - start) : "";
+            int clearAt = region.IndexOf("Ads.Placements.Clear()", StringComparison.Ordinal);
+            int showAt = region.IndexOf("app.Router.Show(ScreenId.MainMenu);", StringComparison.Ordinal);
+            Check(clearAt > 0 && region.Contains("Ads.Impressions.Clear()") && region.Contains("Ads.ClockDay = 0") && showAt > clearAt,
+                  "R28b CAPTURES: every ad target empties the scratch profile's ads block before it shows anything (a granted target no longer caps the ones after it)");
+            Check(!R28bCode(region).Contains("SeedWaveResult(") && !R28bCode(region).Contains("CampaignFlow.") && region.Contains("PrepareClearedForCapture(stage, rewards)") && region.Contains("rewards.RepeatCapped = true"),
+                  "R28b CAPTURES: AdStage hands the stage cleared view a repeat clear directly: no fight, no squad, no wait for a paint that never came");
+            Check(region.Contains("Time.realtimeSinceStartup - _r28bClaimedAt > 3.5f") && Regex.IsMatch(region, "t >= at \\+ 60 && toastGone"),
+                  "R28b CAPTURES: the claim popup's shot waits for the claim toast to fade");
+            string wave = R28bCode(R28bSource(root, "Assets/Scripts/UI/Screens/WaveResultScreen.cs"));
+            int prepare = wave.IndexOf("void PrepareClearedForCapture(", StringComparison.Ordinal);
+            string prepared = prepare > 0 ? wave.Substring(prepare, Math.Min(900, wave.Length - prepare)) : "";
+            int endOfMethod = prepared.IndexOf("_returning = true", StringComparison.Ordinal);
+            Check(prepare > 0 && endOfMethod > 0 && !prepared.Substring(0, endOfMethod).Contains("ResolveWave") && !prepared.Substring(0, endOfMethod).Contains("Profile"),
+                  "WAVE RESULT: the capture door lines up a resolved clear and resolves, grants and saves nothing");
+            string stand = R28bSource(root, "Assets/Editor/R28AdsLadderShots.cs");
+            Check(Regex.IsMatch(stand, "case \"banner-refused\":\\s*\\{[^}]*Attempt\\(Me, \"Me\", 1, false\\)[^}]*Status\\(5, 4, cap, 3, now\\)"),
+                  "R28b CAPTURES: banner-refused loads the ladder as it is after the refusal, floor 1's three attempts spent, so its banner and its ATTEMPT buttons agree");
         }
 
         // ------------------------------------------------------------------ the capture targets

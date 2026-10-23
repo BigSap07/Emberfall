@@ -39,6 +39,14 @@ namespace Emberfall.UI
         /// the photograph, because nothing in the harness can see a gap.
         /// </summary>
         private const float PopupHeight = 430f;
+
+        /// <summary>
+        /// How far the plate sits above the screen's centre. The toast ("Collected ... gold") lands 300 up from the bottom
+        /// edge, which on a 966 tall canvas is across the foot of a centred 430 plate and over CLOSE and CLAIM; lifted this
+        /// far the plate's foot clears the toast on both canvas shapes (the ad block under it can still be crossed by the
+        /// toast for its second and a half, which costs nothing).
+        /// </summary>
+        private const float PopupLift = 120f;
         private const float RowHeight = 34f;
 
         /// <summary>
@@ -147,7 +155,7 @@ namespace Emberfall.UI
             SafeAreaRect.Attach(safe);
 
             RectTransform popup = HudWidgets.Popup("Plate", safe, PopupWidth, PopupHeight,
-                                                   0f, 0f, new Vector2(0.5f, 0.5f));
+                                                   0f, PopupLift, new Vector2(0.5f, 0.5f));
 
             // The heading is a ribbon across the top of the plate rather than a line of text
             // inside it, which is the whole of what this layer gains from the design system: the
@@ -200,7 +208,7 @@ namespace Emberfall.UI
             // A1: BELOW the plate, so it is under both buttons and never above CLAIM. Its own host node, outside the plate,
             // because the plate is a fixed size and the block is only there after a claim.
             RectTransform adHost = UIBuilder.Node("AdBlock", safe);
-            UIBuilder.Box(adHost, 0f, -(PopupHeight * 0.5f + Emberforge.Space16 + RewardedAdBlock.Height * 0.5f),
+            UIBuilder.Box(adHost, 0f, PopupLift - (PopupHeight * 0.5f + Emberforge.Space16 + RewardedAdBlock.Height * 0.5f),
                           PopupWidth, RewardedAdBlock.Height, new Vector2(0.5f, 0.5f));
             _ad = new RewardedAdBlock(_app, AdPlacementKind.IdleGold, adHost, PopupWidth, delegate
             {

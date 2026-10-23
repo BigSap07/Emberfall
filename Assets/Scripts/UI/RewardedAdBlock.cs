@@ -185,6 +185,8 @@ namespace Emberfall.UI
             string main = showingResult ? v.ResultLine : v.RewardLine;
             Color mainColor = showingResult ? (v.ResultIsReward ? HubStyle.ValueGold : Emberforge.TextQuiet) : Emberforge.TextBody;
             Text line = EmberforgeUI.Body("Line", _host, main, UITheme.FontSmall, mainColor, TextAnchor.UpperLeft);
+            // A reward is HubStyle.ValueGold with the kit's outline, so it reads as gold on the sunken plate at any size.
+            if (showingResult && v.ResultIsReward) UIBuilder.Outlined(line, Emberforge.Outline, Emberforge.StrokeThin);
             if (narrow) UIBuilder.Box(line.rectTransform, Pad, -Pad, _width - Pad * 2f, TextHeightNarrow, new Vector2(0f, 1f));
             else UIBuilder.Box(line.rectTransform, Pad, -Pad, _width - Pad * 3f - RightColumn, TextHeight, new Vector2(0f, 1f));
 

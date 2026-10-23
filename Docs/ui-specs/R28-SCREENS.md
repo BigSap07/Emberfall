@@ -336,8 +336,8 @@ three files below and the block's own). Exactly three places:
 `CampaignFlow.Sweep`, a toast) and never reaches `WaveResultScreen`, which refuses a cleared stage
 (`WaveRefusal.StageCleared`); a stage with no curve shows its repeat clear on `BattleScreen`'s result. So the stage cleared
 view only ever shows a FIRST clear, and `BattleRewards.RepeatCapped` is never true there. The block is built there as
-specified and asked about only for `!FirstClear && RepeatCapped`, so it is dormant, and the A3 captures forge the repeat on
-the screen's copy of the result. Where a repeat clear that paid the floor is shown to a player is an owner decision (the
+specified and asked about only for `!FirstClear && RepeatCapped`, so it is dormant, and the A3 captures hand the screen a repeat
+clear (`WaveResultScreen.PrepareClearedForCapture`), with no fight. Where a repeat clear that paid the floor is shown to a player is an owner decision (the
 sweep toast has no room for a button).
 
 ### Layout (one block, the same in all three)

@@ -1,0 +1,12 @@
+# R28 builder b, round 2 retry batch 6 of 6 (10 targets at most, one editor session each).
+#   powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 -TargetsFile Tools/capture-r28b-retry-6.txt -LogDir D:\Emberfall\handoff\R28-SCREENS\logs -Tag r28b-retry-6
+Screen:GuildLadder=after-floor8@1920x1080
+Screen:GuildLadder=after-floor8@2400x1080
+Screen:GuildLadder=banner-refresh@1920x1080
+Screen:GuildLadder=banner-refresh@2400x1080
+Screen:GuildLadder=banner-offline@1920x1080
+Screen:GuildLadder=banner-offline@2400x1080
+Screen:GuildLadder=banner-refused@1920x1080
+Screen:GuildLadder=banner-refused@2400x1080
+Screen:GuildLadder=banner-cycleover@1920x1080
+Screen:GuildLadder=banner-cycleover@2400x1080
