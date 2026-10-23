@@ -1126,9 +1126,12 @@ namespace Emberfall.DevHarness
                   "ONE PLACE MAKES A SEALED MARK: SealedGrants is called by PurchaseGrants alone (" + string.Join(", ", sealers.ToArray()) + ")");
             bool appliersOk = true;
             for (int i = 0; i < appliers.Count; i++)
-                if (appliers[i] != "PurchaseLedger.cs" && appliers[i] != "WayfarersRoad.cs" && appliers[i] != "LiveEvents.cs" && !appliers[i].StartsWith("Store")) appliersOk = false;
+                if (appliers[i] != "PurchaseLedger.cs" && appliers[i] != "WayfarersRoad.cs" && appliers[i] != "LiveEvents.cs"
+                    && appliers[i] != "AdRewards.cs" && !appliers[i].StartsWith("Store")) appliersOk = false;
+            // AdRewards (R28) applies a watched ad's fixed Gold and Dust lines here on purpose: Docs/DESIGN-REWARDED-ADS.md
+            // routes ad rewards through the one grant path so ad Gold is Sealed exactly as bought Gold is.
             Check(appliersOk && appliers.Contains("PurchaseLedger.cs") && appliers.Contains("WayfarersRoad.cs"),
-                  "and a grant is applied only by the ledger, the paid track and the Store's own rules (" + string.Join(", ", appliers.ToArray()) + ")");
+                  "and a grant is applied only by the ledger, the paid track, the Store's own rules and rewarded ads, which are Sealed the same way (" + string.Join(", ", appliers.ToArray()) + ")");
         }
 
         /// <summary>Source with comments and string literals blanked, so a word in prose or a message is not read as code.</summary>
