@@ -96,3 +96,15 @@ The tests run every collector, every tip rule and the keys against `mock/`, and 
 once more with no git, no ccusage and no folders. The mock fixes the clock at 23 Oct 2026 14:00
 and gives file times in `mock/mock.json`, so the result does not depend on the checkout. It has its own
 `mock/CLAUDE.md` and small transcripts in `mock/claude-projects`; no test reads the real ones.
+
+## Web cockpit (V3)
+
+A browser view of the same data, in an Edge app window. The terminal dashboard above stays as the fallback.
+
+- Start: double-click `cockpit-web.bat`, or run `make-shortcut.ps1` once for an `Emberfall Cockpit` icon on the Desktop (it pins nothing).
+  By hand: `python serve.py [--port 8765] [--mock]`, then open http://127.0.0.1:8765. Only stdlib Python is needed.
+- `serve.py` binds 127.0.0.1 only. `GET /api/state` is `state_builder.build_state(data.collect(env))` cached for 5 s; the page polls every 10 s.
+- `POST /api/set` needs the header `X-Cockpit: 1` and accepts only `block_reset` ("3h12", "3:12", "01:12"), `weekly` ("62 2d13h", or "62" when a reset is already stored) and `playtest_date` (YYYY-MM-DD or empty). They write `state.json` (gitignored) through the same parsers as the TUI keys `b` and `w`. Anything else is a 400.
+- `web/SCHEMA.md` is the contract with `web/app.js`, `web/state.sample.json` the sample. `python state_builder.py [--mock]` prints the JSON.
+- Inputs that are not collected: `progress.json` (the six Road to a real game tracks and milestones, edit by hand) and the `plan` block of `costs.json` (prices, start month, renewal day, optional `api_value_eur`).
+- `python test_cockpit.py` covers the builder (keys and types against the sample) and the server (header, keys, formats).

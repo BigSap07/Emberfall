@@ -5,10 +5,14 @@ Tools/cockpit/mock (its own CLAUDE.md, transcripts and logs).
 """
 
 import asyncio
+import dataclasses
+import http.client
 import io
+import json
 import shutil
 import sys
 import tempfile
+import threading
 import unittest
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -18,6 +22,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cockpit  # noqa: E402
 import data  # noqa: E402
 import localusage  # noqa: E402
+import serve  # noqa: E402
+import state_builder  # noqa: E402
 import tips  # noqa: E402
 from rich.console import Console  # noqa: E402
 
@@ -326,6 +332,272 @@ class App(unittest.TestCase):
                 await app.workers.wait_for_complete()
                 await pilot.press("q")
         asyncio.run(go())
+
+
+# ---------------------------------------------------------------- web cockpit (state_builder.py, serve.py)
+
+WEB = Path(__file__).resolve().parent / "web"
+NULLABLE = {"chain.quiet", "limits.weekly.pace"}
+
+
+def kind(v) -> str:
+    return "bool" if isinstance(v, bool) else "number" if isinstance(v, (int, float)) else type(v).__name__
+
+
+def shape(test: unittest.TestCase, sample, actual, path: str = "") -> None:
+    """actual has the same keys and value types as sample. Lists are checked element by element against
+    every sample element at once: a key must be there when all sample elements have it, and may be there when one does."""
+    if actual is None and path in NULLABLE:
+        return
+    if isinstance(sample, dict):
+        test.assertIsInstance(actual, dict, path)
+        test.assertEqual(set(actual), set(sample), path)
+        for k in sample:
+            shape(test, sample[k], actual[k], f"{path}.{k}" if path else k)
+    elif isinstance(sample, list):
+        test.assertIsInstance(actual, list, path)
+        if sample and all(isinstance(x, dict) for x in sample):
+            every = set.intersection(*(set(x) for x in sample))
+            some = set.union(*(set(x) for x in sample))
+            for i, a in enumerate(actual):
+                test.assertIsInstance(a, dict, f"{path}[{i}]")
+                test.assertTrue(every <= set(a) <= some, f"{path}[{i}] keys {sorted(a)}")
+                for k in a:
+                    first = next(x for x in sample if k in x)
+                    shape(test, first[k], a[k], f"{path}[].{k}")
+        elif sample:
+            for i, a in enumerate(actual):
+                test.assertEqual(kind(a), kind(sample[0]), f"{path}[{i}]")
+    else:
+        test.assertEqual(kind(actual), kind(sample), path)
+
+
+class StateBuilder(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.env = data.mock_env()
+        cls.d = data.collect(cls.env)
+        cls.s = state_builder.build_state(cls.d)
+        cls.sample = json.loads((WEB / "state.sample.json").read_text(encoding="utf-8"))
+
+    def test_mock_never_reads_the_real_claude_md_or_root(self):
+        mock_dir = Path(__file__).resolve().parent / "mock"
+        self.assertTrue(self.env.claude_md.is_relative_to(mock_dir))
+        self.assertTrue(self.env.root.is_relative_to(mock_dir))
+
+    def test_same_keys_and_types_as_the_sample(self):
+        shape(self, self.sample, json.loads(json.dumps(self.s)))
+
+    def test_mock_flag_and_order(self):
+        self.assertIs(self.s["mock"], True)
+        self.assertIs(self.s["header"]["mock"], True)
+        self.assertEqual([k["label"] for k in self.s["kpis"]], [k["label"] for k in self.sample["kpis"]])
+        self.assertEqual(len(self.s["week"]["days"]), 7)
+        self.assertTrue(self.s["week"]["days"][-1]["today"])
+        self.assertTrue(self.s["now"].startswith("2026-10-23T14:00:00"))
+        self.assertRegex(self.s["now"], r"[+-]\d\d:\d\d$")
+
+    def test_live_state_is_not_flagged_mock(self):
+        d = {**self.d, "env": dataclasses.replace(self.env, mock=False)}
+        s = state_builder.build_state(d)
+        self.assertIs(s["mock"], False)
+        self.assertIs(s["header"]["mock"], False)
+
+    def test_chain_rows_and_bars(self):
+        c = self.s["chain"]
+        kinds = {b["kind"] for r in c["rows"] for b in r["bars"]}
+        self.assertTrue(kinds <= {"done", "run", "proj", "late"})
+        self.assertIn("late", kinds)                         # three queued runs start after the 14:30 cutoff
+        self.assertEqual(c["badge"]["tone"], "bad")
+        self.assertLess(c["axis_start"], c["axis_end"])
+
+    def test_run_cost_hot_and_bars(self):
+        rows = {r["name"]: r for r in self.s["run_cost"]["rows"]}
+        self.assertTrue(rows["R27-store-polish"]["hot"])
+        self.assertEqual(rows["R27-store-polish"]["bar"], 100)
+        self.assertEqual(rows["R27-store-polish"]["cost"], "$23.00")
+        self.assertFalse(rows["R25-relic-icons"]["hot"])
+
+    def test_waiting_comes_from_user_actions_and_the_queue(self):
+        titles = [i["title"] for i in self.s["waiting"]["items"]]
+        self.assertTrue(any(t.startswith("BLOCKER") for t in titles))
+        self.assertIn("Next in the chain: R29-audio-pass", titles)
+        self.assertIn("Cloud bundle agent/cockpit", titles)
+        self.assertEqual(self.s["waiting"]["open"], sum(1 for i in self.s["waiting"]["items"] if i["tone"] != "mute"))
+        self.assertEqual(self.s["header"]["waiting"], self.s["waiting"]["open"])
+
+    def test_plan_prices_come_from_costs_json(self):
+        with tempfile.TemporaryDirectory() as t:
+            costs = Path(t) / "costs.json"
+            cfg = json.loads(self.env.costs.read_text(encoding="utf-8"))
+            cfg["plan"].update(start_month="2026-09", renew_day=3, api_value_eur=1000)
+            cfg["plan"]["options"] = [{"id": "x5", "name": "Max 5x", "monthly_eur": 100, "capacity": 5},
+                                      {"id": "x20", "name": "Max 20x", "monthly_eur": 200, "capacity": 20}]
+            costs.write_text(json.dumps(cfg), encoding="utf-8")
+            env = data.mock_env()
+            env.costs = costs
+            plan = state_builder.build_state(data.collect(env))["plan"]
+        self.assertEqual([o["price_label"] for o in plan["options"]], ["EUR 100", "EUR 200"])
+        self.assertEqual([o["paid"] for o in plan["options"]], ["EUR 200", "EUR 400"])   # Sep and Oct
+        self.assertEqual(plan["since"], "Sep")
+        self.assertEqual(plan["api_value"], "EUR 1,000")
+        self.assertEqual(plan["options"][1]["multiple"], "2.5x")
+        self.assertIn("Renews 03 Nov, in 11 days", plan["note"])
+        self.assertIn("25%", plan["note"])
+
+    def test_default_plan_costs_json_has_the_agreed_prices(self):
+        cfg = json.loads((Path(__file__).resolve().parent / "costs.json").read_text(encoding="utf-8"))
+        self.assertEqual({o["id"]: o["monthly_eur"] for o in cfg["plan"]["options"]}, {"x5": 110, "x20": 220})
+        self.assertIn("subscriptions", cfg)                   # still valid for the V2 collectors
+
+    def test_road_from_progress_json(self):
+        prog = {"milestones": [{"pct": 40, "label": "A"}, {"pct": 70, "label": "B"}, {"pct": 100, "label": "C"}],
+                "tracks": [{"name": "x", "pct": 20, "sub": "s"}, {"name": "y", "pct": 80, "sub": "s", "tone": "warn"}]}
+        road = state_builder.build_state(self.d, progress=prog)["road"]
+        self.assertEqual(road["pct"], 50)
+        self.assertEqual([m["tone"] for m in road["milestones"]], ["ok", "warn", "dim"])
+        self.assertEqual([t["tone"] for t in road["tracks"]], ["hot", "warn"])
+        real = json.loads((Path(__file__).resolve().parent / "progress.json").read_text(encoding="utf-8"))
+        self.assertEqual(len(real["tracks"]), 6)
+        self.assertEqual([m["pct"] for m in real["milestones"]], [40, 70, 100])
+
+    def test_weekly_pace_and_block_from_state(self):
+        env = data.mock_env()
+        env.state_mem = {"weekly": {"pct": 62, "reset": "2026-10-26T14:00:00"}, "block_end_manual": "2026-10-23T16:12:00",
+                         "block_set_at": "2026-10-23T13:30:00"}
+        s = state_builder.build_state(data.collect(env))
+        wk = s["limits"]["weekly"]
+        self.assertEqual((wk["pct"], wk["pace"]), (62, 57))
+        self.assertIn("5 points ahead of an even pace", wk["note"])
+        self.assertEqual(s["kpis"][3]["value"], "62%")
+        self.assertEqual(s["kpis"][2]["value"], "2h12")
+        self.assertIn("set by hand 13:30", s["limits"]["block"]["sub"])
+
+    def test_tips_and_hints_are_text(self):
+        self.assertTrue(all(isinstance(t, str) for t in self.s["tips"]))
+        self.assertEqual(self.s["hints"], [])
+
+
+class Server(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.env = data.mock_env()
+        cls.httpd, cls.store = serve.make_server(cls.env, 0)
+        cls.port = cls.httpd.server_address[1]
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
+
+    def setUp(self):
+        self.env.state_mem = {}
+        self.store.cached = None
+
+    def req(self, method, path, body=None, headers=None):
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=30)
+        raw = body if isinstance(body, (bytes, type(None))) else json.dumps(body).encode()
+        c.request(method, path, raw, dict(headers or {}))
+        r = c.getresponse()
+        out = (r.status, r.read())
+        c.close()
+        return out
+
+    def post(self, key, value, header=True):
+        return self.req("POST", "/api/set", {"key": key, "value": value}, {"X-Cockpit": "1"} if header else {})
+
+    def test_binds_loopback_only(self):
+        self.assertEqual(self.httpd.server_address[0], "127.0.0.1")
+
+    def test_static_and_state(self):
+        st, body = self.req("GET", "/")
+        self.assertEqual(st, 200)
+        self.assertIn(b"Emberfall", body)
+        self.assertEqual(self.req("GET", "/app.js")[0], 200)
+        self.assertEqual(self.req("GET", "/serve_sample.py")[0], 404)
+        st, body = self.req("GET", "/api/state")
+        self.assertEqual(st, 200)
+        self.assertTrue(json.loads(body)["mock"])
+
+    def test_state_is_cached_for_five_seconds(self):
+        self.req("GET", "/api/state")
+        first = self.store.cached
+        self.req("GET", "/api/state")
+        self.assertIs(self.store.cached, first)
+        self.store.cached = (first[0] - serve.CACHE_S - 1, first[1])
+        self.req("GET", "/api/state")
+        self.assertIsNot(self.store.cached, first)
+
+    def test_post_needs_the_header(self):
+        self.assertEqual(self.post("block_reset", "3h12", header=False)[0], 400)
+        self.assertEqual(self.req("POST", "/api/set", {"key": "block_reset", "value": "3h12"}, {"X-Cockpit": "0"})[0], 400)
+        self.assertEqual(self.env.state_mem, {})
+
+    def test_post_rejects_unknown_keys_and_bad_bodies(self):
+        for key in ("block_end_manual", "weekly_pct", "state", "", "../x"):
+            self.assertEqual(self.post(key, "x")[0], 400, key)
+        h = {"X-Cockpit": "1"}
+        self.assertEqual(self.req("POST", "/api/set", b"not json", h)[0], 400)
+        self.assertEqual(self.req("POST", "/api/set", {"key": "weekly", "value": "62 1d", "extra": 1}, h)[0], 400)
+        self.assertEqual(self.req("POST", "/api/set", {"key": "weekly", "value": 62}, h)[0], 400)
+        self.assertEqual(self.req("POST", "/api/other", {"key": "weekly", "value": "62 1d"}, h)[0], 404)
+        self.assertEqual(self.req("PUT", "/api/set", {}, h)[0], 405)
+        self.assertEqual(self.env.state_mem, {})
+
+    def test_bad_host_header_is_refused(self):
+        self.assertEqual(self.req("GET", "/api/state", None, {"Host": "evil.example"})[0], 400)
+        self.assertEqual(self.req("POST", "/api/set", {"key": "weekly", "value": "62 1d"},
+                                  {"X-Cockpit": "1", "Host": "evil.example"})[0], 400)
+
+    def test_block_reset_formats(self):
+        expect = {"3h12": "2026-10-23T17:12:00", "3:12": "2026-10-23T17:12:00", "01:12": "2026-10-23T15:12:00"}
+        for text, end in expect.items():
+            self.assertEqual(self.post("block_reset", text)[0], 200, text)
+            self.assertEqual(self.env.state_mem["block_end_manual"], end, text)
+        self.assertEqual(self.env.state_mem["block_set_at"], "2026-10-23T14:00:00")
+        for bad in ("soon", "45", "6h00", "0:00", ""):
+            self.assertEqual(self.post("block_reset", bad)[0], 400, bad)
+
+    def test_block_reset_shows_in_the_next_state(self):
+        self.post("block_reset", "3h12")
+        s = json.loads(self.req("GET", "/api/state")[1])
+        self.assertEqual(s["kpis"][2]["value"], "3h12")
+        self.assertIn("set by hand", s["kpis"][2]["sub"])
+
+    def test_weekly_formats(self):
+        self.assertEqual(self.post("weekly", "62 2d13h")[0], 200)
+        self.assertEqual(self.env.state_mem["weekly"], {"pct": 62.0, "reset": "2026-10-26T03:00:00", "set_at": "2026-10-23T14:00:00"})
+        self.assertEqual(self.post("weekly", "70")[0], 200)                      # new percent, stored reset stands
+        self.assertEqual((self.env.state_mem["weekly"]["pct"], self.env.state_mem["weekly"]["reset"]), (70.0, "2026-10-26T03:00:00"))
+        self.assertEqual(self.post("weekly", "62% 2d13h")[0], 200)
+        for bad in ("garbage", "101", "101 1d", "62 never"):
+            self.assertEqual(self.post("weekly", bad)[0], 400, bad)
+
+    def test_weekly_without_a_stored_reset_is_refused(self):
+        self.assertEqual(self.post("weekly", "62")[0], 400)
+        self.assertNotIn("weekly", self.env.state_mem)
+
+    def test_playtest_date(self):
+        self.assertEqual(self.post("playtest_date", "2026-11-07")[0], 200)
+        self.assertEqual(self.env.state_mem["playtest_date"], "2026-11-07")
+        s = json.loads(self.req("GET", "/api/state")[1])
+        self.assertIn("Target Sat 07 Nov, in 15 days", s["playtest"]["desc"])
+        self.assertEqual(self.post("playtest_date", "")[0], 200)
+        self.assertEqual(self.env.state_mem["playtest_date"], "")
+        for bad in ("07-11-2026", "2026-13-01", "2026-02-30", "tomorrow"):
+            self.assertEqual(self.post("playtest_date", bad)[0], 400, bad)
+
+    def test_live_write_goes_to_state_json_only(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = data.mock_env()
+            env.mock = False                                   # a live-style env whose state file is a temp file
+            env.state = Path(t) / "state.json"
+            serve.apply_set(env, "block_reset", "3h12")
+            self.assertEqual(set(json.loads(env.state.read_text(encoding="utf-8"))), {"block_end_manual", "block_set_at"})
+            env.state = Path(t) / "no-such-dir" / "state.json"
+            with self.assertRaises(OSError):
+                serve.apply_set(env, "block_reset", "3h12")
 
 
 if __name__ == "__main__":

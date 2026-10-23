@@ -15,6 +15,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, time as dtime, timedelta
 from pathlib import Path
@@ -642,7 +643,22 @@ def ccusage_json(env: Env, name: str, args: list[list[str]]) -> dict | None:
     return None
 
 
+USAGE_TTL = 0.0          # seconds to reuse a live ccusage result; the web server sets it, the TUI leaves it off
+_USAGE_MEMO: dict = {}
+
+
 def collect_usage(env: Env) -> dict:
+    if USAGE_TTL > 0 and not env.mock:
+        hit = _USAGE_MEMO.get("v")
+        if hit and time.monotonic() - hit[0] < USAGE_TTL:
+            return hit[1]
+        out = _collect_usage(env)
+        _USAGE_MEMO["v"] = (time.monotonic(), out)
+        return out
+    return _collect_usage(env)
+
+
+def _collect_usage(env: Env) -> dict:
     daily = ccusage_json(env, "daily", [["daily", "--json", "--breakdown"], ["daily", "--json"]])
     blocks = ccusage_json(env, "blocks", [["blocks", "--json", "--token-limit", "max"], ["blocks", "--json"]])
     if daily is None and blocks is None:
