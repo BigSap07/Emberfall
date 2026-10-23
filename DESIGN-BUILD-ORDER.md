@@ -1027,6 +1027,16 @@ failed sync. `FriendsScreen` opens with the player's own friend code and a copy 
 cloud config neither the prompt nor the code card exists. `CheckDisplayNameRules` proves the rule;
 `NameOnDemandShots` captures it on a scratch identity with no network.
 
+**Leaderboards: written, not applied, not called (`Docs/DESIGN-LEADERBOARDS.md`).**
+`Server/supabase/migrations/0016_leaderboards.sql` holds three boards (the Deep Recital's highest floor,
+with a weekly board that turns on Monday at 04:00 UTC, the Proving's highest standing and campaign
+progress) as five tables with RLS on, no policy and no grant, and two callable functions.
+`leaderboard_submit()` takes no argument: it reads the caller's own cloud save, checks each value against
+the same save, against ceilings and against server time since the server last raised it, stamps
+everything with `now()` and logs every refusal. `leaderboard_top()` returns rank, display name, value and
+`is_me`, never a user id. `Tools/supabase-leaderboard-rules-test.py` proves the rules once 0016 is applied;
+it has never been run. Nothing in the game calls either function and no screen shows a board.
+
 ### Guilds, phase one
 
 Three more migrations covering guilds, members, requests and guild team snapshots, with RLS on all
@@ -1266,6 +1276,27 @@ through it (`WayfarersRoadState.PaidSeason`); the paid track is then claimable o
 by default (`EMBERFALL_WAYFARERS_ROAD_OFF` rolls it back), **but the pass is inert until the build defines
 `EMBERFALL_DAILY_LOOP_ON`**, because the loop that feeds it is off by default; its door is a button in the
 header of `OrdersScreen`, which exists only with the loop. That default is the lead's call of 2026-10-19.
+
+**What turning the loop on by default would do, measured (`Docs/DAILY-LOOP-CURVE.md`).** The gate's walks
+cannot say: they start before the Road's epoch and claim no order, so flipping the define moves nothing
+they read. `DevHarness.exe --daily-loop-curve` (`DailyLoopCurve.cs`, a measurement, inert in every other
+run) walks the 60 reference seeds on the season calendar's clock with the loop off, on with the Road, and
+on without it, as a player who claims everything twice a day. For the reference player no wall moves by
+more than x0.033 or gains a sitting and the campaign ends within a third of a day, while the loop pays
+about 13% of all Gold and the Road completes every season (a five-star selector every 28 days from day 25).
+The level order cannot be finished by a line at its star cap without levelling a bench hero. The default
+was not flipped.
+
+### Local notifications
+
+**The rule is built, the Unity side is not (`Docs/DESIGN-NOTIFICATIONS.md`).** `NotificationPlanner` in
+`Assets/Scripts/Core/Progression` plans when each local notification fires, given the save, the clock and
+the device's UTC offset: the idle chest at its cap, the next orders turnover (only with the daily loop on),
+and an event's end for a player who has taken part (8 hours before a weekly event, 24 before a monthly).
+Quiet hours 22:00 to 09:00 local, at most 2 a local day, 4 hours apart, nothing past 48 hours, nothing
+before the first stage is cleared, and no notification names anything sold. It writes nothing and holds
+no state in the save. `NotificationChecks.cs` proves it, including a sweep of about 1,500 plans. No
+package, scheduler or settings toggle exists yet.
 
 ### The Store (R19)
 

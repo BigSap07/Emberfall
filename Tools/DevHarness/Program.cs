@@ -38,6 +38,7 @@ namespace Emberfall.DevHarness
             bool reconcile = false;
             int wallStudy = 0;
             int storeCurve = 0;
+            int loopCurve = 0;
             bool lineCalibration = false;
             bool probeStudy = false;
             bool tempoStudy = false;
@@ -79,6 +80,15 @@ namespace Emberfall.DevHarness
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], out n)) { storeCurve = n; i++; }
                     continue;
                 }
+                if (args[i] == "--daily-loop-curve")
+                {
+                    loopCurve = 20;
+                    int n;
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out n)) { loopCurve = n; i++; }
+                    continue;
+                }
+                if (args[i] == "--daily-loop-fuse") { _loopCurveFuse = true; continue; }
+                if (args[i] == "--daily-loop-no-bench") { _loopCurveNoBench = true; continue; }
                 if (args[i] == "--relevel" && i + 1 < args.Length) { _relevelSpec = args[++i]; continue; }
                 if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
                 if (args[i] == "--guild-path") { guildPath = true; continue; }
@@ -129,6 +139,8 @@ namespace Emberfall.DevHarness
             if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
             if (wallStudy > 0) return RunWallStudy(contentDir, wallStudy);
             if (storeCurve > 0) return RunStoreCurve(contentDir, storeCurve);
+            // Nor the daily loop curve (DailyLoopCurve.cs): it measures and writes nothing.
+            if (loopCurve > 0) return RunDailyLoopCurve(contentDir, loopCurve);
             if (WhaleRequested) return RunWhaleStudy(contentDir);
             if (_relevelSpec != null) return RunRelevel(contentDir, _relevelSpec);
             if (lineCalibration) return RunLineCalibration(contentDir);
@@ -317,6 +329,7 @@ namespace Emberfall.DevHarness
             CheckStoreOffers(content, contentDir);
             CheckStore(content, contentDir);
             CheckLiveEvents(content, contentDir);
+            CheckNotifications(content, contentDir);
             CheckR24Store(content, contentDir);
             CheckR24RelicPacks(content, contentDir);
             CheckR24Skins(content, contentDir);
@@ -17562,6 +17575,7 @@ namespace Emberfall.DevHarness
                     //      One claim per sitting, capped exactly as the game caps it.
                     run.Now += EconomyAwaySeconds;
                     StoreSpenderStep(db, session, run.Now);   // inert unless --store-curve asked for the spender
+                    DailyLoopWalkStep(db, session, run.Now, false);  // inert unless --daily-loop-curve asked for the loop
                     IdleReport idle = session.ClaimIdle(run.Now);
                     run.Ledger.GoldIdle += idle.Gold;
                     run.Ledger.ShardIdle += idle.Shards;
@@ -17585,7 +17599,7 @@ namespace Emberfall.DevHarness
                     long goldBeforeLevels = profile.Gold;
                     int levelsBought;
                     Dictionary<string, int> beforeGold = LevelsByUid(profile);
-                    if (SpendGold(session, out levelsBought)) run.CapBlockedSessions++;
+                    if (SpendGold(session, out levelsBought, _walkLoopMode > 0 ? run.Now : 0L)) run.CapBlockedSessions++;
                     else run.SpendableSessions++;
                     CreditLevels(profile, beforeGold, run.GoldLevels);
                     run.Ledger.GoldSpentOnLevels += goldBeforeLevels - profile.Gold;
@@ -17674,6 +17688,8 @@ namespace Emberfall.DevHarness
                         }
                         AdWatcherSweepStep(session, lastFullSweepGold, run.Now);   // inert unless --store-ads asked for the ad watcher
                     }
+
+                    DailyLoopWalkStep(db, session, run.Now, true);   // the end of the sitting's claims; inert as above
 
                     // STALLED means neither power nor the roster moved. Before caps, power was the
                     // only thing a sitting could raise, so a flat power line meant farming had
@@ -21962,6 +21978,13 @@ namespace Emberfall.DevHarness
 
         private static bool SpendGold(GameSession session, out int levelsBought)
         {
+            return SpendGold(session, out levelsBought, 0L);
+        }
+
+        /// <summary>nowUnix above 0 dates each level-up by that clock (the daily loop curve's walk, whose orders
+        /// count level-ups by day); 0 keeps the two-argument LevelUpHero, which reads the wall clock.</summary>
+        private static bool SpendGold(GameSession session, out int levelsBought, long nowUnix)
+        {
             levelsBought = 0;
             for (int guard = 0; guard < 500; guard++)
             {
@@ -21977,7 +22000,8 @@ namespace Emberfall.DevHarness
                 }
                 if (cheapest == null) return true;                        // cap-blocked
                 if (session.Profile.Gold < cheapestCost) return false;    // out of gold
-                if (session.LevelUpHero(cheapest, 1).Success) levelsBought++;
+                LevelUpResult up = nowUnix > 0 ? session.LevelUpHero(cheapest, 1, nowUnix) : session.LevelUpHero(cheapest, 1);
+                if (up.Success) levelsBought++;
             }
             return false;
         }

@@ -50,6 +50,13 @@ project owner:
    select, update or delete. Applied by the owner by hand; nothing else in the project reads or
    needs it. `Tools/supabase-rules-test.py` `check_play_events` needs it applied. The owner reads
    the table with `supabase/queries/play-counts.sql` in the SQL editor.
+16. `0016_leaderboards.sql` - three leaderboards (`Docs/DESIGN-LEADERBOARDS.md`): the Deep Recital's
+   highest floor with a weekly board that turns on Monday at 04:00 UTC, the Proving's highest standing,
+   and campaign progress. The client never sends a score: `leaderboard_submit()` takes no argument and
+   reads the caller's own cloud save, checks it against itself, against ceilings and against server time,
+   and stores only what passes; `leaderboard_top()` reads a board without exposing a user id. The limits
+   are the one-row `leaderboard_limits` table. No table carries a policy or a grant. Written, not
+   applied: nothing in the game calls it yet. `Tools/supabase-leaderboard-rules-test.py` needs it applied.
 
 16. `0016_account_deletion.sql` - `delete_my_account(p_confirm)`, the in-game account deletion Google
    Play requires: the caller's guild membership (a last-member leader's guild is disbanded, otherwise
@@ -86,7 +93,7 @@ are written, not applied, and both are re-appliable:
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0019` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0023` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
 after a half-finished run, is a no-op rather than a failure to unpick.
 
@@ -182,9 +189,11 @@ deployed**. `Docs/DESIGN-RECEIPT-VALIDATION.md` has the setup, the secrets and t
 `Tools/supabase-rules-test.py` (accounts, saves, friends),
 `Tools/supabase-guild-rules-test.py` (guilds and the dungeon) and
 `Tools/supabase-launch-rules-test.py` (account deletion, chat safety, server time and the receipt
-ledger, 0016 to 0019) create throwaway users and prove the rules above against the real project.
-The launch test deletes its own users through `delete_my_account` when it finishes. They are the only things here that need credentials.
-See the header of each script. Both carry the cases the cloud audit added, and both have been run
-against the live project; `Docs/CLOUD-GAPS.md` records what each measured. A case labelled STILL
+ledger, 0016 to 0019) and `Tools/supabase-leaderboard-rules-test.py` (the leaderboards, 0023) create
+throwaway users and prove the rules above against the real project. The launch test deletes its own
+users through `delete_my_account` when it finishes. They are the only things here that need credentials.
+See the header of each script. The first two carry the cases the cloud audit added, and both have been run
+against the live project; `Docs/CLOUD-GAPS.md` records what each measured. The launch, guild dungeon size
+and leaderboard tests have never been run against a project: their migrations are not applied. A case labelled STILL
 PRESENT asserts a defect that was written up and left alone, so it passes today and goes red the
 day that defect is fixed.

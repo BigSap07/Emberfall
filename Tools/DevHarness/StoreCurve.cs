@@ -46,7 +46,7 @@ namespace Emberfall.DevHarness
 
         private static long StoreWalkClockStart(ContentDatabase db)
         {
-            if (_walkStoreMode == 0) return 0L;
+            if (_walkStoreMode == 0 && _walkLoopMode == 0) return 0L;   // the daily loop curve (DailyLoopCurve.cs) walks this clock too
             return PassSeasonStart(db, 5) + 20L * 3600L;
         }
 
