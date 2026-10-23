@@ -268,6 +268,8 @@ namespace Emberfall.Core.Progression
             bought.Uid = profile.AllocateArmorUid();
             profile.OwnedArmor.Add(bought);
             state.Slots[index].Sold = true;
+            // The spend-Gold order counts this sink too, so a roster whose every hero is at its cap can still finish it.
+            if (DailyLoopSwitch.Enabled) DailyLoop.Record(session, OrderKind.Gold, (int)Math.Min(int.MaxValue, result.Price), nowUnix);
 
             result.Piece = bought;
             result.Success = true;

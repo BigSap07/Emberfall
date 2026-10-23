@@ -90,6 +90,16 @@ namespace Emberfall.DevHarness
             CheckConditionGuardrails(content);
             CheckConditionShape(content);
             CheckNotAHeroCheck(content);
+            // SIZE AND ATTEMPTS (phase two, system 1's size rule): the ladder scales with the guild,
+            // the floors do not, and a member's attempts are bounded the same at every size.
+            CheckLadderTable(content);
+            CheckBaseBlockUnmoved(content);
+            CheckFloorIsLadderBlind(content);
+            CheckDeepFloorsMatchBase(content);
+            CheckAttemptBounds(content);
+            CheckSizeReach(content);
+            CheckRewardPlaceholder(content);
+            CheckServerAgreesOnSize(content, contentDir);
             return _failures;
         }
 
@@ -536,10 +546,13 @@ namespace Emberfall.DevHarness
             // still caught: see the constant.
             int built = 0, shortLines = 0, missedTarget = 0, monoAspect = 0, scripted = 0;
             string firstBad = "";
+            // Every floor any guild can reach, not only the base five: a deep floor is built by the
+            // same code from another block's stream, and it is held to the same four rules.
+            int ladder = GuildDungeonScale.MaxLadder(content);
             for (int cycle = 1; cycle <= CompositionCycles; cycle++)
             {
                 int s = GuildDungeon.SeedFor("floors-check", cycle);
-                for (int f = 1; f <= floors; f++)
+                for (int f = 1; f <= ladder; f++)
                 {
                     StageDef a = GuildDungeonGenerator.BuildFloor(content, s, f);
                     built++;
@@ -559,7 +572,7 @@ namespace Emberfall.DevHarness
                     if (bad && firstBad == "") firstBad = " (first: cycle " + cycle + " floor " + f + ", " + Describe(a) + ")";
                 }
             }
-            string over = " - over " + built + " floors, " + CompositionCycles + " dungeons of " + floors;
+            string over = " - over " + built + " floors, " + CompositionCycles + " dungeons of " + ladder + " (the longest ladder)";
             Check(shortLines == 0, "every floor fields a full line of " + cfg.MaxTeamSize + over
                   + (shortLines == 0 ? "" : " (" + shortLines + " short)" + firstBad));
             Check(missedTarget == 0, "and every floor's line reaches its target - the level is solved for it, not guessed" + over
@@ -1233,16 +1246,20 @@ namespace Emberfall.DevHarness
         /// NOT A HERO CHECK. Every floor of several generated dungeons, against the whole spread.
         /// Asserted per generated floor, not on average: one bad floor in one guild's week is the
         /// failure this exists to catch, and an average would hide it.
+        ///
+        /// Over THE LONGEST LADDER, floors 1 to GuildDungeonScale.MaxLadder: a floor only a guild of
+        /// thirty sees is still a floor thirty rosters have to be able to solve.
         /// </summary>
         private static void CheckNotAHeroCheck(ContentDatabase content)
         {
-            Line("  NOT A HERO CHECK - every floor of " + SampleGuilds + " dungeons against a spread of rosters at level " + ReferenceLevel);
+            int floors = GuildDungeonScale.MaxLadder(content);
+            int baseLadder = GuildDungeonScale.BaseLadder(content);
+            Line("  NOT A HERO CHECK - floors 1 to " + floors + " of " + SampleGuilds + " dungeons against a spread of rosters at level " + ReferenceLevel);
             List<Sample> samples = SampleRosters(content, 0x6D1C);
             List<string> groups = new List<string>();
             for (int i = 0; i < samples.Count; i++) if (!groups.Contains(samples[i].Group)) groups.Add(samples[i].Group);
 
-            int floors = content.Balance.GuildDungeonFloors;
-            int badShare = 0, badGroup = 0, badHero = 0, total = 0;
+            int badShare = 0, badGroup = 0, deepGroup = 0, badHero = 0, total = 0;
             List<string> firstFailures = new List<string>();
 
             Line("    " + "guild".PadRight(7) + "floor".PadRight(7) + "theme".PadRight(11) + "all".PadRight(6)
@@ -1300,18 +1317,27 @@ namespace Emberfall.DevHarness
 
                     string where = "guild " + g + " floor " + f + " (" + themes[f - 1] + ", " + (condition != null ? condition.Id : "no condition") + ")";
                     if (share < MinClearShare) { badShare++; Note(firstFailures, where + ": only " + Pct(share) + " of rosters clear"); }
-                    if (worstShare < MinGroupClearShare) { badGroup++; Note(firstFailures, where + ": '" + worstGroup + "' lines clear only " + Pct(worstShare)); }
+                    if (worstShare < MinGroupClearShare)
+                    {
+                        // The group guardrail is asserted per floor on the BASE ladder, as it always
+                        // was. A deep floor's breach is printed, and deep floors are judged by
+                        // CheckDeepFloorsMatchBase against the base block at the same position: see
+                        // that check for why the per-floor form cannot be applied there.
+                        if (f <= baseLadder) { badGroup++; Note(firstFailures, where + ": '" + worstGroup + "' lines clear only " + Pct(worstShare)); }
+                        else { deepGroup++; Note(firstFailures, where + ": '" + worstGroup + "' lines clear only " + Pct(worstShare) + " (deep floor: see the block comparison below)"); }
+                    }
                     if (clears > 0 && topShare > MaxHeroShareOfClears) { badHero++; Note(firstFailures, where + ": " + topHero + " is in " + Pct(topShare) + " of clears"); }
                 }
             }
 
+            int baseTotal = SampleGuilds * Math.Min(baseLadder, floors);
             for (int i = 0; i < firstFailures.Count; i++) Line("    ! " + firstFailures[i]);
             Check(badShare == 0, "every floor is cleared by at least " + Pct(MinClearShare) + " of all sample rosters ("
-                  + (total - badShare) + " of " + total + " floors)");
+                  + (total - badShare) + " of " + total + " floors, every ladder floor)");
             Check(badGroup == 0, "AND by at least " + Pct(MinGroupClearShare) + " of every roster missing an obvious answer - no tank, no healer, no area, no support, no single-target, 3 stars or fewer ("
-                  + (total - badGroup) + " of " + total + " floors)");
+                  + (baseTotal - badGroup) + " of " + baseTotal + " base floors; " + deepGroup + " deep-floor breach(es) here, judged by the block comparison)");
             Check(badHero == 0, "and no single hero is in more than " + Pct(MaxHeroShareOfClears) + " of any floor's clears ("
-                  + (total - badHero) + " of " + total + " floors)");
+                  + (total - badHero) + " of " + total + " floors, every ladder floor)");
         }
 
         private static void Note(List<string> notes, string text) { if (notes.Count < 12) notes.Add(text); }
@@ -1876,6 +1902,511 @@ namespace Emberfall.DevHarness
                   + " dungeons' floors of each of those themes" + (guards.Count > 0 ? " - " + string.Join("; ", guards.ToArray()) : ""));
         }
         private static string F2(float v) { return v.ToString("0.00", CultureInfo.InvariantCulture); }
+
+        // ---------------------------------------------------------------- SIZE AND ATTEMPTS
+        //
+        // claude/DESIGN-GUILDS-PHASE-TWO.md, "Size": scale the CONTENT to the guild, not the payout
+        // per head; "Bounded": a handful of attempts, and the cap, not the reward, is what stops the
+        // mode overtaking the game loop. GuildDungeonScale holds the rules; these checks hold
+        // GuildDungeonScale, the generator under it and the server's copy of both.
+
+        /// <summary>
+        /// The ladder table as content: it loads clean, starts at one member on the base ladder,
+        /// never gives a growing guild fewer floors, and never gives any guild fewer floors than
+        /// every guild had before ladders scaled.
+        /// </summary>
+        private static void CheckLadderTable(ContentDatabase content)
+        {
+            Line("");
+            Line("  SIZE - the ladder scales with the guild, the floors do not");
+            GuildDungeonScaleConfig scale = content.GuildDungeonScale;
+            int baseLadder = GuildDungeonScale.BaseLadder(content);
+            List<string> warned = content.Warnings.FindAll(w => w.StartsWith("guild-dungeon-scale.json", StringComparison.Ordinal));
+            Check(scale.IsUsable && warned.Count == 0, "guild-dungeon-scale.json loads with " + scale.Bands.Count + " ladder rows and no warning"
+                  + (warned.Count > 0 ? " - " + warned[0] : ""));
+            Check(GuildDungeonGenerator.BlockFloors == baseLadder,
+                  "a block is " + GuildDungeonGenerator.BlockFloors + " floors (four themes and a Champion) and the base ladder is balance.json's "
+                  + baseLadder + " - the client asks for a theme by ladder length, so the two must be one number");
+            Check(scale.IsUsable && scale.Bands[0].Members == 1 && scale.Bands[0].Floors == baseLadder,
+                  "the first row is a guild of one on the base ladder (" + (scale.IsUsable ? scale.Bands[0].Members + " member, " + scale.Bands[0].Floors + " floors" : "none") + ")");
+
+            bool rising = true, neverShort = true;
+            int previous = 0;
+            List<string> table = new List<string>();
+            for (int m = 1; m <= GuildRules.MemberCap; m++)
+            {
+                int ladder = GuildDungeonScale.LadderFor(content, m);
+                if (ladder < previous) rising = false;
+                if (ladder < baseLadder) neverShort = false;
+                if (ladder != previous) table.Add(m + "+ members: " + ladder + " floors");
+                previous = ladder;
+            }
+            Line("    " + string.Join("; ", table.ToArray()));
+            Check(rising, "a guild that grows never has fewer floors (1 to " + GuildRules.MemberCap + " members)");
+            Check(neverShort, "no guild has fewer floors than the base " + baseLadder + " - nothing was taken from a small guild");
+            Check(GuildDungeonScale.LadderFor(content, GuildRules.MemberCap) == GuildDungeonScale.MaxLadder(content)
+                  && GuildDungeonScale.MaxLadder(content) > baseLadder,
+                  "a guild at the " + GuildRules.MemberCap + "-member cap gets the longest ladder (" + GuildDungeonScale.MaxLadder(content)
+                  + "), and it is longer than the base - bigger guilds clear more");
+        }
+
+        /// <summary>
+        /// PINNED: floors 1 to 5 - theme, condition, every enemy and its level - are exactly the
+        /// five-floor dungeon that existed before ladders scaled, over 200 cycles. The value was
+        /// taken from the generator BEFORE the block change, so a recorded replay of any live cycle
+        /// still plays. If this moves, every guild's recorded attempts stop replaying.
+        /// </summary>
+        private static void CheckBaseBlockUnmoved(ContentDatabase content)
+        {
+            System.Text.StringBuilder sb = new System.Text.StringBuilder();
+            for (int c = 1; c <= 200; c++)
+            {
+                int seed = GuildDungeon.SeedFor("base-block-pin", c);
+                GuildDungeonTheme[] themes = GuildDungeonGenerator.ThemesFor(5, seed);
+                for (int f = 1; f <= 5; f++)
+                {
+                    StageDef s = GuildDungeonGenerator.BuildFloor(content, seed, f);
+                    FloorConditionDef cond = GuildDungeonGenerator.ConditionFor(content, seed, f);
+                    sb.Append(c).Append('/').Append(f).Append(':').Append(themes[f - 1]).Append(':').Append(cond != null ? cond.Id : "-").Append(':');
+                    foreach (EnemySpawn e in s.Enemies) sb.Append(e.EnemyId).Append('@').Append(e.Level).Append(',');
+                    sb.Append('|');
+                }
+            }
+            uint h = 2166136261u;
+            foreach (byte b in System.Text.Encoding.UTF8.GetBytes(sb.ToString())) { unchecked { h ^= b; h *= 16777619u; } }
+            Check(h == PinnedBaseBlock, "floors 1 to 5 are the five-floor dungeon from before ladders scaled, enemy for enemy, over 200 cycles ("
+                  + h + ") - no recorded replay moved. Content edits move this too; re-pin only together with a ContentVersion change");
+        }
+
+        /// <summary>Taken from the unchanged generator against the content in the tree at the
+        /// time. A content edit that moves the floors (any hashed file the floors read) moves it,
+        /// and retires replays anyway; that edit re-pins it, nothing else may.</summary>
+        private const uint PinnedBaseBlock = 3526086078u;
+
+        /// <summary>
+        /// A FLOOR DOES NOT KNOW HOW LONG ITS LADDER IS. The client asks for a floor's theme with
+        /// whatever floor count the server reported (GuildDungeonScreen, GuildFloorScreen), and builds
+        /// the floor with BuildFloor, which takes no count at all; the two must agree on every ladder
+        /// length. Plus the block shape: four different themes, then a Champion, and the power climb
+        /// starting again, which is what the not-a-hero-check measurement asked for.
+        /// </summary>
+        private static void CheckFloorIsLadderBlind(ContentDatabase content)
+        {
+            BalanceConfig cfg = content.Balance;
+            int max = GuildDungeonScale.MaxLadder(content);
+            int block = GuildDungeonGenerator.BlockFloors;
+            bool blind = true, champions = true, distinct = true, climb = true;
+            int differs = 0, compared = 0;
+            for (int c = 1; c <= 200; c++)
+            {
+                int seed = GuildDungeon.SeedFor("ladder-blind", c);
+                for (int f = 1; f <= max; f++)
+                {
+                    GuildDungeonTheme theme = GuildDungeonGenerator.ThemeOf(seed, f);
+                    for (int n = f; n <= max; n++)
+                        if (GuildDungeonGenerator.ThemesFor(n, seed)[f - 1] != theme) blind = false;
+                    if (GuildDungeonGenerator.TargetPowerForFloor(cfg, f) != GuildDungeonGenerator.TargetPowerForFloor(cfg, GuildDungeonGenerator.PositionInBlock(f)))
+                        climb = false;
+                    if (GuildDungeonGenerator.PositionInBlock(f) == block && theme != GuildDungeonTheme.Champion) champions = false;
+                    if (f > block)
+                    {
+                        compared++;
+                        if (Describe(GuildDungeonGenerator.BuildFloor(content, seed, f)) != Describe(GuildDungeonGenerator.BuildFloor(content, seed, f - block)))
+                            differs++;
+                    }
+                }
+                for (int start = 1; start + block - 1 <= max; start += block)
+                {
+                    HashSet<GuildDungeonTheme> open = new HashSet<GuildDungeonTheme>();
+                    for (int f = start; f < start + block - 1; f++) open.Add(GuildDungeonGenerator.ThemeOf(seed, f));
+                    if (open.Count != block - 1 || open.Contains(GuildDungeonTheme.Champion)) distinct = false;
+                }
+            }
+            Check(blind, "a floor's theme is the same on every ladder long enough to hold it, floors 1 to " + max + " over 200 cycles - the screens and BuildFloor cannot disagree");
+            Check(champions && distinct, "every block of " + block + " is four different themes and then a Champion");
+            Check(climb, "the power climb starts again each block: floor " + (block + 1) + " is floor 1's target, floor " + (2 * block) + " floor " + block + "'s");
+            float share = compared == 0 ? 0f : (float)differs / compared;
+            Check(compared > 0 && share >= 0.9f, "and a deep floor is a new fight, not a copy: " + Pct(share) + " of floors past the first block differ from the floor one block up");
+        }
+
+        /// <summary>
+        /// THE BOUNDS, on GuildDungeonScale's own functions. Three a floor; fifteen a cycle per
+        /// account whatever the ladder, so a member of a big guild has more floors to spend the
+        /// same attempts on, never more attempts; the server's count wins over the rows when a member
+        /// changed guild mid-cycle; and nothing past the ladder or before the guild opens it.
+        /// </summary>
+        private static void CheckAttemptBounds(ContentDatabase content)
+        {
+            Line("");
+            Line("  ATTEMPTS - bounded the same at every guild size");
+            BalanceConfig cfg = content.Balance;
+            int perFloor = cfg.GuildDungeonAttemptsPerFloor;
+            int cap = GuildDungeonScale.CycleAttemptCap(cfg);
+            int baseLadder = GuildDungeonScale.BaseLadder(content);
+            int max = GuildDungeonScale.MaxLadder(content);
+            const string me = "member-a", mate = "member-b";
+            const int cycle = 50;
+
+            Check(cap == perFloor * baseLadder, "the cycle cap is " + cap + ": three a floor times the BASE ladder, derived from balance.json, not typed");
+            Check(cap <= perFloor * GuildDungeonScale.LadderFor(content, 1) && cap < perFloor * max,
+                  "so a guild of one loses nothing it had (" + perFloor * GuildDungeonScale.LadderFor(content, 1) + " on its ladder) and a guild of "
+                  + GuildRules.MemberCap + " gains floors, not attempts (" + cap + " of the " + perFloor * max + " its ladder would allow at three a floor)");
+
+            List<GuildDungeonAttempt> rows = new List<GuildDungeonAttempt>();
+            string why;
+            Check(GuildDungeonScale.CanAttempt(content, rows, me, cycle, 1, max, -1, out why), "floor 1 is open to anybody at the start of a cycle");
+            Check(!GuildDungeonScale.CanAttempt(content, rows, me, cycle, 2, max, -1, out why) && why.Contains("opens when"),
+                  "floor 2 is not, until somebody clears floor 1 (\"" + why + "\")");
+            for (int i = 1; i <= perFloor; i++) rows.Add(Row(me, cycle, 1, i, i == perFloor));
+            Check(!GuildDungeonScale.CanAttempt(content, rows, me, cycle, 1, max, -1, out why) && why.Contains("floor 1"),
+                  "a fourth attempt at floor 1 is refused (\"" + why + "\")");
+            Check(GuildDungeonScale.CanAttempt(content, rows, me, cycle, 2, max, -1, out why) && GuildDungeonScale.CanAttempt(content, rows, mate, cycle, 2, max, -1, out why),
+                  "and floor 2 is now open for both members - the guild pushes together");
+            Check(GuildDungeonScale.AttemptsLeft(cfg, rows, me, cycle, 1, -1) == 0 && GuildDungeonScale.AttemptsLeft(cfg, rows, me, cycle, 2, -1) == perFloor
+                  && GuildDungeonScale.AttemptsLeft(cfg, rows, mate, cycle, 1, -1) == perFloor,
+                  "attempts left: none on floor 1, all three on floor 2, and the guildmate's own three untouched");
+
+            // Spend the whole cycle: three on each base floor, every one a clear so the next opens.
+            rows.Clear();
+            for (int f = 1; f <= baseLadder; f++)
+                for (int i = 1; i <= perFloor; i++) rows.Add(Row(me, cycle, f, i, true));
+            Check(GuildDungeonScale.CycleAttemptsUsed(rows, me, cycle) == cap
+                  && !GuildDungeonScale.CanAttempt(content, rows, me, cycle, baseLadder + 1, max, -1, out why) && why.Contains("this cycle ("),
+                  "after " + cap + " attempts a member of a " + max + "-floor guild cannot start floor " + (baseLadder + 1) + ", open as it is (\"" + why + "\")");
+            Check(GuildDungeonScale.CanAttempt(content, rows, mate, cycle, baseLadder + 1, max, -1, out why),
+                  "while a guildmate with attempts left can - the deep floors are reached by the guild, not by one member's week");
+            Check(GuildDungeonScale.AttemptsLeft(cfg, rows, me, cycle, baseLadder + 1, -1) == 0,
+                  "and attempts left reads the cycle's remainder, not only the floor's");
+
+            Check(!GuildDungeonScale.CanAttempt(content, rows, mate, cycle, baseLadder + 1, baseLadder, -1, out why) && why.Contains(baseLadder + " floors"),
+                  "a floor past this guild's ladder is refused even when the floor below is cleared (\"" + why + "\")");
+            Check(!GuildDungeonScale.CanAttempt(content, rows, mate, cycle, max + 1, max, -1, out why) && !GuildDungeonScale.CanAttempt(content, rows, mate, cycle, 0, max, -1, out why),
+                  "floor 0 and floor " + (max + 1) + " exist for nobody");
+
+            List<GuildDungeonAttempt> fresh = new List<GuildDungeonAttempt>();
+            Check(!GuildDungeonScale.CanAttempt(content, fresh, me, cycle, 1, max, cap, out why) && GuildDungeonScale.AttemptsLeft(cfg, fresh, me, cycle, 1, cap) == 0,
+                  "THE SERVER'S COUNT WINS: a member who spent the cycle in another guild has no rows here and still no attempts (\"" + why + "\")");
+            Check(GuildDungeonScale.AttemptsLeft(cfg, fresh, me, cycle, 1, cap - 1) == 1 && GuildDungeonScale.AttemptsLeft(cfg, fresh, me, cycle + 1, 1, -1) == perFloor,
+                  "one left at " + (cap - 1) + " of " + cap + ", and a new cycle is a new budget");
+        }
+
+        private static GuildDungeonAttempt Row(string user, int cycle, int floor, int attempt, bool victory)
+        {
+            GuildDungeonAttempt a = new GuildDungeonAttempt();
+            a.UserId = user; a.Cycle = cycle; a.Floor = floor; a.Attempt = attempt; a.Victory = victory;
+            a.Fallen = victory ? 0 : 1; a.Id = ++_madeId;
+            return a;
+        }
+
+        /// <summary>Dungeons per block CheckDeepFloorsMatchBase measures: 100, so 500 floors a block,
+        /// about 40 seconds of fights. Enough to put each position's mean within a couple of points
+        /// of the 600-dungeon reading.</summary>
+        private const int BlockCompareGuilds = 100;
+
+        /// <summary>How far a deep floor's mean clear share for 3-star-or-fewer rosters may sit under
+        /// the base floor at the same position in its block. Chosen: a tenth of the rosters.</summary>
+        private const float BlockShareTolerance = 0.10f;
+
+        /// <summary>
+        /// A DEEP FLOOR IS NO HARDER THAN THE BASE FLOOR IT MIRRORS, measured over 100 dungeons a block.
+        ///
+        /// Why the group guardrail is not asserted per deep floor the way it is per base floor: the
+        /// base block itself does not hold it everywhere. Measured when ladders were added, over
+        /// three seed families of 600 dungeons each, the base floors broke "25% of 3-star-or-fewer
+        /// rosters clear" on 155 of 9,000 floors (1.7%), almost all Champion floors, and the deep
+        /// floors on 181 of 9,000 (2.0%); one family read the deep block lower than the base. The
+        /// six fixed dungeons of CheckNotAHeroCheck never happen to draw a base breach. Asserting
+        /// the guardrail per floor across ten floors only re-samples that existing margin and would
+        /// block the ladder on a property of floors 1 to 5. The margin is reported here every run
+        /// as a FINDING for the owner, because closing it moves a hashed balance number and retires
+        /// every replay.
+        ///
+        /// Breach COUNTS are printed, not compared. Every floor is fought by the same twelve
+        /// 3-star-or-fewer sample lines, so breaches are correlated across floors and a count
+        /// swings far more than a binomial would: one family read 44 base against 73 deep at 3,000
+        /// floors each, another 59 against 49. A count comparison would go red on noise.
+        ///
+        /// What IS asserted: no deep floor breaks the all-rosters guardrail; and at every position
+        /// in a block, the deep floors' MEAN clear share for 3-star-or-fewer rosters is within
+        /// BlockShareTolerance of the base floor's - the same difficulty band, read on the
+        /// statistic that does not swing.
+        /// </summary>
+        private static void CheckDeepFloorsMatchBase(ContentDatabase content)
+        {
+            int block = GuildDungeonGenerator.BlockFloors;
+            int max = GuildDungeonScale.MaxLadder(content);
+            int blocks = (max + block - 1) / block;
+            if (blocks < 2) { Check(true, "the longest ladder is one block, so there is no deep floor to compare"); return; }
+            Line("");
+            Line("  DEEP FLOORS AGAINST THE BASE - " + BlockCompareGuilds + " dungeons, every floor of the longest ladder");
+            List<Sample> samples = SampleRosters(content, 0x6D1C);
+            int[] groupBreaks = new int[blocks], allBreaks = new int[blocks], floorsIn = new int[blocks];
+            double[,] lowShare = new double[blocks, block];
+            int[,] lowCount = new int[blocks, block];
+            for (int g = 0; g < BlockCompareGuilds; g++)
+            {
+                int seed = GuildDungeon.SeedFor("block-compare-" + g, 1);
+                for (int f = 1; f <= max; f++)
+                {
+                    int b = GuildDungeonGenerator.BlockOf(f), p = GuildDungeonGenerator.PositionInBlock(f) - 1;
+                    FloorConditionDef condition = GuildDungeon.ConditionOf(content, seed, f);
+                    List<Sample> lines = ConformAll(content, samples, condition, 0x6D1C);
+                    Dictionary<string, int[]> byGroup = new Dictionary<string, int[]>();
+                    int clears = 0;
+                    for (int s = 0; s < lines.Count; s++)
+                    {
+                        int[] t;
+                        if (!byGroup.TryGetValue(lines[s].Group, out t)) byGroup[lines[s].Group] = t = new int[2];
+                        t[1]++;
+                        if (GuildDungeon.Fight(content, lines[s].Team, seed, f).Victory) { t[0]++; clears++; }
+                    }
+                    float worst = 1f;
+                    foreach (KeyValuePair<string, int[]> kv in byGroup) worst = Math.Min(worst, (float)kv.Value[0] / kv.Value[1]);
+                    int[] low;
+                    if (byGroup.TryGetValue("3 stars or fewer", out low)) { lowShare[b, p] += (double)low[0] / low[1]; lowCount[b, p]++; }
+                    floorsIn[b]++;
+                    if (worst < MinGroupClearShare) groupBreaks[b]++;
+                    if ((float)clears / lines.Count < MinClearShare) allBreaks[b]++;
+                }
+            }
+
+            int n = floorsIn[0];
+            Line("    ! FINDING (pre-existing, base floors 1 to " + block + "): the 3-stars-or-fewer guardrail breaks on " + groupBreaks[0] + " of " + n
+                 + " base floors over " + BlockCompareGuilds + " dungeons. Closing it needs a hashed balance change (owner decision, DESIGN-BUILD-ORDER.md).");
+            bool allOk = true, shareOk = true;
+            List<string> detail = new List<string>();
+            for (int b = 0; b < blocks; b++)
+            {
+                List<string> pos = new List<string>();
+                for (int p = 0; p < block; p++)
+                {
+                    if (lowCount[b, p] == 0) continue;
+                    double mean = lowShare[b, p] / lowCount[b, p];
+                    double baseMean = lowShare[0, p] / Math.Max(1, lowCount[0, p]);
+                    pos.Add(Pct((float)mean));
+                    if (b > 0 && mean < baseMean - BlockShareTolerance) { shareOk = false; detail.Add("block " + b + " position " + (p + 1) + " " + Pct((float)mean) + " against " + Pct((float)baseMean)); }
+                }
+                Line("    block " + b + " (floors " + (b * block + 1) + " to " + Math.Min(max, (b + 1) * block) + "): group guardrail broken on " + groupBreaks[b]
+                     + " of " + floorsIn[b] + " (printed, not compared), all-rosters on " + allBreaks[b] + "; 3-stars-or-fewer clear by position " + string.Join(" ", pos.ToArray()));
+                if (b > 0 && allBreaks[b] > 0) allOk = false;
+            }
+            Check(allOk, "no deep floor is cleared by fewer than " + Pct(MinClearShare) + " of all sample rosters");
+            Check(shareOk, "at every position in a block, deep floors are within " + Pct(BlockShareTolerance) + " of the base floor for 3-stars-or-fewer rosters - more floors, not harder ones"
+                  + (detail.Count > 0 ? " - " + string.Join("; ", detail.ToArray()) : ""));
+        }
+
+        /// <summary>Guilds of each size simulated by CheckSizeReach.</summary>
+        private const int SizeGuilds = 8;
+
+        /// <summary>The share of simulated guilds of every size that must reach the end of their
+        /// own ladder inside their attempt budget. Chosen before the first reading, like the
+        /// not-a-hero-check shares: a ladder most guilds of its size cannot finish is content
+        /// scaled to a guild that does not exist.</summary>
+        private const float MinLadderFinishShare = 0.75f;
+
+        private static readonly int[] SizesSimulated = { 1, 2, 5, 9, 10, 15, 20, 25, 30 };
+
+        /// <summary>
+        /// THE COLLECTIVE PUSH, FOUGHT. Guilds of 1 to 30, each member holding three lines drawn
+        /// from the not-a-hero-check spread (random, missing a role family, 3 stars or fewer), made
+        /// legal under each floor's condition the way a player would. Floor by floor, members try
+        /// their lines in turn through GuildDungeonScale.CanAttempt, so the per-floor and cycle caps
+        /// are the real functions; a floor that nobody can clear ends the guild's week. Every fight
+        /// is GuildDungeon.Fight, so CombatSimulation.Run.
+        ///
+        /// Asserted: every size finishes its own ladder in at least MinLadderFinishShare of its
+        /// guilds (the content is scaled to a guild that can clear it); bigger guilds clear more
+        /// floors; and no simulated member ever passes a cap.
+        /// </summary>
+        private static void CheckSizeReach(ContentDatabase content)
+        {
+            Line("");
+            Line("  SIZE, FOUGHT - " + SizeGuilds + " guilds of each size push their own ladder with lines from the roster spread");
+            BalanceConfig cfg = content.Balance;
+            int cap = GuildDungeonScale.CycleAttemptCap(cfg);
+            List<Sample> spread = SampleRosters(content, 0x512E);
+            Dictionary<string, bool> fought = new Dictionary<string, bool>();
+            const int cycle = 9;
+
+            Line("    " + "size".PadRight(6) + "ladder".PadRight(8) + "finished".PadRight(10) + "floors cleared, mean".PadRight(22)
+                 + "attempts per member, mean / max");
+            bool everyFinishes = true, capsHeld = true;
+            List<string> short_ = new List<string>();
+            float smallestMean = -1f, largestMean = -1f;
+            for (int si = 0; si < SizesSimulated.Length; si++)
+            {
+                int size = SizesSimulated[si];
+                int ladder = GuildDungeonScale.LadderFor(content, size);
+                int finished = 0, clearedSum = 0, attemptSum = 0, attemptMax = 0, members = 0;
+                for (int g = 0; g < SizeGuilds; g++)
+                {
+                    string guild = "size-" + size + "-" + g;
+                    int seed = GuildDungeon.SeedFor(guild, cycle);
+                    DeterministicRng rng = new DeterministicRng(GuildDungeonGenerator.Mix(seed, size));
+                    List<List<Sample>> lines = new List<List<Sample>>();
+                    for (int m = 0; m < size; m++)
+                    {
+                        List<Sample> own = new List<Sample>();
+                        for (int k = 0; k < cfg.GuildDungeonAttemptsPerFloor; k++) own.Add(spread[rng.Range(0, spread.Count)]);
+                        lines.Add(own);
+                    }
+
+                    List<GuildDungeonAttempt> rows = new List<GuildDungeonAttempt>();
+                    int cleared = 0;
+                    for (int f = 1; f <= ladder; f++)
+                    {
+                        FloorConditionDef condition = GuildDungeon.ConditionOf(content, seed, f);
+                        bool won = false;
+                        for (int m = 0; m < size && !won; m++)
+                        {
+                            string user = guild + "-m" + m;
+                            List<Sample> legal = ConformAll(content, lines[m], condition, seed ^ f ^ (m << 8));
+                            for (int k = 0; k < legal.Count && !won; k++)
+                            {
+                                string why;
+                                if (!GuildDungeonScale.CanAttempt(content, rows, user, cycle, f, ladder, -1, out why)) break;
+                                string key = seed + "/" + f + "/" + Describe(legal[k].Team);
+                                bool victory;
+                                if (!fought.TryGetValue(key, out victory))
+                                    fought[key] = victory = GuildDungeon.Fight(content, legal[k].Team, seed, f).Victory;
+                                rows.Add(Row(user, cycle, f, GuildDungeon.AttemptsUsed(rows, user, cycle, f) + 1, victory));
+                                won = victory;
+                            }
+                        }
+                        if (!won) break;
+                        cleared = f;
+                    }
+                    if (cleared == ladder) finished++;
+                    clearedSum += cleared;
+                    for (int m = 0; m < size; m++)
+                    {
+                        string user = guild + "-m" + m;
+                        int used = GuildDungeonScale.CycleAttemptsUsed(rows, user, cycle);
+                        for (int f = 1; f <= ladder; f++) if (GuildDungeon.AttemptsUsed(rows, user, cycle, f) > cfg.GuildDungeonAttemptsPerFloor) capsHeld = false;
+                        if (used > cap) capsHeld = false;
+                        attemptSum += used; attemptMax = Math.Max(attemptMax, used); members++;
+                    }
+                }
+                float finishShare = (float)finished / SizeGuilds;
+                float meanCleared = (float)clearedSum / SizeGuilds;
+                if (si == 0) smallestMean = meanCleared;
+                if (si == SizesSimulated.Length - 1) largestMean = meanCleared;
+                if (finishShare < MinLadderFinishShare) { everyFinishes = false; short_.Add(size + " members: " + Pct(finishShare) + " of guilds finish " + ladder); }
+                Line("    " + size.ToString().PadRight(6) + ladder.ToString().PadRight(8) + (finished + "/" + SizeGuilds).PadRight(10)
+                     + meanCleared.ToString("0.0", CultureInfo.InvariantCulture).PadRight(22)
+                     + ((float)attemptSum / members).ToString("0.0", CultureInfo.InvariantCulture) + " / " + attemptMax);
+            }
+            Check(everyFinishes, "every guild size finishes its own ladder in at least " + Pct(MinLadderFinishShare) + " of its guilds - the content fits the guild"
+                  + (short_.Count > 0 ? " - SHORT: " + string.Join("; ", short_.ToArray()) : ""));
+            Check(largestMean > smallestMean, "bigger guilds clear more floors (" + largestMean.ToString("0.0", CultureInfo.InvariantCulture) + " at "
+                  + SizesSimulated[SizesSimulated.Length - 1] + " members against " + smallestMean.ToString("0.0", CultureInfo.InvariantCulture) + " at " + SizesSimulated[0] + ")");
+            Check(capsHeld, "and no simulated member passed three on a floor or " + cap + " in the cycle");
+        }
+
+        /// <summary>
+        /// THE REWARD IS A PLACEHOLDER AND SAYS SO. While GuildDungeonRewards.IsPlaceholder is up,
+        /// every floor on every ladder is worth nothing, marked as undecided. Whatever is decided,
+        /// it must stay a pure function with no seed (nothing random) and nothing a player can buy
+        /// may name the dungeon (nothing bought), and the Waymark pay must stay blind to ladders.
+        /// </summary>
+        private static void CheckRewardPlaceholder(ContentDatabase content)
+        {
+            Line("");
+            Line("  REWARDS - a placeholder until the economy decision lands");
+            int max = GuildDungeonScale.MaxLadder(content);
+            bool empty = true, pure = true;
+            for (int ladder = GuildDungeonScale.BaseLadder(content); ladder <= max; ladder++)
+                for (int f = 1; f <= ladder; f++)
+                {
+                    GuildDungeonFloorReward a = GuildDungeonRewards.ForFirstClear(content.Balance, f, ladder);
+                    GuildDungeonFloorReward b = GuildDungeonRewards.ForFirstClear(content.Balance, f, ladder);
+                    if (!a.Placeholder || a.Amount != 0 || a.Currency.Length != 0 || !a.Note.StartsWith("PLACEHOLDER", StringComparison.Ordinal)) empty = false;
+                    if (a.Placeholder != b.Placeholder || a.Amount != b.Amount || a.Currency != b.Currency || a.Note != b.Note) pure = false;
+                }
+            Check(GuildDungeonRewards.IsPlaceholder, "GuildDungeonRewards is still the placeholder - the economy decision for deep floors is open (DESIGN-BUILD-ORDER.md)");
+            Check(!GuildDungeonRewards.IsPlaceholder || empty,
+                  "and while it is, every floor of every ladder pays nothing and is marked PLACEHOLDER - no number ships before the decision");
+            Check(pure, "a floor's reward is the same every time it is asked for");
+
+            System.Reflection.MethodInfo method = typeof(GuildDungeonRewards).GetMethod("ForFirstClear");
+            List<string> forbidden = new List<string>();
+            foreach (System.Reflection.ParameterInfo p in method.GetParameters())
+            {
+                string n = p.Name.ToLowerInvariant();
+                if (n.Contains("seed") || n.Contains("rng") || n.Contains("roll") || n.Contains("member") || p.ParameterType == typeof(DeterministicRng))
+                    forbidden.Add(p.Name);
+            }
+            Check(forbidden.Count == 0, "NOTHING RANDOM, NOTHING BY SIZE: the reward takes no seed, no roll and no member count, only the floor and the ladder"
+                  + (forbidden.Count > 0 ? " - takes: " + string.Join(", ", forbidden.ToArray()) : ""));
+
+            Type[] bought = { typeof(GrantKind), typeof(StoreOfferKind), typeof(SinkKind), typeof(PassRewardKind), typeof(EventRewardKind) };
+            List<string> named = new List<string>();
+            foreach (Type t in bought)
+                foreach (string v in Enum.GetNames(t))
+                    if (Regex.IsMatch(v, "Guild|Dungeon|Waymark|Attempt", RegexOptions.IgnoreCase)) named.Add(t.Name + "." + v);
+            Check(named.Count == 0, "NOTHING BOUGHT: no store, shop, pass or event grant kind names the guild dungeon, its attempts or Waymarks, so the caps cannot be bought past"
+                  + (named.Count > 0 ? " - " + string.Join(", ", named.ToArray()) : ""));
+            Check(content.GuildPath.BoardFloor == 1,
+                  "the Waymark pay is blind to ladders: only floor " + content.GuildPath.BoardFloor + "'s boards pay, so a longer ladder is more floors to clear and no more pay per member");
+        }
+
+        /// <summary>
+        /// The size rules live twice, here and in 0022, and neither can read the other at runtime.
+        /// The harness reads both and refuses a disagreement: the ladder table band for band, the
+        /// longest ladder, the cycle cap's derivation, and the shape of the rules the server holds.
+        /// </summary>
+        private static void CheckServerAgreesOnSize(ContentDatabase content, string contentDir)
+        {
+            string path = FindMigration(contentDir, "0022_guild_dungeon_size.sql");
+            if (path == null)
+            {
+                Check(false, "Server/supabase/migrations/0022_guild_dungeon_size.sql is findable from the content folder");
+                return;
+            }
+            string sql = File.ReadAllText(path);
+            int max = SqlConstant(sql, "guild_dungeon_floor_max");
+            Check(max == GuildDungeonScale.MaxLadder(content),
+                  "the server's longest ladder (" + max + ", 0022) is guild-dungeon-scale.json's (" + GuildDungeonScale.MaxLadder(content) + ")");
+
+            Match body = Regex.Match(sql, @"function\s+public\.guild_dungeon_floors_for\(p_members integer\)[\s\S]*?\$\$([\s\S]*?)\$\$", RegexOptions.IgnoreCase);
+            List<string> server = new List<string>(), client = new List<string>();
+            int fallback = -1;
+            if (body.Success)
+            {
+                foreach (Match w in Regex.Matches(body.Groups[1].Value, @"when\s+p_members\s*>=\s*(\d+)\s+then\s+(\d+)", RegexOptions.IgnoreCase))
+                    server.Add(w.Groups[1].Value + ":" + w.Groups[2].Value);
+                Match e = Regex.Match(body.Groups[1].Value, @"else\s+(\d+)", RegexOptions.IgnoreCase);
+                if (e.Success) fallback = int.Parse(e.Groups[1].Value, CultureInfo.InvariantCulture);
+            }
+            server.Sort(StringComparer.Ordinal);
+            GuildDungeonScaleConfig scale = content.GuildDungeonScale;
+            for (int i = 0; i < scale.Bands.Count; i++)
+                if (scale.Bands[i].Members > 1) client.Add(scale.Bands[i].Members + ":" + scale.Bands[i].Floors);
+            client.Sort(StringComparer.Ordinal);
+            Check(body.Success && string.Join(",", server.ToArray()) == string.Join(",", client.ToArray())
+                  && fallback == GuildDungeonScale.LadderFor(content, 1),
+                  "guild_dungeon_floors_for holds the same bands as guild-dungeon-scale.json (server " + string.Join(",", server.ToArray())
+                  + " else " + fallback + "; client " + string.Join(",", client.ToArray()) + " else " + GuildDungeonScale.LadderFor(content, 1) + ")");
+
+            Check(Regex.IsMatch(sql, @"function\s+public\.guild_dungeon_cycle_attempt_cap\(\)[\s\S]*?\$\$\s*select\s+public\.guild_dungeon_attempt_cap\(\)\s*\*\s*public\.guild_dungeon_floor_count\(\)\s*;\s*\$\$", RegexOptions.IgnoreCase),
+                  "the server's cycle cap is derived the same way: guild_dungeon_attempt_cap() * guild_dungeon_floor_count(), the per-floor cap times the base ladder");
+
+            string stripped = Regex.Replace(sql, @"--[^\n]*", "");
+            Check(Regex.IsMatch(stripped, @"alter table public\.guild_dungeon_cycles enable row level security", RegexOptions.IgnoreCase)
+                  && Regex.IsMatch(stripped, @"revoke all on public\.guild_dungeon_cycles from anon, authenticated", RegexOptions.IgnoreCase)
+                  && Regex.IsMatch(stripped, @"using \(guild_id = public\.my_guild\(\)\)", RegexOptions.IgnoreCase)
+                  && !Regex.IsMatch(stripped, @"grant [^;]*\b(insert|update|delete|all)\b[^;]* on public\.guild_dungeon_cycles", RegexOptions.IgnoreCase),
+                  "guild_dungeon_cycles has RLS on, revokes both client roles, is read by members of its own guild only, and grants no client write");
+            Check(Regex.IsMatch(stripped, @"check \(floor between 1 and public\.guild_dungeon_floor_max\(\)\)", RegexOptions.IgnoreCase),
+                  "the attempts table's floor constraint is widened to the longest ladder, not removed");
+            Match submit = Regex.Match(stripped, @"function public\.guild_dungeon_submit\([\s\S]*?\$\$([\s\S]*?)\$\$", RegexOptions.IgnoreCase);
+            Check(submit.Success && submit.Groups[1].Value.Contains("public.guild_dungeon_cycle_floors(mine, now_cycle)")
+                  && submit.Groups[1].Value.Contains("public.guild_dungeon_cycle_attempt_cap()")
+                  && submit.Groups[1].Value.Contains("public.guild_dungeon_seed_for(mine, now_cycle)")
+                  && submit.Groups[1].Value.Contains("public.guild_dungeon_attempt_cap()"),
+                  "guild_dungeon_submit holds the ladder, the cycle cap, the per-floor cap and 0014's derived seed");
+        }
+
         // ---------------------------------------------------------------- output
 
         private static string Pct(float v) { return (v * 100f).ToString("0", CultureInfo.InvariantCulture) + "%"; }

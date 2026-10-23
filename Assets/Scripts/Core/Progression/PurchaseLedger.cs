@@ -240,6 +240,10 @@ namespace Emberfall.Core.Progression
             receipt.OfferId = offer.Id;
             receipt.GrantedUnix = nowUnix;
             receipt.Restored = restored;
+            receipt.Gold = g.Gold;
+            receipt.Slag = g.Slag;
+            receipt.Dust = g.Dust;
+            receipt.HeroId = g.HeroId ?? "";
             if (store.Receipts.Count >= StoreState.ReceiptsMax) EvictOldestReceipt(store, _rules);
             store.Receipts.Add(receipt);
             _rules.RecordPurchase(session, offer.Id, choiceHeroId, nowUnix);

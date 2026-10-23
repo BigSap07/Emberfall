@@ -22,12 +22,10 @@ FREE track. The paid track exists in data and as a locked row, and has no purcha
 - **The selectors reset every season.** A player who finishes the track gets a free 4-star and a free 5-star every
   28 days, as plain earned copies. That is the price of "a 5-star selector at tier 30" in a repeating season, and
   it is the number to watch in the balance pass.
-- **It needs the daily loop, and the loop is off by default.** The points are the loop's claims, so the pass earns
-  nothing while `DailyLoopSwitch` is off, and it is off unless `EMBERFALL_DAILY_LOOP_ON` is defined. **The pass is
-  on but inert until the build defines `EMBERFALL_DAILY_LOOP_ON`.** Its door is a button in the header of
-  `OrdersScreen`, which exists only with the loop, so without the define there is no way to reach it either. This
-  is the lead's default of 2026-10-19: the loop keeps its owner default (off) and turning it on is a build-define
-  decision, not a change to this feature.
+- **It needs the daily loop, which is on by default since the owner's decision of 2026-10-23.** The points are the
+  loop's claims, so the pass earns nothing while `DailyLoopSwitch` is off (`EMBERFALL_DAILY_LOOP_OFF`). Its door is a
+  button in the header of `OrdersScreen`, which exists only with the loop. Until 2026-10-23 the loop was off by
+  default (the lead's default of 2026-10-19) and the pass was on but inert.
 
 ## The free track
 

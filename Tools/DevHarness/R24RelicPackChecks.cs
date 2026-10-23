@@ -103,8 +103,8 @@ namespace Emberfall.DevHarness
                   "RELIC DUST SATCHEL: EUR 4.99, 1 a week, 5,000 Relic Dust (one Legendary relic's price)");
             Check(chest.PriceEur == 19.99 && chest.Limit == 2 && chest.Reset == StoreReset.Month && chest.Dust == 5 * sat.Dust,
                   "RELIC DUST CHEST: EUR 19.99, 2 a month (the whale read cut it from 1 a week), five times the Satchel (" + chest.Dust + " Relic Dust)");
-            Check(choice.PriceEur == 29.99 && choice.Limit == 1 && choice.Reset == StoreReset.Month && choice.Kind == StoreOfferKind.RelicChoice && choice.PickCapDust == 20000,
-                  "RELIC OF CHOICE: EUR 29.99, 1 a month, the buyer names the relic, worth at most 20,000 Relic Dust at the shop");
+            Check(choice.PriceEur == 19.99 && choice.Limit == 1 && choice.Reset == StoreReset.Month && choice.Kind == StoreOfferKind.RelicChoice && choice.PickCapDust == 20000,
+                  "RELIC OF CHOICE: EUR 19.99 (the owner's price, never more per Dust than the Satchel), 1 a month, the buyer names the relic, worth at most 20,000 Relic Dust at the shop");
             Check(sat.HasRequires && sat.Requires == Feature.Relics && chest.Requires == Feature.Relics && choice.Requires == Feature.Relics
                   && sat.Group == "relicPacks" && chest.Group == "relicPacks" && choice.Group == "relicPacks",
                   "all three open with the Relic Shop (requires Relics) and sit behind the relic packs switch");

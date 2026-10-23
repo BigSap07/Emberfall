@@ -119,6 +119,17 @@ the same. Bigger guilds clear more stuff; nobody is forced to chase the biggest 
 
 The honest cost: a small guild sees less variety. There is no way around that one.
 
+**As built (guild dungeon size and attempts, `DESIGN-BUILD-ORDER.md`).** The content that scales
+is the ladder's length, not any floor's difficulty: five floors under ten members, one more per
+five members, ten at the cap, fixed for the cycle at the member count it opened with. Floor N is
+the same fight on every ladder, and floors 1 to 5 are the five that existed before. Two readings
+of this section were measured and refused. Deeper floors that keep climbing in power turned the
+deep floors into a star check for 3-star-or-fewer rosters, so each block of five climbs from floor
+one's power again. Fewer floors for a small guild would have taken floors away from guilds that
+have them today, so the smallest ladder is the base five. "Bounded" is now per account as well as
+per floor: fifteen attempts a cycle at every size, so a bigger guild's member gets more floors to
+choose from, never more attempts.
+
 ## The five systems, sequenced
 
 1. **Guild dungeon.** The shared fight above, multi-floor so the guild collectively pushes and

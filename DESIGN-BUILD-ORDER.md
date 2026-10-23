@@ -34,7 +34,11 @@ about reasoning.
 Two runs decide whether the tree is healthy, and they measure different things.
 
 - **`Tools/build-check.ps1`: all checks pass, measured from a clean run of the tree after the R4
-  economy proposal was merged.** It lints the docs,
+  economy proposal was merged.** Re-measured 2026-10-23 by the integration that merged the launch
+  prep, the security review, guild dungeon size, leaderboards and notifications and the content pass,
+  on Linux under Mono with PowerShell 7 (see **Tooling**), the full check with the 60-walk guard:
+  **3,707 checks, 0 failures, exit 0** on `main` before it, and **3,778 checks, 0 failures, exit 0**
+  after it, the owner's decisions of 2026-10-23 included. It lints the docs,
   compiles the core and the Unity-facing code against the shim in `Tools/UnityShim`, checks that
   nothing of the Dev Arena reaches a release build, checks that editor automation cannot reach the
   real cloud (the offline-switch stage, under **Tooling**), and runs `Tools/DevHarness`. Until the
@@ -101,8 +105,8 @@ Two runs decide whether the tree is healthy, and they measure different things.
   **Any failure now is a regression.** Diagnose it; do not add it to a list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
-- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 63 tracked markdown files and reports 123
-  baselined violations and **0 new**. The baseline is the known debt in
+- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 80 tracked markdown files and reports 124
+  baselined violations and **0 new** (measured 2026-10-22). The baseline is the known debt in
   `Tools/doc-lint-baseline.txt`; the zero is the number that has to stay zero.
 - **`Tools/HeroValidator/validate_heroes.py Assets/Resources/Content/heroes.json`: 0 failures.**
   It was the scoreboard for the authoring work and the authoring work is finished. It read 86
@@ -257,6 +261,8 @@ relics, events, armor and floor conditions), so an edit to any of them retires e
 dungeon replay. **Four are not**, because no fight reads them and each loads after `Load`:
 `guild-path.json` (`LoadGuildPath`), `guild-tech.json`, `onboarding.json` (`LoadOnboarding`, read
 through `ContentService`) and `vfx.json` (`VfxConfig`, which `ContentDatabase` never reads).
+`guild-dungeon-scale.json` (`LoadGuildDungeonScale`) is not hashed either, for the same reason: it
+says how many floors a guild has, never what a floor is.
 
 - `heroes.json`: 94 heroes, **all 94 authored**. 8 one-star, 12 two-star, 18 three-star,
   26 four-star, 30 five-star.
@@ -311,9 +317,17 @@ time: 1 star is basicAttack only; 2 adds passive1; 3 adds activeSkill; 4 require
 passive1 with passive2 optional; 5 is the full kit including all three talents.
 
 **Every ability carries player-facing text with no number in it**, written to
-`Docs/ABILITY-TEXT-STYLE.md`: all 427 basics, actives, passives and talents on the 94 heroes, with
-29 exceptions, all of them drafting notes whose sentence and kit still disagree, each a yes or no
-question in `Docs/PINOY-LIST.md` section 2f. Nothing is pinned as unwritten: Nysera's False Target,
+`Docs/ABILITY-TEXT-STYLE.md`: all 428 basics, actives, passives and talents on the 94 heroes, **with
+no exceptions since the content pass of 2026-10-22**. The 28 that were still drafting notes (the
+sentence Pinoy wrote and the kit that ships disagree) now say what their effects do, each sentence
+checked against the effect data, and `AbilityTextPinnedDraftingNotes` is empty; whether any of those
+kits should change to Pinoy's sentence instead is still his call, `Docs/PINOY-LIST.md` section 2f,
+and the card text follows the kit if one does. The same pass audited every other description against
+its effects (each status an ability applies is named, in the battle's word or the hero's own, and
+every area effect says so) and found nothing to correct. Only descriptions changed in `heroes.json`,
+so no fight, fingerprint, sweep, band or walk moved (a full `build-check.ps1` differs from the one
+before only in those pinned counts and in `ContentVersion`, which hashes the file's text and so
+retired recorded guild dungeon replays once). Nothing is pinned as unwritten: Nysera's False Target,
 the last, has text since defect pass 3 repaired it to strike the enemy her Link turns a blow onto
 rather than Nysera herself. `CheckAbilityTextIsPlayerFacing` enforces
 it: a description that is empty, holds a digit or a percent sign, or reads as a drafting note fails,
@@ -326,11 +340,10 @@ pauses the fight while it is up. Per ability it shows the sentence (`AbilityDef.
 `PassiveDef.Description`, read through `AbilityTextConfig.Prose`), then the facts `AbilityFacts` builds
 (Energy cost, when a passive fires, how often, how many rounds a status or Ward lasts, how big a
 status is), then one row per damage, healing or Ward figure from `AbilityMath`. It holds no game
-logic. The 28 abilities whose authored description is still a drafting note read their sentence from
-`ability-text.json` instead (`AbilityTextConfig`, not hashed into `ContentVersion`): proposed wording
-from `Docs/DECISIONS-OPEN.md`, which leaves the file in the same commit as the owner's answer to the
-matching question in `Docs/PINOY-LIST.md` section 2f. A description that already reads as player text
-never consults the file. `CheckAbilityCardTextIsComplete` proves every ability a hero owns has
+logic. An ability whose authored description is a drafting note would read its sentence from
+`ability-text.json` instead (`AbilityTextConfig`, not hashed into `ContentVersion`); **the file is empty
+since the content pass of 2026-10-22**, which moved all 28 of its lines, checked against each kit, into
+`heroes.json`. A description that already reads as player text never consults the file. `CheckAbilityCardTextIsComplete` proves every ability a hero owns has
 non-empty text, and `CheckAbilityFactsMatchTheSimulation` (beside `CheckAbilityNumbersMatchTheSimulation`)
 proves each printed duration, threshold, cost and status size equals what `CombatSimulation` does with
 the same effect.
@@ -1025,6 +1038,37 @@ failed sync. `FriendsScreen` opens with the player's own friend code and a copy 
 cloud config neither the prompt nor the code card exists. `CheckDisplayNameRules` proves the rule;
 `NameOnDemandShots` captures it on a scratch identity with no network.
 
+**Leaderboards: written, not applied to a project, not called (`Docs/DESIGN-LEADERBOARDS.md`).**
+`Server/supabase/migrations/0023_leaderboards.sql` holds three boards (the Deep Recital's highest floor,
+with a weekly board that turns on Monday at 04:00 UTC and ranks the highest floor this week, the Proving's
+highest standing and campaign progress; both rankings are the owner's decisions of 2026-10-23, and the
+floors-climbed board written beside the weekly one is gone) as five tables with RLS on, no policy and no
+grant, and two callable functions.
+`leaderboard_submit()` takes no argument: it reads the caller's own cloud save, checks each value against
+the same save, against ceilings and against server time since the server last raised it, stamps
+everything with `now()` and logs every refusal. `leaderboard_top()` returns rank, display name, value and
+`is_me`, never a user id. `Tools/supabase-leaderboard-rules-test.py` proves the rules once 0023 is applied;
+it has never been run against a project. `Tools/supabase-local-check.sh` applies it locally and checks the
+boards, the refusals and the closed doors. Nothing in the game calls either function and no screen shows a board.
+
+**The launch server pieces: written, not applied to a project (`Server/README.md`, `Docs/LAUNCH-CHECKLIST.md`).**
+`0016_account_deletion.sql` (`delete_my_account`, `admin_delete_account`), `0017_chat_safety.sql` (block,
+mute, report), `0018_server_time.sql` (`server_time`, `clock_check`) and `0019_purchase_receipts.sql` (the
+product list and the receipt ledger), with the two Edge Functions under `Server/supabase/functions`:
+`verify-google-purchase` counts each call against the account's limit, asks Google, records the receipt and
+**acknowledges every verified purchase itself, consumables included** (security review L1, the High
+finding), and `google-play-rtdn` revokes a refunded receipt. The security review's fixes are
+`0020_security_review.sql` and `0021_security_review_launch.sql`; in 0021 **a block also ends an accepted
+friendship** (owner, 2026-10-23). **Refunds claw back unspent goods, server side** (owner, 2026-10-23):
+`0024_purchase_clawback.sql` takes the refunded purchase's unspent Sealed Gold and Slag, its Dust and one
+Sealed hero copy out of the cloud save and out of every later save of that account, reading what the
+purchase gave from its receipt in the save (`PurchaseReceipt` records `Gold`, `Slag`, `Dust`, `HeroId` and
+keeps the server's `ClawedBack` mark; `StoreChecks` proves both). The order to apply is 0016 to 0024 after
+whatever of 0012, 0014 and 0015 a project lacks. Every file 0001 to 0024 was applied to a local PostgreSQL
+with stand-in Supabase roles on 2026-10-23, each from 0004 twice, and `Tools/supabase-local-check.sh` passes
+71 checks; none has been applied to the live project. Design records: `Docs/SECURITY-REVIEW-SUPABASE.md`,
+`Docs/DESIGN-RECEIPT-VALIDATION.md`.
+
 ### Guilds, phase one
 
 Three more migrations covering guilds, members, requests and guild team snapshots, with RLS on all
@@ -1143,6 +1187,75 @@ once per 30 seconds, and `guild_by_code` refuses an account after ten misses in 
 `guild_request_send` taking only a found code. `Tools/supabase-guild-rules-test.py` asserts all
 three. Operator steps are in `Docs/CLOUD-GAPS.md`, **Fixed, pending apply: 0014**.
 
+**Guild dungeon size and attempts (phase two, system 1's "Size" and "Bounded" rules).** System 1
+was built with five floors for every guild, whatever its size. This makes the ladder's length scale
+with the guild and bounds a member's attempts the same at every size. **Unmerged: it is delivered
+as a git bundle with a PR description, not pushed.** Measured with a Linux stand-in for
+`Tools/build-check.ps1` (Roslyn and .NET 8, because the script needs the Windows .NET Framework
+compiler), so it is **unverified by the real build check**.
+
+- **The ladder.** `guild-dungeon-scale.json` maps member count to floors: 5 under ten members, then
+  one more per five members, 10 at the 30-member cap. `GuildDungeonScale.LadderFor` reads it. The
+  smallest ladder is the base five, so no guild has fewer floors than before. The server snapshots
+  the member count when the cycle opens, and the ladder is fixed until the cycle rolls.
+- **A floor never depends on the ladder.** `GuildDungeonGenerator` builds floors in blocks of five
+  (`BlockFloors`: four shuffled themes, then a Champion), and a floor is a function of (seed,
+  floor) alone, so `ThemesFor(n, seed)` agrees with `BuildFloor` for every ladder length the
+  screens pass. **Floors 1 to 5 are unchanged, enemy for enemy**: `CheckBaseBlockUnmoved` pins
+  them over 200 cycles against a value taken from the generator before the change. No hashed file
+  moved, so `ContentVersion` did not move and no recorded replay retired.
+- **Deeper floors are more floors, not harder ones.** Each block's power climb starts again from
+  floor 1's target (`TargetPowerForFloor` reads `PositionInBlock`). Measured first: letting the
+  climb run on past floor 5 took the 3-star-or-fewer rosters under the not-a-hero-check guardrail
+  from floor 6, and to 0% clears on several floors from 7. That is a star check.
+- **Attempts.** Three a floor, as before, and a cycle cap of 15 per account
+  (`GuildDungeonScale.CycleAttemptCap`, derived as `guildDungeonAttemptsPerFloor` x
+  `guildDungeonFloors`). A member of a 10-floor guild has more floors to spend 15 attempts on,
+  never more than 15. `CanAttempt` and `AttemptsLeft` give the client the server's order of
+  refusals and its sentences. The server's count wins over the rows, because a member who changed
+  guild cannot read their old guild's rows.
+- **Rewards: a placeholder, clearly marked.** `GuildDungeonRewards.ForFirstClear` returns
+  `Placeholder` with Amount 0 for every floor, and the server mints nothing for a deep floor. The
+  Waymark pay is untouched and stays blind to depth (only floor 1's boards pay). Whatever is
+  decided must stay a pure function with no seed and no member count, and nothing bought may name
+  the dungeon; `CheckRewardPlaceholder` holds all three now.
+- **Generator fix.** `NeverOneAspect` redraws the last slot of a line that came out single-Aspect.
+  The ten-floor ladder found one such floor in 10,000. It draws only when the line is
+  single-Aspect, so every mixed floor is unchanged (the pin covers it).
+- **Server.** `Server/supabase/migrations/0022_guild_dungeon_size.sql` - **written, not applied to a
+  project.** Applied on 2026-10-23 to a local PostgreSQL with stand-in Supabase roles, twice in a row,
+  and its ladder and cycle cap checked there (`Tools/supabase-local-check.sh`). It needs 0014 applied
+  first and refuses to apply without it.
+  It adds `guild_dungeon_cycles` (the snapshot: RLS on, read by members of the guild, no client
+  write), `guild_dungeon_floor_max`, `guild_dungeon_floors_for`, `guild_dungeon_cycle_attempt_cap`,
+  an internal `guild_dungeon_cycle_floors`, a `cycle_attempt` column with a CHECK and a unique key
+  (so a sixteenth attempt cannot exist), a widened floor constraint, `guild_dungeon_status` with
+  three new columns, and `guild_dungeon_submit` as 0014's body plus the ladder and the cycle cap.
+  It was parsed with the Postgres parser (pglast), statements and PL/pgSQL bodies; nothing
+  resolved names against a schema. The existing live test's assertions still hold for a guild
+  under ten members ("floor 6 does not exist", five floors).
+- **Rules test.** `Tools/supabase-guild-dungeon-size-rules-test.py`, **written, not run.** Reads
+  credentials from `SUPABASE_URL` and `SUPABASE_ANON_KEY` only, never from `supabase.json`, and
+  creates about fourteen tagged throwaway accounts.
+- **Harness.** `GuildDungeonChecks` gains `CheckLadderTable`, `CheckBaseBlockUnmoved`,
+  `CheckFloorIsLadderBlind`, `CheckDeepFloorsMatchBase`, `CheckAttemptBounds`, `CheckSizeReach`,
+  `CheckRewardPlaceholder` and `CheckServerAgreesOnSize`. `CheckFloors`' composition rules and
+  `CheckNotAHeroCheck` now run over all ten floors. `CheckSizeReach` fights guilds of 1 to 30, each
+  member holding three lines from the not-a-hero-check spread, through the real caps: every size
+  finished its own ladder in 7 or 8 of 8 guilds, and no member passed a cap.
+- **FINDING, pre-existing, for the owner.** The base floors themselves break the not-a-hero-check
+  group guardrail (25% of 3-star-or-fewer rosters clear) on about 1.7% of floors, almost all
+  Champion floors: 155 of 9,000 over three seed families of 600 dungeons. `CheckNotAHeroCheck`'s
+  six fixed dungeons never happen to draw one, which is why it has always passed. The deep floors
+  read 181 of 9,000, the same band. Deep floors are therefore judged against the base at the same
+  block position (mean clear share within 10 points), and the per-floor guardrail stays asserted
+  on the base floors exactly as before. Closing the margin means moving `guildDungeonFloorOnePower`
+  or `guildDungeonChampionLevelBonus` in `balance.json`, which retires every replay.
+- **Client.** No screen is changed. The screens already read the server's `floor_count`, so a
+  longer ladder appears once 0022 is applied, but nothing shows the cycle cap, the ladder's
+  origin or the placeholder. `Docs/ui-specs/GUILD-DUNGEON-SIZE.md` is the spec for that run.
+- **Owner decisions:** open decision 5.
+
 ### The Deep Recital, The Proving, events, shop
 
 `RecitalGenerator` builds an endless floor ladder with a Guardian every tenth floor and an unbroken
@@ -1171,11 +1284,26 @@ rules are `DailyLoop` in `Assets/Scripts/Core/Progression`, the saved state is `
 frontier, paid by `GameSession.IdleYield` at claim time and not capped by `Balance.IdleCapHours`.
 The day rolls on `GameSession.DayStartUnix` and only moves forward, so a wound-back clock reopens
 nothing. The pool, targets and hours are in `orders.json`, loaded through `ContentDatabase.LoadOrders`
-and not part of `ContentVersion`; `CheckDailyLoopNotHashed` proves it. **It is off by default**:
-`DailyLoopSwitch.Enabled` is true only when the scripting define `EMBERFALL_DAILY_LOOP_ON` is set,
-and with it off no order is generated, no key is written and the hub shows no door. `OrdersScreen`
-is a placeholder, reached from an Orders door on the `MainMenuScreen` rail. All hours in
-`orders.json` are placeholders for the balance pass. The eleven `CheckDailyLoop*` checks are in
+and not part of `ContentVersion`; `CheckDailyLoopNotHashed` proves it. **It is on by default since the
+owner's decision of 2026-10-23**: `DailyLoopSwitch.Enabled` is false only when the scripting define
+`EMBERFALL_DAILY_LOOP_OFF` is set, and with it off no order is generated, no key is written and the hub
+shows no door. `OrdersScreen` is a placeholder, reached from an Orders door on the `MainMenuScreen` rail.
+**The level order became "spend 1,000 Gold"** the same day (`OrderKind.Gold`, counted on hero levels in
+`GameSession.LevelUpHero` and on purchases in `Quartermaster.Buy`): 1,000 is at most one level of any hero
+(1,070 at the cheapest) and one Quartermaster piece, so a capped roster can always finish it, and
+`CheckDailyLoopSpendGold` asserts both bounds. **The hours in `orders.json`
+are final since the content pass of 2026-10-22, measured rather than chosen**: `DevHarness.exe
+--loop-curve [walks] [scale]` (`LoopCurve.cs`) walks the reference player with the loop on, claiming
+everything every sitting, and over 8 walks the shipped hours pay 3.84 hours of frontier idle income a
+day (26.8 a week against the idle chest's 70) and leave every banded stage inside its power band, with
+or without Wayfarer's Road, with no walk stuck; the tightest are 1-12 at x0.960 (top x0.99) and 2-1 at
+x1.232 with the road (top x1.25), and at twice the hours both sit at their edge. Re-run on 2026-10-23 with
+the loop on by default and spend Gold in place of the level orders: 3.81 hours a day (3.83 with the road),
+still 0 of 72 stages over their band, 1-12 x0.938 and 2-1 x1.208 with the road. What switching the loop
+on changed, item by item, is in `Docs/DESIGN-DAILY-LOOP.md`, **Turning it on by default**. The study also
+found that the economy walk dated its level-ups and ascensions by the device clock
+(`GameSession.LevelUpHero(hero, times)` and `Ascend(hero)`); since 2026-10-23 the walk passes its own clock
+to both (`SpendGold`, `EconomyConvertAscendAndDeploy`). The twelve `CheckDailyLoop*` checks are in
 `DailyLoopChecks.cs`. Design: `Docs/DESIGN-DAILY-LOOP.md`.
 
 **Wayfarer's Road, the free track (R17, `Docs/DESIGN-WAYFARERS-ROAD.md`).** A 28 day season of 30 tiers
@@ -1194,9 +1322,34 @@ nothing and unclaimed tiers lapse (`CheckPassRollover`). The paid track is in th
 refuses every call unless the Store (**The Store (R19)**, below) is on and the player bought this season's premium
 through it (`WayfarersRoadState.PaidSeason`); the paid track is then claimable on the Store's PASS tab and pays through
 `PurchaseGrants.Apply`, so every paid reward is Sealed, a 5-star copy at tier 30 included (`CheckStorePass`). `WayfarersRoadSwitch` is on
-by default (`EMBERFALL_WAYFARERS_ROAD_OFF` rolls it back), **but the pass is inert until the build defines
-`EMBERFALL_DAILY_LOOP_ON`**, because the loop that feeds it is off by default; its door is a button in the
-header of `OrdersScreen`, which exists only with the loop. That default is the lead's call of 2026-10-19.
+by default (`EMBERFALL_WAYFARERS_ROAD_OFF` rolls it back), and **since 2026-10-23 the free track earns by
+default**, because the loop that feeds it is on (owner's decision); its door is a button in the header of
+`OrdersScreen`, which exists only with the loop.
+
+**What the loop on by default does, measured (`Docs/DAILY-LOOP-CURVE.md`, re-run 2026-10-23).** The gate's
+walks cannot say: they start before the Road's epoch and claim no order, so the default moves nothing they
+read. `DevHarness.exe --daily-loop-curve 60 --daily-loop-fuse` (`DailyLoopCurve.cs`, a measurement, inert in
+every other run) walks the 60 reference seeds on the season calendar's clock with the loop off, on with the
+Road, and on without it, as a player who claims everything twice a day. For the reference player the largest
+move is 2-1, x1.194 to x1.239 (band top x1.25), then 1-12, x0.939 to x0.969 (top x0.99); from 2-6 on every
+wall is within 0.01 of the off arm, no wall gains a sitting and the campaign ends within half a day. The
+loop pays about 13% of all Gold, the Road completes nearly every season (a five-star selector every 28 days
+from about day 25), and the spend-Gold order is claimed on 100% of its days, finished off the line with 121
+bench levels a walk (0.3% of all Gold) and never a Quartermaster piece. A player who spends only on the line
+finishes it on 13.9% of its days (`--daily-loop-no-bench`), the level order's old rate: the order can no
+longer trap a capped roster, but it still asks for one action off the line, which the Orders screen has to
+teach. The off arm reproduces the first run exactly.
+
+### Local notifications
+
+**The rule is built, the Unity side is not (`Docs/DESIGN-NOTIFICATIONS.md`).** `NotificationPlanner` in
+`Assets/Scripts/Core/Progression` plans when each local notification fires, given the save, the clock and
+the device's UTC offset: the idle chest at its cap, the next orders turnover (only with the daily loop on),
+and an event's end for a player who has taken part (8 hours before a weekly event, 24 before a monthly).
+Quiet hours 22:00 to 09:00 local, at most 2 a local day, 4 hours apart, nothing past 48 hours, nothing
+before the first stage is cleared, and no notification names anything sold. It writes nothing and holds
+no state in the save. `NotificationChecks.cs` proves it, including a sweep of about 1,500 plans. No
+package, scheduler or settings toggle exists yet.
 
 ### The Store (R19)
 
@@ -1217,8 +1370,9 @@ door, every call refuses `Off`, the save is the document the build before wrote;
 `EMBERFALL_SINKS_OFF` rolls it back. `HeroContractSwitch` is ON since R24 (define `EMBERFALL_HERO_CONTRACT_OFF` rolls it
 back): two a month per hero, four a month for the whole account, listed from 4-1 on (see Docs/DESIGN-STORE.md).
 
-**The seven offers** are in `store.json` (`StoreConfig`, not in `ContentVersion`; every product id and price tier is a
-placeholder): the Starter Pact (once, one of three named 5-stars and 6 hours of idle Gold), the Weekly Pack (resets
+**The seven offers** are in `store.json` (`StoreConfig`, not in `ContentVersion`; every product id is a placeholder, and
+the euro prices are the owner's since 2026-10-23: Starter Pact 2.99, Growth Fund 14.99, Weekly Event Track 2.99, Weekly
+Event Pack 4.99, Relic of Choice 19.99, the rest unchanged, `Docs/STORE-PRICE-PROPOSAL.md`): the Starter Pact (once, one of three named 5-stars and 6 hours of idle Gold), the Weekly Pack (resets
 weekly), the Monthly Pack (resets monthly), the Ember Ledger (a 30 day card, hours each reward day claimed and 10 percent
 more idle Gold), the Growth Fund (once, fixed rewards at 2-12 to 6-12), the Wayfarer's Road premium (per season) and the
 Hero Contract (off). Hours are `GameSession.IdleYield` at the buyer's own frontier, Gold only, and Dust is counted in
@@ -1254,7 +1408,11 @@ in the R19 handoff is not applied: **the owner raises the server's `save_limits`
 receipt or a bought paid track.**
 
 **The curve.** The spender's reference walk and fusing walk against the non-spender, per chapter, are measured by
-`--store-curve` (`StoreCurve.cs`). Result: to be filled in from the R19 report when the curve check is final.
+`--store-curve` (`StoreCurve.cs`); the table is in `Docs/DESIGN-STORE.md`, and its control columns were reproduced to the
+third decimal on 2026-10-22. `--store-curve N --store-ads lean|light|full|heavy` walks a rewarded-ad watcher on the same
+clock instead of the spender (a measurement, inert in every other run); the result and the proposed caps are in
+`Docs/DESIGN-REWARDED-ADS.md`. No ad exists in the game and no ads package is in the project. The euro prices proposed
+in `Docs/STORE-PRICE-PROPOSAL.md` were taken by the owner on 2026-10-23 and are in `store.json`.
 
 ### Late-game spending (R24)
 
@@ -1268,12 +1426,13 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
   from 4-1 on because it alone gave a whale +77 percent at 1-12. `EMBERFALL_HERO_CONTRACT_OFF` rolls back.
 - **Relic packs** (`RelicPacks`, `EMBERFALL_RELIC_PACKS_OFF`): the Relic Dust Satchel (5,000 Dust,
   EUR 4.99, one a week), the Relic Dust Chest (25,000, EUR 19.99, two a month) and the Relic of Choice
-  (EUR 29.99, one a month: a named relic the player lacks or one tier on an owned one, at most 20,000
+  (EUR 19.99 since 2026-10-23, one a month: a named relic the player lacks or one tier on an owned one, at most 20,000
   Dust of shop value). They open with the Relic Shop.
 - **Live events** (`LiveEvents`, `live-events.json`, NOT hashed, `EMBERFALL_LIVE_EVENTS_OFF`): a
   weekly and a monthly event side by side, each with quests counted at the real call sites, points, a
-  free track (which may name a skin, with a fixed fallback) and a paid Event Track (EUR 4.99 weekly,
-  EUR 9.99 monthly), plus one EUR 9.99 pack per event. The paid offers open at 3-1 (the event Gold gave a whale +48 percent
+  free track (which may name a skin, with a fixed fallback) and a paid Event Track (EUR 2.99 weekly,
+  EUR 9.99 monthly), plus one pack per event (EUR 4.99 weekly, EUR 9.99 monthly; the weekly prices are
+  the owner's of 2026-10-23). The paid offers open at 3-1 (the event Gold gave a whale +48 percent
   at 2-6); free events are open from the start. A payment in flight across a turnover is still
   delivered in full and never twice; sales close an hour before an event ends.
 - **Hero skins** (`HeroSkins`, `skins.json`, NOT hashed, `EMBERFALL_SKINS_OFF`): one per hero, default
@@ -1287,9 +1446,17 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
   active player's save becomes 26: `save_limits_26.sql` must be applied before this build reaches a
   cloud player.
 - **The whale curve** (`R24WhaleCurve.cs`, opt-in, 60 walks): from 4-12 on a whale who buys everything
-  leads a non-spender by under 6 percent at every wall and every wall still binds; the whale spends
-  about EUR 289 a month (EUR 34 for the R19 spender), skins one-time on top. The handoff folder holds
-  whale-curve.md and offer-values.md.
+  leads a non-spender by under 6 percent at every wall and every wall still binds. The study reads every
+  offer's price from the content's `store.json` (`WhalePrice`, `WhaleSkinPrice`), so a scratch content folder
+  re-prices it. **Re-run on 2026-10-23, all six columns at 60 walks, at the owner's prices and with the walk on
+  its own clock:** the reference whale leads by +5.6 percent at 4-12, +4.4 at 5-12 and +4.3 at 6-12 (the fusing
+  whale +4.2, +3.3, +3.1), the spender by at most +0.2 from 2-12 on; no walk stuck, every wall from 2-6 on costs
+  its 4 sittings for every buyer. The reference whale spends EUR 235.6 per 30 days over chapters 2 to 6 and EUR
+  311.7 over chapters 4 to 6 (the Hero Contract EUR 129.6 of it), the spender EUR 32.9 recurring and EUR 18.0
+  one-time. The power table is identical to the price proposal's, and the spend is its proposed column: a price
+  changes what a buyer pays, not what they get, and the clock fix changes nothing here because the study models
+  events as fixed offers and reads no order or event counter. The handoff folder holds whale-curve.md and
+  offer-values.md from R24.
 
 ### Test store and player size (R26)
 
@@ -1449,7 +1616,12 @@ The table in `onboarding.json` `unlocks`:
 shop card inside keeps its own row (see **The UI kit (R20)**, the Marketplace paragraph).
 
 `onboarding.json` is not in `ContentVersion`, so a moved unlock or a rewritten line retires no
-replay. Every line of its text is a placeholder for the designer's pass. The harness walks and
+replay. **Its text is final since the content pass of 2026-10-22**: the wake keeps Pinoy's own lore
+lines, the six steps and the recall say what the game does, and nine more screens have a first-visit
+tip than before, 24 in all (the guild dungeon and tech, the live events, the Armory,
+the Archive, the Quartermaster, the Store, Orders and Wayfarer's Road), each checked against what
+the screen does: two ranks in the formation, conversion rolling a random five-star of the chosen
+aspect, the Forge's salvage, reroll and combine. No numbers and no dashes. The harness walks and
 pinned lines read the table through `FeatureGate.IsUnlockedArriving`, which is what moved the two
 failing checks under **The instruments**. `PlayModeScreenshot` has six `Screen:Onboard*` targets;
 a capture of a feature's own screen uses `FeatureGates.CaptureBypass` (and `CaptureForceLocks` keeps the gate live for
@@ -1502,8 +1674,10 @@ recorded. Four of the six that came off were already obeying the rule before it 
 `ForgeScreen` draws Slag, `ProvingScreen` draws Valor, `GuildPathScreen` draws Waymarks,
 `RecitalScreen` draws Coda and Echoes, `EventsScreen` names each event's purse in its own heading.
 The Relic Shop was the one screen with nowhere to read its own currency and now has a Dust plate.
-**Valor and Coda both say, in the bag, that nothing spends them yet**, because a currency banked
-towards nothing should say so where a player goes to look for it.
+**Valor and Coda each name their shop in the bag**: "Spent in the Armory" and "Spent in the
+Archive", read from `SinksSwitch` in `BagPanel`, which has been on by default since R19. With
+`EMBERFALL_SINKS_OFF` defined they say there is nothing to spend them on yet, because a currency
+banked towards nothing should say so where a player goes to look for it.
 
 **The Campaign chip row sizes itself from the chapter count.** `CampaignScreen.RefreshChips` shares
 the row's 1780 units out between however many chapters `campaign.json` holds, clamped to [200, 300]
@@ -1723,6 +1897,13 @@ sweep's own arena and seeds, asserts that the set never cast is exactly Roan's -
 quiet is a failure now - and then proves his in a dark arena that lets him live to round 4, which
 the sweep does not. CI runs `build-check.ps1` on every push and pull request, on `ubuntu-latest`
 (a Windows job runs by hand only; see CLAUDE.md, "build-check on Linux and macOS").
+`bash Tools/supabase-local-check.sh` applies every migration to a throwaway local PostgreSQL with the
+stand-in Supabase roles in `Server/supabase/local/supabase-standin.sql`, pastes each file from 0004 twice,
+and runs `Server/supabase/local/rules-check.sql`; it takes no project URL and no key.
+`DevHarness.exe --loop-curve [walks] [scale]` (`LoopCurve.cs`) is a study, not part of the gate: what
+switching the daily loop on does to the reference walk, with and without Wayfarer's Road (**The daily
+loop**). `python Tools/text_audit.py` writes `Docs/TEXT-AUDIT.md`, the list of every placeholder string
+still in content and code.
 `DevHarness.exe --ceil-reconcile [stage [levels]]` is a second development aid: it reads the solver's
 and the guard's CEIL side by side against a 4,000-sample reference, and it is how the `1-12`
 disagreement under **The instruments** was settled.
@@ -1871,7 +2052,10 @@ opaque green disc over the torso. `VfxEntry` now has a start frame (`start` in `
 of that sheet. The ring is now about a third of a second long.
 
 **Open visual issues:** units with no sheet draw as placeholder figures (63 of 94 heroes, and the
-enemies without sheets), and the battles of chapters 2 to 6 (60 stages) have no painted background, so they use a plain generated dusk gradient (only ashen, ember and hollow, the chapter 1 environments, are painted).
+enemies without sheets). **Every chapter has a painted battle background since R21**: chapter 1's
+ashen, ember and hollow, and `crossing`, `city`, `old_kingdom`, `divided_realm` and `sanctuary` for
+chapters 2 to 6, each with an `<id>_boss` painting that stage 12 of its chapter names in
+`campaign.json`'s `environment` field. `BattleAssets` loads them from `Resources/Backgrounds`.
 
 ## In progress
 
@@ -1928,11 +2112,12 @@ In order.
 
 ## Open decisions
 
-Four. None of them is a number to nudge, and neither the economy question nor the power-band one
+Five. None of them is a number to nudge, and neither the economy question nor the power-band one
 that used to head this list is still here. The five-star review closed four more - the three
 5-star kit questions and the low-tier Energy one - and the Dispel repair closed the Dispel one,
 which was open decision 3, all recorded below. The numbers on the three that remain were reassigned
-when it closed, so the Hub rail is number 3 now.
+when it closed, so the Hub rail is number 3 now. Number 5, the guild dungeon's size rules, was
+added with them.
 
 **The economy decision is resolved, and what replaced it is open decision 4.** The economy and
 curve passes, the retune after them and the re-solve against real summon rates put a simulated
@@ -2141,6 +2326,22 @@ instead and is named in the coverage note under **Known bugs**.
    band the curve check enforces. **The proposal is to keep A on the multiplicative split and let
    the fusion spec say which of the two levers it pulls, and to grade B at 1 to 2 on chapter 1's
    finale and 2 to 4 from chapter 2 on**, pending the playtests open decision 1 already calls for.
+5. **The guild dungeon's size rules** (**Guild dungeon size and attempts**, under **Guilds, phase
+   one**). Built as proposed below, every one reversible in content or one SQL function:
+   - **What a deep floor pays.** `GuildDungeonRewards` is a placeholder that pays nothing. The
+     design asks for breadth or recognition, never more pay per member for depth, and nothing
+     random or bought.
+   - **The bands.** 5 floors under ten members, one more per five, 10 at the cap. The alternative
+     the design text reads as, fewer floors for a small guild, would take floors away from guilds
+     that have them today.
+   - **The cycle cap's scope.** 15 per account across guilds, so changing guild mid-cycle does not
+     reset it. Per guild is the other reading, and it lets a player who hops guilds attempt more.
+   - **When the snapshot is taken.** On the cycle's first status call or attempt by anyone in the
+     guild. A guild that fills up just before that gets the longer ladder all week; nothing extra
+     is paid for it.
+   - **The pre-existing guardrail margin.** About 1.7% of base floors, mostly Champion floors, are
+     cleared by under 25% of 3-star-or-fewer rosters. Accept it, or move `guildDungeonFloorOnePower`
+     or `guildDungeonChampionLevelBonus` and retire every replay.
 
 ## Known bugs
 
@@ -2238,11 +2439,11 @@ listed, so the day a kit change makes one a trap the harness says so.
 
 Not scheduled and not blocked on anything in **Next**, listed so it is not rediscovered.
 
-- **The 28 drafting-note descriptions.** The ability card (**Heroes and kits**) shows every
-  ability's sentence, its facts and its numbers. Twenty-eight abilities still read their sentence from
-  `ability-text.json`, proposed wording standing in for a drafting note, until the owner answers the
-  matching question in `Docs/PINOY-LIST.md` section 2f; the answer goes into `heroes.json` and the line
-  leaves the file in the same commit.
+- **What text is still a placeholder.** `Docs/TEXT-AUDIT.md`, generated by `python
+  Tools/text_audit.py`, lists every remaining placeholder string in content and code with file and
+  line: stage names proposed by us and awaiting Pinoy, the Store's coming-soon and placeholder-price
+  labels, content numbers their own files call placeholders, and the units still drawing a mannequin.
+  Regenerate it rather than edit it.
 - **Summon inflation, measured and not changed.** A summon costs 120 Shards at every stage while idle
   Shards a day grow x9.6 from 1-12 to 6-12 (680 to 6,500) and, with a committed player's repeat-clear
   purses, x51 (1,418 to 72,380; those purses are 79% to 91% of their Shards from 3-12 on). Days per random
@@ -2257,9 +2458,11 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   fodder exchange and (parked) guild wars remain, as sequenced in `DESIGN-GUILDS-PHASE-TWO.md`.
   Guild level exists now and gates the tree; `DESIGN-GUILD-TECH.md` in the `claude` folder G6 lists what could read
   it later (a marketplace, a sixth floor, a fourth attempt, a guild hall) and says that none of
-  them is designed today.
+  them is designed today. A sixth to tenth floor now exists by member count, not guild level
+  (**Guild dungeon size and attempts**), so a level-gated floor would be a second, separate rule.
 - **A marketplace.** Nothing built, nothing designed.
-- **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
+- **Chapters 3 to 6's enemy art**, when it exists. The stages are built, and their backgrounds
+  are painted (R21).
 - **Texture compression.** The 855 MB figure this entry once carried was re-taken against a real
   Windows player twice. The first player, before the 336 by 396 sheets, was 318 MB unzipped and
   188.5 MB zipped, with 208 sheets packed as DXT5 Crunched. **The second, taken in R16 with the
@@ -2304,6 +2507,10 @@ unedited, including:
   37 failures to 3.
 - The known traps carried forward, the numbers already decided, and the relic and aspect hook
   conflict with its resolution.
+
+The security review of every Supabase migration and the receipt functions, with its findings and the two fix
+migrations (`0020_security_review.sql`, `0021_security_review_launch.sql`, neither applied), is
+`Docs/SECURITY-REVIEW-SUPABASE.md`.
 
 Every other `DESIGN-*.md` in this repository is a decision record from its date. The reasoning in
 them is durable; the status claims, names and numbers are not. Never conclude from one that a system

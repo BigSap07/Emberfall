@@ -1,0 +1,30 @@
+{
+  // THE GUILD DUNGEON'S LADDER, BY GUILD SIZE - claude/DESIGN-GUILDS-PHASE-TWO.md, "Size": scale the
+  // CONTENT to the guild, not the payout per head. A guild of at least `members` members gets
+  // `floors` floors for the cycle; the member count is snapshotted when the cycle opens, so a ladder
+  // never shrinks mid-week.
+  //
+  // NOT PART OF ContentDatabase.ContentVersion, on purpose: this says how many floors exist for a
+  // guild, never what a floor is. Floor N is the same fight on every ladder that reaches it
+  // (GuildDungeonGenerator), so moving a band must not retire every guild's replays.
+  //
+  // THE SERVER HAS THE REAL COPY. guild_dungeon_floors_for in
+  // Server/supabase/migrations/0022_guild_dungeon_size.sql decides the ladder and refuses an attempt
+  // past it; GuildDungeonChecks fails the build-check when the two disagree on any band.
+  //
+  // CHOSEN, and named as chosen:
+  // - The smallest ladder is the base five (balance.json guildDungeonFloors). No guild has fewer
+  //   floors than every guild had before ladders scaled.
+  // - One more floor for every five members past nine, so a guild at the 30-member cap gets ten:
+  //   two whole blocks, ending on a Champion.
+  // DERIVED BY THE HARNESS, not chosen: that each band's guilds can reach the end of their own
+  // ladder inside their attempt budget (GuildDungeonChecks, SIZE).
+  "ladders": [
+    { "members": 1, "floors": 5 },
+    { "members": 10, "floors": 6 },
+    { "members": 15, "floors": 7 },
+    { "members": 20, "floors": 8 },
+    { "members": 25, "floors": 9 },
+    { "members": 30, "floors": 10 }
+  ]
+}

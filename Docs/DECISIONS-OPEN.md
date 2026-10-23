@@ -356,6 +356,13 @@ when W1's primitives land, 1 open (L23). "Keep" means the resolution in favour o
 
 ### 4a. The 30 pinned drafting notes (`Docs/PINOY-LIST.md` 2f)
 
+**Status, 2026-10-22: applied for the text.** The content pass wrote player text for all 28 ids still
+pinned into `heroes.json`, checked against each ability's effects, and emptied `ability-text.json` and
+the harness pin list. The wording below was used except where the effect data said more (Demos's Notice
+of Loss, Seraphine's Volume Closed, Brio's Recorded Shot, Petra's Private Address, Adric's No Return
+Mark, Cal's New Sightline); `Docs/PINOY-LIST.md` 2f has the detail. The kit questions stay open with
+Pinoy.
+
 Twenty-nine questions over thirty ability ids (Demos has two). **Proposed: yes to all except T11
 and T25**, which follow I6 and W2. **Yes** means the drafting note comes off and the card text below
 goes on, and the id comes out of the harness's pinned list in the same commit. Every sentence below

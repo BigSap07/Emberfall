@@ -586,6 +586,23 @@ namespace Emberfall.DevHarness
             Check(JsonValue.Parse(json).GetInt("version", 0) == 25 && SaveSerializer.VersionOfJson(json) == 25 && SaveSerializer.StoreVersion == 25 && SaveSerializer.CurrentVersion >= 25 && json.Contains("\"store\"") && json.Contains("\"paid\""),
                   "and the document claims version 25, the version that holds the store");
 
+            // REFUNDS CLAW BACK UNSPENT GOODS (owner, 2026-10-23): the receipt says what it granted, for the server to read
+            // (0024_purchase_clawback.sql), and keeps the server's clawedBack mark through a load and a save.
+            PurchaseReceipt starter = back == null ? null : back.Store.FindReceipt("receipt-V1");
+            PurchaseReceipt starterNow = s.Profile.Store.FindReceipt("receipt-V1");
+            Check(starter != null && starterNow != null && starter.Gold > 0 && starter.Gold == starterNow.Gold
+                  && starterNow.HeroId == five[0].Id && starter.HeroId == five[0].Id,
+                  "A RECEIPT RECORDS WHAT IT GRANTED: the Starter Pact's receipt carries its " + (starter == null ? 0 : starter.Gold)
+                  + " Sealed Gold and its hero, through a load and a save, for a refund to claw back");
+            if (back != null && starter != null)
+            {
+                starter.ClawedBack = true;
+                string marked = SaveSerializer.Serialize(back);
+                PlayerProfile again = SaveSerializer.Deserialize(marked, db, out error);
+                Check(again != null && again.Store.FindReceipt("receipt-V1").ClawedBack && SaveSerializer.Serialize(again) == marked,
+                      "and the server's clawedBack mark survives a load and a save, so a save is never clawed back twice");
+            }
+
             // Sealed goods alone stay 24; the store alone, or a bought track alone, is 25.
             GameSession sealedOnly = StoreSession(db);
             SealedGrants.GrantGold(sealedOnly, 10);

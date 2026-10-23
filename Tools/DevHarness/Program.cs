@@ -49,6 +49,9 @@ namespace Emberfall.DevHarness
             bool reconcile = false;
             int wallStudy = 0;
             int storeCurve = 0;
+            int loopCurve = 0;
+            double loopScale = 1.0;
+            int dailyLoopCurve = 0;
             bool lineCalibration = false;
             bool probeStudy = false;
             bool tempoStudy = false;
@@ -81,7 +84,18 @@ namespace Emberfall.DevHarness
                 // Docs/ECONOMY-PROPOSAL-R4.md, see RunRelevel.
                 if (args[i] == "--wall-modes" && i + 1 < args.Length) { _wallModes = args[++i]; continue; }
                 if (args[i] == "--store-contracts") { _storeContracts = true; continue; }
+                if (args[i] == "--store-ads" && i + 1 < args.Length) { _storeAds = args[++i]; continue; }   // the ad watcher (StoreCurve.cs)
                 if (WhaleTakeArg(args, ref i)) continue;   // the R24 whale study's flags (R24WhaleCurve.cs)
+                if (args[i] == "--loop-curve")
+                {
+                    // LoopCurve.cs: --loop-curve [walks] [scale], what turning the daily loop on does to the curve
+                    loopCurve = 8;
+                    int n;
+                    double f;
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out n)) { loopCurve = n; i++; }
+                    if (i + 1 < args.Length && double.TryParse(args[i + 1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f)) { loopScale = f; i++; }
+                    continue;
+                }
                 if (args[i] == "--store-curve")
                 {
                     storeCurve = 20;
@@ -89,6 +103,15 @@ namespace Emberfall.DevHarness
                     if (i + 1 < args.Length && int.TryParse(args[i + 1], out n)) { storeCurve = n; i++; }
                     continue;
                 }
+                if (args[i] == "--daily-loop-curve")
+                {
+                    dailyLoopCurve = 20;
+                    int n;
+                    if (i + 1 < args.Length && int.TryParse(args[i + 1], out n)) { dailyLoopCurve = n; i++; }
+                    continue;
+                }
+                if (args[i] == "--daily-loop-fuse") { _loopCurveFuse = true; continue; }
+                if (args[i] == "--daily-loop-no-bench") { _loopCurveNoBench = true; continue; }
                 if (args[i] == "--relevel" && i + 1 < args.Length) { _relevelSpec = args[++i]; continue; }
                 if (args[i] == "--guild-conditions") { guildConditions = true; continue; }
                 if (args[i] == "--guild-path") { guildPath = true; continue; }
@@ -139,6 +162,9 @@ namespace Emberfall.DevHarness
             if (reconcile) return RunCeilReconcile(contentDir, reconcileStage, reconcileLevels);
             if (wallStudy > 0) return RunWallStudy(contentDir, wallStudy);
             if (storeCurve > 0) return RunStoreCurve(contentDir, storeCurve);
+            // Nor the two daily loop studies (LoopCurve.cs and DailyLoopCurve.cs): they measure and write nothing.
+            if (loopCurve > 0) return RunLoopCurve(contentDir, loopCurve, loopScale);
+            if (dailyLoopCurve > 0) return RunDailyLoopCurve(contentDir, dailyLoopCurve);
             if (WhaleRequested) return RunWhaleStudy(contentDir);
             if (_relevelSpec != null) return RunRelevel(contentDir, _relevelSpec);
             if (lineCalibration) return RunLineCalibration(contentDir);
@@ -327,6 +353,7 @@ namespace Emberfall.DevHarness
             CheckStoreOffers(content, contentDir);
             CheckStore(content, contentDir);
             CheckLiveEvents(content, contentDir);
+            CheckNotifications(content, contentDir);
             CheckR24Store(content, contentDir);
             CheckR24RelicPacks(content, contentDir);
             CheckR24Skins(content, contentDir);
@@ -4946,6 +4973,8 @@ namespace Emberfall.DevHarness
                 db.LoadGuildPath(File.Exists(pathPath) ? File.ReadAllText(pathPath) : null);
                 string techPath = Path.Combine(dir, "guild-tech.json");
                 db.LoadGuildTech(File.Exists(techPath) ? File.ReadAllText(techPath) : null);
+                string scalePath = Path.Combine(dir, "guild-dungeon-scale.json");
+                db.LoadGuildDungeonScale(File.Exists(scalePath) ? File.ReadAllText(scalePath) : null);
                 string onboardingPath = Path.Combine(dir, "onboarding.json");
                 db.LoadOnboarding(File.Exists(onboardingPath) ? File.ReadAllText(onboardingPath) : null);
                 string ordersPath = Path.Combine(dir, "orders.json");
@@ -17580,9 +17609,12 @@ namespace Emberfall.DevHarness
                     //      One claim per sitting, capped exactly as the game caps it.
                     run.Now += EconomyAwaySeconds;
                     StoreSpenderStep(db, session, run.Now);   // inert unless --store-curve asked for the spender
+                    DailyLoopWalkStep(db, session, run.Now, false);  // inert unless --daily-loop-curve asked for the loop
+                    LoopWalkStep(db, session, run.Now);       // inert unless --loop-curve asked for the loop player (LoopCurve.cs)
                     IdleReport idle = session.ClaimIdle(run.Now);
                     run.Ledger.GoldIdle += idle.Gold;
                     run.Ledger.ShardIdle += idle.Shards;
+                    AdWatcherIdleStep(session, idle, run.Now);   // inert unless --store-ads asked for the ad watcher
                     // THE ORDER OF A SITTING'S ROSTER WORK, and it changed with fusion. Gold used to
                     // go first, into the line as it stood, and the pulls came after it, so a hero
                     // pulled this sitting waited for the next one to be levelled. Now the pulls
@@ -17602,7 +17634,9 @@ namespace Emberfall.DevHarness
                     long goldBeforeLevels = profile.Gold;
                     int levelsBought;
                     Dictionary<string, int> beforeGold = LevelsByUid(profile);
-                    if (SpendGold(session, out levelsBought)) run.CapBlockedSessions++;
+                    // The walk's own clock, always: the two-argument LevelUpHero read the DEVICE clock, which dated every
+                    // level-up's order and live-event count by the day the harness ran, not the day the walk was on.
+                    if (SpendGold(session, out levelsBought, run.Now)) run.CapBlockedSessions++;
                     else run.SpendableSessions++;
                     CreditLevels(profile, beforeGold, run.GoldLevels);
                     run.Ledger.GoldSpentOnLevels += goldBeforeLevels - profile.Gold;
@@ -17675,11 +17709,13 @@ namespace Emberfall.DevHarness
                         // itself, so the ordinal is recorded here where it is still visible.
                         NoteResolvedOrdinal(_economyOrdinals, farm,
                                             Math.Max(1, farm.WaveCount), Math.Max(1, farm.BattleCount));
+                        long lastFullSweepGold = 0;
                         for (int i = 0; i < allowed; i++)
                         {
                             BattleRewards fr = session.SweepClearedStage(farm, run.NextSeed(), run.Now);
                             run.Ledger.GoldFarm += fr.Gold;
                             run.Ledger.ShardFarm += fr.Shards;
+                            if (fr.Gold > 0) lastFullSweepGold = fr.Gold;
                             if (fr.ArmorDrop != null) run.Ledger.ArmorDrops++;
                             run.TotalBattles++;
                             outcome.Battles++;
@@ -17687,7 +17723,10 @@ namespace Emberfall.DevHarness
                             run.Now += (long)(EconomyBattleOverheadSeconds + 8f * EconomySecondsPerRound);
                             if (!fr.Victory) break;
                         }
+                        AdWatcherSweepStep(session, lastFullSweepGold, run.Now);   // inert unless --store-ads asked for the ad watcher
                     }
+
+                    DailyLoopWalkStep(db, session, run.Now, true);   // the end of the sitting's claims; inert as above
 
                     // STALLED means neither power nor the roster moved. Before caps, power was the
                     // only thing a sitting could raise, so a flat power line meant farming had
@@ -21638,7 +21677,7 @@ namespace Emberfall.DevHarness
                 while (_walkAscends && session.AscensionBlocker(h) == null)
                 {
                     int levelBefore = h.Level;
-                    if (!session.Ascend(h).Success) break;
+                    if (!session.Ascend(h, run.Now).Success) break;   // the walk's clock, not the device's (as SpendGold above)
                     Credit(run.CopyLevels, h.Uid, h.Level - levelBefore);
                     run.Ledger.Ascensions++;
                     outcome.Ascensions++;
@@ -21976,6 +22015,14 @@ namespace Emberfall.DevHarness
 
         private static bool SpendGold(GameSession session, out int levelsBought)
         {
+            return SpendGold(session, out levelsBought, 0L);
+        }
+
+        /// <summary>nowUnix above 0 dates each level-up by that clock: the economy walk always passes its own, so its
+        /// orders and live-event quests count on the walk's day. 0 (the checks' short forms) keeps the two-argument
+        /// LevelUpHero, which reads the device clock.</summary>
+        private static bool SpendGold(GameSession session, out int levelsBought, long nowUnix)
+        {
             levelsBought = 0;
             for (int guard = 0; guard < 500; guard++)
             {
@@ -21991,7 +22038,8 @@ namespace Emberfall.DevHarness
                 }
                 if (cheapest == null) return true;                        // cap-blocked
                 if (session.Profile.Gold < cheapestCost) return false;    // out of gold
-                if (session.LevelUpHero(cheapest, 1).Success) levelsBought++;
+                LevelUpResult up = nowUnix > 0 ? session.LevelUpHero(cheapest, 1, nowUnix) : session.LevelUpHero(cheapest, 1);
+                if (up.Success) levelsBought++;
             }
             return false;
         }
@@ -26945,25 +26993,14 @@ namespace Emberfall.DevHarness
         /// <summary>
         /// Ability ids whose description is still a drafting note addressed to Pinoy, because the
         /// sentence he wrote and the kit that ships disagree and only he can say which one is the
-        /// intent. Each one is a question in Docs/PINOY-LIST.md section 2f. When he answers, the
-        /// note is replaced by player text and its id comes out of this list in the same commit;
-        /// CheckAbilityTextIsPlayerFacing fails if either half is done without the other.
+        /// intent. Empty since the content pass of 2026-10-22: every one of the 28 now carries
+        /// player text describing what its effects actually do, and the open question each one
+        /// stood for (keep the kit, or change it to Pinoy's sentence) is a mechanics question in
+        /// Docs/PINOY-LIST.md section 2f rather than a gap on the card. A new drafting note is
+        /// pinned here and asked there in the same commit; CheckAbilityTextIsPlayerFacing fails if
+        /// either half is done without the other.
         /// </summary>
-        private static readonly string[] AbilityTextPinnedDraftingNotes =
-        {
-            "arno_rubble_resolve", "yara_second_bearing", "kora_first_opening",
-            "sena_unfixed_aim",
-            "adric_no_return_mark", "aster_scoring_point", "quin_stamped_parcel",
-            "quin_return_to_sender", "quin_urgent_matter", "selka_no_extension",
-            "bren_take_another_route", "cal_ricochet_mark", "cal_new_sightline",
-            "linnet_open_circuit", "oswin_useful_scar", "brio_recorded_shot", "avera_offbeat_note",
-            "avera_break_the_measure", "lydia_no_fixed_departure", "petra_private_address",
-            "clara_known_condition",
-            "demos_notice_of_loss", "demos_arrears_tick",
-            "hale_field_sign", "hale_closing_radius",
-            "seraphine_volume_closed", "altheon_witness_script",
-            "altheon_immaculate_record"
-        };
+        private static readonly string[] AbilityTextPinnedDraftingNotes = { };
 
         /// <summary>Ability ids deliberately left with no description, because their effect data
         /// is ambiguous enough that any sentence would be a guess. Listed in Docs/PINOY-LIST.md

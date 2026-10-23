@@ -50,17 +50,85 @@ project owner:
    select, update or delete. Applied by the owner by hand; nothing else in the project reads or
    needs it. `Tools/supabase-rules-test.py` `check_play_events` needs it applied. The owner reads
    the table with `supabase/queries/play-counts.sql` in the SQL editor.
+16. `0016_account_deletion.sql` - `delete_my_account(p_confirm)`, the in-game account deletion Google
+   Play requires: the caller's guild membership (a last-member leader's guild is disbanded, otherwise
+   0004's succession promotes an heir), requests, friendships, team snapshot, save, profile and
+   `auth.users` row, with everything else keyed to the profile going by cascade.
+   `admin_delete_account(p_user)` is the operator's door for a web deletion request, granted to no
+   client role. Written, not applied.
+17. `0017_chat_safety.sql` - guild chat moderation: `user_block` / `user_unblock` (a blocked
+   author's lines stop being returned by `guild_messages`' read policy), `guild_mute_member` /
+   `guild_unmute_member` for leaders and officers (enforced by a trigger on `guild_messages`), and
+   `guild_report_message`, which files a report with a copy of the message into `chat_reports`, a
+   table no client role can read. Limits in the one-row `chat_safety_limits`. The owner reviews
+   reports with `supabase/queries/chat-reports.sql`. Written, not applied.
+18. `0018_server_time.sql` - `server_time()` and `clock_check(p_client_unix)`, so the client can tell
+   a device clock moved forward from an honest one. The tolerance is the one-row `clock_rules`
+   (300 seconds). Nothing calls it yet; see `Docs/LAUNCH-CHECKLIST.md`. Written, not applied.
+19. `0019_purchase_receipts.sql` - the Google Play receipt ledger: `store_products` (which product
+   ids the server verifies, seeded inactive with `store.json`'s placeholder ids) and
+   `purchase_receipts` (one row per verified purchase, token stored as a SHA-256, readable by its
+   owner on a few columns). Its three writers are granted to `service_role` only, for the Edge
+   Functions below. `Docs/DESIGN-RECEIPT-VALIDATION.md` is the design. Written, not applied.
+
+The two files after them come from the security review (`Docs/SECURITY-REVIEW-SUPABASE.md`). Both
+are written, not applied, and both are re-appliable:
+
+20. `0020_security_review.sql` - guild XP counts each account's cycle for one guild only, team
+   snapshots and the save's device id are bounded, friend requests are throttled per account
+   (`social_rate_limits`, `friend_request_tally`), and the trigger functions are revoked. Needs
+   only `0001`-`0015`.
+21. `0021_security_review_launch.sql` - the per-account limit on purchase verification
+   (`purchase_verify_allow`, service role only, called by `verify-google-purchase`), and a block
+   that refuses friend requests and ends every friendship row between the two, pending or accepted
+   (the owner's decision of 2026-10-23). Run after `0019` and `0020`.
+22. `0022_guild_dungeon_size.sql` - the guild dungeon's ladder scales with the guild
+   (`guild_dungeon_cycles` snapshots the member count when a cycle opens, ten floors at most) and
+   every member's attempts are capped per cycle across every guild (`cycle_attempt`, unique).
+   `guild_dungeon_submit` is 0014's body plus those two rules; `guild_dungeon_status` gains three
+   columns. Needs 0014 and refuses to apply without it. `Tools/supabase-guild-dungeon-size-rules-test.py`
+   needs it applied. Written, not applied to a project.
+23. `0023_leaderboards.sql` - three leaderboards (`Docs/DESIGN-LEADERBOARDS.md`): the Deep Recital's
+   highest floor with a weekly board that turns on Monday at 04:00 UTC, the Proving's highest standing,
+   and campaign progress. The client never sends a score: `leaderboard_submit()` takes no argument and
+   reads the caller's own cloud save, checks it against itself, against ceilings and against server time,
+   and stores only what passes; `leaderboard_top()` reads a board without exposing a user id. The limits
+   are the one-row `leaderboard_limits` table. No table carries a policy or a grant. Written, not
+   applied to a project: nothing in the game calls it yet. `Tools/supabase-leaderboard-rules-test.py` needs it applied.
+   The weekly Recital board ranks the highest floor this week, and the Proving board the highest
+   standing (the owner's decisions of 2026-10-23).
+24. `0024_purchase_clawback.sql` - refunds claw back unspent goods, server side (the owner's decision
+   of 2026-10-23). When a receipt is revoked, `purchase_clawbacks` gets a row and the cloud save loses
+   what the purchase gave that is still unspent (Sealed Gold and Slag, Dust, one Sealed hero copy),
+   read from the purchase's own receipt in the save; every later save of that account is clawed back
+   on its way in, and a `clawedBack` mark stops a second clawback.
+   `Docs/DESIGN-RECEIPT-VALIDATION.md` section 4. Written, not applied to a project.
+
+**The order to apply, all in the SQL editor as the project owner:** whatever of 0012, 0014 and 0015
+the project lacks, then 0016, 0017, 0018, 0019, 0020, 0021, 0022, 0023, 0024. 0022 refuses to apply
+without 0014. Raise `save_limits.max_save_version` to 26 in the same sitting.
+
+**Checked locally, never on a project:** `bash Tools/supabase-local-check.sh` applies 0001 to 0024 in
+order to a throwaway local PostgreSQL with the stand-in roles in `supabase/local/supabase-standin.sql`,
+pastes every file from 0004 a second time, and runs `supabase/local/rules-check.sql` (71 checks on
+0016 to 0024, as a player, as anon and as the service role). It takes no URL and no key.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0015` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0024` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
-after a half-finished run, is a no-op rather than a failure to unpick.
+after a half-finished run, is a no-op rather than a failure to unpick. Pasting an OLDER file after a
+newer one that replaced its function is a different thing and does not always work: `0007` after
+`0022` fails, because 0022 widened `guild_dungeon_status`. Re-apply in number order from the older
+file on.
 
-Nothing here uses the service role key, and nothing in the game ever will. The client holds
-the anon public key and a user's own access token, and every rule in these files is written to
-be correct against exactly that.
+Nothing in the game uses the service role key, and nothing in the game ever will. The client
+holds the anon public key and a user's own access token, and every rule in these files is written
+to be correct against exactly that. **The one server-side exception** is the pair of Edge Functions
+under `supabase/functions` (below): they run on Supabase's servers, receive the service role key
+from Supabase's own environment, and use it only to call the receipt writers in `0019` and the
+verification limit in `0021`.
 
 ## Two locks on every table
 
@@ -131,12 +199,32 @@ An anonymous sign-in produces a real row in `auth.users` and a real JWT whose ro
 as it does to one who has linked an email, and linking an email keeps the same user id - which
 is why none of these tables have anything to migrate when a player converts.
 
+## Edge Functions
+
+`supabase/functions` holds Google Play receipt validation, **written and type-checked, not
+deployed**. `Docs/DESIGN-RECEIPT-VALIDATION.md` has the setup, the secrets and the client contract.
+
+- `verify-google-purchase` - the game posts a product id and purchase token with the player's own
+  token; the function counts the call against the account's limit (`0021`), asks Google, records the
+  receipt through `0019`, acknowledges every verified purchase itself (consumables included, so
+  Google's three-day automatic refund cannot return the money for granted goods) and answers whether
+  to grant.
+- `google-play-rtdn` - Google Play's real-time developer notifications (refunds, cancellations)
+  arrive here from a Pub/Sub push subscription and revoke the receipt; `0024` then claws back what
+  the purchase gave that is still unspent.
+- `_shared/purchase_logic.ts` - every decision the two make, pure and tested by
+  `tests/purchase_logic.test.ts` (`node --experimental-strip-types --test` or `deno test`).
+
 ## The live rule test
 
-`Tools/supabase-rules-test.py` (accounts, saves, friends) and
-`Tools/supabase-guild-rules-test.py` (guilds and the dungeon) create throwaway users and prove
-the rules above against the real project. They are the only things here that need credentials.
-See the header of each script. Both carry the cases the cloud audit added, and both have been run
-against the live project; `Docs/CLOUD-GAPS.md` records what each measured. A case labelled STILL
+`Tools/supabase-rules-test.py` (accounts, saves, friends),
+`Tools/supabase-guild-rules-test.py` (guilds and the dungeon) and
+`Tools/supabase-launch-rules-test.py` (account deletion, chat safety, server time and the receipt
+ledger, 0016 to 0019) and `Tools/supabase-leaderboard-rules-test.py` (the leaderboards, 0023) create
+throwaway users and prove the rules above against the real project. The launch test deletes its own
+users through `delete_my_account` when it finishes. They are the only things here that need credentials.
+See the header of each script. The first two carry the cases the cloud audit added, and both have been run
+against the live project; `Docs/CLOUD-GAPS.md` records what each measured. The launch, guild dungeon size
+and leaderboard tests have never been run against a project: their migrations are not applied. A case labelled STILL
 PRESENT asserts a defect that was written up and left alone, so it passes today and goes red the
 day that defect is fixed.

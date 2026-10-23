@@ -440,6 +440,7 @@ namespace Emberfall.Core.Session
             result.Success = result.LevelsGained > 0;
             if (result.Success) TelemetryHooks.HeroLevelUp(result.LevelsGained);
             if (result.Success) OrderEvent(OrderKind.Level, result.LevelsGained, nowUnix);
+            if (result.Success) OrderEvent(OrderKind.Gold, (int)Math.Min(int.MaxValue, result.GoldSpent), nowUnix);
             if (result.Success) LiveEvents.Record(this, EventQuestKind.SpendGold, result.GoldSpent, nowUnix);
             if (!result.Success) result.Message = "Not enough gold.";
             else if (hero.Level >= cap) result.Message = "Level cap reached.";

@@ -247,14 +247,14 @@ namespace Emberfall.DevHarness
 
             // The store sells them: four offers, the right prices, kind event.
             string[] ids = { "event_track_weekly", "event_track_monthly", "event_pack_weekly", "event_pack_monthly" };
-            double[] eur = { 4.99, 9.99, 9.99, 9.99 };
+            double[] eur = { 2.99, 9.99, 4.99, 9.99 };   // the owner's prices of 2026-10-23
             bool offers = true;
             for (int i = 0; i < ids.Length; i++)
             {
                 StoreOfferDef d = db.Store.Offer(ids[i]);
                 if (d == null || d.Kind != StoreOfferKind.Event || Math.Abs(d.PriceEur - eur[i]) > 0.001) offers = false;
             }
-            Check(offers && db.Store.Warnings.Count == 0, "store.json sells the weekly track at EUR 4.99, the monthly track at EUR 9.99 and a pack of each kind at EUR 9.99");
+            Check(offers && db.Store.Warnings.Count == 0, "store.json sells the weekly track at EUR 2.99, the monthly track at EUR 9.99, the weekly pack at EUR 4.99 and the monthly pack at EUR 9.99");
 
             // Two weekly events take turns, one per period, in file order.
             ContentDatabase d2 = LiveDb(LiveTestJson(db));
@@ -323,9 +323,9 @@ namespace Emberfall.DevHarness
                   "A LEVEL-UP COUNTS ITS LEVELS AND ITS GOLD: " + bought.LevelsGained + " levels for " + bought.GoldSpent + " Gold finish 'buy a level' and 'spend 100 Gold'");
 
             // ---- a daily order claimed, through the daily loop's own claim
-            LoopSetBoard(s, t0 + 300, "level_3");
-            DailyLoop.Record(s, OrderKind.Level, 3, t0 + 300);
-            LoopPayout claimed = DailyLoop.ClaimOrder(s, "level_3", t0 + 301);
+            LoopSetBoard(s, t0 + 300, "gold_1000");
+            DailyLoop.Record(s, OrderKind.Gold, 1000, t0 + 300);
+            LoopPayout claimed = DailyLoop.ClaimOrder(s, "gold_1000", t0 + 301);
             Check(claimed.Success && LiveProgress(s, LiveEventSlot.Weekly, "q_orders", t0 + 301) == 1, "A CLAIMED ORDER COUNTS: claiming a daily order finishes 'claim an order'");
 
             // ---- the Proving counts as a Proving fight and as an arena fight, the Recital as an arena fight only
@@ -505,7 +505,7 @@ namespace Emberfall.DevHarness
             string pristine = LiveSnapshot(s);
 
             LiveEventView v = LiveEvents.View(s, LiveEventSlot.Weekly, t0);
-            Check(v.PackOfferId == "event_pack_weekly" && v.PackPrice == "EUR 9.99" && v.PackCanBuy && v.PackLines.Count >= 3
+            Check(v.PackOfferId == "event_pack_weekly" && v.PackPrice == "EUR 4.99" && v.PackCanBuy && v.PackLines.Count >= 3
                   && v.PackLines[0].Contains("12 hours") && v.PackLines[0].Contains("Sealed") && v.PackLines[1].Contains("6 sweeps"),
                   "THE PACK'S CONTENTS ARE FIXED AND SHOWN IN FULL WITH THE PRICE BEFORE IT IS BOUGHT: " + string.Join(" / ", v.PackLines.ToArray()) + " at " + v.PackPrice);
             Check(LiveSnapshot(s) == pristine, "and reading them writes nothing");
@@ -1211,9 +1211,9 @@ namespace Emberfall.DevHarness
                     for (int i = 0; i < 40; i++) if (s.ResolveWave(first, 7100 + i * 101, t0 + i).StageCleared) break;
                     s.Profile.Gold = 1000000000L;
                     s.LevelUpHero(s.Profile.Heroes[0], 2, t0 + 100);
-                    LoopSetBoard(s, t0 + 150, "level_3");
-                    DailyLoop.Record(s, OrderKind.Level, 3, t0 + 150);
-                    DailyLoop.ClaimOrder(s, "level_3", t0 + 151);
+                    LoopSetBoard(s, t0 + 150, "gold_1000");
+                    DailyLoop.Record(s, OrderKind.Gold, 1000, t0 + 150);
+                    DailyLoop.ClaimOrder(s, "gold_1000", t0 + 151);
                     s.GrantProvingResult(true, t0 + 200);
                     s.Profile.Shards = cd.Balance.SummonCost;
                     s.Summon(9302, t0 + 300);
