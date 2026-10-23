@@ -16,7 +16,7 @@ namespace Emberfall.DevHarness
     /// <summary>
     /// THE R28 SCREENS' STATE (Docs/ui-specs/R28-SCREENS.md): the presenters behind the leaderboards, the guild dungeon's
     /// size-scaled ladder, the notification settings and the rewarded ad buttons, driven through every state each
-    /// screen can be in; the leaderboard and ladder codecs against the exact shapes the two 0016 migrations return; the
+    /// screen can be in; the leaderboard and ladder codecs against the exact shapes migrations 0022 and 0023 return; the
     /// transport's function names against those migrations; and the rewarded ad rules (Docs/DESIGN-REWARDED-ADS.md):
     /// off equals before, fixed amounts paid as shown, the caps, the forward-only clock, once per impression, and no
     /// path that leaves a reward to luck.
@@ -196,13 +196,13 @@ namespace Emberfall.DevHarness
                   && LeaderboardCodec.FailureOf(400, "{\"code\":\"PT400\"}") == LeaderboardFailure.SaveTooOld
                   && LeaderboardCodec.FailureOf(429, "{\"code\":\"PT429\"}") == LeaderboardFailure.TooSoon
                   && LeaderboardCodec.FailureOf(500, "") == LeaderboardFailure.Server,
-                  "each refusal 0016 raises reads as its own failure, and a 404 is told apart by its code: PT404 is no cloud save, PGRST202 is 0016 not applied");
+                  "each refusal 0023 raises reads as its own failure, and a 404 is told apart by its code: PT404 is no cloud save, PGRST202 is 0023 not applied");
 
             JsonValue argsHigh = JsonValue.Parse(LeaderboardCodec.TopArgs(LeaderboardBoard.RecitalWeekClimb, 500));
             JsonValue argsLow = JsonValue.Parse(LeaderboardCodec.TopArgs(LeaderboardBoard.Campaign, 0));
             Check(argsHigh.GetString("p_board", "") == "recital_week_climb" && argsHigh.GetInt("p_limit", 0) == 100 && argsHigh.Count == 2
                   && argsLow.GetString("p_board", "") == "campaign" && argsLow.GetInt("p_limit", 0) == 1,
-                  "leaderboard_top's arguments name the board as 0016 spells it and clamp the limit to 1..100 as the server does");
+                  "leaderboard_top's arguments name the board as 0023 spells it and clamp the limit to 1..100 as the server does");
 
             Check(LeaderboardCodec.NextWeekResetUnix(R28Now) == R28Unix(2026, 10, 26, 4, 0)
                   && LeaderboardCodec.NextWeekResetUnix(R28Unix(2026, 10, 26, 3, 59)) == R28Unix(2026, 10, 26, 4, 0)
@@ -210,17 +210,17 @@ namespace Emberfall.DevHarness
                   && LeaderboardCodec.NextWeekResetUnix(R28Unix(2026, 10, 25, 23, 0)) == R28Unix(2026, 10, 26, 4, 0),
                   "the weekly board turns on Monday at 04:00 UTC: Thursday and Sunday night point at the next Monday, 03:59 at the same morning, 04:00 at the week after");
 
-            string sql = R28Read(root, "Server/supabase/migrations/0016_leaderboards.sql");
+            string sql = R28Read(root, "Server/supabase/migrations/0023_leaderboards.sql");
             string svc = R28Read(root, "Assets/Scripts/Game/Cloud/LeaderboardService.cs");
-            if (sql == null || svc == null) { Check(false, "0016_leaderboards.sql and LeaderboardService.cs are found under " + root); return; }
+            if (sql == null || svc == null) { Check(false, "0023_leaderboards.sql and LeaderboardService.cs are found under " + root); return; }
             bool names = true;
             foreach (LeaderboardBoard b in Enum.GetValues(typeof(LeaderboardBoard))) names &= sql.Contains("'" + LeaderboardCodec.IdOf(b) + "'");
-            Check(names, "every board the client can ask for is a board 0016's leaderboard_top accepts");
+            Check(names, "every board the client can ask for is a board 0023's leaderboard_top accepts");
             Check(sql.Contains("function public.leaderboard_submit()") && svc.Contains("rpc/leaderboard_submit\", \"{}\"")
                   && sql.Contains("function public.leaderboard_top(p_board text, p_limit integer") && svc.Contains("rpc/leaderboard_top"),
-                  "the transport calls the two functions 0016 defines, and leaderboard_submit with no argument (the client never sends a score)");
+                  "the transport calls the two functions 0023 defines, and leaderboard_submit with no argument (the client never sends a score)");
             Check(sql.Contains("60, 4, 8)") && LeaderboardCodec.SubmitIntervalSeconds == 60 && LeaderboardCodec.WeekResetHourUtc == 4,
-                  "the client's submit interval (60 s) and week reset hour (4) are the values 0016 seeds into leaderboard_limits");
+                  "the client's submit interval (60 s) and week reset hour (4) are the values 0023 seeds into leaderboard_limits");
         }
 
         private static string R28Read(string root, string relative)
@@ -330,7 +330,7 @@ namespace Emberfall.DevHarness
             p.TopFailed(LeaderboardBoard.Recital, LeaderboardFailure.NotDeployed);
             v = p.Build(d, late.Profile, now);
             Check(v.Phase == ScreenPhase.Error && !v.Retry.Visible && v.Status == "The leaderboards are not open yet.",
-                  "LEADERBOARDS NOT DEPLOYED (0016 not applied): 'The leaderboards are not open yet.' and no TRY AGAIN");
+                  "LEADERBOARDS NOT DEPLOYED (0023 not applied): 'The leaderboards are not open yet.' and no TRY AGAIN");
 
             Check(p.Select(LeaderboardBoard.Campaign), "LEADERBOARDS TABS: selecting a board never loaded asks the controller to load it");
             p.BeginLoad(LeaderboardBoard.Campaign);
@@ -413,17 +413,17 @@ namespace Emberfall.DevHarness
             GuildDungeonCycleSnapshot snap = GuildDungeonSizeCodec.ReadSnapshot("[{\"cycle\":42,\"member_count\":31,\"floor_count\":10}]");
             Check(snap != null && snap.Cycle == 42 && snap.MemberCount == 31 && snap.FloorCount == 10 && GuildDungeonSizeCodec.ReadSnapshot("[]") == null,
                   "a guild_dungeon_cycles row reads as the cycle, the member count and the ladder; no row reads as none");
-            Check(JsonValue.Parse(GuildDungeonSizeCodec.FloorsForArgs(31)).GetInt("p_members", 0) == 31, "guild_dungeon_floors_for is called with p_members, as 0016 names it");
+            Check(JsonValue.Parse(GuildDungeonSizeCodec.FloorsForArgs(31)).GetInt("p_members", 0) == 31, "guild_dungeon_floors_for is called with p_members, as 0022 names it");
 
-            string sql = R28Read(root, "Server/supabase/migrations/0016_guild_dungeon_size.sql");
+            string sql = R28Read(root, "Server/supabase/migrations/0022_guild_dungeon_size.sql");
             string svc = R28Read(root, "Assets/Scripts/Game/Cloud/GuildDungeonSizeService.cs");
-            if (sql == null || svc == null) { Check(false, "0016_guild_dungeon_size.sql and GuildDungeonSizeService.cs are found under " + root); return; }
+            if (sql == null || svc == null) { Check(false, "0022_guild_dungeon_size.sql and GuildDungeonSizeService.cs are found under " + root); return; }
             string[] fns = { "guild_dungeon_floors_for", "guild_dungeon_floor_max", "guild_dungeon_cycle_attempt_cap" };
             bool all = true;
             for (int i = 0; i < fns.Length; i++)
                 all &= svc.Contains("\"" + fns[i] + "\"") && sql.Contains("grant execute on function public." + fns[i]);
             Check(all && sql.Contains("grant select on public.guild_dungeon_cycles to authenticated") && svc.Contains("guild_dungeon_cycles?select="),
-                  "the transport calls exactly the three functions 0016 grants to a signed-in client, and reads guild_dungeon_cycles, which it lets members select");
+                  "the transport calls exactly the three functions 0022 grants to a signed-in client, and reads guild_dungeon_cycles, which it lets members select");
             Check(sql.Contains("cycle_attempt_cap integer") && sql.Contains("attempts_used     integer") && sql.Contains("ladder_members    integer"),
                   "guild_dungeon_status answers the three columns GuildDungeonStatus.Read and the ladder screen read");
         }
@@ -588,14 +588,14 @@ namespace Emberfall.DevHarness
             Check(allCycle && v.AttemptsLine == "ATTEMPTS 0 / " + cap + " THIS CYCLE" && R28ReasonsVerbatim(d, v, newGuild, me, s4),
                   "GUILD LADDER, CHANGED GUILD AFTER " + cap + " ATTEMPTS: the server's count wins over rows this guild cannot show; every ATTEMPT disabled with the cycle sentence");
 
-            // A server before 0016: the status columns are -1.
+            // A server before 0022: the status columns are -1.
             GuildDungeonStatus old = R28Status(5, -1, -1, -1, now);
             List<GuildDungeonAttempt> mine = new List<GuildDungeonAttempt> { R28Attempt(me, "Me", 1, false), R28Attempt(me, "Me", 1, true) };
             p.Loaded(old, mine, "Old Server", -1);
             v = p.Build(d, me, now);
             Check(v.LadderLine == "5 FLOORS THIS CYCLE" && v.CycleAttemptCap == cap && v.AttemptsLeftThisCycle == cap - 2 && v.NextCycleLine == ""
                   && v.Rows[0].AttemptsText == "1 of 3 left",
-                  "GUILD LADDER, SERVER BEFORE 0016: the floor count alone, the cap from GuildDungeonScale.CycleAttemptCap, the count from this member's rows");
+                  "GUILD LADDER, SERVER BEFORE 0022: the floor count alone, the cap from GuildDungeonScale.CycleAttemptCap, the count from this member's rows");
 
             // Recording and refusal.
             p.Loaded(s1, none, "Ashen Oath", 4);

@@ -1477,7 +1477,7 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
 **Everything below four screens except the uGUI (`Docs/ui-specs/R28-SCREENS.md`).** Each screen has a presenter in
 `Assets/Scripts/Core/Screens` that exposes exactly what it draws (phase, rows, buttons with enabled and reason, every
 sentence and countdown) and a controller in `Assets/Scripts/Game` that makes the calls. `R28ScreenChecks.cs` drives
-every presenter through every state, reads the codecs against the two 0016 migrations' shapes, and scans every
+every presenter through every state, reads the codecs against the shapes of migrations 0022 and 0023, and scans every
 string for an em or en dash and for selling words.
 
 - **Leaderboards.** `LeaderboardCodec` (Core) and `LeaderboardService.cs` (transport, in-memory override, controller)
@@ -1496,7 +1496,7 @@ string for an em or en dash and for selling words.
   (`SaveSerializer.CurrentVersion` is 27; a save is stamped 27 only once an ad was granted, so with the switch off
   every save is byte for byte what version 26 wrote), `RewardedAdPresenter`, and `Game/Ads` with a simulated backend
   for the editor and development builds. **Before the switch goes on the owner applies
-  `Server/supabase/owner/save_limits_27.sql`.** No ads package is in the project.
+  `Server/supabase/migrations/0026_save_limits_27.sql`.** No ads package is in the project.
 
 ### The UI kit (R20)
 

@@ -47,7 +47,7 @@ lists, before the work counts as done. The in-memory backends make every state r
 
 **Presenter** `LeaderboardsPresenter` (view `LeaderboardsView`). **Controller** `LeaderboardsController` in
 `Assets/Scripts/Game/Cloud/LeaderboardService.cs`, built with `LeaderboardBackends.For(app)`, the app as the coroutine
-runner and the session. **Server** `0016_leaderboards.sql`: `leaderboard_submit()` and `leaderboard_top(board, limit)`.
+runner and the session. **Server** `0023_leaderboards.sql`: `leaderboard_submit()` and `leaderboard_top(board, limit)`.
 
 **Doors.** A LEADERBOARDS button on `ProfileScreen`, and a BOARDS secondary button on `RecitalScreen` and
 `ProvingScreen` that opens this screen with that board selected (`SelectTab` before `Open`). Nothing on the Store,
@@ -134,7 +134,7 @@ The screen reads the tab's board from `Tabs[1].Board` and needs no change either
 
 **Presenter** `GuildDungeonLadderPresenter` (view `GuildDungeonLadderView`). **Controller**
 `GuildDungeonLadderController` in `Assets/Scripts/Game/Cloud/GuildDungeonSizeService.cs`, built with
-`GuildDungeonBackends.For(app)`, `app.Cloud`, the app and the session. **Server** `0016_guild_dungeon_size.sql`: the
+`GuildDungeonBackends.For(app)`, `app.Cloud`, the app and the session. **Server** `0022_guild_dungeon_size.sql`: the
 widened `guild_dungeon_status` (read by `GuildDungeonStatus.Read`), `guild_dungeon_floors_for`,
 `guild_dungeon_floor_max`, `guild_dungeon_cycle_attempt_cap`, and the `guild_dungeon_cycles` row
 (`GuildDungeonSizeService`). This section supersedes the layout half of `Docs/ui-specs/GUILD-DUNGEON-SIZE.md`; its
@@ -367,10 +367,9 @@ for the words of a luck mechanic and fail on any.
 ## Dependencies and owner steps
 
 - **Base.** This work sits on the guild dungeon size work (`GuildDungeonScale`, `GuildDungeonRewards`, the status
-  columns, `0016_guild_dungeon_size.sql`), the leaderboards and notifications work (`0016_leaderboards.sql`,
-  `NotificationPlanner`) and the rewarded ads record (`Docs/DESIGN-REWARDED-ADS.md`), none of which is on main yet.
-- **Two files are numbered 0016** (`0016_leaderboards.sql`, `0016_guild_dungeon_size.sql`), and `Server/README.md`
-  already reserves 0016 to 0019 for the launch migrations. One of them must be renumbered before either is applied.
+  columns, `0022_guild_dungeon_size.sql`), the leaderboards and notifications work (`0023_leaderboards.sql`,
+  `NotificationPlanner`) and the rewarded ads record (`Docs/DESIGN-REWARDED-ADS.md`), all of which are on main (merged as the integration branch; migrations 0022 and 0023).
+- **Migration numbers.** The leaderboards migration is `0023_leaderboards.sql` and the guild dungeon size migration is `0022_guild_dungeon_size.sql`; both were renumbered when the branches merged.
 - **Before ads ship:** apply `Server/supabase/owner/save_limits_27.sql`, then turn `AdsSwitch` on (`EMBERFALL_ADS`).
 - **Before reminders ship:** add `com.unity.mobile.notifications` and an Android `INotificationBackend` behind
   `EMBERFALL_MOBILE_NOTIFICATIONS`, set as `NotificationBackends.Override` at startup.

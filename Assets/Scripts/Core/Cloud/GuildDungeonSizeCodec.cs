@@ -4,7 +4,7 @@ using Emberfall.Core.Json;
 
 namespace Emberfall.Core.Cloud
 {
-    /// <summary>One row of guild_dungeon_cycles (0016_guild_dungeon_size.sql): the member count a guild's
+    /// <summary>One row of guild_dungeon_cycles (0022_guild_dungeon_size.sql): the member count a guild's
     /// ladder was set from when its cycle opened, and the ladder that set.</summary>
     public sealed class GuildDungeonCycleSnapshot
     {

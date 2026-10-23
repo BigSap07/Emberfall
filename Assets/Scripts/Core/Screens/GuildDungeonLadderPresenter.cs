@@ -53,7 +53,7 @@ namespace Emberfall.Core.Screens
         public string GuildName = "";
         public int FloorCount;
         /// <summary>"10 FLOORS THIS CYCLE - set at 31 members when the cycle opened." The member half is left out
-        /// when the server predates 0016 (LadderMembers -1).</summary>
+        /// when the server predates 0022 (LadderMembers -1).</summary>
         public string LadderLine = "";
         /// <summary>"A guild of 15 gets 7 floors from next cycle." Empty at the longest ladder or with no live member count.</summary>
         public string NextCycleLine = "";
@@ -178,7 +178,7 @@ namespace Emberfall.Core.Screens
             _recordingFloor = 0;
         }
 
-        /// <summary>The server refused the attempt. Its sentence is shown as it came (0016's raise messages match
+        /// <summary>The server refused the attempt. Its sentence is shown as it came (0022's raise messages match
         /// GuildDungeonScale.CanAttempt's wording), and the controller reloads, since the refusal means this copy was stale.</summary>
         public void AttemptRefused(string serverSentence)
         {

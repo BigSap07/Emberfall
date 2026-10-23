@@ -9,7 +9,7 @@ using Emberfall.Core.Session;
 namespace Emberfall.Game.Cloud
 {
     /// <summary>
-    /// The two leaderboard functions of Server/supabase/migrations/0016_leaderboards.sql, as one surface.
+    /// The two leaderboard functions of Server/supabase/migrations/0023_leaderboards.sql, as one surface.
     ///
     /// AN INTERFACE for GuildDungeonBackends' reason: editor tooling can put an in-memory board in front of
     /// the screen (LeaderboardBackends.Override) and capture every state without a live project. Bodies are
@@ -54,7 +54,7 @@ namespace Emberfall.Game.Cloud
         }
     }
 
-    /// <summary>The live backend: 0016's leaderboard_submit and leaderboard_top through PostgREST RPC.</summary>
+    /// <summary>The live backend: 0023's leaderboard_submit and leaderboard_top through PostgREST RPC.</summary>
     public sealed class SupabaseLeaderboardBackend : ILeaderboardBackend
     {
         private readonly CloudCoordinator _cloud;

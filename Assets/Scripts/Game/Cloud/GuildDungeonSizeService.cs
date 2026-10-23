@@ -9,11 +9,11 @@ using Emberfall.Core.Session;
 namespace Emberfall.Game.Cloud
 {
     /// <summary>
-    /// The functions Server/supabase/migrations/0016_guild_dungeon_size.sql adds beside the widened
+    /// The functions Server/supabase/migrations/0022_guild_dungeon_size.sql adds beside the widened
     /// guild_dungeon_status (which GuildDungeonStatus.Read already reads through IGuildDungeonBackend.Status):
     /// the ladder for a member count, the longest ladder, the cycle cap, and the cycle snapshot row.
     ///
-    /// Each one answers -1 (or null) with a sentence when the server predates 0016, so the ladder screen falls
+    /// Each one answers -1 (or null) with a sentence when the server predates 0022, so the ladder screen falls
     /// back to GuildDungeonScale's prediction rather than going blank. A plain class rather than a new member
     /// of IGuildDungeonBackend, so the editor's in-memory guild (GuildDungeonShots) does not have to grow.
     /// </summary>
@@ -176,7 +176,7 @@ namespace Emberfall.Game.Cloud
             _presenter.Loaded(status, attempts, _backend.GuildName, live);
             Raise();
 
-            // The server's ladder for the live count, for the next-cycle line. Optional: on a server before 0016
+            // The server's ladder for the live count, for the next-cycle line. Optional: on a server before 0022
             // it answers -1 and the line keeps GuildDungeonScale's prediction.
             if (_size != null && _size.Ready && live > 0)
             {

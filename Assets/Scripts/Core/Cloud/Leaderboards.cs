@@ -5,7 +5,7 @@ using Emberfall.Core.Json;
 namespace Emberfall.Core.Cloud
 {
     /// <summary>
-    /// The boards leaderboard_top serves (Server/supabase/migrations/0016_leaderboards.sql,
+    /// The boards leaderboard_top serves (Server/supabase/migrations/0023_leaderboards.sql,
     /// Docs/DESIGN-LEADERBOARDS.md). Closed: the server refuses any other name with 400.
     /// </summary>
     public enum LeaderboardBoard
@@ -83,7 +83,7 @@ namespace Emberfall.Core.Cloud
         SaveTooOld,
         /// <summary>PT429 on submit: submitted again inside a minute. An answer, not an error.</summary>
         TooSoon,
-        /// <summary>PGRST202: the function does not exist on this server (0016 not applied).</summary>
+        /// <summary>PGRST202: the function does not exist on this server (0023 not applied).</summary>
         NotDeployed,
         /// <summary>Anything else: a 5xx, a timeout, a body that does not parse.</summary>
         Server
@@ -91,7 +91,7 @@ namespace Emberfall.Core.Cloud
 
     /// <summary>
     /// Reads and writes the bodies of the two leaderboard functions. Engine-free, so the harness runs
-    /// it against the exact shapes 0016 returns (R28ScreenChecks); the transport in
+    /// it against the exact shapes 0023 returns (R28ScreenChecks); the transport in
     /// Assets/Scripts/Game/Cloud/LeaderboardService.cs sends the requests and hands the bodies here.
     /// </summary>
     public static class LeaderboardCodec

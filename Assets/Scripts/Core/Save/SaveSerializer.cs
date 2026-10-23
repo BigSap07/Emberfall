@@ -498,7 +498,7 @@ namespace Emberfall.Core.Save
         /// impression twice. Upgrade needs NO migration step: the key's absence is the empty state. Nothing writes it
         /// while AdsSwitch is off, so until ads ship every save is byte for byte the document version 26 wrote. The
         /// server's save_limits row must be raised to 27 before a cloud player holds any of it
-        /// (Server/supabase/owner/save_limits_27.sql, never applied).
+        /// (Server/supabase/migrations/0026_save_limits_27.sql, never applied).
         public const int CurrentVersion = 27;
 
         /// <summary>The version of the R24 monetization run, which a save says when it holds any of its data and none
