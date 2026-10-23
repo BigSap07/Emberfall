@@ -50,7 +50,7 @@ FORMAT_NAMES = {RGBA32: "RGBA32", DXT5: "DXT5", BC7: "BC7", DXT5_CRUNCHED: "DXT5
 
 class Group(object):
     def __init__(self, name, folder, max_size, npot, mipmap, filter_mode,
-                 win_format, android_format, crunch_quality, note):
+                 win_format, android_format, crunch_quality, note, multiple_of_4_only=False):
         self.name = name
         self.folder = folder
         self.max_size = max_size
@@ -61,6 +61,10 @@ class Group(object):
         self.android_format = android_format
         self.crunch_quality = crunch_quality
         self.note = note
+        # A block format stores 4x4 blocks, and Unity falls back to uncompressed for a texture whose
+        # sides are not multiples of 4. With this set, such a file is left exactly as it is (it is
+        # tiny, and the report names it) instead of being given an entry that cannot take effect.
+        self.multiple_of_4_only = multiple_of_4_only
 
 
 GROUPS = [
@@ -217,6 +221,22 @@ GROUPS = [
         win_format=BC7, android_format=ASTC_4x4, crunch_quality=50,
         note="10 relic icons",
     ),
+    # R26 EMBERFORGE SPRITES: the code-built UI's 9-slice pieces (panels, buttons, tabs, chips, frames).
+    # Their metas never named a Standalone or Android platform, so they inherited
+    # DefaultTexturePlatform's textureCompression 0 and shipped as uncompressed RGBA32: 31 files, 1.27 MB
+    # of raw pixels in the player from 0.37 MB of PNG. BC7 on Windows and ASTC 4x4 on Android, the call the
+    # UI kit groups make for the same kind of art (hard edges, soft gold gradients, alpha), is visually
+    # lossless on a 9-slice piece, mips stay off, and the max size stays 2048 (the largest file is 160 px,
+    # so nothing is resampled). forge_rule.png is 32x6, not a multiple of 4, and stays as it is.
+    Group(
+        name="Emberforge sprites (R26)",
+        folder="Assets/Resources/Sprites/Emberforge",
+        max_size=2048,
+        npot=0, mipmap=0, filter_mode=1,
+        win_format=BC7, android_format=ASTC_4x4, crunch_quality=50,
+        note="32 code-built UI pieces, were RGBA32",
+        multiple_of_4_only=True,
+    ),
 ]
 
 PLATFORM_ENTRY = """  - serializedVersion: 4
@@ -320,8 +340,11 @@ def main():
             if not os.path.exists(meta):
                 print("  no .meta for %s - skipped" % os.path.basename(png))
                 continue
-            n += 1
             w, h = png_size(png) or (0, 0)
+            if group.multiple_of_4_only and (w % 4 or h % 4):
+                print("  %s is %dx%d, not a multiple of 4 - left as it is" % (os.path.basename(png), w, h))
+                continue
+            n += 1
 
             old = open(meta, "r", encoding="utf-8").read()
             before += predict(old, w, h)
