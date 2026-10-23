@@ -1,217 +1,156 @@
-# Emberfall — original idle RPG prototype
+# Emberfall
 
-A first playable vertical slice of an original mobile idle RPG: collectible heroes, automatic
-3v3 turn-based combat rendered in 3D, campaign progression, summoning, idle income and local
-saving. Portrait, touch-first, built for Android / BlueStacks.
+An original idle RPG for Android phones: collect heroes, line up five of them, and watch automatic
+turn-based battles while the campaign, idle income and a deep upgrade spine pull you forward.
+Landscape, touch first, built in Unity. Everything is original: setting, heroes, abilities,
+terminology, UI and art direction.
 
-Everything here is original: setting, hero names, abilities, terminology, UI and art direction.
+**This file is an overview.** `DESIGN-BUILD-ORDER.md` is the one document kept current, and it is
+the source of truth for what is built, what is moving and what is owed. If the two disagree, it is
+right. `CLAUDE.md` is the working agreement for agents. `Docs/LAUNCH-CHECKLIST.md` is what stands
+between this build and the Play Store.
+
+---
+
+## What the game has today
+
+**Heroes and combat**
+- 94 heroes from one to five stars, all with authored kits (basic attack, active skill, passives,
+  and up to three talents that ascension opens), six aspects with a type wheel, and ten relics.
+- 5 against 5 automatic, turn-based battles. A fight is a pure, seeded function: the same inputs
+  replay the same battle, and WATCH replays the hardest fight of a wave exactly.
+- Battle HUD with plates, status icons, turn order, ability callouts and a per-hero stats panel.
+
+**Progression**
+- A campaign of six chapters and 72 stages. A stage is a ladder of waves of 12 battles that
+  resolve in one tap, with a miniboss wall at stage 6 and a boss at stage 12 of every chapter, and
+  a one-time wall chest on each.
+- Idle income against a real clock, capped (`idleCapHours` in `balance.json`).
+- Summoning with a pity rule, hero fusion (conversion) and ascension, star-gated level caps.
+- Armor with rolls, tempers and attunements, a Forge, a Quartermaster shop, relic upgrades.
+
+**Things to do besides the campaign**
+- The Deep Recital, an endless floor ladder with Guardians.
+- The Proving, fights against generated opponent lines, and friendly duels against friends.
+- Guilds: founding, codes, roles, chat, a weekly five-floor guild dungeon with replays, the Guild
+  Path and a guild tech tree.
+- Daily orders, a login calendar and Wayfarer's Road (a free 28-day track), **off by default**
+  behind `EMBERFALL_DAILY_LOOP_ON`.
+- Weekly and monthly live events with free tracks.
+
+**Store**
+- A Store with packs, a starter offer, a monthly card, a growth fund, a paid pass track, event
+  tracks, relic packs, hero contracts and skins. Everything bought is Sealed and never feeds a random
+  mechanic (`Docs/DESIGN-SEALED.md`). **No real money moves yet**: the editor uses Unity IAP's fake
+  store, a development build uses a debug store, and a release build says COMING SOON.
+
+**Around the game**
+- A guided first session with a feature unlock table (`onboarding.json`).
+- Anonymous cloud accounts on Supabase with optional email, cloud save with conflict handling,
+  friends and friend codes.
+- Opt-in play stats for playtests, consent off by default (`Docs/PRIVACY-PLAYTEST.md`).
+- Real music and sound effects with settings sliders.
+
+**Art**
+- All 94 hero badges are drawn. 31 heroes have battle sprite sheets; the other 63 draw as named
+  placeholder mannequins until their sheets arrive (`Docs/PINOY-LIST.md`).
+- 12 of chapter 1's 14 enemies and all 14 of chapter 2's have sheets; chapters 3 to 6 field
+  placeholder enemies.
+- Every chapter has painted battle backgrounds, including a boss backdrop for each stage 12.
 
 ---
 
 ## Getting it running
 
-**Unity is not installed on this machine, so the project has never been opened in the editor.**
-It was written to be opened without any manual setup.
+1. Install **Unity 6.5 (6000.5.9f1)** through Unity Hub, with **Android Build Support** (Android
+   SDK and NDK tools, OpenJDK) and, for playtest builds, Windows build support.
+2. In Unity Hub choose **Add, Add project from disk** and pick this folder. Do not create a new
+   project on top of it: a template can switch the render pipeline.
+3. Open the project. `EmberfallProjectSetup` creates the near-empty `Assets/Scenes/Main.unity`,
+   adds it to Build Settings and applies the player settings (landscape, bundle id
+   `com.emberfall.prototype`, Android backend). **Emberfall, Set Up Project** reapplies them.
+4. **Emberfall, Open Main Scene**, then Play.
 
-1. Install **Unity 6 LTS (6000.0.x)** via Unity Hub, with the **Android Build Support** module
-   (including *Android SDK & NDK Tools* and *OpenJDK*).
-   Unity 2022.3 LTS also works — the project has no version-specific code.
-2. In Unity Hub choose **Add → Add project from disk** and pick this folder.
-   *Do not* create a new project on top of it: creating a project applies a template that may
-   switch the render pipeline to URP or change the input backend.
-3. Open the project. On first load Unity generates `Packages/manifest.json`, `Library/` and the
-   remaining `ProjectSettings/` defaults, and `EmberfallProjectSetup` runs automatically to:
-   - create `Assets/Scenes/Main.unity` (deliberately empty — see *Architecture*),
-   - add it to Build Settings,
-   - set product name, portrait orientation, bundle id and the Android backend.
-4. Open `Assets/Scenes/Main.unity` (menu: **Emberfall → Open Main Scene**) and press **Play**.
+The project uses the **Built-In Render Pipeline**, not URP, and needs the `com.unity.ugui` package.
+The UI is uGUI built from code; `GameBootstrap` builds the camera, canvas, UI and battlefield at
+runtime, which is why the scene is empty.
 
-If anything looks wrong, run **Emberfall → Set Up Project** to reapply all of the above.
-
-### Render pipeline
-
-The project targets the **Built-In Render Pipeline**. The two shaders in
-`Assets/Resources/Shaders` also ship a URP sub-shader, so URP renders too, but Built-In is what
-it was designed against. `GameApp` logs a warning at startup if an SRP is active.
-
----
-
-## The loop that works today
-
-```
-MAIN SCREEN → HEROES → HERO DETAIL (level up, deploy)
-            → CAMPAIGN (pick stage, see your banner)
-            → BATTLE (auto 3v3, abilities, crits, deaths)
-            → REWARDS (gold, shards, account XP, unlocks)
-            → SUMMON (spend shards, new ally)
-            → repeat
-```
-
-Progress is saved automatically and survives restarts.
+**Cloud features** need `Assets/Resources/Config/supabase.json`, which is gitignored and never
+committed (copy `supabase.template.json`). Without it the game runs fully offline and every cloud
+page says LOCAL ONLY.
 
 ---
 
 ## Architecture
 
-The hard rule is that **combat is a pure function**. `CombatSimulation.Run()` resolves the entire
-fight up front and returns an ordered list of `BattleEvent`s. The battle screen is a player for
-that list — it never computes damage, never decides a target and cannot change the outcome.
-
 ```
 Assets/Scripts/
-  Core/          no UnityEngine reference at all (enforced by Emberfall.Core.asmdef)
-    Json/        dependency-free JSON reader/writer, shared by content and saves
-    Data/        HeroDef, EnemyDef, AbilityDef, StageDef, BalanceConfig, ContentDatabase
-    Model/       PlayerProfile, HeroInstance
-    Combat/      DeterministicRng, CombatUnit, CombatSimulation, BattleEvent
-    Progression/ StatMath — every formula in one file
-    Save/        SaveSerializer
-    Session/     GameSession — the only place profile state is mutated
-  Game/          Unity glue: bootstrap, content loading, save IO, synthesised audio
-  UI/            theme, procedural sprite lab, widget builders, router, screens
-  Battle/        camera/arena, procedural character rigs, effects, actors
-  Editor/        project setup and the Android build menu
+  Core/      the game itself, with no UnityEngine reference (enforced by its asmdef)
+    Combat/      CombatSimulation, BattleEvent, statuses, targeting, talents
+    Data/        definitions and ContentDatabase
+    Session/     GameSession, the only place profile state is mutated
+    Progression/ StatMath, daily loop, store offers, purchase ledger
+    Save/        SaveSerializer (save version 26)
+    Cloud/       sync decisions, guild rules, codecs
+  Game/      Unity glue: bootstrap, content loading, save IO, audio, cloud transport, IAP adapter
+  UI/        theme, widgets, router and the screens under UI/Screens
+  Battle/    stage, actors, sprite animation, hit effects
+  Dev/       the Dev Arena, compiled out of release builds
+Assets/Editor/   project setup, build menu, capture tooling
 ```
 
-`Core` is where the game actually lives; the Unity layers only render it. That split is what
-lets the whole simulation be tested without the editor (see *Offline verification*).
+- **Combat is a pure function.** `CombatSimulation.Run()` resolves the whole fight and returns an
+  ordered list of `BattleEvent`s; the battle screen only plays it. No game logic lives in UI.
+- **Content is data.** Balance, heroes, enemies, the campaign, relics, events, store offers and the
+  rest are JSON in `Assets/Resources/Content`. Eight files are hashed into
+  `ContentDatabase.ContentVersion` because fights read them; the others are not.
+- **Saves are documents.** The whole profile is one versioned JSON document, migrated on load. A
+  save from a newer build is refused rather than read.
 
-### Data-driven content
+## Checking it without the editor
 
-All static content is JSON in `Assets/Resources/Content/`:
+`Tools/build-check.ps1` (PowerShell, Windows) compiles every script against a hand-written Unity
+shim in `Tools/UnityShim` and runs `Tools/DevHarness`: content validation, determinism, save round
+trips, the campaign power curve over many simulated players, the store and economy studies, and
+hundreds of named checks. `-Quick` runs fewer simulated walks during work; only the full run counts
+for a merge. CI runs it on every push (`.github/workflows/build-check.yml`).
 
-| File | Contents |
+`Tools/doc-lint.ps1` lints the markdown for line-number citations, dead commit hashes and dead
+branch names.
+
+## Building
+
+| Menu | Result |
 |---|---|
-| `heroes.json` | the six heroes: stats, visuals, basic attack, active, passive |
-| `enemies.json` | eight Hollow enemy types including a boss |
-| `campaign.json` | chapter 1, twelve stages with enemy line-ups and rewards |
-| `balance.json` | every tuning constant — damage formula, costs, idle rates, summon odds |
+| Emberfall, Build Windows (Development) | a Windows player with the Dev Arena |
+| Emberfall, Build Android APK | an APK on the fast backend (Mono, ARMv7) |
+| Emberfall, Build Android APK (Release) | an APK on IL2CPP, ARM64 |
+| Emberfall, Android, ... | switch between the two Android backends |
+| Emberfall, Delete Local Save | wipe progress to replay the first session |
+| Emberfall, Reveal Save Folder | open `persistentDataPath` |
 
-Adding hero #7 means adding one JSON object. Nothing in the combat code knows any hero by name.
-Abilities are lists of typed effects (`Damage`, `Heal`, `Shield`, `ApplyStatus`, `Cleanse`,
-`EnergyGain`) with a targeting mode, so new behaviour is usually data, not code.
+Playtest packages come from `Tools/build-windows.ps1` (release or `-Development`, offline by default
+or `-Cloud`), which zips the player with `Docs/PLAYTEST-README.md` inside. Every player prints
+`BUILD <version> (<commit>)` in the Hub's corner. The current version is 0.3.0.
 
-### No imported art
+## Server
 
-There are no models, textures, fonts or audio files in the project. Instead:
+`Server/` holds the Supabase side: numbered SQL migrations (run in order in the SQL editor, never
+automatically), operator queries, and Edge Functions for Google Play receipt validation. The game
+talks to Supabase's REST endpoints with the anon key and the player's own token; the service role
+key is never in the game. `Server/README.md` lists every migration and what is applied.
+`Tools/supabase-rules-test.py`, `Tools/supabase-guild-rules-test.py` and
+`Tools/supabase-launch-rules-test.py` prove the database rules against a live project.
 
-- **Characters** are assembled from Unity primitives at runtime by `UnitRig`, using a
-  silhouette + weapon + palette recipe from each unit's `visual` block.
-- **UI sprites** (rounded panels, rings, glows, hatching, hero sigils) are drawn pixel by pixel
-  into textures at startup by `TextureLab` and cached.
-- **Ground, sky and effects** are generated textures on two custom shaders.
-- **Sound** is synthesised in `Sfx` — sine sweeps and arpeggios, no audio assets.
-- **Text** uses Unity's built-in `LegacyRuntime.ttf`, so there is no TextMeshPro import step.
+## Where to read next
 
-This is why the repository is a few thousand lines of code and nothing else, and why there are
-no `.meta` files to conflict — Unity generates them on first import.
-
-### Why the scene is empty
-
-`GameBootstrap` builds the camera, canvas, UI and battlefield from code via
-`[RuntimeInitializeOnLoadMethod]`. The scene file contains nothing. That avoids hand-authored
-scene YAML, makes the project version-agnostic, and means pressing Play from any scene works.
-
----
-
-## Offline verification
-
-Unity is not installed here, so the project ships with its own compile-and-test harness that
-runs against the .NET Framework compiler already present on Windows:
-
-```bash
-pwsh "Tools/build-check.ps1"
-```
-
-It does two things:
-
-1. **Compiles every script** — `Core`, the Unity runtime code and the editor scripts — against
-   `Tools/UnityShim`, a hand-written subset of the UnityEngine/UnityEditor API with matching
-   signatures. This catches typos, wrong overloads and missing usings without an editor.
-2. **Runs `Tools/DevHarness`**, which loads the real content files and checks content validity,
-   battle determinism, save round-tripping, prints a readable sample battle, then simulates a
-   full player run through the campaign and reports win rate and fight length per stage.
-
-`Tools/` sits outside `Assets/`, so Unity never sees the shim.
-
-Because the harness compiler is C# 5, the project is written in C# 5-compatible syntax
-(no string interpolation, no expression-bodied members). Unity supports C# 9 — this is a
-deliberate trade to keep the offline check working, and can be dropped once Unity is installed.
-
----
-
-## Building the APK
-
-**Emberfall → Build Android APK** writes `Builds/Emberfall.apk` and opens the folder.
-
-Android defaults applied by `EmberfallProjectSetup`:
-
-| Setting | Value | Why |
-|---|---|---|
-| Scripting backend | Mono | fastest builds, no NDK needed |
-| Architecture | ARMv7 | runs on BlueStacks through its ARM translation layer |
-| Orientation | Portrait | phone-shaped UI |
-| Min SDK | 26 | Unity's current Android minimum |
-| Bundle id | `com.emberfall.prototype` | |
-
-For a device-ready build use **Emberfall → Android → Release Backend (IL2CPP, ARM64)** first.
-That path needs the Android NDK module installed and takes considerably longer to build. x86-64
-is no longer a supported Android target architecture in this Unity version, so this backend no
-longer runs natively on 64-bit BlueStacks instances - it still runs there through BlueStacks' ARM
-translation layer, same as the fast-iteration (ARMv7) backend, just with an IL2CPP build.
-
-Headless/CI:
-
-```bash
-Unity.exe -quit -batchmode -projectPath "<this folder>" -executeMethod Emberfall.EditorTools.EmberfallBuild.BuildFromCommandLine
-```
-
-### Installing in BlueStacks
-
-1. Start BlueStacks 5 and let it finish booting.
-2. Drag `Builds/Emberfall.apk` onto the BlueStacks window, or use the sidebar **Install APK**
-   button and select the file.
-3. Launch **Emberfall** from the BlueStacks home screen.
-4. Set the instance to a portrait resolution (Settings → Display → Portrait, e.g. 1080×1920)
-   so the UI is not letterboxed.
-
-`adb` also works if you prefer it:
-
-```bash
-adb connect 127.0.0.1:5555
-```
-
-```bash
-adb install -r Builds/Emberfall.apk
-```
-
----
-
-## Menu reference
-
-| Menu item | Effect |
+| Document | What it is |
 |---|---|
-| Emberfall → Set Up Project | recreate scene, build settings and player settings |
-| Emberfall → Open Main Scene | open `Assets/Scenes/Main.unity` |
-| Emberfall → Delete Local Save | wipe progress so the next run is a first-time experience |
-| Emberfall → Reveal Save Folder | open `persistentDataPath` |
-| Emberfall → Android → … | switch between the fast-iteration and release backends |
-| Emberfall → Build Android APK | build `Builds/Emberfall.apk` |
-
-There is also a **…** button on the main screen in-game that resets progress, for testing the
-first-run experience on device.
-
----
-
-## Combat rules
-
-- Turn order is by effective Speed each round; ties break toward the player, then slot, then id.
-- A basic attack grants 28 energy; taking damage grants 9. At 100 energy the unit spends it on
-  its active ability instead of attacking.
-- `damage = attack × power × aspect × crit × (1 − defense/(defense + 320 + 18×level)) × ±6%`
-- Aspects: Ember ▸ Verdant ▸ Tide ▸ Gale ▸ Ember, and Lumen ⇄ Umbra. ×1.20 / ×0.85.
-- Statuses: Attack Up/Down, Guard Up/Down, Cinder (damage over time), Renewal, Ward (absorb),
-  Provoke (taunt), Focus (crit up), Mire (slow).
-- Wards absorb before health. Damage over time ticks at the start of the victim's turn.
-- 30 rounds maximum; if time runs out the side with the higher remaining health fraction wins.
-- Everything is seeded, so the same battle replays identically.
+| `DESIGN-BUILD-ORDER.md` | what is built, in progress, next, blocked, open and buggy |
+| `Docs/LAUNCH-CHECKLIST.md` | what the Play Store launch still needs, prioritised, with owners |
+| `CLAUDE.md` | ground rules for agents working in this repository |
+| `DESIGN-*.md`, `Docs/DESIGN-*.md` | decision records, each true as of its date |
+| `Docs/CLOUD-GAPS.md` | the save and cloud audit |
+| `Docs/DESIGN-RECEIPT-VALIDATION.md` | Google Play purchase verification |
+| `Docs/store/` | privacy policy draft, Play Store listing, data safety answers |
+| `Docs/PINOY-LIST.md` | everything waiting on the designer and artist |
