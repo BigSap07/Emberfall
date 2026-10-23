@@ -17,9 +17,25 @@ namespace Emberfall.Game
         public const string FileName = "emberfall_save.json";
         public const string PrefsKey = "emberfall.save.v1";
 
+        /// <summary>The save file. In a smoke run (SmokeStorage.Active, EMBERFALL_PLAYLOG only) it is inside the
+        /// scratch-smoke folder, never the real file; the same holds for the PlayerPrefs mirror (MirrorKey).</summary>
         public static string FilePath
         {
-            get { return Path.Combine(Application.persistentDataPath, FileName); }
+            get
+            {
+                string dir = SmokeStorage.SaveDirectory(Application.persistentDataPath);
+                if (SmokeStorage.Active)
+                {
+                    try { Directory.CreateDirectory(dir); }
+                    catch (Exception) { }
+                }
+                return Path.Combine(dir, FileName);
+            }
+        }
+
+        private static string MirrorKey
+        {
+            get { return SmokeStorage.SavePrefsKey(PrefsKey); }
         }
 
         public static void Save(PlayerProfile profile)
@@ -39,7 +55,7 @@ namespace Emberfall.Game
 
             try
             {
-                PlayerPrefs.SetString(PrefsKey, json);
+                PlayerPrefs.SetString(MirrorKey, json);
                 PlayerPrefs.Save();
             }
             catch (Exception ex)
@@ -90,7 +106,7 @@ namespace Emberfall.Game
 
             try
             {
-                PlayerPrefs.SetString(PrefsKey, json);
+                PlayerPrefs.SetString(MirrorKey, json);
                 PlayerPrefs.Save();
                 anyLanded = true;
             }
@@ -168,7 +184,7 @@ namespace Emberfall.Game
             {
                 string name = "emberfall_save.unreadable-" + TimeUtil.NowUnix() + "-"
                             + ((uint)json.GetHashCode()).ToString("x8") + ".json";
-                string path = Path.Combine(Application.persistentDataPath, name);
+                string path = Path.Combine(Path.GetDirectoryName(FilePath), name);
                 if (!File.Exists(path)) File.WriteAllText(path, json);
             }
             catch (Exception ex)
@@ -204,7 +220,7 @@ namespace Emberfall.Game
         {
             try
             {
-                if (PlayerPrefs.HasKey(PrefsKey)) return PlayerPrefs.GetString(PrefsKey, null);
+                if (PlayerPrefs.HasKey(MirrorKey)) return PlayerPrefs.GetString(MirrorKey, null);
             }
             catch (Exception ex)
             {
@@ -223,7 +239,7 @@ namespace Emberfall.Game
             {
                 Debug.LogWarning("Emberfall: could not delete save file: " + ex.Message);
             }
-            PlayerPrefs.DeleteKey(PrefsKey);
+            PlayerPrefs.DeleteKey(MirrorKey);
             PlayerPrefs.Save();
         }
     }

@@ -155,10 +155,16 @@ namespace Emberfall.Core.Session
         private bool _opened;
 
         public PlayLogWriter(bool enabled, string directory)
+            : this(enabled, directory, PlayLogRules.FileName, PlayLogRules.PrevFileName)
+        {
+        }
+
+        /// <summary>With the file names given: a smoke run writes emberfall_playlog.smoke.txt (SmokeStorage), never the real log.</summary>
+        public PlayLogWriter(bool enabled, string directory, string fileName, string prevFileName)
         {
             _enabled = enabled && !string.IsNullOrEmpty(directory);
-            _path = _enabled ? Path.Combine(directory, PlayLogRules.FileName) : "";
-            _prevPath = _enabled ? Path.Combine(directory, PlayLogRules.PrevFileName) : "";
+            _path = _enabled ? Path.Combine(directory, fileName) : "";
+            _prevPath = _enabled ? Path.Combine(directory, prevFileName) : "";
         }
 
         public bool Enabled { get { return _enabled; } }
@@ -232,6 +238,9 @@ namespace Emberfall.Core.Session
         private readonly Func<double> _clock;
         private int _errors;
         private bool _errorsCapped;
+        private bool _closed;
+        private bool _summaryWritten;
+        private int _events;
 
         /// <summary>The campaign event names the stage tap hands over. Mirrors of the stats schema's constants (the harness
         /// proves they are equal), kept as text here so the play log has no dependency on the stats code.</summary>
@@ -319,6 +328,8 @@ namespace Emberfall.Core.Session
 
         public void Screen(string screenId)
         {
+            if (_closed) return;
+            _events++;
             ScreensOpened++;
             _writer.Write(ScreenLine(_clock(), screenId));
         }
@@ -327,25 +338,33 @@ namespace Emberfall.Core.Session
         {
             string result;
             if (eventName == StageAttemptEvent) result = "attempt";
-            else if (eventName == StageClearEvent) { result = "win"; StagesCleared++; }
+            else if (eventName == StageClearEvent) { if (!_closed) StagesCleared++; result = "win"; }
             else if (eventName == WaveLostEvent) result = "lose";
             else return;
+            if (_closed) return;
+            _events++;
             _writer.Write(StageLine(_clock(), stageId, result, wave, battle));
         }
 
         public void Purchase(string offerId, bool bought, string reason)
         {
+            if (_closed) return;
+            _events++;
             if (bought) Purchases++; else PurchasesRefused++;
             _writer.Write(PurchaseLine(_clock(), offerId, bought, reason));
         }
 
         public void Cloud(string status, string message)
         {
+            if (_closed) return;
+            _events++;
             _writer.Write(CloudLine(_clock(), status, message));
         }
 
         public void Error(string message)
         {
+            if (_closed) return;
+            _events++;
             if (_errors >= PlayLogRules.MaxErrorsPerSession)
             {
                 if (_errorsCapped) return;
@@ -360,14 +379,38 @@ namespace Emberfall.Core.Session
         /// <summary>A free line (the smoke test's), stamped like the others.</summary>
         public void Note(string text)
         {
+            if (_closed) return;
+            _events++;
             _writer.Write(StampOf(_clock()) + " " + PlayLogRules.Clean(text, PlayLogRules.MaxLineChars));
         }
 
-        /// <summary>The cumulative summary. Written even when the line budget is spent: the budget is for events.</summary>
+        /// <summary>
+        /// The session end summary, cumulative, written even when the line budget is spent. WRITTEN ONCE PER END: the
+        /// first call after the session started (or after Resume) writes it and CLOSES the session, so a quit that
+        /// follows a pause writes nothing more, and a late event (the cloud syncing as the app leaves) is dropped
+        /// instead of landing after the summary. After Resume (the app came back) the next summary is a new line only
+        /// if events happened since the previous one.
+        /// </summary>
         public void Summary()
         {
-            _writer.WriteAlways(SummaryLine(_clock(), ScreensOpened, StagesCleared, Purchases, _errors));
+            if (_closed) return;
+            if (!_summaryWritten || _events > 0)
+            {
+                _writer.WriteAlways(SummaryLine(_clock(), ScreensOpened, StagesCleared, Purchases, _errors));
+                _summaryWritten = true;
+            }
+            _events = 0;
+            _closed = true;
         }
+
+        /// <summary>The app came back to the foreground: events are recorded again.</summary>
+        public void Resume()
+        {
+            _closed = false;
+            _events = 0;
+        }
+
+        public bool Closed { get { return _closed; } }
     }
 
     /// <summary>

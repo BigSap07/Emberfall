@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using Emberfall.Core.Json;
+using Emberfall.Core.Session;
 
 namespace Emberfall.Game.Cloud
 {
@@ -26,6 +27,13 @@ namespace Emberfall.Game.Cloud
     public sealed class CloudLocalState
     {
         private const string PrefsKey = "emberfall.cloud.v1";
+
+        /// <summary>The key the session lives under: the real one, or the smoke run's own (SmokeStorage), so a smoke
+        /// run signs in as a throw-away anonymous player and never reads or writes the real session.</summary>
+        private static string StoreKey
+        {
+            get { return SmokeStorage.CloudPrefsKey(PrefsKey); }
+        }
 
         /// <summary>
         /// A random id for this install, made once and kept.
@@ -76,7 +84,7 @@ namespace Emberfall.Game.Cloud
             string raw = null;
             try
             {
-                if (PlayerPrefs.HasKey(PrefsKey)) raw = PlayerPrefs.GetString(PrefsKey, null);
+                if (PlayerPrefs.HasKey(StoreKey)) raw = PlayerPrefs.GetString(StoreKey, null);
             }
             catch (Exception ex)
             {
@@ -121,7 +129,7 @@ namespace Emberfall.Game.Cloud
             root.Set("chosenNameFor", ChosenNameFor);
             try
             {
-                PlayerPrefs.SetString(PrefsKey, root.ToJson(false));
+                PlayerPrefs.SetString(StoreKey, root.ToJson(false));
                 PlayerPrefs.Save();
             }
             catch (Exception ex)

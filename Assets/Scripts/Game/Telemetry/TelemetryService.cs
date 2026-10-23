@@ -61,7 +61,8 @@ namespace Emberfall.Game.Telemetry
         /// leaves the game without stats and otherwise untouched.</summary>
         public static TelemetryService Install(GameApp app)
         {
-            if (!TelemetrySwitch.Enabled || app == null) return null;
+            // R27: a smoke run (SmokeStorage.Active) is a throw-away player: it must not queue or send the real install's events.
+            if (!TelemetrySwitch.Enabled || app == null || SmokeStorage.Active) return null;
             if (Instance != null) return Instance;
             try
             {

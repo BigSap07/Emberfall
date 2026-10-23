@@ -35,6 +35,18 @@ namespace Emberfall.Game
         {
             Instance = null;
             PlayLogHooks.Active = null;
+            SmokeStorage.Active = false;
+        }
+
+        /// <summary>
+        /// Decides, before any scene loads and so before the save is read, whether this run is a smoke run. If it is,
+        /// SmokeStorage redirects the save file, the save mirror, the cloud session and the play log to throw-away
+        /// names, so the run is a brand new anonymous player and the real data is never opened.
+        /// </summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void DecideSmokeStorage()
+        {
+            SmokeStorage.Active = SmokeStorage.ShouldActivate(PlayLogSwitch.Enabled, Environment.GetCommandLineArgs());
         }
 
         /// <summary>Builds the service once, writes the session header and starts listening. Never throws.</summary>
@@ -53,7 +65,7 @@ namespace Emberfall.Game
         {
             _app = app;
             _start = Time.realtimeSinceStartup;
-            _writer = new PlayLogWriter(true, Application.persistentDataPath);
+            _writer = new PlayLogWriter(true, Application.persistentDataPath, SmokeStorage.PlayLogFile, SmokeStorage.PlayLogPrevFile);
             _writer.Open();
             string id = Guid.NewGuid().ToString("N").Substring(0, 8);
             _session = new PlayLogSession(_writer, delegate () { return Time.realtimeSinceStartup - _start; }, id);
@@ -96,7 +108,9 @@ namespace Emberfall.Game
         /// <summary>The summary line, at pause and at quit. Cumulative, so the last one in a session is the total.</summary>
         public static void OnPause(bool paused)
         {
-            if (Instance != null && paused) Instance.WriteSummary();
+            if (Instance == null) return;
+            if (paused) Instance.WriteSummary();
+            else Instance._session.Resume();
         }
 
         public static void OnQuit()
@@ -201,7 +215,7 @@ namespace Emberfall.Game
         private IEnumerator SmokeRoutine()
         {
             bool ok = true;
-            Say("[smoke] start");
+            Say("[smoke] start (throw-away identity: scratch-smoke folder, own session; the real save and session are not used)");
             float t0 = Time.realtimeSinceStartup;
             while (_app.Cloud == null && Time.realtimeSinceStartup - t0 < 10f) yield return null;
 
