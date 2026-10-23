@@ -548,6 +548,10 @@ namespace Emberfall.Core.Model
         /// </summary>
         public LiveEventsState LiveEvents = new LiveEventsState();
 
+        /// <summary>Rewarded ads' daily counts and recent impression ids (R28, Docs/DESIGN-REWARDED-ADS.md). Saved from
+        /// version 27, only once it holds something; with AdsSwitch off nothing writes it.</summary>
+        public AdsState Ads = new AdsState();
+
         /// <summary>Gold a random mechanic may spend: the purse less its Sealed part.</summary>
         public long FreeGold { get { return Gold - Math.Min(Math.Max(0, Sealed.Gold), Gold); } }
 

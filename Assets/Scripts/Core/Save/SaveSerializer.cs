@@ -491,7 +491,19 @@ namespace Emberfall.Core.Save
         /// holds none of it is byte for byte the document the build before wrote, version included. The server's
         /// save_limits row must be raised to 26 before a cloud player holds any of it (save_limits_26.sql, never
         /// applied).
-        public const int CurrentVersion = 26;
+        ///
+        /// 27: rewarded ads (R28, Docs/DESIGN-REWARDED-ADS.md), stamped ONLY on a document that holds data a version 26
+        /// build would drop (HoldsVersion27Data): the `ads` block (AdsState), each placement's count for its reward
+        /// day and the recent impression ids. A build that drops it would reopen a day's capped ad and grant one
+        /// impression twice. Upgrade needs NO migration step: the key's absence is the empty state. Nothing writes it
+        /// while AdsSwitch is off, so until ads ship every save is byte for byte the document version 26 wrote. The
+        /// server's save_limits row must be raised to 27 before a cloud player holds any of it
+        /// (Server/supabase/owner/save_limits_27.sql, never applied).
+        public const int CurrentVersion = 27;
+
+        /// <summary>The version of the R24 monetization run, which a save says when it holds any of its data and none
+        /// of the version 27 data.</summary>
+        public const int R24Version = 26;
 
         /// <summary>The version of the Store (R19), which a save says when it holds any of its data and none of
         /// the version 26 data.</summary>
@@ -514,10 +526,19 @@ namespace Emberfall.Core.Save
         /// existed. A document claims a version only when it holds data from it.</summary>
         public static int VersionOf(PlayerProfile profile)
         {
-            if (HoldsVersion26Data(profile)) return CurrentVersion;
+            if (HoldsVersion27Data(profile)) return CurrentVersion;
+            if (HoldsVersion26Data(profile)) return R24Version;
             if (HoldsVersion25Data(profile)) return StoreVersion;
             if (HoldsVersion24Data(profile)) return CoreGapsVersion;
             return profile != null && profile.Sinks != null && !profile.Sinks.IsEmpty ? SinksVersion : BaseVersion;
+        }
+
+        /// <summary>True when the profile holds anything a version 26 build would drop. THE ONE PLACE that decides a
+        /// save is a version 27 save: the rewarded ads block, once an ad has been granted (R28).</summary>
+        public static bool HoldsVersion27Data(PlayerProfile profile)
+        {
+            if (profile == null) return false;
+            return profile.Ads != null && !profile.Ads.IsEmpty;
         }
 
         /// <summary>True when the profile holds anything a version 25 build would drop. THE ONE PLACE that
@@ -1165,6 +1186,10 @@ namespace Emberfall.Core.Save
             if (profile.Store != null && !profile.Store.IsEmpty)
                 root.Set("store", profile.Store.Write());
 
+            // Version 27: rewarded ads' counts and impression ids, only once an ad has been granted.
+            if (profile.Ads != null && !profile.Ads.IsEmpty)
+                root.Set("ads", profile.Ads.Write());
+
             // Version 26: the hero skins the player owns, only once there is one. The skin each hero wears is on its hero.
             if (profile.OwnedSkins.Count > 0)
             {
@@ -1547,6 +1572,9 @@ namespace Emberfall.Core.Save
 
             // Version 25. Absent reads as nothing bought.
             profile.Store = StoreState.Read(root["store"]);
+
+            // Version 27. Absent reads as no ad ever granted.
+            profile.Ads = AdsState.Read(root["ads"]);
 
             // Version 26: the owned skins. Absent is none; a damaged or repeated entry is skipped, and the list is capped far
             // above any roster of skins.

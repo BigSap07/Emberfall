@@ -57,6 +57,9 @@ namespace Emberfall.Game
             db.LoadStore(ReadTextOptional("store"));
             // And the weekly and monthly live events (ContentDatabase.LiveEvents): no fight reads them.
             db.LoadLiveEvents(ReadTextOptional("live-events"));
+            // And the rewarded ad placements (ContentDatabase.Ads): no fight reads them, and nothing uses them while
+            // AdsSwitch is off.
+            db.LoadAds(ReadTextOptional("ads"));
 
             for (int i = 0; i < db.Warnings.Count; i++)
                 Debug.LogWarning("Emberfall content: " + db.Warnings[i]);
