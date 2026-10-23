@@ -69,7 +69,7 @@ $sources = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs 
            (Join-Path $root "Assets\Scripts\Battle\BattleFraming.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudMetrics.cs") +
            (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudLayout.cs") + (Join-Path $root "Tools\DevHarness\BattleHudChecks.cs") +
            (Join-Path $root "Tools\DevHarness\StageChecks.cs") + (Join-Path $root "Assets\Scripts\Battle\StagePresentation.cs") +
-           (Join-Path $root "Tools\DevHarness\UiKitChecks.cs") + @(Get-ChildItem (Join-Path $root "Tools\DevHarness") -Filter *.cs | Where-Object { $_.Name -match '^R2[46]' } | ForEach-Object { $_.FullName } | Sort-SourceOrder)
+           (Join-Path $root "Tools\DevHarness\UiKitChecks.cs") + (Join-Path $root "Tools\DevHarness\R28ScreenChecks.cs") + @(Get-ChildItem (Join-Path $root "Tools\DevHarness") -Filter *.cs | Where-Object { $_.Name -match '^R2[46]' } | ForEach-Object { $_.FullName } | Sort-SourceOrder)
 $rsp = Join-Path (Get-TempDir) "emberfall_recpwr.rsp"
 $lines = @($sources | ForEach-Object { '"' + $_ + '"' })
 [IO.File]::WriteAllLines($rsp, [string[]]$lines, [Text.UTF8Encoding]::new($false))

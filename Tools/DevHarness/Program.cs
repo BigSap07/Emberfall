@@ -357,6 +357,8 @@ namespace Emberfall.DevHarness
             CheckR24Store(content, contentDir);
             CheckR24RelicPacks(content, contentDir);
             CheckR24Skins(content, contentDir);
+            // The R28 screens' presenters, codecs and rewarded ad rules (R28ScreenChecks.cs).
+            CheckR28Screens(content, contentDir);
             CheckUiKit(content, contentDir);
             CheckR26Ui(content, contentDir);
             CheckR26Store(content, contentDir);
@@ -4995,6 +4997,8 @@ namespace Emberfall.DevHarness
                 db.LoadStore(File.Exists(storePath) ? File.ReadAllText(storePath) : null);
                 string liveEventsPath = Path.Combine(dir, "live-events.json");
                 db.LoadLiveEvents(File.Exists(liveEventsPath) ? File.ReadAllText(liveEventsPath) : null);
+                string adsPath = Path.Combine(dir, "ads.json");
+                db.LoadAds(File.Exists(adsPath) ? File.ReadAllText(adsPath) : null);
                 return db;
             }
             catch (Exception ex)
