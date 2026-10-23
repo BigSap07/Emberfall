@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 using Emberfall.Core.Data;
+using Emberfall.Core.Json;
 using Emberfall.Core.Model;
 using Emberfall.Core.Progression;
 using Emberfall.Core.Save;
@@ -201,6 +202,30 @@ namespace Emberfall.DevHarness
                   "and so is the Starter Pact: it stays sold out after the load");
             Check(back != null && back.Store.Offers.Count == p.Store.Offers.Count && SaveSerializer.Serialize(back) == json,
                   "the load drops no store record at all: the save reads back byte for byte");
+
+            // Past the cap: a block with more periodic counters than OffersMax, the once-only records written last.
+            JsonValue offers = JsonValue.NewArray();
+            for (int i = 0; i < StoreState.OffersMax + 10; i++)
+            {
+                JsonValue j = JsonValue.NewObject();
+                j.Set("offer", StoreOffers.ContractPrefix + "h" + i);
+                j.Set("period", 202601L);
+                j.Set("count", 1);
+                offers.Add(j);
+            }
+            foreach (string once in new[] { "growth_fund", "starter_pact" })
+            {
+                JsonValue j = JsonValue.NewObject();
+                j.Set("offer", once);
+                j.Set("count", 1);
+                offers.Add(j);
+            }
+            JsonValue block = JsonValue.NewObject();
+            block.Set("offers", offers);
+            StoreState read = StoreState.Read(block);
+            Check(read.Find("growth_fund") != null && read.Find("starter_pact") != null && read.Offers.Count == StoreState.OffersMax + 2,
+                  "A ONCE-ONLY RECORD IS NEVER DROPPED: behind " + (StoreState.OffersMax + 10) + " periodic counters the Growth Fund and the Starter Pact are read, and only the periodic counters stop at "
+                  + StoreState.OffersMax + " (" + read.Offers.Count + " read)");
         }
 
         // ------------------------------------------------------------------ 4. a live event slot's Clone
