@@ -9,7 +9,10 @@ Decision record from 2026-10-22. The reasoning is durable. Names and numbers are
   and their privileges. Nothing has been run against any database.
 - **Written, not run:** `Tools/supabase-leaderboard-rules-test.py`, which proves the rules against the live
   project once 0016 is applied. It needs the project's anon key, as the other two rule tests do.
-- **Not built:** anything in the game. No client code calls these functions and no screen shows a board.
+- **Built in R28, not on screen:** the client side. `LeaderboardCodec` (Core) reads both functions' bodies,
+  `Assets/Scripts/Game/Cloud/LeaderboardService.cs` holds the transport and the screen's controller, and
+  `LeaderboardsPresenter` says what the screen draws. The screen itself is UI work, specified in
+  `Docs/ui-specs/R28-SCREENS.md`.
 
 ## The three boards
 
@@ -92,7 +95,7 @@ they submit during it. Two readings are kept:
 The first favours veterans every week. The second rewards playing that week. Which one the game shows is the
 owner's call; both are served. Weeks older than 8 are pruned by `leaderboard_submit`.
 
-## How the client should call it (not built)
+## How the client calls it
 
 1. After a successful `push_save` (the sync already in `CloudSaveService`), call `leaderboard_submit` at most
    once a minute. Its answer says, per board, raised, kept or refused, and why.

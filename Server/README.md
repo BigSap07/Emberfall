@@ -70,6 +70,10 @@ launch and are not in this folder on main yet. The two files after them come fro
    (`purchase_verify_allow`, service role only; the Edge Function change is in the review), and a
    block that also refuses friend requests. Run after `0019` and `0020`.
 
+`supabase/owner/` holds owner steps that are not migrations. `save_limits_27.sql` raises `save_limits.max_save_version`
+to 27 so `push_save` accepts a save holding the rewarded ads block (R28). Written, not applied, re-appliable; apply it
+only before a build with `AdsSwitch` on reaches a cloud player.
+
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly

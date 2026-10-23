@@ -1,7 +1,8 @@
 # Guild dungeon size and attempts: spec for the UI run
 
 Written for the run that builds the client side of the guild dungeon's size and attempt rules
-(`DESIGN-BUILD-ORDER.md`, **Guild dungeon size and attempts**). Nothing here is built. The core
+(`DESIGN-BUILD-ORDER.md`, **Guild dungeon size and attempts**). The screens are not built. Since R28,
+`GuildDungeonLadderPresenter` reads every number below and `Docs/ui-specs/R28-SCREENS.md` is the layout. The core
 rules, the server migration and the harness checks exist; this is what the screens must show on
 top of them. **No game logic goes in UI**: every number below is read from `GuildDungeonStatus`,
 `GuildDungeonScale` or `GuildDungeonRewards`, never recomputed in a screen.
