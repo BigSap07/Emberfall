@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
-"""Proves the leaderboard rules (migration 0016) against a real Supabase project.
+"""Proves the leaderboard rules (migration 0023) against a real Supabase project.
 
-Server/supabase/migrations/0016_leaderboards.sql says the client never sends a score: leaderboard_submit()
+Server/supabase/migrations/0023_leaderboards.sql says the client never sends a score: leaderboard_submit()
 reads the caller's own cloud save, checks it against itself, against ceilings and against the time the
 server has seen pass, stamps everything with the server's clock and stores only what passed. This script
 asks the live database whether that is true. Like Tools/supabase-rules-test.py it works WITHOUT the game
 client, as throwaway anonymous users, with the anon public key only.
 
-    Apply 0013 and 0016 first (in order, in the SQL editor). Against a project without 0016 the first
+    Apply 0001 to 0023 first (in number order, in the SQL editor; 0023 itself needs only 0013). Against a project without 0023 the first
     call answers 404, which is reported as one FAIL and the run stops.
 
     python Tools/supabase-leaderboard-rules-test.py           # every case, about two minutes
@@ -20,7 +20,7 @@ field when set. THE KEY IS NEVER PRINTED. Only the anon key runs; a service-role
 by the same decoded-key guard, proven on every run before it is trusted.
 
 THE SAVE VERSION. push_save refuses a save_version above save_limits.max_save_version (0013). The script
-tries SaveSerializer.CurrentVersion first and steps down to 20 (0016's min_save_version) until the server
+tries SaveSerializer.CurrentVersion first and steps down to 20 (0023's min_save_version) until the server
 takes one, and prints which it used. If the server takes none, raise save_limits first.
 
 THE RUN IS RECORDED in Tools/SupabaseRuns/leaderboards.json (gitignored): when, at which commit, and the
@@ -225,7 +225,7 @@ def stages(n, chapter_first=1):
 
 
 def save(cleared, recital=0, proving=0, standing=None, attempts=None, current=None, **extra):
-    """A document shaped like the fields 0016 reads. Nothing else in it matters to the server."""
+    """A document shaped like the fields 0023 reads. Nothing else in it matters to the server."""
     doc = {"version": SAVE_VERSION, "playerName": "Leaderboard Test", "clearedStages": cleared,
            "recitalHighestFloor": recital, "recitalCurrentFloor": recital + 1 if current is None else current,
            "provingHighestStanding": proving, "provingStanding": proving if standing is None else standing,
@@ -287,10 +287,10 @@ def find_save_version():
 
 
 def check_probe(probe):
-    section("0016 IS APPLIED")
+    section("0023 IS APPLIED")
     status, body = submit(probe)
     missing = status == 404 and isinstance(body, dict) and body.get("code") in ("PGRST202", "42883")
-    check(not missing, "leaderboard_submit exists (otherwise apply 0016: the run stops here)", (status, body))
+    check(not missing, "leaderboard_submit exists (otherwise apply 0023: the run stops here)", (status, body))
     if missing:
         return False
     check(status == 200 and verdict(body, "campaign").get("status") == "raised" and verdict(body, "campaign").get("value") == 1,
@@ -468,7 +468,7 @@ def main():
         print("That key is not an anon public key (it reads as: " + key_kind(ANON) + "). Use the ANON PUBLIC key.")
         return 2
     print("key: decoded as an anon public key, and the guard was shown to fire on built secret keys")
-    print("EMBERFALL LEADERBOARD RULE TEST (0016)")
+    print("EMBERFALL LEADERBOARD RULE TEST (0023)")
     print("project: " + URL)
 
     probe = find_save_version()

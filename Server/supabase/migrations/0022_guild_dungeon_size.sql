@@ -1,14 +1,14 @@
--- 0016_guild_dungeon_size.sql - the guild dungeon's ladder scales with the guild, and a member's
+-- 0022_guild_dungeon_size.sql - the guild dungeon's ladder scales with the guild, and a member's
 -- attempts are bounded the same at every size. claude/DESIGN-GUILDS-PHASE-TWO.md, "Size" and
 -- "Bounded"; DESIGN-BUILD-ORDER.md, "Guild dungeon size".
 --
 -- WRITTEN, NOT APPLIED. Nothing in this file has been run against any database.
 --
--- RUN AFTER 0015, and only once 0014 is applied: guild_dungeon_submit below is 0014's body with two
+-- RUN AFTER 0021 (the files go in number order), and only once 0014 is applied: guild_dungeon_submit below is 0014's body with two
 -- rules added, and it calls 0014's guild_dungeon_seed_for. The guard straight below stops the file
 -- there if 0014 is missing, before anything is created or replaced.
 --
--- RE-APPLIABLE, like 0004-0015: the table is `if not exists`, every policy is preceded by `drop
+-- RE-APPLIABLE, like 0004-0021: the table is `if not exists`, every policy is preceded by `drop
 -- policy if exists`, every function is `create or replace` except guild_dungeon_status, which is
 -- dropped and recreated because its answer gains columns (a returned row type cannot change in
 -- place), and the floor constraint is dropped and re-added with the same name. Running it twice
@@ -53,7 +53,7 @@
 do $$
 begin
   if to_regprocedure('public.guild_dungeon_seed_for(uuid, integer)') is null then
-    raise exception '0016 needs 0014 (guild_dungeon_seed_for) applied first - nothing in this file was applied';
+    raise exception '0022 needs 0014 (guild_dungeon_seed_for) applied first - nothing in this file was applied';
   end if;
 end;
 $$;
@@ -331,7 +331,7 @@ begin
       p_seed, now_cycle using errcode = 'PT400';
   end if;
 
-  -- The ladder (0016). Snapshotted on the cycle's first touch and fixed until it rolls.
+  -- The ladder (0022). Snapshotted on the cycle's first touch and fixed until it rolls.
   ladder := public.guild_dungeon_cycle_floors(mine, now_cycle);
   if p_floor > ladder then
     raise exception 'a floor is 1 to %: your guild''s dungeon is % floors this cycle', ladder, ladder
@@ -353,7 +353,7 @@ begin
       p_floor, used, public.guild_dungeon_attempt_cap() using errcode = 'PT409';
   end if;
 
-  -- The cycle cap (0016). Per account, every guild.
+  -- The cycle cap (0022). Per account, every guild.
   select count(*) into cycle_used
     from public.guild_dungeon_attempts a
    where a.user_id = uid and a.cycle = now_cycle;

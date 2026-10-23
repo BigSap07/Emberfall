@@ -9,7 +9,7 @@
   // (GuildDungeonGenerator), so moving a band must not retire every guild's replays.
   //
   // THE SERVER HAS THE REAL COPY. guild_dungeon_floors_for in
-  // Server/supabase/migrations/0016_guild_dungeon_size.sql decides the ladder and refuses an attempt
+  // Server/supabase/migrations/0022_guild_dungeon_size.sql decides the ladder and refuses an attempt
   // past it; GuildDungeonChecks fails the build-check when the two disagree on any band.
   //
   // CHOSEN, and named as chosen:

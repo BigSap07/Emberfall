@@ -50,14 +50,6 @@ project owner:
    select, update or delete. Applied by the owner by hand; nothing else in the project reads or
    needs it. `Tools/supabase-rules-test.py` `check_play_events` needs it applied. The owner reads
    the table with `supabase/queries/play-counts.sql` in the SQL editor.
-16. `0016_leaderboards.sql` - three leaderboards (`Docs/DESIGN-LEADERBOARDS.md`): the Deep Recital's
-   highest floor with a weekly board that turns on Monday at 04:00 UTC, the Proving's highest standing,
-   and campaign progress. The client never sends a score: `leaderboard_submit()` takes no argument and
-   reads the caller's own cloud save, checks it against itself, against ceilings and against server time,
-   and stores only what passes; `leaderboard_top()` reads a board without exposing a user id. The limits
-   are the one-row `leaderboard_limits` table. No table carries a policy or a grant. Written, not
-   applied: nothing in the game calls it yet. `Tools/supabase-leaderboard-rules-test.py` needs it applied.
-
 16. `0016_account_deletion.sql` - `delete_my_account(p_confirm)`, the in-game account deletion Google
    Play requires: the caller's guild membership (a last-member leader's guild is disbanded, otherwise
    0004's succession promotes an heir), requests, friendships, team snapshot, save, profile and
@@ -89,6 +81,19 @@ are written, not applied, and both are re-appliable:
 21. `0021_security_review_launch.sql` - the per-account limit on purchase verification
    (`purchase_verify_allow`, service role only; the Edge Function change is in the review), and a
    block that also refuses friend requests. Run after `0019` and `0020`.
+22. `0022_guild_dungeon_size.sql` - the guild dungeon's ladder scales with the guild
+   (`guild_dungeon_cycles` snapshots the member count when a cycle opens, ten floors at most) and
+   every member's attempts are capped per cycle across every guild (`cycle_attempt`, unique).
+   `guild_dungeon_submit` is 0014's body plus those two rules; `guild_dungeon_status` gains three
+   columns. Needs 0014 and refuses to apply without it. `Tools/supabase-guild-dungeon-size-rules-test.py`
+   needs it applied. Written, not applied to a project.
+23. `0023_leaderboards.sql` - three leaderboards (`Docs/DESIGN-LEADERBOARDS.md`): the Deep Recital's
+   highest floor with a weekly board that turns on Monday at 04:00 UTC, the Proving's highest standing,
+   and campaign progress. The client never sends a score: `leaderboard_submit()` takes no argument and
+   reads the caller's own cloud save, checks it against itself, against ceilings and against server time,
+   and stores only what passes; `leaderboard_top()` reads a board without exposing a user id. The limits
+   are the one-row `leaderboard_limits` table. No table carries a policy or a grant. Written, not
+   applied to a project: nothing in the game calls it yet. `Tools/supabase-leaderboard-rules-test.py` needs it applied.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:

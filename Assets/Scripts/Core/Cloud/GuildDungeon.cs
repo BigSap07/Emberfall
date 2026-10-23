@@ -156,14 +156,14 @@ namespace Emberfall.Core.Cloud
         public long StartsUnix;
         public long EndsUnix;
         public int AttemptCap = 3;
-        /// <summary>THIS GUILD'S ladder this cycle, as 0016 snapshots it from the member count when
-        /// the cycle opened (GuildDungeonScale). Before 0016 the server sends the base five.</summary>
+        /// <summary>THIS GUILD'S ladder this cycle, as 0022 snapshots it from the member count when
+        /// the cycle opened (GuildDungeonScale). Before 0022 the server sends the base five.</summary>
         public int FloorCount = 5;
-        /// <summary>Attempts one account may make this cycle across every floor (0016). -1 when the
+        /// <summary>Attempts one account may make this cycle across every floor (0022). -1 when the
         /// server predates it, and then GuildDungeonScale.CycleAttemptCap is the client's prediction.</summary>
         public int CycleAttemptCap = -1;
         /// <summary>The caller's attempts this cycle by the server's count, every guild included.
-        /// -1 when the server predates 0016.</summary>
+        /// -1 when the server predates 0022.</summary>
         public int AttemptsUsed = -1;
         /// <summary>The member count the ladder was set from. -1 when unknown.</summary>
         public int LadderMembers = -1;

@@ -15,7 +15,7 @@ done, at 1920x1080, with a 5-floor guild and a 10-floor guild.
 
 1. **How long this week's ladder is, and why.** "10 FLOORS THIS CYCLE - set at 31 members when the
    cycle opened." Read `GuildDungeonStatus.FloorCount` and `GuildDungeonStatus.LadderMembers`.
-   When `LadderMembers` is -1 (a server before 0016), show the floor count alone.
+   When `LadderMembers` is -1 (a server before 0022), show the floor count alone.
 2. **That the ladder will grow, and when.** One quiet line under it, only when the guild is below
    the cap: "A guild of 15 gets 7 floors from next cycle." Read the next band from
    `GuildDungeonScale.LadderFor(content, members)` with the live member count from `GuildService`.

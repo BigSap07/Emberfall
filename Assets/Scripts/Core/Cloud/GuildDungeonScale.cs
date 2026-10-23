@@ -9,7 +9,7 @@ namespace Emberfall.Core.Cloud
     /// The guild dungeon's SIZE and ATTEMPT rules: how long a guild's ladder is, and how many
     /// attempts a member has left. claude/DESIGN-GUILDS-PHASE-TWO.md, "Size" and "Bounded".
     ///
-    /// THE SERVER HOLDS BOTH (Server/supabase/migrations/0016_guild_dungeon_size.sql). This copy
+    /// THE SERVER HOLDS BOTH (Server/supabase/migrations/0022_guild_dungeon_size.sql). This copy
     /// decides what to draw and what to say before a round trip, exactly as GuildRules does for
     /// membership, and GuildDungeonChecks fails the build when the two disagree.
     ///
@@ -92,7 +92,7 @@ namespace Emberfall.Core.Cloud
 
         /// <summary>
         /// Whether this member may attempt this floor now, and if not, the sentence that says why.
-        /// The order is the server's (0016's guild_dungeon_submit): the floor exists, the ladder
+        /// The order is the server's (0022's guild_dungeon_submit): the floor exists, the ladder
         /// reaches it, the guild has opened it, then the two caps.
         /// </summary>
         public static bool CanAttempt(ContentDatabase content, List<GuildDungeonAttempt> attempts, string userId, int cycle,

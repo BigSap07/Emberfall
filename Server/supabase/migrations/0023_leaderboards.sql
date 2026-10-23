@@ -1,15 +1,15 @@
--- 0016_leaderboards.sql - three leaderboards: the Deep Recital's highest floor (with a weekly board
+-- 0023_leaderboards.sql - three leaderboards: the Deep Recital's highest floor (with a weekly board
 -- that resets every Monday at the reward-day turnover), the Proving's highest standing, and campaign
 -- progress. Docs/DESIGN-LEADERBOARDS.md.
 --
 -- WRITTEN, NOT APPLIED. Nothing in the game calls these functions yet. The owner applies this file in
--- the SQL editor, after 0013 (it reads public.saves as 0013 shapes it) and before any build that shows
+-- the SQL editor, after 0022 (it reads public.saves as 0013 shapes it) and before any build that shows
 -- a board. Tools/supabase-leaderboard-rules-test.py proves the rules once it is applied.
 --
--- RUN AFTER 0013. It reads public.saves (0002, 0013) and public.profiles (0001) and touches neither: no
+-- RUN AFTER 0022 (the files go in number order); it needs only 0013. It reads public.saves (0002, 0013) and public.profiles (0001) and touches neither: no
 -- column, constraint, policy or grant on them changes. 0014 and 0015 are not read.
 --
--- RE-APPLIABLE, like 0004-0015: tables and indexes are `if not exists`, the limits row is inserted
+-- RE-APPLIABLE, like 0004-0022: tables and indexes are `if not exists`, the limits row is inserted
 -- `on conflict do nothing` (re-applying never resets a limit somebody tuned), every function is
 -- `create or replace`, and the grants are revoked and re-granted to the same end state. There are no
 -- policies to drop: no table here has one, on purpose (below).
@@ -297,7 +297,7 @@ begin
 
   select * into lim from public.leaderboard_limits where id;
   if not found then
-    raise exception 'leaderboard_submit has no leaderboard_limits row - see 0016' using errcode = 'PT500';
+    raise exception 'leaderboard_submit has no leaderboard_limits row - see 0023' using errcode = 'PT500';
   end if;
 
   select * into sv from public.saves where user_id = uid;
@@ -551,24 +551,24 @@ begin
   foreach t in array array['leaderboard_limits', 'leaderboard_entries', 'leaderboard_recital_weeks',
                            'leaderboard_refusals', 'leaderboard_bans'] loop
     if not (select c.relrowsecurity from pg_class c where c.oid = ('public.' || t)::regclass) then
-      raise exception '0016: row level security is not on for %', t;
+      raise exception '0023: row level security is not on for %', t;
     end if;
     if exists (select 1 from pg_policies where schemaname = 'public' and tablename = t) then
-      raise exception '0016: % carries a policy; no leaderboard table is meant to have one', t;
+      raise exception '0023: % carries a policy; no leaderboard table is meant to have one', t;
     end if;
     foreach who in array array['anon', 'authenticated'] loop
       foreach verb in array array['select', 'insert', 'update', 'delete'] loop
         if has_table_privilege(who, 'public.' || t, verb) or has_any_column_privilege(who, 'public.' || t, verb) then
-          raise exception '0016: % can % %', who, verb, t;
+          raise exception '0023: % can % %', who, verb, t;
         end if;
       end loop;
     end loop;
   end loop;
   if has_function_privilege('anon', 'public.leaderboard_submit()', 'execute')
      or has_function_privilege('anon', 'public.leaderboard_top(text, integer)', 'execute') then
-    raise exception '0016: anon can call a leaderboard function';
+    raise exception '0023: anon can call a leaderboard function';
   end if;
-  raise notice '0016: five leaderboard tables, none readable or writable by a client; leaderboard_submit and leaderboard_top for authenticated only';
+  raise notice '0023: five leaderboard tables, none readable or writable by a client; leaderboard_submit and leaderboard_top for authenticated only';
 end;
 $$;
 

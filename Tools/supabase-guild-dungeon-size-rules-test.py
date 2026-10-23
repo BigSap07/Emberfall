@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""Proves migration 0016's rules - the guild dungeon's ladder by guild size and the per-account
+"""Proves migration 0022's rules - the guild dungeon's ladder by guild size and the per-account
 cycle cap - against a real Supabase project.
 
-WRITTEN, NOT RUN. Nothing here has been executed against any project; 0016 is not applied. A
+WRITTEN, NOT RUN. Nothing here has been executed against any project; 0022 is not applied. A
 sibling of Tools/supabase-guild-rules-test.py, kept apart because that file proves 0004 to 0014
-and is red-or-green against what is applied today, while every case here needs 0016.
+and is red-or-green against what is applied today, while every case here needs 0022.
 
-    Apply Server/supabase/migrations/0004 through 0016 first, in order (0016 refuses to apply
+    Apply Server/supabase/migrations/0004 through 0022 first, in order (0022 refuses to apply
     without 0014). Then:
 
     SUPABASE_URL=... SUPABASE_ANON_KEY=... python Tools/supabase-guild-dungeon-size-rules-test.py
@@ -474,7 +474,7 @@ def main():
 
     ladders = client_ladders()
     per_floor, base = client_caps()
-    print("EMBERFALL GUILD DUNGEON SIZE RULE TEST (0016)")
+    print("EMBERFALL GUILD DUNGEON SIZE RULE TEST (0022)")
     print("project: " + URL)
     print("run tag: gs-" + RUN_TAG + "-*")
 

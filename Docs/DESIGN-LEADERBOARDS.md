@@ -5,10 +5,10 @@ Decision record from 2026-10-22. The reasoning is durable. Names and numbers are
 
 ## What is built and what is not
 
-- **Written, not applied:** `Server/supabase/migrations/0016_leaderboards.sql`, five tables, four functions
+- **Written, not applied:** `Server/supabase/migrations/0023_leaderboards.sql`, five tables, four functions
   and their privileges. Nothing has been run against any database.
 - **Written, not run:** `Tools/supabase-leaderboard-rules-test.py`, which proves the rules against the live
-  project once 0016 is applied. It needs the project's anon key, as the other two rule tests do.
+  project once 0023 is applied. It needs the project's anon key, as the other two rule tests do.
 - **Not built:** anything in the game. No client code calls these functions and no screen shows a board.
 
 ## The three boards
@@ -121,7 +121,7 @@ board shows a first submission and the climb board does not; and, with two 61 se
 
 ## Owner steps
 
-1. Apply `0016_leaderboards.sql` in the SQL editor, after 0013. It ends with a block that refuses to finish if
+1. Apply `0023_leaderboards.sql` in the SQL editor, after 0022 (it needs only 0013). It ends with a block that refuses to finish if
    any table is readable or writable by a client.
 2. Make sure `save_limits.max_save_version` is at the build's `SaveSerializer.CurrentVersion` (26 at this
    writing; 0013 inserted 19). The rules test prints which version the server took.

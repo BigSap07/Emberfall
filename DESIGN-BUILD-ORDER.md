@@ -1037,13 +1037,13 @@ cloud config neither the prompt nor the code card exists. `CheckDisplayNameRules
 `NameOnDemandShots` captures it on a scratch identity with no network.
 
 **Leaderboards: written, not applied, not called (`Docs/DESIGN-LEADERBOARDS.md`).**
-`Server/supabase/migrations/0016_leaderboards.sql` holds three boards (the Deep Recital's highest floor,
+`Server/supabase/migrations/0023_leaderboards.sql` holds three boards (the Deep Recital's highest floor,
 with a weekly board that turns on Monday at 04:00 UTC, the Proving's highest standing and campaign
 progress) as five tables with RLS on, no policy and no grant, and two callable functions.
 `leaderboard_submit()` takes no argument: it reads the caller's own cloud save, checks each value against
 the same save, against ceilings and against server time since the server last raised it, stamps
 everything with `now()` and logs every refusal. `leaderboard_top()` returns rank, display name, value and
-`is_me`, never a user id. `Tools/supabase-leaderboard-rules-test.py` proves the rules once 0016 is applied;
+`is_me`, never a user id. `Tools/supabase-leaderboard-rules-test.py` proves the rules once 0023 is applied;
 it has never been run. Nothing in the game calls either function and no screen shows a board.
 
 ### Guilds, phase one
@@ -1199,7 +1199,7 @@ compiler), so it is **unverified by the real build check**.
 - **Generator fix.** `NeverOneAspect` redraws the last slot of a line that came out single-Aspect.
   The ten-floor ladder found one such floor in 10,000. It draws only when the line is
   single-Aspect, so every mixed floor is unchanged (the pin covers it).
-- **Server.** `Server/supabase/migrations/0016_guild_dungeon_size.sql` - **written, not applied,
+- **Server.** `Server/supabase/migrations/0022_guild_dungeon_size.sql` - **written, not applied,
   never run against any database.** It needs 0014 applied first and refuses to apply without it.
   It adds `guild_dungeon_cycles` (the snapshot: RLS on, read by members of the guild, no client
   write), `guild_dungeon_floor_max`, `guild_dungeon_floors_for`, `guild_dungeon_cycle_attempt_cap`,
@@ -1227,7 +1227,7 @@ compiler), so it is **unverified by the real build check**.
   on the base floors exactly as before. Closing the margin means moving `guildDungeonFloorOnePower`
   or `guildDungeonChampionLevelBonus` in `balance.json`, which retires every replay.
 - **Client.** No screen is changed. The screens already read the server's `floor_count`, so a
-  longer ladder appears once 0016 is applied, but nothing shows the cycle cap, the ladder's
+  longer ladder appears once 0022 is applied, but nothing shows the cycle cap, the ladder's
   origin or the placeholder. `Docs/ui-specs/GUILD-DUNGEON-SIZE.md` is the spec for that run.
 - **Owner decisions:** open decision 5.
 

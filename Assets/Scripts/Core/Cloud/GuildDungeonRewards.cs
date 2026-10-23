@@ -14,7 +14,7 @@ namespace Emberfall.Core.Cloud
     /// boards) is unchanged by ladders and is not this class's business.
     ///
     /// Until the owner decides, every reward here is Amount 0 with Placeholder set, the server mints
-    /// nothing for a deep floor (0016 has no reward table on purpose), and
+    /// nothing for a deep floor (0022 has no reward table on purpose), and
     /// GuildDungeonChecks.CheckRewardPlaceholder fails the build if a number appears here while the
     /// flag is still up.
     ///

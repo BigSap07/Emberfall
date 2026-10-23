@@ -22,7 +22,7 @@ namespace Emberfall.Core.Data
     /// fight and must not retire a week of every guild's replays.
     ///
     /// THE SERVER HAS THE REAL COPY. guild_dungeon_floors_for in
-    /// Server/supabase/migrations/0016_guild_dungeon_size.sql decides a guild's ladder and refuses an
+    /// Server/supabase/migrations/0022_guild_dungeon_size.sql decides a guild's ladder and refuses an
     /// attempt past it; this file is what the client predicts and prints. GuildDungeonChecks fails
     /// the build-check when the two disagree on any band.
     /// </summary>

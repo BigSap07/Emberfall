@@ -2351,22 +2351,22 @@ namespace Emberfall.DevHarness
         }
 
         /// <summary>
-        /// The size rules live twice, here and in 0016, and neither can read the other at runtime.
+        /// The size rules live twice, here and in 0022, and neither can read the other at runtime.
         /// The harness reads both and refuses a disagreement: the ladder table band for band, the
         /// longest ladder, the cycle cap's derivation, and the shape of the rules the server holds.
         /// </summary>
         private static void CheckServerAgreesOnSize(ContentDatabase content, string contentDir)
         {
-            string path = FindMigration(contentDir, "0016_guild_dungeon_size.sql");
+            string path = FindMigration(contentDir, "0022_guild_dungeon_size.sql");
             if (path == null)
             {
-                Check(false, "Server/supabase/migrations/0016_guild_dungeon_size.sql is findable from the content folder");
+                Check(false, "Server/supabase/migrations/0022_guild_dungeon_size.sql is findable from the content folder");
                 return;
             }
             string sql = File.ReadAllText(path);
             int max = SqlConstant(sql, "guild_dungeon_floor_max");
             Check(max == GuildDungeonScale.MaxLadder(content),
-                  "the server's longest ladder (" + max + ", 0016) is guild-dungeon-scale.json's (" + GuildDungeonScale.MaxLadder(content) + ")");
+                  "the server's longest ladder (" + max + ", 0022) is guild-dungeon-scale.json's (" + GuildDungeonScale.MaxLadder(content) + ")");
 
             Match body = Regex.Match(sql, @"function\s+public\.guild_dungeon_floors_for\(p_members integer\)[\s\S]*?\$\$([\s\S]*?)\$\$", RegexOptions.IgnoreCase);
             List<string> server = new List<string>(), client = new List<string>();
