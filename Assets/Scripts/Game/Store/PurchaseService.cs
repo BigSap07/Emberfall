@@ -20,6 +20,8 @@ namespace Emberfall.Game
     ///    debug store; ForceDebugStore selects the scripted debug store for captures and tests;
     ///  - a development build: the DEBUG store (SimulatedStore). Unity IAP on a phone would reach the real
     ///    store, which this run must not;
+    ///  - a release build with EMBERFALL_TESTSTORE (R26): the DEBUG store, purchases free, a TEST STORE banner on
+    ///    the Store and the Events screen. Together with EMBERFALL_STORE_LIVE it falls back to COMING SOON;
     ///  - a release build: COMING SOON. No backend is built, so no buy path exists, whatever the screen draws.
     ///    The live store needs a release build, the IAP package and the define EMBERFALL_STORE_LIVE, which
     ///    nothing in this run sets.
@@ -65,7 +67,7 @@ namespace Emberfall.Game
 #if EMBERFALL_UNITY_IAP
             iap = true;
 #endif
-            return StoreModes.Resolve(StoreSwitch.Enabled, test, live, iap);
+            return StoreModes.Resolve(StoreSwitch.Enabled, test, live, iap, TestStoreSwitch.Enabled);
         }
 
         /// <summary>The one flow, built the first time the Store asks for it. The rules and offers are the
@@ -109,7 +111,7 @@ namespace Emberfall.Game
 
         private SimulatedStore MakeDebugStore()
         {
-#if UNITY_EDITOR || DEVELOPMENT_BUILD
+#if UNITY_EDITOR || DEVELOPMENT_BUILD || EMBERFALL_TESTSTORE
             SimulatedStore store = new SimulatedStore();
             string path = DebugAccountPath ?? Path.Combine(Application.persistentDataPath, "debug-store-account.json");
             store.LoadAccount = () =>

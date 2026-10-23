@@ -45,6 +45,7 @@ namespace Emberfall.UI.Screens
 
         private Text _headerSubtitle;
         private Text _banner;
+        private RectTransform _testChip;
         private RectTransform _body;
         private readonly ForgeTab[] _tabs = new ForgeTab[2];
         private LiveEventSlot _slot = LiveEventSlot.Weekly;
@@ -72,6 +73,7 @@ namespace Emberfall.UI.Screens
 
             _banner = EmberforgeUI.Label("Banner", Root, "", UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleRight);
             UIBuilder.Box(_banner.rectTransform, -UITheme.ScreenPadding, -top, 560f, HubStyle.TabHeight, new Vector2(1f, 1f));
+            _testChip = TestStoreBanner.Create(Root, top);
 
             _body = UIBuilder.Node("Body", Root);
             UIBuilder.Box(_body, 0f, -(top + HubStyle.TabHeight + 12f), ContentWidth, BodyHeight, new Vector2(0.5f, 1f));
@@ -160,10 +162,11 @@ namespace Emberfall.UI.Screens
 
             switch (Mode)
             {
-                case StoreMode.Test: _banner.text = "TEST STORE  -  NO REAL MONEY MOVES"; _banner.color = Emberforge.TextGold; break;
+                case StoreMode.Test: _banner.text = TestStoreBanner.Shown(StoreMode.Test) ? "" : "TEST STORE  -  NO REAL MONEY MOVES"; _banner.color = Emberforge.TextGold; break;
                 case StoreMode.Live: _banner.text = ""; break;
                 default: _banner.text = "COMING SOON  -  PURCHASES OPEN WITH THE STORE"; _banner.color = Emberforge.TextQuiet; break;
             }
+            _testChip.gameObject.SetActive(TestStoreBanner.Shown(Mode));
 
             LiveEventView v = LiveEvents.View(App.Session, _slot, now);
             if (!v.Active)

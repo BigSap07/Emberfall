@@ -2618,6 +2618,7 @@ namespace Emberfall.EditorTools
             PurchaseService.ForceDebugStore = true;
             PurchaseService.DebugAccountPath = Path.Combine(Path.GetTempPath(), "emberfall-capture-store-account-" + DateTime.UtcNow.Ticks + ".json");
             StoreScreen.CaptureComingSoon = name == "StoreComingSoon";
+            TestStoreBanner.Capture = name == "StorePacks" || name == "StorePurchase";   // R26: the TEST STORE chip without the define
 
             // 2-12 cleared: a frontier with real numbers, and the Growth Fund's first milestone in reach.
             List<StageDef> stages = session.Content.AllStages;

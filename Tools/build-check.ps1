@@ -163,6 +163,12 @@ $engineSources = @($core + $shim + $runtime + $editor)
 # name, wrong argument types) still passed this exact step, and only the real Unity compiler, with
 # UNITY_EDITOR defined by the editor itself, caught it.
 $okEngine = Compile "unity-code" $engineSources "library" (Join-Path $out "EmberfallEngineCheck.dll") "UNITY_EDITOR;EMBERFALL_UNITY_IAP"
+# R26: the RELEASE side of the store's #if paths. No UNITY_EDITOR and no DEVELOPMENT_BUILD, so PurchaseService.MakeDebugStore
+# and ModeOfThisBuild take their release branches: once plain (the shipped build: COMING SOON) and once with the test store
+# define (EMBERFALL_TESTSTORE: the debug store must still compile into a release player).
+$releaseSources = @($core + $shim + $runtime)
+$okReleasePlain = Compile "release-plain" $releaseSources "library" (Join-Path $out "EmberfallReleasePlain.dll") "EMBERFALL_UNITY_IAP"
+$okReleaseTest = Compile "release-teststore" $releaseSources "library" (Join-Path $out "EmberfallReleaseTestStore.dll") "EMBERFALL_UNITY_IAP;EMBERFALL_TESTSTORE"
 
 
 # ---------------------------------------------------------------------------------------------
@@ -328,9 +334,11 @@ else { Write-Host "[offline-switch] FAILED" -ForegroundColor Red }
 
 if (-not $okHarness) { $failures.Add("core+harness: compile FAILED") }
 if (-not $okEngine) { $failures.Add("unity-code: compile FAILED") }
+if (-not $okReleasePlain) { $failures.Add("release-plain: compile FAILED") }
+if (-not $okReleaseTest) { $failures.Add("release-teststore: compile FAILED (EMBERFALL_TESTSTORE in a release build)") }
 if (-not $devOk) { $failures.Add("dev-arena: something reaches a release build") }
 if (-not $offlineOk) { $failures.Add("offline-switch: editor automation can reach the real cloud") }
-if (-not ($okHarness -and $okEngine)) { $harnessNote = "not run, a compile failed"; Finish 1 }
+if (-not ($okHarness -and $okEngine -and $okReleasePlain -and $okReleaseTest)) { $harnessNote = "not run, a compile failed"; Finish 1 }
 if (-not $devOk) { $harnessNote = "not run, the dev-arena check failed"; Finish 1 }
 if (-not $offlineOk) { $harnessNote = "not run, the offline-switch check failed"; Finish 1 }
 

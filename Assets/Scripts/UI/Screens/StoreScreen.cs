@@ -56,6 +56,7 @@ namespace Emberfall.UI.Screens
         private Text _headerSubtitle;
         private RectTransform _body;
         private Text _banner;
+        private RectTransform _testChip;
         private readonly ForgeTab[] _tabs = new ForgeTab[TabCount];
 
         private Tab _tab = Tab.Packs;
@@ -98,6 +99,7 @@ namespace Emberfall.UI.Screens
 
             _banner = EmberforgeUI.Label("Banner", Root, "", UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleRight);
             UIBuilder.Box(_banner.rectTransform, -UITheme.ScreenPadding, -top, 560f, HubStyle.TabHeight, new Vector2(1f, 1f));
+            _testChip = TestStoreBanner.Create(Root, top);
 
             _body = UIBuilder.Node("Body", Root);
             UIBuilder.Box(_body, 0f, -(top + HubStyle.TabHeight + 12f), ContentWidth, BodyHeight, new Vector2(0.5f, 1f));
@@ -252,10 +254,11 @@ namespace Emberfall.UI.Screens
             StoreView view = StoreOffers.View(App.Session, now);
             switch (Mode)
             {
-                case StoreMode.Test: _banner.text = "TEST STORE  -  NO REAL MONEY MOVES"; _banner.color = Emberforge.TextGold; break;
+                case StoreMode.Test: _banner.text = TestStoreBanner.Shown(StoreMode.Test) ? "" : "TEST STORE  -  NO REAL MONEY MOVES"; _banner.color = Emberforge.TextGold; break;
                 case StoreMode.Live: _banner.text = ""; break;
                 default: _banner.text = "COMING SOON  -  PURCHASES OPEN WITH THE STORE"; _banner.color = Emberforge.TextQuiet; break;
             }
+            _testChip.gameObject.SetActive(TestStoreBanner.Shown(Mode));
 
             // R24: the SKINS tab exists only while some skin is on sale in this build (zero skins is a working Store).
             bool anySkin = false;
@@ -1294,6 +1297,29 @@ namespace Emberfall.UI.Screens
             b.Interactable = CanBuy && o.Available && !pending;
             string id = o.Id;
             b.OnClick(delegate { Buy(id, ""); });
+        }
+    }
+
+    /// <summary>R26: the TEST STORE chip on the Store and the Events screen. Drawn while the build is the test store
+    /// by the define EMBERFALL_TESTSTORE (TestStoreSwitch), so nobody mistakes a free build for the real one. Prices
+    /// stay visible beside it. The Capture flag lets PlayModeScreenshot draw it without the define.</summary>
+    public static class TestStoreBanner
+    {
+        /// <summary>CAPTURE ONLY: draws the chip in the editor without the define. Whatever sets it puts it back.</summary>
+        public static bool Capture;
+
+        public static bool Shown(StoreMode mode)
+        {
+            return mode == StoreMode.Test && (TestStoreSwitch.Enabled || Capture);
+        }
+
+        /// <summary>The chip, in the corner the plain banner text uses. The caller shows it only when Shown.</summary>
+        public static RectTransform Create(Transform root, float top)
+        {
+            RectTransform chip = EmberforgeUI.Chip("TestStoreChip", root, "TEST STORE  -  FREE", Emberforge.OrnamentInset, UITheme.FontTiny);
+            UIBuilder.Box(chip, -UITheme.ScreenPadding, -top, 290f, HubStyle.TabHeight, new Vector2(1f, 1f));
+            chip.gameObject.SetActive(false);
+            return chip;
         }
     }
 }

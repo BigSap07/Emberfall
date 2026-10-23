@@ -36,6 +36,24 @@ namespace Emberfall.Core.Session
 #endif
     }
 
+    /// <summary>
+    /// THE TEST STORE DEFINE (R26, Docs/DESIGN-STORE.md): a build compiled with EMBERFALL_TESTSTORE runs the test
+    /// store (SimulatedStore: purchases are free and no money moves) even though it is a release build, so the
+    /// owner can hand a player build to a tester. The grants are the offer's fixed contents through
+    /// PurchaseGrants.Apply, so everything stays Sealed, and the Store and Events screens carry a TEST STORE
+    /// banner. Off by default: without the define a release build is COMING SOON exactly as before. Read only;
+    /// the define is the only way to turn it on. Set together with EMBERFALL_STORE_LIVE it resolves to the safe
+    /// state (StoreModes.Resolve), never to free goods.
+    /// </summary>
+    public static class TestStoreSwitch
+    {
+#if EMBERFALL_TESTSTORE
+        public static readonly bool Enabled = true;
+#else
+        public static readonly bool Enabled = false;
+#endif
+    }
+
     /// <summary>What the build does when a player taps an offer.</summary>
     public enum StoreMode
     {
@@ -57,8 +75,17 @@ namespace Emberfall.Core.Session
     {
         public static StoreMode Resolve(bool switchOn, bool editorOrDevelopmentBuild, bool liveDefine, bool iapPackage)
         {
+            return Resolve(switchOn, editorOrDevelopmentBuild, liveDefine, iapPackage, false);
+        }
+
+        /// <summary>R26: the same table plus the test store define (EMBERFALL_TESTSTORE). The define makes a release
+        /// build a test store; set together with the live define the two contradict (free goods versus real money),
+        /// and the answer is the safe one, COMING SOON, whatever else is true.</summary>
+        public static StoreMode Resolve(bool switchOn, bool editorOrDevelopmentBuild, bool liveDefine, bool iapPackage, bool testStoreDefine)
+        {
             if (!switchOn) return StoreMode.Off;
-            if (editorOrDevelopmentBuild) return StoreMode.Test;
+            if (testStoreDefine && liveDefine) return StoreMode.ComingSoon;
+            if (editorOrDevelopmentBuild || testStoreDefine) return StoreMode.Test;
             if (liveDefine && iapPackage) return StoreMode.Live;
             return StoreMode.ComingSoon;
         }
