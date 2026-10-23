@@ -46,6 +46,8 @@ namespace Emberfall.DevHarness
 
         private static long StoreWalkClockStart(ContentDatabase db)
         {
+            // --loop-curve (LoopCurve.cs) walks a season calendar of its own, far ahead of the device clock (see LoopClockSeason).
+            if (_walkLoopClock) return PassSeasonStart(db, LoopClockSeason) + 20L * 3600L;
             if (_walkStoreMode == 0 && _walkLoopMode == 0) return 0L;   // the daily loop curve (DailyLoopCurve.cs) walks this clock too
             return PassSeasonStart(db, 5) + 20L * 3600L;
         }

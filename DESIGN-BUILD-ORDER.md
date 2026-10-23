@@ -34,7 +34,9 @@ about reasoning.
 Two runs decide whether the tree is healthy, and they measure different things.
 
 - **`Tools/build-check.ps1`: all checks pass, measured from a clean run of the tree after the R4
-  economy proposal was merged.** It lints the docs,
+  economy proposal was merged.** Re-measured 2026-10-22 by the content pass, on Linux under Mono with
+  PowerShell 7 (see **Tooling**), the full check with the 60-walk guard: **3,707 checks, 0 failures,
+  exit 0**, both on `main` as it stood and on the content pass's tree. It lints the docs,
   compiles the core and the Unity-facing code against the shim in `Tools/UnityShim`, checks that
   nothing of the Dev Arena reaches a release build, checks that editor automation cannot reach the
   real cloud (the offline-switch stage, under **Tooling**), and runs `Tools/DevHarness`. Until the
@@ -101,8 +103,8 @@ Two runs decide whether the tree is healthy, and they measure different things.
   **Any failure now is a regression.** Diagnose it; do not add it to a list. One caveat that is not
   a regression: a turned-around tripwire goes red if the content it names stops using what it
   names.
-- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 63 tracked markdown files and reports 123
-  baselined violations and **0 new**. The baseline is the known debt in
+- **Doc lint is clean.** `Tools/doc-lint.ps1` scans 80 tracked markdown files and reports 124
+  baselined violations and **0 new** (measured 2026-10-22). The baseline is the known debt in
   `Tools/doc-lint-baseline.txt`; the zero is the number that has to stay zero.
 - **`Tools/HeroValidator/validate_heroes.py Assets/Resources/Content/heroes.json`: 0 failures.**
   It was the scoreboard for the authoring work and the authoring work is finished. It read 86
@@ -313,9 +315,17 @@ time: 1 star is basicAttack only; 2 adds passive1; 3 adds activeSkill; 4 require
 passive1 with passive2 optional; 5 is the full kit including all three talents.
 
 **Every ability carries player-facing text with no number in it**, written to
-`Docs/ABILITY-TEXT-STYLE.md`: all 427 basics, actives, passives and talents on the 94 heroes, with
-29 exceptions, all of them drafting notes whose sentence and kit still disagree, each a yes or no
-question in `Docs/PINOY-LIST.md` section 2f. Nothing is pinned as unwritten: Nysera's False Target,
+`Docs/ABILITY-TEXT-STYLE.md`: all 428 basics, actives, passives and talents on the 94 heroes, **with
+no exceptions since the content pass of 2026-10-22**. The 28 that were still drafting notes (the
+sentence Pinoy wrote and the kit that ships disagree) now say what their effects do, each sentence
+checked against the effect data, and `AbilityTextPinnedDraftingNotes` is empty; whether any of those
+kits should change to Pinoy's sentence instead is still his call, `Docs/PINOY-LIST.md` section 2f,
+and the card text follows the kit if one does. The same pass audited every other description against
+its effects (each status an ability applies is named, in the battle's word or the hero's own, and
+every area effect says so) and found nothing to correct. Only descriptions changed in `heroes.json`,
+so no fight, fingerprint, sweep, band or walk moved (a full `build-check.ps1` differs from the one
+before only in those pinned counts and in `ContentVersion`, which hashes the file's text and so
+retired recorded guild dungeon replays once). Nothing is pinned as unwritten: Nysera's False Target,
 the last, has text since defect pass 3 repaired it to strike the enemy her Link turns a blow onto
 rather than Nysera herself. `CheckAbilityTextIsPlayerFacing` enforces
 it: a description that is empty, holds a digit or a percent sign, or reads as a drafting note fails,
@@ -328,11 +338,10 @@ pauses the fight while it is up. Per ability it shows the sentence (`AbilityDef.
 `PassiveDef.Description`, read through `AbilityTextConfig.Prose`), then the facts `AbilityFacts` builds
 (Energy cost, when a passive fires, how often, how many rounds a status or Ward lasts, how big a
 status is), then one row per damage, healing or Ward figure from `AbilityMath`. It holds no game
-logic. The 28 abilities whose authored description is still a drafting note read their sentence from
-`ability-text.json` instead (`AbilityTextConfig`, not hashed into `ContentVersion`): proposed wording
-from `Docs/DECISIONS-OPEN.md`, which leaves the file in the same commit as the owner's answer to the
-matching question in `Docs/PINOY-LIST.md` section 2f. A description that already reads as player text
-never consults the file. `CheckAbilityCardTextIsComplete` proves every ability a hero owns has
+logic. An ability whose authored description is a drafting note would read its sentence from
+`ability-text.json` instead (`AbilityTextConfig`, not hashed into `ContentVersion`); **the file is empty
+since the content pass of 2026-10-22**, which moved all 28 of its lines, checked against each kit, into
+`heroes.json`. A description that already reads as player text never consults the file. `CheckAbilityCardTextIsComplete` proves every ability a hero owns has
 non-empty text, and `CheckAbilityFactsMatchTheSimulation` (beside `CheckAbilityNumbersMatchTheSimulation`)
 proves each printed duration, threshold, cost and status size equals what `CombatSimulation` does with
 the same effect.
@@ -1253,8 +1262,19 @@ nothing. The pool, targets and hours are in `orders.json`, loaded through `Conte
 and not part of `ContentVersion`; `CheckDailyLoopNotHashed` proves it. **It is off by default**:
 `DailyLoopSwitch.Enabled` is true only when the scripting define `EMBERFALL_DAILY_LOOP_ON` is set,
 and with it off no order is generated, no key is written and the hub shows no door. `OrdersScreen`
-is a placeholder, reached from an Orders door on the `MainMenuScreen` rail. All hours in
-`orders.json` are placeholders for the balance pass. The eleven `CheckDailyLoop*` checks are in
+is a placeholder, reached from an Orders door on the `MainMenuScreen` rail. **The hours in `orders.json`
+are final since the content pass of 2026-10-22, measured rather than chosen**: `DevHarness.exe
+--loop-curve [walks] [scale]` (`LoopCurve.cs`) walks the reference player with the loop on, claiming
+everything every sitting, and over 8 walks the shipped hours pay 3.84 hours of frontier idle income a
+day (26.8 a week against the idle chest's 70) and leave every banded stage inside its power band, with
+or without Wayfarer's Road, with no walk stuck; the tightest are 1-12 at x0.960 (top x0.99) and 2-1 at
+x1.232 with the road (top x1.25), and at twice the hours both sit at their edge. What switching the loop
+on by default would change (the define, the screen, the level order that a capped roster cannot finish,
+Wayfarer's Road waking with two free hero selectors a season, the paid pass becoming sellable) is
+written up in `Docs/DESIGN-DAILY-LOOP.md`, **Turning it on by default**. The study also found that
+`GameSession.LevelUpHero(hero, times)` dates its order event by the device clock and the economy walk's
+`SpendGold` calls that form; the study walks a clock decades ahead to stay clear of it, and the R24
+whale study's live-event quests may carry the same skew. The eleven `CheckDailyLoop*` checks are in
 `DailyLoopChecks.cs`. Design: `Docs/DESIGN-DAILY-LOOP.md`.
 
 **Wayfarer's Road, the free track (R17, `Docs/DESIGN-WAYFARERS-ROAD.md`).** A 28 day season of 30 tiers
@@ -1511,7 +1531,12 @@ The table in `onboarding.json` `unlocks`:
 | campaign, summon, heroes, idle | 1-4 | 1-6 | 1-12 | 2-1 | 2-4 | 2-8 | 3-1 |
 
 `onboarding.json` is not in `ContentVersion`, so a moved unlock or a rewritten line retires no
-replay. Every line of its text is a placeholder for the designer's pass. The harness walks and
+replay. **Its text is final since the content pass of 2026-10-22**: the wake keeps Pinoy's own lore
+lines, the six steps and the recall say what the game does, and nine more screens have a first-visit
+tip than before, 24 in all (the guild dungeon and tech, the live events, the Armory,
+the Archive, the Quartermaster, the Store, Orders and Wayfarer's Road), each checked against what
+the screen does: two ranks in the formation, conversion rolling a random five-star of the chosen
+aspect, the Forge's salvage, reroll and combine. No numbers and no dashes. The harness walks and
 pinned lines read the table through `FeatureGate.IsUnlockedArriving`, which is what moved the two
 failing checks under **The instruments**. `PlayModeScreenshot` has six `Screen:Onboard*` targets;
 a capture of a feature's own screen uses `FeatureGates.CaptureBypass` and the onboarding targets
@@ -1785,6 +1810,15 @@ sweep. **`CheckEveryAuthoredActiveIsCast` is new**: it walks all 74 authored act
 sweep's own arena and seeds, asserts that the set never cast is exactly Roan's - a second hero going
 quiet is a failure now - and then proves his in a dark arena that lets him live to round 4, which
 the sweep does not. CI runs `build-check.ps1` on every push and pull request.
+**`build-check.ps1` runs off Windows too, since the content pass of 2026-10-22**: with PowerShell 7 and
+Mono installed it compiles with Mono's `mcs` instead of the .NET Framework `csc.exe` and starts the
+harness and `OfflineSwitchCheck` through `mono` (`$onWindows`, `Invoke-Built`); `EMBERFALL_CSC` names a
+compiler explicitly on either. On Windows nothing changed. Two path filters that assumed a backslash
+now accept either separator.
+`DevHarness.exe --loop-curve [walks] [scale]` (`LoopCurve.cs`) is a study, not part of the gate: what
+switching the daily loop on does to the reference walk, with and without Wayfarer's Road (**The daily
+loop**). `python Tools/text_audit.py` writes `Docs/TEXT-AUDIT.md`, the list of every placeholder string
+still in content and code.
 `DevHarness.exe --ceil-reconcile [stage [levels]]` is a second development aid: it reads the solver's
 and the guard's CEIL side by side against a 4,000-sample reference, and it is how the `1-12`
 disagreement under **The instruments** was settled.
@@ -2312,11 +2346,11 @@ listed, so the day a kit change makes one a trap the harness says so.
 
 Not scheduled and not blocked on anything in **Next**, listed so it is not rediscovered.
 
-- **The 28 drafting-note descriptions.** The ability card (**Heroes and kits**) shows every
-  ability's sentence, its facts and its numbers. Twenty-eight abilities still read their sentence from
-  `ability-text.json`, proposed wording standing in for a drafting note, until the owner answers the
-  matching question in `Docs/PINOY-LIST.md` section 2f; the answer goes into `heroes.json` and the line
-  leaves the file in the same commit.
+- **What text is still a placeholder.** `Docs/TEXT-AUDIT.md`, generated by `python
+  Tools/text_audit.py`, lists every remaining placeholder string in content and code with file and
+  line: stage names proposed by us and awaiting Pinoy, the Store's coming-soon and placeholder-price
+  labels, content numbers their own files call placeholders, and the units still drawing a mannequin.
+  Regenerate it rather than edit it.
 - **Summon inflation, measured and not changed.** A summon costs 120 Shards at every stage while idle
   Shards a day grow x9.6 from 1-12 to 6-12 (680 to 6,500) and, with a committed player's repeat-clear
   purses, x51 (1,418 to 72,380; those purses are 79% to 91% of their Shards from 3-12 on). Days per random

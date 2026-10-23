@@ -40,8 +40,9 @@ batch appends to it rather than rebuilding it again.
 a row to either, and 2c's four-clause Energy question is now answered here rather than waiting.
 **Sections 2d and 2e are not closed**, because they hold what a MEASUREMENT produced rather than
 an authoring batch, and the instruments keep running. 2e holds the talents that cost the hero who
-picks them, which is one. **2f** is the ability text that still carries a drafting note, one yes or no question
-per note, and it shrinks as answers arrive. **2g** is eleven sentences the engine gaps pass 3
+picks them, which is one. **2f** was the ability text that still carried a drafting note; since the content pass of
+2026-10-22 every one of those 28 says what its kit does, and 2f is now the 27 kit questions behind
+them, still Pinoy's to answer. **2g** is eleven sentences the engine gaps pass 3
 rewrote when it made the kits do what they say, each one to confirm. **2h is the newest**: the eight
 talents the arena matrix found the old talent sweep had counted on nothing but their own
 announcement, each with what it does in normal play. One of them, Aeron's Interest Owed, needs an
@@ -348,18 +349,26 @@ Breath paid its Energy only for enemies below half HP, as its sentence says, the
 was Final Denial meant to deny the enemy's healer rather than the healing Velis herself feeds on?
 It is not a trap by the numbers, and `CheckTalentsAreWorthPicking` has taken it off the list.
 
-### 2f. Ability text waiting on an answer
+### 2f. Ability text: the 28 drafting notes, answered yes for the text
 
-Every basic, active, passive and talent now carries a player-facing sentence with no numbers in
-it, written to `Docs/ABILITY-TEXT-STYLE.md`, **except these 28 ids, asked as 27 questions** (Demos's
-two share one). Each still carries a drafting
-note because the sentence Pinoy wrote and the kit that ships disagree. Most repeat a row of 2a,
-2b, 2c or 2d, asked here as the one question the text needs answered.
+**Answered for the text by the content pass of 2026-10-22, on the owner's instruction that every
+ability's card must say what its effects actually do.** These 28 ids, asked below as 27 questions
+(Demos's two share one), were the last abilities whose description was a drafting note, because the
+sentence Pinoy wrote and the kit that ships disagree. Each now carries a player-facing sentence with
+no number in it, written to `Docs/ABILITY-TEXT-STYLE.md` and checked against the ability's effect
+data, which is **yes** below for the text. `ability-text.json`, which stood in for them on the card,
+is empty, and `AbilityTextPinnedDraftingNotes` in the harness is empty with it.
 
-**Yes** means the text is rewritten to say what the kit does and the note comes off. **No** means
-the kit changes, which is balance or engine work rather than a text edit. **The recommendation is
-yes throughout**, because the built kit is what players fight. The harness pins each of these ids
-in `AbilityTextPinnedDraftingNotes` and fails if one is answered and not unpinned. Nara's Carry On
+**What stays open is the kit, and it is Pinoy's call.** A **no** on any row still means the kit
+changes to his sentence (balance or engine work, most of it recorded as an engine gap in
+`Docs/ENGINE-GAPS.md`), and the card text follows the kit in the same commit. Until then the card
+describes the kit players fight. Three sentences differ from the proposed wording in
+`Docs/DECISIONS-OPEN.md` 4a because the effect data said more than the proposal did: Demos's Notice
+of Loss also says an enemy in Arrears receives less healing (its HealingReduction), Seraphine's
+Volume Closed says it is read at the start of each of her turns and names Nullify, and Brio's Recorded
+Shot says what Accounted is for.
+
+Earlier departures from this list, kept as the record: Nara's Carry On
 was the third and has left the list the other way: the kit now says "the first time", as her
 sentence does, and the text says what it does. **Hale's Tracking Habit has left the same way**: the
 kit now moves Quarry at the end of the round, as his sentence does, rather than at the start of his
@@ -370,6 +379,8 @@ most one Broken Link a round and Severance Paid spends it on the next basic, so 
 none held and every payout in every arena was the base twelve percent - and it answered OnKill,
 which is rarely hers. It answers a body falling now, pays a Ward and pays a larger one if she
 is holding a Link, and the card says exactly that with no number in it.
+
+The 27 questions, each now answered yes for the text and open for the kit:
 
 1. **Arno, Rubble Resolve**: Attack Up when Arno strikes an enemy whose Ward is still standing, not when a Ward breaks? Recommend yes.
 2. **Yara, Second Bearing**: Yara can never aim at the same enemy twice running and gains Attack Up on every shot, rather than Energy for choosing to switch? Recommend yes.
