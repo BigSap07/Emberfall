@@ -1,0 +1,40 @@
+# Emberfall play log. This file stays on this device. The game never sends it anywhere, whatever you chose for the play stats: it is local, and you send it by hand (Settings, SHARE PLAY LOG). It holds screens opened, stage results, test store purchases, cloud status and errors. No save data and no account details.
+== session 11aa22bb started 2026-10-24T21:00:00Z ==
+build 0.3.0 (ae12e88) | platform WindowsPlayer | device Desktop | defines EMBERFALL_PLAYLOG;EMBERFALL_TESTSTORE
++1.5s screen MainMenu
++8.0s screen Campaign
++10.0s stage ch1_1 attempt
++11.0s screen Battle
++50.0s stage ch1_1 win
++51.0s screen WaveResult
++60.0s screen Summon
++95.2s screen Campaign
+== session 33cc44dd started 2026-10-24T21:05:30Z ==
+build 0.3.0 (ae12e88) | platform WindowsPlayer | device Desktop | defines EMBERFALL_PLAYLOG;EMBERFALL_TESTSTORE
++1.5s screen MainMenu
++4.0s screen Campaign
++6.0s stage ch1_2 attempt
++7.0s screen Battle
++60.0s stage ch1_2 win
++61.0s screen Campaign
++64.0s stage ch1_3 attempt
++65.0s screen Battle
++100.0s stage ch1_3 lose wave 1 battle 0
++101.0s screen Campaign
++104.0s stage ch1_3 attempt
++105.0s screen Battle
++140.0s stage ch1_3 lose wave 1 battle 0
++141.0s screen Campaign
++144.0s stage ch1_3 attempt
++145.0s screen Battle
++180.0s stage ch1_3 lose wave 1 battle 0
++181.0s screen Campaign
++184.0s stage ch1_3 attempt
++185.0s screen Battle
++220.0s stage ch1_3 lose wave 1 battle 0
++221.0s screen Talents
++260.0s screen Store
++270.0s purchase offer weekly_pack result bought
++275.0s purchase offer weekly_pack result refused reason AlreadyOwned
++290.0s screen Campaign
++298.0s summary length 298s screens 14 stages_cleared 1 purchases 1 errors 0
