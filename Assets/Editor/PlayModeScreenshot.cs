@@ -97,9 +97,9 @@ namespace Emberfall.EditorTools
 
         /// <summary>The UI kit's switch for this run (R20): a target named with +kit forces UiKitSwitch ON
         /// for the capture only, +plain forces it OFF (the before shot and the rollback proof), 0 leaves
-        /// it as the build has it. The switch is a static, so the domain reload Play mode triggers resets
+        /// it as the build has it (ON unless EMBERFALL_UIKIT_OFF, R26). The switch is a static, so the domain reload Play mode triggers resets
         /// it and the static constructor re-applies it before the game boots; KitWasKey is what it was
-        /// before the run, put back by Stop. It is never committed ON.</summary>
+        /// before the run, put back by Stop.</summary>
         private const string KitForceKey = "PlayModeScreenshot.UiKitForce";
         private const string KitWasKey = "PlayModeScreenshot.UiKitWas";
 
@@ -1516,7 +1516,7 @@ namespace Emberfall.EditorTools
             // And the UI kit's, so a +kit run cannot leave the switch on for the next one in this editor.
             if (SessionState.GetInt(KitForceKey, 0) != 0)
             {
-                UiKitSwitch.Enabled = SessionState.GetBool(KitWasKey, false);
+                UiKitSwitch.Enabled = SessionState.GetBool(KitWasKey, UiKitSwitch.ShippedDefault);
                 SessionState.SetInt(KitForceKey, 0);
                 UiKit.Forget();
             }

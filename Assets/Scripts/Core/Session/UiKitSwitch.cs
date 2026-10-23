@@ -4,24 +4,27 @@ using System.Collections.Generic;
 namespace Emberfall.Core.Session
 {
     /// <summary>
-    /// THE UI KIT SWITCH (R20): the generated art kit that skins the Hub, the Battle HUD, the Store, the
-    /// Hero screen, Victory and Summon. OFF by default and committed OFF. Define EMBERFALL_UIKIT to build
-    /// it ON; the owner turns it on after approving the contact sheet. The field is writable so the
-    /// harness and the capture targets can force it; whatever sets it puts it back.
+    /// THE UI KIT SWITCH (R20, default flipped in R26): the generated art kit that skins the Hub, the Battle
+    /// HUD, the Store, the Hero screen, Victory and Summon. ON by default; define EMBERFALL_UIKIT_OFF to
+    /// build the old look (the same opt-out shape as EMBERFALL_STORE_OFF and EMBERFALL_SINKS_OFF). The
+    /// field is writable so the harness and the capture targets can force it; whatever sets it puts it
+    /// back. ShippedDefault is what this compile ships, so a capture restores to it and not to a literal.
     ///
-    /// OFF IS TODAY, EXACTLY. Every lookup in UiKitMap answers null while this is off, and every call
-    /// site treats null as "draw what was always drawn", so with the switch off no kit sprite is loaded,
-    /// no tint changes, no ornament is skipped and no layout moves. The switch is a presentation
+    /// OFF IS THE OLD LOOK, EXACTLY. Every lookup in UiKitMap answers null while this is off, and every
+    /// call site treats null as "draw what was always drawn", so with the switch off no kit sprite is
+    /// loaded, no tint changes, no ornament is skipped and no layout moves. The switch is a presentation
     /// preference of the build: it reads nothing from a save, writes nothing to one, and never reaches
     /// a fight.
     /// </summary>
     public static class UiKitSwitch
     {
-#if EMBERFALL_UIKIT
-        public static bool Enabled = true;
+#if EMBERFALL_UIKIT_OFF
+        public static readonly bool ShippedDefault = false;
 #else
-        public static bool Enabled = false;
+        public static readonly bool ShippedDefault = true;
 #endif
+
+        public static bool Enabled = ShippedDefault;
     }
 
     /// <summary>

@@ -1297,10 +1297,14 @@ A generated art kit (panels, buttons, tabs, pills, currency and navigation icons
 icons, Store card art) that skins the existing screens behind one switch. It is a skin, not a redesign: no layout
 moved, and the kit only replaces the sprite, tint or text colour at the call sites listed below.
 
-**The switch.** `UiKitSwitch` (Core, engine-free) is **off** and is committed off. `EMBERFALL_UIKIT` builds it on:
-add the define to the player's scripting define symbols (`Assets/csc.rsp` carries the one other define, for the
-store, and takes `-define:EMBERFALL_UIKIT` the same way). The field is writable so a harness check or a capture can
-force it. Off is today exactly: every lookup in `UiKitMap` answers null, every call site keeps the drawing it always
+**The switch.** `UiKitSwitch` (Core, engine-free) is **on by default** (R26). `EMBERFALL_UIKIT_OFF` is the opt-out
+that builds the old look (the same shape as `EMBERFALL_STORE_OFF` and `EMBERFALL_SINKS_OFF`); no build script sets a
+define, so a normal build ships the kit. `UiKitSwitch.ShippedDefault` says what the compile ships, and
+`PlayModeScreenshot` restores to it. The field is writable so a harness check or a capture can force it, and the old
+look stays reachable three ways: the define, the field, and the `+plain` capture suffix. `build-check` proves the
+defines by running them: the `[define-probe]` step compiles `Tools/DefineProbe` with the Core files with no defines
+and with `EMBERFALL_UIKIT_OFF;EMBERFALL_TESTSTORE`, runs both and asserts the printed flags. Off is the old look
+exactly: every lookup in `UiKitMap` answers null, every call site keeps the drawing it always
 had as its fallback, and no kit sprite is loaded. The switch reads nothing from a save, writes nothing to one, never
 reaches a fight, and the kit's art is named in none of the eight hashed content files (`ContentVersion` did not move).
 
