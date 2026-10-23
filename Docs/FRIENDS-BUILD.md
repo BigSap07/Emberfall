@@ -43,8 +43,8 @@ it, and it does not depend on the play stats choice. The file header says so. It
 details. Format (`PlayLogSession` in `PlayLog.cs` is the one place that builds the lines):
 
     # Emberfall play log. This file stays on this device. ...
-    == session 3f9a1c2e started 2026-10-23T12:00:00Z ==
-    build 0.3.0 (abc1234) | platform Android | device SM-X200 | defines EMBERFALL_PLAYLOG;EMBERFALL_TESTSTORE
+    == session <id> started 2026-10-23T12:00:00Z ==
+    build 0.3.0 (<commit>) | platform Android | device SM-X200 | defines EMBERFALL_PLAYLOG;EMBERFALL_TESTSTORE
     +2.0s screen MainMenu
     +6.0s stage 1-1 attempt
     +20.0s stage 1-1 lose wave 1 battle 0
@@ -76,7 +76,7 @@ grants nothing), creates no purchase and writes no cloud data beyond a normal fi
 
     [smoke] start
     [smoke] cloud signed in anonymously (status Ready)
-    [smoke] user id prefix abcd1234
+    [smoke] user id prefix <8 chars>
     [smoke] friends screen loaded (status 0 FRIENDS)
     [smoke] guild screen loaded (status NO GUILD)
     [smoke] done ok
