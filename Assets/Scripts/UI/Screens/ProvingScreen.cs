@@ -20,6 +20,9 @@ namespace Emberfall.UI.Screens
     /// real players - and why a ghost opponent says out loud that it is the player's own line.
     /// Presenting a locally-generated number as a competitive position would be a straightforward
     /// lie to the player, and it is the easiest lie in this whole system to tell by accident.
+    ///
+    /// THE BOARDS DOOR (R28) DOES NOT CHANGE THAT. BOARDS opens the leaderboards screen, where the server ranks real
+    /// players' own saves; this page still draws no rank, no list of names and no "top %" of its own.
     /// </summary>
     public sealed class ProvingScreen : UIScreen
     {
@@ -48,6 +51,24 @@ namespace Emberfall.UI.Screens
             ScreenChrome.ForgedHeader(Root, "THE PROVING", Router, out _headerSubtitle);
             BuildOpponentCard();
             BuildHonestyNote();
+            BuildBoardsDoor();
+        }
+
+        /// <summary>
+        /// THE LEADERBOARDS' DOOR (R28): BOARDS, a secondary button in the top right, under the header and clear of the
+        /// opponent card. It opens the leaderboards with the Proving's board selected. The board is the server's own
+        /// ranking of real players' saves; the standing shown on this page stays what it always was.
+        /// </summary>
+        private void BuildBoardsDoor()
+        {
+            UIButton boards = EmberforgeUI.Button("Boards", Root, "BOARDS", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIBuilder.Box(boards.Root, -UITheme.ScreenPadding, -(ScreenChrome.HeaderTop + 108f + 16f), 260f, HubStyle.TouchMin,
+                          new Vector2(1f, 1f));
+            boards.OnClick(delegate
+            {
+                App.Audio.Tap();
+                Router.Leaderboards.OpenBoard(Emberfall.Core.Cloud.LeaderboardBoard.Proving);
+            });
         }
 
         private void BuildOpponentCard()

@@ -130,7 +130,7 @@ namespace Emberfall.DevHarness
                   "Marketplace SHARED: the Store's SHOPS tab and the Marketplace screen draw the same ShopDoors, and the Store no longer carries its own copy");
             Check(doors.Contains("NOT IN THIS BUILD") && doors.Contains("FeatureLockView.Attach(") && doors.Contains("EntryOf(shop)") && doors.Contains("\"OPEN\""),
                   "Marketplace CARDS: each card gates by its own door id, carries the lock and the new dot, says NOT IN THIS BUILD for a missing shop and OPEN otherwise");
-            Check(router.Contains("Marketplace = Create<Screens.MarketplaceScreen>()") && Regex.IsMatch(router, @"LiveEvents,\s*Marketplace\s*\}"),
+            Check(router.Contains("Marketplace = Create<Screens.MarketplaceScreen>()") && Regex.IsMatch(router, @"LiveEvents,\s*Marketplace\s*[,\}]"),
                   "Marketplace ROUTER: ScreenId.Marketplace exists and the router builds the screen");
             Check(hub.Contains("AddMapNode(\"MARKETPLACE\", MarketX, MarketY, OpenMarketplace, \"hub.map.MARKETPLACE\")") && !hub.Contains("AddMapNode(\"RELICS\""),
                   "Marketplace HUB: the market stall's label is MARKETPLACE and it opens the Marketplace, not the Relic Shop");

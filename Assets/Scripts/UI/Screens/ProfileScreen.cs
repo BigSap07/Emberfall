@@ -49,6 +49,7 @@ namespace Emberfall.UI.Screens
             BuildIdentityCard(content);
             BuildAvatarCard(content);
             BuildStatsCard(content);
+            BuildBoardsCard(content);
         }
 
 
@@ -270,6 +271,25 @@ namespace Emberfall.UI.Screens
             if (string.IsNullOrEmpty(profile.AvatarHeroId)) return null;
             if (!profile.Owns(profile.AvatarHeroId)) return null;
             return App.Session.Content.GetHero(profile.AvatarHeroId);
+        }
+
+        // ------------------------------------------------------------------ leaderboards door
+
+        /// <summary>
+        /// The door to the leaderboards (R28): a button and nothing else. It opens the screen on its first tab; the
+        /// screen draws everything it says, so this card carries no copy and no number of its own.
+        /// </summary>
+        private void BuildBoardsCard(RectTransform parent)
+        {
+            RectTransform card = Card(parent, HubStyle.TouchMin + UITheme.Space32);
+
+            UIButton boards = EmberforgeUI.Button("Leaderboards", card, "LEADERBOARDS", HubStyle.FontButton, ForgeButtonKind.Secondary);
+            UIBuilder.Box(boards.Root, 28f, 0f, 420f, HubStyle.TouchMin, new Vector2(0f, 0.5f));
+            boards.OnClick(delegate
+            {
+                App.Audio.Tap();
+                Router.Show(ScreenId.Leaderboards);
+            });
         }
 
         // ------------------------------------------------------------------ lifetime stats

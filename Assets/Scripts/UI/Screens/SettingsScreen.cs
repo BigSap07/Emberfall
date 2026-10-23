@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using Emberfall.Battle;
 using Emberfall.Core.Telemetry;
 using Emberfall.Game.Cloud;
+using Emberfall.Game.Notifications;
 using Emberfall.Game.Telemetry;
 using Emberfall.UI.Summon;
 
@@ -35,6 +36,7 @@ namespace Emberfall.UI.Screens
         private ScrollRect _scroll;
 
         private AudioSettingsCard _audioCard;
+        private RemindersCard _remindersCard;
         private UIButton _fastSummonButton;
         private Text _fastSummonNote;
         private UIButton _screenShakeButton;
@@ -57,6 +59,7 @@ namespace Emberfall.UI.Screens
             ApplyContentInset();
 
             BuildAudioCard(content);
+            BuildRemindersCard(content);
             // Summoning and Battle are two short cards, so they share one row: the screen shake
             // switch then sits inside the first screenful instead of under the fold.
             RectTransform pair = UIBuilder.Node("Pair", content);
@@ -108,6 +111,19 @@ namespace Emberfall.UI.Screens
             RectTransform card = Card(parent, AudioSettingsCard.Height);
             _audioCard = new AudioSettingsCard(App);
             _audioCard.Build(card, CardWidth);
+        }
+
+        /// <summary>
+        /// The REMINDERS card (R28), under the sound card in the same panel style: drawn from the notification
+        /// settings view alone, so it says "not available on this device yet" while the build has no notification
+        /// package and every switch stays off. Its height follows its view, so the page's card starts at a placeholder
+        /// and the card sets its own on the first Show.
+        /// </summary>
+        private void BuildRemindersCard(RectTransform parent)
+        {
+            RectTransform card = Card(parent, 300f);
+            _remindersCard = new RemindersCard(App);
+            _remindersCard.Build(card, card.GetComponent<LayoutElement>(), CardWidth);
         }
 
         /// <summary>
@@ -407,8 +423,32 @@ namespace Emberfall.UI.Screens
             if (_scroll != null) _scroll.verticalNormalizedPosition = 0f;
         }
 
+        /// <summary>For the capture tool: the page scrolled so the REMINDERS card is at the top of the view.</summary>
+        public void ScrollToRemindersForCapture()
+        {
+            if (_scroll == null || _remindersCard == null) return;
+            Canvas.ForceUpdateCanvases();
+            RectTransform card = _remindersCard.CardRect;
+            if (card == null) return;
+            RectTransform content = _scroll.content;
+            content.anchoredPosition = new Vector2(content.anchoredPosition.x, -card.anchoredPosition.y - 8f);
+        }
+
+        /// <summary>For the capture tool: the card's controller, for the two taps a target presses.</summary>
+        public NotificationSettingsController RemindersForCapture
+        {
+            get { return _remindersCard != null ? _remindersCard.ControllerForCapture : null; }
+        }
+
+        private void Update()
+        {
+            if (_remindersCard == null || Root == null || !Root.gameObject.activeInHierarchy) return;
+            _remindersCard.Tick(Time.unscaledDeltaTime);
+        }
+
         public override void OnHide()
         {
+            if (_remindersCard != null) _remindersCard.Hide();
             // Volumes are stored as the sliders move; this is the one disk write for a drag.
             if (_audioCard != null) _audioCard.Flush();
         }
@@ -418,6 +458,7 @@ namespace Emberfall.UI.Screens
             App.RefreshHud();
             _headerSubtitle.text = "";
             _audioCard.Refresh();
+            _remindersCard.Show();
             RefreshFastSummon();
             RefreshScreenShake();
             RefreshSave();
