@@ -1875,9 +1875,9 @@ slots always stood in on screen, SlotCell), a side with fewer than five keeps th
 whose slot is taken goes to the nearest free one (ResolveSlots). BattleStage.FitFormation solves the world
 position that puts each unit's feet on its cell for the camera's viewport and the safe area
 (FormationLayout.ToWorld, the inverse of BattleFraming.Project) and sets the orthographic size so a unit is
-0.20 of the safe height tall; UnitActor.Setup scales every rig to that one height (a boss is up to 1.3 times
+0.20 of the safe height tall; UnitActor.Setup scales every rig so its VISIBLE top (the art's own, from sprite-extents.json, read by SpriteExtents; the body rule where an entry is missing or is not the body, the Carrion Vulture's wings) is that one height (a boss is up to 1.3 times
 taller, held under the bars ceiling), so heroes and enemies read the same size. The lower unit is drawn in
-front (the unit quads are transparent and sort by distance from the camera, which with every unit one height is feet order; `FormationLayout.DrawOrder` is the proved statement of it). The HP and energy bars stand just over the
+front (the unit quads are transparent and sort by distance from the camera, which with every unit one height is feet order; `FormationLayout.DrawOrder` is the proved statement of it). Damage and heal numbers start on the target's own upper body and the buff chip is drawn over the upper body, so neither reads as the neighbour's; the turn dot and the inert status icons are not drawn over a head. The HP and energy bars stand just over the
 head (BattleHudLayout.PlateOriginAboveHead), the highest stays below 0.38 of the height from the top, the
 centre stays open, and attack steps are FormationLayout.ApproachScale of the old ones. R29FormationChecks.cs
 proves all of it at 16:9, 18:9, 20:9 and 4:3 with a notch and a gesture bar. **Rollback:**
@@ -1885,7 +1885,8 @@ FormationLayout.Enabled false returns the stage and the plates to the R15 geomet
 boss does not move to B2, because campaign.json lists every boss first (slot 0) and the sim's front-target rule
 picks the lowest slot, so B2 would draw the front unit behind two others. Captures:
 Tools/capture-formation-targets.txt and Tools/capture-formation-moments.txt through capture-batch.ps1,
-Screen:Battle=<stage>@<W>x<H>.
+Screen:Battle=<stage>+five@<W>x<H> (+five, and .five on a BattleMoment, fields a full five hero line on the scratch identity only).
+
 **31 of 94 heroes have drawn battle art**, and they are the thirty 5-stars plus Celen. The other 63
 carry `visual.spriteStatus: "pending"` and render as an aspect-tinted placeholder mannequin with
 their name under its feet, which makes "not drawn yet" a thing the game can say separately from

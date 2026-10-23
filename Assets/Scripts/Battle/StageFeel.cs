@@ -62,6 +62,31 @@ namespace Emberfall.Battle
             return Config.ClipFlip.TryGetValue(defId, out set) ? set : null;
         }
 
+        private static SpriteExtents _extents;
+
+        /// <summary>Where each sprite's visible pixels sit (sprite-extents.json), read once. Presentation only.</summary>
+        public static SpriteExtents Extents
+        {
+            get
+            {
+                if (_extents == null)
+                {
+                    TextAsset asset = Resources.Load<TextAsset>(SpriteExtents.ResourcePath);
+                    _extents = asset != null ? SpriteExtents.FromJson(asset.text) : SpriteExtents.Empty;
+                    for (int i = 0; i < _extents.Warnings.Count; i++) Debug.LogWarning("Emberfall content: " + _extents.Warnings[i]);
+                }
+                return _extents;
+            }
+        }
+
+        /// <summary>How much higher the art's visible top is than the rig's body top for this look (1 for a
+        /// placeholder, a vector body or a sprite with no extents): SpriteExtents.TopRatio.</summary>
+        public static float TopRatio(VisualDef look)
+        {
+            if (look == null || look.SpritePending || string.IsNullOrEmpty(look.Sprite)) return 1f;
+            return Extents.TopRatio(look.Sprite, look.SpriteBodyFraction, look.SpriteFootFraction);
+        }
+
         /// <summary>A unit's own factor on the formation's common height: stage-v2.json's scaleMul in v2
         /// (the Carrion Vulture's wings are too wide for the height every unit shares), 1 otherwise.</summary>
         public static float FormationMul(string defId)

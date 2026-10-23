@@ -676,6 +676,10 @@ namespace Emberfall.Battle
             float body = target.HeadPosition.y - target.transform.position.y;
             Vector3 head = target.HeadPosition + (FxPoint(target) - target.CenterPosition);
             float scale = travel / 0.7f;
+            // In the formation the bars stand just over the head and the rows are close, so a chip drifting up
+            // off the head sat on the bars and, on the back row, above the 0.38 line. It is drawn over the upper
+            // body instead, FormationLayout.ArrowBodyAnchor of the body height down from the head.
+            float anchor = FormationLayout.Enabled ? FormationLayout.ArrowBodyAnchor : 0f;
             float from = up ? 0.06f : 0.06f + 0.18f * scale;
             float to = up ? 0.06f + 0.18f * scale : 0.06f;
             float duration = Mathf.Max(0.02f, seconds) / PlaybackSpeed();
@@ -684,7 +688,7 @@ namespace Emberfall.Battle
             {
                 t += Time.deltaTime;
                 float k = Mathf.Clamp01(t / duration);
-                q.T.position = head + Vector3.up * (body * Mathf.Lerp(from, to, 1f - (1f - k) * (1f - k)) + size * 0.5f);
+                q.T.position = head + Vector3.up * (body * (Mathf.Lerp(from, to, 1f - (1f - k) * (1f - k)) + anchor) + size * 0.5f);
                 float a = k < 0.15f ? k / 0.15f : 1f - Mathf.Clamp01((k - 0.55f) / 0.45f);
                 q.Material.SetColor("_Color", new Color(tint.r, tint.g, tint.b, a));
                 yield return null;

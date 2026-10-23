@@ -38,17 +38,17 @@ The capture runs on a scratch identity with the cloud held off (`ScratchCaptures
 
 ## Photographing the battle formation (R29)
 
-`Screen:Battle=<stage>@<W>x<H>` is the whole battle screen with the first round underway, and the size is just the suffix: `@1920x1080` is 16:9, `@2400x1080` is 20:9, with no other setting. Two target files hold what the formation needs, both run with `-TargetsFile`:
+`Screen:Battle=<stage>+five@<W>x<H>` is the whole battle screen with the first round underway, and the size is just the suffix: `@1920x1080` is 16:9, `@2400x1080` is 20:9, with no other setting. `+five` after the stage (`.five` on a `BattleMoment`) gives the scratch profile the five `WaveLine` heroes and deploys them, so B1 and B2 on the left are seen; it refuses to run off the scratch identity and never touches the real save. Without it the scratch squad is three heroes. Two target files hold what the formation needs, both run with `-TargetsFile`:
 
 - `Tools/capture-formation-targets.txt`, 12 shots: `ch1_9` (chapter 1, five a side), `ch2_5` (chapter 2 crossing, five a side), `ch1_12` and `ch2_12` (the two bosses, slot 0), `ch1_1` (three enemies) and `ch1_5` (four enemies), each at both sizes. Tag it `formation`.
-- `Tools/capture-formation-moments.txt`, 8 shots: `Screen:BattleMoment=ch1_9.<kind>@<W>x<H>` for a hit, a skill, a heal and a death, at both sizes. Tag it `formation-fx`.
+- `Tools/capture-formation-moments.txt`, 8 shots: `Screen:BattleMoment=ch1_9.<kind>.five@<W>x<H>` for a hit, a skill, a heal and a death, at both sizes. Tag it `formation-fx`.
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 `
     -TargetsFile Tools/capture-formation-targets.txt -LogDir D:\Emberfall\handoff\<RUN>\logs -Tag formation
 ```
 
-The files are not menu items and have no literal `Begin` call, so the nightly sweep does not run them. The PNGs are `screen_Battle=<stage>@<W>x<H>.png`. What to look at: both teams in the bottom half in the five cells of `FormationLayout`, the bars just over each head and none above 0.38 of the height from the top, the centre open, attack steps and effects landing on the right unit, and the three-enemy and four-enemy lines leaving their cells empty rather than moving.
+The files are not menu items and have no literal `Begin` call, so the nightly sweep does not run them. The PNGs are `screen_Battle=<stage>+five@<W>x<H>.png`. What to look at: both teams in the bottom half in the five cells of `FormationLayout`, the bars just over each head and none above 0.38 of the height from the top, the centre open, attack steps and effects landing on the right unit, and the three-enemy and four-enemy lines leaving their cells empty rather than moving.
 ## Photographing a whole side (the roster sheet)
 
 `Screen:RosterSheet=<side>[.<a|b|c|d>][.<clip>][.v1|.v2]` lines up the units of one side in one clip, one unit to a cell, so a unit that faces the wrong way shows at a glance. A sheet holds twelve units (six across, two deep) and no body or name overlaps another; `allies` has three sheets (`allies`, `allies.b`, `allies.c`) and `enemies` four (up to `enemies.d`).

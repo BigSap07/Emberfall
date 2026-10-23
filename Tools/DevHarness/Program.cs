@@ -365,7 +365,7 @@ namespace Emberfall.DevHarness
             CheckR27PlayLog(contentDir);
             CheckR29Rematch(content);
             // R29: the battle formation table and everything hung off it (R29FormationChecks.cs).
-            CheckR29Formation(contentDir);
+            CheckR29Formation(content, contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
             CheckCaptureWatchdog(content, contentDir);

@@ -4,14 +4,15 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 `
 #       -TargetsFile Tools/capture-formation-moments.txt -LogDir D:\Emberfall\handoff\<RUN>\logs -Tag formation-fx
 #
-# Screen:BattleMoment=<stage>.<kind>@<W>x<H> waits for the first event of that kind in the stage's first fight and
+# The .five token fields the same five hero line as +five does in capture-formation-targets.txt.
+# Screen:BattleMoment=<stage>.<kind>.five@<W>x<H> waits for the first event of that kind in the stage's first fight and
 # shoots it (kinds: hit, crit, skill, heal, death, buff, debuff, shield). ch1_9 is a five against five.
 
-Screen:BattleMoment=ch1_9.hit@1920x1080
-Screen:BattleMoment=ch1_9.hit@2400x1080
-Screen:BattleMoment=ch1_9.skill@1920x1080
-Screen:BattleMoment=ch1_9.skill@2400x1080
-Screen:BattleMoment=ch1_9.heal@1920x1080
-Screen:BattleMoment=ch1_9.heal@2400x1080
-Screen:BattleMoment=ch1_9.death@1920x1080
-Screen:BattleMoment=ch1_9.death@2400x1080
+Screen:BattleMoment=ch1_9.hit.five@1920x1080
+Screen:BattleMoment=ch1_9.hit.five@2400x1080
+Screen:BattleMoment=ch1_9.skill.five@1920x1080
+Screen:BattleMoment=ch1_9.skill.five@2400x1080
+Screen:BattleMoment=ch1_9.heal.five@1920x1080
+Screen:BattleMoment=ch1_9.heal.five@2400x1080
+Screen:BattleMoment=ch1_9.death.five@1920x1080
+Screen:BattleMoment=ch1_9.death.five@2400x1080

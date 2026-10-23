@@ -3,7 +3,11 @@
 #   powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 `
 #       -TargetsFile Tools/capture-formation-targets.txt -LogDir D:\Emberfall\handoff\<RUN>\logs -Tag formation
 #
-# Screen:Battle=<stage>@<W>x<H> fights that stage and writes screen_Battle=<stage>@<W>x<H>.png. The size is
+# +five after the stage fields a full five hero line on the left (capture-only: the scratch identity's profile is given
+# the five WaveLine heroes and they are deployed; the real save and profile are never touched, and the target refuses to
+# run anywhere but on the scratch identity). Without it the scratch squad is three heroes and B1 and B2 stay empty.
+#
+# Screen:Battle=<stage>+five@<W>x<H> fights that stage and writes screen_Battle=<stage>+five@<W>x<H>.png. The size is
 # the Game view's: 1920x1080 is 16:9, 2400x1080 is 20:9. Nothing else needs setting.
 #
 # Which stage is which (enemies in the line, from campaign.json):
@@ -14,15 +18,15 @@
 #   ch1_1   three enemies: slots 0 to 2 only, so the back row's outer cells stay empty
 #   ch1_5   four enemies: slots 0 to 3
 
-Screen:Battle=ch1_9@1920x1080
-Screen:Battle=ch1_9@2400x1080
-Screen:Battle=ch2_5@1920x1080
-Screen:Battle=ch2_5@2400x1080
-Screen:Battle=ch1_12@1920x1080
-Screen:Battle=ch1_12@2400x1080
-Screen:Battle=ch2_12@1920x1080
-Screen:Battle=ch2_12@2400x1080
-Screen:Battle=ch1_1@1920x1080
-Screen:Battle=ch1_1@2400x1080
-Screen:Battle=ch1_5@1920x1080
-Screen:Battle=ch1_5@2400x1080
+Screen:Battle=ch1_9+five@1920x1080
+Screen:Battle=ch1_9+five@2400x1080
+Screen:Battle=ch2_5+five@1920x1080
+Screen:Battle=ch2_5+five@2400x1080
+Screen:Battle=ch1_12+five@1920x1080
+Screen:Battle=ch1_12+five@2400x1080
+Screen:Battle=ch2_12+five@1920x1080
+Screen:Battle=ch2_12+five@2400x1080
+Screen:Battle=ch1_1+five@1920x1080
+Screen:Battle=ch1_1+five@2400x1080
+Screen:Battle=ch1_5+five@1920x1080
+Screen:Battle=ch1_5+five@2400x1080

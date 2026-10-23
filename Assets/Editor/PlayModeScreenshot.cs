@@ -66,6 +66,7 @@ namespace Emberfall.EditorTools
         private const string BattleStageKey = "PlayModeScreenshot.BattleStage";
         /// <summary>Screen:BattleMoment only: the text after the stage id, "kind[.aspect][.off]".</summary>
         private const string MomentKey = "PlayModeScreenshot.Moment";
+        private const string FiveLineKey = "PlayModeScreenshot.FiveLine";
         /// <summary>Screen:BattleMoment only: 0 waits for the round, 1 for the moment, 2 settles.</summary>
         private const string MomentStageKey = "PlayModeScreenshot.MomentStage";
         /// <summary>Screen:BattleMoment only: the GAME frame (Time.frameCount) the moment arrived on,
@@ -745,7 +746,11 @@ namespace Emberfall.EditorTools
                 battleStage = target.Substring(eq + 1);
                 target = target.Substring(0, eq);
                 suffix = "=" + battleStage + suffix;
+                // Screen:Battle=<stage>+five fights with a full five hero line on the left (the scratch
+                // identity only; see the Battle block). The suffix stays in the file name so the shot says so.
+                if (battleStage.EndsWith("+five")) battleStage = battleStage.Substring(0, battleStage.Length - 5);
             }
+            SessionState.SetInt(FiveLineKey, requested.IndexOf("+five", StringComparison.Ordinal) >= 0 ? 1 : 0);
 
             // Screen:<Name>+kit forces the UI kit ON for this capture, +plain forces it OFF. It rides on
             // the target name so every existing target can be shot both ways without a new code path, and
@@ -2096,6 +2101,21 @@ namespace Emberfall.EditorTools
                         List<HeroInstance> fielded = app.Session.Profile.TeamHeroes();
                         for (int h = 0; h < fielded.Count; h++)
                             fielded[h].Level = Math.Max(fielded[h].Level, app.Session.HeroLevelCapOf(fielded[h]));
+                    }
+                    // R29: a full five hero line on the left, so B1 and B2 of the formation are seen. The scratch
+                    // identity holds a three hero squad; FieldLine grants the five WaveLine heroes straight into
+                    // that scratch profile (never the real one, which this refuses to touch) and deploys them.
+                    bool fiveLine = SessionState.GetInt(FiveLineKey, 0) == 1
+                                    || MomentHasToken(SessionState.GetString(MomentKey, ""), "five");
+                    if (fiveLine)
+                    {
+                        if (Application.persistentDataPath.IndexOf("Emberfall Scratch", StringComparison.OrdinalIgnoreCase) < 0)
+                        {
+                            Debug.LogError("PlayModeScreenshot: a five hero line rewrites the squad, so it only runs on the scratch identity. Skipping.");
+                            SessionState.SetInt(StageKey, slot + 1);
+                            return;
+                        }
+                        FieldLine(app.Session, WaveLine);
                     }
                     string asked = SessionState.GetString(BattleStageKey, "");
                     StageDef next = asked.Length > 0 ? app.Session.Content.GetStage(asked) : app.Session.NextStage;
@@ -3489,6 +3509,7 @@ namespace Emberfall.EditorTools
                     else return false;
                 }
                 else if (p == "off") off = true;
+                else if (p == "five") { }                 // a full five hero line, read by MomentHasToken
                 else if (p == "v1" || p == "v2") { }     // the R15 feel preset, read by MomentHasToken
                 else
                 {

@@ -21,6 +21,7 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 UNITS = os.path.join(ROOT, "Assets", "Resources", "Sprites", "Units")
 OUT = os.path.join(ROOT, "Tools", "DevHarness", "sprite-extents.txt")
+OUT_JSON = os.path.join(ROOT, "Assets", "Resources", "Content", "sprite-extents.json")
 
 
 def idle_bbox(sprite):
@@ -61,6 +62,15 @@ def main():
         lines.append("%s|%d|%d|%.4f|%.4f|%.4f|%.4f" % (name, fw, fh, x0 / fw, x1 / fw, 1 - y1 / fh, 1 - y0 / fh))
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
+    # The game reads the same two numbers per sprite (ybot, ytop) from Resources, so the unit's head is where
+    # the art's head is (SpriteExtents). Same rounding as the text file; the harness holds the two equal.
+    jlines = ["{", '  // Written by Tools/sprite_extents.py: [ybot, ytop] of each sprite, fractions of one frame, y from the bottom.',
+              '  // Presentation only, never read by ContentDatabase, so not part of ContentVersion.', '  "sprites": {']
+    for i, (name, (fw, fh, x0, x1, y0, y1)) in enumerate(rows):
+        jlines.append('    "%s": [%.4f, %.4f]%s' % (name, 1 - y1 / fh, 1 - y0 / fh, "," if i < len(rows) - 1 else ""))
+    jlines += ["  }", "}"]
+    with open(OUT_JSON, "w", encoding="utf-8", newline="\n") as f:
+        f.write("\n".join(jlines) + "\n")
     print("wrote %d sprites to %s" % (len(rows), OUT))
 
 

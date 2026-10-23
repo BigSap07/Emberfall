@@ -90,20 +90,27 @@ namespace Emberfall.Battle
             // produced, so no screen has to look a unit up a second time to draw it.
             // StageFeel.Resolve is the snapshot's own VisualDef, the same object, unless the v2 look
             // is on: then a stand-in's art, a corrected facing and the larger scale (StagePresentation).
-            Rig = UnitRig.Build("Rig", transform, StageFeel.Resolve(snapshot), facingForward,
+            VisualDef look = StageFeel.Resolve(snapshot);
+            Rig = UnitRig.Build("Rig", transform, look, facingForward,
                                 snapshot.Name, snapshot.Aspect);
             // v2: clips whose art faces the other way from the rest of the sheet (null in v1).
             if (Rig.Animation != null) Rig.Animation.SetClipFlips(StageFeel.ClipFlips(snapshot.DefId));
 
             // The formation draws every unit the same height, whatever its silhouette or authored
             // scale (a boss a little taller), so heroes and enemies read alike. Applied on top of the
-            // rig's own scale: Rig.Height is the scaled top, so the ratio is the whole correction.
+            // rig's own scale. The height that is matched is the VISIBLE figure's: Rig.Height is the body
+            // top the rig was built to, and the art's own top (sprite-extents.json, SpriteExtents) can sit
+            // a little higher or lower; topRatio is that difference, so the visible head, not the frame, is
+            // what ends up UnitHeightFraction tall, and Rig.Height becomes where that head is. The bars, the
+            // numbers and the effects anchor to Rig.Height.
             if (FormationLayout.Enabled && Rig.Height > 0.05f)
             {
-                float k = FormationLayout.WorldHeight(snapshot.IsBoss, FormationSlot >= 0 ? FormationSlot : snapshot.Slot) / Rig.Height * StageFeel.FormationMul(snapshot.DefId);
+                float topRatio = StageFeel.TopRatio(look);
+                float visibleTop = Rig.Height * topRatio;
+                float k = FormationLayout.WorldHeight(snapshot.IsBoss, FormationSlot >= 0 ? FormationSlot : snapshot.Slot) / visibleTop * StageFeel.FormationMul(snapshot.DefId);
                 k = Mathf.Clamp(k, 0.5f, 2.5f);
                 Rig.Root.localScale = Rig.Root.localScale * k;
-                Rig.Height *= k;
+                Rig.Height = visibleTop * k;
             }
 
             _idlePhase = (snapshot.Id * 0.73f) % 6.28f;

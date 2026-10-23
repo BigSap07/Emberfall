@@ -129,6 +129,12 @@ namespace Emberfall.UI.Battle
         /// (UnitPlate) and hides it; flip this to bring it back and the harness re-proves the boxes.</summary>
         public static readonly bool PlateNameOverHead = false;
 
+        /// <summary>Whether the turn pip (the dot beside the HP bar) is drawn over a head. DEFAULT TAKEN: no. The
+        /// captures showed it as a small yellow dot that was hard to read and crowded the next plate; the turn cue
+        /// over a head is the plate's lift (PlateTurnLift). The inert bookkeeping status kinds (the grey diamond) are
+        /// left off the plate over a head for the same reason (BattleScreen.RefreshStatusText).</summary>
+        public static readonly bool PlateTurnPipOverHead = false;
+
         /// <summary>The two bars alone: energy 4, hairline 1, HP 10 = 15.</summary>
         public const float PlateBarsHeight = PlateEnergyHeight + PlateHpToEnergy + PlateHpHeight;
 

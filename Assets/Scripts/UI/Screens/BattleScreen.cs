@@ -2207,12 +2207,23 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void RefreshStatusText(UnitBar bar)
         {
-            int overflow = StatusIcons.Compose(bar.Statuses, _iconScratch,
+            // Over a head the inert bookkeeping kinds (the grey diamond) are not drawn: they say nothing a player
+            // acts on and they crowd the next plate.
+            IList<StatusKind> shown = bar.Statuses;
+            if (FormationLayout.Enabled && bar.Statuses != null)
+            {
+                _statusScratch.Clear();
+                for (int s = 0; s < bar.Statuses.Count; s++)
+                    if (!StatusInfo.IsInert(bar.Statuses[s])) _statusScratch.Add(bar.Statuses[s]);
+                shown = _statusScratch;
+            }
+            int overflow = StatusIcons.Compose(shown, _iconScratch,
                 FormationLayout.Enabled ? BattleHudMetrics.PlateMaxIconsOverHead : BattleHudMetrics.PlateMaxIcons);
             bar.Plate.ShowStatuses(_iconScratch, overflow);
         }
 
         private readonly List<StatusIcon> _iconScratch = new List<StatusIcon>();
+        private readonly List<StatusKind> _statusScratch = new List<StatusKind>();
 
         /// <summary>
         /// Set the bar's entry count for one status to what the simulation says it is.
@@ -2365,7 +2376,7 @@ namespace Emberfall.UI.Screens
 
             Vector3 screen = _world.Camera.WorldToScreenPoint(worldPosition);
             Vector2 start = new Vector2(screen.x / canvasScale, screen.y / canvasScale);
-            start.y += BattleHudLayout.FloatSpawnLift(FormationLayout.Enabled);
+            start.y += BattleHudLayout.FloatSpawnLift(FormationLayout.Enabled, FormationUnitCanvasHeight(canvasScale));
             start.x += Random.Range(-9f, 9f);
 
             // Make room: the cap first (the oldest numbers on this unit, then overall), then the lane.
@@ -2462,6 +2473,12 @@ namespace Emberfall.UI.Screens
             }
         }
 
+        /// <summary>An ordinary unit's height on screen in canvas units, for where a number starts on its body.</summary>
+        private float FormationUnitCanvasHeight(float canvasScale)
+        {
+            return FormationLayout.UnitScreenHeight(SafeAreaRect.Current.height / canvasScale, false, 0);
+        }
+
         private IEnumerator FloatRoutine(FloatText item, Vector3 worldPosition)
         {
             float canvasScale = App.RootCanvas != null ? App.RootCanvas.scaleFactor : 1f;
@@ -2474,7 +2491,7 @@ namespace Emberfall.UI.Screens
             // same head (the "58 on top of the Sundered Colossus's name" case); the plate now hangs
             // under the feet, so the head is the number's alone and it starts just above it. In the
             // formation the plate stands on the head, so the number starts above the plate instead.
-            start.y += BattleHudLayout.FloatSpawnLift(FormationLayout.Enabled);
+            start.y += BattleHudLayout.FloatSpawnLift(FormationLayout.Enabled, FormationUnitCanvasHeight(canvasScale));
 
             // Jitter was +/-34, which was more than half the old 120-unit tag width, so a number
             // could start closer to a NEIGHBOUR's unit than to the one that produced it. On a five-unit

@@ -130,7 +130,7 @@ namespace Emberfall.UI.Battle
         public static BattleFraming.CanvasRect PlateBoxAboveHead(BattleFraming.CanvasPoint headTop, bool lifted, bool isPlayer)
         {
             float half = BattleHudMetrics.PlateBarWidth * 0.5f;
-            float outer = half + BattleHudMetrics.PlateTurnPipGap + BattleHudMetrics.PlateTurnPipSize;
+            float outer = half + (BattleHudMetrics.PlateTurnPipOverHead ? BattleHudMetrics.PlateTurnPipGap + BattleHudMetrics.PlateTurnPipSize : 0f);
             float inner = half + BattleHudMetrics.PlateIconsInset + BattleHudMetrics.PlateIconsWidth;
             if (BattleHudMetrics.PlateNameOverHead)
             {
@@ -147,21 +147,26 @@ namespace Emberfall.UI.Battle
         /// FormationLayout.BarsCeiling of the height from the top.</summary>
         public static BattleFraming.CanvasRect BarsBoxAboveHead(BattleFraming.CanvasPoint headTop, bool lifted)
         {
-            float left = BattleHudMetrics.PlateBarWidth * 0.5f + BattleHudMetrics.PlateTurnPipGap + BattleHudMetrics.PlateTurnPipSize;
+            float left = BattleHudMetrics.PlateBarWidth * 0.5f
+                         + (BattleHudMetrics.PlateTurnPipOverHead ? BattleHudMetrics.PlateTurnPipGap + BattleHudMetrics.PlateTurnPipSize : 0f);
             float lift = lifted ? BattleHudMetrics.PlateTurnLift : 0f;
             return new BattleFraming.CanvasRect(headTop.X - left, headTop.Y + BattleHudMetrics.PlateHeadGap + lift,
                                                 left + BattleHudMetrics.PlateBarWidth * 0.5f, BattleHudMetrics.PlateBarsHeight);
         }
 
-        /// <summary>How far above the head a floating number starts: clear of the plate in the formation
-        /// (the number would otherwise start on the bars), just above the head in the legacy layout.</summary>
-        public static float FloatSpawnLift(bool formation)
+        /// <summary>
+        /// How far above the head a floating number starts, in canvas units (negative is below it). In the formation
+        /// the unit behind the target stands so close that a number above the plate read as the neighbour's (a hit on F2
+        /// printed over F1's head), so it starts on the target's own upper body, FloatSpawnBodyFraction of the unit's
+        /// height under the head top, and rises from there. Legacy: just above the head.
+        /// </summary>
+        public static float FloatSpawnLift(bool formation, float unitCanvasHeight)
         {
-            return formation
-                ? BattleHudMetrics.PlateHeadGap + StackAboveHead() + BattleHudMetrics.FloatSpawnAboveHead
-                : BattleHudMetrics.FloatSpawnAboveHead;
+            return formation ? -FloatSpawnBodyFraction * unitCanvasHeight : BattleHudMetrics.FloatSpawnAboveHead;
         }
 
+        /// <summary>How far down the body, as a fraction of the unit's height, a number starts in the formation.</summary>
+        public const float FloatSpawnBodyFraction = 0.30f;
         // ---------------------------------------------------------------- pills
 
         /// <summary>The ability callout: centred on the screen, CalloutGap under the bar, as wide

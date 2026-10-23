@@ -96,6 +96,11 @@ namespace Emberfall.Battle
         /// which is over 600 pixels between the front pairs.</summary>
         public const float ApproachScale = 0.8f;
 
+        /// <summary>Where the buff and debuff arrow chip sits in the formation, as a fraction of the body height added
+        /// to its drift (negative is down from the head top): over the upper body, clear of the bars and under the
+        /// 0.38 line, rather than above the head.</summary>
+        public const float ArrowBodyAnchor = -0.50f;
+
         // ---------------------------------------------------------------- slots
 
         /// <summary>The cell a game slot stands in. A slot outside 0 to 4 is clamped into the five a

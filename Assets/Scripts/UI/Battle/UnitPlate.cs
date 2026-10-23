@@ -96,6 +96,7 @@ namespace Emberfall.UI.Battle
             // the turn cue lights it.
             plate.TurnPip = UIBuilder.Panel("TurnPip", plate.Root, Color.clear, 5);
             float pipSize = BattleHudMetrics.PlateTurnPipSize;
+            if (FormationLayout.Enabled && !BattleHudMetrics.PlateTurnPipOverHead) plate.TurnPip.gameObject.SetActive(false);
             UIBuilder.Box(plate.TurnPip.rectTransform,
                           -inward * (BattleHudMetrics.PlateBarWidth * 0.5f + BattleHudMetrics.PlateTurnPipGap + pipSize * 0.5f),
                           hpY + (BattleHudMetrics.PlateHpHeight - pipSize) * 0.5f, pipSize, pipSize, bottom);

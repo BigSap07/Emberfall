@@ -51,7 +51,7 @@ namespace Emberfall.DevHarness
         /// <summary>The slot every boss of campaign.json stands in: first in its line, so slot 0.</summary>
         private const int R29ContentBossSlot = 0;
 
-        private static void CheckR29Formation(string contentDir)
+        private static void CheckR29Formation(ContentDatabase content, string contentDir)
         {
             Line("");
             Line("R29 BATTLE FORMATION - the Idle Heroes style 5v5 table (FormationLayout) and what hangs off it");
@@ -64,6 +64,8 @@ namespace Emberfall.DevHarness
             R29Icons();
             for (int s = 0; s < R29Screens.Length; s++) R29AtScreen(R29Screens[s]);
             R29Approach(root);
+            R29Extents(content, root);
+            R29Numbers();
             R29Wiring(root);
         }
 
@@ -461,6 +463,104 @@ namespace Emberfall.DevHarness
                       + worstAt + ", max 0.5): it stays in the open centre and on screen at every shape");
         }
 
+        // ---------------------------------------------------------------- the visible figure
+
+        private static void R29Extents(ContentDatabase content, string root)
+        {
+            string json = R29Read(root, "Assets/Resources/Content/sprite-extents.json");
+            string txt = R29Read(root, "Tools/DevHarness/sprite-extents.txt");
+            if (json == null || txt == null) { Check(false, "sprite-extents.json and sprite-extents.txt are found"); return; }
+            SpriteExtents ext = SpriteExtents.FromJson(json);
+            Check(ext.Warnings.Count == 0 && ext.Sprites.Count > 50,
+                  "sprite-extents.json parses clean (" + ext.Sprites.Count + " sprites, " + ext.Warnings.Count + " warnings)");
+
+            // The file the game reads and the file the harness reads hold the same numbers.
+            int rows = 0, differ = 0;
+            foreach (string raw in txt.Split('\n'))
+            {
+                string line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                string[] p = line.Split('|');
+                if (p.Length < 7) continue;
+                rows++;
+                float bot, top;
+                float tb = float.Parse(p[5], CultureInfo.InvariantCulture), tt = float.Parse(p[6], CultureInfo.InvariantCulture);
+                if (!ext.TryGet(p[0], out bot, out top) || Math.Abs(bot - tb) > 0.00011f || Math.Abs(top - tt) > 0.00011f) differ++;
+            }
+            Check(rows == ext.Sprites.Count && differ == 0,
+                  "sprite-extents.json equals Tools/DevHarness/sprite-extents.txt row for row (" + rows + " rows, " + differ + " differ)");
+
+            // What the rule does to every drawn unit in the content: the visible top is matched to the body top
+            // (ratio 1) or, where the art's top differs by a trusted amount, rescaled by that ratio.
+            int used = 0, fallback = 0, noExtents = 0;
+            float worstUsed = 0f;
+            string worstAt = "", fallbackNames = "";
+            List<VisualDef> looks = new List<VisualDef>();
+            List<string> names = new List<string>();
+            for (int i = 0; i < content.Heroes.Count; i++) { looks.Add(content.Heroes[i].Visual); names.Add(content.Heroes[i].Id); }
+            for (int i = 0; i < content.Enemies.Count; i++) { looks.Add(content.Enemies[i].Visual); names.Add(content.Enemies[i].Id); }
+            for (int i = 0; i < looks.Count; i++)
+            {
+                VisualDef v = looks[i];
+                if (v == null || v.SpritePending || string.IsNullOrEmpty(v.Sprite)) continue;
+                float bot, top;
+                if (!ext.TryGet(v.Sprite, out bot, out top)) { noExtents++; continue; }
+                float raw = v.SpriteBodyFraction > 0.05f ? (top - v.SpriteFootFraction) / v.SpriteBodyFraction : 1f;
+                float applied = SpriteExtents.RatioOf(top, v.SpriteBodyFraction, v.SpriteFootFraction);
+                if (applied == 1f && Math.Abs(raw - 1f) > 0.0001f && (raw < SpriteExtents.MinTopRatio || raw > SpriteExtents.MaxTopRatio))
+                {
+                    fallback++;
+                    fallbackNames += (fallbackNames.Length > 0 ? ", " : "") + names[i] + " (x" + F2(raw) + ")";
+                }
+                else
+                {
+                    used++;
+                    if (Math.Abs(applied - 1f) > worstUsed) { worstUsed = Math.Abs(applied - 1f); worstAt = names[i]; }
+                }
+            }
+            Line("  drawn units with extents: " + used + " follow their art's top, " + fallback + " keep the body rule"
+                 + (fallback > 0 ? " [" + fallbackNames + "]" : "") + ", " + noExtents + " have no extents entry");
+            Check(used > 40 && worstUsed <= 0.10f && fallback <= 2,
+                  "every drawn unit's art top is within 10 percent of its body top (worst " + F3(worstUsed) + ", " + worstAt
+                  + ") except at most two whose extents are not the body, which keep the body rule (" + fallback + ")");
+            Check(SpriteExtents.RatioOf(0.775f, 0.55f, 0.223f) > 0.99f && SpriteExtents.RatioOf(0.775f, 0.55f, 0.223f) < 1.01f
+                  && SpriteExtents.RatioOf(0.942f, 0.308f, 0.200f) == 1f && SpriteExtents.RatioOf(0.5f, 0f, 0.1f) == 1f,
+                  "the ratio is Kael's 1.00, 1 for the vulture's wings (outside 0.80 to 1.25) and 1 for no fractions");
+        }
+
+        // ---------------------------------------------------------------- numbers and chips
+
+        private static void R29Numbers()
+        {
+            // A damage or heal number starts on the target's own body, FloatSpawnBodyFraction under the head top:
+            // inside the body box of that unit, below its head, so it cannot read as the neighbour's.
+            bool ok = true;
+            string why = "";
+            for (int s = 0; s < R29Screens.Length; s++)
+            {
+                R29Screen sc = R29Screens[s];
+                float scale = BattleHudLayout.CanvasScale(sc.Width, sc.Height);
+                float canvasW = sc.Width / scale, canvasH = sc.Height / scale;
+                BattleFraming.CanvasRect safe = new BattleFraming.CanvasRect(sc.Side / scale, sc.Bottom / scale, canvasW - 2f * sc.Side / scale, canvasH - sc.Bottom / scale);
+                float unitH = FormationLayout.UnitScreenHeight(safe.Height, false, 0);
+                for (int i = 0; i < 10; i++)
+                {
+                    BattleFraming.CanvasPoint feet = FormationLayout.Feet(i < 5, i % 5, safe);
+                    BattleFraming.CanvasPoint head = new BattleFraming.CanvasPoint(feet.X, feet.Y + unitH);
+                    float startY = head.Y + BattleHudLayout.FloatSpawnLift(true, unitH);
+                    BattleFraming.CanvasRect body = R29Body(feet, unitH);
+                    if (!(startY < head.Y && startY > feet.Y && feet.X >= body.X && feet.X <= body.XMax)) { ok = false; why += " " + sc.Tag + "/" + i; }
+                }
+            }
+            Check(ok, "a floating number starts on its target's own body, under the head top and over the feet, never above the plate" + why);
+            Check(BattleHudLayout.FloatSpawnLift(false, 100f) == BattleHudMetrics.FloatSpawnAboveHead,
+                  "with the formation off a number starts just above the head as before");
+            Check(FormationLayout.ArrowBodyAnchor < 0f && FormationLayout.ArrowBodyAnchor >= -0.8f,
+                  "the buff and debuff chip is drawn on the upper body (anchor " + F2(FormationLayout.ArrowBodyAnchor) + " of the body height), not above the bars");
+            Check(!BattleHudMetrics.PlateTurnPipOverHead,
+                  "the turn pip is not drawn over a head, so no plate reaches sideways for it");
+        }
+
         // ---------------------------------------------------------------- wiring
 
         private static string R29Read(string root, string rel)
@@ -484,6 +584,16 @@ namespace Emberfall.DevHarness
             Check(actor.Contains("FormationLayout.WorldHeight(") && actor.Contains("FormationLayout.ApproachScale"),
                   "UnitActor draws every unit at the formation's height and steps by the formation's approach");
 
+            string vfx = R29Read(root, "Assets/Scripts/Battle/VfxDirector.cs") ?? "";
+            string plate = R29Read(root, "Assets/Scripts/UI/Battle/UnitPlate.cs") ?? "";
+            string shotTool = R29Read(root, "Assets/Editor/PlayModeScreenshot.cs") ?? "";
+            Check(actor.Contains("StageFeel.TopRatio(look)") && screen.Contains("FloatSpawnLift(FormationLayout.Enabled, FormationUnitCanvasHeight(")
+                  && vfx.Contains("FormationLayout.ArrowBodyAnchor") && plate.Contains("PlateTurnPipOverHead") && screen.Contains("StatusInfo.IsInert("),
+                  "UnitActor scales on the visible figure, numbers start on the body, the chip is anchored on the body, the pip and the inert icons are off the plate");
+            Check(shotTool.Contains("FiveLineKey") && shotTool.Contains("FieldLine(app.Session, WaveLine)") && shotTool.Contains("\"+five\"")
+                  && shotTool.Contains("a five hero line rewrites the squad, so it only runs on the scratch identity"),
+                  "PlayModeScreenshot fields five heroes for +five and .five, on the scratch identity only");
+
             // The table lives in FormationLayout and nowhere else.
             Regex literal = new Regex(@"\b0\.(64|77|69|84)f\b");
             bool single = !literal.IsMatch(stage) && !literal.IsMatch(actor);
@@ -503,10 +613,11 @@ namespace Emberfall.DevHarness
                 {
                     string line = raw.Trim();
                     if (line.Length == 0 || line.StartsWith("#")) continue;
-                    Match m = Regex.Match(line, @"^Screen:(Battle|BattleMoment)=(ch\d+_\d+)(\.\w+)?@(1920x1080|2400x1080)$");
+                    Match m = Regex.Match(line, @"^Screen:(Battle|BattleMoment)=(ch\d+_\d+)(\+five)?(\.\w+)*@(1920x1080|2400x1080)$");
                     if (!m.Success) { unknownStage += 100; continue; }
+                    if (line.IndexOf("five", StringComparison.Ordinal) < 0) unknownStage += 1000;   // every shot fields five heroes
                     targets++;
-                    if (m.Groups[4].Value == "2400x1080") wide++; else narrow++;
+                    if (m.Groups[5].Value == "2400x1080") wide++; else narrow++;
                     if (!campaign.Contains("\"id\": \"" + m.Groups[2].Value + "\", \"index\"")) unknownStage++;
                 }
             }
@@ -514,8 +625,8 @@ namespace Emberfall.DevHarness
                   "the formation capture files hold 20 targets, half at 1920x1080 and half at 2400x1080, every one on a real stage ("
                   + targets + " targets, " + narrow + " + " + wide + ", " + unknownStage + " not understood)");
             string shots = R29Read(root, "Tools/capture-formation-targets.txt") ?? "";
-            Check(shots.Contains("=ch1_9@") && shots.Contains("=ch2_5@") && shots.Contains("=ch1_12@") && shots.Contains("=ch2_12@")
-                  && shots.Contains("=ch1_1@") && shots.Contains("=ch1_5@"),
+            Check(shots.Contains("=ch1_9+five@") && shots.Contains("=ch2_5+five@") && shots.Contains("=ch1_12+five@") && shots.Contains("=ch2_12+five@")
+                  && shots.Contains("=ch1_1+five@") && shots.Contains("=ch1_5+five@"),
                   "the fights cover chapter 1 and the chapter 2 crossing at five a side, both bosses, and sides of three and four");
 
             // Every tool that compiles the harness compiles FormationLayout with it.
