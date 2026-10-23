@@ -19,7 +19,9 @@
   // leaves its power band, with or without Wayfarer's Road, and no walk sticks. The tightest stages
   // are 2-1 (x1.232 with the road, band top x1.25) and the chapter 1 finale 1-12 (x0.960, band top
   // x0.99). At twice these hours 1-12 reads x0.988 and 2-1 x1.243, both at their edge, which is why
-  // the hours were kept rather than raised. The reference player piles up Gold from chapter 4 on,
+  // the hours were kept rather than raised. Re-measured 2026-10-23 with the loop on by default and spend Gold in
+  // slot 2: 3.81 hours a day (3.83 with the road), still no banded stage over its band, 1-12 x0.938 and 2-1
+  // x1.208 with the road. The reference player piles up Gold from chapter 4 on,
   // so loop Gold buys little power late (Quartermaster sizing); the free track's hero selectors move the curve more than the
   // hours do. Docs/DESIGN-DAILY-LOOP.md has the table and what turning the loop on would change.
 

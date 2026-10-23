@@ -25,7 +25,11 @@ Rules live in `DailyLoop` (Core/Progression). State lives in `DailyLoopState`. C
 happens, never a screen.
 
 - **Five orders a day, from a fixed pool.** The pool has five slots: clear waves, win a stage,
-  level a hero, summon once, and fight in the Proving or the Recital. `DailyLoop.BuildBoard`
+  spend Gold, summon once, and fight in the Proving or the Recital. **Spend Gold replaced "level up
+  a hero" on 2026-10-23** (owner): it counts Gold spent on hero levels and at the Quartermaster
+  (`OrderKind.Gold`), and its 1,000 Gold is at most one level of any hero (1,070 at the cheapest) and
+  one Quartermaster piece, so a roster whose line, or whose every hero, is at its cap can still finish
+  it (`CheckDailyLoopSpendGold`). `DailyLoop.BuildBoard`
   takes one entry of each slot, chosen by the day alone, so the same day is the same board for
   everyone with the same unlocks.
 - **Unlock awareness.** An entry whose features are all locked is never offered.
@@ -100,9 +104,10 @@ player, the one `recommendedPower` and the power band are derived from, three wa
 off (the control), loop on, and loop on with Wayfarer's Road. The loop player is diligent: at the end
 of every sitting they claim every finished order, both chests and the calendar. The walk's own waves,
 stage wins, level ups and summons progress the orders through `GameSession`, exactly as in the game;
-the arena order and the level order are credited, because the walk never fights the Proving or the
-Recital and its level-capped line cannot finish a level order on its own (a player levels a cheap
-bench hero for it). That makes the loop's income an upper bound for a twice-a-day player.
+the arena order is credited, because the walk never fights the Proving or the Recital. The level order
+was credited too until 2026-10-23; its replacement, spend Gold, is finished with real Gold off the line
+when the capped line buys nothing (`LoopFinishSpendGold`). The arena credit makes the loop's income an
+upper bound for a twice-a-day player.
 
 Over 8 walks, with the hours as shipped:
 
@@ -116,30 +121,35 @@ Over 8 walks, with the hours as shipped:
 | 2-6 wall | x1.184 | x1.191 | x1.220 |
 | free track seasons finished | | | 34 (74 hero selectors) |
 
-At twice the hours (`--loop-curve 8 2`) nothing leaves its band either, but 1-12 reads x0.988 and 2-1
+**Re-measured 2026-10-23**, with the loop on by default, spend Gold in place of the level orders and the
+walk on its own clock (`--loop-curve 8`): 0 of 72 banded stages over their top in every column, no walk
+stuck, 261 sittings in each; the loop pays 3.81 hours a day (3.83 with the road, 26.8 a week); 1-12 reads
+x0.937, x0.935 and x0.938, and 2-1 x1.173, x1.192 and x1.208 (off, loop, loop and road); the road finished
+34 seasons with 74 hero selectors, as before. Spending real Gold on the order where the first run credited
+it is what takes a little off chapter 1 and 2-1.
+
+At twice the hours (first run, `--loop-curve 8 2`) nothing leaves its band either, but 1-12 reads x0.988 and 2-1
 x1.243, both at their edge. That is why the hours were kept rather than raised. From chapter 4 the
 reference player piles up Gold it cannot spend, so loop Gold buys little power late, and the
 differences between the columns there (a hundredth or two either way) are draw noise between walks.
 **The free track moves the curve more than the hours do**: its 4-star and 5-star selectors every
 season are what lift 2-1 and the chapter 2 walls.
 
-**One harness defect the study found and worked around.** `GameSession.LevelUpHero(hero, times)`
-reads the device clock, and the economy walk's `SpendGold` calls that form. With the loop on, the
+**One harness defect the study found, fixed 2026-10-23.** `GameSession.LevelUpHero(hero, times)` and
+`Ascend(hero)` read the device clock, and the economy walk called both forms. With the loop on, the
 first level up recorded an order at today's real date, which rolled the board months ahead of the
-walk's clock and froze it: the first run claimed one board in 134 reward days. The study walks a
-season calendar decades ahead (`LoopClockSeason`), so a device-clock call reads as an earlier day,
-which `DailyLoop.Roll` ignores. The plain walk is unaffected because nothing in it claims orders;
-the R24 whale study's live-event quests are counted through the same call and may carry the same
-skew, which is worth checking before its numbers are relied on.
+walk's clock and froze it: the first run claimed one board in 134 reward days. The walk passes its own
+clock to both now (`SpendGold` and `EconomyConvertAscendAndDeploy` in `Program.cs`). The R24 whale
+study was re-run after the fix and did not move: it models events as fixed offers and reads no order
+or event counter. `LoopClockSeason` still starts this study decades ahead, so its columns stay
+comparable with the first run.
 
-## Turning it on by default: what has to change
+## Turning it on by default: what changed (done 2026-10-23)
 
-Not done here; the switch stays off. What it would take:
+The owner turned it on. Item by item, against the list written before:
 
-1. **The switch.** `DailyLoopSwitch.Enabled` is compile time: add `-define:EMBERFALL_DAILY_LOOP_ON` to
-   `Assets/csc.rsp` (which already carries the store's define), or flip the default in
-   `DailyLoopSwitch`. No harness check asserts that it ships off; the daily loop checks force it on
-   and put it back.
+1. **The switch.** Done: `DailyLoopSwitch` defaults to on and `EMBERFALL_DAILY_LOOP_OFF` rolls it back.
+   No harness check asserts a default; the daily loop checks force it on and put it back.
 2. **The screen.** `OrdersScreen` is a working placeholder built from the Emberforge kit, and its door
    on the Hub rail appears only with the switch. It needs its final layout and a capture of every
    `Screen:Orders*` target, which is client UI work.
@@ -149,10 +159,11 @@ Not done here; the switch stays off. What it would take:
    cost the reference player no extra sittings at the median). If the owner wants walls to bite for a
    loop player, the loop has to enter the reference walk and `recommendedPower` re-solved, which is a
    balance pass, not a switch.
-4. **The level order.** "Level up a hero" is the one order a level-capped player cannot finish without
-   a hero below its cap. A new player always has one; a long-time player with a capped roster may not,
-   and an unfinished order also keeps the daily chest, the weekly chest and the road's points shut that
-   day. Either drop the level slot after the caps start to bind, or let it count an ascension.
+4. **The level order.** Done: retargeted to "spend 1,000 Gold" (above). In the 60-walk daily loop curve
+   it was claimed on 100% of the days it was on the board, for both players, by a player who spends one
+   bench level or Quartermaster piece when the line cannot (`Docs/DAILY-LOOP-CURVE.md`). A player who spends
+   only on the line finishes it on 13.9% of its days, as with the level order, so the Orders screen should
+   say where Gold can go.
 5. **Wayfarer's Road wakes up.** It is on by default (`WayfarersRoadSwitch`) but earns nothing while the
    loop is off, because its points are the loop's claims. With the loop on, every season's free track
    pays its hourglasses, Slag and Dust and a free 4-star at tier 15 and a free 5-star at tier 30. Sized
