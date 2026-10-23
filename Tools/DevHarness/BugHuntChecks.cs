@@ -23,6 +23,8 @@ namespace Emberfall.DevHarness
             Line("FIRST-WEEK BUG HUNT (one reproduction per bug)");
             CheckServerAcceptsWhatThisBuildWrites(db, contentDir);
             CheckRecitalRematchRepaysNoMilestone(db);
+            CheckStoreLoadKeepsOneTimePurchases(db, contentDir);
+            CheckLiveEventSlotCloneIsACopy(db);
         }
 
         // ------------------------------------------------------------------ 1. the server's save limit
@@ -135,6 +137,104 @@ namespace Emberfall.DevHarness
             }
             Check(first != null && first.IsMilestone && first.RelicDust == b.RecitalMilestoneDustPerTier && fresh.Profile.RelicDust - before == first.RelicDust,
                   "(control) the first clear of floor " + milestone + " still pays its milestone, " + (first != null ? first.RelicDust : 0) + " Relic Dust");
+        }
+
+        // ------------------------------------------------------------------ 3. one-time purchases survive a load
+
+        /// <summary>
+        /// The store keeps one OfferRecord per offer it has counted: one per skin bought, one per hero a Hero Contract
+        /// went to, one per pack and card, and the store's clock. A player of a year or two who buys skins and contracts
+        /// passes 64 of them, and StoreState.Read stopped reading at 64, so whatever was bought after that was gone on
+        /// the next load: a Growth Fund bought late read as not owned and was on sale again, and so was the Starter
+        /// Pact. A once-only record must never be dropped, and the cap must sit above anything the content can write.
+        /// The shipped skins.json sells only test skins so far, so the player here shops a skins.json with one store skin
+        /// per hero of the first 48, which is the roster the skin pipeline is building toward.
+        /// </summary>
+        private static void CheckStoreLoadKeepsOneTimePurchases(ContentDatabase shipped, string contentDir)
+        {
+            List<string> entries = new List<string>();
+            for (int i = 0; i < shipped.Heroes.Count && entries.Count < 48; i++)
+                entries.Add(R24SkinEntry("bh_" + shipped.Heroes[i].Id, shipped.Heroes[i].Id, "rare", ""));
+            ContentDatabase db = R24SkinDb(contentDir, R24SkinFile(entries.ToArray()));
+            long now = OfferMonday(db);
+            GameSession s = OfferSession(db, 6);
+            PlayerProfile p = s.Profile;
+            for (int i = 0; i < db.Heroes.Count; i++)
+                if (p.FindHeroByDefId(db.Heroes[i].Id) == null) s.GrantHeroDirect(db.Heroes[i], now);
+
+            // A multi-year player: a skin now and then, four contracts a month spread over the 5-stars.
+            int skins = 0, contracts = 0;
+            long t = now;
+            List<StoreOfferDef> all = db.Store.Offers;
+            for (int i = 0; i < all.Count; i++)
+            {
+                if (all[i].Kind != StoreOfferKind.Skin) continue;
+                t += 3 * 86400L;
+                if (StoreOffers.Fulfil(s, all[i].Id, null, t).Success) skins++;
+            }
+            List<HeroDef> fives = db.HeroesOfStars(5);
+            for (int month = 0, h = 0; month < 24 && fives.Count > 0; month++)
+            {
+                t += 31 * 86400L;
+                for (int k = 0; k < 4; k++, h++)
+                    if (StoreOffers.Fulfil(s, "hero_contract", fives[h % fives.Count].Id, t).Success) contracts++;
+            }
+            Check(p.Store.Offers.Count > 64,
+                  "(setup) " + skins + " skins and " + contracts + " contracts leave " + p.Store.Offers.Count + " store records, more than the old cap of 64");
+
+            string pick = db.Store.Offer("starter_pact").HeroChoices[0];
+            bool bought = StoreOffers.Fulfil(s, "growth_fund", null, t).Success && StoreOffers.Fulfil(s, "starter_pact", pick, t).Success;
+            string json = SaveSerializer.Serialize(p);
+            string error;
+            PlayerProfile back = SaveSerializer.Deserialize(json, db, out error);
+            GameSession b = new GameSession(db, back);
+            StoreOfferView growth = null;
+            if (back != null)
+            {
+                StoreView v = StoreOffers.View(b, t + 60);
+                for (int i = 0; i < v.Offers.Count; i++) if (v.Offers[i].Id == "growth_fund") growth = v.Offers[i];
+            }
+            Check(bought && back != null && growth != null && growth.Owned && StoreOffers.Check(b, "growth_fund", null, t + 60) == StoreRefusal.SoldOut,
+                  "A GROWTH FUND BOUGHT AFTER " + p.Store.Offers.Count + " STORE RECORDS IS STILL OWNED AFTER A LOAD (owned "
+                  + (growth != null && growth.Owned) + ", " + (back != null ? back.Store.Offers.Count : 0) + " records read back)");
+            Check(back != null && StoreOffers.Check(b, "starter_pact", pick, t + 60) == StoreRefusal.SoldOut,
+                  "and so is the Starter Pact: it stays sold out after the load");
+            Check(back != null && back.Store.Offers.Count == p.Store.Offers.Count && SaveSerializer.Serialize(back) == json,
+                  "the load drops no store record at all: the save reads back byte for byte");
+        }
+
+        // ------------------------------------------------------------------ 4. a live event slot's Clone
+
+        /// <summary>
+        /// LiveEventSlotState.Clone made a MemberwiseClone, which shares the readonly Progress list, and then cleared
+        /// the copy's list to refill it: that cleared the ORIGINAL's list, so cloning a player's live event state wiped
+        /// their quest progress. A clone must be a true copy and leave the original exactly as it was.
+        /// </summary>
+        private static void CheckLiveEventSlotCloneIsACopy(ContentDatabase db)
+        {
+            if (!db.LiveEvents.IsUsable || db.AllStages.Count == 0) { Check(false, "(setup) live-events.json is usable"); return; }
+            long t = db.LiveEvents.EpochDay * 86400L + (long)db.Balance.DailyResetHourUtc * 3600L + 3600L;
+            GameSession s = new GameSession(db, Onboarding.CreateKeeperProfile(db, t));
+            Onboarding.Skip(s, t);
+            s.GrantBattleResult(db.AllStages[0], true, t + 60);
+            PlayerProfile p = s.Profile;
+            LiveEventSlotState w = p.LiveEvents.Weekly;
+            int progress = 0;
+            for (int i = 0; i < w.Progress.Count; i++) progress += w.Progress[i];
+            Check(progress > 0, "(setup) clearing 1-1 while the weekly event runs records quest progress (" + progress + ")");
+
+            string before = SaveSerializer.Serialize(p);
+            LiveEventsState copy = p.LiveEvents.Clone();
+            int after = 0;
+            for (int i = 0; i < w.Progress.Count; i++) after += w.Progress[i];
+            Check(SaveSerializer.Serialize(p) == before && after == progress,
+                  "CLONING THE LIVE EVENT STATE LEAVES THE PLAYER'S QUEST PROGRESS ALONE (" + progress + " before, " + after + " after)");
+            Check(copy.Weekly.Write().ToString() == w.Write().ToString() && copy.Monthly.Write().ToString() == p.LiveEvents.Monthly.Write().ToString(),
+                  "and the clone holds the same counters, progress included");
+            copy.Weekly.Progress.Add(7);
+            if (copy.Weekly.Progress.Count > 0) copy.Weekly.Progress[0] = copy.Weekly.Progress[0] + 1;
+            Check(SaveSerializer.Serialize(p) == before && !ReferenceEquals(copy.Weekly.Progress, w.Progress),
+                  "and is its own: changing the clone's progress changes nothing in the original");
         }
     }
 }
