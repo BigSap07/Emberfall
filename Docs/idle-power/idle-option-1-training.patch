@@ -1,0 +1,46 @@
+diff --git a/Assets/Resources/Content/onboarding.json b/Assets/Resources/Content/onboarding.json
+index 507bb33..6fa63f7 100644
+--- a/Assets/Resources/Content/onboarding.json
++++ b/Assets/Resources/Content/onboarding.json
+@@ -27,6 +27,7 @@
+     { "feature": "talents",  "stage": "ch1_12" },
+     { "feature": "armor",    "stage": "ch1_12" },
+     { "feature": "forge",    "stage": "ch1_12" },
++    { "feature": "training", "stage": "ch1_12" },
+     { "feature": "guilds",   "stage": "ch2_1" },
+     { "feature": "proving",  "stage": "ch2_4" },
+     { "feature": "recital",  "stage": "ch2_8" },
+diff --git a/Assets/Resources/Content/training.json b/Assets/Resources/Content/training.json
+new file mode 100644
+index 0000000..92ca487
+--- /dev/null
++++ b/Assets/Resources/Content/training.json
+@@ -0,0 +1,28 @@
++{
++  // TRAINING - Docs/IDLE-POWER-OPTIONS.md, option 1. Gold buys power past the level caps.
++  //
++  // INERT WITHOUT CODE. Nothing reads this file until the code plan in Docs/IDLE-POWER-OPTIONS.md
++  // (option 1) is built: ContentDatabase.LoadTraining, PlayerProfile.Training, the last stage of
++  // StatMath.ForHero, GameSession.BuyTrainingRank and the save block.
++  //
++  // NOT PART OF ContentDatabase.ContentVersion, for guild-tech.json's reason: a guild dungeon fight
++  // hands CombatSimulation an empty profile, so it cannot read a rank.
++  //
++  // THE FAMILIES ARE guild-tech.json's FOUR (line, blade, grace, reach), by id, so a role belongs to
++  // the same family in both trees. A rank is worth `share` of the hero's power, compounding, split
++  // equally by power over the family's rungStats (GuildTech.ApplyShare). It applies after guild tech.
++  //
++  // NOTHING HERE IS RANDOM. A rank has one price and one effect, shown before the tap.
++  "currency": "Gold",
++  // Bought Gold (Sealed) is refused, as the Quartermaster refuses it. With Sealed Gold accepted the
++  // reference whale led the non-spender by +40 to +53 percent from 3-6 on (the R24 limit is 6).
++  "refusesSealed": true,
++  // It opens with the chapter 1 finale cleared, where the level caps start to bind: the "training"
++  // row of onboarding.json's unlock table, the only place an opening is decided.
++  // Rank r of a family (from 0) costs firstRankCost * costGrowth^r and adds share, compounding:
++  // a family at rank r carries (1 + share)^r - 1 of its heroes' power.
++  "firstRankCost": 20000,
++  "costGrowth": 1.10,
++  "share": 0.05,
++  "families": ["line", "blade", "grace", "reach"]
++}

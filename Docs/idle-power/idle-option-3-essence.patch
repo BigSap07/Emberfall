@@ -1,0 +1,62 @@
+diff --git a/Assets/Resources/Content/balance.json b/Assets/Resources/Content/balance.json
+index 9291116..f820f16 100644
+--- a/Assets/Resources/Content/balance.json
++++ b/Assets/Resources/Content/balance.json
+@@ -100,6 +100,10 @@
+   "idleGoldPerHourFloor": 140,
+   "idleShardsPerHourFloor": 7,
+   "idleCapHours": 10,
++  // IDLE POWER, option 3 (Docs/IDLE-POWER-OPTIONS.md): Essence an idle claim pays per Gold it pays,
++  // read off the same frontier stage and the same idleCapHours. 0.01 is the frontier's idle Gold per
++  // hour over 100. Inert until GameSession.IdleYield reads it.
++  "essencePerIdleGold": 0.01,
+ 
+   // Replay economy - see DESIGN-REPLAY-ECONOMY.md. Repeat clears of an already-cleared stage that
+   // still pay the full purse, counted per stage per UTC day. Past the allowance the fight still
+diff --git a/Assets/Resources/Content/onboarding.json b/Assets/Resources/Content/onboarding.json
+index 507bb33..6fa63f7 100644
+--- a/Assets/Resources/Content/onboarding.json
++++ b/Assets/Resources/Content/onboarding.json
+@@ -27,6 +27,7 @@
+     { "feature": "talents",  "stage": "ch1_12" },
+     { "feature": "armor",    "stage": "ch1_12" },
+     { "feature": "forge",    "stage": "ch1_12" },
++    { "feature": "training", "stage": "ch1_12" },
+     { "feature": "guilds",   "stage": "ch2_1" },
+     { "feature": "proving",  "stage": "ch2_4" },
+     { "feature": "recital",  "stage": "ch2_8" },
+diff --git a/Assets/Resources/Content/training.json b/Assets/Resources/Content/training.json
+new file mode 100644
+index 0000000..7f94fdb
+--- /dev/null
++++ b/Assets/Resources/Content/training.json
+@@ -0,0 +1,29 @@
++{
++  // TRAINING - Docs/IDLE-POWER-OPTIONS.md, option 3. Essence, an idle-only
++  // material, buys power past the level caps.
++  //
++  // INERT WITHOUT CODE. Nothing reads this file until the code plan in Docs/IDLE-POWER-OPTIONS.md
++  // (option 3) is built: ContentDatabase.LoadTraining, PlayerProfile.Training, the last stage of
++  // StatMath.ForHero, GameSession.BuyTrainingRank, the Essence purse
++  // (PlayerProfile.Essence, paid by GameSession.ClaimIdle) and the save block.
++  //
++  // NOT PART OF ContentDatabase.ContentVersion, for guild-tech.json's reason: a guild dungeon fight
++  // hands CombatSimulation an empty profile, so it cannot read a rank.
++  //
++  // THE FAMILIES ARE guild-tech.json's FOUR (line, blade, grace, reach), by id, so a role belongs to
++  // the same family in both trees. A rank is worth `share` of the hero's power, compounding, split
++  // equally by power over the family's rungStats (GuildTech.ApplyShare). It applies after guild tech.
++  //
++  // NOTHING HERE IS RANDOM. A rank has one price and one effect, shown before the tap.
++  // Essence comes from the idle claim only (balance.json essencePerIdleGold). No store offer, pack,
++  // pass, chest, order or ad grants it, so money cannot reach it; a check should prove that.
++  "currency": "Essence",
++  // It opens with the chapter 1 finale cleared, where the level caps start to bind: the "training"
++  // row of onboarding.json's unlock table, the only place an opening is decided.
++  // Rank r of a family (from 0) costs firstRankCost * costGrowth^r and adds share, compounding:
++  // a family at rank r carries (1 + share)^r - 1 of its heroes' power.
++  "firstRankCost": 200,
++  "costGrowth": 1.10,
++  "share": 0.05,
++  "families": ["line", "blade", "grace", "reach"]
++}

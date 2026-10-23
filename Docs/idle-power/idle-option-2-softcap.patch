@@ -1,0 +1,28 @@
+diff --git a/Assets/Resources/Content/balance.json b/Assets/Resources/Content/balance.json
+index 9291116..6487618 100644
+--- a/Assets/Resources/Content/balance.json
++++ b/Assets/Resources/Content/balance.json
+@@ -44,6 +44,11 @@
+   "levelCostA": 600,
+   "levelCostB": 470,
+   "levelCostC": 0,
++  // IDLE POWER, option 2 (Docs/IDLE-POWER-OPTIONS.md): the soft cap. A hero at its cap keeps levelling,
++  // one Level at a time, at this many times the price the curve above gives for that Level. The cap
++  // stays what the fusion block below derives; it stops being a wall and becomes the point where the
++  // price steps up. Inert until GameSession.LevelUpHero reads it (code plan, option 2).
++  "overcapPremium": 2.0,
+ 
+   // LEVEL CAPS, ASCENSION AND CONVERSION. Every number in this block is
+   // DERIVED by CheckFusionEconomyDerivation in Tools/DevHarness and asserted equal to what is written
+diff --git a/Assets/Resources/Content/onboarding.json b/Assets/Resources/Content/onboarding.json
+index 507bb33..68ed70b 100644
+--- a/Assets/Resources/Content/onboarding.json
++++ b/Assets/Resources/Content/onboarding.json
+@@ -27,6 +27,7 @@
+     { "feature": "talents",  "stage": "ch1_12" },
+     { "feature": "armor",    "stage": "ch1_12" },
+     { "feature": "forge",    "stage": "ch1_12" },
++    { "feature": "overcap",  "stage": "ch1_12" },
+     { "feature": "guilds",   "stage": "ch2_1" },
+     { "feature": "proving",  "stage": "ch2_4" },
+     { "feature": "recital",  "stage": "ch2_8" },

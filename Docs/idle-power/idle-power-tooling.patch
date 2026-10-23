@@ -1,0 +1,419 @@
+diff --git a/Assets/Scripts/Core/Combat/CombatSimulation.cs b/Assets/Scripts/Core/Combat/CombatSimulation.cs
+index 6dd11dd..55cd379 100644
+--- a/Assets/Scripts/Core/Combat/CombatSimulation.cs
++++ b/Assets/Scripts/Core/Combat/CombatSimulation.cs
+@@ -1493,8 +1493,9 @@ namespace Emberfall.Core.Combat
+                     {
+                         EnemyDef def = _request.Content.GetEnemy(spawns[i].EnemyId);
+                         if (def == null) continue;
+-                        UnitStats stats = StatMath.ForEnemy(def, spawns[i].Level);
+-                        _units.Add(CombatUnit.FromDef(def, stats, spawns[i].Level, false, i, id++, _cfg.EnergyMax));
++                        int level = StatMath.StudyEnemyLevel(def, spawns[i].Level);   // idle power study only; the authored Level otherwise
++                        UnitStats stats = StatMath.ForEnemy(def, level);
++                        _units.Add(CombatUnit.FromDef(def, stats, level, false, i, id++, _cfg.EnergyMax));
+                     }
+                 }
+ 
+diff --git a/Assets/Scripts/Core/Progression/StatMath.cs b/Assets/Scripts/Core/Progression/StatMath.cs
+index a78d4e2..ca94e5e 100644
+--- a/Assets/Scripts/Core/Progression/StatMath.cs
++++ b/Assets/Scripts/Core/Progression/StatMath.cs
+@@ -174,6 +174,7 @@ namespace Emberfall.Core.Progression
+         {
+             UnitStats s = ForHero(def, level, relic, armor, config);
+             if (def != null) Cloud.GuildTech.ApplyRungs(s, tech, guild, def.Role);
++            if (StudyHeroHook != null && def != null) StudyHeroHook(s, def);   // idle power study only (Docs/IDLE-POWER-OPTIONS.md)
+             return s;
+         }
+ 
+@@ -334,7 +335,30 @@ namespace Emberfall.Core.Progression
+         /// </summary>
+         public static UnitStats ForEnemy(EnemyDef def, int level)
+         {
+-            return Build(def, level, 1f);
++            UnitStats e = Build(def, level, 1f);
++            if (StudyEnemyScale > 0f && !StudyEnemyByLevel)
++            {
++                e.MaxHp = Round(e.MaxHp * StudyEnemyScale);
++                e.Attack = Round(e.Attack * StudyEnemyScale);
++                e.Defense = Round(e.Defense * StudyEnemyScale);
++            }
++            return e;
++        }
++
++        /// <summary>Idle power study only (Docs/IDLE-POWER-OPTIONS.md): a last stage on the player's stat line, and the
++        /// enemy multiplier that stands in for content re-solved to a new curve. Null and 0 are exact no-ops.</summary>
++        public static Action<UnitStats, HeroDef> StudyHeroHook;
++        public static float StudyEnemyScale;
++        /// <summary>With it on, the multiplier is paid in enemy Levels (the solver's own lever), not in stats: the Level
++        /// at which the enemy's HP, Attack and Defense are StudyEnemyScale times what they are at the authored one.</summary>
++        public static bool StudyEnemyByLevel;
++
++        public static int StudyEnemyLevel(EnemyDef def, int level)
++        {
++            if (!StudyEnemyByLevel || StudyEnemyScale <= 0f || def == null || def.Growth <= 0f) return level;
++            if (level < 1) level = 1;
++            double target = StudyEnemyScale * (1.0 + def.Growth * (level - 1));
++            return Math.Max(level, (int)Math.Round(1.0 + (target - 1.0) / def.Growth, MidpointRounding.AwayFromZero));
+         }
+ 
+         private static UnitStats Build(UnitDef def, int level, float rarityMultiplier)
+diff --git a/Tools/DevHarness/Program.cs b/Tools/DevHarness/Program.cs
+index 466e040..39440f4 100644
+--- a/Tools/DevHarness/Program.cs
++++ b/Tools/DevHarness/Program.cs
+@@ -17623,6 +17623,7 @@ namespace Emberfall.DevHarness
+                     IdleReport idle = session.ClaimIdle(run.Now);
+                     run.Ledger.GoldIdle += idle.Gold;
+                     run.Ledger.ShardIdle += idle.Shards;
++                    IdleDustClaim(db, session, EconomyAwaySeconds);   // idle power study, option 3 only
+                     AdWatcherIdleStep(session, idle, run.Now);   // inert unless --store-ads asked for the ad watcher
+                     // THE ORDER OF A SITTING'S ROSTER WORK, and it changed with fusion. Gold used to
+                     // go first, into the line as it stood, and the pulls came after it, so a hero
+@@ -17650,6 +17651,7 @@ namespace Emberfall.DevHarness
+                     CreditLevels(profile, beforeGold, run.GoldLevels);
+                     run.Ledger.GoldSpentOnLevels += goldBeforeLevels - profile.Gold;
+                     run.Ledger.HeroLevelsBought += levelsBought;
++                    IdleAfterGold(db, session);   // idle power study, options 1 and 2 only
+                     if (profile.Gold > run.PeakGold) run.PeakGold = profile.Gold;
+                     // Wear what has actually been earned - GrantBattleResult rolls the real drops
+                     // at the real drop chance, and this instrument has been accumulating them all
+@@ -17664,6 +17666,7 @@ namespace Emberfall.DevHarness
+                     //      the rule DESIGN-CAMPAIGN-STRUCTURE decided.
+                     int budget = EconomySessionBattleBudget;
+                     int consecutiveLosses = 0;
++                    IdleSetEnemyStage(stageIdx);   // idle power study: inert without --enemy-scale
+                     while (budget > 0 && !cleared)
+                     {
+                         int wave, battle;
+@@ -17713,6 +17716,7 @@ namespace Emberfall.DevHarness
+                     if (!cleared && stageIdx > 0)
+                     {
+                         StageDef farm = db.AllStages[stageIdx - 1];
++                        IdleSetEnemyStage(stageIdx - 1);
+                         int allowed = session.RepeatClearsRemaining(farm, run.Now);
+                         // SweepClearedStage resolves this stage's ceiling battle inside
+                         // itself, so the ordinal is recorded here where it is still visible.
+@@ -21763,7 +21767,7 @@ namespace Emberfall.DevHarness
+         private static int CeilingPower(GameSession session, HeroInstance h)
+         {
+             if (h == null || h.Def == null) return 0;
+-            return StatMath.PowerScore(StatMath.ForHero(h.Def, session.HeroLevelCapOf(h)));
++            return StatMath.PowerScore(StatMath.ForHero(h.Def, Math.Max(h.Level, session.HeroLevelCapOf(h))));
+         }
+ 
+         /// <summary>One entry per spare body below five stars: a hero with Copies n contributes n
+diff --git a/Tools/DevHarness/R24IdlePowerStudy.cs b/Tools/DevHarness/R24IdlePowerStudy.cs
+new file mode 100644
+index 0000000..35334e2
+--- /dev/null
++++ b/Tools/DevHarness/R24IdlePowerStudy.cs
+@@ -0,0 +1,210 @@
++using System;
++using System.Collections.Generic;
++using System.Globalization;
++using System.IO;
++using Emberfall.Core.Cloud;
++using Emberfall.Core.Data;
++using Emberfall.Core.Model;
++using Emberfall.Core.Progression;
++using Emberfall.Core.Session;
++
++namespace Emberfall.DevHarness
++{
++    /// <summary>
++    /// THE IDLE POWER STUDY (Docs/IDLE-POWER-OPTIONS.md). Measurement only, never committed to Tools/: it lives in
++    /// Docs/idle-power/idle-power-tooling.patch. Three ways for idle time to become power past the level caps, each
++    /// simulated on the R16 reference walk through the R24 whale column (--whale-curve ... --whale-loop):
++    ///   --idle-opt 1  Training: Gold buys account ranks per guild tech family (GuildTech.ApplyShare's split);
++    ///                 rank r of a family costs trainCost * trainGrowth^r Gold and the family's heroes carry
++    ///                 (1 + trainShare)^r - 1 of their power on the family's rung stats.
++    ///   --idle-opt 2  Soft cap: a hero at its cap keeps levelling, at overcapPremium times the level curve's price.
++    ///   --idle-opt 3  Essence: an idle-only material (the frontier's idle Gold per hour / essenceDivisor, claimed with
++    ///                 idle and capped like it; never sold) buys the same family ranks as option 1, at
++    ///                 essenceCost * trainGrowth^r Essence.
++    ///   --enemy-scale FILE  one multiplier per stage index (the content re-solved to the new curve, by proxy):
++    ///                 every enemy's HP, Attack and Defense at that stage are multiplied by it, or with
++    ///                 --idle-p enemyByLevel=1 every enemy stands at the Level that gives that multiple.
++    /// Every purchase here is a fixed price for a fixed effect. Nothing rolls.
++    /// </summary>
++    internal static partial class Program
++    {
++        private static int _idleOpt;
++        private static readonly Dictionary<string, double> _idleP = new Dictionary<string, double>();
++        private static double[] _idleEnemyScale;
++        private static readonly Dictionary<string, int> _trainRanks = new Dictionary<string, int>();
++        private static ContentDatabase _idleDb;
++        private static long _essence;
++
++        private static double IdleP(string name, double fallback)
++        {
++            double v;
++            return _idleP.TryGetValue(name, out v) ? v : fallback;
++        }
++
++        private static bool IdleTakeArg(string[] args, ref int i)
++        {
++            string a = args[i];
++            if (a == "--idle-opt" && i + 1 < args.Length) { _idleOpt = int.Parse(args[++i]); return true; }
++            if (a == "--idle-p" && i + 1 < args.Length)
++            {
++                string[] kv = args[++i].Split('=');
++                _idleP[kv[0]] = double.Parse(kv[1], CultureInfo.InvariantCulture);
++                return true;
++            }
++            if (a == "--enemy-scale" && i + 1 < args.Length)
++            {
++                string[] lines = File.ReadAllLines(args[++i]);
++                List<double> xs = new List<double>();
++                foreach (string l in lines) if (l.Trim().Length > 0) xs.Add(double.Parse(l.Trim(), CultureInfo.InvariantCulture));
++                _idleEnemyScale = xs.ToArray();
++                return true;
++            }
++            return false;
++        }
++
++        private static string IdleHeader()
++        {
++            string s = "# idle-opt " + _idleOpt;
++            foreach (KeyValuePair<string, double> kv in _idleP) s += " " + kv.Key + "=" + kv.Value.ToString(CultureInfo.InvariantCulture);
++            s += _idleEnemyScale != null ? " enemy-scale on" : " enemy-scale off";
++            return s + "\n";
++        }
++
++        private static void IdleBeginWalk(ContentDatabase db)
++        {
++            _idleDb = db;
++            _trainRanks.Clear();
++            _essence = 0;
++            StatMath.StudyHeroHook = _idleOpt == 1 || _idleOpt == 3 ? (Action<UnitStats, HeroDef>)TrainingApply : null;
++            StatMath.StudyEnemyScale = 0f;
++            StatMath.StudyEnemyByLevel = IdleP("enemyByLevel", 0) > 0;
++        }
++
++        private static void IdleEndWalk()
++        {
++            StatMath.StudyHeroHook = null;
++            StatMath.StudyEnemyScale = 0f;
++        }
++
++        /// <summary>The enemy multiplier for a stage index; 0 (off) when no scale file was given.</summary>
++        private static void IdleSetEnemyStage(int stageIdx)
++        {
++            if (_idleEnemyScale == null || stageIdx < 0) { StatMath.StudyEnemyScale = 0f; return; }
++            StatMath.StudyEnemyScale = (float)_idleEnemyScale[Math.Min(stageIdx, _idleEnemyScale.Length - 1)];
++        }
++
++        private static bool IdleOpen(ContentDatabase db, PlayerProfile p)
++        {
++            // every option opens where the caps start to bind: the chapter 1 finale cleared (the talents and armor row)
++            return FeatureGate.IsUnlocked(db, p, Feature.Talents);
++        }
++
++        // ------------------------------------------------------------------ option 1: Training (Gold)
++
++        private static void TrainingApply(UnitStats stats, HeroDef def)
++        {
++            if (_idleDb == null || _idleDb.GuildTech == null || def == null) return;
++            GuildTechFamilyDef family = _idleDb.GuildTech.FamilyOfRole(def.Role);
++            if (family == null) return;
++            int r;
++            if (!_trainRanks.TryGetValue(family.Id, out r) || r <= 0) return;
++            double share = Math.Pow(1.0 + IdleP("trainShare", 0.05), r) - 1.0;
++            GuildTech.ApplyShare(stats, family, (float)share);
++        }
++
++        private static long TrainingCost(int rank)
++        {
++            double first = _idleOpt == 3 ? IdleP("essenceCost", 200) : IdleP("trainCost", 20000);
++            return (long)Math.Round(first * Math.Pow(IdleP("trainGrowth", 1.10), rank));
++        }
++
++        private static void TrainingSpend(ContentDatabase db, GameSession s)
++        {
++            PlayerProfile p = s.Profile;
++            if (db.GuildTech == null || !IdleOpen(db, p)) return;
++            for (int guard = 0; guard < 2000; guard++)
++            {
++                string cheapest = null;
++                long cost = long.MaxValue;
++                foreach (HeroInstance h in p.TeamHeroes())
++                {
++                    if (h.Def == null) continue;
++                    GuildTechFamilyDef f = db.GuildTech.FamilyOfRole(h.Def.Role);
++                    if (f == null) continue;
++                    int r;
++                    _trainRanks.TryGetValue(f.Id, out r);
++                    long c = TrainingCost(r);
++                    if (c < cost || (c == cost && string.CompareOrdinal(f.Id, cheapest) < 0)) { cost = c; cheapest = f.Id; }
++                }
++                if (cheapest == null) return;
++                if (_idleOpt == 3) { if (_essence < cost) return; _essence -= cost; }
++                else if (!IdleSpendGold(p, cost)) return;
++                int have;
++                _trainRanks.TryGetValue(cheapest, out have);
++                _trainRanks[cheapest] = have + 1;
++            }
++        }
++
++        /// <summary>freeGoldOnly=1: the sink takes earned Gold only and refuses Sealed (bought) Gold, as the
++        /// Quartermaster does. Otherwise it is a deterministic sink and takes Sealed Gold first, as a level-up does.</summary>
++        private static bool IdleSpendGold(PlayerProfile p, long cost)
++        {
++            if (IdleP("freeGoldOnly", 0) > 0)
++            {
++                if (p.FreeGold < cost) return false;
++                p.Gold -= cost;
++                return true;
++            }
++            if (p.Gold < cost) return false;
++            p.SpendGoldDeterministic(cost);
++            return true;
++        }
++
++        // ------------------------------------------------------------------ option 2: soft cap (Gold)
++
++        private static long OvercapCost(GameSession s, HeroInstance h)
++        {
++            BalanceConfig b = s.Balance;
++            double baseCost = b.LevelCostA + b.LevelCostB * (double)h.Level + b.LevelCostC * (double)h.Level * h.Level;
++            return (long)Math.Round(baseCost * IdleP("overcapPremium", 2.0));
++        }
++
++        private static void OvercapSpend(ContentDatabase db, GameSession s)
++        {
++            PlayerProfile p = s.Profile;
++            if (!IdleOpen(db, p)) return;
++            for (int guard = 0; guard < 5000; guard++)
++            {
++                HeroInstance best = null;
++                long cost = long.MaxValue;
++                foreach (HeroInstance h in p.TeamHeroes())
++                {
++                    if (h.Def == null || h.Level < s.HeroLevelCapOf(h)) continue;   // below the cap the walk's own SpendGold buys
++                    long c = OvercapCost(s, h);
++                    if (c < cost) { cost = c; best = h; }
++                }
++                if (best == null || !IdleSpendGold(p, cost)) return;
++                best.Level += 1;
++            }
++        }
++
++        // ------------------------------------------------------------------ option 3: idle Essence
++
++        private static void IdleDustClaim(ContentDatabase db, GameSession s, long seconds)
++        {
++            if (_idleOpt != 3) return;
++            if (!IdleOpen(db, s.Profile)) return;
++            StageDef frontier = s.FurthestClearedStage;
++            if (frontier == null) return;
++            double hours = Math.Min(seconds / 3600.0, s.Balance.IdleCapHours);
++            _essence += (long)Math.Floor(frontier.IdleGoldPerHour / IdleP("essenceDivisor", 100) * hours);
++        }
++
++        /// <summary>Called by the walk after its own level spending, every sitting.</summary>
++        private static void IdleAfterGold(ContentDatabase db, GameSession s)
++        {
++            if (_idleOpt == 1 || _idleOpt == 3) TrainingSpend(db, s);
++            else if (_idleOpt == 2) OvercapSpend(db, s);
++        }
++    }
++}
+diff --git a/Tools/DevHarness/R24WhaleCurve.cs b/Tools/DevHarness/R24WhaleCurve.cs
+index 4293dd0..c90aec0 100644
+--- a/Tools/DevHarness/R24WhaleCurve.cs
++++ b/Tools/DevHarness/R24WhaleCurve.cs
+@@ -48,6 +48,7 @@ namespace Emberfall.DevHarness
+         private static string WhaleOut = null, WhaleDir = null;
+         private static bool _whaleRelics = true, _whaleCommitted = false, _whaleFreeEvents = true, _whaleChoiceMax = true;
+         private static int _whaleContractFrom = 37;
++        private static bool _whaleLoop;
+         /// <summary>As the store has it now (lead's default, log 09:14; builder-b c8d987c): the Chest comes 2 a month instead of 1 a week.</summary>
+         private static bool _whaleChestMonthly = true;
+         /// <summary>The most Dust a Relic of Choice pick may be worth (builder-b: the picker is capped at 20,000).</summary>
+@@ -72,6 +73,9 @@ namespace Emberfall.DevHarness
+             if (a == "--whale-out" && i + 1 < args.Length) { WhaleOut = args[++i]; return true; }
+             if (a == "--whale-range" && i + 2 < args.Length) { WhaleFrom = int.Parse(args[++i]); WhaleTo = int.Parse(args[++i]); return true; }
+             if (a == "--whale-no-relics") { _whaleRelics = false; return true; }
++            // walls study (Docs/WALLS-OPTIONS.md): every buyer also plays the daily loop with the free Road on, as DailyLoopCurve.cs's diligent player
++            if (a == "--whale-loop") { _whaleLoop = true; return true; }
++            if (IdleTakeArg(args, ref i)) return true;   // idle power study (IdlePowerStudy.cs)
+             if (a == "--whale-committed") { _whaleCommitted = true; return true; }
+             if (a == "--whale-weekly-chest") { _whaleChestMonthly = false; return true; }
+             if (a == "--whale-choice-cap" && i + 1 < args.Length) { _whaleChoiceCap = int.Parse(args[++i]); return true; }
+@@ -635,21 +639,25 @@ namespace Emberfall.DevHarness
+               .Append(" skip ").Append(string.Join(",", new List<string>(_whaleSkip).ToArray())).Append(" scale");
+             foreach (KeyValuePair<string, double> kv in _whaleScale) sb.Append(' ').Append(kv.Key).Append('=').Append(kv.Value.ToString(CultureInfo.InvariantCulture));
+             sb.Append('\n');
++            sb.Append(IdleHeader());
+             int was = _walkStoreMode;
++            int loopWas = _walkLoopMode;
+             _walkStoreMode = mode;
++            if (_whaleLoop) { _walkLoopMode = 2; DailyLoopSwitch.Enabled = true; WayfarersRoadSwitch.Enabled = true; sb.Append("# loop on, road on\n"); }
+             try
+             {
+                 for (int k = WhaleFrom; k < to; k++)
+                 {
+                     WhaleBeginWalk();
++                    IdleBeginWalk(db);
+                     EconomyRun r;
+                     try { r = SimulateEconomyUnder(db, WalkSeed(k), fuse, fuse); }
+-                    finally { WhaleEndWalk(); }
++                    finally { WhaleEndWalk(); IdleEndWalk(); }
+                     WhaleWrite(sb, db, r, WhaleCol, k);
+                     Console.Error.WriteLine("walk " + k + " " + WhaleCol + " done");
+                 }
+             }
+-            finally { _walkStoreMode = was; }
++            finally { _walkStoreMode = was; _walkLoopMode = loopWas; }
+             File.WriteAllText(WhaleOut, sb.ToString(), new UTF8Encoding(false));
+             return 0;
+         }
+@@ -668,7 +676,8 @@ namespace Emberfall.DevHarness
+                 int extra = o.Cleared ? WallExtraSittings(o, out ladder, out floor) : -1;
+                 sb.Append("S\t").Append(col).Append('\t').Append(k).Append('\t').Append(i).Append('\t').Append(o.EntryPower)
+                   .Append('\t').Append(o.Sessions).Append('\t').Append(extra).Append('\t').Append(o.Cleared ? 1 : 0)
+-                  .Append('\t').Append(o.ElapsedSeconds).Append('\t').Append(o.EntryRelicDust).Append('\n');
++                  .Append('\t').Append(o.ElapsedSeconds).Append('\t').Append(o.EntryRelicDust)
++                  .Append('\t').Append(o.TeamPower).Append('\t').Append(o.EntryGold).Append('\n');
+             }
+             for (int i = 0; i < w.Spend.Count; i++)
+                 sb.Append("E\t").Append(col).Append('\t').Append(k).Append('\t').Append(w.Spend[i].Key).Append('\t')
+diff --git a/Tools/build-check.ps1 b/Tools/build-check.ps1
+index 4f68820..0f72440 100644
+--- a/Tools/build-check.ps1
++++ b/Tools/build-check.ps1
+@@ -210,7 +210,8 @@ $probeExtra = @{
+ foreach ($case in $probeCases) {
+     $exe = Join-Path $out ($case.Label + ".exe")
+     if (-not (Compile $case.Label $probeSources "exe" $exe $case.Defines)) { $probeOk = $false; continue }
+-    $printed = @(& $exe)
++    Write-RuntimeConfig $compiler $exe
++    $printed = @(Invoke-BuiltExe $compiler $exe)
+     foreach ($want in $case.Expect) {
+         if ($printed -notcontains $want) {
+             Write-Host ("  " + $case.Label + ": expected '" + $want + "', probe printed: " + ($printed -join " | ")) -ForegroundColor Red
+diff --git a/Tools/csharp.ps1 b/Tools/csharp.ps1
+index 871cff2..44077a0 100644
+--- a/Tools/csharp.ps1
++++ b/Tools/csharp.ps1
+@@ -93,7 +93,9 @@ function Get-CSharpCompiler {
+ # Runs the compiler with the arguments the Windows call has always used; returns its output, sets $LASTEXITCODE.
+ function Invoke-CSharpCompiler($compiler, [string[]]$arguments) {
+     if ($compiler.Kind -eq 'netfx') { return (& $compiler.Path @arguments 2>&1) }
+-    $all = @('exec', $compiler.Path, '-noconfig', '-nostdlib', '-langversion:5') + $compiler.References + $arguments
++    $extra = @()
++    if ($env:EMBERFALL_EXTRA_REFS) { $extra = @($env:EMBERFALL_EXTRA_REFS.Split([IO.Path]::PathSeparator) | Where-Object { $_ } | ForEach-Object { '-r:' + $_ }) }
++    $all = @('exec', $compiler.Path, '-noconfig', '-nostdlib', '-langversion:5') + $compiler.References + $extra + $arguments
+     return (& $compiler.Dotnet @all 2>&1)
+ }
+ 
+@@ -105,7 +107,7 @@ function Write-RuntimeConfig($compiler, [string]$exePath) {
+     $text = ("{`n  `"runtimeOptions`": {`n    `"tfm`": `"net" + $parts[0] + "." + $parts[1] + "`",`n" +
+              "    `"rollForward`": `"LatestMajor`",`n" +
+              "    `"framework`": { `"name`": `"Microsoft.NETCore.App`", `"version`": `"" + $compiler.RuntimeVersion + "`" },`n" +
+-             "    `"configProperties`": { `"System.GC.Server`": true, `"System.GC.Concurrent`": false }`n  }`n}`n")
++             "    `"configProperties`": { `"System.GC.Server`": true, `"System.GC.Concurrent`": false" + $(if ($env:EMBERFALL_EXTRA_REFS) { ", `"System.Drawing.EnableUnixSupport`": true" } else { "" }) + " }`n  }`n}`n")
+     $path = [IO.Path]::ChangeExtension($exePath, '.runtimeconfig.json')
+     if ((Test-Path -LiteralPath $path) -and ([IO.File]::ReadAllText($path) -eq $text)) { return }
+     [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
