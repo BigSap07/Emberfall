@@ -39,11 +39,18 @@ param([switch]$WhatIf)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
-$csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+# Windows compiles with the .NET Framework csc.exe as it always has; Linux and macOS fall back to the .NET SDK's
+# compiler at C# 5 and run the exe through dotnet (Tools/csharp.ps1, the same fallback build-check.ps1 uses).
+. (Join-Path $PSScriptRoot "csharp.ps1")
+$compiler = Get-CSharpCompiler
 $out = Join-Path $root "Tools\DevHarness\bin"
 New-Item -ItemType Directory -Force $out | Out-Null
 
-if (-not (Test-Path $csc)) { Write-Error "C# compiler not found at $csc"; exit 1 }
+if ($null -eq $compiler) {
+    if ($script:OnWindows) { Write-Error "C# compiler not found at C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" }
+    else { Write-Error "C# compiler not found: no .NET SDK on PATH, at DOTNET_ROOT or in ~/.dotnet" }
+    exit 1
+}
 
 # Compiled here rather than leaning on a build-check that ran at some point earlier, because the
 # whole value of this thing is that its answer describes the tree as it stands right now.
@@ -53,7 +60,7 @@ if (-not (Test-Path $csc)) { Write-Error "C# compiler not found at $csc"; exit 1
 # files (BattleFraming.cs, BattleHudMetrics.cs, BattleHudLayout.cs), which Program.cs names directly: this
 # list and build-check.ps1's are the same list, and a file added to one belongs in the other.
 $sources = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs -Recurse |
-             Select-Object -Expand FullName) + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Assets\Scripts\Battle\JuiceMath.cs") + (Join-Path $root "Assets\Scripts\Battle\FeelMath.cs") +
+             Select-Object -Expand FullName | Sort-SourceOrder) + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Assets\Scripts\Battle\JuiceMath.cs") + (Join-Path $root "Assets\Scripts\Battle\FeelMath.cs") +
            (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") +
            (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs") +
            (Join-Path $root "Tools\DevHarness\CloudChecks.cs") + (Join-Path $root "Tools\DevHarness\ArenaMatrix.cs") +
@@ -62,14 +69,14 @@ $sources = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs 
            (Join-Path $root "Assets\Scripts\Battle\BattleFraming.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudMetrics.cs") +
            (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudLayout.cs") + (Join-Path $root "Tools\DevHarness\BattleHudChecks.cs") +
            (Join-Path $root "Tools\DevHarness\StageChecks.cs") + (Join-Path $root "Assets\Scripts\Battle\StagePresentation.cs") +
-           (Join-Path $root "Tools\DevHarness\UiKitChecks.cs") + @(Get-ChildItem (Join-Path $root "Tools\DevHarness") -Filter *.cs | Where-Object { $_.Name -match '^R2[46]' } | ForEach-Object { $_.FullName })
-$rsp = Join-Path $env:TEMP "emberfall_recpwr.rsp"
+           (Join-Path $root "Tools\DevHarness\UiKitChecks.cs") + @(Get-ChildItem (Join-Path $root "Tools\DevHarness") -Filter *.cs | Where-Object { $_.Name -match '^R2[46]' } | ForEach-Object { $_.FullName } | Sort-SourceOrder)
+$rsp = Join-Path (Get-TempDir) "emberfall_recpwr.rsp"
 $lines = @($sources | ForEach-Object { '"' + $_ + '"' })
 [IO.File]::WriteAllLines($rsp, [string[]]$lines, [Text.UTF8Encoding]::new($false))
 
 $exe = Join-Path $out "DevHarness.exe"
 Write-Host ("[core+harness] " + $sources.Count + " files")
-$compile = & $csc -nologo "-target:exe" "-out:$exe" "@$rsp" 2>&1
+$compile = Invoke-CSharpCompiler $compiler @("-nologo", "-target:exe", "-out:$exe", "@$rsp")
 if ($LASTEXITCODE -ne 0) {
     $compile | Where-Object { $_ -match "error" } | ForEach-Object { Write-Host "  $_" }
     Write-Host "[core+harness] FAILED" -ForegroundColor Red
@@ -81,6 +88,7 @@ Write-Host "[core+harness] ok" -ForegroundColor Green
 . (Join-Path $PSScriptRoot "compile-cache.ps1")
 Reset-CompileCache $exe
 Write-HarnessConfig $exe
+Write-RuntimeConfig $compiler $exe
 Write-Host ""
 
 $content = Join-Path $root "Assets\Resources\Content"
@@ -89,7 +97,7 @@ $content = Join-Path $root "Assets\Resources\Content"
 # and the report are identical; the campaign.json it overwrites is the copy's, and the tree is
 # left alone. That is the honest form of a dry run here, because this tool's output IS a file.
 if ($WhatIf) {
-    $scratch = Join-Path $env:TEMP ("emberfall-recpwr-whatif-" + [Guid]::NewGuid().ToString("n"))
+    $scratch = Join-Path (Get-TempDir) ("emberfall-recpwr-whatif-" + [Guid]::NewGuid().ToString("n"))
     New-Item -ItemType Directory -Force $scratch | Out-Null
     Copy-Item (Join-Path $content "*.json") $scratch
     Write-Host "-WhatIf: solving against a copy in $scratch - campaign.json in the tree is not touched."
@@ -101,7 +109,7 @@ if ($WhatIf) {
 $quickWalksWas = $env:EMBERFALL_QUICK_WALKS
 $env:EMBERFALL_QUICK_WALKS = "0"
 try {
-    & $exe $content --solve-recommended-power
+    Invoke-BuiltExe $compiler $exe @($content, "--solve-recommended-power")
     $code = $LASTEXITCODE
 } finally {
     $env:EMBERFALL_QUICK_WALKS = $quickWalksWas

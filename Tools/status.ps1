@@ -151,6 +151,8 @@ Section 'Hero validator' {
     $validator = Join-Path $root 'Tools\HeroValidator\validate_heroes.py'
     $heroesJson = Join-Path $root 'Assets\Resources\Content\heroes.json'
     $python = Get-Command python -ErrorAction SilentlyContinue
+    # Linux and macOS usually name it python3 only; Windows is unchanged.
+    if (-not $python -and $env:OS -ne 'Windows_NT') { $python = Get-Command python3 -ErrorAction SilentlyContinue }
     if (-not $python) { Add '**Not run:** no `python` on PATH.'; return }
     $out = @(& $python.Source -I $validator $heroesJson 2>&1 | ForEach-Object { "$_" })
     $code = $LASTEXITCODE
@@ -310,7 +312,9 @@ Section 'Baseline drift' {
     Add ''
     $baselinePath = Join-Path $root 'Tools\doc-lint-baseline.txt'
     $baseline = @(Get-Content $baselinePath | ForEach-Object { $_ -replace "^\uFEFF", '' } | Where-Object { $_.Trim() })
-    $lint = @(& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'doc-lint.ps1') 2>&1 | ForEach-Object { "$_" })
+    # Windows PowerShell on Windows, as always; Linux and macOS have only pwsh.
+    $shell = if ($env:OS -eq 'Windows_NT') { 'powershell' } else { 'pwsh' }
+    $lint = @(& $shell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'doc-lint.ps1') 2>&1 | ForEach-Object { "$_" })
     $found = @{}
     $newOnes = New-Object System.Collections.Generic.List[string]
     $section = ''

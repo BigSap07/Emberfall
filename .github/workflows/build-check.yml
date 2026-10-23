@@ -3,10 +3,17 @@ name: Build Check
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+# Every push and pull request runs on ubuntu-latest: Linux minutes are the cheap ones, and
+# Tools/build-check.ps1 runs the same check there (the .NET SDK compiler at C# 5 in place of the
+# Windows csc.exe, the same file lists, harness, walks, fingerprints and doc lint - see
+# Tools/csharp.ps1 and CLAUDE.md). The Windows job is the reference platform the baselines were
+# recorded on, and runs only when started by hand (Actions > Build Check > Run workflow).
 
 jobs:
   build-check:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -39,6 +46,26 @@ jobs:
             Write-Error "Expected exactly $expected root commit(s), found $roots. History has been re-rooted."
             exit 1
           }
+
+      # The SDK's Roslyn compiler (run at -langversion:5) and the runtime the harness runs on.
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Run build-check.ps1
+        shell: pwsh
+        run: ./Tools/build-check.ps1
+
+  build-check-windows:
+    # Kept for parity with the reference platform; started by hand only, never by a push.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Run build-check.ps1
         shell: pwsh

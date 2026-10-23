@@ -27,6 +27,17 @@ namespace Emberfall.DevHarness
 
         private static int Main(string[] args)
         {
+            // Off Windows (the .NET SDK fallback in Tools/csharp.ps1), the culture comes from LANG/LC_ALL, so a
+            // de_DE shell printed "x4,00" and "0,75 h" where Windows prints "x4.00" and "0.75 h". It is pinned
+            // to the invariant culture there, for this thread and every walk thread. Windows is untouched: on
+            // .NET Framework Platform is Win32NT and this never runs.
+            if (Environment.OSVersion.Platform == PlatformID.Unix || Environment.OSVersion.Platform == PlatformID.MacOSX)
+            {
+                CultureInfo.DefaultThreadCurrentCulture = CultureInfo.InvariantCulture;
+                CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.InvariantCulture;
+                System.Threading.Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
+                System.Threading.Thread.CurrentThread.CurrentUICulture = CultureInfo.InvariantCulture;
+            }
             bool solve = false;
             bool talentValue = false;
             bool fidelity = false;
@@ -4332,14 +4343,22 @@ namespace Emberfall.DevHarness
         private static void Line(string text) { Console.WriteLine(text); }
 
         /// <summary>Walk up from the executable until Assets/Resources/Content shows up.</summary>
+        /// <summary>Walks up from the exe's folder, then (as FindToolSource does) from the working directory, for
+        /// a binary built outside the checkout - a temp folder, say - and run from the repository root. The
+        /// second walk only runs when the first finds nothing, so a build under Tools/DevHarness/bin never
+        /// reaches it.</summary>
         private static string FindContentDir()
         {
-            DirectoryInfo dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-            for (int i = 0; i < 8 && dir != null; i++)
+            string[] roots = { AppDomain.CurrentDomain.BaseDirectory, Environment.CurrentDirectory };
+            for (int r = 0; r < roots.Length; r++)
             {
-                string candidate = Path.Combine(dir.FullName, Path.Combine("Assets", Path.Combine("Resources", "Content")));
-                if (Directory.Exists(candidate)) return candidate;
-                dir = dir.Parent;
+                DirectoryInfo dir = new DirectoryInfo(roots[r]);
+                for (int i = 0; i < 8 && dir != null; i++)
+                {
+                    string candidate = Path.Combine(dir.FullName, Path.Combine("Assets", Path.Combine("Resources", "Content")));
+                    if (Directory.Exists(candidate)) return candidate;
+                    dir = dir.Parent;
+                }
             }
             return Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Content");
         }
@@ -35722,14 +35741,19 @@ namespace Emberfall.DevHarness
         /// <summary>The engine source file at Assets/Scripts/Core/&lt;folder&gt;/&lt;name&gt;, or null.</summary>
         private static string FindEngineSource(string folder, string name)
         {
-            DirectoryInfo dir = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
-            for (int i = 0; i < 8 && dir != null; i++)
+            // The exe's folder first, then the working directory, as FindContentDir does.
+            string[] roots = { AppDomain.CurrentDomain.BaseDirectory, Environment.CurrentDirectory };
+            for (int r = 0; r < roots.Length; r++)
             {
-                string candidate = Path.Combine(dir.FullName,
-                    Path.Combine("Assets", Path.Combine("Scripts", Path.Combine("Core",
-                        Path.Combine(folder, name)))));
-                if (File.Exists(candidate)) return candidate;
-                dir = dir.Parent;
+                DirectoryInfo dir = new DirectoryInfo(roots[r]);
+                for (int i = 0; i < 8 && dir != null; i++)
+                {
+                    string candidate = Path.Combine(dir.FullName,
+                        Path.Combine("Assets", Path.Combine("Scripts", Path.Combine("Core",
+                            Path.Combine(folder, name)))));
+                    if (File.Exists(candidate)) return candidate;
+                    dir = dir.Parent;
+                }
             }
             return null;
         }

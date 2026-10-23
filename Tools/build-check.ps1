@@ -16,12 +16,18 @@
 # The reference walks run on worker threads: EMBERFALL_WALK_WORKERS=1 forces them serial (the default is
 # the logical cores less two). Compiles are skipped when a stamp says nothing they read has changed:
 # see Tools/compile-cache.ps1; EMBERFALL_NO_COMPILE_CACHE=1 turns that off.
+#
+# CROSS-PLATFORM. On Windows the compiler is the .NET Framework csc.exe (C# 5) and nothing here differs from
+# what it always did. On Linux and macOS there is no csc.exe, so it falls back to the .NET SDK's Roslyn
+# compiler with -langversion:5, the same file lists in the same order, and runs the exes through `dotnet`;
+# every check, walk, fingerprint and the doc lint run the same. See Tools/csharp.ps1.
 
 param([switch]$NoRun, [switch]$Quick)
 
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 . (Join-Path $PSScriptRoot "compile-cache.ps1")
+. (Join-Path $PSScriptRoot "csharp.ps1")
 $wall = [Diagnostics.Stopwatch]::StartNew()
 $mode = if ($Quick) { "quick" } else { "full" }
 # The caller's own value, put back by Finish, so an in-process -Quick run does not leave the shell
@@ -33,11 +39,17 @@ if ($Quick) {
 } else {
     $env:EMBERFALL_QUICK_WALKS = "0"
 }
-$csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
+$compiler = Get-CSharpCompiler
 $out = Join-Path $root "Tools\DevHarness\bin"
 New-Item -ItemType Directory -Force $out | Out-Null
 
-if (-not (Test-Path $csc)) { $env:EMBERFALL_QUICK_WALKS = $quickWalksWas; Write-Error "C# compiler not found at $csc"; exit 1 }
+if ($null -eq $compiler) {
+    $env:EMBERFALL_QUICK_WALKS = $quickWalksWas
+    if ($script:OnWindows) { Write-Error "C# compiler not found at C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" }
+    else { Write-Error "C# compiler not found: no .NET SDK (dotnet with sdk/*/Roslyn/bincore/csc.dll and packs/Microsoft.NETCore.App.Ref) on PATH, at DOTNET_ROOT or in ~/.dotnet" }
+    exit 1
+}
+if (-not $script:OnWindows) { Write-Host ("[build-check] compiler: " + $compiler.Describe) }
 
 # ---- documentation lint.
 #
@@ -82,7 +94,7 @@ function Finish([int]$code) {
 }
 
 function Compile($label, $sources, $target, $outputPath, $defines) {
-    $key = Get-CompileKey ([string[]]$sources) $target $outputPath $defines $csc
+    $key = Get-CompileKey ([string[]]$sources) $target $outputPath $defines $compiler.Path
     $cached = Test-CompileCache $key $outputPath
     if ($null -ne $cached) {
         Write-Host ("[" + $label + "] " + $sources.Count + " files")
@@ -90,7 +102,7 @@ function Compile($label, $sources, $target, $outputPath, $defines) {
         Write-Host ("[" + $label + "] ok (up to date: no input changed since it was last compiled)") -ForegroundColor Green
         return $true
     }
-    $rsp = Join-Path $env:TEMP ("emberfall_" + $label + ".rsp")
+    $rsp = Join-Path (Get-TempDir) ("emberfall_" + $label + ".rsp")
     # UTF-8 WITHOUT A BOM, written through .NET rather than Set-Content -Encoding UTF8, which on
     # Windows PowerShell 5.1 means UTF-8 WITH one. csc.exe happens to tolerate a BOM at the top of
     # a response file, so this was never a visible failure - it is the same mistake that put a
@@ -101,7 +113,7 @@ function Compile($label, $sources, $target, $outputPath, $defines) {
     Write-Host ("[" + $label + "] " + $sources.Count + " files")
     $defineArgs = @()
     if ($defines) { $defineArgs = @("-define:$defines") }
-    $output = & $csc -nologo "-target:$target" "-out:$outputPath" @defineArgs "@$rsp" 2>&1
+    $output = Invoke-CSharpCompiler $compiler (@("-nologo", "-target:$target", "-out:$outputPath") + $defineArgs + @("@$rsp"))
     $ok = ($LASTEXITCODE -eq 0)
     $shown = @($output | Where-Object { $_ -match "error|warning CS" } | ForEach-Object { "$_" })
     $shown | ForEach-Object { Write-Host "  $_" }
@@ -113,14 +125,16 @@ function Compile($label, $sources, $target, $outputPath, $defines) {
     return $ok
 }
 
-$core = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs -Recurse | Select-Object -Expand FullName)
-$shim = @(Get-ChildItem (Join-Path $root "Tools\UnityShim") -Filter *.cs -Recurse | Select-Object -Expand FullName)
+# Sort-SourceOrder (Tools/csharp.ps1) is a no-op on Windows and gives Linux and macOS the order NTFS does.
+# [\\/] rather than \\ so the folder test holds for Linux and macOS paths too; on Windows it is the same match.
+$core = @(Get-ChildItem (Join-Path $root "Assets\Scripts\Core") -Filter *.cs -Recurse | Select-Object -Expand FullName | Sort-SourceOrder)
+$shim = @(Get-ChildItem (Join-Path $root "Tools\UnityShim") -Filter *.cs -Recurse | Select-Object -Expand FullName | Sort-SourceOrder)
 $runtime = @(Get-ChildItem (Join-Path $root "Assets\Scripts") -Filter *.cs -Recurse |
-             Where-Object { $_.FullName -notmatch "\\Scripts\\Core\\" } |
-             Select-Object -Expand FullName)
+             Where-Object { $_.FullName -notmatch "[\\/]Scripts[\\/]Core[\\/]" } |
+             Select-Object -Expand FullName | Sort-SourceOrder)
 $editor = @()
 if (Test-Path (Join-Path $root "Assets\Editor")) {
-    $editor = @(Get-ChildItem (Join-Path $root "Assets\Editor") -Filter *.cs -Recurse | Select-Object -Expand FullName)
+    $editor = @(Get-ChildItem (Join-Path $root "Assets\Editor") -Filter *.cs -Recurse | Select-Object -Expand FullName | Sort-SourceOrder)
 }
 
 # BattleClips.cs rides with the harness: it is engine-free on purpose, so the sheet reachability
@@ -150,9 +164,9 @@ if (Test-Path (Join-Path $root "Assets\Editor")) {
 # BattleFraming.cs, BattleHudMetrics.cs and BattleHudLayout.cs ride with it for BattleClips.cs's
 # reason: they are engine-free on purpose, so BattleHudChecks.cs proves the battle HUD's layout with
 # the very functions the battle screen places it by.
-$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Assets\Scripts\Battle\JuiceMath.cs") + (Join-Path $root "Assets\Scripts\Battle\FeelMath.cs") + (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") + (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs") + (Join-Path $root "Tools\DevHarness\CloudChecks.cs") + (Join-Path $root "Tools\DevHarness\ArenaMatrix.cs") + (Join-Path $root "Tools\DevHarness\WallResolve.cs") + (Join-Path $root "Tools\DevHarness\TempoStudy.cs") + (Join-Path $root "Tools\DevHarness\SolvePrereqs.cs") + (Join-Path $root "Tools\DevHarness\ParityStudy.cs") + (Join-Path $root "Tools\DevHarness\GuildPathChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTechChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentParity.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentThemes.cs") + (Join-Path $root "Tools\DevHarness\TalentTrialChecks.cs") + (Join-Path $root "Tools\DevHarness\OnboardingChecks.cs") + (Join-Path $root "Tools\DevHarness\TelemetryChecks.cs") + (Join-Path $root "Tools\DevHarness\DailyLoopChecks.cs") + (Join-Path $root "Tools\DevHarness\SinkChecks.cs") + (Join-Path $root "Tools\DevHarness\SealedChecks.cs") + (Join-Path $root "Tools\DevHarness\QuartermasterChecks.cs") + (Join-Path $root "Tools\DevHarness\RelicEndgameChecks.cs") + (Join-Path $root "Tools\DevHarness\SummonInflationStudy.cs") + (Join-Path $root "Tools\DevHarness\WayfarersRoadChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreOfferChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreCurve.cs") + (Join-Path $root "Tools\DevHarness\AbilityCardChecks.cs") + (Join-Path $root "Tools\DevHarness\WallChestChecks.cs") + (Join-Path $root "Tools\DevHarness\AudioChecks.cs") + (Join-Path $root "Tools\DevHarness\JuiceChecks.cs") + (Join-Path $root "Tools\DevHarness\FeelChecks.cs") + (Join-Path $root "Tools\DevHarness\StageChecks.cs") + (Join-Path $root "Assets\Scripts\Battle\StagePresentation.cs") + (Join-Path $root "Tools\DevHarness\CaptureWatchdogChecks.cs") + (Join-Path $root "Assets\Editor\CaptureWatchdog.cs") + (Join-Path $root "Assets\Scripts\Battle\BattleFraming.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudMetrics.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudLayout.cs") + (Join-Path $root "Tools\DevHarness\BattleHudChecks.cs") + (Join-Path $root "Tools\DevHarness\UiKitChecks.cs") + @(Get-ChildItem (Join-Path $root "Tools\DevHarness") -Filter *.cs | Where-Object { $_.Name -match '^R2[46]' } | ForEach-Object { $_.FullName }))
+$harness = @($core + (Join-Path $root "Assets\Scripts\Battle\BattleClips.cs") + (Join-Path $root "Assets\Scripts\Battle\JuiceMath.cs") + (Join-Path $root "Assets\Scripts\Battle\FeelMath.cs") + (Join-Path $root "Assets\Scripts\UI\Summon\SummonTiming.cs") + (Join-Path $root "Tools\DevHarness\Program.cs") + (Join-Path $root "Tools\DevHarness\GuildDungeonChecks.cs") + (Join-Path $root "Tools\DevHarness\CloudChecks.cs") + (Join-Path $root "Tools\DevHarness\ArenaMatrix.cs") + (Join-Path $root "Tools\DevHarness\WallResolve.cs") + (Join-Path $root "Tools\DevHarness\TempoStudy.cs") + (Join-Path $root "Tools\DevHarness\SolvePrereqs.cs") + (Join-Path $root "Tools\DevHarness\ParityStudy.cs") + (Join-Path $root "Tools\DevHarness\GuildPathChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTechChecks.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentParity.cs") + (Join-Path $root "Tools\DevHarness\GuildTalentThemes.cs") + (Join-Path $root "Tools\DevHarness\TalentTrialChecks.cs") + (Join-Path $root "Tools\DevHarness\OnboardingChecks.cs") + (Join-Path $root "Tools\DevHarness\TelemetryChecks.cs") + (Join-Path $root "Tools\DevHarness\DailyLoopChecks.cs") + (Join-Path $root "Tools\DevHarness\SinkChecks.cs") + (Join-Path $root "Tools\DevHarness\SealedChecks.cs") + (Join-Path $root "Tools\DevHarness\QuartermasterChecks.cs") + (Join-Path $root "Tools\DevHarness\RelicEndgameChecks.cs") + (Join-Path $root "Tools\DevHarness\SummonInflationStudy.cs") + (Join-Path $root "Tools\DevHarness\WayfarersRoadChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreOfferChecks.cs") + (Join-Path $root "Tools\DevHarness\StoreCurve.cs") + (Join-Path $root "Tools\DevHarness\AbilityCardChecks.cs") + (Join-Path $root "Tools\DevHarness\WallChestChecks.cs") + (Join-Path $root "Tools\DevHarness\AudioChecks.cs") + (Join-Path $root "Tools\DevHarness\JuiceChecks.cs") + (Join-Path $root "Tools\DevHarness\FeelChecks.cs") + (Join-Path $root "Tools\DevHarness\StageChecks.cs") + (Join-Path $root "Assets\Scripts\Battle\StagePresentation.cs") + (Join-Path $root "Tools\DevHarness\CaptureWatchdogChecks.cs") + (Join-Path $root "Assets\Editor\CaptureWatchdog.cs") + (Join-Path $root "Assets\Scripts\Battle\BattleFraming.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudMetrics.cs") + (Join-Path $root "Assets\Scripts\UI\Battle\BattleHudLayout.cs") + (Join-Path $root "Tools\DevHarness\BattleHudChecks.cs") + (Join-Path $root "Tools\DevHarness\UiKitChecks.cs") + @(Get-ChildItem (Join-Path $root "Tools\DevHarness") -Filter *.cs | Where-Object { $_.Name -match '^R2[46]' } | ForEach-Object { $_.FullName } | Sort-SourceOrder))
 $okHarness = Compile "core+harness" $harness "exe" (Join-Path $out "DevHarness.exe")
-if ($okHarness) { Write-HarnessConfig (Join-Path $out "DevHarness.exe") }
+if ($okHarness) { Write-HarnessConfig (Join-Path $out "DevHarness.exe"); Write-RuntimeConfig $compiler (Join-Path $out "DevHarness.exe") }
 
 $engineSources = @($core + $shim + $runtime + $editor)
 # UNITY_EDITOR is required here, not optional: every file under Assets/Editor is wrapped in
@@ -258,7 +272,7 @@ if (Test-Path $devDir) {
     }
 
     $shipped = @(Get-ChildItem (Join-Path $root "Assets\Scripts") -Filter *.cs -Recurse |
-                 Where-Object { $_.FullName -notmatch "\\Scripts\\Dev\\" } |
+                 Where-Object { $_.FullName -notmatch "[\\/]Scripts[\\/]Dev[\\/]" } |
                  Where-Object { (Get-Content $_.FullName -Raw) -match 'Emberfall\.Dev|DevArena' })
     foreach ($f in $shipped) {
         $text = Get-Content $f.FullName -Raw
@@ -355,14 +369,15 @@ if ($okEngine) {
     $offlineExe = Join-Path $out "OfflineSwitchCheck.exe"
     $engineDll = Join-Path $out "EmberfallEngineCheck.dll"
     $offlineSrc = Join-Path $root "Tools\OfflineSwitchCheck\OfflineSwitchCheck.cs"
-    $compileOut = & $csc -nologo -target:exe "-out:$offlineExe" "-reference:$engineDll" $offlineSrc 2>&1
+    $compileOut = Invoke-CSharpCompiler $compiler @("-nologo", "-target:exe", "-out:$offlineExe", "-reference:$engineDll", $offlineSrc)
     if ($LASTEXITCODE -ne 0) {
         $compileOut | ForEach-Object { Write-Host "  $_" }
         Write-Host "  OfflineSwitchCheck failed to compile" -ForegroundColor Red
         $offlineOk = $false
     }
     else {
-        $offlineLines = @(& $offlineExe)
+        Write-RuntimeConfig $compiler $offlineExe
+        $offlineLines = @(Invoke-BuiltExe $compiler $offlineExe)
         $offlineCode = $LASTEXITCODE
         foreach ($l in $offlineLines) { Write-Host ("  " + $l) }
         if ($offlineCode -ne 0) { $offlineOk = $false }
@@ -392,7 +407,7 @@ else {
     Write-Host ""
     # Tee rather than a plain call, so STATUS.md can name each failing check. The output still
     # streams to the console line by line; the harness writes plain ASCII, so nothing is re-encoded.
-    & (Join-Path $out "DevHarness.exe") | Tee-Object -Variable harnessLines
+    Invoke-BuiltExe $compiler (Join-Path $out "DevHarness.exe") | Tee-Object -Variable harnessLines
     $harnessCode = $LASTEXITCODE
     $harnessRan = $true
     $harnessLines = @($harnessLines)
