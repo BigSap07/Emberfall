@@ -1,0 +1,125 @@
+diff --git a/Assets/Resources/Content/campaign.json b/Assets/Resources/Content/campaign.json
+index 974f61b..6d97ee6 100644
+--- a/Assets/Resources/Content/campaign.json
++++ b/Assets/Resources/Content/campaign.json
+@@ -414,8 +414,8 @@
+           "environment": "hollow", "gold": 835, "shards": 42, "accountXp": 125,
+           "firstClearGold": 1080, "firstClearShards": 160, "recommendedPower": 9639,
+           "idleGoldPerHour": 670, "idleShardsPerHour": 34,
+-          "waveCount": 6, "battleCount": 12, "floorLevel": 14, "ceilingLevel": 18,
+-          "enemies": [ { "id": "the_collector", "level": 13 }, { "id": "hollowed_guard", "level": 13 }, { "id": "wild_bear", "level": 13 }, { "id": "hollowed_hunter", "level": 14 }, { "id": "hollowed_mage", "level": 13 } ]
++          "waveCount": 6, "battleCount": 12, "floorLevel": 19, "ceilingLevel": 19,
++          "enemies": [ { "id": "the_collector", "level": 18 }, { "id": "hollowed_guard", "level": 18 }, { "id": "wild_bear", "level": 18 }, { "id": "hollowed_hunter", "level": 19 }, { "id": "hollowed_mage", "level": 18 } ]
+         }
+       ]
+     },
+@@ -480,8 +480,8 @@
+           "environment": "crossing", "gold": 1700, "shards": 85, "accountXp": 225,
+           "firstClearGold": 1860, "firstClearShards": 275, "recommendedPower": 9688,
+           "idleGoldPerHour": 1460, "idleShardsPerHour": 53,
+-          "waveCount": 12, "battleCount": 12, "floorLevel": 25, "ceilingLevel": 37,
+-          "enemies": [ { "id": "the_waykeeper", "level": 24 }, { "id": "road_marauder", "level": 23 }, { "id": "dire_wolf", "level": 23 }, { "id": "marauder_crossbowman", "level": 25 }, { "id": "goblin_trapper", "level": 23 } ]
++          "waveCount": 12, "battleCount": 12, "floorLevel": 42, "ceilingLevel": 42,
++          "enemies": [ { "id": "the_waykeeper", "level": 41 }, { "id": "road_marauder", "level": 40 }, { "id": "dire_wolf", "level": 40 }, { "id": "marauder_crossbowman", "level": 42 }, { "id": "goblin_trapper", "level": 40 } ]
+         },
+         {
+           "id": "ch2_7", "index": 7, "name": "Beyond the Checkpoint", "subtitle": "Beyond the checkpoint, affected travelers start appearing.",
+@@ -535,8 +535,8 @@
+           "environment": "crossing_boss", "gold": 3030, "shards": 150, "accountXp": 360,
+           "firstClearGold": 7190, "firstClearShards": 1070, "recommendedPower": 10045,
+           "idleGoldPerHour": 2960, "idleShardsPerHour": 74,
+-          "waveCount": 12, "battleCount": 12, "floorLevel": 20, "ceilingLevel": 21,
+-          "enemies": [ { "id": "the_shepherd", "level": 19 }, { "id": "hollowed_sentinel", "level": 20 }, { "id": "hollowed_woodsman", "level": 20 }, { "id": "drifting_pilgrim", "level": 20 }, { "id": "hollowed_apothecary", "level": 20 } ]
++          "waveCount": 12, "battleCount": 12, "floorLevel": 25, "ceilingLevel": 25,
++          "enemies": [ { "id": "the_shepherd", "level": 24 }, { "id": "hollowed_sentinel", "level": 25 }, { "id": "hollowed_woodsman", "level": 25 }, { "id": "drifting_pilgrim", "level": 25 }, { "id": "hollowed_apothecary", "level": 25 } ]
+         }
+       ]
+     },
+@@ -601,8 +601,8 @@
+           "environment": "city", "gold": 4950, "shards": 245, "accountXp": 535,
+           "firstClearGold": 8180, "firstClearShards": 1220, "recommendedPower": 9986,
+           "idleGoldPerHour": 4950, "idleShardsPerHour": 98,
+-          "waveCount": 12, "battleCount": 12, "floorLevel": 31, "ceilingLevel": 43,
+-          "enemies": [ { "id": "the_gatewarden", "level": 31 }, { "id": "dock_enforcer", "level": 30 }, { "id": "deserted_watchman", "level": 30 }, { "id": "watch_crossbowman", "level": 31 } ]
++          "waveCount": 12, "battleCount": 12, "floorLevel": 49, "ceilingLevel": 49,
++          "enemies": [ { "id": "the_gatewarden", "level": 49 }, { "id": "dock_enforcer", "level": 48 }, { "id": "deserted_watchman", "level": 48 }, { "id": "watch_crossbowman", "level": 49 } ]
+         },
+         {
+           "id": "ch3_7", "index": 7, "name": "Inside the Walls", "subtitle": "Inside, ordinary citizens begin showing symptoms.",
+@@ -656,8 +656,8 @@
+           "environment": "city_boss", "gold": 7570, "shards": 380, "accountXp": 755,
+           "firstClearGold": 18700, "firstClearShards": 2800, "recommendedPower": 10150,
+           "idleGoldPerHour": 7580, "idleShardsPerHour": 125,
+-          "waveCount": 12, "battleCount": 12, "floorLevel": 22, "ceilingLevel": 23,
+-          "enemies": [ { "id": "the_arbiter", "level": 21 }, { "id": "hollowed_captain", "level": 21 }, { "id": "deserted_watchman", "level": 22 }, { "id": "hollowed_magistrate", "level": 22 }, { "id": "hollowed_physician", "level": 22 } ]
++          "waveCount": 12, "battleCount": 12, "floorLevel": 28, "ceilingLevel": 28,
++          "enemies": [ { "id": "the_arbiter", "level": 27 }, { "id": "hollowed_captain", "level": 27 }, { "id": "deserted_watchman", "level": 28 }, { "id": "hollowed_magistrate", "level": 28 }, { "id": "hollowed_physician", "level": 28 } ]
+         }
+       ]
+     },
+@@ -722,8 +722,8 @@
+           "environment": "old_kingdom", "gold": 11000, "shards": 550, "accountXp": 1020,
+           "firstClearGold": 18100, "firstClearShards": 2710, "recommendedPower": 10237,
+           "idleGoldPerHour": 11000, "idleShardsPerHour": 155,
+-          "waveCount": 12, "battleCount": 12, "floorLevel": 31, "ceilingLevel": 44,
+-          "enemies": [ { "id": "the_last_castellan", "level": 30 }, { "id": "forgotten_soldier", "level": 31 }, { "id": "cave_lurker", "level": 31 }, { "id": "forgotten_archer", "level": 31 } ]
++          "waveCount": 12, "battleCount": 12, "floorLevel": 51, "ceilingLevel": 51,
++          "enemies": [ { "id": "the_last_castellan", "level": 50 }, { "id": "forgotten_soldier", "level": 51 }, { "id": "cave_lurker", "level": 51 }, { "id": "forgotten_archer", "level": 51 } ]
+         },
+         {
+           "id": "ch4_7", "index": 7, "name": "The Ancient Settlement", "subtitle": "Enter the actual ancient settlement.",
+@@ -777,8 +777,8 @@
+           "environment": "old_kingdom_boss", "gold": 15400, "shards": 770, "accountXp": 1340,
+           "firstClearGold": 37800, "firstClearShards": 5680, "recommendedPower": 10555,
+           "idleGoldPerHour": 15400, "idleShardsPerHour": 185,
+-          "waveCount": 12, "battleCount": 12, "floorLevel": 24, "ceilingLevel": 25,
+-          "enemies": [ { "id": "the_archivist", "level": 21 }, { "id": "graven_guardian", "level": 22 }, { "id": "forgotten_knight", "level": 21 }, { "id": "graven_watcher", "level": 24 }, { "id": "crypt_acolyte", "level": 22 } ]
++          "waveCount": 12, "battleCount": 12, "floorLevel": 31, "ceilingLevel": 31,
++          "enemies": [ { "id": "the_archivist", "level": 28 }, { "id": "graven_guardian", "level": 29 }, { "id": "forgotten_knight", "level": 28 }, { "id": "graven_watcher", "level": 31 }, { "id": "crypt_acolyte", "level": 29 } ]
+         }
+       ]
+     },
+@@ -843,8 +843,8 @@
+           "environment": "divided_realm", "gold": 20900, "shards": 1040, "accountXp": 1720,
+           "firstClearGold": 34100, "firstClearShards": 5120, "recommendedPower": 10645,
+           "idleGoldPerHour": 20900, "idleShardsPerHour": 215,
+-          "waveCount": 12, "battleCount": 12, "floorLevel": 32, "ceilingLevel": 46,
+-          "enemies": [ { "id": "the_standard_bearer", "level": 32 }, { "id": "ironshield_soldier", "level": 31 }, { "id": "border_levy", "level": 29 }, { "id": "ironshield_arbalist", "level": 30 } ]
++          "waveCount": 12, "battleCount": 12, "floorLevel": 54, "ceilingLevel": 54,
++          "enemies": [ { "id": "the_standard_bearer", "level": 54 }, { "id": "ironshield_soldier", "level": 53 }, { "id": "border_levy", "level": 51 }, { "id": "ironshield_arbalist", "level": 52 } ]
+         },
+         {
+           "id": "ch5_7", "index": 7, "name": "The Preachers", "subtitle": "The conflict becomes increasingly ideological.",
+@@ -898,8 +898,8 @@
+           "environment": "divided_realm_boss", "gold": 27600, "shards": 1380, "accountXp": 2160,
+           "firstClearGold": 67300, "firstClearShards": 10100, "recommendedPower": 10618,
+           "idleGoldPerHour": 27600, "idleShardsPerHour": 250,
+-          "waveCount": 12, "battleCount": 12, "floorLevel": 21, "ceilingLevel": 22,
+-          "enemies": [ { "id": "the_peacemaker", "level": 21 }, { "id": "ironshield_justicar", "level": 19 }, { "id": "war_chaplain", "level": 21 }, { "id": "freeblade_reaver", "level": 19 }, { "id": "oathbreaker", "level": 20 } ]
++          "waveCount": 12, "battleCount": 12, "floorLevel": 28, "ceilingLevel": 28,
++          "enemies": [ { "id": "the_peacemaker", "level": 28 }, { "id": "ironshield_justicar", "level": 26 }, { "id": "war_chaplain", "level": 28 }, { "id": "freeblade_reaver", "level": 26 }, { "id": "oathbreaker", "level": 27 } ]
+         }
+       ]
+     },
+@@ -964,8 +964,8 @@
+           "environment": "sanctuary", "gold": 35600, "shards": 1780, "accountXp": 2650,
+           "firstClearGold": 57900, "firstClearShards": 8710, "recommendedPower": 10535,
+           "idleGoldPerHour": 35600, "idleShardsPerHour": 290,
+-          "waveCount": 12, "battleCount": 12, "floorLevel": 32, "ceilingLevel": 44,
+-          "enemies": [ { "id": "the_penitent", "level": 32 }, { "id": "sanctuary_keeper", "level": 31 }, { "id": "oathbound_monk", "level": 32 }, { "id": "oathbound_seer", "level": 31 } ]
++          "waveCount": 12, "battleCount": 12, "floorLevel": 51, "ceilingLevel": 51,
++          "enemies": [ { "id": "the_penitent", "level": 51 }, { "id": "sanctuary_keeper", "level": 50 }, { "id": "oathbound_monk", "level": 51 }, { "id": "oathbound_seer", "level": 50 } ]
+         },
+         {
+           "id": "ch6_7", "index": 7, "name": "The Sanctuary Archives", "subtitle": "Enter the sanctuary archives.",
+@@ -1019,8 +1019,8 @@
+           "environment": "sanctuary_boss", "gold": 45100, "shards": 2260, "accountXp": 3220,
+           "firstClearGold": 110000, "firstClearShards": 16500, "recommendedPower": 11349,
+           "idleGoldPerHour": 45100, "idleShardsPerHour": 325,
+-          "waveCount": 12, "battleCount": 12, "floorLevel": 23, "ceilingLevel": 24,
+-          "enemies": [ { "id": "the_curator", "level": 21 }, { "id": "scripture_golem", "level": 21 }, { "id": "sanctuary_champion", "level": 22 }, { "id": "echo_wisp", "level": 21 }, { "id": "veiled_custodian", "level": 23 } ]
++          "waveCount": 12, "battleCount": 12, "floorLevel": 31, "ceilingLevel": 31,
++          "enemies": [ { "id": "the_curator", "level": 29 }, { "id": "scripture_golem", "level": 29 }, { "id": "sanctuary_champion", "level": 30 }, { "id": "echo_wisp", "level": 29 }, { "id": "veiled_custodian", "level": 31 } ]
+         }
+       ]
+     }

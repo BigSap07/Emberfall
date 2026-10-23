@@ -1,0 +1,78 @@
+diff --git a/Tools/DevHarness/R24WhaleCurve.cs b/Tools/DevHarness/R24WhaleCurve.cs
+index 4293dd0..4511cb6 100644
+--- a/Tools/DevHarness/R24WhaleCurve.cs
++++ b/Tools/DevHarness/R24WhaleCurve.cs
+@@ -48,6 +48,7 @@ namespace Emberfall.DevHarness
+         private static string WhaleOut = null, WhaleDir = null;
+         private static bool _whaleRelics = true, _whaleCommitted = false, _whaleFreeEvents = true, _whaleChoiceMax = true;
+         private static int _whaleContractFrom = 37;
++        private static bool _whaleLoop;
+         /// <summary>As the store has it now (lead's default, log 09:14; builder-b c8d987c): the Chest comes 2 a month instead of 1 a week.</summary>
+         private static bool _whaleChestMonthly = true;
+         /// <summary>The most Dust a Relic of Choice pick may be worth (builder-b: the picker is capped at 20,000).</summary>
+@@ -72,6 +73,8 @@ namespace Emberfall.DevHarness
+             if (a == "--whale-out" && i + 1 < args.Length) { WhaleOut = args[++i]; return true; }
+             if (a == "--whale-range" && i + 2 < args.Length) { WhaleFrom = int.Parse(args[++i]); WhaleTo = int.Parse(args[++i]); return true; }
+             if (a == "--whale-no-relics") { _whaleRelics = false; return true; }
++            // walls study (Docs/WALLS-OPTIONS.md): every buyer also plays the daily loop with the free Road on, as DailyLoopCurve.cs's diligent player
++            if (a == "--whale-loop") { _whaleLoop = true; return true; }
+             if (a == "--whale-committed") { _whaleCommitted = true; return true; }
+             if (a == "--whale-weekly-chest") { _whaleChestMonthly = false; return true; }
+             if (a == "--whale-choice-cap" && i + 1 < args.Length) { _whaleChoiceCap = int.Parse(args[++i]); return true; }
+@@ -636,7 +639,9 @@ namespace Emberfall.DevHarness
+             foreach (KeyValuePair<string, double> kv in _whaleScale) sb.Append(' ').Append(kv.Key).Append('=').Append(kv.Value.ToString(CultureInfo.InvariantCulture));
+             sb.Append('\n');
+             int was = _walkStoreMode;
++            int loopWas = _walkLoopMode;
+             _walkStoreMode = mode;
++            if (_whaleLoop) { _walkLoopMode = 2; DailyLoopSwitch.Enabled = true; WayfarersRoadSwitch.Enabled = true; sb.Append("# loop on, road on\n"); }
+             try
+             {
+                 for (int k = WhaleFrom; k < to; k++)
+@@ -649,7 +654,7 @@ namespace Emberfall.DevHarness
+                     Console.Error.WriteLine("walk " + k + " " + WhaleCol + " done");
+                 }
+             }
+-            finally { _walkStoreMode = was; }
++            finally { _walkStoreMode = was; _walkLoopMode = loopWas; }
+             File.WriteAllText(WhaleOut, sb.ToString(), new UTF8Encoding(false));
+             return 0;
+         }
+diff --git a/Tools/build-check.ps1 b/Tools/build-check.ps1
+index 26ee243..c89db06 100644
+--- a/Tools/build-check.ps1
++++ b/Tools/build-check.ps1
+@@ -210,7 +210,8 @@ $probeExtra = @{
+ foreach ($case in $probeCases) {
+     $exe = Join-Path $out ($case.Label + ".exe")
+     if (-not (Compile $case.Label $probeSources "exe" $exe $case.Defines)) { $probeOk = $false; continue }
+-    $printed = @(& $exe)
++    Write-RuntimeConfig $compiler $exe
++    $printed = @(Invoke-BuiltExe $compiler $exe)
+     foreach ($want in $case.Expect) {
+         if ($printed -notcontains $want) {
+             Write-Host ("  " + $case.Label + ": expected '" + $want + "', probe printed: " + ($printed -join " | ")) -ForegroundColor Red
+diff --git a/Tools/csharp.ps1 b/Tools/csharp.ps1
+index 871cff2..44077a0 100644
+--- a/Tools/csharp.ps1
++++ b/Tools/csharp.ps1
+@@ -93,7 +93,9 @@ function Get-CSharpCompiler {
+ # Runs the compiler with the arguments the Windows call has always used; returns its output, sets $LASTEXITCODE.
+ function Invoke-CSharpCompiler($compiler, [string[]]$arguments) {
+     if ($compiler.Kind -eq 'netfx') { return (& $compiler.Path @arguments 2>&1) }
+-    $all = @('exec', $compiler.Path, '-noconfig', '-nostdlib', '-langversion:5') + $compiler.References + $arguments
++    $extra = @()
++    if ($env:EMBERFALL_EXTRA_REFS) { $extra = @($env:EMBERFALL_EXTRA_REFS.Split([IO.Path]::PathSeparator) | Where-Object { $_ } | ForEach-Object { '-r:' + $_ }) }
++    $all = @('exec', $compiler.Path, '-noconfig', '-nostdlib', '-langversion:5') + $compiler.References + $extra + $arguments
+     return (& $compiler.Dotnet @all 2>&1)
+ }
+ 
+@@ -105,7 +107,7 @@ function Write-RuntimeConfig($compiler, [string]$exePath) {
+     $text = ("{`n  `"runtimeOptions`": {`n    `"tfm`": `"net" + $parts[0] + "." + $parts[1] + "`",`n" +
+              "    `"rollForward`": `"LatestMajor`",`n" +
+              "    `"framework`": { `"name`": `"Microsoft.NETCore.App`", `"version`": `"" + $compiler.RuntimeVersion + "`" },`n" +
+-             "    `"configProperties`": { `"System.GC.Server`": true, `"System.GC.Concurrent`": false }`n  }`n}`n")
++             "    `"configProperties`": { `"System.GC.Server`": true, `"System.GC.Concurrent`": false" + $(if ($env:EMBERFALL_EXTRA_REFS) { ", `"System.Drawing.EnableUnixSupport`": true" } else { "" }) + " }`n  }`n}`n")
+     $path = [IO.Path]::ChangeExtension($exePath, '.runtimeconfig.json')
+     if ((Test-Path -LiteralPath $path) -and ([IO.File]::ReadAllText($path) -eq $text)) { return }
+     [IO.File]::WriteAllText($path, $text, [Text.UTF8Encoding]::new($false))
