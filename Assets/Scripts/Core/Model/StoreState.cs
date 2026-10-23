@@ -15,6 +15,20 @@ namespace Emberfall.Core.Model
         public long GrantedUnix;
         /// <summary>True when a restore delivered it rather than a purchase on this profile.</summary>
         public bool Restored;
+
+        /// <summary>REFUNDS CLAW BACK UNSPENT GOODS (owner decision, 2026-10-23). What this purchase granted when it was
+        /// delivered: its Sealed Gold and Sealed Slag, its Relic Dust and the hero a copy went to. The server reads these
+        /// from the cloud save when Google reports the purchase refunded (Server/supabase/migrations/0024_purchase_clawback.sql)
+        /// and takes back what is still unspent, never more than the purchase gave. 0 and "" when nothing of that kind.</summary>
+        public long Gold;
+        public long Slag;
+        public long Dust;
+        public string HeroId = "";
+
+        /// <summary>Set by the SERVER, never by the game: this purchase was refunded and its unspent goods were taken
+        /// back from the save. Kept on read and written back, so a save that was already clawed back is never clawed
+        /// back twice.</summary>
+        public bool ClawedBack;
     }
 
     /// <summary>One offer's saved counters. GENERIC ON PURPOSE so the offer rules (limits, weekly and
@@ -116,6 +130,11 @@ namespace Emberfall.Core.Model
                 j.Set("offer", r.OfferId);
                 j.Set("at", r.GrantedUnix);
                 if (r.Restored) j.Set("restored", true);
+                if (r.Gold > 0) j.Set("gold", r.Gold);
+                if (r.Slag > 0) j.Set("slag", r.Slag);
+                if (r.Dust > 0) j.Set("dust", r.Dust);
+                if (!string.IsNullOrEmpty(r.HeroId)) j.Set("hero", r.HeroId);
+                if (r.ClawedBack) j.Set("clawedBack", true);
                 receipts.Add(j);
             }
             if (receipts.Count > 0) o.Set("receipts", receipts);
@@ -158,6 +177,12 @@ namespace Emberfall.Core.Model
                 r.OfferId = j.GetString("offer", "");
                 r.GrantedUnix = Math.Max(0, j.GetLong("at", 0));
                 r.Restored = j.GetBool("restored", false);
+                r.Gold = Math.Max(0, Math.Min(SealedState.PartMax, j.GetLong("gold", 0)));
+                r.Slag = Math.Max(0, Math.Min(SealedState.PartMax, j.GetLong("slag", 0)));
+                r.Dust = Math.Max(0, Math.Min(SealedState.PartMax, j.GetLong("dust", 0)));
+                r.HeroId = j.GetString("hero", "");
+                if (r.HeroId.Length > 200) r.HeroId = "";
+                r.ClawedBack = j.GetBool("clawedBack", false);
                 s.Receipts.Add(r);
             }
             return s;
