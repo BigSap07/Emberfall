@@ -400,6 +400,7 @@ namespace UnityEditor
         public BuildTarget target;
         public BuildTargetGroup targetGroup;
         public BuildOptions options;
+        public string[] extraScriptingDefines;
     }
 
     public static class BuildPipeline
@@ -462,6 +463,7 @@ namespace UnityEditor
         public static void SetScriptingBackend(UnityEditor.Build.NamedBuildTarget target, ScriptingImplementation backend) { }
         public static ScriptingImplementation GetScriptingBackend(UnityEditor.Build.NamedBuildTarget target) { return ScriptingImplementation.Mono2x; }
         public static void SetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget target, ManagedStrippingLevel level) { }
+        public static ManagedStrippingLevel GetManagedStrippingLevel(UnityEditor.Build.NamedBuildTarget target) { return ManagedStrippingLevel.Disabled; }
 
         public static class Android
         {
