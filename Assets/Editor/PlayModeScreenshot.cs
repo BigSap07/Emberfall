@@ -17,6 +17,10 @@ using Emberfall.Core.Data;
 using Emberfall.Core.Model;
 using Emberfall.Core.Session;
 using Emberfall.Core.Progression;
+using Emberfall.Core.Cloud;
+using Emberfall.Core.Screens;
+using Emberfall.Game.Ads;
+using Emberfall.Game.Cloud;
 
 namespace Emberfall.EditorTools
 {
@@ -1549,6 +1553,7 @@ namespace Emberfall.EditorTools
                 SessionState.SetInt(KitForceKey, 0);
                 UiKit.Forget();
             }
+            R28bRestore();
             SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetInt(MomentStageKey, 0);
             Juice.ForceForCapture(null);
@@ -1559,6 +1564,250 @@ namespace Emberfall.EditorTools
             EditorApplication.isPlaying = false;
             EditorScratchIdentity.LeaveWhenIdle();
         }
+
+        // ================================================================== R28 screens (builder b): guild dungeon ladder, rewarded ads
+        //
+        // THE R28-SCREENS CAPTURE TARGETS FOR THE GUILD DUNGEON LADDER AND THE REWARDED ADS (Docs/ui-specs/R28-SCREENS.md).
+        // One contiguous block, kept apart from the rest of the file on purpose; the stand-ins it uses are in
+        // R28AdsLadderShots.cs. Everything is reachable offline:
+        //
+        //   Screen:GuildLadder=<state>   GuildDungeonBackends.Override puts an in-memory guild in front of the REAL
+        //                                controller; the states without a loaded ladder (offline, no guild) and the
+        //                                banner states are laid over it through GuildDungeonScreen.ApplyForCapture.
+        //   Screen:AdClaim=<state>       A1: the Hub, the idle claim popup opened and CLAIM pressed, the block under it.
+        //   Screen:AdProving=<state>     A2: the Proving, with two Brands missing.
+        //   Screen:AdStage=<state>       A3: the stage cleared view. The game sweeps a repeat clear (CampaignFlow.Sweep)
+        //                                and never draws it on this view, so the capture resolves the first clear for
+        //                                real and then forges the repeat on the screen's copy of the result.
+        //
+        // The ad states are hidden (AdsSwitch off), ready, playing, granted, notfinished, failed, refused. AdsSwitch is
+        // flipped ON here and nowhere else, and put back by Stop. Ad targets rewrite the scratch profile, so they only
+        // run on the scratch identity.
+
+        private const string R28bArmKey = "PlayModeScreenshot.R28bArm";
+        private static bool _r28bAdsWas;
+        private static bool _r28bAdsForced;
+        private static Action<GuildDungeonLadderPresenter> _r28bOverlay;
+
+        private static readonly string[] R28bAdStates = { "hidden", "ready", "playing", "granted", "notfinished", "failed", "refused" };
+
+        private static bool IsR28bTarget(string name)
+        {
+            return name == "GuildLadder" || name == "AdClaim" || name == "AdProving" || name == "AdStage";
+        }
+
+        /// <summary>Puts every switch and override the R28b targets set back as the run found it.</summary>
+        private static void R28bRestore()
+        {
+            if (_r28bAdsForced) { AdsSwitch.Enabled = _r28bAdsWas; _r28bAdsForced = false; }
+            AdBackends.Override = null;
+            GuildDungeonBackends.Override = null;
+            _r28bOverlay = null;
+            SessionState.SetInt(R28bArmKey, 0);
+        }
+
+        private static void PumpR28b(GameApp app, string name, int frame, int slot)
+        {
+            const int ShowAt = 10;
+            string state = SessionState.GetString(BattleStageKey, "");
+            if (frame < ShowAt) return;
+
+            if (name == "GuildLadder")
+            {
+                if (frame == ShowAt)
+                {
+                    R28bRestore();
+                    Action<GuildDungeonLadderPresenter> overlay;
+                    GuildDungeonBackends.Override = R28LadderStates.For(state, app.Session.Content, TimeUtil.NowUnix(), out overlay);
+                    _r28bOverlay = overlay;
+                    app.Router.Show(ScreenId.GuildDungeon);
+                    Debug.Log("PlayModeScreenshot: showing the guild dungeon ladder, state " + state);
+                }
+                if (frame == ShowAt + 45 && _r28bOverlay != null) app.Router.GuildDungeon.ApplyForCapture(_r28bOverlay);
+                if (frame == ShowAt + 70) Canvas.ForceUpdateCanvases();
+                if (frame == ShowAt + 90) { Shoot(name, frame, slot); R28bRestore(); }
+                return;
+            }
+
+            // The ad targets: the screen, the state, then the tap that reaches it.
+            if (frame == ShowAt)
+            {
+                R28bRestore();
+                if (Application.persistentDataPath.IndexOf("Emberfall Scratch", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    Debug.LogError("PlayModeScreenshot: " + name + " rewrites the profile, so it only runs on the scratch identity. Skipping.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                    return;
+                }
+                if (Array.IndexOf(R28bAdStates, state) < 0)
+                {
+                    Debug.LogError("PlayModeScreenshot: '" + state + "' is not an ad state (" + string.Join(", ", R28bAdStates) + "). Skipping.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                    return;
+                }
+                _r28bAdsWas = AdsSwitch.Enabled;
+                _r28bAdsForced = true;
+                AdsSwitch.Enabled = state != "hidden";
+                SimulatedAdBackend sim = new SimulatedAdBackend();
+                if (state == "notfinished") sim.FinishNext = false;
+                if (state == "failed") sim.FailNext = true;
+                AdBackends.Override = state == "playing" ? (IAdBackend)new R28HoldingAdBackend()
+                                    : state == "refused" ? (IAdBackend)new R28RefusedAdBackend(app.Session) : sim;
+
+                GameSession session = app.Session;
+                long now = TimeUtil.NowUnix();
+                if (name == "AdStage")
+                {
+                    StageDef waveStage = SeedWaveResult(app, "WaveResultCleared");
+                    if (waveStage == null) { SessionState.SetInt(StageKey, slot + 1); return; }
+                    CampaignFlow.Launch(app, waveStage);
+                }
+                else
+                {
+                    List<StageDef> stages = session.Content.AllStages;
+                    for (int i = 0; i < stages.Count && i < 16; i++) session.GrantBattleResult(stages[i], true, now);
+                    if (name == "AdClaim")
+                    {
+                        session.Profile.LastIdleClaimUnix = now - 5L * 3600L;
+                        app.Router.Show(ScreenId.MainMenu);
+                    }
+                    else
+                    {
+                        ProvingBrandsStatus brands = session.PeekProvingBrands(now);
+                        session.Profile.ProvingBrandsBanked = Math.Max(0, brands.Max - 2);
+                        session.Profile.ProvingBrandsClockUnix = now;
+                        app.Router.Show(ScreenId.Proving);
+                    }
+                    app.RefreshHud();
+                }
+                Debug.Log("PlayModeScreenshot: showing " + name + ", ad state " + state + " (AdsSwitch " + AdsSwitch.Enabled + ")");
+                return;
+            }
+
+            RewardedAdBlock block = null;
+            int t = frame;      // frames since the screen was ready, offset so that ShowAt is the moment it was shown
+            if (name == "AdClaim")
+            {
+                if (frame == ShowAt + 6) app.Router.MainMenu.OpenLayerForCapture("claim");
+                if (frame == ShowAt + 16) app.Router.MainMenu.ClaimPopup.ClaimForCapture();
+                if (app.Router.MainMenu.ClaimPopup != null) block = app.Router.MainMenu.ClaimPopup.AdBlock;
+            }
+            else if (name == "AdProving")
+            {
+                block = app.Router.Proving.AdBlock;
+            }
+            else
+            {
+                // The stage cleared view paints when the wave resolves, and a frame count cannot time that.
+                WaveResultScreen ws = app.Router.WaveResult;
+                int armed = SessionState.GetInt(R28bArmKey, 0);
+                if (armed == 0)
+                {
+                    if (ws != null && ws.Painted && ws.Result != null && ws.Result.StageCleared && ws.Result.Rewards != null)
+                    {
+                        // The repeat clear that paid the floor, forged on the screen's copy of the first clear.
+                        GameSession session = app.Session;
+                        ws.Result.Rewards.FirstClear = false;
+                        ws.Result.Rewards.RepeatCapped = true;
+                        session.Profile.StageClearsToday[ws.Result.StageId] = session.RepeatFullClearsPerDay;
+                        session.Profile.DailyResetUnix = session.DayStartUnix(TimeUtil.NowUnix());
+                        ws.RepaintForCapture();
+                        SessionState.SetInt(R28bArmKey, frame);
+                        Debug.LogWarning("PlayModeScreenshot: AdStage forged a repeat clear on the first clear's result; the game sweeps repeats and never draws them here.");
+                    }
+                    else if (frame > ShowAt + 2400)
+                    {
+                        Debug.LogError("PlayModeScreenshot: the stage cleared view never painted. Skipping AdStage.");
+                        SessionState.SetInt(StageKey, slot + 1);
+                        R28bRestore();
+                    }
+                    return;
+                }
+                block = ws.AdBlock;
+                t = frame - armed + ShowAt;
+            }
+
+            int at = ShowAt + (name == "AdClaim" ? 30 : 20);      // the frame the screen is ready for the tap
+            if (t == at && block != null && state != "ready" && state != "hidden") block.Watch();
+            if (t == at + 40) Canvas.ForceUpdateCanvases();
+            if (t == at + 60) { Shoot(name, frame, slot); R28bRestore(); }
+        }
+
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Offline, no cloud", false, 300)]
+        public static void CaptureLadderOfflineNoCloud() { Begin("Screen:GuildLadder=offline-nocloud"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Offline, signed out (TRY AGAIN)", false, 301)]
+        public static void CaptureLadderOfflineSignedOut() { Begin("Screen:GuildLadder=offline-signedout"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Unavailable, not in a guild", false, 302)]
+        public static void CaptureLadderUnavailable() { Begin("Screen:GuildLadder=unavailable"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Loading", false, 303)]
+        public static void CaptureLadderLoading() { Begin("Screen:GuildLadder=loading"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Error", false, 304)]
+        public static void CaptureLadderError() { Begin("Screen:GuildLadder=error"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Guild of 4, cycle open", false, 305)]
+        public static void CaptureLadderG4() { Begin("Screen:GuildLadder=g4-open"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Guild of 30, at the cycle cap", false, 306)]
+        public static void CaptureLadderG30() { Begin("Screen:GuildLadder=g30-cap"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Guild of 12, cycle opened at 9", false, 307)]
+        public static void CaptureLadderG12() { Begin("Screen:GuildLadder=g12-grew"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Changed guild after 15 attempts", false, 308)]
+        public static void CaptureLadderChangedGuild() { Begin("Screen:GuildLadder=changed-guild"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/After floor 8", false, 309)]
+        public static void CaptureLadderAfterFloor8() { Begin("Screen:GuildLadder=after-floor8"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Banner, refresh failed", false, 310)]
+        public static void CaptureLadderBannerRefresh() { Begin("Screen:GuildLadder=banner-refresh"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Banner, offline", false, 311)]
+        public static void CaptureLadderBannerOffline() { Begin("Screen:GuildLadder=banner-offline"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Banner, attempt refused", false, 312)]
+        public static void CaptureLadderBannerRefused() { Begin("Screen:GuildLadder=banner-refused"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Banner, cycle over", false, 313)]
+        public static void CaptureLadderBannerCycleOver() { Begin("Screen:GuildLadder=banner-cycleover"); }
+
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A1 idle claim/Hidden (ads off)", false, 320)]
+        public static void CaptureAdClaimHidden() { Begin("Screen:AdClaim=hidden"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A1 idle claim/Ready", false, 321)]
+        public static void CaptureAdClaimReady() { Begin("Screen:AdClaim=ready"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A1 idle claim/Playing", false, 322)]
+        public static void CaptureAdClaimPlaying() { Begin("Screen:AdClaim=playing"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A1 idle claim/Granted", false, 323)]
+        public static void CaptureAdClaimGranted() { Begin("Screen:AdClaim=granted"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A1 idle claim/Not finished", false, 324)]
+        public static void CaptureAdClaimNotFinished() { Begin("Screen:AdClaim=notfinished"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A1 idle claim/Failed", false, 325)]
+        public static void CaptureAdClaimFailed() { Begin("Screen:AdClaim=failed"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A1 idle claim/Refused", false, 326)]
+        public static void CaptureAdClaimRefused() { Begin("Screen:AdClaim=refused"); }
+
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A2 Proving/Hidden (ads off)", false, 330)]
+        public static void CaptureAdProvingHidden() { Begin("Screen:AdProving=hidden"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A2 Proving/Ready", false, 331)]
+        public static void CaptureAdProvingReady() { Begin("Screen:AdProving=ready"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A2 Proving/Playing", false, 332)]
+        public static void CaptureAdProvingPlaying() { Begin("Screen:AdProving=playing"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A2 Proving/Granted", false, 333)]
+        public static void CaptureAdProvingGranted() { Begin("Screen:AdProving=granted"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A2 Proving/Not finished", false, 334)]
+        public static void CaptureAdProvingNotFinished() { Begin("Screen:AdProving=notfinished"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A2 Proving/Failed", false, 335)]
+        public static void CaptureAdProvingFailed() { Begin("Screen:AdProving=failed"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A2 Proving/Refused", false, 336)]
+        public static void CaptureAdProvingRefused() { Begin("Screen:AdProving=refused"); }
+
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A3 stage cleared/Hidden (ads off)", false, 340)]
+        public static void CaptureAdStageHidden() { Begin("Screen:AdStage=hidden"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A3 stage cleared/Ready", false, 341)]
+        public static void CaptureAdStageReady() { Begin("Screen:AdStage=ready"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A3 stage cleared/Playing", false, 342)]
+        public static void CaptureAdStagePlaying() { Begin("Screen:AdStage=playing"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A3 stage cleared/Granted", false, 343)]
+        public static void CaptureAdStageGranted() { Begin("Screen:AdStage=granted"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A3 stage cleared/Not finished", false, 344)]
+        public static void CaptureAdStageNotFinished() { Begin("Screen:AdStage=notfinished"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A3 stage cleared/Failed", false, 345)]
+        public static void CaptureAdStageFailed() { Begin("Screen:AdStage=failed"); }
+        [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A3 stage cleared/Refused", false, 346)]
+        public static void CaptureAdStageRefused() { Begin("Screen:AdStage=refused"); }
+
+        // ================================================================== end of R28 screens (builder b)
 
         private static string OutputPath(string fileName)
         {
@@ -1805,6 +2054,7 @@ namespace Emberfall.EditorTools
             }
 
             string name = list[slot];
+            if (IsR28bTarget(name)) { PumpR28b(app, name, frame, Math.Min(slot, list.Length - 1)); return; }
             // R24: BattleSkin is Battle with Azure Kael, an owned test skin, worn by the line's first hero.
             bool skinBattle = name == "BattleSkin";
             if (skinBattle) name = "Battle";

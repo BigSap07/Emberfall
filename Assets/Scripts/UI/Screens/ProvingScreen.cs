@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
+using Emberfall.Core.Progression;
 using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
@@ -45,6 +46,16 @@ namespace Emberfall.UI.Screens
 
         private const float CardWidth = 900f;
 
+        /// <summary>A2 of the rewarded ads (Docs/ui-specs/R28-SCREENS.md): the block beside the opponent card at the height
+        /// of its Brands rows, in the free column right of the card. 430 wide fits that column at 1920, so it draws
+        /// stacked (RewardedAdBlock.NarrowBelow). Nothing is built while AdsSwitch is off.</summary>
+        private const float AdWidth = 430f;
+        private const float AdBesideBrands = 250f;
+        private RewardedAdBlock _ad;
+
+        /// <summary>The ad block, for the capture tool and the checks.</summary>
+        public RewardedAdBlock AdBlock { get { return _ad; } }
+
         protected override void Build()
         {
             EmberforgeUI.Ground(Root);
@@ -52,6 +63,7 @@ namespace Emberfall.UI.Screens
             BuildOpponentCard();
             BuildHonestyNote();
             BuildBoardsDoor();
+            BuildAd();
         }
 
         /// <summary>
@@ -69,6 +81,16 @@ namespace Emberfall.UI.Screens
                 App.Audio.Tap();
                 Router.Leaderboards.OpenBoard(Emberfall.Core.Cloud.LeaderboardBoard.Proving);
             });
+        }
+
+        private void BuildAd()
+        {
+            float top = ScreenChrome.HeaderTop + 108f + 16f;
+            RectTransform host = UIBuilder.Node("AdBlock", Root);
+            UIBuilder.Box(host, CardWidth * 0.5f + UITheme.Space24 + AdWidth * 0.5f, -(top + AdBesideBrands),
+                          AdWidth, RewardedAdBlock.HeightFor(AdWidth), new Vector2(0.5f, 1f));
+            _ad = new RewardedAdBlock(App, AdPlacementKind.Brand, host, AdWidth, null);
+            host.gameObject.SetActive(false);
         }
 
         private void BuildOpponentCard()
@@ -191,7 +213,13 @@ namespace Emberfall.UI.Screens
         {
             App.RefreshHud();
             _tick = 0f;
+            _ad.Bind();
             Refresh();
+        }
+
+        public override void OnHide()
+        {
+            if (_ad != null) _ad.Unbind();
         }
 
         private void Update()
@@ -229,6 +257,7 @@ namespace Emberfall.UI.Screens
             _fightButton.SetText(brands.Banked > 0 ? "FIGHT  -  1 BRAND" : "OUT OF BRANDS");
 
             RefreshLine(opponent);
+            if (_ad != null) _ad.Refresh();
         }
 
         private void RefreshLine(BattleLoadout opponent)

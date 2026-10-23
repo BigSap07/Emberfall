@@ -634,7 +634,7 @@ namespace Emberfall.DevHarness
             string solver = R29Read(root, "Tools/solve-recommended-power.ps1") ?? "";
             Check(gate.Contains("FormationLayout.cs") && solver.Contains("FormationLayout.cs")
                   && gate.Contains("^R2[46789]") && solver.Contains("^R2[46789]"),
-                  "build-check.ps1 and solve-recommended-power.ps1 both compile FormationLayout.cs and glob the R24 and R26 to R29 checks");
+                  "build-check.ps1 and solve-recommended-power.ps1 both compile FormationLayout.cs and glob R24, R26, R27, R28 and R29 checks");
         }
 
         private static string F3(float v) { return v.ToString("0.000", CultureInfo.InvariantCulture); }

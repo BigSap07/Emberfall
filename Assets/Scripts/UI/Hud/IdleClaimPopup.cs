@@ -1,6 +1,8 @@
 using System;
 using UnityEngine;
 using UnityEngine.UI;
+using Emberfall.Core.Data;
+using Emberfall.Core.Progression;
 using Emberfall.Core.Session;
 using Emberfall.Game;
 
@@ -58,6 +60,15 @@ namespace Emberfall.UI
         private Text _rate;
         private UIButton _claim;
 
+        /// <summary>
+        /// A1 of the rewarded ads (Docs/ui-specs/R28-SCREENS.md): the block under the plate, drawn after a claim and
+        /// never before one. _claimedGold is the Gold the last claim in this visit paid, which is the context the
+        /// block is asked about; it is 0 on a fresh visit, so the block is not there until something is claimed.
+        /// With AdsSwitch off the block draws nothing at all.
+        /// </summary>
+        private RewardedAdBlock _ad;
+        private long _claimedGold;
+
         private UiLayerStack.Layer _layerHandle;
 
         public bool IsOpen { get { return _root != null && _root.gameObject.activeSelf; } }
@@ -68,9 +79,14 @@ namespace Emberfall.UI
             _layer = layer;
         }
 
+        /// <summary>The ad block, for the capture tool and the checks. Null until the popup is first shown.</summary>
+        public RewardedAdBlock AdBlock { get { return _ad; } }
+
         public void Show()
         {
             Build();
+            _claimedGold = 0;
+            if (_ad != null) _ad.Bind();
             Refresh();
             _root.gameObject.SetActive(true);
             _root.SetAsLastSibling();
@@ -90,6 +106,7 @@ namespace Emberfall.UI
         private void CloseInternal()
         {
             _layerHandle = null;
+            if (_ad != null) _ad.Unbind();
             if (_root != null) _root.gameObject.SetActive(false);
         }
 
@@ -114,6 +131,7 @@ namespace Emberfall.UI
             _rate.text = "+" + Mathf.RoundToInt(session.IdleGoldPerHour) + " gold  /  +"
                        + Mathf.RoundToInt(session.IdleShardsPerHour) + " shards per hour";
             _claim.Interactable = report.HasAnything;
+            if (_ad != null) _ad.Refresh();
         }
 
         private void Build()
@@ -179,8 +197,24 @@ namespace Emberfall.UI
             UIBuilder.Box(close.Root, inner, inner, 260f, HubStyle.TouchMin, new Vector2(0f, 0f));
             close.OnClick(Close);
 
+            // A1: BELOW the plate, so it is under both buttons and never above CLAIM. Its own host node, outside the plate,
+            // because the plate is a fixed size and the block is only there after a claim.
+            RectTransform adHost = UIBuilder.Node("AdBlock", safe);
+            UIBuilder.Box(adHost, 0f, -(PopupHeight * 0.5f + Emberforge.Space16 + RewardedAdBlock.Height * 0.5f),
+                          PopupWidth, RewardedAdBlock.Height, new Vector2(0.5f, 0.5f));
+            _ad = new RewardedAdBlock(_app, AdPlacementKind.IdleGold, adHost, PopupWidth, delegate
+            {
+                AdContext context = new AdContext();
+                context.ClaimGold = _claimedGold;
+                return context;
+            });
+            adHost.gameObject.SetActive(false);
+
             _root.gameObject.SetActive(false);
         }
+
+        /// <summary>CAPTURE ONLY: the tap on CLAIM, through the same private handler the button drives.</summary>
+        public void ClaimForCapture() { ClaimNow(); }
 
         private void ClaimNow()
         {
@@ -194,6 +228,7 @@ namespace Emberfall.UI
             _app.Notify("Collected " + report.Gold + " gold and " + report.Shards + " shards.");
             _app.RefreshHud();
             _app.RequestSave();
+            _claimedGold = report.Gold;
             Refresh();
             if (Claimed != null) Claimed();
         }

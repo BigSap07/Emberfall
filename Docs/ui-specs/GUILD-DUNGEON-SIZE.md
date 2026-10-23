@@ -69,3 +69,5 @@ done, at 1920x1080, with a 5-floor guild and a 10-floor guild.
    visible, every button disabled with the cycle sentence.
 5. The result screen after clearing floor 8: the Waymark lines as today, and "Reward not decided
    yet" for the floor.
+   `GuildDungeonResultScreen` is not replaced and draws no reward line, so this state is captured as the ladder with
+   floors 1 to 8 cleared (`Screen:GuildLadder=after-floor8`), where every row reads "Reward not decided yet".

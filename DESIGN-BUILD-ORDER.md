@@ -1478,13 +1478,13 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
 
 ### The R28 screens (presenters, transport, rewarded ads)
 
-**Four screens built below the uGUI, and the uGUI of two of them (`Docs/ui-specs/R28-SCREENS.md`).** Each screen has a presenter in
+**Everything below four screens; the uGUI of all four is built (`Docs/ui-specs/R28-SCREENS.md`):** the Leaderboards screen and the REMINDERS card, the guild dungeon ladder and the rewarded ad block. Each screen has a presenter in
 `Assets/Scripts/Core/Screens` that exposes exactly what it draws (phase, rows, buttons with enabled and reason, every
 sentence and countdown) and a controller in `Assets/Scripts/Game` that makes the calls. `R28ScreenChecks.cs` drives
 every presenter through every state, reads the codecs against the shapes of migrations 0022 and 0023, and scans every
 string for an em or en dash and for selling words. **Built in uGUI:** the Leaderboards screen and the REMINDERS card on
-Settings (below), checked by `R28UiChecks.cs` (`CheckR28Ui`). **Not built in uGUI:** the guild dungeon ladder's floor list
-and the rewarded ad blocks, which have presenters, controllers and checks and no screen yet.
+Settings (`R28UiChecks.cs`, `CheckR28Ui`), the guild dungeon ladder and the rewarded ad block (`R28AdsLadderUiChecks.cs`,
+`CheckR28AdsLadderUi`). Nothing of the four is captured yet in this entry's own words: see the captures below.
 
 - **Leaderboards.** `LeaderboardCodec` (Core) and `LeaderboardService.cs` (transport, in-memory override, controller)
   for `leaderboard_submit` and `leaderboard_top`; `LeaderboardsPresenter`. Submits at most once a minute, never sends
@@ -1498,7 +1498,15 @@ and the rewarded ad blocks, which have presenters, controllers and checks and no
   bands sit is `LeaderboardsLayout` in `R28ScreenLayout.cs`, engine-free so the harness runs it.
 - **Guild dungeon ladder.** `GuildDungeonSizeService` for the size migration's three functions and its snapshot row;
   `GuildDungeonLadderPresenter` reads the ladder, the cycle cap and every refusal sentence from `GuildDungeonScale`
-  and the reward from `GuildDungeonRewards` (still the placeholder).
+  and the reward from `GuildDungeonRewards` (still the placeholder). **The screen is built:** `GuildDungeonScreen`
+  draws `GuildDungeonLadderView` through `GuildDungeonLadderController` and nothing else: a header with REFRESH, the
+  ladder, next-cycle, attempts and cycle lines, the pip strip, a `UIBuilder.ScrollList` of 96 tall floor rows with the
+  second block divider, state chips, the muted reward text, ATTEMPT with its Reason, BOARDS, and every status state
+  (offline, no guild with FIND A GUILD, loading, error, banner). The layout maths (pip spacing, the row's tap
+  overhang) is `LadderLayout` in Core. ATTEMPT hands the floor to `GuildFloorScreen`, whose `GuildDungeonFlow.Attempt`
+  stores the attempt before the fight is shown, so the screen never calls `RecordAttempt` and reloads in `OnShow`.
+  `GuildFloorScreen`, `GuildDungeonBoardsScreen` and `GuildDungeonResultScreen` are as they were, and the door to
+  the guild tech tree (GUILD TECH) is kept.
 - **Notification settings.** `NotificationSettingsPresenter` over `NotificationPlanner`; the switches in `PlayerPrefs`;
   `NotificationScheduler` wired into `GameApp`'s pause and quit hooks, inert with the only backend there is
   (`UnsupportedNotificationBackend`). **The card** is `RemindersCard` on `SettingsScreen`, directly under the audio card:
@@ -1515,7 +1523,14 @@ and the rewarded ad blocks, which have presenters, controllers and checks and no
   (`SaveSerializer.CurrentVersion` is 27; a save is stamped 27 only once an ad was granted, so with the switch off
   every save is byte for byte what version 26 wrote), `RewardedAdPresenter`, and `Game/Ads` with a simulated backend
   for the editor and development builds. **Before the switch goes on the owner applies
-  `Server/supabase/migrations/0026_save_limits_27.sql`.** No ads package is in the project.
+  `Server/supabase/migrations/0026_save_limits_27.sql`.** No ads package is in the project. **The block is built:**
+  `RewardedAdBlock` (UI) draws `RewardedAdView` through `RewardedAdController`, a secondary WATCH AN AD under a
+  sunken plate, and exists in three places only: `IdleClaimPopup` under the claim plate after a claim (A1), `ProvingScreen`
+  right of the opponent card at the Brands rows (A2), and `WaveResultScreen`'s stage cleared view under CONTINUE
+  (A3). With `AdsSwitch` off every view is Hidden and no block is drawn. **A3 has a known gap:** a repeat clear of a
+  stage with a wave curve is swept (`CampaignFlow.Sweep`, a toast) and never reaches that view, which only ever
+  shows a first clear, so the block is wired and never visible there today; where a repeat clear is shown is an
+  owner decision. `R28AdsLadderUiChecks.cs` reads the source of both screens and the capture targets.
 
 ### The friends build (R27)
 
@@ -2146,6 +2161,12 @@ primary button, a stronger gilded frame, lighter secondary and disabled plates, 
 and the Hero screen's level cap sentence. All four are described under **The UI kit (R20)**. Their harness checks are
 `CheckR26Ui`. **Owed before it counts:** the screens that changed layout (Hub, Marketplace both ways, Hero at the cap,
 Store shops) have no capture yet; the tester takes them from the `Emberfall/Capture/R26 polish/` menu.
+
+**R28 screens, the ladder and the ads** (an unmerged branch of run R28, not named here). It holds the guild dungeon ladder
+screen and the rewarded ad block described under **The R28 screens**. **Owed before it counts:** the captures. The
+tester runs `Tools/capture-r28b-targets.txt` through `Tools/capture-batch.ps1` (70 targets: every ladder state and
+every ad state in each of the three places, at 1920x1080 and 2400x1080); the same states are in the editor under
+`Emberfall/Capture/R28 screens/`. Nothing has been looked at in Unity yet.
 
 Otherwise none. The R4 economy proposal is merged and described under **The economy curve** and **The
 campaign power curve, and the walls**.
