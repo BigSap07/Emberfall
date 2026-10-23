@@ -237,8 +237,10 @@ namespace Emberfall.Core.Session
         public bool Victory;
         public int Floor;
 
-        /// <summary>True when this win was against the player's current floor (the only case that
-        /// exists today) and RecitalHighestFloor/RecitalCurrentFloor moved forward because of it.</summary>
+        /// <summary>True when this win was against the player's current floor and
+        /// RecitalHighestFloor/RecitalCurrentFloor moved forward because of it. False on a REMATCH
+        /// after a win, which fights the floor just beaten again: that pays the floor but no
+        /// milestone (GrantRecitalResult).</summary>
         public bool AdvancedFloor;
 
         public int Gold;
@@ -2530,13 +2532,18 @@ namespace Emberfall.Core.Session
             rewards.IsMilestone = RecitalGenerator.IsMilestone(Balance, floor) && !rewards.IsDeepMilestone;
             rewards.IsGuardian = RecitalGenerator.IsGuardian(Balance, floor);
 
-            if (rewards.IsDeepMilestone)
+            // A milestone pays for REACHING its floor, so only that floor's first clear pays it. A win
+            // on a floor already beaten is real: REMATCH after a win fights the same floor again. It
+            // used to repay the milestone each time, Relic Dust per Echo, and a deep milestone handed
+            // over a different unowned relic per rematch.
+            bool firstClearOfFloor = floor > Profile.RecitalHighestFloor;
+            if (rewards.IsDeepMilestone && firstClearOfFloor)
             {
                 string grantedId = GrantRandomUnownedRelic(floor);
                 if (!string.IsNullOrEmpty(grantedId)) rewards.GrantedRelicId = grantedId;
                 else rewards.RelicDust = Balance.RecitalDeepMilestoneDustFallback;
             }
-            else if (rewards.IsMilestone)
+            else if (rewards.IsMilestone && firstClearOfFloor)
             {
                 int tier = Balance.RecitalMilestoneInterval > 0 ? floor / Balance.RecitalMilestoneInterval : 0;
                 rewards.RelicDust = Balance.RecitalMilestoneDustPerTier * Math.Max(1, tier);

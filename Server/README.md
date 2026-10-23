@@ -104,23 +104,30 @@ are written, not applied, and both are re-appliable:
    on its way in, and a `clawedBack` mark stops a second clawback.
    `Docs/DESIGN-RECEIPT-VALIDATION.md` section 4. Written, not applied to a project.
 
-**The order to apply, all in the SQL editor as the project owner:** whatever of 0012, 0014 and 0015
-the project lacks, then 0016, 0017, 0018, 0019, 0020, 0021, 0022, 0023, 0024. 0022 refuses to apply
-without 0014. Raise `save_limits.max_save_version` to 26 in the same sitting.
+25. `0025_save_limits_26.sql` - raises `save_limits.max_save_version` to 26, the version this build writes from a first
+   session's first stage clear (live event state). Only ever raises the row (`greatest`), so it is safe after a
+   hand-run update and safe twice. Needs `0013`. The harness check `CheckServerAcceptsWhatThisBuildWrites` fails
+   while the migrations leave the row below `SaveSerializer.CurrentVersion`, so the next version bump ships with
+   its own migration. (Written as 0016 on the bug hunt branch, renumbered after the integration branch's 0016 to 0024.)
+26. `0026_save_limits_27.sql` - raises `save_limits.max_save_version` to 27 so `push_save` accepts a save holding
+   the rewarded ads block (R28). It was `supabase/owner/save_limits_27.sql`, a hand-run step, until the check above
+   needed it in order. Only ever raises the row. Needs `0013`. Apply it before a build with `AdsSwitch` on reaches a
+   cloud player (a save is stamped 27 only once an ad was granted).
 
-**Checked locally, never on a project:** `bash Tools/supabase-local-check.sh` applies 0001 to 0024 in
+**The order to apply, all in the SQL editor as the project owner:** whatever of 0012, 0014 and 0015
+the project lacks, then 0016, 0017, 0018, 0019, 0020, 0021, 0022, 0023, 0024, 0025, 0026. 0022 refuses to apply
+without 0014. 0025 and 0026 raise `save_limits.max_save_version` to 26 and 27, so no hand-run update is left.
+
+**Checked locally, never on a project:** `bash Tools/supabase-local-check.sh` applied 0001 to 0024 in
 order to a throwaway local PostgreSQL with the stand-in roles in `supabase/local/supabase-standin.sql`,
 pastes every file from 0004 a second time, and runs `supabase/local/rules-check.sql` (71 checks on
-0016 to 0024, as a player, as anon and as the service role). It takes no URL and no key.
-
-`supabase/owner/` holds owner steps that are not migrations. `save_limits_27.sql` raises `save_limits.max_save_version`
-to 27 so `push_save` accepts a save holding the rewarded ads block (R28). Written, not applied, re-appliable; apply it
-only before a build with `AdsSwitch` on reaches a cloud player.
+0016 to 0024, as a player, as anon and as the service role). It takes no URL and no key. 0025 and 0026 are one
+update each and were not part of that run.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0024` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0026` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
 after a half-finished run, is a no-op rather than a failure to unpick. Pasting an OLDER file after a
 newer one that replaced its function is a different thing and does not always work: `0007` after
