@@ -47,7 +47,7 @@ namespace Emberfall.UI.Screens
         /// of its Brands rows, in the free column right of the card. 430 wide fits that column at 1920, so it draws
         /// stacked (RewardedAdBlock.NarrowBelow). Nothing is built while AdsSwitch is off.</summary>
         private const float AdWidth = 430f;
-        private const float AdBesideBrands = 262f;
+        private const float AdBesideBrands = 250f;
         private RewardedAdBlock _ad;
 
         /// <summary>The ad block, for the capture tool and the checks.</summary>
