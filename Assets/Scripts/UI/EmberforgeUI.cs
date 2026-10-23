@@ -382,6 +382,9 @@ namespace Emberfall.UI
                 AddKitOrnament(panel, new Vector2(1f, 1f), ki, k);
                 AddKitOrnament(panel, new Vector2(0f, 0f), ki, k);
                 AddKitOrnament(panel, new Vector2(1f, 0f), ki, k);
+                // A panel whose size a layout decides (a tile, a row) is only known later: the fitter scales the
+                // corners to it and hides them when it is too small (KitOrnamentRule).
+                panel.gameObject.AddComponent<KitOrnamentFit>();
                 return;
             }
             float s = Emberforge.OrnamentSize;
@@ -1358,6 +1361,33 @@ namespace Emberfall.UI
             // The gloss is a property of a lit face, and a disabled button is not lit. Hiding it
             // is what stops a greyed-out button still looking glossy and therefore still pressable.
             if (_gloss != null) _gloss.enabled = _interactable && UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) == null;
+        }
+    }
+
+    /// <summary>Scales a panel's filigree corners to the panel's real size, and hides them on a panel too small to
+    /// carry them (KitOrnamentRule). Runs whenever the rect changes, so a layout-sized tile or row is handled too.</summary>
+    public sealed class KitOrnamentFit : MonoBehaviour
+    {
+        private void OnEnable() { Fit(); }
+        private void OnRectTransformDimensionsChange() { Fit(); }
+
+        private void Fit()
+        {
+            RectTransform rt = transform as RectTransform;
+            if (rt == null) return;
+            float size = Emberfall.Core.Progression.KitOrnamentRule.SizeFor(rt.rect.width, rt.rect.height);
+            for (int i = 0; i < rt.childCount; i++)
+            {
+                Transform child = rt.GetChild(i);
+                if (child.name != "Ornament") continue;
+                RectTransform o = child as RectTransform;
+                o.gameObject.SetActive(size > 0f);
+                if (size <= 0f) continue;
+                float dx = o.anchorMin.x < 0.5f ? 1f : -1f;
+                float dy = o.anchorMin.y < 0.5f ? 1f : -1f;
+                o.sizeDelta = new Vector2(size, size);
+                o.anchoredPosition = new Vector2(dx * (Emberforge.KitOrnamentInset + size * 0.5f), dy * (Emberforge.KitOrnamentInset + size * 0.5f));
+            }
         }
     }
 

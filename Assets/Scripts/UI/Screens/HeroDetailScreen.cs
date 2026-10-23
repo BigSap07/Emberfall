@@ -253,7 +253,8 @@ namespace Emberfall.UI.Screens
 
             _levelLabel = EmberforgeUI.Label("Level", _left, "", UITheme.FontSmall,
                                              Emberforge.TextBody, TextAnchor.UpperLeft);
-            UIBuilder.Box(_levelLabel.rectTransform, UITheme.Space24, -UITheme.Space16, 400f, 32f,
+            // Clear of the kit's corner filigree (R26): the label starts right of it when the kit is on.
+            UIBuilder.Box(_levelLabel.rectTransform, UiKit.On ? Emberforge.OrnamentClearance + UITheme.Space8 : UITheme.Space24, -UITheme.Space16, 400f, 32f,
                           new Vector2(0f, 1f));
             UIBuilder.Outlined(_levelLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
@@ -277,7 +278,8 @@ namespace Emberfall.UI.Screens
 
             _slotStatus = EmberforgeUI.Label("SlotStatus", _left, "", UITheme.FontTiny,
                                              Emberforge.TextQuiet, TextAnchor.UpperCenter);
-            UIBuilder.Box(_slotStatus.rectTransform, 0f, 8f, PanelWidth - 60f, 26f, new Vector2(0.5f, 0f));
+            // The kit's frame is 34 units thick, so the line sits above it rather than on it (R26).
+            UIBuilder.Box(_slotStatus.rectTransform, 0f, UiKit.On ? 40f : 8f, PanelWidth - 60f, 26f, new Vector2(0.5f, 0f));
             UIBuilder.Outlined(_slotStatus, Emberforge.Outline, Emberforge.StrokeThin);
 
             // Teal, because it is the way OUT of this page and into the formation. The one thing

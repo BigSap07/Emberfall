@@ -113,7 +113,7 @@ namespace Emberfall.UI
                 string lockLine = built ? FeatureGates.LockLine(app, EntryOf(shop)) : "NOT IN THIS BUILD";
                 if (lockLine.Length > 0)
                 {
-                    RectTransform chip = EmberforgeUI.Chip("Lock", card, lockLine.ToUpperInvariant(), Emberforge.TextQuiet, UITheme.FontTiny - 2);
+                    RectTransform chip = EmberforgeUI.Chip("Lock", card, lockLine.ToUpperInvariant(), Emberforge.TextBody, UITheme.FontTiny - 2);
                     UIBuilder.Box(chip, 0f, 30f, CardWidth - 48f, 52f, new Vector2(0.5f, 0f));
                     continue;
                 }

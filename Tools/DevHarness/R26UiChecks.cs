@@ -29,6 +29,7 @@ namespace Emberfall.DevHarness
                 CheckR26Marketplace(db, root);
                 CheckR26KitPolish(root);
                 CheckR26HeroCap(db, root);
+                CheckR26Round2(root);
             }
             finally
             {
@@ -344,6 +345,30 @@ namespace Emberfall.DevHarness
                   "hero CAP: the page disables both buttons from the cap flag, shows the sentence through LevelCapText and keeps the label LEVEL UP");
             Check(hero.Contains("int cap = session.HeroLevelCapOf(_hero);"),
                   "hero CAP: the cap is the hero's own (stars and ascension), not the account rank");
+        }
+
+        // ------------------------------------------------------------------ round 2: the tester's findings
+
+        private static void CheckR26Round2(string root)
+        {
+            Check(KitOrnamentRule.SizeFor(1750f, 150f) == 0f && KitOrnamentRule.SizeFor(440f, 44f) == 0f && KitOrnamentRule.SizeFor(160f, 100f) == 0f
+                  && KitOrnamentRule.SizeFor(179f, 600f) == 0f,
+                  "ornament RULE: a tile, a quest row, a hero card or any panel under 180 on its short side carries no corner");
+            Check(KitOrnamentRule.SizeFor(420f, 600f) == 48f && KitOrnamentRule.SizeFor(180f, 400f) == 48f * 0f + System.Math.Min(48f, 0.30f * 180f)
+                  && KitOrnamentRule.SizeFor(1800f, 700f) == 48f && KitOrnamentRule.SizeFor(200f, 200f) <= 0.30f * 200f + 0.001f,
+                  "ornament RULE: a panel that can carry one gets min(48, 30 percent of its short side)");
+            string ui = R26Read(root, "Assets", "Scripts", "UI", "EmberforgeUI.cs");
+            Check(ui.Contains("class KitOrnamentFit") && ui.Contains("KitOrnamentRule.SizeFor(rt.rect.width, rt.rect.height)") && ui.Contains("AddComponent<KitOrnamentFit>()"),
+                  "ornament RULE: every kit panel fits its corners to its real size, so a layout-sized tile or row is handled too");
+            string store = R26Read(root, "Assets", "Scripts", "UI", "Screens", "StoreScreen.cs");
+            Check(store.Contains("PURCHASES\\nOPEN WITH THE STORE") && store.Contains("-top, 300f, HubStyle.TabHeight") && store.Contains("\"TEST STORE  -  FREE\", Emberforge.TextGold"),
+                  "Store BANNER: the coming soon line is two lines in a 300 wide box clear of the SKINS tab, and the TEST STORE chip is gold, not red");
+            string hero = R26Read(root, "Assets", "Scripts", "UI", "Screens", "HeroDetailScreen.cs");
+            Check(hero.Contains("UiKit.On ? Emberforge.OrnamentClearance + UITheme.Space8") && hero.Contains("UiKit.On ? 40f : 8f"),
+                  "hero PAGE: with the kit on, LEVEL starts right of the corner and the slot line sits above the frame");
+            string doors = R26Read(root, "Assets", "Scripts", "UI", "ShopDoors.cs");
+            Check(doors.Contains("lockLine.ToUpperInvariant(), Emberforge.TextBody,"),
+                  "Marketplace LOCKS: the UNLOCKS AT line is body-bright, not quiet grey");
         }
     }
 }

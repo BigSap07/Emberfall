@@ -98,7 +98,8 @@ namespace Emberfall.UI.Screens
             }
 
             _banner = EmberforgeUI.Label("Banner", Root, "", UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleRight);
-            UIBuilder.Box(_banner.rectTransform, -UITheme.ScreenPadding, -top, 560f, HubStyle.TabHeight, new Vector2(1f, 1f));
+            // 300 wide so the COMING SOON line (two lines) stays right of the SKINS tab (R26).
+            UIBuilder.Box(_banner.rectTransform, -UITheme.ScreenPadding, -top, 300f, HubStyle.TabHeight, new Vector2(1f, 1f));
             _testChip = TestStoreBanner.Create(Root, top);
 
             _body = UIBuilder.Node("Body", Root);
@@ -256,7 +257,7 @@ namespace Emberfall.UI.Screens
             {
                 case StoreMode.Test: _banner.text = TestStoreBanner.Shown(StoreMode.Test) ? "" : "TEST STORE  -  NO REAL MONEY MOVES"; _banner.color = Emberforge.TextGold; break;
                 case StoreMode.Live: _banner.text = ""; break;
-                default: _banner.text = "COMING SOON  -  PURCHASES OPEN WITH THE STORE"; _banner.color = Emberforge.TextQuiet; break;
+                default: _banner.text = "COMING SOON  -  PURCHASES\nOPEN WITH THE STORE"; _banner.color = Emberforge.TextQuiet; break;
             }
             _testChip.gameObject.SetActive(TestStoreBanner.Shown(Mode));
 
@@ -1261,7 +1262,7 @@ namespace Emberfall.UI.Screens
         /// <summary>The chip, in the corner the plain banner text uses. The caller shows it only when Shown.</summary>
         public static RectTransform Create(Transform root, float top)
         {
-            RectTransform chip = EmberforgeUI.Chip("TestStoreChip", root, "TEST STORE  -  FREE", Emberforge.OrnamentInset, UITheme.FontTiny);
+            RectTransform chip = EmberforgeUI.Chip("TestStoreChip", root, "TEST STORE  -  FREE", Emberforge.TextGold, UITheme.FontTiny);
             UIBuilder.Box(chip, -UITheme.ScreenPadding, -top, 290f, HubStyle.TabHeight, new Vector2(1f, 1f));
             chip.gameObject.SetActive(false);
             return chip;
