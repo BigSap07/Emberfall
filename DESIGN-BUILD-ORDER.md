@@ -1514,7 +1514,9 @@ Settings (`R28UiChecks.cs`, `CheckR28Ui`), the guild dungeon ladder and the rewa
   only from `NotificationSettingsView` and taps call only `Toggle` and `PermissionButton`. With no notification package
   installed (the real state today) it reads "Reminders are not available on this device yet." with every switch disabled
   and no list. `RemindersCardLayout` in `R28ScreenLayout.cs` holds its band heights.
-- **Captures owed.** Both screens changed layout and have no capture yet. Every state is a target under
+- **Captures owed.** Both screens changed layout and the first captures of most states came out as the Hub's frame (a Game view that
+  did not present the new frame; the targets now log what the router shows before the shot). The first Profile page now carries the
+  LEADERBOARDS door in its identity card, and the Settings page opens at its top. Every state is a target under
   `Emberfall/Capture/R28 screens/` in `PlayModeScreenshot` (`R28aCaptures`, offline through `LeaderboardBackends.Override`
   and `NotificationBackends.Override`), listed at both shapes in `Tools/capture-r28a-targets.txt`.
 - **Rewarded ads, behind `AdsSwitch`, OFF.** `ads.json` (the lean variant: A1 idle Gold capped at 2 hours, A2 one

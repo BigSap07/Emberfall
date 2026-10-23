@@ -34,7 +34,8 @@
 #   Granted             the COMING UP list (the planner's own answer)
 #   Off                 allowed, Reminders off: the topics disabled, 'Reminders are off.'
 #
-# Profile, Recital and Proving carry the new LEADERBOARDS and BOARDS buttons.
+# ProfileLeaderboardsDoor is the Profile page at its first frame (the LEADERBOARDS door sits in the identity card);
+# Recital and Proving carry the new BOARDS buttons.
 Screen:LeaderboardsOfflineNoCloud@1920x1080
 Screen:LeaderboardsOfflineNoCloud@2400x1080
 Screen:LeaderboardsOfflineSignedOut@1920x1080
@@ -81,8 +82,8 @@ Screen:SettingsRemindersGranted@1920x1080
 Screen:SettingsRemindersGranted@2400x1080
 Screen:SettingsRemindersOff@1920x1080
 Screen:SettingsRemindersOff@2400x1080
-Screen:Profile@1920x1080
-Screen:Profile@2400x1080
+Screen:ProfileLeaderboardsDoor@1920x1080
+Screen:ProfileLeaderboardsDoor@2400x1080
 Screen:Recital@1920x1080
 Screen:Recital@2400x1080
 Screen:Proving@1920x1080

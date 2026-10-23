@@ -37,8 +37,9 @@ screen opens from the Hub. The header is `ScreenChrome.ForgedHeader` with the vi
 `UIBuilder.GoldButton` (the one primary action), `UIBuilder.SecondaryButton` (everything else); lists are
 `UIBuilder.ScrollList`; tabs and chips are `UIBuilder.Chip`. **With the UI kit on (the default) the built screens draw the same
 roles in the kit's components instead:** `EmberforgeUI.Button` with `ForgeButtonKind.Primary` (the ember button, where the old
-text says gold) and `ForgeButtonKind.Secondary`, `EmberforgeUI.Tab` for tabs, `EmberforgeUI.PlainPanelOn` for rows and
-`EmberforgeUI.PanelOn` for cards. The colours, sizes, fields and taps below are unchanged. Panels use `UITheme.Panel` and `UITheme.CornerRadius`,
+text says gold) and `ForgeButtonKind.Secondary`, `EmberforgeUI.Tab` for tabs and `EmberforgeUI.PanelOn` for cards. A leaderboard row is NOT the kit's plain panel (its art carries a
+gold rim, which framed every row): it is the flat `UITheme.PanelRaised` plate with a `UITheme.BorderSoft` hairline, and only the
+caller's row has the gold frame. The colours, sizes, fields and taps below are unchanged. Panels use `UITheme.Panel` and `UITheme.CornerRadius`,
 rows `UITheme.PanelRaised` and `UITheme.CornerRadiusSmall`. Values a player reads as a number that matters
 (`HubStyle.ValueGold`) are `UITheme.Gold`; structure is `UITheme.ChromeBrass`, never Gold. Every tap target is at least
 `HubStyle.TouchMin` on both axes (so the tab chips are 108 tall, not the Store's 76). No new art, no new colour, no em or en dash in any string (the checks scan for them).
@@ -287,7 +288,7 @@ return (`NotificationScheduler`), which does nothing until a backend reports the
 | Upcoming status | `UpcomingStatus` | `UITheme.TextMuted`, `UITheme.FontTiny` |
 | Rule lines | `RuleLines` | `UITheme.TextDim`, `UITheme.FontTiny` |
 | Whole card | `Phase == Unavailable`: `Status` replaces the permission line, every switch disabled | A switch's `Reason` is printed under its label in place of its description, except a reason that repeats the `Status` already shown, which would read five times down the card: that switch shows its description instead (`RemindersCardLayout.SubLine`) |
-| Switch | `On`, `Enabled` of each `ToggleModel` | a button reading ON (ember) or OFF (teal), 220 by `HubStyle.TouchMin`, disabled when `Enabled` is false. ALLOW REMINDERS and ASKING are the ember button, OPEN PHONE SETTINGS the teal one |
+| Switch | `On`, `Enabled` of each `ToggleModel` | a button reading ON (ember) or OFF (teal), 220 by `HubStyle.TouchMin`, disabled when `Enabled` is false; a disabled switch always reads OFF (`RemindersCardLayout.SwitchShowsOn`), so a topic held on while the phone blocks reminders does not read ON. ALLOW REMINDERS and ASKING are the ember button, OPEN PHONE SETTINGS the teal one |
 | Card heading | constant REMINDERS | the card's name in the spec; `NotificationSettingsView.Title` (NOTIFICATIONS) is not drawn |
 
 ### Taps

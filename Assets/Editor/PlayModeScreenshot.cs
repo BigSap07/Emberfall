@@ -4476,7 +4476,7 @@ namespace Emberfall.EditorTools
             public static void CaptureSettingsRemindersOff() { Begin("Screen:SettingsRemindersOff"); }
 
             [MenuItem("Emberfall/Capture/R28 screens/Profile with the LEADERBOARDS door", false, 430)]
-            public static void CaptureProfileDoor() { Begin("Screen:Profile"); }
+            public static void CaptureProfileDoor() { Begin("Screen:ProfileLeaderboardsDoor"); }
 
             [MenuItem("Emberfall/Capture/R28 screens/Recital with the BOARDS door", false, 431)]
             public static void CaptureRecitalDoor() { Begin("Screen:Recital"); }
@@ -4494,7 +4494,7 @@ namespace Emberfall.EditorTools
                 // otherwise answer the next one.
                 Emberfall.Game.Cloud.LeaderboardBackends.Override = null;
                 Emberfall.Game.Notifications.NotificationBackends.Override = null;
-                if (!IsLeaderboards(name) && !IsReminders(name)) return 0;
+                if (!IsLeaderboards(name) && !IsReminders(name) && name != "ProfileLeaderboardsDoor") return 0;
 
                 if (Application.persistentDataPath.IndexOf("Emberfall Scratch", StringComparison.OrdinalIgnoreCase) < 0)
                 {
@@ -4502,6 +4502,12 @@ namespace Emberfall.EditorTools
                     return 2;
                 }
 
+                if (name == "ProfileLeaderboardsDoor")
+                {
+                    // The page's first frame, with the door in the identity card.
+                    app.Router.Show(ScreenId.Profile);
+                    return 1;
+                }
                 if (IsLeaderboards(name))
                 {
                     OpenLeaderboards(app, name);
@@ -4511,9 +4517,37 @@ namespace Emberfall.EditorTools
                 return 1;
             }
 
+            /// <summary>The screen a target is meant to photograph.</summary>
+            private static ScreenId ExpectedScreen(string name)
+            {
+                switch (name)
+                {
+                    case "ProfileLeaderboardsDoor": return ScreenId.Profile;
+                }
+                return IsReminders(name) ? ScreenId.Settings : ScreenId.Leaderboards;
+            }
+
             /// <summary>Called every frame after the screen is shown, with the frames since: the cues a state waits for.</summary>
             public static void Tick(GameApp app, string name, int since)
             {
+                bool mine = IsLeaderboards(name) || IsReminders(name) || name == "ProfileLeaderboardsDoor";
+                if (mine && since >= 10 && since <= 88 && since % 6 == 0)
+                {
+                    // A stale frame is a Game view that did not present what the router shows (the capture hazard of
+                    // Docs/CAPTURE.md): ask the editor for a player loop and a canvas pass as well as the repaint every tick makes.
+                    Canvas.ForceUpdateCanvases();
+                    EditorApplication.QueuePlayerLoopUpdate();
+                }
+                if (mine && since == 84)
+                {
+                    // One line per target saying what the router showed just before the shot, so a Hub frame in a PNG can be
+                    // told from a router that really went home. If it did, show the screen again (the shot is six frames on).
+                    ScreenId expected = ExpectedScreen(name);
+                    ScreenId current = app.Router.Current != null ? app.Router.Current.Id : ScreenId.MainMenu;
+                    Debug.Log("PlayModeScreenshot: R28a verify " + name + ": router shows " + current + ", expected " + expected
+                              + (current == expected ? ", ok" : ", NOT the screen asked for, showing it again"));
+                    if (current != expected) app.Router.Show(expected);
+                }
                 if (IsLeaderboards(name))
                 {
                     if (since == 24 && name == "LeaderboardsBannerOffline" && _board != null) _board.IsReady = false;

@@ -37,6 +37,8 @@ namespace Emberfall.UI.Screens
         private RectTransform _card;
         private LayoutElement _size;
         private float _width;
+        /// <summary>The width the card was last laid out at: its real rect once the page has run its layout, else the width it was built for.</summary>
+        private float _w;
         private NotificationSettingsController _controller;
         private string _key;
         private float _tick;
@@ -51,6 +53,7 @@ namespace Emberfall.UI.Screens
             _card = card;
             _size = size;
             _width = cardWidth;
+            _w = cardWidth;
         }
 
         /// <summary>The page is on screen: a controller for this visit, so the switches are read fresh from the device.</summary>
@@ -79,10 +82,23 @@ namespace Emberfall.UI.Screens
         public void Tick(float deltaTime)
         {
             if (_controller == null) return;
+            // The page's layout makes the card as wide as the page, which is not the width it was built for: look again
+            // the moment it differs, so the first frame never holds text laid out for the wrong width.
+            if (Mathf.Abs(CurrentWidth() - _w) > 1f)
+            {
+                _key = null;
+                Refresh();
+            }
             _tick += deltaTime;
             if (_tick < 1f) return;
             _tick = 0f;
             Refresh();
+        }
+
+        private float CurrentWidth()
+        {
+            float w = _card != null ? _card.rect.width : 0f;
+            return w > 200f ? w : _width;
         }
 
         private void OnChanged()
@@ -111,7 +127,8 @@ namespace Emberfall.UI.Screens
                 Object.Destroy(old);
             }
 
-            RemindersPlan plan = RemindersCardLayout.Plan(v, _width);
+            _w = CurrentWidth();
+            RemindersPlan plan = RemindersCardLayout.Plan(v, _w);
             _size.preferredHeight = plan.Height;
             _card.sizeDelta = new Vector2(_card.sizeDelta.x, plan.Height);
 
@@ -131,14 +148,14 @@ namespace Emberfall.UI.Screens
             {
                 Text rule = EmberforgeUI.Label("RuleLine" + i, _card, v.RuleLines[i], UITheme.FontTiny, UITheme.TextDim, TextAnchor.MiddleLeft);
                 UIBuilder.Box(rule.rectTransform, RemindersCardLayout.Pad, -(plan.RulesTop + i * RemindersCardLayout.LineHeight),
-                              _width - RemindersCardLayout.Pad * 2f, RemindersCardLayout.LineHeight, new Vector2(0f, 1f));
+                              _w - RemindersCardLayout.Pad * 2f, RemindersCardLayout.LineHeight, new Vector2(0f, 1f));
             }
         }
 
         private void BuildPermission(NotificationSettingsView v, RemindersPlan plan)
         {
             bool button = v.PermissionButton.Visible;
-            float lineWidth = _width - RemindersCardLayout.Pad * 2f - (button ? RemindersCardLayout.PermissionButtonWidth + 16f : 0f);
+            float lineWidth = _w - RemindersCardLayout.Pad * 2f - (button ? RemindersCardLayout.PermissionButtonWidth + 16f : 0f);
             Text line = EmberforgeUI.Body("PermissionLine", _card, v.PermissionLine, UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.MiddleLeft);
             UIBuilder.Box(line.rectTransform, RemindersCardLayout.Pad, -plan.PermissionTop, lineWidth, plan.PermissionHeight, new Vector2(0f, 1f));
             if (!button) return;
@@ -166,7 +183,7 @@ namespace Emberfall.UI.Screens
             float indent = index == 0 ? 0f : RemindersCardLayout.TopicIndent;
             float x = RemindersCardLayout.Pad + indent;
             float top = plan.ToggleTops[index] + RemindersCardLayout.RowPad * 0.5f;
-            float textWidth = RemindersCardLayout.TextWidth(_width, indent);
+            float textWidth = RemindersCardLayout.TextWidth(_w, indent);
 
             Text label = EmberforgeUI.Label("Label" + index, _card, t.Label, UITheme.FontSmall, t.Enabled ? UITheme.TextPrimary : UITheme.TextMuted, TextAnchor.MiddleLeft);
             UIBuilder.Box(label.rectTransform, x, -top, textWidth, RemindersCardLayout.TitleLineHeight, new Vector2(0f, 1f));
@@ -185,8 +202,11 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Box(note.rectTransform, x, -below, textWidth, RemindersCardLayout.LineHeight, new Vector2(0f, 1f));
             }
 
-            UIButton toggle = EmberforgeUI.Button("Switch" + index, _card, t.On ? SwitchOn : SwitchOff, HubStyle.FontButton,
-                                                  t.On ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
+            // A switch that cannot be flipped is drawn off, whatever it holds: ON beside "Allow reminders in your phone's
+            // settings first." would say nothing is blocked. The view's own On and Enabled decide (SwitchShowsOn).
+            bool shownOn = RemindersCardLayout.SwitchShowsOn(t);
+            UIButton toggle = EmberforgeUI.Button("Switch" + index, _card, shownOn ? SwitchOn : SwitchOff, HubStyle.FontButton,
+                                                  shownOn ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
             UIBuilder.Box(toggle.Root, -RemindersCardLayout.Pad, -(plan.ToggleTops[index] + (plan.ToggleHeights[index] - RemindersCardLayout.TapMin) * 0.5f),
                           RemindersCardLayout.SwitchWidth, RemindersCardLayout.TapMin, new Vector2(1f, 1f));
             toggle.Interactable = t.Enabled;
@@ -209,14 +229,14 @@ namespace Emberfall.UI.Screens
                 float y = plan.UpcomingTops[i];
                 Text title = EmberforgeUI.Label("UpTitle" + i, _card, u.Title, UITheme.FontSmall, UITheme.TextPrimary, TextAnchor.MiddleLeft);
                 UIBuilder.Box(title.rectTransform, RemindersCardLayout.Pad + RemindersCardLayout.TopicIndent, -y,
-                              _width - RemindersCardLayout.Pad * 2f - 300f, RemindersCardLayout.TitleLineHeight, new Vector2(0f, 1f));
+                              _w - RemindersCardLayout.Pad * 2f - 300f, RemindersCardLayout.TitleLineHeight, new Vector2(0f, 1f));
 
                 Text when = EmberforgeUI.Label("UpWhen" + i, _card, u.WhenText, UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleRight);
                 UIBuilder.Box(when.rectTransform, -RemindersCardLayout.Pad, -y, 280f, RemindersCardLayout.TitleLineHeight, new Vector2(1f, 1f));
 
                 if (u.Body.Length > 0)
                 {
-                    float bodyWidth = _width - RemindersCardLayout.Pad * 2f - 240f;
+                    float bodyWidth = _w - RemindersCardLayout.Pad * 2f - 240f;
                     Text body = EmberforgeUI.Body("UpBody" + i, _card, u.Body, UITheme.FontTiny, UITheme.TextDim, TextAnchor.UpperLeft);
                     UIBuilder.Box(body.rectTransform, RemindersCardLayout.Pad + RemindersCardLayout.TopicIndent, -(y + RemindersCardLayout.TitleLineHeight),
                                   bodyWidth, RemindersCardLayout.LinesFor(u.Body, bodyWidth) * RemindersCardLayout.LineHeight, new Vector2(0f, 1f));
@@ -227,15 +247,21 @@ namespace Emberfall.UI.Screens
             {
                 Text status = EmberforgeUI.Label("UpcomingStatus", _card, v.UpcomingStatus, UITheme.FontTiny, UITheme.TextMuted, TextAnchor.MiddleLeft);
                 UIBuilder.Box(status.rectTransform, RemindersCardLayout.Pad + RemindersCardLayout.TopicIndent, -plan.UpcomingStatusTop,
-                              _width - RemindersCardLayout.Pad * 2f, RemindersCardLayout.LineHeight, new Vector2(0f, 1f));
+                              _w - RemindersCardLayout.Pad * 2f, RemindersCardLayout.LineHeight, new Vector2(0f, 1f));
             }
         }
 
         private void Rule(float bandTop)
         {
+            // Stretched between the card's padding, so a divider spans the card's inner width whatever width the page gives it.
             Image rule = EmberforgeUI.Rule("Rule", _card);
-            UIBuilder.Box(rule.rectTransform, RemindersCardLayout.Pad, -(bandTop + (RemindersCardLayout.RuleBand - Emberforge.RuleHeight) * 0.5f),
-                          _width - RemindersCardLayout.Pad * 2f, Emberforge.RuleHeight, new Vector2(0f, 1f));
+            RectTransform rt = rule.rectTransform;
+            float top = bandTop + (RemindersCardLayout.RuleBand - Emberforge.RuleHeight) * 0.5f;
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.offsetMin = new Vector2(RemindersCardLayout.Pad, -(top + Emberforge.RuleHeight));
+            rt.offsetMax = new Vector2(-RemindersCardLayout.Pad, -top);
         }
     }
 }

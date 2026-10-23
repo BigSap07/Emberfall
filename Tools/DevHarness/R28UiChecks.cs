@@ -37,6 +37,7 @@ namespace Emberfall.DevHarness
                 CheckR28UiDoors(root);
                 CheckR28UiRemindersSource(root);
                 CheckR28UiRemindersLayout(d);
+                CheckR28UiRound2(d, root);
                 CheckR28UiCaptures(root);
             }
             finally
@@ -182,6 +183,10 @@ namespace Emberfall.DevHarness
                   && !Regex.IsMatch(code, @"Rank\s*(==|<=|<)\s*[1-4]\b") && !Regex.IsMatch(code, @"Rows\[\s*[0-2]\s*\]"),
                   "R28 UI LEADERBOARDS: no medal, no crown and no row treated differently by its place; boards pay nothing");
             string buildRow = R28UiBody(code, "private static void BuildRow(");
+            Check(buildRow.Contains("plate.color = UITheme.PanelRaised") && !buildRow.Contains("PlainPanelOn") && Regex.Matches(buildRow, @"UITheme\.Gold,").Count == 1
+                  && Regex.IsMatch(buildRow, @"if \(r\.IsMe\)\s*UIBuilder\.Frame\(""Mine"", row, UITheme\.Gold, \(int\)UITheme\.CornerRadiusSmall, HubStyle\.BorderWeightHeavy\);\s*else\s*UIBuilder\.Frame\(""Edge"", row, UITheme\.BorderSoft"),
+                  "R28 UI LEADERBOARDS: an ordinary row is a flat raised plate with a soft hairline (the kit's plain panel carries a gold rim of its own); only the caller's row has the gold frame"
+                  + " of HubStyle.BorderWeightHeavy");
             Check(buildRow.Length > 0 && !buildRow.Contains("Button") && !buildRow.Contains("OnClick") && !buildRow.Contains("raycastTarget = true"),
                   "R28 UI LEADERBOARDS: a row is not tappable (the server sends no user id, so no profile opens from a board)");
             Check(code.Contains("BuildRow(pinned, v.PinnedSelf)") && code.Contains("UIBuilder.Divider(") && code.Contains("if (v.PinnedSelf != null)"),
@@ -319,6 +324,10 @@ namespace Emberfall.DevHarness
                   "R28 UI DOORS: Leaderboards is named in FeatureEntryPoints.OpenScreens, so CheckFeatureUnlockGating places it; no feature gates it");
             Check(profile.Contains("\"LEADERBOARDS\"") && profile.Contains("Router.Show(ScreenId.Leaderboards)") && Regex.IsMatch(profile, @"Box\(boards\.Root[^;]*HubStyle\.TouchMin"),
                   "R28 UI DOORS: ProfileScreen has a LEADERBOARDS button that opens the screen, at least TouchMin tall");
+            string identity = R28UiBody(profile, "private void BuildIdentityCard(");
+            Check(identity.Contains("\"LEADERBOARDS\"") && identity.Contains("Box(boards.Root, -28f, -46f, 420f, HubStyle.TouchMin, new Vector2(1f, 1f))") && !profile.Contains("BuildBoardsCard")
+                  && identity.IndexOf("boards", StringComparison.Ordinal) > identity.IndexOf("_nameField", StringComparison.Ordinal),
+                  "R28 UI DOORS: the LEADERBOARDS door sits in the Profile's identity card, the first card of the page, 46 below its top and at least TouchMin tall, so it is in the first frame");
             Check(recital.Contains("\"BOARDS\"") && recital.Contains("Router.Leaderboards.OpenBoard(Emberfall.Core.Cloud.LeaderboardBoard.Recital)")
                   && recital.Contains("ForgeButtonKind.Secondary") && Regex.IsMatch(recital, @"Box\(boards\.Root[^;]*HubStyle\.TouchMin"),
                   "R28 UI DOORS: RecitalScreen has a BOARDS secondary button that opens the leaderboards on the Deep Recital board, at least TouchMin tall");
@@ -349,10 +358,10 @@ namespace Emberfall.DevHarness
                   "R28 UI REMINDERS: no sentence of its own; REMINDERS, COMING UP, ON, OFF and the settings button's label are the only constants" + (copy.Count > 0 ? " (found: " + string.Join(" | ", copy.ToArray()) + ")" : ""));
             Check(R28UiNoLongDash(src), "R28 UI REMINDERS: no em or en dash in the card's source");
             string unusedView = R28UiUnused(code, typeof(NotificationSettingsView), @"\bv", "Title");
-            string unusedToggle = R28UiUnused(code, typeof(ToggleModel), @"\bt", "Description", "Reason");
+            string unusedToggle = R28UiUnused(code, typeof(ToggleModel), @"\bt", "Description", "Reason", "On");
             string unusedUp = R28UiUnused(code, typeof(UpcomingReminderView), @"\bu", "Kind", "FireUnix");
             Check(unusedView.Length == 0, "R28 UI REMINDERS: every field of the view is used (the page's own heading stands in for Title)" + (unusedView.Length > 0 ? " - unused: " + unusedView : ""));
-            Check(unusedToggle.Length == 0 && code.Contains("RemindersCardLayout.SubLine(t, "),
+            Check(unusedToggle.Length == 0 && code.Contains("RemindersCardLayout.SubLine(t, ") && code.Contains("RemindersCardLayout.SwitchShowsOn(t)"),
                   "R28 UI REMINDERS: every field of a switch is drawn: label, on, enabled, note, and its reason or description through SubLine" + (unusedToggle.Length > 0 ? " - unused: " + unusedToggle : ""));
             Check(unusedUp.Length == 0, "R28 UI REMINDERS: every upcoming reminder is drawn with its title, its time and its body" + (unusedUp.Length > 0 ? " - unused: " + unusedUp : ""));
 
@@ -393,7 +402,7 @@ namespace Emberfall.DevHarness
                   "R28 UI REMINDERS: a switch is tappable only when the view says Enabled, and the permission button is built only when Visible");
             Check(code.Contains("float indent = index == 0 ? 0f : RemindersCardLayout.TopicIndent") && RemindersCardLayout.TopicIndent == 24f,
                   "R28 UI REMINDERS: the three topics are indented UITheme.Space24 (24) under Reminders");
-            Check(code.Contains("t.On ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary") && code.Contains("model.Label == OpenSettingsLabel ? ForgeButtonKind.Secondary : ForgeButtonKind.Primary"),
+            Check(code.Contains("shownOn ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary") && code.Contains("model.Label == OpenSettingsLabel ? ForgeButtonKind.Secondary : ForgeButtonKind.Primary"),
                   "R28 UI REMINDERS: ALLOW REMINDERS and ASKING are the primary button, OPEN PHONE SETTINGS the secondary one");
 
             // ---- where it sits on the page
@@ -506,6 +515,117 @@ namespace Emberfall.DevHarness
                   "R28 UI REMINDERS LAYOUT: a sentence counts the lines it wraps to, and a row's text keeps room beside the switch");
         }
 
+        // ------------------------------------------------------------------ round 2: the fixes after the first captures
+
+        private static void CheckR28UiRound2(ContentDatabase d, string root)
+        {
+            // ---- the whole Leaderboards path with rows, long names, a pinned row, a banner and a spinner at once
+            GameSession late = R28Cleared(d, "ch3_1");
+            LeaderboardsPresenter p = new LeaderboardsPresenter();
+            p.Online();
+            p.BeginLoad(LeaderboardBoard.Recital);
+            List<LeaderboardRow> rows = R28Rows(LeaderboardsPresenter.Limit, LeaderboardsPresenter.Limit + 212);
+            for (int i = 0; i < rows.Count; i++) rows[i].DisplayName = new string('W', 40) + i;
+            p.TopLoaded(LeaderboardBoard.Recital, rows, R28Now);
+            p.TopFailed(LeaderboardBoard.Recital, LeaderboardFailure.Server);
+            LeaderboardsView failedView = p.Build(d, late.Profile, R28Now + 300);
+            p.BeginLoad(LeaderboardBoard.Recital);
+            LeaderboardsView loadingView = p.Build(d, late.Profile, R28Now + 300);
+            // The presenter never shows a banner and a spinner together (a new load clears the failure), so the two
+            // are exercised separately, each over the same 100 long-named rows and the pinned row, and the layout is
+            // asked for the worst combination of all its flags.
+            bool built = failedView.Phase == ScreenPhase.Ready && failedView.Rows.Count == LeaderboardsPresenter.Limit && failedView.PinnedSelf != null
+                         && failedView.Banner.Length > 0 && !failedView.ShowSpinner && failedView.Rows[5].Name.Length > 40
+                         && loadingView.Phase == ScreenPhase.Ready && loadingView.PinnedSelf != null && loadingView.ShowSpinner && loadingView.Banner.Length == 0
+                         && !loadingView.Refresh.Enabled && loadingView.Refresh.Label == "REFRESHING";
+            LeaderboardsPlan plan = LeaderboardsLayout.Plan(260f, 966f, true, true, true);
+            string key = LeaderboardsLayout.StructureKey(failedView);
+            Check(built && plan.RowsVisible >= 3 && plan.ListHeight > 0f && key.Length > 0 && key.Contains(failedView.PinnedSelf.RankText),
+                  "R28 UI ROUND 2: " + failedView.Rows.Count + " rows of 40 character names with the pinned row, under a banner and under a spinner, build their views and key them; the worst layout keeps "
+                  + plan.RowsVisible + " rows visible on the shortest canvas");
+            LeaderboardsView again = p.Build(d, late.Profile, R28Now + 301);
+            Check(LeaderboardsLayout.StructureKey(again) == LeaderboardsLayout.StructureKey(loadingView),
+                  "R28 UI ROUND 2: the same board a second later has the same structure, so the once-a-second look never rebuilds under it");
+
+            // ---- a switch that cannot be flipped is not drawn ON
+            ToggleModel held = new ToggleModel(); held.On = true; held.Enabled = false;
+            ToggleModel live = new ToggleModel(); live.On = true; live.Enabled = true;
+            ToggleModel offLive = new ToggleModel(); offLive.On = false; offLive.Enabled = true;
+            NotificationPrefs on = new NotificationPrefs();
+            NotificationPrefs off = new NotificationPrefs(); off.Enabled = false;
+            NotificationSettingsView denied = R28UiReminders(d, "ch1_6", NotificationPermission.Denied, false, on);
+            NotificationSettingsView unsupported = R28UiReminders(d, "ch1_6", NotificationPermission.Unsupported, false, on);
+            NotificationSettingsView remindersOff = R28UiReminders(d, "ch1_6", NotificationPermission.Granted, false, off);
+            NotificationSettingsView allowed = R28UiReminders(d, "ch1_6", NotificationPermission.Granted, false, on);
+            Check(!RemindersCardLayout.SwitchShowsOn(held) && RemindersCardLayout.SwitchShowsOn(live) && !RemindersCardLayout.SwitchShowsOn(offLive)
+                  && !RemindersCardLayout.SwitchShowsOn(denied.IdleChest) && !RemindersCardLayout.SwitchShowsOn(denied.Master) && !RemindersCardLayout.SwitchShowsOn(unsupported.Orders)
+                  && !RemindersCardLayout.SwitchShowsOn(remindersOff.Events) && !RemindersCardLayout.SwitchShowsOn(remindersOff.Master)
+                  && RemindersCardLayout.SwitchShowsOn(allowed.Master) && RemindersCardLayout.SwitchShowsOn(allowed.IdleChest),
+                  "R28 UI ROUND 2: blocked by the phone, unavailable, or Reminders off, every switch reads OFF even where the view holds it on; allowed, they read as they are");
+            string card = R28UiCode(R28UiRead(root, "Assets/Scripts/UI/Screens/RemindersCard.cs"));
+            Check(card.Contains("bool shownOn = RemindersCardLayout.SwitchShowsOn(t);") && !card.Contains("t.On ?"),
+                  "R28 UI ROUND 2: the card draws its switch from SwitchShowsOn and never reads On alone");
+
+            // ---- dividers span the card's inner width, and the card lays out at its real width
+            string rule = R28UiBody(card, "private void Rule(");
+            Check(rule.Contains("rt.anchorMin = new Vector2(0f, 1f)") && rule.Contains("rt.anchorMax = new Vector2(1f, 1f)") && rule.Contains("offsetMin = new Vector2(RemindersCardLayout.Pad,")
+                  && rule.Contains("offsetMax = new Vector2(-RemindersCardLayout.Pad,") && !rule.Contains("_w") && !rule.Contains("_width"),
+                  "R28 UI ROUND 2: a divider is stretched between the card's padding, so it spans the inner width of a card of any width (it was 1120 px in a 1850 px card)");
+            Check(card.Contains("Mathf.Abs(CurrentWidth() - _w) > 1f") && card.Contains("RemindersCardLayout.Plan(v, _w)") && !Regex.IsMatch(card, @"\b_width\b[^;]*(Plan|TextWidth)"),
+                  "R28 UI ROUND 2: the card plans its text at the width the page really gives it and looks again the moment that width differs from the one it was built for");
+            bool fits = true;
+            foreach (float w in new float[] { 1180f, 1850f })
+                foreach (NotificationSettingsView v in new NotificationSettingsView[] { unsupported, denied, remindersOff, allowed })
+                {
+                    RemindersPlan rp = RemindersCardLayout.Plan(v, w);
+                    float prev = rp.PermissionTop + rp.PermissionHeight;
+                    for (int i = 0; i < 4; i++) { fits &= rp.ToggleTops[i] >= prev; prev = rp.ToggleTops[i] + rp.ToggleHeights[i]; }
+                    fits &= rp.Height > prev && RemindersCardLayout.TextWidth(w, RemindersCardLayout.TopicIndent) > 400f;
+                }
+            Check(fits, "R28 UI ROUND 2: the card's bands stack without overlapping at the width it was built for (1180) and at the page's full width (1850)");
+
+            // ---- the settings page opens at its top, and the capture scroll aims at the card's top edge, not its middle
+            string settings = R28UiCode(R28UiRead(root, "Assets/Scripts/UI/Screens/SettingsScreen.cs"));
+            string onShow = R28UiBody(settings, "public override void OnShow()");
+            Check(onShow.Contains("_scroll.content.anchoredPosition = new Vector2(_scroll.content.anchoredPosition.x, 0f)") && onShow.IndexOf("_remindersCard.Show()", StringComparison.Ordinal) > 0,
+                  "R28 UI ROUND 2: the Settings page opens at its top, not wherever the last visit left it");
+            Check(settings.Contains("card.anchoredPosition.y + card.rect.height * (1f - card.pivot.y)") && !settings.Contains("-card.anchoredPosition.y - 8f"),
+                  "R28 UI ROUND 2: the capture scrolls to the card's top edge (its pivot is its middle; scrolled by the middle the page opened at the bottom of the card)");
+        }
+
+        private static void CheckR28UiRetryFiles(string root, Dictionary<string, List<string>> known)
+        {
+            string all = R28UiRead(root, "Tools/capture-r28a-retry.txt");
+            List<string> union = new List<string>();
+            bool small = true;
+            for (int n = 1; n < 20; n++)
+            {
+                string text = R28UiRead(root, "Tools/capture-r28a-retry-" + n + ".txt");
+                if (text.Length == 0) break;
+                int lines = 0;
+                foreach (string raw in text.Split('\n'))
+                {
+                    string line = raw.Trim();
+                    if (line.Length == 0 || line.StartsWith("#")) continue;
+                    lines++;
+                    union.Add(line);
+                }
+                small &= lines <= 10;
+            }
+            List<string> every = new List<string>();
+            bool known1 = true;
+            foreach (string raw in all.Split('\n'))
+            {
+                string line = raw.Trim();
+                if (line.Length == 0 || line.StartsWith("#")) continue;
+                every.Add(line);
+                Match m = Regex.Match(line, @"^Screen:(\w+)@(?:1920x1080|2400x1080)$");
+                if (!m.Success || !known.ContainsKey(m.Groups[1].Value)) known1 = false;
+            }
+            Check(all.Length > 0 && small && every.Count > 0 && string.Join("|", union.ToArray()) == string.Join("|", every.ToArray()) && known1,
+                  "R28 UI CAPTURES: the retry list is split into files of at most 10 targets whose lines add up to Tools/capture-r28a-retry.txt, every one a real target (" + every.Count + " in all)");
+        }
+
         // ------------------------------------------------------------------ the capture targets
 
         private static void CheckR28UiCaptures(string root)
@@ -539,7 +659,7 @@ namespace Emberfall.DevHarness
                 "LeaderboardsRefreshing", "LeaderboardsBannerFailed", "LeaderboardsBannerOffline", "LeaderboardsEmpty", "LeaderboardsEmptyWeekly", "LeaderboardsError",
                 "LeaderboardsNotOpen", "LeaderboardsWeekly", "LeaderboardsProving", "LeaderboardsCampaign",
                 "SettingsRemindersUnsupported", "SettingsRemindersNoStage", "SettingsRemindersNotAsked", "SettingsRemindersAsking", "SettingsRemindersDenied",
-                "SettingsRemindersGranted", "SettingsRemindersOff"
+                "SettingsRemindersGranted", "SettingsRemindersOff", "ProfileLeaderboardsDoor"
             };
             string missing = "", unwired = "";
             foreach (string name in required)
@@ -554,8 +674,11 @@ namespace Emberfall.DevHarness
                   "R28 UI CAPTURES: the menu items sit under Emberfall/Capture/R28 screens/");
             Check(shot.Contains("LeaderboardBackends.Override") && shot.Contains("NotificationBackends.Override") && shot.Contains("Emberfall Scratch"),
                   "R28 UI CAPTURES: the states are reached through the in-memory backends, on the scratch identity only");
-            bool doorsShot = sizes.ContainsKey("Profile") && sizes.ContainsKey("Recital") && sizes.ContainsKey("Proving");
-            Check(doorsShot, "R28 UI CAPTURES: the three screens that gained a door (Profile, Recital, Proving) are targets too");
+            bool doorsShot = sizes.ContainsKey("ProfileLeaderboardsDoor") && sizes.ContainsKey("Recital") && sizes.ContainsKey("Proving");
+            Check(doorsShot, "R28 UI CAPTURES: the three screens that gained a door (Profile at its first frame, Recital, Proving) are targets too");
+            CheckR28UiRetryFiles(root, sizes);
+            Check(shot.Contains("R28a verify ") && shot.Contains("EditorApplication.QueuePlayerLoopUpdate()") && shot.Contains("if (current != expected) app.Router.Show(expected);"),
+                  "R28 UI CAPTURES: each R28a target logs what the router shows just before the shot and shows the screen again if it is not the one asked for, so a Hub frame can be told from a router that went home");
         }
     }
 }

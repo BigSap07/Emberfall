@@ -291,10 +291,18 @@ namespace Emberfall.UI.Screens
         /// <summary>One row, ordinary or pinned. The caller's own is the same plate with a gold frame and a gold name.</summary>
         private static void BuildRow(RectTransform row, LeaderboardRowView r)
         {
-            Image plate = EmberforgeUI.PlainPanelOn(row);
+            // The spec's row: UITheme.PanelRaised, CornerRadiusSmall. The kit's plain panel carries a gold rim of its own,
+            // which put a gold frame round EVERY row and left the caller's row told apart by its name colour alone; so
+            // an ordinary row is a flat raised plate with a soft hairline, and only the caller's has the gold frame.
+            Image plate = row.gameObject.AddComponent<Image>();
+            plate.sprite = UISkin.Panel((int)UITheme.CornerRadiusSmall);
+            plate.type = Image.Type.Sliced;
+            plate.color = UITheme.PanelRaised;
             plate.raycastTarget = false;
             if (r.IsMe)
                 UIBuilder.Frame("Mine", row, UITheme.Gold, (int)UITheme.CornerRadiusSmall, HubStyle.BorderWeightHeavy);
+            else
+                UIBuilder.Frame("Edge", row, UITheme.BorderSoft, (int)UITheme.CornerRadiusSmall, HubStyle.BorderWeight);
 
             Text rank = EmberforgeUI.Label("Rank", row, r.RankText, UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleLeft);
             UIBuilder.Box(rank.rectTransform, ValueInset, 0f, LeaderboardsLayout.RankColumn, LeaderboardsLayout.RowHeight, new Vector2(0f, 0.5f));

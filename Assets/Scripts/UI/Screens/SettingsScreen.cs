@@ -431,7 +431,10 @@ namespace Emberfall.UI.Screens
             RectTransform card = _remindersCard.CardRect;
             if (card == null) return;
             RectTransform content = _scroll.content;
-            content.anchoredPosition = new Vector2(content.anchoredPosition.x, -card.anchoredPosition.y - 8f);
+            // The card's pivot is its middle, so its anchored position is the middle of it: its top edge is half a height
+            // above that. Scrolled by the middle instead, the page opened at the bottom of the card.
+            float cardTop = card.anchoredPosition.y + card.rect.height * (1f - card.pivot.y);
+            content.anchoredPosition = new Vector2(content.anchoredPosition.x, Mathf.Max(0f, -cardTop - 8f));
         }
 
         /// <summary>For the capture tool: the card's controller, for the two taps a target presses.</summary>
@@ -459,6 +462,8 @@ namespace Emberfall.UI.Screens
             _headerSubtitle.text = "";
             _audioCard.Refresh();
             _remindersCard.Show();
+            // The page opens at its top, not wherever the last visit left it.
+            if (_scroll != null) _scroll.content.anchoredPosition = new Vector2(_scroll.content.anchoredPosition.x, 0f);
             RefreshFastSummon();
             RefreshScreenShake();
             RefreshSave();

@@ -182,6 +182,15 @@ namespace Emberfall.Core.Screens
             return t.Description;
         }
 
+        /// <summary>
+        /// Whether a switch is drawn ON. A switch that cannot be flipped is drawn off whatever it holds: a topic held on
+        /// while Reminders is off, or while the phone blocks reminders, is not on in any way the player can use.
+        /// </summary>
+        public static bool SwitchShowsOn(ToggleModel t)
+        {
+            return t.On && t.Enabled;
+        }
+
         /// <summary>Width left for a switch row's words once the switch, the indent and the card's padding are taken.</summary>
         public static float TextWidth(float cardWidth, float indent)
         {
