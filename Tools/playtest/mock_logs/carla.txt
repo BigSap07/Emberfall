@@ -1,0 +1,18 @@
+Emberfall play log. Last session summary: +150.0s summary length 150s screens 5 stages_cleared 1 purchases 0 errors 0
+
+...
++610.0s screen Campaign
++612.0s stage ch1_2 attempt
++613.0s screen Battle
++680.0s stage ch1_2 win
++700.0s summary length 700s screens 30 stages_cleared 4 purchases 0 errors 0
+== session 9f8e7d6c started 2026-10-26T07:30:00Z ==
+build 0.3.0 (ae12e88) | platform Android | device Pixel 7 | defines EMBERFALL_PLAYLOG;EMBERFALL_TESTSTORE
++2.0s screen MainMenu
++7.0s screen Campaign
++9.0s stage ch1_3 attempt
++10.0s screen Battle
++60.0s stage ch1_3 win
++61.0s screen Recital
++120.0s screen MainMenu
++150.0s summary length 150s screens 5 stages_cleared 1 purchases 0 errors 0

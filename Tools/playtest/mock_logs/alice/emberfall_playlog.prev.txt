@@ -1,0 +1,21 @@
+# Emberfall play log. This file stays on this device. The game never sends it anywhere, whatever you chose for the play stats: it is local, and you send it by hand (Settings, SHARE PLAY LOG). It holds screens opened, stage results, test store purchases, cloud status and errors. No save data and no account details.
+== session a1b2c3d4 started 2026-10-24T18:02:11Z ==
+build 0.3.0 (ae12e88) | platform Android | device SM-X200 | defines EMBERFALL_PLAYLOG;EMBERFALL_TESTSTORE
++0.4s cloud Ready
++2.1s screen MainMenu
++9.8s screen Campaign
++12.0s stage ch1_1 attempt
++14.0s screen Battle
++58.3s stage ch1_1 win
++59.0s screen WaveResult
++66.2s screen Campaign
++70.0s stage ch1_2 attempt
++71.0s screen Battle
++130.5s stage ch1_2 win
++131.0s screen WaveResult
++140.0s screen Summon
++260.0s screen Heroes
++402.7s screen Store
++415.0s purchase offer starter_pack result bought
++440.0s screen MainMenu
++447.0s summary length 447s screens 11 stages_cleared 2 purchases 1 errors 0

@@ -1,0 +1,8 @@
+# Emberfall play log. This file stays on this device. The game never sends it anywhere, whatever you chose for the play stats: it is local, and you send it by hand (Settings, SHARE PLAY LOG). It holds screens opened, stage results, test store purchases, cloud status and errors. No save data and no account details.
+== session 5m0k3000 started 2026-10-23T15:00:00Z ==
+build 0.3.0 (ae12e88) | platform WindowsPlayer | device Desktop | defines EMBERFALL_PLAYLOG;EMBERFALL_TESTSTORE
++0.5s [smoke] start (throw-away identity: scratch-smoke folder, own session; the real save and session are not used)
++3.0s screen Friends
++5.0s screen Guild
++6.0s [smoke] done ok
++6.1s summary length 6s screens 2 stages_cleared 0 purchases 0 errors 0
