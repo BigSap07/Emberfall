@@ -6500,8 +6500,9 @@ namespace Emberfall.Core.Combat
                 // --- Disrupted: intercept the first energy gain each round ---
                 // Checked before AddEnergyClamped so the gain never reaches the unit. The drain
                 // that replaces it calls AddEnergyClamped directly, bypassing this method, so
-                // the interceptor cannot re-enter itself. No shipped content applies Disrupted,
-                // so this branch is unreachable in every existing battle.
+                // the interceptor cannot re-enter itself. Shipped content applies Disrupted (Oris,
+                // Avera and Iolan; the harness's "shipped content applies or reads Disrupted" check
+                // names them), so this branch runs in real battles.
                 if (amount > 0 && InterceptDisrupted(unit, amount))
                     return;
 
@@ -6636,7 +6637,7 @@ namespace Emberfall.Core.Combat
             /// AddEnergyClamped for the original amount. False if no Disrupted entry with uses
             /// remaining was found, letting the gain through unchanged.
             ///
-            /// Unreachable in shipped content: nothing applies Disrupted.
+            /// Reached in shipped content: Oris, Avera and Iolan apply Disrupted.
             /// </summary>
             private bool InterceptDisrupted(CombatUnit unit, int amount)
             {
