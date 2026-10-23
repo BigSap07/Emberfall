@@ -1312,7 +1312,8 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
   (`EmberfallBuild.BuildAndroidPlaytest`, IL2CPP ARM64) and `Tools/build-friends.ps1` (with `-WhatIf`) build it; see `Docs/FRIENDS-BUILD.md`.
 - **Play log and smoke mode.** `PlayLogSwitch` (off by default), `PlayLogSession` and `PlayLogWriter` in `PlayLog.cs` (Core) and
   `PlayLogService` (Game, compiled only with the define) write `emberfall_playlog.txt`, independent of the stats consent, with a
-  SHARE PLAY LOG button in `SettingsScreen`. `-emberfallSmoke` checks the cloud sign in and opens the Friends and Guild screens.
+  SHARE PLAY LOG button in `SettingsScreen`. `-emberfallSmoke` checks the cloud sign in and opens the Friends and Guild screens
+  on a throw-away identity: `SmokeStorage` redirects the save file, its mirror, the cloud session and the play log.
   `CheckR27PlayLog` and the `release-playlog` compile prove it; a real Unity build is still owed.
 
 ### The UI kit (R20)

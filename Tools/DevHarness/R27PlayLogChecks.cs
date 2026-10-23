@@ -23,11 +23,13 @@ namespace Emberfall.DevHarness
             R27OffMeansNoFile();
             R27Formats();
             R27Session();
+            R27SummaryOnce();
             R27Caps();
             R27Rotation();
             R27Share();
             R27Defines();
             R27Smoke();
+            R27SmokeIdentity(contentDir);
             R27Wiring(contentDir);
         }
 
@@ -119,7 +121,8 @@ namespace Emberfall.DevHarness
             Check(!text.Contains("something_else"), "an unknown campaign event is ignored");
             Check(text.TrimEnd().EndsWith("+60.0s summary length 60s screens 2 stages_cleared 1 purchases 1 errors 1"), "the file ends with the session summary line");
 
-            // The hooks reach the active session.
+            // The hooks reach the active session (the app came back, so the session records again).
+            s.Resume();
             PlayLogHooks.Active = s;
             try
             {
@@ -219,6 +222,96 @@ namespace Emberfall.DevHarness
             string[] upper = new string[] { "-EMBERFALLSMOKE" };
             Check(PlayLogRules.HasFlag(with, "-emberfallSmoke") && PlayLogRules.HasFlag(upper, "-emberfallSmoke") && !PlayLogRules.HasFlag(new string[] { "-emberfallSmokeX" }, "-emberfallSmoke")
                   && !PlayLogRules.HasFlag(null, "-emberfallSmoke") && !PlayLogRules.HasFlag(with, ""), "the smoke flag is found without regard to case, and only as a whole argument");
+        }
+
+        private static int R27Count(string text, string needle)
+        {
+            int n = 0, at = 0;
+            while ((at = text.IndexOf(needle, at, StringComparison.Ordinal)) >= 0) { n++; at += needle.Length; }
+            return n;
+        }
+
+        private static void R27SummaryOnce()
+        {
+            string dir = R27TempDir("once");
+            PlayLogWriter w = new PlayLogWriter(true, dir);
+            double now = 0.0;
+            PlayLogSession s = new PlayLogSession(w, delegate () { return now; }, "once0000");
+            now = 1.0; s.Screen("MainMenu");
+            now = 2.0; s.Cloud("Ready", "");
+            now = 10.0; s.Summary();                       // the pause
+            now = 10.1; s.Cloud("Working", "syncing");     // the cloud syncing as the app leaves
+            now = 10.2; s.Summary();                       // the quit that follows the pause
+            string text = File.ReadAllText(w.FilePath);
+            Check(R27Count(text, " summary ") == 1 && text.TrimEnd().EndsWith("errors 0") && !text.Contains("syncing"),
+                  "THE SUMMARY IS WRITTEN ONCE per session end, and a late cloud event after it is dropped (pause then quit gives one summary, nothing after it)");
+            Check(s.Closed, "after the summary the session is closed until the app comes back");
+
+            now = 20.0; s.Resume();
+            now = 21.0; s.Summary();                       // came back, nothing happened, paused again
+            Check(R27Count(File.ReadAllText(w.FilePath), " summary ") == 1, "resume then pause with no new event adds no second summary");
+            now = 30.0; s.Resume();
+            now = 31.0; s.Screen("Heroes");
+            now = 32.0; s.Summary();
+            string later = File.ReadAllText(w.FilePath);
+            Check(R27Count(later, " summary ") == 2 && later.TrimEnd().EndsWith("screens 2 stages_cleared 0 purchases 0 errors 0"),
+                  "a later summary is a new line only because more events happened since the previous one, and it is cumulative");
+        }
+
+        private static void R27SmokeIdentity(string contentDir)
+        {
+            string real = Path.Combine("data", "persistent");
+            bool was = SmokeStorage.Active;
+            try
+            {
+                SmokeStorage.Active = false;
+                Check(SmokeStorage.SaveDirectory(real) == real && SmokeStorage.SavePrefsKey("emberfall.save.v1") == "emberfall.save.v1"
+                      && SmokeStorage.CloudPrefsKey("emberfall.cloud.v1") == "emberfall.cloud.v1" && SmokeStorage.PlayLogFile == PlayLogRules.FileName
+                      && SmokeStorage.PlayLogPrevFile == PlayLogRules.PrevFileName,
+                      "SMOKE STORAGE OFF resolves every real name unchanged (a normal run is exactly as before)");
+                SmokeStorage.Active = true;
+                string dir = SmokeStorage.SaveDirectory(real);
+                Check(dir != real && dir.StartsWith(real) && dir.EndsWith(SmokeStorage.FolderName) && Path.Combine(dir, "emberfall_save.json") != Path.Combine(real, "emberfall_save.json"),
+                      "SMOKE STORAGE ON never resolves the real save path: the file is inside " + SmokeStorage.FolderName);
+                Check(SmokeStorage.SavePrefsKey("emberfall.save.v1") != "emberfall.save.v1" && SmokeStorage.CloudPrefsKey("emberfall.cloud.v1") != "emberfall.cloud.v1",
+                      "and neither the save mirror key nor the cloud session key is the real one");
+                Check(SmokeStorage.PlayLogFile == "emberfall_playlog.smoke.txt" && SmokeStorage.PlayLogFile != PlayLogRules.FileName && SmokeStorage.PlayLogPrevFile != PlayLogRules.PrevFileName,
+                      "and the play log is emberfall_playlog.smoke.txt, never the real log");
+                string logDir = R27TempDir("smokelog");
+                PlayLogWriter sw = new PlayLogWriter(true, logDir, SmokeStorage.PlayLogFile, SmokeStorage.PlayLogPrevFile);
+                sw.Open();
+                sw.Write("+1.0s [smoke] start");
+                Check(File.Exists(Path.Combine(logDir, "emberfall_playlog.smoke.txt")) && !File.Exists(Path.Combine(logDir, PlayLogRules.FileName)), "a smoke writer creates only the smoke log file");
+            }
+            finally { SmokeStorage.Active = was; }
+            Check(!SmokeStorage.ShouldActivate(false, new string[] { "-emberfallSmoke" }) && !SmokeStorage.ShouldActivate(true, new string[] { "-batchmode" })
+                  && SmokeStorage.ShouldActivate(true, new string[] { "x", "-emberfallSmoke" }), "smoke storage activates only with the define compiled in AND the flag on the command line");
+            Check(!SmokeStorage.Active, "smoke storage is off by default");
+
+            string root = SealedRepoRoot(contentDir);
+            if (root == null) { Check(false, "R27 smoke: the repository root was not found"); return; }
+            string save = R27Read(root, "Assets", "Scripts", "Game", "SaveService.cs");
+            string cloud = R27Read(root, "Assets", "Scripts", "Game", "Cloud", "CloudLocalState.cs");
+            string svc = R27Read(root, "Assets", "Scripts", "Game", "PlayLog", "PlayLogService.cs");
+            System.Text.RegularExpressions.Regex rawKey = new System.Text.RegularExpressions.Regex(@"PlayerPrefs\.\w+\(\s*PrefsKey");
+            Check(save != null && save.Contains("SmokeStorage.SaveDirectory(Application.persistentDataPath)") && save.Contains("SmokeStorage.SavePrefsKey(PrefsKey)") && !rawKey.IsMatch(save)
+                  && !save.Contains("Path.Combine(Application.persistentDataPath, name)"),
+                  "SOURCE SCAN SaveService: the file path, the unreadable-copy path and every PlayerPrefs call go through SmokeStorage, none through the raw key");
+            Check(cloud != null && cloud.Contains("SmokeStorage.CloudPrefsKey(PrefsKey)") && !rawKey.IsMatch(cloud), "SOURCE SCAN CloudLocalState: the session key goes through SmokeStorage, none through the raw key");
+            bool noOther = true;
+            string[] dirs = new string[] { Path.Combine(root, "Assets", "Scripts") };
+            foreach (string f in Directory.GetFiles(dirs[0], "*.cs", SearchOption.AllDirectories))
+            {
+                string name = Path.GetFileName(f);
+                if (name == "SaveService.cs" || name == "SmokeStorage.cs") continue;
+                string t = File.ReadAllText(f);
+                if (t.Contains("emberfall_save") || t.Contains("SaveService.FilePath") || t.Contains("\"emberfall.save.v1\"") || t.Contains("\"emberfall.cloud.v1\"")) { if (name != "CloudLocalState.cs") noOther = false; }
+            }
+            Check(noOther, "no other runtime script names the real save file, its mirror key or the cloud session key");
+            Check(svc != null && svc.Contains("DecideSmokeStorage") && svc.Contains("BeforeSceneLoad") && svc.Contains("SmokeStorage.PlayLogFile") && svc.Contains("SmokeStorage.Active = false"),
+                  "PlayLogService decides smoke storage before any scene loads (before the save is read) and opens the smoke play log");
+            string tele = R27Read(root, "Assets", "Scripts", "Game", "Telemetry", "TelemetryService.cs");
+            Check(tele != null && tele.Contains("SmokeStorage.Active) return null"), "a smoke run installs no play stats, so it cannot queue or send the real install's events");
         }
 
         private static string R27Read(string root, params string[] parts)

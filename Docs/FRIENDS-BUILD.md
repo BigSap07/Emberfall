@@ -16,10 +16,18 @@ reads the command line argument `-emberfallDefines "A;B"` and `BuildDefines.Pars
 list. `ProjectSettings.asset` is never written for them, so a build leaves the tree clean. Together with
 `EMBERFALL_STORE_LIVE` the test store still resolves to COMING SOON (`StoreModes.Resolve`).
 
+`EMBERFALL_UNITY_IAP` also shows in the defines of a build (and in the play log header): the project's `csc.rsp` sets it
+for every build, so it is expected and not something `-Defines` added.
+
 ## Building
 
 All three scripts refuse a dirty tree, keep the `supabase.json` rules (offline by default, the file is moved out for
 the build and back; `-Cloud` includes it untouched) and delete nothing new. Close the editor on the project first.
+Unity rewrites `ProjectSettings/ProjectSettings.asset` on its way out (it drops one `m_SubKind:` line), which would trip
+the clean-tree check after the build. `build-windows.ps1` and `build-android.ps1` therefore save its bytes before Unity
+starts and put them back after it exits, before the check; every other file is still checked. `build-friends.ps1` does
+the same between its two steps and lists anything else a step left changed. Unity's native build tools also write a
+`.utmp` folder in the project root during an Android build; it is in `.gitignore`.
 
 - `Tools/build-windows.ps1 -Cloud -Defines "EMBERFALL_TESTSTORE;EMBERFALL_PLAYLOG"` builds the Windows zip. Without
   `-Defines` it behaves as it always did. With `EMBERFALL_PLAYLOG` it also checks the play log is inside the player.
@@ -59,7 +67,10 @@ details. Format (`PlayLogSession` in `PlayLog.cs` is the one place that builds t
   the `TelemetryHooks` campaign taps (so the log works with the stats off), purchases from `PurchaseFlow.Buy`
   refusals and `PurchaseFlow.Finished` / `Failed`, cloud transitions from `CloudCoordinator`, errors from
   `Application.logMessageReceived` (errors and exceptions only, 25 a session).
-- The summary line is cumulative and is written at pause and at quit; the last one in a session is the total.
+- The summary line is cumulative and is written once per session end (`PlayLogSession.Summary`): the first call at pause
+  or quit writes it and closes the session, so a quit after a pause adds nothing and a late event (the cloud syncing as
+  the app leaves) is dropped instead of landing after it. When the app comes back (`Resume`) a later summary is a new line
+  only if events happened since the previous one.
 - Caps (`PlayLogRules`): at most 2500 event lines a session; a file over 200 KB is moved to
   `emberfall_playlog.prev.txt` at the next start (an older prev is replaced, nothing else is removed) and a fresh file
   begins.
@@ -71,8 +82,21 @@ details. Format (`PlayLogSession` in `PlayLog.cs` is the one place that builds t
 
 `Emberfall.exe -emberfallSmoke` (only in a build with `EMBERFALL_PLAYLOG`) runs a short cloud check after boot, then
 quits. It opens the Friends and Guild screens through the router (the feature lock is bypassed for the visit only; it
-grants nothing), creates no purchase and writes no cloud data beyond a normal first launch. Every line goes to
-`Player.log` and to the play log, so `grep "\[smoke\]"` finds them:
+grants nothing) and creates no purchase.
+
+**It runs as a throw-away player and never touches the real data.** Before any scene loads, `PlayLogService` sets
+`SmokeStorage.Active` (flag on the command line and the define compiled in). While it is active, `SmokeStorage` redirects
+every name the real data lives under: the save file to `scratch-smoke\emberfall_save.json` inside
+`persistentDataPath` (`SaveService.FilePath`), the save's PlayerPrefs mirror to `emberfall.smoke.save.v1`, the cloud
+session (user id and refresh token, `CloudLocalState`) to `emberfall.smoke.cloud.v1`, and the play log to
+`emberfall_playlog.smoke.txt`. The play stats are not installed. So the run starts as a brand new anonymous player with
+its own session; nothing in the real `emberfall_save.json`, its mirror, the real session or the real play log is read
+or written, and the real session is not needed for the cloud sign in (a fresh anonymous sign in works with the public
+key). What it does create in the cloud is what any first launch creates: one anonymous user and that user's starter
+save. The smoke identity is kept between smoke runs (same scratch keys), so repeating the test reuses that one user.
+`CheckR27PlayLog` proves the mapping with pure functions and a source scan of `SaveService` and `CloudLocalState`.
+No real-save backup is needed any more. Every line goes to `Player.log` and to the smoke play log, so
+`grep "\[smoke\]"` finds them:
 
     [smoke] start
     [smoke] cloud signed in anonymously (status Ready)
