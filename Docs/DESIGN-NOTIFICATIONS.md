@@ -9,8 +9,14 @@ Decision record from 2026-10-22. The reasoning is durable. Names and numbers are
   notification fires given a save, and `NotificationChecks.cs` in `Tools/DevHarness`, which proves it.
   It is engine-free Core, reads the profile and content, writes nothing, and the same inputs give the
   same plan.
-- **Not built:** the Unity side. Nothing schedules a notification yet, the Mobile Notifications package
-  is not in `Packages/manifest.json`, and there is no settings toggle. The section **What a Unity Mobile
+- **Built in R28:** the Unity glue short of the package. `Assets/Scripts/Game/Notifications/NotificationService.cs`
+  holds `INotificationBackend` (with `UnsupportedNotificationBackend` as the only implementation),
+  `NotificationPrefsStore` (the four switches in `PlayerPrefs`), `NotificationScheduler` (called from
+  `GameApp`'s pause and quit hooks: re-plan on leaving, clear on return; inert until a backend reports the
+  permission granted) and the settings screen's controller. `NotificationSettingsPresenter` says what the
+  settings screen draws (`Docs/ui-specs/R28-SCREENS.md`).
+- **Not built:** the package and the Android backend. The Mobile Notifications package is not in
+  `Packages/manifest.json`, so nothing is scheduled on a device yet. The section **What a Unity Mobile
   Notifications integration needs** below is the list for whoever builds it.
 
 ## The three notifications

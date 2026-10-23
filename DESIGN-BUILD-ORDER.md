@@ -1049,7 +1049,7 @@ the same save, against ceilings and against server time since the server last ra
 everything with `now()` and logs every refusal. `leaderboard_top()` returns rank, display name, value and
 `is_me`, never a user id. `Tools/supabase-leaderboard-rules-test.py` proves the rules once 0023 is applied;
 it has never been run against a project. `Tools/supabase-local-check.sh` applies it locally and checks the
-boards, the refusals and the closed doors. Nothing in the game calls either function and no screen shows a board.
+boards, the refusals and the closed doors. The client side is built (R28, **The R28 screens**); no screen shows a board yet.
 
 **The launch server pieces: written, not applied to a project (`Server/README.md`, `Docs/LAUNCH-CHECKLIST.md`).**
 `0016_account_deletion.sql` (`delete_my_account`, `admin_delete_account`), `0017_chat_safety.sql` (block,
@@ -1348,8 +1348,9 @@ the device's UTC offset: the idle chest at its cap, the next orders turnover (on
 and an event's end for a player who has taken part (8 hours before a weekly event, 24 before a monthly).
 Quiet hours 22:00 to 09:00 local, at most 2 a local day, 4 hours apart, nothing past 48 hours, nothing
 before the first stage is cleared, and no notification names anything sold. It writes nothing and holds
-no state in the save. `NotificationChecks.cs` proves it, including a sweep of about 1,500 plans. No
-package, scheduler or settings toggle exists yet.
+no state in the save. `NotificationChecks.cs` proves it, including a sweep of about 1,500 plans. The
+scheduler glue and the settings screen's presenter are built (R28, **The R28 screens**); the package and
+an Android backend are not, so nothing is scheduled on a device.
 
 ### The Store (R19)
 
@@ -1470,6 +1471,32 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
   (3018 MB packed, BC7), and `Tools/sheet-trim-report.py` (read only) measures that 81 percent of their 4x4 blocks are fully transparent. The
   only big lever is re-cutting the sheets, which is an art and content change left as an owner decision; the numbers are in
   `handoff/R26-POLISH/texture-size.md`.
+
+### The R28 screens (presenters, transport, rewarded ads)
+
+**Everything below four screens except the uGUI (`Docs/ui-specs/R28-SCREENS.md`).** Each screen has a presenter in
+`Assets/Scripts/Core/Screens` that exposes exactly what it draws (phase, rows, buttons with enabled and reason, every
+sentence and countdown) and a controller in `Assets/Scripts/Game` that makes the calls. `R28ScreenChecks.cs` drives
+every presenter through every state, reads the codecs against the two 0016 migrations' shapes, and scans every
+string for an em or en dash and for selling words.
+
+- **Leaderboards.** `LeaderboardCodec` (Core) and `LeaderboardService.cs` (transport, in-memory override, controller)
+  for `leaderboard_submit` and `leaderboard_top`; `LeaderboardsPresenter`. Submits at most once a minute, never sends
+  a score, words a refusal neutrally, and runs the weekly countdown on the server's clock once known. Which weekly
+  board the THIS WEEK tab shows is `LeaderboardsPresenter.WeeklyBoard` (owner decision 1 of the record).
+- **Guild dungeon ladder.** `GuildDungeonSizeService` for the size migration's three functions and its snapshot row;
+  `GuildDungeonLadderPresenter` reads the ladder, the cycle cap and every refusal sentence from `GuildDungeonScale`
+  and the reward from `GuildDungeonRewards` (still the placeholder).
+- **Notification settings.** `NotificationSettingsPresenter` over `NotificationPlanner`; the switches in `PlayerPrefs`;
+  `NotificationScheduler` wired into `GameApp`'s pause and quit hooks, inert with the only backend there is
+  (`UnsupportedNotificationBackend`).
+- **Rewarded ads, behind `AdsSwitch`, OFF.** `ads.json` (the lean variant: A1 idle Gold capped at 2 hours, A2 one
+  Brand, A3 one more full-pay repeat clear, each once a reward day), `AdRewards` (read-only `View`, `Grant` once per
+  impression through `PurchaseGrants.Apply`, so the Gold is Sealed), `AdsState` in the save from **version 27**
+  (`SaveSerializer.CurrentVersion` is 27; a save is stamped 27 only once an ad was granted, so with the switch off
+  every save is byte for byte what version 26 wrote), `RewardedAdPresenter`, and `Game/Ads` with a simulated backend
+  for the editor and development builds. **Before the switch goes on the owner applies
+  `Server/supabase/owner/save_limits_27.sql`.** No ads package is in the project.
 
 ### The UI kit (R20)
 

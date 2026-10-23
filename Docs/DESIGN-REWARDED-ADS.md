@@ -1,6 +1,6 @@
 # DESIGN-REWARDED-ADS: where rewarded ads fit, their caps, and what they do to the curve
 
-Decision record, dated 2026-10-22. A proposal: nothing in the game shows an ad, and no ads package is in the project. The numbers below were measured with the harness's reference walks (60 walks a column). The LevelPlay integration is a plan at the end of this file, not code.
+Decision record, dated 2026-10-22. A proposal: nothing in the game shows an ad, and no ads package is in the project. Since R28 the rules below are code behind `AdsSwitch`, which is off: `AdRewards`, `ads.json`, the save's `ads` block (version 27, written only once an ad is granted), `RewardedAdPresenter` and a simulated ad backend (`Docs/ui-specs/R28-SCREENS.md`). The numbers below were measured with the harness's reference walks (60 walks a column). The LevelPlay integration is a plan at the end of this file, not code.
 
 ## The rules
 
