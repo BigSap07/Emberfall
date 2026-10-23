@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
+using Emberfall.Core.Session;
 
 namespace Emberfall.EditorTools
 {
@@ -161,6 +162,19 @@ namespace Emberfall.EditorTools
             return "Emberfall-" + Version + "-" + commit + "-" + variant + "-win";
         }
 
+        /// <summary>The command line flag that carries the extra scripting defines of one build, "A;B".</summary>
+        public const string DefinesFlag = "-emberfallDefines";
+
+        /// <summary>
+        /// The defines the tool script asked for (-emberfallDefines "A;B"), parsed by BuildDefines.Parse. They go to
+        /// the player build through BuildPlayerOptions.extraScriptingDefines, which belongs to that one BuildPlayer
+        /// call and is never written to ProjectSettings.asset, so the tree stays clean. Empty when the flag is absent.
+        /// </summary>
+        public static string[] RequestedDefines()
+        {
+            return BuildDefines.Parse(CommandLineValue(DefinesFlag));
+        }
+
         /// <summary>The value following <paramref name="flag"/> on Unity's own command line, or
         /// null if the flag is absent or is the last argument.</summary>
         private static string CommandLineValue(string flag)
@@ -283,13 +297,15 @@ namespace Emberfall.EditorTools
             // Assets/Scripts/Dev, which no build script can bypass. See DESIGN-BUILD-ORDER.md.
             options.scenes = ScenesFor(development);
 
+            options.extraScriptingDefines = RequestedDefines();
             options.locationPathName = outputPath;
             options.target = BuildTarget.StandaloneWindows64;
             options.targetGroup = BuildTargetGroup.Standalone;
             options.options = development ? BuildOptions.Development : BuildOptions.None;
 
             Debug.Log("Emberfall: building Windows " + (development ? "development" : "release") +
-                      " player " + Version + " (" + (commit ?? "unstamped") + ") -> " + outputPath);
+                      " player " + Version + " (" + (commit ?? "unstamped") + ") -> " + outputPath +
+                      " defines [" + BuildDefines.Join(options.extraScriptingDefines) + "]");
             BuildReport report;
             WriteStamp(commit);
             try
@@ -566,6 +582,7 @@ namespace Emberfall.EditorTools
 
             BuildPlayerOptions options = new BuildPlayerOptions();
             options.scenes = ScenesFor(!release);
+            options.extraScriptingDefines = RequestedDefines();
             options.locationPathName = outputPath;
             options.target = BuildTarget.Android;
             options.targetGroup = BuildTargetGroup.Android;
@@ -590,6 +607,106 @@ namespace Emberfall.EditorTools
             Debug.Log("Emberfall: build succeeded in " + Math.Round(summary.totalTime.TotalSeconds) + "s, " +
                       Math.Round(megabytes, 1) + " MB -> " + outputPath);
             return outputPath;
+        }
+
+        /// <summary>
+        /// THE ANDROID PLAYTEST BUILD (R27, Docs/FRIENDS-BUILD.md): the APK a friend installs, built by
+        /// Tools/build-android.ps1 the way Tools/build-windows.ps1 builds the Windows zip. Headless and dialog free:
+        ///
+        ///   -emberfallOutput  "<a folder outside every working tree>"
+        ///   -emberfallCommit  "<short hash>"
+        ///   -emberfallVariant release-offline | release-cloud
+        ///   -emberfallDefines "A;B"            (optional, extraScriptingDefines for this build only)
+        ///
+        /// The editor must already be on the Android target (the script passes -buildTarget Android): switching here
+        /// would re-import in the middle of a batch run, so a wrong target is an error, never a dialog. It applies the
+        /// player settings, then the release backend (IL2CPP, ARM64) over them, builds a RELEASE APK (no Dev Arena),
+        /// stamps the commit, and writes Emberfall-VERSION-HASH-VARIANT-android.apk and .sizes.txt in the output
+        /// folder. The debug keystore signs it, which is fine for a sideloaded test build. The backend settings it
+        /// changed are put back afterwards.
+        /// </summary>
+        public static void BuildAndroidPlaytest()
+        {
+            string outputRoot = CommandLineValue("-emberfallOutput");
+            string commit = CommandLineValue("-emberfallCommit");
+            string variant = CommandLineValue("-emberfallVariant");
+            if (string.IsNullOrEmpty(outputRoot) || string.IsNullOrEmpty(commit) || string.IsNullOrEmpty(variant))
+            {
+                throw new Exception("Emberfall: BuildAndroidPlaytest needs -emberfallOutput <folder>, " +
+                                    "-emberfallCommit <hash> and -emberfallVariant <variant>. " +
+                                    "Run it through Tools/build-android.ps1.");
+            }
+            if (variant != "release-offline" && variant != "release-cloud")
+            {
+                throw new Exception("Emberfall: " + variant + " is not an Android playtest variant. It is " +
+                                    "release-offline or release-cloud.");
+            }
+            bool cloud = variant == "release-cloud";
+            string projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            bool configPresent = File.Exists(Path.Combine(projectRoot, CloudConfigPath));
+            if (configPresent != cloud)
+            {
+                throw new Exception("Emberfall: a " + variant + " build with " + CloudConfigPath +
+                                    (configPresent ? " present" : " absent") + ". The script moves it " +
+                                    "for an offline build and needs it for a cloud one.");
+            }
+            if (EditorUserBuildSettings.activeBuildTarget != BuildTarget.Android)
+            {
+                throw new Exception("Emberfall: the active build target is " + EditorUserBuildSettings.activeBuildTarget +
+                                    ", not Android. Run it through Tools/build-android.ps1, which passes -buildTarget Android.");
+            }
+
+            EmberfallProjectSetup.EnsureScene();
+            EmberfallProjectSetup.EnsureBuildSettings();
+
+            NamedBuildTarget android = NamedBuildTarget.Android;
+            ScriptingImplementation previousBackend = PlayerSettings.GetScriptingBackend(android);
+            AndroidArchitecture previousArchitectures = PlayerSettings.Android.targetArchitectures;
+            ManagedStrippingLevel previousStripping = PlayerSettings.GetManagedStrippingLevel(android);
+            string path = null;
+            try
+            {
+                EmberfallProjectSetup.ApplyPlayerSettings();
+                EmberfallProjectSetup.ApplyReleaseBackend();
+                EditorUserBuildSettings.buildAppBundle = false;
+                EditorUserBuildSettings.androidBuildType = AndroidBuildType.Release;
+
+                if (!Directory.Exists(outputRoot)) Directory.CreateDirectory(outputRoot);
+                string apkName = "Emberfall-" + Version + "-" + commit + "-" + variant + "-android";
+                string apkPath = Path.Combine(outputRoot, apkName + ".apk");
+
+                BuildPlayerOptions options = new BuildPlayerOptions();
+                options.scenes = ScenesFor(false);
+                options.extraScriptingDefines = RequestedDefines();
+                options.locationPathName = apkPath;
+                options.target = BuildTarget.Android;
+                options.targetGroup = BuildTargetGroup.Android;
+                options.options = BuildOptions.None;
+
+                Debug.Log("Emberfall: building Android release APK " + Version + " (" + commit + ") -> " + apkPath +
+                          " defines [" + BuildDefines.Join(options.extraScriptingDefines) + "]");
+                BuildReport report;
+                WriteStamp(commit);
+                try { report = BuildPipeline.BuildPlayer(options); }
+                finally { RemoveStamp(); }
+                if (report == null) throw new Exception("Emberfall: Android build returned no report.");
+                if (report.summary.result != BuildResult.Succeeded)
+                {
+                    throw new Exception("Emberfall: Android build " + report.summary.result + " with " +
+                                        report.summary.totalErrors + " error(s).");
+                }
+                Debug.Log("Emberfall: Android build succeeded in " + Math.Round(report.summary.totalTime.TotalSeconds) +
+                          "s, " + Math.Round(report.summary.totalSize / (1024.0 * 1024.0), 1) + " MB -> " + apkPath);
+                WriteSizeReport(report, Path.Combine(outputRoot, apkName + ".sizes.txt"));
+                path = apkPath;
+            }
+            finally
+            {
+                PlayerSettings.SetScriptingBackend(android, previousBackend);
+                PlayerSettings.Android.targetArchitectures = previousArchitectures;
+                PlayerSettings.SetManagedStrippingLevel(android, previousStripping);
+            }
+            if (path == null) throw new Exception("Emberfall: Android playtest build failed.");
         }
 
         /// <summary>

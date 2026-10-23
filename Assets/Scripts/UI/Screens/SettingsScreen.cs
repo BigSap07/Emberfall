@@ -66,6 +66,9 @@ namespace Emberfall.UI.Screens
             BuildSummonCard(pair);
             BuildBattleCard(pair);
             if (TelemetrySwitch.Enabled) BuildStatsCard(content);
+#if EMBERFALL_PLAYLOG
+            BuildPlayLogCard(content);
+#endif
             BuildSaveCard(content);
             BuildResetCard(content);
             BuildCreditsCard(content);
@@ -196,6 +199,32 @@ namespace Emberfall.UI.Screens
             // The longest note is about 150 characters in a 620 wide box: fit it rather than trust a size.
             UIBuilder.BestFit(_statsNote, UITheme.FontTiny - 6, UITheme.FontTiny);
         }
+
+#if EMBERFALL_PLAYLOG
+        /// <summary>
+        /// R27 friends build only (EMBERFALL_PLAYLOG): the local play log and the way out for it. The file never leaves
+        /// the device by itself; this button hands its text to the share sheet (Android) or opens its folder (Windows).
+        /// </summary>
+        private void BuildPlayLogCard(RectTransform parent)
+        {
+            RectTransform card = Card(parent, 190f);
+            Heading(card, "PLAY LOG");
+
+            UIButton share = EmberforgeUI.Button("SharePlayLog", card, "SHARE PLAY LOG", HubStyle.FontButton,
+                                                 ForgeButtonKind.Secondary);
+            UIBuilder.Box(share.Root, 30f, -56f, 440f, HubStyle.TouchMin, new Vector2(0f, 1f));
+            share.OnClick(delegate
+            {
+                App.Audio.Tap();
+                Game.PlayLogService service = Game.PlayLogService.Instance;
+                App.Notify(service == null ? "The play log is not running." : service.Share());
+            });
+
+            Text note = EmberforgeUI.Body("Note", card, "A short list of what you opened and did, kept on this device. The game never "
+                + "sends it. Share it by hand if a tester asks.", UITheme.FontTiny, Emberforge.TextBody, TextAnchor.UpperLeft);
+            UIBuilder.Box(note.rectTransform, 500f, -60f, CardWidth - 560f, 110f, new Vector2(0f, 1f));
+        }
+#endif
 
         private void BuildSaveCard(RectTransform parent)
         {

@@ -78,6 +78,14 @@ namespace Emberfall.Core.Progression
 
         public PurchaseResult Buy(string offerId, string choiceHeroId)
         {
+            PurchaseResult r = BuyCore(offerId, choiceHeroId);
+            // R27 play log: a refused attempt is recorded here; a started one is recorded when the store finishes it.
+            if (PlayLogSwitch.Enabled && !r.Success) PlayLogHooks.Purchase(r.OfferId, false, r.Reason.ToString());
+            return r;
+        }
+
+        private PurchaseResult BuyCore(string offerId, string choiceHeroId)
+        {
             if (!StoreSwitch.Enabled || _mode == StoreMode.Off || _backend == null && _mode != StoreMode.ComingSoon)
             {
                 PurchaseResult off = new PurchaseResult();

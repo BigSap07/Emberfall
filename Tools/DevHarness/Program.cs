@@ -362,6 +362,7 @@ namespace Emberfall.DevHarness
             CheckUiKit(content, contentDir);
             CheckR26Ui(content, contentDir);
             CheckR26Store(content, contentDir);
+            CheckR27PlayLog(contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
             CheckCaptureWatchdog(content, contentDir);

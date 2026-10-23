@@ -1500,6 +1500,18 @@ string for an em or en dash and for selling words.
   for the editor and development builds. **Before the switch goes on the owner applies
   `Server/supabase/migrations/0026_save_limits_27.sql`.** No ads package is in the project.
 
+### The friends build (R27)
+
+- **Defines and scripts.** A friends build is the Windows zip and the Android APK with `EMBERFALL_TESTSTORE` and `EMBERFALL_PLAYLOG`,
+  passed per build through `EmberfallBuild.RequestedDefines` (`-emberfallDefines`, `BuildDefines.Parse`) into
+  `extraScriptingDefines`, never into `ProjectSettings.asset`. `Tools/build-windows.ps1 -Defines`, the new `Tools/build-android.ps1`
+  (`EmberfallBuild.BuildAndroidPlaytest`, IL2CPP ARM64) and `Tools/build-friends.ps1` (with `-WhatIf`) build it; see `Docs/FRIENDS-BUILD.md`.
+- **Play log and smoke mode.** `PlayLogSwitch` (off by default), `PlayLogSession` and `PlayLogWriter` in `PlayLog.cs` (Core) and
+  `PlayLogService` (Game, compiled only with the define) write `emberfall_playlog.txt`, independent of the stats consent, with a
+  SHARE PLAY LOG button in `SettingsScreen`. `-emberfallSmoke` checks the cloud sign in and opens the Friends and Guild screens
+  on a throw-away identity: `SmokeStorage` redirects the save file, its mirror, the cloud session and the play log.
+  `CheckR27PlayLog` and the `release-playlog` compile prove it; a real Unity build is still owed.
+
 ### The UI kit (R20)
 
 A generated art kit (panels, buttons, tabs, pills, currency and navigation icons, aspect badges, relic icons, ability

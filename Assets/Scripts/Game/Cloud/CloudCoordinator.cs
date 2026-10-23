@@ -642,6 +642,11 @@ namespace Emberfall.Game.Cloud
         {
             Status = status;
             Message = message == null ? "" : message;
+            if (PlayLogSwitch.Enabled)
+            {
+                PlayLogHooks.Cloud(status.ToString(), Message);
+                if (status == CloudStatus.Ready) Debug.Log("Emberfall: cloud status Ready (signed in).");
+            }
             Raise();
         }
 

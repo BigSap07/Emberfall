@@ -231,6 +231,12 @@ namespace Emberfall.Game
             PanelLayer.SetAsLastSibling();
             OverlayLayer.SetAsLastSibling();
 
+#if EMBERFALL_PLAYLOG
+            // R27: the local play log and the smoke test (Docs/FRIENDS-BUILD.md). Compiled only with the define; never throws. Installed before the first screen and the cloud so neither is missed.
+            BootStage = "playlog";
+            PlayLogService.Install(this);
+#endif
+
             BootStage = "first screen";
             RefreshHud();
             Router.Show(ScreenId.MainMenu, false);
@@ -783,6 +789,9 @@ namespace Emberfall.Game
         private void OnApplicationPause(bool paused)
         {
             if (TelemetrySwitch.Enabled) TelemetryService.OnPause(paused);
+#if EMBERFALL_PLAYLOG
+            PlayLogService.OnPause(paused);
+#endif
             // Local reminders (Docs/DESIGN-NOTIFICATIONS.md): cleared on return, re-planned on leaving. Inert until a
             // notification backend reports the permission granted, which no build does without the package.
             if (!paused) { NotificationScheduler.OnForeground(); return; }
@@ -794,6 +803,9 @@ namespace Emberfall.Game
         private void OnApplicationQuit()
         {
             if (TelemetrySwitch.Enabled) TelemetryService.OnQuit();
+#if EMBERFALL_PLAYLOG
+            PlayLogService.OnQuit();
+#endif
             SaveNow();
             NotificationScheduler.OnBackground(Session);
             if (Cloud != null) Cloud.SyncOnLeaving();

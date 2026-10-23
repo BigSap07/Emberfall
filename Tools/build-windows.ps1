@@ -4,6 +4,7 @@
 #   powershell -ExecutionPolicy Bypass -File Tools/build-windows.ps1 -Development    # development, offline
 #   powershell -ExecutionPolicy Bypass -File Tools/build-windows.ps1 -Cloud          # release, cloud
 #   ... -OutputRoot D:\Somewhere -NoZip -UnityExe <path>
+#   ... -Defines "EMBERFALL_TESTSTORE;EMBERFALL_PLAYLOG"   # extra scripting defines for this build only
 #
 # It wraps the one Windows build path that already exists, EmberfallBuild.BuildWindows, through
 # EmberfallBuild.BuildWindowsPlaytest. It invents no second one. What this script adds is the part
@@ -27,6 +28,9 @@
 #   - it checks the player it got: the Dev Arena scene and classes are there exactly when the
 #     variant says so, the hash is packed inside, and the cloud project's address is packed inside
 #     exactly when the variant says so;
+#   - -Defines "A;B" (R27) passes extra scripting defines to this one player build through
+#     -emberfallDefines, which EmberfallBuild hands to BuildPlayerOptions.extraScriptingDefines. Nothing
+#     is written to ProjectSettings.asset, so the tree stays clean. Absent, the build is exactly as before;
 #   - it reports what the player weighs: the folder, the zip, and where the bytes went, from the
 #     size report EmberfallBuild writes beside the player.
 #
@@ -41,7 +45,8 @@ param(
     [string]$UnityExe = "",
     [switch]$Cloud,
     [switch]$Development,
-    [switch]$NoZip
+    [switch]$NoZip,
+    [string]$Defines = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -51,6 +56,16 @@ $flavour = if ($Development) { "development" } else { "release" }
 $network = if ($Cloud) { "cloud" } else { "offline" }
 $variant = "$flavour-$network"
 Write-Host "MODE: $flavour, $network ($variant)" -ForegroundColor Cyan
+
+# The defines, normalised the way BuildDefines.Parse reads them: names of letters, digits and underscores.
+$definesList = @()
+if ($Defines) {
+    $definesList = @($Defines -split '[;,]' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+    foreach ($name in $definesList) {
+        if ($name -notmatch '^[A-Za-z_][A-Za-z0-9_]*$') { throw "BUILD REFUSED: '$name' is not a scripting define name." }
+    }
+}
+$definesText = ($definesList | Select-Object -Unique) -join ";"
 
 # Refusals are thrown, not exited, so the finally block at the bottom always runs: it is what puts
 # the cloud config back and stops a Unity that is still building.
@@ -165,6 +180,22 @@ function Stash-CloudConfig {
     if (Test-Path $configMeta) { Move-Item $configMeta $stashedMeta -Force }
 }
 
+# ProjectSettings.asset: the editor rewrites it on its way out (it drops an m_SubKind line), which the clean-tree
+# check below would call "built from files HEAD does not hold". Its bytes are saved before Unity starts and put back
+# after it exits, before the check; every other file is still checked. Nothing is deleted.
+$settingsFile = Join-Path $root "ProjectSettings\ProjectSettings.asset"
+$script:SettingsBackup = $null
+
+function Restore-ProjectSettings {
+    if ($script:SettingsBackup -eq $null -or -not (Test-Path $settingsFile)) { return $false }
+    $nowBytes = [IO.File]::ReadAllBytes($settingsFile)
+    $same = ($nowBytes.Length -eq $script:SettingsBackup.Length)
+    if ($same) { for ($i = 0; $i -lt $nowBytes.Length; $i++) { if ($nowBytes[$i] -ne $script:SettingsBackup[$i]) { $same = $false; break } } }
+    if ($same) { return $false }
+    [IO.File]::WriteAllBytes($settingsFile, $script:SettingsBackup)
+    return $true
+}
+
 $exitCode = 1
 $script:UnityProcess = $null
 $script:ExpectedFolder = $null
@@ -242,6 +273,7 @@ try {
     $branch = "$(Invoke-Git rev-parse --abbrev-ref HEAD)".Trim()
     Write-Host "  commit   $hash on $branch"
     Write-Host "  cloud    $cloudLine"
+    if ($definesText) { Write-Host "  defines  $definesText" }
 
     # A hash nobody else can fetch cannot be traced by anybody else. Loud, not fatal: building
     # before pushing is a legitimate order of work, as long as the push happens before the zip leaves.
@@ -319,6 +351,9 @@ try {
         "-emberfallVariant", $variant,
         "-logFile", "`"$log`""
     )
+    if ($definesText) { $unityArgs += @("-emberfallDefines", "`"$definesText`"") }
+
+    if (Test-Path $settingsFile) { $script:SettingsBackup = [IO.File]::ReadAllBytes($settingsFile) }
 
     # Last thing before Unity starts, so every refusal above leaves the config where it was.
     if (-not $Cloud -and (Test-Path $config)) {
@@ -351,6 +386,10 @@ try {
         $script:ConfigMoved = $false
     }
 
+    if (Restore-ProjectSettings) {
+        Write-Host "  put ProjectSettings.asset back as it was: the editor rewrote it on its way out" -ForegroundColor Yellow
+    }
+
     # ---------------------------------------------------------------------------------------- player
 
     $exe = Join-Path $folder "Emberfall.exe"
@@ -374,6 +413,10 @@ try {
     }
     if ($assemblyText.Contains("DebugSlowMotionToggle")) { Fail "the editor-only slow-motion key is compiled into a player." }
     if (-not $assemblyText.Contains("BuildStamp")) { Fail "Game.BuildStamp is not in the player, so it cannot name its build." }
+    # R27: PlayLogService is compiled only under EMBERFALL_PLAYLOG, so the define decides whether the play log is in.
+    $hasPlayLog = $assemblyText.Contains("PlayLogService")
+    if (($definesList -contains "EMBERFALL_PLAYLOG") -and -not $hasPlayLog) { Fail "-Defines asked for EMBERFALL_PLAYLOG and the play log is not in the player." }
+    if (-not ($definesList -contains "EMBERFALL_PLAYLOG") -and $hasPlayLog) { Fail "the play log is compiled into a player that did not ask for EMBERFALL_PLAYLOG." }
 
     # The stamp and the cloud config are both TextAssets, packed raw into the resources file.
     $packed = Join-Path $data "resources.assets"
@@ -414,6 +457,7 @@ try {
         "Branch:  $branch",
         "Built:   $built",
         "Cloud:   $cloudLine",
+        $(if ($definesText) { "Defines: $definesText" } else { "Defines: (none)" }),
         "",
         "The game shows '$label' in the bottom-left corner of the main screen and at",
         "the bottom of Settings. Put those words in every report."
@@ -464,6 +508,7 @@ finally {
     if ($script:ConfigMoved) {
         if (Restore-CloudConfig) { Write-Host "  put the cloud config back" }
     }
+    if (-not $succeeded) { $null = Restore-ProjectSettings }
     if (-not $succeeded -and $script:ExpectedFolder -and (Test-Path $script:ExpectedFolder)) {
         if (Test-Path "$($script:ExpectedFolder).zip") { Remove-Item "$($script:ExpectedFolder).zip" -Force }
         Move-Item $script:ExpectedFolder "$($script:ExpectedFolder)-REFUSED"

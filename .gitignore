@@ -84,3 +84,7 @@ Assets/Resources/BuildStamp.txt.meta
 # The live Supabase rule tests' run records, read by Tools/status.ps1. Local facts about one machine's
 # runs, and they carry the commit each run was made at, not anything about the project's keys.
 /Tools/SupabaseRuns/
+
+# Unity's native build tools write a .utmp folder in the project root during an Android (IL2CPP) build
+# (RelWithDebInfo, tools). It is scratch output of the editor, not part of the project.
+/.utmp/
