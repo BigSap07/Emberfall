@@ -1,0 +1,11 @@
+# economy r5
+- 2026-10-21 08:00 start
+- 08:40 ratchet pass 1 running
+- 08:45 sleep 600 while the walks run
+- 08:55 polling STATUS.md
+- 09:05 sleep 600
+- 09:15 polling STATUS.md
+- 09:25 sleep 600
+- 09:35 polling STATUS.md
+- 11:30 candidate G recorded
+- 16:00 waiting for owner review of candidate G

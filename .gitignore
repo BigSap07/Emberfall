@@ -88,3 +88,6 @@ Assets/Resources/BuildStamp.txt.meta
 # Unity's native build tools write a .utmp folder in the project root during an Android (IL2CPP) build
 # (RelWithDebInfo, tools). It is scratch output of the editor, not part of the project.
 /.utmp/
+
+# Tools/cockpit: the 5h reset and weekly values typed with keys b and w
+/Tools/cockpit/state.json

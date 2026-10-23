@@ -1,0 +1,1 @@
+Mock prompt for a run that already has a folder.

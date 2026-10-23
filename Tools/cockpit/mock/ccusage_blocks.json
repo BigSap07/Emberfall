@@ -1,0 +1,94 @@
+{
+ "blocks": [
+  {
+   "id": "2026-10-22T08:00:00",
+   "startTime": "2026-10-22T08:00:00",
+   "endTime": "2026-10-22T13:00:00",
+   "actualEndTime": "2026-10-22T12:40:00",
+   "isActive": false,
+   "isGap": false,
+   "costUSD": 41.2,
+   "totalTokens": 28840000,
+   "models": [
+    "claude-opus-4-1-20250805"
+   ],
+   "burnRate": null,
+   "projection": null,
+   "tokenLimitStatus": {
+    "limit": 46480000,
+    "projectedUsage": 28840000,
+    "percentUsed": 62,
+    "status": "ok"
+   }
+  },
+  {
+   "id": "2026-10-22T13:00:00",
+   "startTime": "2026-10-22T13:00:00",
+   "endTime": "2026-10-22T18:00:00",
+   "actualEndTime": "2026-10-22T17:40:00",
+   "isActive": false,
+   "isGap": false,
+   "costUSD": 66.4,
+   "totalTokens": 46480000,
+   "models": [
+    "claude-opus-4-1-20250805"
+   ],
+   "burnRate": null,
+   "projection": null,
+   "tokenLimitStatus": {
+    "limit": 46480000,
+    "projectedUsage": 46480000,
+    "percentUsed": 100,
+    "status": "exceeds"
+   }
+  },
+  {
+   "id": "2026-10-22T19:00:00",
+   "startTime": "2026-10-22T19:00:00",
+   "endTime": "2026-10-23T00:00:00",
+   "actualEndTime": "2026-10-22T23:40:00",
+   "isActive": false,
+   "isGap": false,
+   "costUSD": 22.9,
+   "totalTokens": 16029999,
+   "models": [
+    "claude-opus-4-1-20250805"
+   ],
+   "burnRate": null,
+   "projection": null,
+   "tokenLimitStatus": {
+    "limit": 46480000,
+    "projectedUsage": 16029999,
+    "percentUsed": 34,
+    "status": "ok"
+   }
+  },
+  {
+   "id": "2026-10-23T11:00:00",
+   "startTime": "2026-10-23T11:00:00",
+   "endTime": "2026-10-23T16:00:00",
+   "actualEndTime": "2026-10-23T14:00:00",
+   "isActive": true,
+   "isGap": false,
+   "costUSD": 28.6,
+   "totalTokens": 20020000,
+   "models": [
+    "claude-opus-4-1-20250805"
+   ],
+   "burnRate": {
+    "costPerHour": 9.53,
+    "tokensPerMinute": 110000
+   },
+   "projection": {
+    "totalCost": 47.7,
+    "remainingMinutes": 120
+   },
+   "tokenLimitStatus": {
+    "limit": 46480000,
+    "projectedUsage": 20020000,
+    "percentUsed": 48,
+    "status": "ok"
+   }
+  }
+ ]
+}

@@ -1,0 +1,1 @@
+An old prompt that was never chained: must not show as queued.
