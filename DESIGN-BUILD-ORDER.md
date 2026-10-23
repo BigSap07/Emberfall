@@ -1291,6 +1291,19 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
   about EUR 289 a month (EUR 34 for the R19 spender), skins one-time on top. The handoff folder holds
   whale-curve.md and offer-values.md.
 
+### Test store and player size (R26)
+
+- **Test store.** `EMBERFALL_TESTSTORE` (`TestStoreSwitch` in `StoreSwitch.cs`) makes a release build the test store: purchases are free, the
+  goods are the offer's fixed contents through `PurchaseGrants.Apply` (Sealed, limits honoured), and the Store and Events screens draw a
+  TEST STORE chip (`TestStoreBanner`). Without the define a release build is COMING SOON as before; with it together with
+  `EMBERFALL_STORE_LIVE` the build resolves to COMING SOON, never to free goods. `CheckR26Store` and the `release-plain` and
+  `release-teststore` compiles in `Tools/build-check.ps1` prove it. See `Docs/DESIGN-STORE.md`, "The test store define".
+- **Player size.** `Tools/texture-import-policy.py` has an Emberforge sprites group (BC7 on Windows, ASTC 4x4 on Android; the 31 files that
+  were uncompressed RGBA32, 1.27 MB raw to 0.32 MB packed; `forge_rule.png` at 32x6 stays as it is). The player is 97 percent the Units sheets
+  (3018 MB packed, BC7), and `Tools/sheet-trim-report.py` (read only) measures that 81 percent of their 4x4 blocks are fully transparent. The
+  only big lever is re-cutting the sheets, which is an art and content change left as an owner decision; the numbers are in
+  `handoff/R26-POLISH/texture-size.md`.
+
 ### The UI kit (R20)
 
 A generated art kit (panels, buttons, tabs, pills, currency and navigation icons, aspect badges, relic icons, ability
