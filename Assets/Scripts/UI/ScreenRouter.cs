@@ -44,7 +44,8 @@ namespace Emberfall.UI
         WayfarersRoad,
         Store,
         LiveEvents,
-        Marketplace
+        Marketplace,
+        Leaderboards
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -177,6 +178,10 @@ namespace Emberfall.UI
         /// shows NOT IN THIS BUILD on its card.</summary>
         public Screens.MarketplaceScreen Marketplace;
 
+        /// <summary>The leaderboards (R28): four boards, four tabs. Always built; with no cloud in the build it says so
+        /// and draws no TRY AGAIN. An open screen: no feature gates it, and the lock it may show is the board's own.</summary>
+        public Screens.LeaderboardsScreen Leaderboards;
+
         public UIScreen Current { get; private set; }
 
         public void Build(GameApp app, RectTransform screenLayer, RectTransform overlayLayer)
@@ -200,6 +205,7 @@ namespace Emberfall.UI
             Proving = Create<Screens.ProvingScreen>();
             Forge = Create<Screens.ForgeScreen>();
             Marketplace = Create<Screens.MarketplaceScreen>();
+            Leaderboards = Create<Screens.LeaderboardsScreen>();
 
             // Built whether or not this build has a cloud. Each of the six renders an honest
             // empty state when GameApp.Cloud is null - "this build has no account service" rather

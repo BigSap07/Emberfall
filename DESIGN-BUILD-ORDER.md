@@ -1049,7 +1049,8 @@ the same save, against ceilings and against server time since the server last ra
 everything with `now()` and logs every refusal. `leaderboard_top()` returns rank, display name, value and
 `is_me`, never a user id. `Tools/supabase-leaderboard-rules-test.py` proves the rules once 0023 is applied;
 it has never been run against a project. `Tools/supabase-local-check.sh` applies it locally and checks the
-boards, the refusals and the closed doors. The client side is built (R28, **The R28 screens**); no screen shows a board yet.
+boards, the refusals and the closed doors. The client side is built (R28, **The R28 screens**): `LeaderboardsScreen` shows the four boards, reached from
+the Profile, the Recital and the Proving, and says so honestly while 0023 is not applied ("The leaderboards are not open yet.").
 
 **The launch server pieces: written, not applied to a project (`Server/README.md`, `Docs/LAUNCH-CHECKLIST.md`).**
 `0016_account_deletion.sql` (`delete_my_account`, `admin_delete_account`), `0017_chat_safety.sql` (block,
@@ -1349,8 +1350,9 @@ and an event's end for a player who has taken part (8 hours before a weekly even
 Quiet hours 22:00 to 09:00 local, at most 2 a local day, 4 hours apart, nothing past 48 hours, nothing
 before the first stage is cleared, and no notification names anything sold. It writes nothing and holds
 no state in the save. `NotificationChecks.cs` proves it, including a sweep of about 1,500 plans. The
-scheduler glue and the settings screen's presenter are built (R28, **The R28 screens**); the package and
-an Android backend are not, so nothing is scheduled on a device.
+scheduler glue, the settings presenter and the REMINDERS card on the Settings page are built (R28, **The R28 screens**);
+the package and an Android backend are not, so nothing is scheduled on a device and the card says reminders are not
+available on this device yet.
 
 ### The Store (R19)
 
@@ -1476,29 +1478,61 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
 
 ### The R28 screens (presenters, transport, rewarded ads)
 
-**Everything below four screens except the uGUI (`Docs/ui-specs/R28-SCREENS.md`).** Each screen has a presenter in
+**Everything below four screens; the uGUI of all four is built (`Docs/ui-specs/R28-SCREENS.md`):** the Leaderboards screen and the REMINDERS card, the guild dungeon ladder and the rewarded ad block. Each screen has a presenter in
 `Assets/Scripts/Core/Screens` that exposes exactly what it draws (phase, rows, buttons with enabled and reason, every
 sentence and countdown) and a controller in `Assets/Scripts/Game` that makes the calls. `R28ScreenChecks.cs` drives
 every presenter through every state, reads the codecs against the shapes of migrations 0022 and 0023, and scans every
-string for an em or en dash and for selling words.
+string for an em or en dash and for selling words. **Built in uGUI:** the Leaderboards screen and the REMINDERS card on
+Settings (`R28UiChecks.cs`, `CheckR28Ui`), the guild dungeon ladder and the rewarded ad block (`R28AdsLadderUiChecks.cs`,
+`CheckR28AdsLadderUi`). Nothing of the four is captured yet in this entry's own words: see the captures below.
 
 - **Leaderboards.** `LeaderboardCodec` (Core) and `LeaderboardService.cs` (transport, in-memory override, controller)
   for `leaderboard_submit` and `leaderboard_top`; `LeaderboardsPresenter`. Submits at most once a minute, never sends
   a score, words a refusal neutrally, and runs the weekly countdown on the server's clock once known. The THIS
   WEEK tab is the highest-floor board (owner decision of 2026-10-23: the floors-climbed board is gone from the server).
+  **The screen** is `LeaderboardsScreen` (`ScreenId.Leaderboards`, built by `ScreenRouter.Build`, named open in
+  `FeatureEntryPoints.OpenScreens`): four tabs, the caller's own row highlighted and pinned under the list when it ranks
+  below the top, every state of the spec's table, no medals, rows that are not buttons. Its doors are a LEADERBOARDS button
+  on `ProfileScreen` and a BOARDS button on `RecitalScreen` and `ProvingScreen` (`LeaderboardsScreen.OpenBoard`: `SelectTab`
+  before `Open`). It is drawn only from `LeaderboardsView` and taps call only `Open`, `Refresh` and `SelectTab`. Where its
+  bands sit is `LeaderboardsLayout` in `R28ScreenLayout.cs`, engine-free so the harness runs it.
 - **Guild dungeon ladder.** `GuildDungeonSizeService` for the size migration's three functions and its snapshot row;
   `GuildDungeonLadderPresenter` reads the ladder, the cycle cap and every refusal sentence from `GuildDungeonScale`
-  and the reward from `GuildDungeonRewards` (still the placeholder).
+  and the reward from `GuildDungeonRewards` (still the placeholder). **The screen is built:** `GuildDungeonScreen`
+  draws `GuildDungeonLadderView` through `GuildDungeonLadderController` and nothing else: a header with REFRESH, the
+  ladder, next-cycle, attempts and cycle lines, the pip strip, a `UIBuilder.ScrollList` of 96 tall floor rows with the
+  second block divider, state chips, the muted reward text, ATTEMPT with its Reason, BOARDS, and every status state
+  (offline, no guild with FIND A GUILD, loading, error, banner). The layout maths (pip spacing, the row's tap
+  overhang) is `LadderLayout` in Core. ATTEMPT hands the floor to `GuildFloorScreen`, whose `GuildDungeonFlow.Attempt`
+  stores the attempt before the fight is shown, so the screen never calls `RecordAttempt` and reloads in `OnShow`.
+  `GuildFloorScreen`, `GuildDungeonBoardsScreen` and `GuildDungeonResultScreen` are as they were, and the door to
+  the guild tech tree (GUILD TECH) is kept.
 - **Notification settings.** `NotificationSettingsPresenter` over `NotificationPlanner`; the switches in `PlayerPrefs`;
   `NotificationScheduler` wired into `GameApp`'s pause and quit hooks, inert with the only backend there is
-  (`UnsupportedNotificationBackend`).
+  (`UnsupportedNotificationBackend`). **The card** is `RemindersCard` on `SettingsScreen`, directly under the audio card:
+  the permission line and button, Reminders with its three topics indented under it, COMING UP, the rule lines. It is drawn
+  only from `NotificationSettingsView` and taps call only `Toggle` and `PermissionButton`. With no notification package
+  installed (the real state today) it reads "Reminders are not available on this device yet." with every switch disabled
+  and no list. `RemindersCardLayout` in `R28ScreenLayout.cs` holds its band heights.
+- **Captures owed.** Both screens changed layout and the first captures of most states came out as the Hub's frame (a Game view that
+  did not present the new frame; the targets now log what the router shows before the shot). The first Profile page now carries the
+  LEADERBOARDS door in its identity card, and the Settings page opens at its top. Every state is a target under
+  `Emberfall/Capture/R28 screens/` in `PlayModeScreenshot` (`R28aCaptures`, offline through `LeaderboardBackends.Override`
+  and `NotificationBackends.Override`), listed at both shapes in `Tools/capture-r28a-targets.txt`.
 - **Rewarded ads, behind `AdsSwitch`, OFF.** `ads.json` (the lean variant: A1 idle Gold capped at 2 hours, A2 one
   Brand, A3 one more full-pay repeat clear, each once a reward day), `AdRewards` (read-only `View`, `Grant` once per
   impression through `PurchaseGrants.Apply`, so the Gold is Sealed), `AdsState` in the save from **version 27**
   (`SaveSerializer.CurrentVersion` is 27; a save is stamped 27 only once an ad was granted, so with the switch off
   every save is byte for byte what version 26 wrote), `RewardedAdPresenter`, and `Game/Ads` with a simulated backend
   for the editor and development builds. **Before the switch goes on the owner applies
-  `Server/supabase/migrations/0026_save_limits_27.sql`.** No ads package is in the project.
+  `Server/supabase/migrations/0026_save_limits_27.sql`.** No ads package is in the project. **The block is built:**
+  `RewardedAdBlock` (UI) draws `RewardedAdView` through `RewardedAdController`, a secondary WATCH AN AD under a
+  sunken plate, and exists in three places only: `IdleClaimPopup` under the claim plate after a claim (A1), `ProvingScreen`
+  right of the opponent card at the Brands rows (A2), and `WaveResultScreen`'s stage cleared view under CONTINUE
+  (A3). With `AdsSwitch` off every view is Hidden and no block is drawn. **A3 has a known gap:** a repeat clear of a
+  stage with a wave curve is swept (`CampaignFlow.Sweep`, a toast) and never reaches that view, which only ever
+  shows a first clear, so the block is wired and never visible there today; where a repeat clear is shown is an
+  owner decision. `R28AdsLadderUiChecks.cs` reads the source of both screens and the capture targets.
 
 ### The friends build (R27)
 
@@ -2129,6 +2163,12 @@ primary button, a stronger gilded frame, lighter secondary and disabled plates, 
 and the Hero screen's level cap sentence. All four are described under **The UI kit (R20)**. Their harness checks are
 `CheckR26Ui`. **Owed before it counts:** the screens that changed layout (Hub, Marketplace both ways, Hero at the cap,
 Store shops) have no capture yet; the tester takes them from the `Emberfall/Capture/R26 polish/` menu.
+
+**R28 screens, the ladder and the ads** (an unmerged branch of run R28, not named here). It holds the guild dungeon ladder
+screen and the rewarded ad block described under **The R28 screens**. **Owed before it counts:** the captures. The
+tester runs `Tools/capture-r28b-targets.txt` through `Tools/capture-batch.ps1` (70 targets: every ladder state and
+every ad state in each of the three places, at 1920x1080 and 2400x1080); the same states are in the editor under
+`Emberfall/Capture/R28 screens/`. Nothing has been looked at in Unity yet.
 
 Otherwise none. The R4 economy proposal is merged and described under **The economy curve** and **The
 campaign power curve, and the walls**.

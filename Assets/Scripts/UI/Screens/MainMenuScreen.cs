@@ -83,6 +83,9 @@ namespace Emberfall.UI.Screens
 
         // ---------- layer 3 ----------
         private IdleClaimPopup _claimPopup;
+
+        /// <summary>The idle claim popup, for the capture tool and the checks (A1 of the rewarded ads lives in it).</summary>
+        public IdleClaimPopup ClaimPopup { get { return _claimPopup; } }
         private HubOverflowMenu _overflowMenu;
 
         // ---------- the Hub's own surfaces ----------

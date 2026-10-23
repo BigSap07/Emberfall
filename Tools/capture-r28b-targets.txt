@@ -1,0 +1,93 @@
+# R28 screens, builder b: the guild dungeon ladder and the rewarded ads, every state the spec lists, at both shapes.
+#
+#   powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 `
+#       -TargetsFile Tools/capture-r28b-targets.txt -LogDir D:\Emberfall\handoff\<RUN>\logs -Tag r28b
+#
+# Screen:GuildLadder=<state> puts an in-memory guild in front of the real controller (GuildDungeonBackends.Override).
+#   offline-nocloud, offline-signedout (TRY AGAIN), unavailable (FIND A GUILD), loading, error (TRY AGAIN) are the status
+#   states; g4-open (a guild of 4 on cycle open), g30-cap (a guild of 30 at the cycle cap), g12-grew (a guild of 12 whose
+#   cycle opened at 9), changed-guild (15 attempts spent in another guild) and after-floor8 (floors 1 to 8 cleared, the
+#   muted "Reward not decided yet" on every row) are the five states GUILD-DUNGEON-SIZE.md asks for; banner-refresh,
+#   banner-offline, banner-refused and banner-cycleover are a ladder under each of its four banners.
+#
+# Screen:AdClaim=<state>, Screen:AdProving=<state>, Screen:AdStage=<state> are the rewarded ad block in its three places
+#   (A1 the idle claim popup after CLAIM, A2 the Proving beside the Brands, A3 the stage cleared view). The states are
+#   hidden (AdsSwitch off: nothing is drawn), ready, playing, granted, notfinished, failed, refused. AdsSwitch is flipped
+#   ON for the capture only (Stop puts it back) and the simulated ad backend stands in for the network. They rewrite the
+#   scratch profile, so they only run on the scratch identity (capture-batch.ps1 always is). AdStage hands the stage cleared
+#   view a repeat clear directly (the game sweeps repeats and never draws them on this view). Every ad target first
+#   empties the scratch profile's ads block, so one granted target does not cap the ones after it. Batches of 10 at most:
+#   Tools/capture-r28b-retry-1.txt to -6.txt.
+#
+# The size is the Game view's: 1920x1080 is 16:9, 2400x1080 is 20:9.
+
+Screen:GuildLadder=offline-nocloud@1920x1080
+Screen:GuildLadder=offline-nocloud@2400x1080
+Screen:GuildLadder=offline-signedout@1920x1080
+Screen:GuildLadder=offline-signedout@2400x1080
+Screen:GuildLadder=unavailable@1920x1080
+Screen:GuildLadder=unavailable@2400x1080
+Screen:GuildLadder=loading@1920x1080
+Screen:GuildLadder=loading@2400x1080
+Screen:GuildLadder=error@1920x1080
+Screen:GuildLadder=error@2400x1080
+Screen:GuildLadder=g4-open@1920x1080
+Screen:GuildLadder=g4-open@2400x1080
+Screen:GuildLadder=g30-cap@1920x1080
+Screen:GuildLadder=g30-cap@2400x1080
+Screen:GuildLadder=g12-grew@1920x1080
+Screen:GuildLadder=g12-grew@2400x1080
+Screen:GuildLadder=changed-guild@1920x1080
+Screen:GuildLadder=changed-guild@2400x1080
+Screen:GuildLadder=after-floor8@1920x1080
+Screen:GuildLadder=after-floor8@2400x1080
+Screen:GuildLadder=banner-refresh@1920x1080
+Screen:GuildLadder=banner-refresh@2400x1080
+Screen:GuildLadder=banner-offline@1920x1080
+Screen:GuildLadder=banner-offline@2400x1080
+Screen:GuildLadder=banner-refused@1920x1080
+Screen:GuildLadder=banner-refused@2400x1080
+Screen:GuildLadder=banner-cycleover@1920x1080
+Screen:GuildLadder=banner-cycleover@2400x1080
+Screen:AdClaim=hidden@1920x1080
+Screen:AdClaim=hidden@2400x1080
+Screen:AdClaim=ready@1920x1080
+Screen:AdClaim=ready@2400x1080
+Screen:AdClaim=playing@1920x1080
+Screen:AdClaim=playing@2400x1080
+Screen:AdClaim=granted@1920x1080
+Screen:AdClaim=granted@2400x1080
+Screen:AdClaim=notfinished@1920x1080
+Screen:AdClaim=notfinished@2400x1080
+Screen:AdClaim=failed@1920x1080
+Screen:AdClaim=failed@2400x1080
+Screen:AdClaim=refused@1920x1080
+Screen:AdClaim=refused@2400x1080
+Screen:AdProving=hidden@1920x1080
+Screen:AdProving=hidden@2400x1080
+Screen:AdProving=ready@1920x1080
+Screen:AdProving=ready@2400x1080
+Screen:AdProving=playing@1920x1080
+Screen:AdProving=playing@2400x1080
+Screen:AdProving=granted@1920x1080
+Screen:AdProving=granted@2400x1080
+Screen:AdProving=notfinished@1920x1080
+Screen:AdProving=notfinished@2400x1080
+Screen:AdProving=failed@1920x1080
+Screen:AdProving=failed@2400x1080
+Screen:AdProving=refused@1920x1080
+Screen:AdProving=refused@2400x1080
+Screen:AdStage=hidden@1920x1080
+Screen:AdStage=hidden@2400x1080
+Screen:AdStage=ready@1920x1080
+Screen:AdStage=ready@2400x1080
+Screen:AdStage=playing@1920x1080
+Screen:AdStage=playing@2400x1080
+Screen:AdStage=granted@1920x1080
+Screen:AdStage=granted@2400x1080
+Screen:AdStage=notfinished@1920x1080
+Screen:AdStage=notfinished@2400x1080
+Screen:AdStage=failed@1920x1080
+Screen:AdStage=failed@2400x1080
+Screen:AdStage=refused@1920x1080
+Screen:AdStage=refused@2400x1080

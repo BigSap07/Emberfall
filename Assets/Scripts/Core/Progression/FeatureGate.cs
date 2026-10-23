@@ -194,7 +194,7 @@ namespace Emberfall.Core.Progression
         /// list nor All fails CheckFeatureUnlockGating, so a new screen has to be placed on purpose.</summary>
         public static readonly string[] OpenScreens =
         {
-            "MainMenu", "Profile", "HeroDetail", "Battle", "Events", "Account", "Settings", "WaveResult", "Orders", "WayfarersRoad", "Store", "LiveEvents"
+            "MainMenu", "Profile", "HeroDetail", "Battle", "Events", "Account", "Settings", "WaveResult", "Orders", "WayfarersRoad", "Store", "LiveEvents", "Leaderboards"
         };
 
         public static FeatureEntryPoint Find(string id)

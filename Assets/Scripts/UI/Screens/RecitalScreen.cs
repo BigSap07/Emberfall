@@ -89,6 +89,7 @@ namespace Emberfall.UI.Screens
             ScreenChrome.ForgedHeader(Root, "THE DEEP RECITAL", Router, out _headerSubtitle);
             _currencies.Build(Root);
             if (SinksSwitch.Enabled) BuildArchiveDoor();
+            BuildBoardsDoor();
 
             float top = CurrencyStrip.BottomOf(CurrencyStrip.DefaultTop);
             float bannerHeight = ShortestCanvasHeight - top - UITheme.Space24 - CycleBlock;
@@ -110,6 +111,23 @@ namespace Emberfall.UI.Screens
                 if (!FeatureGates.TryEnter(App, "recital.Archive")) return;
                 App.Audio.Tap();
                 Router.Show(ScreenId.Archive);
+            });
+        }
+
+        /// <summary>
+        /// THE LEADERBOARDS' DOOR (R28): BOARDS, a secondary button at the strip's height in the top right, left of the
+        /// Archive's when that one is drawn. It opens the leaderboards with the Deep Recital's board selected.
+        /// </summary>
+        private void BuildBoardsDoor()
+        {
+            float archive = SinksSwitch.Enabled ? 260f + UITheme.Space16 : 0f;
+            UIButton boards = EmberforgeUI.Button("Boards", Root, "BOARDS", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIBuilder.Box(boards.Root, -(UITheme.ScreenPadding + archive), -CurrencyStrip.DefaultTop, 260f, HubStyle.TouchMin,
+                          new Vector2(1f, 1f));
+            boards.OnClick(delegate
+            {
+                App.Audio.Tap();
+                Router.Leaderboards.OpenBoard(Emberfall.Core.Cloud.LeaderboardBoard.Recital);
             });
         }
 

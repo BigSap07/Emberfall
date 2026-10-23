@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
+using Emberfall.Core.Progression;
 using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
@@ -20,6 +21,9 @@ namespace Emberfall.UI.Screens
     /// real players - and why a ghost opponent says out loud that it is the player's own line.
     /// Presenting a locally-generated number as a competitive position would be a straightforward
     /// lie to the player, and it is the easiest lie in this whole system to tell by accident.
+    ///
+    /// THE BOARDS DOOR (R28) DOES NOT CHANGE THAT. BOARDS opens the leaderboards screen, where the server ranks real
+    /// players' own saves; this page still draws no rank, no list of names and no "top %" of its own.
     /// </summary>
     public sealed class ProvingScreen : UIScreen
     {
@@ -42,12 +46,51 @@ namespace Emberfall.UI.Screens
 
         private const float CardWidth = 900f;
 
+        /// <summary>A2 of the rewarded ads (Docs/ui-specs/R28-SCREENS.md): the block beside the opponent card at the height
+        /// of its Brands rows, in the free column right of the card. 430 wide fits that column at 1920, so it draws
+        /// stacked (RewardedAdBlock.NarrowBelow). Nothing is built while AdsSwitch is off.</summary>
+        private const float AdWidth = 430f;
+        private const float AdBesideBrands = 250f;
+        private RewardedAdBlock _ad;
+
+        /// <summary>The ad block, for the capture tool and the checks.</summary>
+        public RewardedAdBlock AdBlock { get { return _ad; } }
+
         protected override void Build()
         {
             EmberforgeUI.Ground(Root);
             ScreenChrome.ForgedHeader(Root, "THE PROVING", Router, out _headerSubtitle);
             BuildOpponentCard();
             BuildHonestyNote();
+            BuildBoardsDoor();
+            BuildAd();
+        }
+
+        /// <summary>
+        /// THE LEADERBOARDS' DOOR (R28): BOARDS, a secondary button in the top right, under the header and clear of the
+        /// opponent card. It opens the leaderboards with the Proving's board selected. The board is the server's own
+        /// ranking of real players' saves; the standing shown on this page stays what it always was.
+        /// </summary>
+        private void BuildBoardsDoor()
+        {
+            UIButton boards = EmberforgeUI.Button("Boards", Root, "BOARDS", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIBuilder.Box(boards.Root, -UITheme.ScreenPadding, -(ScreenChrome.HeaderTop + 108f + 16f), 260f, HubStyle.TouchMin,
+                          new Vector2(1f, 1f));
+            boards.OnClick(delegate
+            {
+                App.Audio.Tap();
+                Router.Leaderboards.OpenBoard(Emberfall.Core.Cloud.LeaderboardBoard.Proving);
+            });
+        }
+
+        private void BuildAd()
+        {
+            float top = ScreenChrome.HeaderTop + 108f + 16f;
+            RectTransform host = UIBuilder.Node("AdBlock", Root);
+            UIBuilder.Box(host, CardWidth * 0.5f + UITheme.Space24 + AdWidth * 0.5f, -(top + AdBesideBrands),
+                          AdWidth, RewardedAdBlock.HeightFor(AdWidth), new Vector2(0.5f, 1f));
+            _ad = new RewardedAdBlock(App, AdPlacementKind.Brand, host, AdWidth, null);
+            host.gameObject.SetActive(false);
         }
 
         private void BuildOpponentCard()
@@ -170,7 +213,13 @@ namespace Emberfall.UI.Screens
         {
             App.RefreshHud();
             _tick = 0f;
+            _ad.Bind();
             Refresh();
+        }
+
+        public override void OnHide()
+        {
+            if (_ad != null) _ad.Unbind();
         }
 
         private void Update()
@@ -208,6 +257,7 @@ namespace Emberfall.UI.Screens
             _fightButton.SetText(brands.Banked > 0 ? "FIGHT  -  1 BRAND" : "OUT OF BRANDS");
 
             RefreshLine(opponent);
+            if (_ad != null) _ad.Refresh();
         }
 
         private void RefreshLine(BattleLoadout opponent)

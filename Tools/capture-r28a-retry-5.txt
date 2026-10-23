@@ -1,0 +1,13 @@
+# R28 round 2 retry, builder a. Re-shoot after the round 2 fixes: ordinary rows are no longer gold framed, the REMINDERS card
+# opens from its first line with full width dividers and disabled switches drawn OFF, the Profile door sits in the identity
+# card. Offline (both), Loading and the guild and ad targets are unchanged and are not here.
+# At most 10 targets per file, because a long batch produces stale Hub frames; run the files one after the other:
+#   powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 -TargetsFile Tools/capture-r28a-retry-<N>.txt -LogDir D:\Emberfall\handoff\<RUN>\logs -Tag r28a-retry<N>
+# Each run now logs 'R28a verify <target>: router shows <screen>' just before the shot: a Hub frame with 'ok' on that line is
+# the editor not presenting the frame, not the router going home.
+Screen:ProfileLeaderboardsDoor@1920x1080
+Screen:ProfileLeaderboardsDoor@2400x1080
+Screen:Recital@1920x1080
+Screen:Recital@2400x1080
+Screen:Proving@1920x1080
+Screen:Proving@2400x1080

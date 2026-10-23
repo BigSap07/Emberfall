@@ -366,6 +366,10 @@ namespace Emberfall.DevHarness
             CheckR29Rematch(content);
             // R29: the battle formation table and everything hung off it (R29FormationChecks.cs).
             CheckR29Formation(content, contentDir);
+            // R28 UI: the Leaderboards screen and the REMINDERS card, read and run (R28UiChecks.cs).
+            CheckR28Ui(content, contentDir);
+            // R28 builder b: the guild dungeon ladder screen and the rewarded ad block, as built (R28AdsLadderUiChecks.cs).
+            CheckR28AdsLadderUi(content, contentDir);
             CheckAudio(content, contentDir);
             CheckJuice(content, contentDir);
             CheckCaptureWatchdog(content, contentDir);

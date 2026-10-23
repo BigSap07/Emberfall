@@ -108,6 +108,17 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(_nameField.GetComponent<RectTransform>(), 28f, -60f, 640f, 76f, new Vector2(0f, 1f));
             _nameField.onEndEdit.AddListener(CommitName);
 
+            // The door to the leaderboards (R28): a button and nothing else, at the right of the identity card, where the
+            // first frame of the page shows it. It opens the screen on its first tab; the screen draws everything it says,
+            // so this carries no copy and no number of its own.
+            UIButton boards = EmberforgeUI.Button("Leaderboards", card, "LEADERBOARDS", HubStyle.FontButton, ForgeButtonKind.Secondary);
+            UIBuilder.Box(boards.Root, -28f, -46f, 420f, HubStyle.TouchMin, new Vector2(1f, 1f));
+            boards.OnClick(delegate
+            {
+                App.Audio.Tap();
+                Router.Show(ScreenId.Leaderboards);
+            });
+
             Text hint = EmberforgeUI.Label("Hint", card,
                                            "Shown on the top bar. Up to " + NameLimit + " characters.",
                                            UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperLeft);

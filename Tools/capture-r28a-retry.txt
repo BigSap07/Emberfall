@@ -1,0 +1,53 @@
+# R28 round 2 retry, builder a. Re-shoot after the round 2 fixes: ordinary rows are no longer gold framed, the REMINDERS card
+# opens from its first line with full width dividers and disabled switches drawn OFF, the Profile door sits in the identity
+# card. Offline (both), Loading and the guild and ad targets are unchanged and are not here.
+# At most 10 targets per file, because a long batch produces stale Hub frames; run the files one after the other:
+#   powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 -TargetsFile Tools/capture-r28a-retry-<N>.txt -LogDir D:\Emberfall\handoff\<RUN>\logs -Tag r28a-retry<N>
+# Each run now logs 'R28a verify <target>: router shows <screen>' just before the shot: a Hub frame with 'ok' on that line is
+# the editor not presenting the frame, not the router going home.
+Screen:LeaderboardsLocked@1920x1080
+Screen:LeaderboardsLocked@2400x1080
+Screen:LeaderboardsReady@1920x1080
+Screen:LeaderboardsReady@2400x1080
+Screen:LeaderboardsPinned@1920x1080
+Screen:LeaderboardsPinned@2400x1080
+Screen:LeaderboardsRefreshing@1920x1080
+Screen:LeaderboardsRefreshing@2400x1080
+Screen:LeaderboardsBannerFailed@1920x1080
+Screen:LeaderboardsBannerFailed@2400x1080
+Screen:LeaderboardsBannerOffline@1920x1080
+Screen:LeaderboardsBannerOffline@2400x1080
+Screen:LeaderboardsEmpty@1920x1080
+Screen:LeaderboardsEmpty@2400x1080
+Screen:LeaderboardsEmptyWeekly@1920x1080
+Screen:LeaderboardsEmptyWeekly@2400x1080
+Screen:LeaderboardsError@1920x1080
+Screen:LeaderboardsError@2400x1080
+Screen:LeaderboardsNotOpen@1920x1080
+Screen:LeaderboardsNotOpen@2400x1080
+Screen:LeaderboardsWeekly@1920x1080
+Screen:LeaderboardsWeekly@2400x1080
+Screen:LeaderboardsProving@1920x1080
+Screen:LeaderboardsProving@2400x1080
+Screen:LeaderboardsCampaign@1920x1080
+Screen:LeaderboardsCampaign@2400x1080
+Screen:SettingsRemindersUnsupported@1920x1080
+Screen:SettingsRemindersUnsupported@2400x1080
+Screen:SettingsRemindersNoStage@1920x1080
+Screen:SettingsRemindersNoStage@2400x1080
+Screen:SettingsRemindersNotAsked@1920x1080
+Screen:SettingsRemindersNotAsked@2400x1080
+Screen:SettingsRemindersAsking@1920x1080
+Screen:SettingsRemindersAsking@2400x1080
+Screen:SettingsRemindersDenied@1920x1080
+Screen:SettingsRemindersDenied@2400x1080
+Screen:SettingsRemindersGranted@1920x1080
+Screen:SettingsRemindersGranted@2400x1080
+Screen:SettingsRemindersOff@1920x1080
+Screen:SettingsRemindersOff@2400x1080
+Screen:ProfileLeaderboardsDoor@1920x1080
+Screen:ProfileLeaderboardsDoor@2400x1080
+Screen:Recital@1920x1080
+Screen:Recital@2400x1080
+Screen:Proving@1920x1080
+Screen:Proving@2400x1080

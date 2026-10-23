@@ -3,6 +3,8 @@
 Written 2026-10-23 for the client run that builds these four screens in uGUI. Everything below the screen is built:
 for each screen a presenter in `Assets/Scripts/Core/Screens` that says exactly what is drawn, a controller in
 `Assets/Scripts/Game` that makes the calls, and harness checks for every state (`Tools/DevHarness/R28ScreenChecks.cs`).
+**Built so far:** screen 1 (`LeaderboardsScreen`) and the REMINDERS card of screen 3 (`RemindersCard` on `SettingsScreen`), held
+to this spec by `Tools/DevHarness/R28UiChecks.cs`. Screens 2 and 4 are not built in uGUI yet.
 The UI run writes the screen and binds it. It decides nothing: **no game logic goes in UI**, and here that includes
 whether a button is drawn, whether it can be tapped, every sentence and every countdown.
 
@@ -33,13 +35,18 @@ in `UITheme.TextMuted` at `UITheme.FontBody`, and under it the screen's `Retry` 
 **Look and feel.** `UITheme` for every colour, size and spacing; `HubStyle` for plates, borders and radii where the
 screen opens from the Hub. The header is `ScreenChrome.ForgedHeader` with the view's `Title`; buttons are
 `UIBuilder.GoldButton` (the one primary action), `UIBuilder.SecondaryButton` (everything else); lists are
-`UIBuilder.ScrollList`; tabs and chips are `UIBuilder.Chip`. Panels use `UITheme.Panel` and `UITheme.CornerRadius`,
+`UIBuilder.ScrollList`; tabs and chips are `UIBuilder.Chip`. **With the UI kit on (the default) the built screens draw the same
+roles in the kit's components instead:** `EmberforgeUI.Button` with `ForgeButtonKind.Primary` (the ember button, where the old
+text says gold) and `ForgeButtonKind.Secondary`, `EmberforgeUI.Tab` for tabs and `EmberforgeUI.PanelOn` for cards. A leaderboard row is NOT the kit's plain panel (its art carries a
+gold rim, which framed every row): it is the flat `UITheme.PanelRaised` plate with a `UITheme.BorderSoft` hairline, and only the
+caller's row has the gold frame. The colours, sizes, fields and taps below are unchanged. Panels use `UITheme.Panel` and `UITheme.CornerRadius`,
 rows `UITheme.PanelRaised` and `UITheme.CornerRadiusSmall`. Values a player reads as a number that matters
 (`HubStyle.ValueGold`) are `UITheme.Gold`; structure is `UITheme.ChromeBrass`, never Gold. Every tap target is at least
-`HubStyle.TouchMin` on both axes. No new art, no new colour, no em or en dash in any string (the checks scan for them).
+`HubStyle.TouchMin` on both axes (so the tab chips are 108 tall, not the Store's 76). No new art, no new colour, no em or en dash in any string (the checks scan for them).
 
 **Captures.** Each screen is captured with `PlayModeScreenshot` at 1920x1080 and 2400x1080 in every state its table
-lists, before the work counts as done. The in-memory backends make every state reachable offline:
+lists, before the work counts as done. Screens 1 and 3 have their targets under `Emberfall/Capture/R28 screens/`, listed in
+`Tools/capture-r28a-targets.txt`. The in-memory backends make every state reachable offline:
 `LeaderboardBackends.Override`, `GuildDungeonBackends.Override`, `NotificationBackends.Override`, `AdBackends.Override`
 (the simulated ad backend's `FinishNext` and `FailNext` rehearse the two no-reward endings).
 
@@ -86,14 +93,14 @@ boards pay nothing, and a medal would read as a prize.
 | Element | Field | Style |
 |---|---|---|
 | Header title | `Title` | `ForgedHeader` |
-| REFRESH | `Refresh` (`ButtonModel`) | `SecondaryButton`, `UITheme.FontSmall`; label is REFRESH or REFRESHING |
-| Tab chips | `Tabs[i].Label`, `Tabs[i].Selected` | `UIBuilder.Chip`; selected chip `UITheme.Gold` text on `UITheme.PanelRaised`, others `UITheme.TextMuted` |
+| REFRESH | `Refresh` (`ButtonModel`) | `SecondaryButton`, `UITheme.FontSmall`; label is REFRESH or REFRESHING; in the header at the right, 300 by `HubStyle.TouchMin`; a disabled one prints its `Reason` under it |
+| Tab chips | `Tabs[i].Label`, `Tabs[i].Selected` | `UIBuilder.Chip`; selected chip `UITheme.Gold` text on `UITheme.PanelRaised`, others `UITheme.TextMuted` (kit: `EmberforgeUI.Tab` and `SetTabSelected`, 280 by `HubStyle.TouchMin`) |
 | Reset line | `ResetLine` (`ResetInSeconds` for the tick) | `UITheme.TextMuted`, `UITheme.FontTiny`, right-aligned |
 | Caption | `Caption` | `UITheme.TextPrimary`, `UITheme.FontSmall` |
 | Updated line | `UpdatedLine` | `UITheme.TextDim`, `UITheme.FontTiny` |
 | Banner | `Banner` | the banner strip |
 | Lock line | `LockLine` | `UITheme.ChromeBrass`, `UITheme.FontTiny`, all caps as given |
-| Value column header | `ValueHeader` | `UITheme.ChromeBrass`, `UITheme.FontTiny` |
+| Value column header | `ValueHeader` | `UITheme.ChromeBrass`, `UITheme.FontTiny`, right-aligned over the value column. The diagram's RANK and NAME headers are not drawn: the view carries no field for them and the screen writes no copy of its own |
 | Row rank | `Rows[i].RankText` | `UITheme.TextMuted`, `UITheme.FontSmall` |
 | Row name | `Rows[i].Name` | `UITheme.TextPrimary` (`UITheme.Gold` when `IsMe`), `UITheme.FontSmall` |
 | Row value | `Rows[i].ValueText` | `HubStyle.ValueGold`, `HubStyle.FontRankValue`, right-aligned |
@@ -199,8 +206,9 @@ pips. **The divider** is a `UIBuilder.Divider` in `UITheme.ChromeBrass` with `Di
 | Tap | Call | What happens |
 |---|---|---|
 | Screen opens, REFRESH, TRY AGAIN | `Refresh()` | Status, then this cycle's attempts, then the server's ladder for the live member count. |
-| ATTEMPT | router | Opens `GuildFloorScreen` for `Rows[i].Floor`. When its fight is over it hands the attempt to `RecordAttempt(attempt)`, which disables every ATTEMPT (RECORDING), stores it, and reloads. A refusal comes back as the banner with the server's sentence. |
+| ATTEMPT | router | Opens `GuildFloorScreen` for `Rows[i].Floor`. That screen fights the line and files it through `GuildDungeonFlow.Attempt`, which stores the attempt BEFORE the fight is shown, so the ladder screen never calls `RecordAttempt` (it would file one fight twice); coming back, `OnShow` reloads. A refusal in that flow is `GuildFloorScreen`'s notice, so the RECORDING label and the refused-attempt banner exist in the presenter and the controller but nothing in the shipped flow drives them yet. |
 | BOARDS | router | Opens `GuildDungeonBoardsScreen`. |
+| GUILD TECH | router | Opens `GuildTechScreen`. Not in the view: the old screen's door to the tree this dungeon pays into, kept, drawn only on a loaded ladder. |
 | FIND A GUILD | router | Opens `GuildScreen` at its join view. |
 
 There is no button that buys, refills or plays an ad for an attempt, and the checks fail the build if a label here
@@ -217,9 +225,21 @@ says so. Attempts cannot be bought.
 | `Ready` | loaded | the layout above |
 | `Ready` + banner | refresh failed, offline, refused attempt, cycle over | ladder under the banner; offline and cycle over disable every ATTEMPT |
 
-The five states `GUILD-DUNGEON-SIZE.md` asks to capture are all reachable through `GuildDungeonBackends.Override`:
-a guild of 4 on cycle open, a guild of 30 at the cycle cap, a guild of 12 whose cycle opened at 9, a member who changed
-guild after 15 attempts, and the result after floor 8 (`RewardText` "Reward not decided yet").
+The five states `GUILD-DUNGEON-SIZE.md` asks to capture are all reachable through `GuildDungeonBackends.Override`
+(`Tools/capture-r28b-targets.txt`, `Screen:GuildLadder=<state>`): a guild of 4 on cycle open (`g4-open`), a guild of 30
+at the cycle cap (`g30-cap`), a guild of 12 whose cycle opened at 9 (`g12-grew`), a member who changed guild after 15
+attempts (`changed-guild`), and floor 8 just cleared (`after-floor8`). The last is a capture of the ladder: its rows read
+"Reward not decided yet", muted. `GuildDungeonResultScreen` is not replaced and draws no reward line at all, so there is
+no result screen to show that sentence on.
+
+**As built.** The buttons are the kit's: ATTEMPT and FIND A GUILD are `EmberforgeUI.Button` with `ForgeButtonKind.Primary`
+(the spec's `GoldButton`), the others `ForgeButtonKind.Secondary`; text colours are `Emberforge.TextBody` and
+`Emberforge.TextQuiet` on the kit's plates, gold values `HubStyle.ValueGold`. REFRESH sits in the header's right end.
+A row is 96 tall, but the ATTEMPT button is `HubStyle.TouchMin` (108) tall and overhangs its row by 6 a side
+(`LadderLayout`), so the list spacing is 14. The Reason of a disabled ATTEMPT is printed verbatim in the row's lower
+line, left of the button, since there is no room under a button that fills the row. The Champion floors (5 and 10) keep a
+gold framed plate, locked floors a recess, and the row has no enemy portraits: the floor view is where a floor is
+inspected. The spinner is eight dots in a ring, the only motion on the screen.
 
 ## 3. Notification settings
 
@@ -267,7 +287,9 @@ return (`NotificationScheduler`), which does nothing until a backend reports the
 | Upcoming rows | `Upcoming[i].Title`, `Upcoming[i].WhenText` (`Body` as a second line) | title `UITheme.TextPrimary`, time `UITheme.TextMuted` right-aligned |
 | Upcoming status | `UpcomingStatus` | `UITheme.TextMuted`, `UITheme.FontTiny` |
 | Rule lines | `RuleLines` | `UITheme.TextDim`, `UITheme.FontTiny` |
-| Whole card | `Phase == Unavailable`: `Status` replaces the permission line, every switch disabled | |
+| Whole card | `Phase == Unavailable`: `Status` replaces the permission line, every switch disabled | A switch's `Reason` is printed under its label in place of its description, except a reason that repeats the `Status` already shown, which would read five times down the card: that switch shows its description instead (`RemindersCardLayout.SubLine`) |
+| Switch | `On`, `Enabled` of each `ToggleModel` | a button reading ON (ember) or OFF (teal), 220 by `HubStyle.TouchMin`, disabled when `Enabled` is false; a disabled switch always reads OFF (`RemindersCardLayout.SwitchShowsOn`), so a topic held on while the phone blocks reminders does not read ON. ALLOW REMINDERS and ASKING are the ember button, OPEN PHONE SETTINGS the teal one |
+| Card heading | constant REMINDERS | the card's name in the spec; `NotificationSettingsView.Title` (NOTIFICATIONS) is not drawn |
 
 ### Taps
 
@@ -300,13 +322,23 @@ the save is client-authoritative and `Docs/DESIGN-REWARDED-ADS.md` proposes no s
 built and captured now (flip it in the capture tool) and ship invisible until the owner decides.
 
 **Where.** Never on `StoreScreen`, `EventsScreen`, `LiveEventsScreen`, `WayfarersRoadScreen` or any offer card (the
-checks hold every UI file with those names to it). Exactly three places:
+checks hold every UI file with those names to it, and `R28AdsLadderUiChecks.cs` holds the identifiers `RewardedAdBlock`,
+`RewardedAdController`, `RewardedAdPresenter`, `AdRewards`, `AdBackends`, `AdContext` and `AdPlacementKind` to the
+three files below and the block's own). Exactly three places:
 
 | Placement | Screen | Context the screen passes |
 |---|---|---|
 | A1 `AdPlacementKind.IdleGold` | `IdleClaimPopup`, after the claim, under the claimed amounts | `AdContext.ClaimGold` = the Gold that claim paid |
 | A2 `AdPlacementKind.Brand` | `ProvingScreen`, beside the Brands counter | none |
 | A3 `AdPlacementKind.RepeatClear` | `WaveResultScreen`'s stage cleared view, on a repeat clear that paid the floor | `AdContext.Stage` = the stage |
+
+**A3 cannot be seen today.** A stage with a wave curve that is already cleared is swept (`CampaignFlow.Launch` calls
+`CampaignFlow.Sweep`, a toast) and never reaches `WaveResultScreen`, which refuses a cleared stage
+(`WaveRefusal.StageCleared`); a stage with no curve shows its repeat clear on `BattleScreen`'s result. So the stage cleared
+view only ever shows a FIRST clear, and `BattleRewards.RepeatCapped` is never true there. The block is built there as
+specified and asked about only for `!FirstClear && RepeatCapped`, so it is dormant, and the A3 captures hand the screen a repeat
+clear (`WaveResultScreen.PrepareClearedForCapture`), with no fight. Where a repeat clear that paid the floor is shown to a player is an owner decision (the
+sweep toast has no room for a button).
 
 ### Layout (one block, the same in all three)
 
@@ -325,6 +357,15 @@ after the ad:
 A `UITheme.PanelSunken` plate at `HubStyle.PlateAlpha`, `HubStyle.BorderWarm` hairline, `UITheme.CornerRadiusSmall`,
 placed below the screen's own primary action, never above it and never as the primary action: the screen's own
 button (COLLECT, FIGHT, CONTINUE) stays the `GoldButton`, and WATCH AN AD is a `SecondaryButton`.
+
+**As built.** `RewardedAdBlock` is one class for all three. It is a kit `Sunken` plate (not a `PanelSunken` colour at
+`HubStyle.PlateAlpha`), its buttons `ForgeButtonKind.Secondary` and `HubStyle.TouchMin` tall, and it is empty and inactive
+while the view is Hidden. A1: under the claim plate (the plate is a fixed size and the block is only there after a
+claim), 760 wide, the context the Gold of the last claim in that visit. A2: right of the opponent card at the height of its
+Brands rows, 430 wide, so it stacks (the line, the small line, the buttons) instead of putting the small line beside the
+text; "beside the Brands counter" cannot mean inside the card, whose width the stat rows fill. A3: 760 wide under the
+CONTINUE row. The disabled PLAYING button prints no Reason under it (the label says it). A screen holds a new controller
+per visit, so an old result does not follow the player in.
 
 ### Bindings
 
@@ -368,7 +409,7 @@ for the words of a luck mechanic and fail on any.
   columns, `0022_guild_dungeon_size.sql`), the leaderboards and notifications work (`0023_leaderboards.sql`,
   `NotificationPlanner`) and the rewarded ads record (`Docs/DESIGN-REWARDED-ADS.md`), all of which are on main (merged as the integration branch; migrations 0022 and 0023).
 - **Migration numbers.** The leaderboards migration is `0023_leaderboards.sql` and the guild dungeon size migration is `0022_guild_dungeon_size.sql`; both were renumbered when the branches merged.
-- **Before ads ship:** apply `Server/supabase/owner/save_limits_27.sql`, then turn `AdsSwitch` on (`EMBERFALL_ADS`).
+- **Before ads ship:** apply the migration `Server/supabase/migrations/0026_save_limits_27.sql`, then turn `AdsSwitch` on (`EMBERFALL_ADS`).
 - **Before reminders ship:** add `com.unity.mobile.notifications` and an Android `INotificationBackend` behind
   `EMBERFALL_MOBILE_NOTIFICATIONS`, set as `NotificationBackends.Override` at startup.
 - **Before real ads ship:** add the LevelPlay package and an `IAdBackend` behind `EMBERFALL_LEVELPLAY`, set as
