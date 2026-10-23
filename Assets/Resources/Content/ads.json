@@ -1,0 +1,21 @@
+{
+  // REWARDED ADS (Docs/DESIGN-REWARDED-ADS.md), the lean variant the record proposes. Read by AdsConfig and
+  // AdRewards. NOT part of ContentDatabase.ContentVersion: no fight reads it.
+  //
+  // NOTHING HERE IS LEFT TO LUCK (the Belgian rule). Each placement pays one fixed line, worked out and shown in full
+  // before the player taps, and the same tap always pays the same thing. There is no field for a weight, a table or
+  // a pool, and AdsConfig refuses a placement kind it does not know.
+  //
+  // Nothing runs until AdsSwitch is on (EMBERFALL_ADS). With it off there is no button, no SDK, no key in the save.
+  //
+  // kind:        idleGold (A1: the claim's Gold again, capped at capHours of the player's own idle Gold),
+  //              brand (A2: one Proving Brand while below the maximum),
+  //              repeatClear (A3: one more full-pay repeat clear of a stage, Gold and its Relic Dust).
+  // perDay:      how many times a reward day (04:00 UTC) this placement pays.
+  // adPlacement: the placement name in the ad network's dashboard, capped there to the same number as a second lock.
+  "placements": [
+    { "id": "idle_double", "kind": "idleGold", "perDay": 1, "capHours": 2, "adPlacement": "A1_IdleDouble", "enabled": true },
+    { "id": "proving_brand", "kind": "brand", "perDay": 1, "adPlacement": "A2_ProvingBrand", "enabled": true },
+    { "id": "repeat_clear", "kind": "repeatClear", "perDay": 1, "adPlacement": "A3_RepeatClear", "enabled": true }
+  ]
+}

@@ -226,6 +226,17 @@ namespace Emberfall.Core.Data
             for (int i = 0; i < Store.Warnings.Count; i++) Warnings.Add(Store.Warnings[i]);
         }
 
+        /// <summary>The rewarded ad placements (ads.json, R28, Docs/DESIGN-REWARDED-ADS.md). NOT part of ContentVersion: no
+        /// fight reads it. Empty (IsUsable false) until LoadAds is called, which every screen reads as "no ads".</summary>
+        public AdsConfig Ads = new AdsConfig();
+
+        /// <summary>Parses ads.json into Ads and adds its warnings to Warnings. Does not touch ContentVersion.</summary>
+        public void LoadAds(string adsJson)
+        {
+            Ads = AdsConfig.FromJson(adsJson);
+            for (int i = 0; i < Ads.Warnings.Count; i++) Warnings.Add(Ads.Warnings[i]);
+        }
+
         /// <summary>Parses wayfarers-road.json into WayfarersRoad and adds its warnings to Warnings. Does
         /// not touch ContentVersion.</summary>
         public void LoadWayfarersRoad(string wayfarersRoadJson)

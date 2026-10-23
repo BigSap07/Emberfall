@@ -8,6 +8,7 @@ using Emberfall.Core.Model;
 using Emberfall.Core.Session;
 using Emberfall.Core.Telemetry;
 using Emberfall.Game.Cloud;
+using Emberfall.Game.Notifications;
 using Emberfall.Game.Telemetry;
 using Emberfall.UI;
 
@@ -782,8 +783,11 @@ namespace Emberfall.Game
         private void OnApplicationPause(bool paused)
         {
             if (TelemetrySwitch.Enabled) TelemetryService.OnPause(paused);
-            if (!paused) return;
+            // Local reminders (Docs/DESIGN-NOTIFICATIONS.md): cleared on return, re-planned on leaving. Inert until a
+            // notification backend reports the permission granted, which no build does without the package.
+            if (!paused) { NotificationScheduler.OnForeground(); return; }
             SaveNow();
+            NotificationScheduler.OnBackground(Session);
             if (Cloud != null) Cloud.SyncOnLeaving();
         }
 
@@ -791,6 +795,7 @@ namespace Emberfall.Game
         {
             if (TelemetrySwitch.Enabled) TelemetryService.OnQuit();
             SaveNow();
+            NotificationScheduler.OnBackground(Session);
             if (Cloud != null) Cloud.SyncOnLeaving();
         }
 
