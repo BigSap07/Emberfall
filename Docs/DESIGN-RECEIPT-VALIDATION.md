@@ -7,6 +7,8 @@ is durable, the status lines are not. `DESIGN-BUILD-ORDER.md` is where status li
 | Piece | Where | State |
 |---|---|---|
 | Receipt ledger and product list | `Server/supabase/migrations/0019_purchase_receipts.sql` | written, not applied |
+| Per-account verification limit | `Server/supabase/migrations/0021_security_review_launch.sql` | written, not applied |
+| Refund clawback | `Server/supabase/migrations/0024_purchase_clawback.sql` | written, not applied |
 | Verification function | `Server/supabase/functions/verify-google-purchase/index.ts` | type-checked, not deployed |
 | Refund notification function | `Server/supabase/functions/google-play-rtdn/index.ts` | type-checked, not deployed |
 | Decision logic | `Server/supabase/functions/_shared/purchase_logic.ts` | 22 tests pass under Node and Deno |
@@ -55,7 +57,7 @@ ProcessPurchase(token, productId)
                                        productsv2.getproductpurchasev2 -> Google Play API
                                        decidePurchase(...)
                                        purchase_receipt_record(...) ---> purchase_receipts
-                                       acknowledge (non-consumables) --> Google Play API
+                                       acknowledge (every purchase) ---> Google Play API
   <------ { status, grant, receiptId, offerId }
 if grant: PurchaseLedger.Complete -> PurchaseGrants.Apply
 if status is not pending/error: ConfirmPendingPurchase (consumes a consumable)
@@ -112,10 +114,17 @@ three days.
 non-consumable (bought once, restorable, matching `restorable: true` in `store.json`); everything
 else can be bought again and is consumable.
 
-- A **non-consumable** is acknowledged by the server once it is recorded.
-- A **consumable** is consumed by the client through `ConfirmPendingPurchase`, which also
-  acknowledges it. The server does not consume, because consuming is what lets the player buy the
-  item again, and that should happen only after the client has granted.
+- **Every verified purchase is acknowledged by the server** once it is recorded, consumables
+  included (security review finding L1, the owner's decision of 2026-10-23). Google refunds a
+  purchase nobody acknowledged within three days, so a client that took the grant and never
+  confirmed used to keep the goods and get the money back.
+- A **consumable** is still consumed by the client through `ConfirmPendingPurchase`. The server does
+  not consume, because consuming is what lets the player buy the item again, and that should happen
+  only after the client has granted. **To prove on the internal test track:** that Google accepts an
+  acknowledge for a consumable and that the client's later consume still succeeds. If it does not,
+  the fallback is to consume on the server and grant from the player's own `purchase_receipts` rows.
+- Before Google is asked, `purchase_verify_allow` (0021) counts the call: past 20 calls in 10
+  minutes for one account the answer is 429 with `status: "error"`, so the purchase stays pending.
 
 ### 3.4 Restore
 
@@ -146,13 +155,34 @@ One-time product notifications are published only if the owner opts into them wh
 RTDN in the Play Console. Voided purchase notifications need no opt-in. As a backstop, the Voided
 Purchases API can be polled; that is not built.
 
-**What a revoked receipt costs the player is an owner decision.** Revoking marks the row; it takes
-nothing back, because the goods are in a save on the device. The options, cheapest first:
+**A revoked receipt claws back the purchase's unspent goods, on the server** (the owner's decision
+of 2026-10-23, option 2 of the three this section listed, made a server rule). `0024_purchase_clawback.sql`:
 
-1. Record only, and refuse future purchases from an account with repeated refunds.
-2. Have the client read its revoked receipts at boot and remove what is still unspent from that
-   purchase's Sealed purses (Sealed goods are tracked separately, so this is possible for currency).
-3. Flag the account server-side and keep it out of guild and PvP leaderboards when those exist.
+- **What the purchase gave** is written by the game into the purchase's receipt in the save
+  (`PurchaseReceipt` in `StoreState.cs`: `gold`, `slag`, `dust`, `hero`), when `PurchaseLedger`
+  delivers it. The server never guesses: an offer paid in hours of the buyer's idle Gold has no size
+  it could know.
+- **What is unspent:** the least of what was given, the Sealed part of the purse and the purse, for
+  Gold and Slag (Sealed Gold leaves only through a deterministic sink, Sealed part first); the least of
+  what was given and the purse, for Dust (unmarked, so earned and bought cannot be told apart, and it
+  never takes more than was given); one Sealed copy of the hero, only from a hero that keeps a copy.
+- **When:** a trigger on `purchase_receipts` files a `purchase_clawbacks` row when the receipt is
+  revoked and claws back the stored cloud save at once, moving its revision on so the buying device
+  sees a newer cloud save at its next sync. A trigger on `saves` claws back every later save of that
+  account on its way in, so a device that keeps pushing its own copy still lands a clawed save.
+- **Once:** the receipt in the save gets `"clawedBack": true` and what was `taken`; the game keeps the
+  mark (`StoreState`), so no save is clawed back twice.
+- **Matching:** a save receipt matches when its id is Google's order id or its SHA-256 is the stored
+  token hash, so it works whichever id Unity IAP hands the game.
+- **Not taken back:** a relic named by a Relic of Choice, a skin, an unlocked paid track or pass, the
+  Ember Ledger's and the Growth Fund's later payouts, and a hero whose only copy is the bought one.
+  Each needs a game operation rather than a change to the saved document; they are listed for the
+  owner. A player can read their own clawback rows (offer, when, what was taken) for a support answer.
+- **The device itself** keeps its local copy until it takes the cloud save. A client step that offers
+  the cloud save whenever it holds a `clawedBack` receipt the local save lacks is client work, not built.
+
+Recording refusals of future purchases after repeated refunds (option 1) and keeping refunders off
+the leaderboards (option 3) are not built.
 
 ## 5. Setting it up (owner, when the store goes live)
 
@@ -214,5 +244,10 @@ None of this is built; the server side is ready for it. In `Assets` (not touched
 - **The two functions** pass `deno check`.
 - **Not checked:** a call to Google's real API, and a deployed function. Both need the Play Console
   products and a service account, which do not exist yet.
+- **2026-10-23:** every migration 0001 to 0024 applied in order to a local PostgreSQL with stand-in
+  Supabase roles, each from 0004 twice, by `Tools/supabase-local-check.sh` (71 checks, among them the
+  whole clawback: a refund, a later push of the old copy, a second push of the clawed copy, a receipt
+  keyed by its token, a refund with no cloud save). Both functions pass `deno check` after the L1 and
+  L2 changes, and the 22 logic tests pass under Node and Deno.
 - **The live client-side refusals** are in `Tools/supabase-launch-rules-test.py`, section PURCHASE
   RECEIPTS, to run once 0019 is applied.

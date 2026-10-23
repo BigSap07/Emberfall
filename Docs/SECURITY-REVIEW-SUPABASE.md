@@ -79,7 +79,16 @@ if (!(allow as { allowed?: boolean }).allowed) {
 
 `status: "error"` is deliberate: the client must not confirm on an error, so a throttled honest purchase stays pending and is verified on the next try (`DESIGN-RECEIPT-VALIDATION.md` 3.2). The tests in `functions/tests/purchase_logic.test.ts` do not cover `index.ts`, so this needs one integration run on a test project.
 
-## What the owner must decide
+## What the owner decided (2026-10-23)
+
+- **L1 is fixed in the Edge Function.** `verify-google-purchase/index.ts` acknowledges every verified purchase that is not yet acknowledged, consumables included, as the code block above shows. The L2 throttle call is in the same file. Both pass `deno check`; neither has been deployed.
+- **Decision 1: refunds claw back unspent goods, server side.** `0024_purchase_clawback.sql`: a revoked receipt takes back the purchase's unspent Sealed Gold and Slag, its Dust and one Sealed hero copy from the cloud save, and from every save that account writes afterwards. `Docs/DESIGN-RECEIPT-VALIDATION.md` section 4 has the rule and what it does not take.
+- **Decision 4: a block also ends an accepted friendship.** 0021's `user_blocks_end_friendship` removes every friendship row between the two, pending or accepted.
+- Decisions 2, 3 and 5 are still open.
+
+All of 0001 to 0024 were applied on 2026-10-23 to a local PostgreSQL with stand-in Supabase roles, each file from 0004 twice, and exercised by `Tools/supabase-local-check.sh` (71 checks). That run found one defect the parser could not: 0023's closing check asked PostgreSQL for a column DELETE privilege, which is an error, so the whole file would have failed in the SQL editor. It is fixed.
+
+## What the owner had to decide
 
 1. **What a revoked receipt costs (L1).** `DESIGN-RECEIPT-VALIDATION.md` section 4 lists three options. Google's fraud guidance recommends the second (claw back unspent goods; Sealed purses make that possible for currency). Recommendation: option 2 for currency, plus option 1 (refuse new purchases after two refunds).
 2. **Restoring a one-time purchase after a reinstall (L3).** Either require an account link (email or Google) before the Starter Pact or the Growth Fund can be bought, or allow the server to re-bind a non-consumable receipt to a new account when Google confirms the same Google account bought it. The second needs a design of its own, because re-binding is exactly what account binding exists to refuse. Recommendation: require the link, and say so on the offer card.

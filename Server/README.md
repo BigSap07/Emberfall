@@ -79,8 +79,9 @@ are written, not applied, and both are re-appliable:
    (`social_rate_limits`, `friend_request_tally`), and the trigger functions are revoked. Needs
    only `0001`-`0015`.
 21. `0021_security_review_launch.sql` - the per-account limit on purchase verification
-   (`purchase_verify_allow`, service role only; the Edge Function change is in the review), and a
-   block that also refuses friend requests. Run after `0019` and `0020`.
+   (`purchase_verify_allow`, service role only, called by `verify-google-purchase`), and a block
+   that refuses friend requests and ends every friendship row between the two, pending or accepted
+   (the owner's decision of 2026-10-23). Run after `0019` and `0020`.
 22. `0022_guild_dungeon_size.sql` - the guild dungeon's ladder scales with the guild
    (`guild_dungeon_cycles` snapshots the member count when a cycle opens, ten floors at most) and
    every member's attempts are capped per cycle across every guild (`cycle_attempt`, unique).
@@ -94,19 +95,40 @@ are written, not applied, and both are re-appliable:
    and stores only what passes; `leaderboard_top()` reads a board without exposing a user id. The limits
    are the one-row `leaderboard_limits` table. No table carries a policy or a grant. Written, not
    applied to a project: nothing in the game calls it yet. `Tools/supabase-leaderboard-rules-test.py` needs it applied.
+   The weekly Recital board ranks the highest floor this week, and the Proving board the highest
+   standing (the owner's decisions of 2026-10-23).
+24. `0024_purchase_clawback.sql` - refunds claw back unspent goods, server side (the owner's decision
+   of 2026-10-23). When a receipt is revoked, `purchase_clawbacks` gets a row and the cloud save loses
+   what the purchase gave that is still unspent (Sealed Gold and Slag, Dust, one Sealed hero copy),
+   read from the purchase's own receipt in the save; every later save of that account is clawed back
+   on its way in, and a `clawedBack` mark stops a second clawback.
+   `Docs/DESIGN-RECEIPT-VALIDATION.md` section 4. Written, not applied to a project.
+
+**The order to apply, all in the SQL editor as the project owner:** whatever of 0012, 0014 and 0015
+the project lacks, then 0016, 0017, 0018, 0019, 0020, 0021, 0022, 0023, 0024. 0022 refuses to apply
+without 0014. Raise `save_limits.max_save_version` to 26 in the same sitting.
+
+**Checked locally, never on a project:** `bash Tools/supabase-local-check.sh` applies 0001 to 0024 in
+order to a throwaway local PostgreSQL with the stand-in roles in `supabase/local/supabase-standin.sql`,
+pastes every file from 0004 a second time, and runs `supabase/local/rules-check.sql` (71 checks on
+0016 to 0024, as a player, as anon and as the service role). It takes no URL and no key.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0023` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0024` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
-after a half-finished run, is a no-op rather than a failure to unpick.
+after a half-finished run, is a no-op rather than a failure to unpick. Pasting an OLDER file after a
+newer one that replaced its function is a different thing and does not always work: `0007` after
+`0022` fails, because 0022 widened `guild_dungeon_status`. Re-apply in number order from the older
+file on.
 
 Nothing in the game uses the service role key, and nothing in the game ever will. The client
 holds the anon public key and a user's own access token, and every rule in these files is written
 to be correct against exactly that. **The one server-side exception** is the pair of Edge Functions
 under `supabase/functions` (below): they run on Supabase's servers, receive the service role key
-from Supabase's own environment, and use it only to call the receipt writers in `0019`.
+from Supabase's own environment, and use it only to call the receipt writers in `0019` and the
+verification limit in `0021`.
 
 ## Two locks on every table
 
@@ -183,9 +205,13 @@ is why none of these tables have anything to migrate when a player converts.
 deployed**. `Docs/DESIGN-RECEIPT-VALIDATION.md` has the setup, the secrets and the client contract.
 
 - `verify-google-purchase` - the game posts a product id and purchase token with the player's own
-  token; the function asks Google, records the receipt through `0019` and answers whether to grant.
+  token; the function counts the call against the account's limit (`0021`), asks Google, records the
+  receipt through `0019`, acknowledges every verified purchase itself (consumables included, so
+  Google's three-day automatic refund cannot return the money for granted goods) and answers whether
+  to grant.
 - `google-play-rtdn` - Google Play's real-time developer notifications (refunds, cancellations)
-  arrive here from a Pub/Sub push subscription and revoke the receipt.
+  arrive here from a Pub/Sub push subscription and revoke the receipt; `0024` then claws back what
+  the purchase gave that is still unspent.
 - `_shared/purchase_logic.ts` - every decision the two make, pure and tested by
   `tests/purchase_logic.test.ts` (`node --experimental-strip-types --test` or `deno test`).
 
