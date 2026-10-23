@@ -399,8 +399,8 @@ namespace Emberfall.DevHarness
             Check(hero.Contains("_slotStatus.alignment = TextAnchor.UpperLeft") && !hero.Contains("UiKit.On ? 40f : 8f"),
                   "hero PAGE: with the kit on the slot line sits under the LEVEL label, no longer over the attunement line");
             string toast = R26Read(root, "Assets", "Scripts", "UI", "Overlays.cs");
-            Check(toast.Contains("-(ScreenChrome.HeaderTop + 12f), MinWidth, MinHeight, new Vector2(0.5f, 1f)"),
-                  "toast: the message strip sits in the header band, not over the price buttons at the bottom");
+            Check(toast.Contains("UIBuilder.Box(_root, 0f, 300f, MinWidth, MinHeight, new Vector2(0.5f, 0f))"),
+                  "toast: the message strip keeps its bottom anchor (a header-band anchor covered the Store title ribbon in the R26 captures; the bottom one covering price buttons is a known low item)");
         }
     }
 }
