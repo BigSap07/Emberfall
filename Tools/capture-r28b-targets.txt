@@ -14,9 +14,10 @@
 #   (A1 the idle claim popup after CLAIM, A2 the Proving beside the Brands, A3 the stage cleared view). The states are
 #   hidden (AdsSwitch off: nothing is drawn), ready, playing, granted, notfinished, failed, refused. AdsSwitch is flipped
 #   ON for the capture only (Stop puts it back) and the simulated ad backend stands in for the network. They rewrite the
-#   scratch profile, so they only run on the scratch identity (capture-batch.ps1 always is). AdStage fights a real first
-#   clear and then forges the repeat on the screen's copy of the result, because the game sweeps repeats and never draws
-#   them on this view; its search takes longer than the others.
+#   scratch profile, so they only run on the scratch identity (capture-batch.ps1 always is). AdStage hands the stage cleared
+#   view a repeat clear directly (the game sweeps repeats and never draws them on this view). Every ad target first
+#   empties the scratch profile's ads block, so one granted target does not cap the ones after it. Batches of 10 at most:
+#   Tools/capture-r28b-retry-1.txt to -6.txt.
 #
 # The size is the Game view's: 1920x1080 is 16:9, 2400x1080 is 20:9.
 

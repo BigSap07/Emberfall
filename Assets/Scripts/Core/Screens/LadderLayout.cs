@@ -70,6 +70,30 @@ namespace Emberfall.Core.Screens
             return index * (pip + spacing) + (index / PipsPerBlock) * blockGap;
         }
 
+        /// <summary>
+        /// How many whole rows a list viewport of this height shows from the top: the top padding, then rows of
+        /// `rowHeight` with `spacing` between. At least one.
+        /// </summary>
+        public static int RowsThatFit(float available, float rowHeight, float spacing, float padTop)
+        {
+            float pitch = rowHeight + spacing;
+            if (pitch <= 0f) return 1;
+            int n = (int)Math.Floor((available - padTop + spacing * 0.5f) / pitch);
+            return n < 1 ? 1 : n;
+        }
+
+        /// <summary>
+        /// The height to give a scrolling list so that at rest its bottom edge falls in the gap under a row, never through
+        /// a row or a divider: the whole rows that fit, and half a spacing. A list whose whole content fits is left alone.
+        /// </summary>
+        public static float SnappedViewport(float available, float contentHeight, float rowHeight, float spacing, float padTop)
+        {
+            if (contentHeight <= available) return available;
+            int n = RowsThatFit(available, rowHeight, spacing, padTop);
+            float height = padTop + n * (rowHeight + spacing) - spacing * 0.5f;
+            return height > available ? available : height;
+        }
+
         /// <summary>A tap target's size: what the art wants, never below the touch minimum.</summary>
         public static float TapSize(float wanted, float touchMin)
         {

@@ -168,6 +168,27 @@ namespace Emberfall.UI.Screens
             if (_result != null && _result.Refused == WaveRefusal.None) Paint(false);
         }
 
+        /// <summary>
+        /// CAPTURE ONLY: lines up a stage cleared view for a stage without fighting for it. The next Router.Show takes the
+        /// "back from a replay" road in OnShow, which draws a resolved result as it stood, so nothing is resolved, granted or
+        /// saved. A3 of the rewarded ads needs a repeat clear that paid the floor, which the campaign sweeps instead of
+        /// showing (CampaignFlow.Sweep), so the capture hands in the result itself.
+        /// </summary>
+        public void PrepareClearedForCapture(StageDef stage, BattleRewards rewards)
+        {
+            WaveResolution r = new WaveResolution();
+            r.StageId = stage.Id;
+            r.Wave = Mathf.Max(1, stage.WaveCount);
+            r.WaveCount = Mathf.Max(1, stage.WaveCount);
+            r.WaveCleared = true;
+            r.StageCleared = true;
+            r.Rewards = rewards;
+            _result = r;
+            _stage = stage;
+            _pending = null;
+            _returning = true;
+        }
+
         /// <summary>Presses STATS from outside, so a capture can photograph the panel, on the
         /// scope the panel opens on or the other one.</summary>
         public void StatsForCapture(bool otherScope)

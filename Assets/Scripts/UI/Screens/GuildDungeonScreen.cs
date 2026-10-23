@@ -46,9 +46,11 @@ namespace Emberfall.UI.Screens
         private const float PipHeight = 18f;
         private const float BannerHeight = 44f;
         private const float RightColumn = 560f;
-        private const float DividerHeight = 40f;
+        private const float DividerHeight = 56f;       // its own full height, so a caption is never a sliver
         private const float PipsAvailable = 520f;
         private const float ButtonWidth = 260f;
+        private const float ListPadTop = 10f;
+        private const float ListPadBottom = 24f;
 
         /// <summary>Shared with the floor, result and boards screens through the router.</summary>
         public readonly GuildDungeonState State = new GuildDungeonState();
@@ -97,7 +99,7 @@ namespace Emberfall.UI.Screens
             _info.offsetMin = new Vector2(UITheme.ScreenPadding, -BodyTop - 200f);
             _info.offsetMax = new Vector2(-UITheme.ScreenPadding, -BodyTop);
 
-            _content = UIBuilder.ScrollList("Floors", Root, out _scroll, RowSpacing, new RectOffset(0, 0, 10, 24));
+            _content = UIBuilder.ScrollList("Floors", Root, out _scroll, RowSpacing, new RectOffset(0, 0, (int)ListPadTop, (int)ListPadBottom));
             RectTransform scrollRect = _scroll.GetComponent<RectTransform>();
             UIBuilder.FillParent(scrollRect, UITheme.ScreenPadding, BodyTop + 120f, UITheme.ScreenPadding, BottomBarHeight);
 
@@ -316,7 +318,13 @@ namespace Emberfall.UI.Screens
             // The list takes what is left under the info block.
             float infoHeight = -y;
             RectTransform scrollRect = _scroll.GetComponent<RectTransform>();
-            UIBuilder.FillParent(scrollRect, UITheme.ScreenPadding, BodyTop + infoHeight, UITheme.ScreenPadding, BottomBarHeight);
+            float available = Root.rect.height - BodyTop - infoHeight - BottomBarHeight;
+            float contentHeight = ListPadTop + ListPadBottom;
+            for (int i = 0; i < v.Rows.Count; i++) contentHeight += LadderLayout.RowHeight + RowSpacing + (v.Rows[i].DividerBefore ? DividerHeight + RowSpacing : 0f);
+            // At rest the list ends in the gap under a row, so no row or divider is the half cut last thing in view.
+            float snapped = available > 0f ? LadderLayout.SnappedViewport(available, contentHeight, LadderLayout.RowHeight, RowSpacing, ListPadTop) : 0f;
+            float slack = available > 0f ? available - snapped : 0f;
+            UIBuilder.FillParent(scrollRect, UITheme.ScreenPadding, BodyTop + infoHeight, UITheme.ScreenPadding, BottomBarHeight + slack);
 
             for (int i = 0; i < v.Rows.Count; i++)
             {

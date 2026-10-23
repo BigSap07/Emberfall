@@ -1,0 +1,12 @@
+# R28 builder b, round 2 retry batch 1 of 6 (10 targets at most, one editor session each).
+#   powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 -TargetsFile Tools/capture-r28b-retry-1.txt -LogDir D:\Emberfall\handoff\R28-SCREENS\logs -Tag r28b-retry-1
+Screen:AdClaim=hidden@1920x1080
+Screen:AdClaim=hidden@2400x1080
+Screen:AdClaim=ready@1920x1080
+Screen:AdClaim=ready@2400x1080
+Screen:AdClaim=playing@1920x1080
+Screen:AdClaim=playing@2400x1080
+Screen:AdClaim=granted@1920x1080
+Screen:AdClaim=granted@2400x1080
+Screen:AdClaim=notfinished@1920x1080
+Screen:AdClaim=notfinished@2400x1080
