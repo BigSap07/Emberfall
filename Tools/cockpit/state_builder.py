@@ -629,12 +629,29 @@ def header_section(d: dict, waiting_open: int) -> dict:
             "date": f"{now:%a} {now.day} {now:%b %Y}", "mock": d["env"].mock}
 
 
+def emberfall_today(d: dict) -> float:
+    """Today's cost from sessions whose cwd is under the Emberfall root (the per run costs use the same root)."""
+    import localusage
+    root = d["env"].cwd_root.lower().rstrip("/")
+    start = datetime.combine(d["now"].date(), datetime.min.time()).timestamp()
+    total = 0.0
+    for m in d["local"].get("msgs", []):
+        cwd = m.cwd.replace("\\", "/").rstrip("/").lower()
+        if m.ts >= start and (cwd == root or cwd.startswith(root + "/")):
+            total += localusage.msg_cost(m, d["local"]["table"])
+    return total
+
+
 def kpi_spend(d: dict) -> dict:
     fam = d["today"]["families"]
     total = sum(fam.values())
     sub = ", ".join(f"{n.capitalize()} {fam[n] / total:.0%}" for n in ("sonnet", "opus", "haiku")
                     if total and fam[n] / total >= 0.005) if total else "no local transcripts today"
-    return {"label": "Spend today", "value": usd(today_cost(d), 0), "tone": "text", "sub": sub}
+    mine = emberfall_today(d)
+    all_ = today_cost(d)
+    if total and all_ - mine >= 1:        # other projects ran today: say how much of the total is Emberfall's
+        sub += f". Emberfall {usd(mine, 0)}, other projects {usd(all_ - mine, 0)}"
+    return {"label": "Spend today", "value": usd(all_, 0), "tone": "text", "sub": sub}
 
 
 def kpi_block(d: dict) -> dict:

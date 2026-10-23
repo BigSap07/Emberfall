@@ -600,5 +600,144 @@ class Server(unittest.TestCase):
                 serve.apply_set(env, "block_reset", "3h12")
 
 
+# ---------------------------------------------------------------- V3b: four data bugs the real run showed
+
+CHAIN_LOG = (
+    "# R26-POLISH, MERGE-1 running log\n\n"
+    "- 12:10 start. Deadline 22:10.\n"
+    "- 18:58 OWNER CHAIN UPDATE: after R28-SCREENS run D:\\Emberfall\\handoff\\PROMPT_R29B-TUNE.txt, then the friends build b, "
+    "then R30-EFFICIENCY. No new run after 21:30.\n"
+    "- 20:51 R29B-TUNE RUN DONE. Starting friends build b.\n")
+R30_LOG = ("# R30-EFFICIENCY running log\n\n"
+           "- 21:14 R30-EFFICIENCY started by lead. Start condition met (R28 RUN DONE). Cutoff lifted by owner.\n")
+
+
+def temp_env(root: Path, logs: dict, mtimes: dict, clock, builds: tuple = ()) -> data.Env:
+    (root / "tmp").mkdir(exist_ok=True)
+    (root / "handoff").mkdir(exist_ok=True)
+    for name, text in logs.items():
+        (root / "tmp" / name).write_text(text, encoding="utf-8")
+    for b in builds:
+        (root / "Builds" / b).mkdir(parents=True, exist_ok=True)
+    return data.Env(root=root, game=root / "Game", claude_md=root / "none.md", costs=root / "none.json", clock=clock,
+                    mtimes=mtimes, cwd_root="D:/Emberfall")
+
+
+class V3bDataFixes(unittest.TestCase):
+    # ---- 1 the newest cutoff line wins, and a queued entry whose build exists is not queued
+    def test_cutoff_lifted_by_the_newest_line(self):
+        logs = {"R26-POLISH_running_log.md": CHAIN_LOG, "R30-EFFICIENCY_running_log.md": R30_LOG}
+        mt = {"tmp/R26-POLISH_running_log.md": "2026-10-23T20:51:00", "tmp/R30-EFFICIENCY_running_log.md": "2026-10-23T21:20:00"}
+        with tempfile.TemporaryDirectory() as t:
+            env = temp_env(Path(t), logs, mt, D(2026, 10, 23, 21, 25))
+            rr = data.collect_runs(env)
+            self.assertIsNone(rr["no_new_after"])
+            self.assertFalse(any(q["late"] for q in data.plan_chain(rr, env.now())["queued"]))
+            # without the lift line the old cutoff stands
+            del logs["R30-EFFICIENCY_running_log.md"]
+            (Path(t) / "tmp" / "R30-EFFICIENCY_running_log.md").unlink()
+            self.assertEqual(data.collect_runs(env)["no_new_after"], D(2026, 10, 23, 21, 30))
+
+    def test_a_newer_cutoff_after_the_lift_wins_again(self):
+        logs = {"R26-POLISH_running_log.md": CHAIN_LOG,
+                "R30-EFFICIENCY_running_log.md": R30_LOG + "- 21:40 OWNER NOTE: no new run after 23:00.\n"}
+        mt = {"tmp/R26-POLISH_running_log.md": "2026-10-23T20:51:00", "tmp/R30-EFFICIENCY_running_log.md": "2026-10-23T21:41:00"}
+        with tempfile.TemporaryDirectory() as t:
+            rr = data.collect_runs(temp_env(Path(t), logs, mt, D(2026, 10, 23, 21, 45)))
+            self.assertEqual(rr["no_new_after"], D(2026, 10, 23, 23, 0))
+
+    def test_queue_entry_with_an_existing_build_is_not_queued(self):
+        logs = {"R26-POLISH_running_log.md": CHAIN_LOG}
+        mt = {"tmp/R26-POLISH_running_log.md": "2026-10-23T20:51:00",
+              "Builds/friends-b-2026-10-23": "2026-10-23T20:52:00"}
+        with tempfile.TemporaryDirectory() as t:
+            env = temp_env(Path(t), logs, mt, D(2026, 10, 23, 21, 25), builds=("friends-b-2026-10-23", "friends-2026-10-23"))
+            self.assertEqual([q["name"] for q in data.collect_runs(env)["queue"]], ["R30-EFFICIENCY"])
+            # a build folder from before the entry was queued does not count, and a different letter does not match
+            mt["Builds/friends-b-2026-10-23"] = "2026-10-22T10:00:00"
+            names = [q["name"] for q in data.collect_runs(env)["queue"]]
+            self.assertEqual(names, ["friends build b", "R30-EFFICIENCY"])
+        self.assertTrue(data.output_exists("friends build b", D(2026, 10, 23, 18), [(["friends", "b", "2026"], D(2026, 10, 23, 20))]))
+        self.assertFalse(data.output_exists("friends build b", D(2026, 10, 23, 18), [(["friends", "2026"], D(2026, 10, 23, 20))]))
+
+    def test_the_real_log_lines_are_matched(self):
+        for line in ("Cutoff lifted by owner.", "OWNER NOTE: the cutoff was removed", "the cut-off is cancelled", "owner lifted the no new run rule"):
+            self.assertTrue(data.LIFT.search(line), line)
+        for line in ("No new run after 21:30.", "the cutoff is 21:30", "lifted 120 units"):
+            self.assertFalse(data.LIFT.search(line), line)
+
+    # ---- 3 a stamp later than the file's mtime is the mtime, not a day back
+    def test_future_stamp_is_clamped_not_pushed_a_day_back(self):
+        log = ("# R30-EFFICIENCY running log\n\n- 21:14 R30-EFFICIENCY started by lead.\n- 21:35 merged cockpit.\n"
+               "- 22:00 FULL check green.\n")
+        mt = {"tmp/R30-EFFICIENCY_running_log.md": "2026-10-23T21:52:00"}
+        with tempfile.TemporaryDirectory() as t:
+            rr = data.collect_runs(temp_env(Path(t), {"R30-EFFICIENCY_running_log.md": log}, mt, D(2026, 10, 23, 21, 56)))
+        r = rr["runs"][0]
+        self.assertEqual(r["start"], D(2026, 10, 23, 21, 14))
+        self.assertEqual(r["last"], D(2026, 10, 23, 21, 52))
+        self.assertEqual(r["elapsed"], timedelta(minutes=42))
+        self.assertEqual(r["state"], "running")
+
+    def test_overnight_log_still_starts_the_day_before(self):
+        log = "# R40 running log\n\n- 23:50 R40-NIGHT started.\n- 00:05 step.\n"
+        mt = {"tmp/R40-NIGHT_running_log.md": "2026-10-23T00:10:00"}
+        with tempfile.TemporaryDirectory() as t:
+            rr = data.collect_runs(temp_env(Path(t), {"R40-NIGHT_running_log.md": log}, mt, D(2026, 10, 23, 0, 12)))
+        r = rr["runs"][0]
+        self.assertEqual(r["start"], D(2026, 10, 22, 23, 50))
+        self.assertEqual(r["last"], D(2026, 10, 23, 0, 5))
+
+    def test_a_quoted_run_done_in_another_log_does_not_move_the_end(self):
+        # the R30 log says "(R28 RUN DONE)" as its start condition; R28 ended at its own, earlier done
+        logs = {"R28-SCREENS_running_log.md": "# R28 running log\n\n- 17:49 start. Deadline 21:49.\n- 20:43 R28-SCREENS RUN DONE (main 4718cb7).\n",
+                "R30-EFFICIENCY_running_log.md": R30_LOG}
+        mt = {"tmp/R28-SCREENS_running_log.md": "2026-10-23T20:43:30", "tmp/R30-EFFICIENCY_running_log.md": "2026-10-23T21:20:00"}
+        with tempfile.TemporaryDirectory() as t:
+            rr = data.collect_runs(temp_env(Path(t), logs, mt, D(2026, 10, 23, 21, 25)))
+        r28 = next(r for r in rr["runs"] if r["name"] == "R28-SCREENS")
+        self.assertEqual((r28["state"], r28["end"]), ("DONE", D(2026, 10, 23, 20, 43)))
+
+    # ---- 2 per run Opus and idle split
+    def test_run_cost_opus_and_idle_from_transcripts(self):
+        log = "# R40-TEST running log\n\n- 10:00 start.\n- 12:00 R40-TEST RUN DONE.\n"
+        mt = {"tmp/R40-TEST_running_log.md": "2026-10-23T12:00:00"}
+
+        def msg(h, m, model, cwd="D:\\Emberfall\\Game"):
+            return localusage.Msg(D(2026, 10, 23, h, m).timestamp(), cwd, model, 0, 100_000, 0, 0, 0, "s1")
+        sonnet, opus = "claude-sonnet-5-5", "claude-opus-5-5"
+        msgs = [msg(10, 1, sonnet), msg(10, 3, sonnet), msg(11, 0, opus, "D:\\pulse"), msg(11, 30, opus), msg(11, 45, sonnet)]
+        with tempfile.TemporaryDirectory() as t:
+            env = temp_env(Path(t), {"R40-TEST_running_log.md": log}, mt, D(2026, 10, 23, 13, 0))
+            rr = data.collect_runs(env)
+            local = {"msgs": msgs, "table": localusage.price_table(None)}
+            rows = data.per_run_rows(rr["runs"], data.attribute_runs(env, local, rr["runs"], {}))
+        self.assertEqual(len(rows), 1)
+        row = rows[0]
+        self.assertAlmostEqual(row["cost"], 3 * 1.0 + 2.0)                 # three Sonnet at $1, one Opus at $2; the pulse message is not Emberfall
+        self.assertAlmostEqual(row["opus_share"], 2.0 / 5.0)
+        # gaps of 5 minutes or more between 10:00, 10:01, 10:03, 11:30, 11:45 and 12:00: 87 + 15 + 15 of 120
+        self.assertAlmostEqual(row["idle_share"], 117 / 120)
+
+    def test_idle_seconds_ignores_short_gaps(self):
+        start, end = D(2026, 10, 23, 10, 0), D(2026, 10, 23, 10, 30)
+        ts = [D(2026, 10, 23, 10, m).timestamp() for m in (2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28)]
+        self.assertEqual(data.idle_seconds(ts, start, end), 0)
+        self.assertEqual(data.idle_seconds([], start, end), 1800)
+
+    def test_log_sleep_lines_still_count_when_larger(self):
+        # a transcript with no gaps keeps the log's own sleep estimate as a floor
+        run = {"name": "R41", "state": "DONE", "start": D(2026, 10, 23, 10), "end": D(2026, 10, 23, 11), "elapsed": timedelta(hours=1),
+               "idle_s": 1800}
+        a = {"R41": {"cost": 1.0, "opus": 0.0, "n": 1, "ts": [D(2026, 10, 23, 10, m).timestamp() for m in range(1, 60, 2)]}}
+        self.assertAlmostEqual(data.per_run_rows([run], a)[0]["idle_share"], 0.5)
+
+    def test_spend_tile_says_how_much_is_emberfall(self):
+        d = data.collect(data.mock_env())
+        sub = state_builder.kpi_spend(d)["sub"]
+        self.assertIn("Emberfall $34, other projects $1", sub)             # the mock's pulse and owner sessions
+        self.assertIn("Sonnet 69%, Opus 31%", sub)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -196,6 +196,11 @@ START_BARE = re.compile(r"^\s*(?:[-*]\s*)?(?:\d{4}-\d{2}-\d{2}[ T])?\d{1,2}:\d{2
 DONE_NAMED = re.compile(rf"\b({NAME})\s+RUN DONE\b")
 CHAIN_UPDATE = re.compile(r"OWNER CHAIN UPDATE\b[^:]*:\s*after\s+(.+?)\s+(?-i:run)\s+(\S.+)$", re.I)
 NO_NEW = re.compile(r"(?:no new run after|do not start a new run after|not after)\s+(\d{1,2}:\d{2})", re.I)
+# "Cutoff lifted by owner", "the cutoff was removed", "lifted the no new run rule": the newest cutoff line wins, lift or not
+LIFT = re.compile(r"cut-?off\s+(?:is\s+|was\s+|has\s+been\s+)?(?:lifted|removed|cancell?ed|waived)"
+                  r"|(?:lifted|removed|waived|cancell?ed)\s+the\s+(?:no[- ]new[- ]run\s+)?(?:cut-?off|rule)", re.I)
+FUTURE_SLACK = timedelta(hours=3)   # a first stamp this far past the file's mtime means the run began the day before
+IDLE_GAP_S = 300                    # no transcript message for this long inside a run counts as waiting
 DEADLINE = re.compile(r"Deadline\s+(\d{1,2}:\d{2})", re.I)
 STOP_START = re.compile(r"stop starting work\s+(\d{1,2}:\d{2})", re.I)
 
@@ -285,6 +290,17 @@ def parse_chain_update(line: str) -> list[str]:
     return names
 
 
+def name_tokens(name: str) -> list[str]:
+    """'friends build b' -> ['friends', 'b']; the folder 'friends-b-2026-10-23' -> ['friends', 'b', '2026', '10', '23']."""
+    return [w for w in re.findall(r"[a-z0-9]+", name.lower()) if w not in ("build", "the", "run")]
+
+
+def output_exists(name: str, since: datetime, builds: list) -> bool:
+    """A queued entry whose Builds folder (named like it, changed after the entry was queued) already exists."""
+    want = name_tokens(name)
+    return bool(want) and any(tok[: len(want)] == want and when >= since for tok, when in builds)
+
+
 def blank_run(name: str) -> dict:
     return {"name": name, "key": key_of(name), "path": "", "state": "queued", "changed": None, "start": None,
             "last": None, "end": None, "elapsed": None, "lines": [], "idle_s": 0, "sleep_hits": 0,
@@ -304,8 +320,11 @@ def collect_runs(env: Env) -> dict:
         # The file date anchors HH:MM-only stamps. If that puts the last stamp after the file's
         # own change time, the run started the day before.
         stamps = line_times(text, changed.date())
-        if stamps and stamps[-1][0] > changed + timedelta(minutes=5):
+        if stamps and stamps[0][0] > changed + FUTURE_SLACK:
             stamps = line_times(text, changed.date() - timedelta(days=1))
+        # A stamp past the file's own change time is a clock written ahead (R30's 21:35 at 21:21): it
+        # counts as the change time. It never moves the run to the day before.
+        stamps = [(min(t, changed), line) for t, line in stamps]
         lines = [l for l in text.splitlines() if l.strip()]
         last_line = lines[-1] if lines else ""
         ev = log_events(stamps, name, last_line, changed)
@@ -315,6 +334,8 @@ def collect_runs(env: Env) -> dict:
                 updates.append((t, parse_chain_update(line)))
             for m in NO_NEW.finditer(line):
                 no_new.append((t, clock_after(m.group(1), t)))
+            if LIFT.search(line):
+                no_new.append((t, None))
         logs.append({"name": name, "path": p, "text": text, "changed": changed, "stamps": stamps,
                      "lines": lines, "last_line": last_line})
 
@@ -360,7 +381,8 @@ def collect_runs(env: Env) -> dict:
                 r["lines"] = src["lines"][idx:]
             blocked = False
         if done:
-            r["state"], r["end"] = "DONE", dones[-1][0]
+            # the first done after the last start: a later "(R28 RUN DONE)" quoted as another run's start condition is not its end
+            r["state"], r["end"] = "DONE", min(t for t, _, _ in dones if not starts or t >= starts[-1][0])
         elif k == active_key:
             r["state"], r["end"] = ("BLOCKED" if blocked else "running"), now
         elif blocked:
@@ -384,18 +406,22 @@ def collect_runs(env: Env) -> dict:
         seen.add(k)
 
     # queued: only the newest OWNER CHAIN UPDATE plus handoff\QUEUE.txt
-    queued_names = max(updates, key=lambda u: u[0])[1] if updates else []
+    newest = max(updates, key=lambda u: u[0]) if updates else None
+    queued_names = [(n, newest[0]) for n in newest[1]] if newest else []
     qfile = handoff / "QUEUE.txt"
     if qfile.is_file():
         for line in read_text(qfile).splitlines():
             line = line.strip()
             if line and not line.startswith("#"):
                 p = re.search(r"PROMPT_([\w-]+)\.txt", line)
-                queued_names.append(p.group(1) if p else line)
+                queued_names.append((p.group(1) if p else line, env.mtime(qfile)))
+    builds = [(name_tokens(p.name), env.mtime(p)) for p in (env.root / "Builds").iterdir() if p.is_dir()]         if (env.root / "Builds").is_dir() else []
     queue = []
-    for name in queued_names:
+    for name, since in queued_names:
         k = key_of(name)
         if k in seen or name.lower() in {q["name"].lower() for q in queue}:
+            continue
+        if output_exists(name, since, builds):  # its build folder is already there: done, not queued
             continue
         q = blank_run(name)
         pf = handoff / f"PROMPT_{name}.txt"
@@ -409,7 +435,7 @@ def collect_runs(env: Env) -> dict:
         max(live, key=lambda r: r["changed"]) if live else None)
     order = {"running": 0, "BLOCKED": 1, "waiting": 2, "queued": 3, "DONE": 4}
     runs.sort(key=lambda r: (order[r["state"]], -(r["changed"].timestamp() if r["changed"] else 0)))
-    chain_no_new = max(no_new, key=lambda n: n[0])[1] if no_new else None
+    chain_no_new = no_new[max(range(len(no_new)), key=lambda i: (no_new[i][0], i))][1] if no_new else None
     return {"runs": runs, "active": active, "tail": active["lines"][-4:] if active else [],
             "queue": queue, "no_new_after": chain_no_new, "hint": ""}
 
@@ -745,7 +771,7 @@ def attribute_runs(env: Env, local: dict, runs: list[dict], cfg: dict) -> dict:
     cwd_re = re.compile(cfg.get("run_cwd_regex", RUN_CWD), re.I)
     root = env.cwd_root.lower().rstrip("/")
     wins = [r for r in runs if r["start"] and r["end"] and r["state"] != "queued"]
-    out = {r["name"]: {"cost": 0.0, "opus": 0.0, "n": 0} for r in wins}
+    out = {r["name"]: {"cost": 0.0, "opus": 0.0, "n": 0, "ts": []} for r in wins}
     for m in local.get("msgs", []):
         cwd = m.cwd.replace("\\", "/").rstrip("/")
         if not cwd.lower().startswith(root + "/") and cwd.lower() != root:
@@ -773,9 +799,17 @@ def attribute_runs(env: Env, local: dict, runs: list[dict], cfg: dict) -> dict:
         o = out[pick["name"]]
         o["cost"] += c
         o["n"] += 1
+        o["ts"].append(m.ts)
         if localusage.family(m.model) == "opus":
             o["opus"] += c
     return out
+
+
+def idle_seconds(ts: list[float], start: datetime, end: datetime) -> float:
+    """Time inside a run with no transcript message from any of its sessions for IDLE_GAP_S or more,
+    counted from the run's start to its end (waiting on a build, a sub agent, the owner or a limit)."""
+    pts = sorted([start.timestamp(), end.timestamp()] + [t for t in ts if start.timestamp() <= t <= end.timestamp()])
+    return sum(b - a for a, b in zip(pts, pts[1:]) if b - a >= IDLE_GAP_S)
 
 
 def per_run_rows(runs: list[dict], attributed: dict) -> list[dict]:
@@ -785,7 +819,10 @@ def per_run_rows(runs: list[dict], attributed: dict) -> list[dict]:
         if not a or a["cost"] <= 0 or not r["start"]:
             continue
         mins = r["elapsed"].total_seconds() / 60 if r["elapsed"] else 0
-        idle = min(1.0, (r["idle_s"] / 60) / mins) if mins else 0.0
+        idle = 0.0
+        if mins:
+            gaps = idle_seconds(a["ts"], r["start"], r["end"]) if a.get("ts") and r["end"] else 0.0
+            idle = min(1.0, max(r["idle_s"], gaps) / 60 / mins)
         rows.append({"name": r["name"], "state": r["state"], "cost": a["cost"], "sessions": a["n"],
                      "minutes": mins, "per_h": a["cost"] / (mins / 60) if mins else 0.0,
                      "opus_share": a["opus"] / a["cost"] if a["cost"] else 0.0, "idle_share": idle,
