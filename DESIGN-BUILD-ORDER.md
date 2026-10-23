@@ -1838,10 +1838,10 @@ heal, buff, debuff, shield or death. See `Docs/DESIGN-JUICE.md`.
 v2 replaces the white-out with a 0.06 s tint, gives each event class (hit, crit, skill, heal, buff,
 debuff, shield, death) one look and its own cue with no geometric rings, caps effects at 2 per unit,
 draws numbers 1.25 times larger, plays one sound per basic hit with at most 6 effect voices, draws
-units 1.2 times larger on a re-solved formation, shows Drifting Pilgrim and Thornback Boar for the two
+units 1.2 times larger on a re-solved formation (the R15 slots, still in `BattleFraming` as the rollback to the formation below), shows Drifting Pilgrim and Thornback Boar for the two
 chapter 1 placeholders, and fixes facing (six heroes flipped, four with per-clip flips, enemy mannequins
 turned to face the heroes). Who a unit looks like (stand-ins, flips, a per-unit scale) lives in the
-unhashed `stage-v2.json`; the formation, camera and unit scale are `BattleFraming` constants. `FeelChecks.cs` and
+unhashed `stage-v2.json`; the R15 formation, camera and unit scale are `BattleFraming` constants. `FeelChecks.cs` and
 `StageChecks.cs` prove v1 equals R12 and that ids, stats, `ContentVersion` and the fingerprints are
 unchanged. `Screen:RosterSheet=<side>[.page][.clip][.v1|.v2]` photographs a whole side for the facing
 proof. See the v2 section of `Docs/DESIGN-JUICE.md`.
@@ -1859,14 +1859,33 @@ effect is alive.
 
 **The battle HUD is presentation only and placed by one engine-free layout.** An opaque top bar
 (`BattleHudMetrics.BarHeight`) with the battle camera's viewport stopping under it, so nothing on
-the field is drawn beneath it. One plate per unit under its feet with status icons (`UnitPlate`,
-`StatusIcons.Compose`), the ability callout as a pill under the bar, and the turn order as a NEXT
+the field is drawn beneath it. One plate per unit (`UnitPlate`: HP bar, energy bar, status icons, no name over the head,
+`StatusIcons.Compose`), standing on the unit's head in the formation, the ability callout as a pill under the bar, and the turn order as a NEXT
 pill at the bottom centre (`TurnOrderPill`). Every position comes from `BattleHudLayout` over
 `BattleFraming`, and every size from `BattleHudMetrics`, which has no `UnityEngine` reference so the
 harness compiles the same file. `CheckBattleHud` in `BattleHudChecks` builds every plate, both
 pills and the bar at every formation slot and three phone aspects, and fails if two of them
 overlap. Nothing in it reads or changes a fight.
 
+**The battle stands on an Idle Heroes style formation table.** FormationLayout (engine free, one array,
+`Cells`) says where each side's five units stand as fractions of the safe area, measured from its left and
+its top: back row B1 0.18,0.64, B2 0.13,0.77, B3 0.09,0.90, front row F1 0.32,0.69, F2 0.29,0.84, the right
+team mirrored (x becomes 1 minus x). Game slot 0 is F2, 1 is F1, 2 is B3, 3 is B2, 4 is B1 (the order the
+slots always stood in on screen, SlotCell), a side with fewer than five keeps the cells it occupies, and a unit
+whose slot is taken goes to the nearest free one (ResolveSlots). BattleStage.FitFormation solves the world
+position that puts each unit's feet on its cell for the camera's viewport and the safe area
+(FormationLayout.ToWorld, the inverse of BattleFraming.Project) and sets the orthographic size so a unit is
+0.20 of the safe height tall; UnitActor.Setup scales every rig to that one height (a boss is up to 1.3 times
+taller, held under the bars ceiling), so heroes and enemies read the same size. The lower unit is drawn in
+front (the unit quads are transparent and sort by distance from the camera, which with every unit one height is feet order; `FormationLayout.DrawOrder` is the proved statement of it). The HP and energy bars stand just over the
+head (BattleHudLayout.PlateOriginAboveHead), the highest stays below 0.38 of the height from the top, the
+centre stays open, and attack steps are FormationLayout.ApproachScale of the old ones. R29FormationChecks.cs
+proves all of it at 16:9, 18:9, 20:9 and 4:3 with a notch and a gesture bar. **Rollback:**
+FormationLayout.Enabled false returns the stage and the plates to the R15 geometry. Not done, on purpose: a
+boss does not move to B2, because campaign.json lists every boss first (slot 0) and the sim's front-target rule
+picks the lowest slot, so B2 would draw the front unit behind two others. Captures:
+Tools/capture-formation-targets.txt and Tools/capture-formation-moments.txt through capture-batch.ps1,
+Screen:Battle=<stage>@<W>x<H>.
 **31 of 94 heroes have drawn battle art**, and they are the thirty 5-stars plus Celen. The other 63
 carry `visual.spriteStatus: "pending"` and render as an aspect-tinted placeholder mannequin with
 their name under its feet, which makes "not drawn yet" a thing the game can say separately from

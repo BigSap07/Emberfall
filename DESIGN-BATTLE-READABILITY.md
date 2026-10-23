@@ -90,7 +90,9 @@ per turn:
    rest, with a stack's depth as a small digit (`StatusIcons.Compose`). The placeholder glyphs are
    a green chevron up, a red chevron down, the shield and a grey diamond, each reskinnable through
    `HudSkin`'s `hud_status_<kind>` and `hud_status_<role>` slots. `BattleHudChecks` in the harness
-   proves no two plates overlap at any formation slot at 16:9, 18:9 and 20:9.*
+   proves no two plates overlap at any formation slot at 16:9, 18:9 and 20:9.* (R29 moved the plate: in the
+   formation it stands on the unit's head, bars only and two icons, and the name is not drawn over a head; the
+   under-the-feet layout above is what `FormationLayout.Enabled` false returns. See `DESIGN-BUILD-ORDER.md`.)
 8. On death: everything else stops, 0.5s, then the fall.
 
 The rule is one sentence long: *the source moves before the target reacts, and the target reacts

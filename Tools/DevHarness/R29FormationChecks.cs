@@ -489,6 +489,35 @@ namespace Emberfall.DevHarness
             bool single = !literal.IsMatch(stage) && !literal.IsMatch(actor);
             Check(single, "the formation's numbers are written in FormationLayout.cs only (none in BattleStage or UnitActor)");
 
+            // The capture target files the tester runs through capture-batch.ps1: every line is a Battle or a
+            // BattleMoment target at 1920x1080 or 2400x1080, on a stage that exists in campaign.json, and the
+            // fights cover a full five, a boss, and a side with fewer than five.
+            string campaign = R29Read(root, "Assets/Resources/Content/campaign.json") ?? "";
+            string[] files = { "Tools/capture-formation-targets.txt", "Tools/capture-formation-moments.txt" };
+            int targets = 0, wide = 0, narrow = 0, unknownStage = 0;
+            for (int f = 0; f < files.Length; f++)
+            {
+                string text = R29Read(root, files[f]);
+                if (text == null) { targets = -1000; break; }
+                foreach (string raw in text.Split('\n'))
+                {
+                    string line = raw.Trim();
+                    if (line.Length == 0 || line.StartsWith("#")) continue;
+                    Match m = Regex.Match(line, @"^Screen:(Battle|BattleMoment)=(ch\d+_\d+)(\.\w+)?@(1920x1080|2400x1080)$");
+                    if (!m.Success) { unknownStage += 100; continue; }
+                    targets++;
+                    if (m.Groups[4].Value == "2400x1080") wide++; else narrow++;
+                    if (!campaign.Contains("\"id\": \"" + m.Groups[2].Value + "\", \"index\"")) unknownStage++;
+                }
+            }
+            Check(targets == 20 && wide == narrow && unknownStage == 0 && campaign.Length > 0,
+                  "the formation capture files hold 20 targets, half at 1920x1080 and half at 2400x1080, every one on a real stage ("
+                  + targets + " targets, " + narrow + " + " + wide + ", " + unknownStage + " not understood)");
+            string shots = R29Read(root, "Tools/capture-formation-targets.txt") ?? "";
+            Check(shots.Contains("=ch1_9@") && shots.Contains("=ch2_5@") && shots.Contains("=ch1_12@") && shots.Contains("=ch2_12@")
+                  && shots.Contains("=ch1_1@") && shots.Contains("=ch1_5@"),
+                  "the fights cover chapter 1 and the chapter 2 crossing at five a side, both bosses, and sides of three and four");
+
             // Every tool that compiles the harness compiles FormationLayout with it.
             string gate = R29Read(root, "Tools/build-check.ps1") ?? "";
             string solver = R29Read(root, "Tools/solve-recommended-power.ps1") ?? "";
