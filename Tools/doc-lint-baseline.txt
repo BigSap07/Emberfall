@@ -1,7 +1,7 @@
 CLAUDE.md|CombatSimulation.cs:1060
-CLAUDE.md|docs/maintenance
-CLAUDE.md|docs/maintenance-only
-CLAUDE.md|docs/maintenance/tooling
+Docs/agent-guide/discord-posts.md|docs/maintenance
+Docs/agent-guide/discord-posts.md|docs/maintenance-only
+Docs/agent-guide/discord-posts.md|docs/maintenance/tooling
 DESIGN-ASPECTS.md|claude/aspects-ember-verdant
 DESIGN-ASPECTS.md|claude/aspects-gale
 DESIGN-ASPECTS.md|claude/aspects-lumen

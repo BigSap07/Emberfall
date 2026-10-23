@@ -25,7 +25,20 @@ namespace Emberfall.DevHarness
     {
         private static int _failures;
 
+        // The harness runs on a thread with a big stack. The combat recursion (a passive that redirects damage to a unit whose
+        // passive redirects it again) is finite but deep: it fits the 1 MB main-thread stack of the .NET Framework build on
+        // Windows, not the larger frames of the .NET SDK build (the 1 MB Windows main thread overflowed in CheckMirrorMatchSmoke),
+        // and Linux main threads have 8 MB. One size everywhere removes the platform difference.
         private static int Main(string[] args)
+        {
+            int exit = 0;
+            System.Threading.Thread worker = new System.Threading.Thread(delegate () { exit = RunHarness(args); }, 256 * 1024 * 1024);
+            worker.Start();
+            worker.Join();
+            return exit;
+        }
+
+        private static int RunHarness(string[] args)
         {
             // Off Windows (the .NET SDK fallback in Tools/csharp.ps1), the culture comes from LANG/LC_ALL, so a
             // de_DE shell printed "x4,00" and "0,75 h" where Windows prints "x4.00" and "0.75 h". It is pinned
