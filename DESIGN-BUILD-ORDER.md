@@ -1482,8 +1482,8 @@ string for an em or en dash and for selling words.
 
 - **Leaderboards.** `LeaderboardCodec` (Core) and `LeaderboardService.cs` (transport, in-memory override, controller)
   for `leaderboard_submit` and `leaderboard_top`; `LeaderboardsPresenter`. Submits at most once a minute, never sends
-  a score, words a refusal neutrally, and runs the weekly countdown on the server's clock once known. Which weekly
-  board the THIS WEEK tab shows is `LeaderboardsPresenter.WeeklyBoard` (owner decision 1 of the record).
+  a score, words a refusal neutrally, and runs the weekly countdown on the server's clock once known. The THIS
+  WEEK tab is the highest-floor board (owner decision of 2026-10-23: the floors-climbed board is gone from the server).
 - **Guild dungeon ladder.** `GuildDungeonSizeService` for the size migration's three functions and its snapshot row;
   `GuildDungeonLadderPresenter` reads the ladder, the cycle cap and every refusal sentence from `GuildDungeonScale`
   and the reward from `GuildDungeonRewards` (still the placeholder).

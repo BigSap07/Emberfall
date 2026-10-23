@@ -14,8 +14,6 @@ namespace Emberfall.Core.Cloud
         Recital,
         /// <summary>The highest floor held at the latest submission this week. Resets Monday 04:00 UTC.</summary>
         RecitalWeek,
-        /// <summary>Floors climbed this week. Resets Monday 04:00 UTC.</summary>
-        RecitalWeekClimb,
         /// <summary>The Proving's highest standing, all time.</summary>
         Proving,
         /// <summary>Campaign stages cleared.</summary>
@@ -114,7 +112,6 @@ namespace Emberfall.Core.Cloud
             {
                 case LeaderboardBoard.Recital: return "recital";
                 case LeaderboardBoard.RecitalWeek: return "recital_week";
-                case LeaderboardBoard.RecitalWeekClimb: return "recital_week_climb";
                 case LeaderboardBoard.Proving: return "proving";
                 default: return "campaign";
             }
@@ -123,7 +120,7 @@ namespace Emberfall.Core.Cloud
         /// <summary>True for the boards that reset every Monday.</summary>
         public static bool IsWeekly(LeaderboardBoard board)
         {
-            return board == LeaderboardBoard.RecitalWeek || board == LeaderboardBoard.RecitalWeekClimb;
+            return board == LeaderboardBoard.RecitalWeek;
         }
 
         /// <summary>The JSON body of a leaderboard_top call.</summary>

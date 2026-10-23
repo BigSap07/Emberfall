@@ -126,9 +126,7 @@ boards pay nothing, and a medal would read as a prize.
 | `Empty` | no rows | "Nobody is on this board yet." (weekly: "Nobody has climbed this week yet.") |
 | `Error` | first load failed | the failure's sentence and TRY AGAIN; "The leaderboards are not open yet." has no TRY AGAIN |
 
-**Owner decision 1** (`Docs/DESIGN-LEADERBOARDS.md`): the THIS WEEK tab shows `LeaderboardsPresenter.WeeklyBoard`,
-highest floor (`RecitalWeek`, the default) or floors climbed (`RecitalWeekClimb`, values drawn "+N", header CLIMBED).
-The screen reads the tab's board from `Tabs[1].Board` and needs no change either way.
+**Owner decision 1** (`Docs/DESIGN-LEADERBOARDS.md`, decided 2026-10-23): the THIS WEEK tab is the highest-floor board (`RecitalWeek`). The floors-climbed board was dropped from the server, so the client has four boards and no switch. The screen reads the tab's board from `Tabs[1].Board`.
 
 ## 2. Guild dungeon: the size-scaled ladder
 

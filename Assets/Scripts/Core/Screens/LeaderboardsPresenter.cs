@@ -34,7 +34,7 @@ namespace Emberfall.Core.Screens
         public LeaderboardBoard Board;
         /// <summary>What the selected board measures: "Highest floor reached in the Deep Recital".</summary>
         public string Caption = "";
-        /// <summary>The value column's header: "FLOOR", "STANDING", "STAGES", "CLIMBED".</summary>
+        /// <summary>The value column's header: "FLOOR", "STANDING", "STAGES".</summary>
         public string ValueHeader = "";
         /// <summary>Best first. Never holds the caller's row when it sits below the top list; that one is PinnedSelf.</summary>
         public readonly List<LeaderboardRowView> Rows = new List<LeaderboardRowView>();
@@ -79,9 +79,9 @@ namespace Emberfall.Core.Screens
     public sealed class LeaderboardsPresenter
     {
         /// <summary>
-        /// Which weekly Recital board the THIS WEEK tab shows: highest floor (RecitalWeek) or floors climbed
-        /// (RecitalWeekClimb). Owner decision 1 in Docs/DESIGN-LEADERBOARDS.md; the server serves both, so
-        /// switching is this one value.
+        /// Which weekly Recital board the THIS WEEK tab shows. The owner decided on 2026-10-23 (Docs/DESIGN-LEADERBOARDS.md)
+        /// that the weekly board ranks the highest floor; the floors-climbed board is gone from the server, so there is
+        /// nothing else to switch to.
         /// </summary>
         public static LeaderboardBoard WeeklyBoard = LeaderboardBoard.RecitalWeek;
 
@@ -352,8 +352,7 @@ namespace Emberfall.Core.Screens
             switch (board)
             {
                 case LeaderboardBoard.Recital: return "DEEP RECITAL";
-                case LeaderboardBoard.RecitalWeek:
-                case LeaderboardBoard.RecitalWeekClimb: return "THIS WEEK";
+                case LeaderboardBoard.RecitalWeek: return "THIS WEEK";
                 case LeaderboardBoard.Proving: return "THE PROVING";
                 default: return "CAMPAIGN";
             }
@@ -365,7 +364,6 @@ namespace Emberfall.Core.Screens
             {
                 case LeaderboardBoard.Recital: return "Highest floor reached in the Deep Recital";
                 case LeaderboardBoard.RecitalWeek: return "Highest Deep Recital floor this week";
-                case LeaderboardBoard.RecitalWeekClimb: return "Deep Recital floors climbed this week";
                 case LeaderboardBoard.Proving: return "Highest standing in the Proving";
                 default: return "Campaign stages cleared";
             }
@@ -377,7 +375,6 @@ namespace Emberfall.Core.Screens
             {
                 case LeaderboardBoard.Recital:
                 case LeaderboardBoard.RecitalWeek: return "FLOOR";
-                case LeaderboardBoard.RecitalWeekClimb: return "CLIMBED";
                 case LeaderboardBoard.Proving: return "STANDING";
                 default: return "STAGES";
             }
@@ -395,7 +392,7 @@ namespace Emberfall.Core.Screens
 
         private static string ValueText(LeaderboardBoard board, long value)
         {
-            return board == LeaderboardBoard.RecitalWeekClimb ? "+" + ScreenText.Group(value) : ScreenText.Group(value);
+            return ScreenText.Group(value);
         }
 
         public static string FailureSentence(LeaderboardFailure failure)

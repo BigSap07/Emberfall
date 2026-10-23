@@ -198,9 +198,9 @@ namespace Emberfall.DevHarness
                   && LeaderboardCodec.FailureOf(500, "") == LeaderboardFailure.Server,
                   "each refusal 0023 raises reads as its own failure, and a 404 is told apart by its code: PT404 is no cloud save, PGRST202 is 0023 not applied");
 
-            JsonValue argsHigh = JsonValue.Parse(LeaderboardCodec.TopArgs(LeaderboardBoard.RecitalWeekClimb, 500));
+            JsonValue argsHigh = JsonValue.Parse(LeaderboardCodec.TopArgs(LeaderboardBoard.RecitalWeek, 500));
             JsonValue argsLow = JsonValue.Parse(LeaderboardCodec.TopArgs(LeaderboardBoard.Campaign, 0));
-            Check(argsHigh.GetString("p_board", "") == "recital_week_climb" && argsHigh.GetInt("p_limit", 0) == 100 && argsHigh.Count == 2
+            Check(argsHigh.GetString("p_board", "") == "recital_week" && argsHigh.GetInt("p_limit", 0) == 100 && argsHigh.Count == 2
                   && argsLow.GetString("p_board", "") == "campaign" && argsLow.GetInt("p_limit", 0) == 1,
                   "leaderboard_top's arguments name the board as 0023 spells it and clamp the limit to 1..100 as the server does");
 
@@ -386,16 +386,10 @@ namespace Emberfall.DevHarness
             p.Online();
             Check(p.ShouldSubmit(now + 3600), "LEADERBOARDS SUBMIT: back online, a submission is due again");
 
-            LeaderboardsPresenter.WeeklyBoard = LeaderboardBoard.RecitalWeekClimb;
-            LeaderboardsPresenter climb = new LeaderboardsPresenter();
-            climb.Select(LeaderboardBoard.RecitalWeekClimb);
-            climb.Online();
-            climb.TopLoaded(LeaderboardBoard.RecitalWeekClimb, R28Rows(3, 1), now);
-            v = climb.Build(d, late.Profile, now);
-            texts.AddRange(R28Texts(v));
-            Check(v.Tabs[1].Board == LeaderboardBoard.RecitalWeekClimb && v.ValueHeader == "CLIMBED" && v.Rows[0].ValueText.StartsWith("+"),
-                  "LEADERBOARDS, OWNER DECISION 1 FLIPPED: the THIS WEEK tab shows floors climbed (CLIMBED, '+N')");
-            LeaderboardsPresenter.WeeklyBoard = LeaderboardBoard.RecitalWeek;
+            // The floors-climbed board is gone (owner decision of 2026-10-23, 0023 serves recital, recital_week, proving and campaign):
+            // the THIS WEEK tab is the highest-floor board, and the client names no board the server would refuse.
+            Check(Enum.GetNames(typeof(LeaderboardBoard)).Length == 4 && LeaderboardsPresenter.WeeklyBoard == LeaderboardBoard.RecitalWeek,
+                  "LEADERBOARDS: four boards, the THIS WEEK tab is the highest-floor board (the floors-climbed board is gone with the owner's decision)");
 
             string dash = R28Dashes(texts);
             Check(dash == null, "LEADERBOARDS: no em or en dash in any string the screen draws" + (dash != null ? " (" + dash + ")" : ""));
