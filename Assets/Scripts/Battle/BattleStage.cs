@@ -84,12 +84,61 @@ namespace Emberfall.Battle
         /// </summary>
         private bool _framingV2;
 
+        /// <summary>
+        /// The area the formation (FormationLayout) is laid out inside, in screen pixels, origin
+        /// bottom-left: the battle screen sets it to the safe area, so the same fractions hold on a
+        /// notched or a taller screen. When nothing sets it the camera's own viewport is the area,
+        /// which is what the wave result screen and the Dev Arena get.
+        /// </summary>
+        public Rect FormationArea;
+        public bool HasFormationArea;
+
+        /// <summary>The game slot each entry of Actors was placed in, after FormationLayout.ResolveSlots.</summary>
+        private readonly List<int> _slotOf = new List<int>();
+
         private void ApplyFraming()
         {
             _framingV2 = StageFeel.V2;
+            if (FormationLayout.Enabled)
+            {
+                FitFormation();
+                return;
+            }
             Camera.orthographicSize = BattleFraming.OrthographicSizeFor(_framingV2, Camera.aspect);
             _cameraHome = new Vector3(BattleFraming.CameraX, BattleFraming.CameraYFor(_framingV2), BattleFraming.CameraZ);
             _cameraRig.localPosition = _cameraHome;
+        }
+
+        /// <summary>
+        /// The formation's camera and its actors, for the viewport and the area as they are now: the
+        /// orthographic size that makes a unit read FormationLayout.UnitHeightFraction tall, and every
+        /// actor stood where that camera puts its slot's feet (FormationLayout.ToWorld). Cheap, so the
+        /// battle screen calls it whenever its viewport or the safe area moves, mid-fight included;
+        /// a lunge is a local offset of the rig, so moving the actor's own position under it is safe.
+        /// </summary>
+        public void FitFormation()
+        {
+            Rect cameraRect = Camera.rect;
+            Rect view = new Rect(cameraRect.x * Screen.width, cameraRect.y * Screen.height,
+                                 cameraRect.width * Screen.width, cameraRect.height * Screen.height);
+            if (view.width < 1f || view.height < 1f) return;
+            Rect area = HasFormationArea && FormationArea.width > 1f && FormationArea.height > 1f ? FormationArea : view;
+
+            Camera.orthographicSize = FormationLayout.OrthographicSize(view.height, area.height);
+            _cameraHome = new Vector3(BattleFraming.CameraX, FormationLayout.CameraY, BattleFraming.CameraZ);
+            if (_shake == null) _cameraRig.localPosition = _cameraHome;
+
+            BattleFraming.CanvasRect viewport = new BattleFraming.CanvasRect(view.x, view.y, view.width, view.height);
+            BattleFraming.CanvasRect safe = new BattleFraming.CanvasRect(area.x, area.y, area.width, area.height);
+            for (int i = 0; i < Actors.Count && i < _slotOf.Count; i++)
+            {
+                if (Actors[i] == null) continue;
+                bool ally = Actors[i].Snapshot.IsPlayer;
+                BattleFraming.CanvasPoint feet = FormationLayout.Feet(ally, _slotOf[i], safe);
+                float x, z;
+                FormationLayout.ToWorld(feet, viewport, Camera.orthographicSize, out x, out z);
+                Actors[i].transform.localPosition = new Vector3(x, 0f, z);
+            }
         }
 
         // ------------------------------------------------------------------ world
@@ -186,7 +235,10 @@ namespace Emberfall.Battle
             // bottom. Same rule, different frame; nothing here changed for it.
             // v2 only: the viewport's shape sets the frame (a narrow one zooms out so the wider
             // formation is not cut off). v1 keeps the size it was built with.
-            if (_framingV2) Camera.orthographicSize = BattleFraming.OrthographicSizeFor(true, Camera.aspect);
+            // Under the formation the size comes from the table (FitFormation), which also stands the
+            // actors, so a viewport that moved re-places them in the same breath.
+            if (FormationLayout.Enabled) FitFormation();
+            else if (_framingV2) Camera.orthographicSize = BattleFraming.OrthographicSizeFor(true, Camera.aspect);
             float frameH = Camera.orthographicSize * 2f;
             float frameW = frameH * Camera.aspect;
             const float ShakeMargin = 0.30f;
@@ -232,6 +284,8 @@ namespace Emberfall.Battle
             // The preset can change between two fights of one session (a capture target forces it), so
             // it is read again here and the camera, which was set for the last one, follows.
             if (StageFeel.V2 != _framingV2) { ApplyFraming(); FitBackdrop(); }
+            _slotOf.Clear();
+            int[] resolved = FormationLayout.Enabled ? ResolveFormationSlots(result) : null;
             for (int i = 0; i < result.Units.Count; i++)
             {
                 UnitSnapshot snapshot = result.Units[i];
@@ -240,11 +294,38 @@ namespace Emberfall.Battle
                 GameObject host = new GameObject((snapshot.IsPlayer ? "Ally_" : "Enemy_") + snapshot.Name);
                 host.transform.SetParent(_world, false);
                 UnitActor actor = host.AddComponent<UnitActor>();
+                if (resolved != null) actor.FormationSlot = resolved[i];
+                // Under the formation the position is set by FitFormation below; the legacy slot is
+                // only where the actor starts.
                 actor.Setup(snapshot, new Vector3(slot.X, 0f, slot.Z), snapshot.IsPlayer);
                 actor.Director = Director;
                 Actors.Add(actor);
+                _slotOf.Add(resolved != null ? resolved[i] : snapshot.Slot);
             }
+            if (FormationLayout.Enabled) FitFormation();
             if (Director != null) Director.Bind(result);
+        }
+
+        /// <summary>The slot each unit of the result stands in, a side at a time
+        /// (FormationLayout.ResolveSlots): the slot the unit has, or the nearest free one.</summary>
+        private static int[] ResolveFormationSlots(BattleResult result)
+        {
+            int[] resolved = new int[result.Units.Count];
+            for (int side = 0; side < 2; side++)
+            {
+                bool ally = side == 0;
+                List<int> indices = new List<int>();
+                List<int> asked = new List<int>();
+                for (int i = 0; i < result.Units.Count; i++)
+                {
+                    if (result.Units[i].IsPlayer != ally) continue;
+                    indices.Add(i);
+                    asked.Add(result.Units[i].Slot);
+                }
+                int[] got = FormationLayout.ResolveSlots(asked.ToArray());
+                for (int k = 0; k < indices.Count; k++) resolved[indices[k]] = got[k];
+            }
+            return resolved;
         }
 
         public UnitActor Find(int unitId)

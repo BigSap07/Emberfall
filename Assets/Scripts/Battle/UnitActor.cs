@@ -26,6 +26,10 @@ namespace Emberfall.Battle
         /// </summary>
         public VfxDirector Director;
 
+        /// <summary>The formation slot BattleStage resolved for this unit (FormationLayout.ResolveSlots);
+        /// negative until it has, when the snapshot's own slot stands in. Set before Setup.</summary>
+        public int FormationSlot = -1;
+
         private float _displayShield;
 
         /// <summary>
@@ -90,6 +94,17 @@ namespace Emberfall.Battle
                                 snapshot.Name, snapshot.Aspect);
             // v2: clips whose art faces the other way from the rest of the sheet (null in v1).
             if (Rig.Animation != null) Rig.Animation.SetClipFlips(StageFeel.ClipFlips(snapshot.DefId));
+
+            // The formation draws every unit the same height, whatever its silhouette or authored
+            // scale (a boss a little taller), so heroes and enemies read alike. Applied on top of the
+            // rig's own scale: Rig.Height is the scaled top, so the ratio is the whole correction.
+            if (FormationLayout.Enabled && Rig.Height > 0.05f)
+            {
+                float k = FormationLayout.WorldHeight(snapshot.IsBoss, FormationSlot >= 0 ? FormationSlot : snapshot.Slot) / Rig.Height * StageFeel.FormationMul(snapshot.DefId);
+                k = Mathf.Clamp(k, 0.5f, 2.5f);
+                Rig.Root.localScale = Rig.Root.localScale * k;
+                Rig.Height *= k;
+            }
 
             _idlePhase = (snapshot.Id * 0.73f) % 6.28f;
             _bobSpeed = snapshot.IsBoss ? 1.1f : 1.5f + (snapshot.Id % 3) * 0.16f;
@@ -230,7 +245,11 @@ namespace Emberfall.Battle
             // v2: the front pairs stand 2.30 apart, not 2.80, and the units are 1.2x larger, so the
             // R12 step of 0.85 would put the bodies inside each other at contact. The step is scaled
             // to leave the gap R12 left in world units (2.80 - 0.85 = 1.95 = 2.30 - 0.34).
-            if (StageFeel.V2) distance *= BattleFraming.ApproachScaleV2;
+            // The formation's own step (FormationLayout.ApproachScale) replaces it: the teams stand a
+            // third of the screen apart and the step is the same few world units, so it stays in the
+            // open centre whatever the aspect.
+            if (FormationLayout.Enabled) distance *= FormationLayout.ApproachScale;
+            else if (StageFeel.V2) distance *= BattleFraming.ApproachScaleV2;
             Vector3 home = Vector3.zero;
             Vector3 direction = towards - transform.position;
             direction.y = 0f;

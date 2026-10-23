@@ -96,6 +96,72 @@ namespace Emberfall.UI.Battle
                                                 BattleHudMetrics.PlateBelowFeet + above);
         }
 
+        // ---------------------------------------------------------------- plates over the head
+
+        /// <summary>Where a plate's root goes in the formation: the top of the unit's head, raised by
+        /// the head gap and the turn cue. The root is the plate's bottom centre.</summary>
+        public static BattleFraming.CanvasPoint PlateOriginAboveHead(BattleFraming.CanvasPoint headTop, float turnLift)
+        {
+            return new BattleFraming.CanvasPoint(headTop.X, headTop.Y + BattleHudMetrics.PlateHeadGap + turnLift);
+        }
+
+        /// <summary>Where a plate's root goes in the legacy layout (FormationLayout.Enabled false): the
+        /// stack hangs under the feet, so its bottom is PlateBelowFeet below them.</summary>
+        public static BattleFraming.CanvasPoint PlateOriginUnderFeet(BattleFraming.CanvasPoint feet, float turnLift)
+        {
+            return new BattleFraming.CanvasPoint(feet.X, feet.Y - BattleHudMetrics.PlateBelowFeet + turnLift);
+        }
+
+        /// <summary>The height of the stack over a head, above the head gap: the bars and the icon row beside
+        /// them, plus the name when the plate carries one (BattleHudMetrics.PlateNameOverHead).</summary>
+        public static float StackAboveHead()
+        {
+            float bars = Math.Max(BattleHudMetrics.PlateBarsHeight, BattleHudMetrics.PlateIconSize);
+            return BattleHudMetrics.PlateNameOverHead ? BattleHudMetrics.PlateStackHeight : bars;
+        }
+
+        /// <summary>
+        /// Everything an over-the-head plate can cover, from the top of the head to the top of the stack,
+        /// with the turn cue's lift included when asked. The icon row sits on the side that faces the
+        /// centre, so it reaches inward and the turn pip outward: allies stand on the left and reach right.
+        /// The lift only ever applies to the one unit acting, so a pair of plates is checked with the lift
+        /// on one and off the other.
+        /// </summary>
+        public static BattleFraming.CanvasRect PlateBoxAboveHead(BattleFraming.CanvasPoint headTop, bool lifted, bool isPlayer)
+        {
+            float half = BattleHudMetrics.PlateBarWidth * 0.5f;
+            float outer = half + BattleHudMetrics.PlateTurnPipGap + BattleHudMetrics.PlateTurnPipSize;
+            float inner = half + BattleHudMetrics.PlateIconsInset + BattleHudMetrics.PlateIconsWidth;
+            if (BattleHudMetrics.PlateNameOverHead)
+            {
+                outer = Math.Max(outer, BattleHudMetrics.PlateNameWidth * 0.5f);
+                inner = Math.Max(inner, BattleHudMetrics.PlateNameWidth * 0.5f);
+            }
+            float left = isPlayer ? outer : inner;
+            float right = isPlayer ? inner : outer;
+            float top = BattleHudMetrics.PlateHeadGap + StackAboveHead() + (lifted ? BattleHudMetrics.PlateTurnLift : 0f);
+            return new BattleFraming.CanvasRect(headTop.X - left, headTop.Y, left + right, top);
+        }
+
+        /// <summary>The two bars alone (and the turn pip beside them), over a head: what must stay below
+        /// FormationLayout.BarsCeiling of the height from the top.</summary>
+        public static BattleFraming.CanvasRect BarsBoxAboveHead(BattleFraming.CanvasPoint headTop, bool lifted)
+        {
+            float left = BattleHudMetrics.PlateBarWidth * 0.5f + BattleHudMetrics.PlateTurnPipGap + BattleHudMetrics.PlateTurnPipSize;
+            float lift = lifted ? BattleHudMetrics.PlateTurnLift : 0f;
+            return new BattleFraming.CanvasRect(headTop.X - left, headTop.Y + BattleHudMetrics.PlateHeadGap + lift,
+                                                left + BattleHudMetrics.PlateBarWidth * 0.5f, BattleHudMetrics.PlateBarsHeight);
+        }
+
+        /// <summary>How far above the head a floating number starts: clear of the plate in the formation
+        /// (the number would otherwise start on the bars), just above the head in the legacy layout.</summary>
+        public static float FloatSpawnLift(bool formation)
+        {
+            return formation
+                ? BattleHudMetrics.PlateHeadGap + StackAboveHead() + BattleHudMetrics.FloatSpawnAboveHead
+                : BattleHudMetrics.FloatSpawnAboveHead;
+        }
+
         // ---------------------------------------------------------------- pills
 
         /// <summary>The ability callout: centred on the screen, CalloutGap under the bar, as wide
@@ -191,6 +257,13 @@ namespace Emberfall.UI.Battle
         /// </summary>
         public static int Compose(IList<StatusKind> statuses, List<StatusIcon> shown)
         {
+            return Compose(statuses, shown, BattleHudMetrics.PlateMaxIcons);
+        }
+
+        /// <summary>Compose with a ceiling of its own: the plate over a head has room for
+        /// BattleHudMetrics.PlateMaxIconsOverHead (see there), the one under the feet for PlateMaxIcons.</summary>
+        public static int Compose(IList<StatusKind> statuses, List<StatusIcon> shown, int maxIcons)
+        {
             shown.Clear();
             List<StatusIcon> all = new List<StatusIcon>();
             if (statuses != null)
@@ -214,7 +287,7 @@ namespace Emberfall.UI.Battle
                 for (int i = 0; i < all.Count; i++)
                 {
                     if ((int)all[i].Role != role) continue;
-                    if (shown.Count < BattleHudMetrics.PlateMaxIcons) shown.Add(all[i]);
+                    if (shown.Count < maxIcons) shown.Add(all[i]);
                 }
             }
             return all.Count - shown.Count;
