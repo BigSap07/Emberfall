@@ -326,6 +326,7 @@ namespace Emberfall.DevHarness
             CheckFeatureUnlockGating(content, contentDir);
             CheckAccounts(content);
             _failures += CloudChecks.Run(content, contentDir);
+            CheckBugHunt(content, contentDir);
             CheckGuilds(contentDir);
             // The guild dungeon's own checks live in GuildDungeonChecks.cs so the guild branch and
             // this file never edit the same lines; this is the one line that wires them in.
