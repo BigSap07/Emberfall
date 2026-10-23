@@ -41,6 +41,7 @@ The capture runs on a scratch identity with the cloud held off (`ScratchCaptures
 `Screen:Battle=<stage>+five@<W>x<H>` is the whole battle screen with the first round underway, and the size is just the suffix: `@1920x1080` is 16:9, `@2400x1080` is 20:9, with no other setting. `+five` after the stage (`.five` on a `BattleMoment`) gives the scratch profile the five `WaveLine` heroes and deploys them, so B1 and B2 on the left are seen; it refuses to run off the scratch identity and never touches the real save. Without it the scratch squad is three heroes. Two target files hold what the formation needs, both run with `-TargetsFile`:
 
 - `Tools/capture-formation-targets.txt`, 12 shots: `ch1_9` (chapter 1, five a side), `ch2_5` (chapter 2 crossing, five a side), `ch1_12` and `ch2_12` (the two bosses, slot 0), `ch1_1` (three enemies) and `ch1_5` (four enemies), each at both sizes. Tag it `formation`.
+- `Tools/capture-formation-tune.txt`, 8 shots (the R29B retune: straight rows): `ch1_9`, `ch2_12`, `ch1_12` and `ch1_5` (four enemies), each at both sizes. Tag it `formation-tune`.
 - `Tools/capture-formation-moments.txt`, 8 shots: `Screen:BattleMoment=ch1_9.<kind>.five@<W>x<H>` for a hit, a skill, a heal and a death, at both sizes. Tag it `formation-fx`.
 
 ```powershell

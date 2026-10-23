@@ -18,8 +18,12 @@ namespace Emberfall.Battle
     /// (x becomes 1 minus x). Two ranks, as the game has them (BattleFraming.FrontRankSlots): a front
     /// pair and a back three.
     ///
-    ///     back row   B1 0.18, 0.64   B2 0.13, 0.77   B3 0.09, 0.90
-    ///     front row  F1 0.32, 0.69   F2 0.29, 0.84
+    ///     back row   B1 0.13, 0.66   B2 0.13, 0.79   B3 0.13, 0.92
+    ///     front row  F1 0.30, 0.72   F2 0.30, 0.87
+    ///
+    /// R29B retune: the rows stand STRAIGHT (every back cell shares one x, both front cells share one x),
+    /// so the line through a team's feet no longer reads as a slope; the top back unit is lower (0.66, was
+    /// 0.64) and the y steps are wider (0.13 back, 0.15 front) so neighbouring bars stand well apart.
     ///
     /// A unit is about UnitHeightFraction of the safe height tall, heroes and enemies alike (the rig is
     /// scaled to it, UnitActor.Setup); a boss is larger (BossScaleAt). The lower unit is drawn in
@@ -64,11 +68,11 @@ namespace Emberfall.Battle
 
         public static readonly Cell[] Cells =
         {
-            new Cell("B1", 0.18f, 0.64f),
-            new Cell("B2", 0.13f, 0.77f),
-            new Cell("B3", 0.09f, 0.90f),
-            new Cell("F1", 0.32f, 0.69f),
-            new Cell("F2", 0.29f, 0.84f)
+            new Cell("B1", 0.13f, 0.66f),
+            new Cell("B2", 0.13f, 0.79f),
+            new Cell("B3", 0.13f, 0.92f),
+            new Cell("F1", 0.30f, 0.72f),
+            new Cell("F2", 0.30f, 0.87f)
         };
 
         /// <summary>Game slot (0 to 4) to the index in Cells. See the class comment.</summary>

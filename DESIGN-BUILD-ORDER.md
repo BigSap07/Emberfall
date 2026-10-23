@@ -1869,7 +1869,7 @@ overlap. Nothing in it reads or changes a fight.
 
 **The battle stands on an Idle Heroes style formation table.** FormationLayout (engine free, one array,
 `Cells`) says where each side's five units stand as fractions of the safe area, measured from its left and
-its top: back row B1 0.18,0.64, B2 0.13,0.77, B3 0.09,0.90, front row F1 0.32,0.69, F2 0.29,0.84, the right
+its top: back row B1 0.13,0.66, B2 0.13,0.79, B3 0.13,0.92, front row F1 0.30,0.72, F2 0.30,0.87 (rows stand straight: R29B retuned it after the owner and Pinoy saw the feet line slope), the right
 team mirrored (x becomes 1 minus x). Game slot 0 is F2, 1 is F1, 2 is B3, 3 is B2, 4 is B1 (the order the
 slots always stood in on screen, SlotCell), a side with fewer than five keeps the cells it occupies, and a unit
 whose slot is taken goes to the nearest free one (ResolveSlots). BattleStage.FitFormation solves the world
@@ -1884,7 +1884,7 @@ proves all of it at 16:9, 18:9, 20:9 and 4:3 with a notch and a gesture bar. **R
 FormationLayout.Enabled false returns the stage and the plates to the R15 geometry. Not done, on purpose: a
 boss does not move to B2, because campaign.json lists every boss first (slot 0) and the sim's front-target rule
 picks the lowest slot, so B2 would draw the front unit behind two others. Captures:
-Tools/capture-formation-targets.txt and Tools/capture-formation-moments.txt through capture-batch.ps1,
+Tools/capture-formation-targets.txt, Tools/capture-formation-moments.txt and Tools/capture-formation-tune.txt (the R29B retune, 8 shots) through capture-batch.ps1,
 Screen:Battle=<stage>+five@<W>x<H> (+five, and .five on a BattleMoment, fields a full five hero line on the scratch identity only).
 
 **31 of 94 heroes have drawn battle art**, and they are the thirty 5-stars plus Celen. The other 63

@@ -59,6 +59,8 @@ namespace Emberfall.DevHarness
             string root = Path.GetFullPath(Path.Combine(Path.Combine(Path.Combine(contentDir, ".."), ".."), ".."));
             R29Table();
             R29Mirror();
+            R29Straight();
+            R29FrontOverlap();
             R29SlotMapping();
             R29ResolveSlots();
             R29Icons();
@@ -74,8 +76,8 @@ namespace Emberfall.DevHarness
         private static void R29Table()
         {
             string[] names = { "B1", "B2", "B3", "F1", "F2" };
-            float[] xs = { 0.18f, 0.13f, 0.09f, 0.32f, 0.29f };
-            float[] ys = { 0.64f, 0.77f, 0.90f, 0.69f, 0.84f };
+            float[] xs = { 0.13f, 0.13f, 0.13f, 0.30f, 0.30f };
+            float[] ys = { 0.66f, 0.79f, 0.92f, 0.72f, 0.87f };
             bool ok = FormationLayout.Cells.Length == 5;
             string seen = "";
             for (int i = 0; ok && i < 5; i++)
@@ -84,7 +86,7 @@ namespace Emberfall.DevHarness
                 ok = c.Name == names[i] && Math.Abs(c.X - xs[i]) < 1e-6f && Math.Abs(c.Y - ys[i]) < 1e-6f;
                 seen += c.Name + " " + c.X.ToString("0.00", CultureInfo.InvariantCulture) + "," + c.Y.ToString("0.00", CultureInfo.InvariantCulture) + "  ";
             }
-            Check(ok, "the table is the target's: B1 0.18,0.64  B2 0.13,0.77  B3 0.09,0.90  F1 0.32,0.69  F2 0.29,0.84 (got " + seen.Trim() + ")");
+            Check(ok, "the table is the R29B target's: B1 0.13,0.66  B2 0.13,0.79  B3 0.13,0.92  F1 0.30,0.72  F2 0.30,0.87 (got " + seen.Trim() + ")");
             Check(FormationLayout.Enabled, "FormationLayout.Enabled is true in the shipped tree");
             Check(Math.Abs(FormationLayout.UnitHeightFraction - 0.20f) < 1e-6f && FormationLayout.BossScale > 1f
                   && Math.Abs(FormationLayout.BarsCeiling - 0.38f) < 1e-6f,
@@ -329,7 +331,9 @@ namespace Emberfall.DevHarness
             string want5 = string.Join(" ", expect) + " ";
             Check(orderOk && got == want5, tag + ": draw order by feet height, back to front (one team: " + got.Trim() + ")");
 
-            // Bodies overlap only slightly.
+            // Bodies overlap only slightly. R29B: a straight column of three at 0.13 steps stacks the figure boxes by
+            // 0.39 of one box (the box is the generous one: 0.8 wide, a shadow below), so the limits are 0.40 and 0.70 (a boss 1.3 tall in a column cell covers 0.67 of its neighbour in the column).
+            // DEFAULT TAKEN: the limits follow the owner's table, the table does not follow the limits.
             float worstOverlap = 0f, worstBossOverlap = 0f;
             string worstOverlapAt = "", worstBossAt = "";
             for (int i = 0; i < 10; i++)
@@ -341,10 +345,10 @@ namespace Emberfall.DevHarness
                     if (withBoss) { if (f > worstBossOverlap) { worstBossOverlap = f; worstBossAt = id[i] + "/" + id[j]; } }
                     else if (f > worstOverlap) { worstOverlap = f; worstOverlapAt = id[i] + "/" + id[j]; }
                 }
-            Check(worstOverlap <= 0.30f && worstBossOverlap <= 0.55f,
+            Check(worstOverlap <= 0.40f && worstBossOverlap <= 0.70f,
                   tag + ": units overlap only slightly, worst " + F3(worstOverlap) + " of the smaller body (" + worstOverlapAt
-                  + ", max 0.30), a boss in F2 (larger, drawn in front of the unit behind it) " + F3(worstBossOverlap)
-                  + " (" + worstBossAt + ", max 0.55)");
+                  + ", max 0.40), a boss in F2 (larger, drawn in front of the unit behind it) " + F3(worstBossOverlap)
+                  + " (" + worstBossAt + ", max 0.70)");
 
             // Plates against plates, the turn lift on one at a time.
             float worstPlate = float.MaxValue;
@@ -388,6 +392,68 @@ namespace Emberfall.DevHarness
             Check(inField && viewport.YMax <= BattleHudLayout.BarBottom(safeTop) + 0.01f,
                   tag + ": every plate is inside the camera's viewport, which stops at the top bar");
 
+            // Rows stand straight in the solved WORLD positions too: one world x per row, one screen x per row.
+            bool straightWorld = true;
+            float[] rowX = { float.NaN, float.NaN };   // back, front (left team)
+            float[] rowWx = { float.NaN, float.NaN };
+            for (int slot = 0; slot < 5; slot++)
+            {
+                int row = FormationLayout.CellOf(true, slot).Name[0] == 'B' ? 0 : 1;
+                BattleFraming.CanvasPoint f = feet[slot];
+                float wx, wz;
+                FormationLayout.ToWorld(f, viewport, ortho, out wx, out wz);
+                if (float.IsNaN(rowX[row])) { rowX[row] = f.X; rowWx[row] = wx; }
+                else if (Math.Abs(f.X - rowX[row]) > 0.01f || Math.Abs(wx - rowWx[row]) > 0.001f) straightWorld = false;
+            }
+            Check(straightWorld, tag + ": the back row shares one screen x and one world x, the front row shares one (rows stand straight as solved)");
+
+            // The top back unit (slot 4 is B1): head top and bar at or below the 0.38 line.
+            {
+                float headTop = (canvasH - (feet[4].Y + height[4])) / canvasH;
+                float barTop = (canvasH - barsLift[4].YMax) / canvasH;
+                Check(FormationLayout.CellOf(true, 4).Name == "B1" && headTop >= FormationLayout.BarsCeiling && barTop >= FormationLayout.BarsCeiling,
+                      tag + ": the top back unit's head top stands at " + F3(headTop) + " and its bar (acting) at " + F3(barTop)
+                      + " of the height from the top, both at or below " + F2(FormationLayout.BarsCeiling));
+            }
+
+            // No two bars of one team overlap, each unit acting in turn (the lifted bar against the others at rest),
+            // with an ordinary unit in every slot and then a boss in each slot in turn, both teams.
+            {
+                float worstBars = float.MaxValue;
+                string worstBarsAt = "";
+                for (int side = 0; side < 2; side++)
+                    for (int boss = -1; boss < 5; boss++)
+                    {
+                        BattleFraming.CanvasRect[] rest = new BattleFraming.CanvasRect[5];
+                        BattleFraming.CanvasRect[] lift = new BattleFraming.CanvasRect[5];
+                        for (int slot = 0; slot < 5; slot++)
+                        {
+                            bool isBoss = slot == boss;
+                            BattleFraming.CanvasPoint f = FormationLayout.Feet(side == 0, slot, safe);
+                            float wx, wz;
+                            FormationLayout.ToWorld(f, viewport, ortho, out wx, out wz);
+                            BattleFraming.CanvasPoint hd = BattleFraming.Project(wx, FormationLayout.WorldHeight(isBoss, slot), wz, viewport, true, ortho);
+                            rest[slot] = BattleHudLayout.BarsBoxAboveHead(hd, false);
+                            lift[slot] = BattleHudLayout.BarsBoxAboveHead(hd, true);
+                        }
+                        for (int a = 0; a < 5; a++)
+                            for (int b = 0; b < 5; b++)
+                            {
+                                if (a == b) continue;
+                                float c = BattleHudLayout.Clearance(lift[a], rest[b]);
+                                if (c < worstBars)
+                                {
+                                    worstBars = c;
+                                    worstBarsAt = (side == 0 ? "A" : "E") + FormationLayout.CellOf(true, a).Name + " acting / " + FormationLayout.CellOf(true, b).Name
+                                                  + (boss >= 0 ? ", boss in " + FormationLayout.CellOf(true, boss).Name : ", no boss");
+                                }
+                            }
+                    }
+                Check(worstBars >= BattleHudMetrics.PlateMinClearance,
+                      tag + ": no two bars of one team touch, worst gap " + F1(worstBars) + " canvas units (" + worstBarsAt + ", min "
+                      + F1(BattleHudMetrics.PlateMinClearance) + ")");
+            }
+
             // A boss in ANY slot (content puts it in slot 0, but nothing forbids another): its bars still
             // clear the ceiling, it and its plate stay in the safe area, and it hides no more of a
             // neighbour than a boss may. Its plate is held clear of the other plates only in the two slots a
@@ -418,7 +484,7 @@ namespace Emberfall.DevHarness
                     // The ordinary neighbours' bodies, with the boss swapped in at its own cell (the
                     // main loop's own boss stands in slot 0 and is the case under test there).
                     float smaller = Math.Min(bbody.Width * bbody.Height, other.Width * other.Height);
-                    if (R29Overlap(bbody, other) / smaller > 0.55f) { bossOk = false; bossWhy += " overlap@" + FormationLayout.CellOf(false, bs).Name; }
+                    if (R29Overlap(bbody, other) / smaller > 0.70f) { bossOk = false; bossWhy += " overlap@" + FormationLayout.CellOf(false, bs).Name; }
                     float clear = BattleHudLayout.Clearance(bplate, BattleHudLayout.PlateBoxAboveHead(head[j], false, j < 5));
                     if (clear < BattleHudMetrics.PlateMinClearance && (bs == R29ContentBossSlot || bs == FormationLayout.BossSlot)) { bossOk = false; bossWhy += " plate@" + FormationLayout.CellOf(false, bs).Name + "/" + id[j]; }
                 }
@@ -426,6 +492,65 @@ namespace Emberfall.DevHarness
             }
             Check(bossOk, tag + ": a boss in any of the five slots keeps its bars under the ceiling, stays in the safe area and keeps its plate clear"
                           + (bossOk ? "" : " - FAILS:" + bossWhy));
+        }
+
+        // ---------------------------------------------------------------- R29B: straight rows, the front pair
+
+        private static void R29Straight()
+        {
+            // Left team, by cell: every back cell shares one x, both front cells share one x.
+            float bx = FormationLayout.Cells[FormationLayout.B1].X;
+            bool back = Math.Abs(FormationLayout.Cells[FormationLayout.B2].X - bx) < 1e-6f && Math.Abs(FormationLayout.Cells[FormationLayout.B3].X - bx) < 1e-6f;
+            float fx = FormationLayout.Cells[FormationLayout.F1].X;
+            bool front = Math.Abs(FormationLayout.Cells[FormationLayout.F2].X - fx) < 1e-6f;
+            Check(back && front && fx > bx, "rows stand straight in the table: B1, B2 and B3 share x " + F2(bx) + ", F1 and F2 share x " + F2(fx)
+                                            + ", the front row in front of the back row");
+
+            // Both teams, through the slot mapping and the mirror, at a safe area off the origin.
+            BattleFraming.CanvasRect safe = new BattleFraming.CanvasRect(100f, 40f, 1600f, 900f);
+            bool ok = true;
+            for (int side = 0; side < 2; side++)
+            {
+                float backX = float.NaN, frontX = float.NaN;
+                for (int slot = 0; slot < 5; slot++)
+                {
+                    BattleFraming.CanvasPoint p = FormationLayout.Feet(side == 0, slot, safe);
+                    if (slot >= BattleFraming.FrontRankSlots) { if (float.IsNaN(backX)) backX = p.X; else ok &= Math.Abs(p.X - backX) < 0.01f; }
+                    else { if (float.IsNaN(frontX)) frontX = p.X; else ok &= Math.Abs(p.X - frontX) < 0.01f; }
+                }
+            }
+            Check(ok, "rows stand straight for both teams as placed: one feet x per row, left and mirrored right");
+
+            float s12 = FormationLayout.Cells[FormationLayout.B2].Y - FormationLayout.Cells[FormationLayout.B1].Y;
+            float s23 = FormationLayout.Cells[FormationLayout.B3].Y - FormationLayout.Cells[FormationLayout.B2].Y;
+            Check(Math.Abs(s12 - s23) < 1e-5f && s12 > 0.12f, "the back row's feet are evenly stepped, " + F2(s12) + " of the height apart");
+        }
+
+        /// <summary>The overlap of two figure boxes (R29Body) as a fraction of one box, from the numbers alone,
+        /// for a safe area of w x h and a gap of dx (of the width) and dy (of the height) between the feet.</summary>
+        private static float R29PairOverlap(float w, float h, float dx, float dy)
+        {
+            float figH = FormationLayout.UnitHeightFraction * h;
+            BattleFraming.CanvasRect a = R29Body(new BattleFraming.CanvasPoint(0f, 0f), figH);
+            BattleFraming.CanvasRect b = R29Body(new BattleFraming.CanvasPoint(dx * w, dy * h), figH);
+            return R29Overlap(a, b) / (a.Width * a.Height);
+        }
+
+        private static void R29FrontOverlap()
+        {
+            FormationLayout.Cell f1 = FormationLayout.Cells[FormationLayout.F1], f2 = FormationLayout.Cells[FormationLayout.F2];
+            float newDx = Math.Abs(f2.X - f1.X), newDy = f2.Y - f1.Y;
+            float newOverlap = R29PairOverlap(1920f, 1080f, newDx, newDy);
+            // The R29 table, kept here as numbers only: F1 0.32,0.69 and F2 0.29,0.84.
+            float oldOverlap = R29PairOverlap(1920f, 1080f, 0.03f, 0.15f);
+            Line("  front pair overlap (figure box, fraction of one figure) at 1920x1080: R29 table " + F3(oldOverlap) + ", R29B table " + F3(newOverlap)
+                 + " (x gap " + F2(newDx) + ", y step " + F2(newDy) + ", figure " + F2(FormationLayout.UnitHeightFraction) + " tall)");
+            // Honest statement of the numbers: the y step is the same 0.15 and the x gap went from 0.03 to 0 (rows
+            // straight), so by the box metric the pair overlaps NOT less than before. This pins the measured value.
+            Check(Math.Abs(newDy - 0.15f) < 1e-5f && Math.Abs(newOverlap - 0.2923f) < 0.005f && newOverlap >= oldOverlap,
+                  "the front pair's figure boxes overlap " + F3(newOverlap) + " of one figure (R29 table " + F3(oldOverlap)
+                  + "): the 0.15 y step is unchanged and the x gap is now 0, so this table does not reduce it (OWNER DECISION: widen the y step)");
+            Check(newOverlap < 0.35f, "the front pair never covers more than 0.35 of one figure (" + F3(newOverlap) + ")");
         }
 
         // ---------------------------------------------------------------- attack movement
@@ -595,7 +720,7 @@ namespace Emberfall.DevHarness
                   "PlayModeScreenshot fields five heroes for +five and .five, on the scratch identity only");
 
             // The table lives in FormationLayout and nowhere else.
-            Regex literal = new Regex(@"\b0\.(64|77|69|84)f\b");
+            Regex literal = new Regex(@"\b0\.(66|79|92|72|87)f\b");
             bool single = !literal.IsMatch(stage) && !literal.IsMatch(actor);
             Check(single, "the formation's numbers are written in FormationLayout.cs only (none in BattleStage or UnitActor)");
 
@@ -603,7 +728,7 @@ namespace Emberfall.DevHarness
             // BattleMoment target at 1920x1080 or 2400x1080, on a stage that exists in campaign.json, and the
             // fights cover a full five, a boss, and a side with fewer than five.
             string campaign = R29Read(root, "Assets/Resources/Content/campaign.json") ?? "";
-            string[] files = { "Tools/capture-formation-targets.txt", "Tools/capture-formation-moments.txt" };
+            string[] files = { "Tools/capture-formation-targets.txt", "Tools/capture-formation-moments.txt", "Tools/capture-formation-tune.txt" };
             int targets = 0, wide = 0, narrow = 0, unknownStage = 0;
             for (int f = 0; f < files.Length; f++)
             {
@@ -621,13 +746,18 @@ namespace Emberfall.DevHarness
                     if (!campaign.Contains("\"id\": \"" + m.Groups[2].Value + "\", \"index\"")) unknownStage++;
                 }
             }
-            Check(targets == 20 && wide == narrow && unknownStage == 0 && campaign.Length > 0,
-                  "the formation capture files hold 20 targets, half at 1920x1080 and half at 2400x1080, every one on a real stage ("
+            Check(targets == 28 && wide == narrow && unknownStage == 0 && campaign.Length > 0,
+                  "the formation capture files hold 28 targets, half at 1920x1080 and half at 2400x1080, every one on a real stage ("
                   + targets + " targets, " + narrow + " + " + wide + ", " + unknownStage + " not understood)");
             string shots = R29Read(root, "Tools/capture-formation-targets.txt") ?? "";
             Check(shots.Contains("=ch1_9+five@") && shots.Contains("=ch2_5+five@") && shots.Contains("=ch1_12+five@") && shots.Contains("=ch2_12+five@")
                   && shots.Contains("=ch1_1+five@") && shots.Contains("=ch1_5+five@"),
                   "the fights cover chapter 1 and the chapter 2 crossing at five a side, both bosses, and sides of three and four");
+
+            string tune = R29Read(root, "Tools/capture-formation-tune.txt") ?? "";
+            Check(tune.Contains("=ch1_9+five@1920x1080") && tune.Contains("=ch2_12+five@2400x1080") && tune.Contains("=ch1_12+five@1920x1080")
+                  && tune.Contains("=ch1_5+five@2400x1080") && Regex.Matches(tune, @"(?m)^Screen:Battle=").Count == 8,
+                  "capture-formation-tune.txt holds the 8 retune shots: ch1_9, ch2_12, ch1_12 and ch1_5 at both sizes");
 
             // Every tool that compiles the harness compiles FormationLayout with it.
             string gate = R29Read(root, "Tools/build-check.ps1") ?? "";

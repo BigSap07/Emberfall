@@ -1,0 +1,17 @@
+# R29B formation retune captures: straight rows, wider steps, top back unit lower. Five hero squad on the scratch identity only.
+#
+#   powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 `
+#       -TargetsFile Tools/capture-formation-tune.txt -LogDir D:\Emberfall\handoff\R29B-FORMATION-TUNE\logs -Tag formation-tune
+#
+#   ch1_9   chapter 1, five a side
+#   ch2_12  boss, The Shepherd, the crossing boss fight
+#   ch1_12  boss, The Collector
+#   ch1_5   four enemies: slots 0 to 3
+Screen:Battle=ch1_9+five@1920x1080
+Screen:Battle=ch2_12+five@1920x1080
+Screen:Battle=ch1_12+five@1920x1080
+Screen:Battle=ch1_5+five@1920x1080
+Screen:Battle=ch1_9+five@2400x1080
+Screen:Battle=ch2_12+five@2400x1080
+Screen:Battle=ch1_12+five@2400x1080
+Screen:Battle=ch1_5+five@2400x1080
