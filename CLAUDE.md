@@ -118,6 +118,7 @@ starting an agent. It runs build-check, the hero validator and a capture sweep o
 - The run never posts to Discord, never reads `supabase.json`, and makes no network call other
   than `git fetch`. Its captures are forced offline on the scratch identity, and it hashes the
   real save before and after and flags any change at the top of the report.
+- **`Tools/cockpit/cockpit.ps1`** is the owner's live, read-only view of runs, usage and cost; see its `README.md`.
 
 ## Update posts (Discord)
 

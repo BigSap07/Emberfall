@@ -1,0 +1,52 @@
+{
+ "session": [
+  {
+   "sessionId": "a1",
+   "firstActivity": "2026-10-23T11:02:00",
+   "lastActivity": "2026-10-23T13:55:00",
+   "totalCost": 28.6,
+   "inputTokens": 0,
+   "outputTokens": 0
+  },
+  {
+   "sessionId": "a2",
+   "firstActivity": "2026-10-22T09:10:00",
+   "lastActivity": "2026-10-22T12:40:00",
+   "totalCost": 31.4,
+   "inputTokens": 0,
+   "outputTokens": 0
+  },
+  {
+   "sessionId": "a3",
+   "firstActivity": "2026-10-22T13:05:00",
+   "lastActivity": "2026-10-22T17:50:00",
+   "totalCost": 66.4,
+   "inputTokens": 0,
+   "outputTokens": 0
+  },
+  {
+   "sessionId": "a4",
+   "firstActivity": "2026-10-22T19:30:00",
+   "lastActivity": "2026-10-22T22:15:00",
+   "totalCost": 22.9,
+   "inputTokens": 0,
+   "outputTokens": 0
+  },
+  {
+   "sessionId": "a5",
+   "firstActivity": "2026-10-21T08:00:00",
+   "lastActivity": "2026-10-21T16:00:00",
+   "totalCost": 142.8,
+   "inputTokens": 0,
+   "outputTokens": 0
+  },
+  {
+   "sessionId": "a6",
+   "firstActivity": "2026-10-23T07:30:00",
+   "lastActivity": "2026-10-23T10:20:00",
+   "totalCost": 18.1,
+   "inputTokens": 0,
+   "outputTokens": 0
+  }
+ ]
+}

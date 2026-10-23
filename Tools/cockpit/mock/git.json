@@ -1,0 +1,19 @@
+{
+ "main": "afaef35 Merge claude/cross-platform-build-check: build-check runs on Linux and macOS",
+ "recent": [
+  {"hash": "afaef35", "when": "3 hours ago", "subject": "Merge claude/cross-platform-build-check: build-check runs on Linux and macOS"},
+  {"hash": "4b6f21c", "when": "5 hours ago", "subject": "R26: the toast keeps its bottom anchor"}
+ ],
+ "unmerged": [
+  {"name": "origin/claude/r27-store-polish", "when": "6 minutes ago"},
+  {"name": "origin/claude/hero-batch-9", "when": "20 hours ago"},
+  {"name": "origin/claude/economy-r5", "when": "2 days ago"}
+ ],
+ "merged": [
+  {"name": "origin/claude/cross-platform-build-check", "when": "3 hours ago"},
+  {"name": "origin/claude/r26-toast-anchor", "when": "1 day ago"},
+  {"name": "origin/claude/r25-relic-icons", "when": "1 day ago"},
+  {"name": "origin/claude/nightly-fixups", "when": "1 day ago"},
+  {"name": "origin/claude/r24-theme", "when": "6 days ago"}
+ ]
+}

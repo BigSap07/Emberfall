@@ -1,0 +1,17 @@
+{
+ "now": "2026-10-23T14:00:00",
+ "unity": {"pid": 18244, "start": "2026-10-23T08:47:00"},
+ "mtimes": {
+  "tmp/R27-store-polish_running_log.md": "2026-10-23T13:55:00",
+  "tmp/R26-toast-anchor_running_log.md": "2026-10-22T12:40:00",
+  "tmp/hero-batch-9_running_log.md": "2026-10-22T17:50:00",
+  "tmp/economy-r5_running_log.md": "2026-10-21T16:00:00",
+  "tmp/nightly-fixups_running_log.md": "2026-10-22T22:15:00",
+  "tmp/R25-relic-icons_running_log.md": "2026-10-23T10:20:00",
+  "handoff/R27-store-polish/BOARD.md": "2026-10-23T13:55:00",
+  "handoff/hero-batch-9/REPORT.md": "2026-10-22T17:51:00",
+  "handoff/economy-r5/BOARD.md": "2026-10-21T16:01:00",
+  "handoff/R26-toast-anchor/REPORT.md": "2026-10-22T12:41:00",
+  "handoff/R25-relic-icons/REPORT.md": "2026-10-23T10:21:00"
+ }
+}

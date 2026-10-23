@@ -1,0 +1,13 @@
+{
+ "_help": "All amounts in EUR. Months are YYYY-MM, dates YYYY-MM-DD. end_month null means still paying. Entries with 0 are ignored. See README.md.",
+ "usd_to_eur": 0.92,
+ "subscriptions": [
+  {"name": "Claude", "monthly_eur": 0, "start_month": "2026-01", "end_month": null}
+ ],
+ "api_topups": [
+  {"date": "2026-01-01", "eur": 0, "note": "Anthropic Console credit"}
+ ],
+ "one_off": [
+  {"date": "2026-01-01", "eur": 0, "category": "Assets", "note": "example: font or sound licence"}
+ ]
+}
