@@ -28,6 +28,10 @@ namespace Emberfall.UI
         /// first run on and are what photograph the locks. Never compiled into a player.
         /// </summary>
         public static bool CaptureBypass;
+
+        /// <summary>R26: keeps the gate live for a capture even with the first run suppressed, so a target can
+        /// photograph the locks on a profile it seeded itself (Marketplace, fresh profile with locks).</summary>
+        public static bool CaptureForceLocks;
 #endif
 
         private static bool Bypassed
@@ -35,6 +39,7 @@ namespace Emberfall.UI
             get
             {
 #if UNITY_EDITOR
+                if (CaptureForceLocks) return false;
                 return CaptureBypass || UnityEditor.EditorPrefs.GetBool(GameApp.SuppressFirstRunKey, false);
 #else
                 return false;

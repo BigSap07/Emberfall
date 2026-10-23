@@ -137,6 +137,7 @@ namespace Emberfall.Core.Progression
             new FeatureEntryPoint("screen:Armory", Feature.Proving, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Archive", Feature.Recital, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Quartermaster", Feature.Quartermaster, "ScreenRouter.Show"),
+            new FeatureEntryPoint("screen:Marketplace", Feature.Marketplace, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Campaign", Feature.Campaign, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Summon", Feature.Summon, "ScreenRouter.Show"),
             new FeatureEntryPoint("screen:Formation", Feature.Heroes, "ScreenRouter.Show"),
@@ -146,7 +147,7 @@ namespace Emberfall.Core.Progression
             new FeatureEntryPoint("hub.map.HEROES", Feature.Heroes, "MainMenuScreen map"),
             new FeatureEntryPoint("hub.map.SUMMON", Feature.Summon, "MainMenuScreen map"),
             new FeatureEntryPoint("hub.map.FORGE", Feature.Forge, "MainMenuScreen map"),
-            new FeatureEntryPoint("hub.map.RELICS", Feature.Relics, "MainMenuScreen map"),
+            new FeatureEntryPoint("hub.map.MARKETPLACE", Feature.Marketplace, "MainMenuScreen map"),
             new FeatureEntryPoint("hub.map.RECITAL", Feature.Recital, "MainMenuScreen map"),
             new FeatureEntryPoint("hub.map.PROVING", Feature.Proving, "MainMenuScreen map"),
             new FeatureEntryPoint("hub.map.CAMPAIGN", Feature.Campaign, "MainMenuScreen map"),
@@ -178,7 +179,14 @@ namespace Emberfall.Core.Progression
             new FeatureEntryPoint("recital.Archive", Feature.Recital, "RecitalScreen"),
 
             // The Quartermaster's door (Docs/DESIGN-QUARTERMASTER.md), off the Forge.
-            new FeatureEntryPoint("forge.Quartermaster", Feature.Quartermaster, "ForgeScreen")
+            new FeatureEntryPoint("forge.Quartermaster", Feature.Quartermaster, "ForgeScreen"),
+
+            // The Marketplace's four shop doors (R26), one per card, each bound to its own shop's feature so a
+            // card keeps its own lock line: the hub node opens at 2-4, the Relic Shop card stays locked to 3-1.
+            new FeatureEntryPoint("marketplace.RelicShop", Feature.Relics, "ShopDoors card"),
+            new FeatureEntryPoint("marketplace.Quartermaster", Feature.Quartermaster, "ShopDoors card"),
+            new FeatureEntryPoint("marketplace.Armory", Feature.Proving, "ShopDoors card"),
+            new FeatureEntryPoint("marketplace.Archive", Feature.Recital, "ShopDoors card")
         };
 
         /// <summary>The router's screens that belong to no gated feature: the Hub, the shared
