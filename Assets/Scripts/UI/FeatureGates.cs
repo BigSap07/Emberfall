@@ -34,10 +34,20 @@ namespace Emberfall.UI
         public static bool CaptureForceLocks;
 #endif
 
+#if EMBERFALL_PLAYLOG
+        /// <summary>R27: the cloud smoke test (-emberfallSmoke) opens the Friends and Guild screens on whatever profile
+        /// the device has, locked or not. It only opens a page; it grants nothing and NoteOpened still checks the real
+        /// unlock. Compiled only with EMBERFALL_PLAYLOG.</summary>
+        public static bool SmokeBypass;
+#endif
+
         private static bool Bypassed
         {
             get
             {
+#if EMBERFALL_PLAYLOG
+                if (SmokeBypass) return true;
+#endif
 #if UNITY_EDITOR
                 if (CaptureForceLocks) return false;
                 return CaptureBypass || UnityEditor.EditorPrefs.GetBool(GameApp.SuppressFirstRunKey, false);

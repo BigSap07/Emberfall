@@ -467,6 +467,19 @@ namespace UnityEngine
         public static RuntimePlatform platform { get { return RuntimePlatform.WindowsEditor; } }
         public static string version { get { return "0.1"; } }
         public static void Quit() { }
+        public static void Quit(int exitCode) { }
+        public static string unityVersion { get { return "6000.5.9f1"; } }
+        public static void OpenURL(string url) { }
+        public delegate void LogCallback(string condition, string stackTrace, LogType type);
+        public static event LogCallback logMessageReceived;
+    }
+
+    public enum LogType { Error, Assert, Warning, Log, Exception }
+
+    public static class SystemInfo
+    {
+        public static string deviceModel { get { return "shim"; } }
+        public static string operatingSystem { get { return "shim"; } }
     }
 
     public static class PlayerPrefs

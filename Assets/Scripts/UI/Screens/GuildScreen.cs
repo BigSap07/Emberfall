@@ -86,6 +86,10 @@ namespace Emberfall.UI.Screens
         private int _pendingRequestCount;
         private bool _loading;
 
+        /// <summary>R27 smoke test: true while the page is fetching, and the words under its title.</summary>
+        public bool IsLoading { get { return _loading; } }
+        public string StatusText { get { return _headerSubtitle != null ? _headerSubtitle.text : ""; } }
+
         /// <summary>Armed by HAND OVER and disarmed by picking somebody, cancelling, or leaving the
         /// screen. Never survives a hide - an armed dangerous mode a player walked away from is a
         /// trap the next visit springs.</summary>

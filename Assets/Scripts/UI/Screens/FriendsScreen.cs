@@ -53,6 +53,10 @@ namespace Emberfall.UI.Screens
         private readonly List<FriendEntry> _entries = new List<FriendEntry>();
         private bool _loading;
 
+        /// <summary>R27 smoke test: true while the page is fetching, and the words under its title.</summary>
+        public bool IsLoading { get { return _loading; } }
+        public string StatusText { get { return _headerSubtitle != null ? _headerSubtitle.text : ""; } }
+
         protected override void Build()
         {
             _ground = EmberforgeUI.Ground(Root);

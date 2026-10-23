@@ -94,6 +94,9 @@ namespace Emberfall.Game
             s.DebugStore = backend as SimulatedStore;
             s.Flow = new PurchaseFlow(rules, backend, mode, CurrentSession, TimeUtil.NowUnix, SaveNow);
             Instance = s;
+#if EMBERFALL_PLAYLOG
+            if (PlayLogService.Instance != null) PlayLogService.Instance.WatchPurchases(s.Flow);
+#endif
             s.Flow.Start(offers);
             if (backend != null) StoreTicker.Create();
             return s;

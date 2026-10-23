@@ -65,6 +65,8 @@ namespace Emberfall.Core.Telemetry
 
         private static void Campaign(string eventName, GameSession session, StageDef stage, int wave, int battle)
         {
+            // R27: the local play log sees the same moment, independent of the stats consent (null unless EMBERFALL_PLAYLOG).
+            if (PlayLogSwitch.Enabled && stage != null) PlayLogHooks.Stage(eventName, stage.Id, wave, battle);
             ITelemetrySink sink = Live;
             if (sink == null || session == null || stage == null) return;
             try
