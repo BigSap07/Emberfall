@@ -1271,7 +1271,7 @@ and the flag off is the build before them): the Armory sells for Valor and the A
 `sinks.json`, which is not in `ContentVersion`. Prices are days of income, `SinkPricing` is the one place
 days become currency, and `SinkShop.Buy` is the only door that sells. Nothing in them is random and only
 earned currency pays. `Docs/DESIGN-SINKS.md` has the items, caps and the Echo note.
-`ProvingGenerator` builds opponent lines. The events engine is content-driven through
+`ProvingGenerator` builds opponent lines, and every Proving entry, REMATCH included, goes through `GameSession.TryBeginProvingFight` (Brand spent, opponent drawn fresh), so a rematch never replays the line just beaten. The events engine is content-driven through
 `events.json`, and each milestone carries a permanent `id` that a claim is saved against, so a
 threshold can be retuned freely. Shop screens are wired.
 

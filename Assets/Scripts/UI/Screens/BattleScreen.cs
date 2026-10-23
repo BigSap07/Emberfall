@@ -949,12 +949,16 @@ namespace Emberfall.UI.Screens
                 // The one and only spend point for a Proving attempt, mirroring the Recital branch
                 // below: RecitalScreen and ProvingScreen both only PEEK affordability, and a
                 // Rematch re-enters here with no gate of its own.
-                if (!App.Session.TryStartProvingAttempt(TimeUtil.NowUnix()))
+                // The opponent comes back from the session too: a Rematch must fight a fresh draw, not
+                // the line it captured (GameSession.TryBeginProvingFight).
+                BattleLoadout drawn;
+                if (!App.Session.TryBeginProvingFight(TimeUtil.NowUnix(), out drawn) || drawn == null || drawn.Units.Count == 0)
                 {
                     App.Notify("Out of Brands.");
                     Router.Show(ScreenId.Proving, false);
                     return;
                 }
+                _provingOpponent = drawn;
                 _stageLabel.text = "THE PROVING   " + _provingOpponent.Label.ToUpperInvariant();
             }
             else if (_recitalFloor >= 0)

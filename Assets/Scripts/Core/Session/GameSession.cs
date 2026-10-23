@@ -2397,6 +2397,22 @@ namespace Emberfall.Core.Session
             return true;
         }
 
+        /// <summary>
+        /// The one door into a Proving fight, for the first entry AND every Rematch: spends the Brand
+        /// (TryStartProvingAttempt) and hands back the opponent to fight, which is the persisted offer
+        /// (CurrentProvingOpponent). On a first entry that is the line the player was just shown; after a
+        /// result GrantProvingResult has cleared it, so a Rematch draws a fresh one the way the Proving
+        /// screen does. Before this a Rematch replayed the line it had captured, so one easy opponent
+        /// could be farmed for standing and Valor. False, with no Brand spent, when none is banked.
+        /// </summary>
+        public bool TryBeginProvingFight(long nowUnix, out BattleLoadout opponent)
+        {
+            opponent = null;
+            if (!TryStartProvingAttempt(nowUnix)) return false;
+            opponent = CurrentProvingOpponent(nowUnix);
+            return true;
+        }
+
         /// <summary>AddRecitalEcho for Brands: one Brand back in the bank, refused when it is full.</summary>
         public bool AddProvingBrand(long nowUnix)
         {
