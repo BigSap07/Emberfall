@@ -6,6 +6,7 @@ using Emberfall.Battle;
 using Emberfall.Core.Combat;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
+using Emberfall.Core.Progression;
 using Emberfall.Core.Session;
 using Emberfall.UI.Battle;
 
@@ -94,6 +95,19 @@ namespace Emberfall.UI.Screens
         private UIButton _continue;
         private UIButton _watchCleared;
         private UIButton _statsCleared;
+
+        /// <summary>
+        /// A3 of the rewarded ads (Docs/ui-specs/R28-SCREENS.md): the block under the stage cleared view's buttons, asked
+        /// about only when the clear was a repeat that paid the floor (BattleRewards.RepeatCapped on a clear that is not
+        /// a first one), with that stage as the context. _adStage is that stage, or null when the block has no business
+        /// here. With AdsSwitch off nothing is built.
+        /// </summary>
+        private const float AdWidth = 760f;
+        private RewardedAdBlock _ad;
+        private StageDef _adStage;
+
+        /// <summary>The ad block, for the capture tool and the checks.</summary>
+        public RewardedAdBlock AdBlock { get { return _ad; } }
 
         private readonly BattleStatsPanel _statsPanel = new BattleStatsPanel();
 
@@ -283,6 +297,15 @@ namespace Emberfall.UI.Screens
             _watchCleared.OnClick(OnWatch);
             _statsCleared = EmberforgeUI.Button("Stats", _column, "STATS", UITheme.FontBody, ForgeButtonKind.Secondary);
             _statsCleared.OnClick(OnStats);
+
+            RectTransform adHost = UIBuilder.Node("AdBlock", _column);
+            _ad = new RewardedAdBlock(App, AdPlacementKind.RepeatClear, adHost, AdWidth, delegate
+            {
+                AdContext context = new AdContext();
+                context.Stage = _adStage;
+                return context;
+            });
+            adHost.gameObject.SetActive(false);
         }
 
         /// <summary>One screen back is the campaign map, which this screen was never remembered
@@ -341,6 +364,7 @@ namespace Emberfall.UI.Screens
 
         public override void OnHide()
         {
+            if (_ad != null) _ad.Unbind();
             StopAllCoroutines();
             _autoRoutine = null;
             if (_world != null)
@@ -593,7 +617,7 @@ namespace Emberfall.UI.Screens
             for (int i = _column.childCount - 1; i >= 0; i--)
             {
                 Transform child = _column.GetChild(i);
-                if (child == _continue.Root || child == _watchCleared.Root || child == _statsCleared.Root) continue;
+                if (child == _continue.Root || child == _watchCleared.Root || child == _statsCleared.Root || child == _ad.Root) continue;
                 Destroy(child.gameObject);
             }
 
@@ -655,8 +679,30 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(_statsCleared.Root, next + 140f, y, 280f, 96f, TopCentre);
             y -= 96f;
 
+            // A3: below the buttons, only on a repeat clear that paid the floor, and only when the block says it is there.
+            _adStage = rewards != null && !rewards.FirstClear && rewards.RepeatCapped ? _stage : null;
+            _ad.Bind();
+            if (_ad.View != null && _ad.View.Visible)
+            {
+                y -= Emberforge.Space24;
+                UIBuilder.Box(_ad.Root, 0f, y, AdWidth, RewardedAdBlock.HeightFor(AdWidth), TopCentre);
+                y -= RewardedAdBlock.HeightFor(AdWidth);
+                StartCoroutine(AdTick());
+            }
+
             // The column is as tall as what it holds, centred on the screen.
             _column.sizeDelta = new Vector2(width, -y);
+        }
+
+        /// <summary>Once a second while the stage cleared view is up, so "Next one in" counts down. The block returns at
+        /// once when its view has not changed.</summary>
+        private IEnumerator AdTick()
+        {
+            while (true)
+            {
+                yield return new WaitForSecondsRealtime(1f);
+                if (_ad != null) _ad.Refresh();
+            }
         }
 
         private float PlaceRule(string name, float y, float width)
