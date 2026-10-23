@@ -55,7 +55,26 @@ jobs:
 
       - name: Run build-check.ps1
         shell: pwsh
-        run: ./Tools/build-check.ps1
+        run: |
+          # The log is kept so a failure can be read without admin rights to the repository: failing lines
+          # become annotations in the next step.
+          ./Tools/build-check.ps1 *>&1 | Tee-Object -FilePath "$env:RUNNER_TEMP/build-check.log"
+          exit $LASTEXITCODE
+
+      - name: Annotate failing lines
+        if: failure()
+        shell: pwsh
+        run: |
+          $n = 0
+          foreach ($l in (Get-Content "$env:RUNNER_TEMP/build-check.log")) {
+            if ($l -match 'FAIL|error CS|FAILED|Exception|not found|cannot') {
+              $t = ([string]$l -replace '%', ' ').Trim()
+              if ($t.Length -gt 400) { $t = $t.Substring(0, 400) }
+              Write-Host "::error::$t"
+              $n++
+              if ($n -ge 40) { break }
+            }
+          }
 
   build-check-windows:
     # Kept for parity with the reference platform; started by hand only, never by a push.

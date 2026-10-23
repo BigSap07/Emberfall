@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Drawing;
+using System.IO.Compression;
 using System.IO;
 using System.Text.RegularExpressions;
 using Emberfall.Core.Data;
@@ -147,13 +147,93 @@ namespace Emberfall.DevHarness
 
         // ------------------------------------------------------------------ item 3: kit polish
 
+        /// <summary>One decoded pixel of an <see cref="R26Png"/>.</summary>
+        private struct R26Pixel { public int A, R, G, B; }
+
+        /// <summary>A minimal PNG reader (8-bit RGB or RGBA, not interlaced, every filter), so the kit checks need no
+        /// System.Drawing: that assembly is Windows-only, and the ubuntu CI job has no reference to it.</summary>
+        private sealed class R26Png : IDisposable
+        {
+            public readonly int Width, Height;
+            private readonly byte[] px; // RGBA, row by row
+
+            public R26Png(string path)
+            {
+                byte[] f = File.ReadAllBytes(path);
+                int pos = 8, w = 0, h = 0, ct = 0;
+                MemoryStream idat = new MemoryStream();
+                while (pos + 8 <= f.Length)
+                {
+                    int len = (f[pos] << 24) | (f[pos + 1] << 16) | (f[pos + 2] << 8) | f[pos + 3];
+                    string type = System.Text.Encoding.ASCII.GetString(f, pos + 4, 4);
+                    int data = pos + 8;
+                    if (type == "IHDR")
+                    {
+                        w = (f[data] << 24) | (f[data + 1] << 16) | (f[data + 2] << 8) | f[data + 3];
+                        h = (f[data + 4] << 24) | (f[data + 5] << 16) | (f[data + 6] << 8) | f[data + 7];
+                        if (f[data + 8] != 8 || f[data + 12] != 0) throw new InvalidDataException(path + ": only 8-bit, non-interlaced PNG is supported");
+                        ct = f[data + 9];
+                        if (ct != 2 && ct != 6) throw new InvalidDataException(path + ": only RGB or RGBA PNG is supported");
+                    }
+                    else if (type == "IDAT") idat.Write(f, data, len);
+                    else if (type == "IEND") break;
+                    pos = data + len + 4;
+                }
+                Width = w; Height = h;
+                int bpp = ct == 6 ? 4 : 3, stride = w * bpp;
+                byte[] raw = new byte[(stride + 1) * h];
+                idat.Position = 2; // the zlib header
+                using (DeflateStream z = new DeflateStream(idat, CompressionMode.Decompress))
+                {
+                    int got = 0;
+                    while (got < raw.Length) { int n = z.Read(raw, got, raw.Length - got); if (n <= 0) break; got += n; }
+                }
+                px = new byte[w * h * 4];
+                byte[] prev = new byte[stride], cur = new byte[stride];
+                for (int y = 0; y < h; y++)
+                {
+                    int filter = raw[y * (stride + 1)];
+                    Buffer.BlockCopy(raw, y * (stride + 1) + 1, cur, 0, stride);
+                    for (int i = 0; i < stride; i++)
+                    {
+                        int a = i >= bpp ? cur[i - bpp] : 0, b = prev[i], c = i >= bpp ? prev[i - bpp] : 0, add = 0;
+                        if (filter == 1) add = a;
+                        else if (filter == 2) add = b;
+                        else if (filter == 3) add = (a + b) / 2;
+                        else if (filter == 4)
+                        {
+                            int p = a + b - c, pa = Math.Abs(p - a), pb = Math.Abs(p - b), pc = Math.Abs(p - c);
+                            add = (pa <= pb && pa <= pc) ? a : (pb <= pc ? b : c);
+                        }
+                        cur[i] = (byte)(cur[i] + add);
+                    }
+                    for (int x = 0; x < w; x++)
+                    {
+                        int o = (y * w + x) * 4;
+                        px[o] = cur[x * bpp]; px[o + 1] = cur[x * bpp + 1]; px[o + 2] = cur[x * bpp + 2];
+                        px[o + 3] = bpp == 4 ? cur[x * bpp + 3] : (byte)255;
+                    }
+                    byte[] t = prev; prev = cur; cur = t;
+                }
+            }
+
+            public R26Pixel GetPixel(int x, int y)
+            {
+                int o = (y * Width + x) * 4;
+                R26Pixel p; p.R = px[o]; p.G = px[o + 1]; p.B = px[o + 2]; p.A = px[o + 3];
+                return p;
+            }
+
+            public void Dispose() { }
+        }
+
         private static readonly string[] R26PolishPieces = { "panel_large", "panel_small", "btn_primary", "btn_secondary", "btn_disabled" };
 
         /// <summary>Mean colour of a centre block of a PNG (the plate, never the rim): the share of the width and
         /// height given, centred.</summary>
         private static double[] R26MeanColour(string png, double shareX, double shareY)
         {
-            using (Bitmap bmp = new Bitmap(png))
+            using (R26Png bmp = new R26Png(png))
             {
                 int w = bmp.Width, h = bmp.Height;
                 int x0 = (int)(w * (1 - shareX) / 2), x1 = (int)(w * (1 + shareX) / 2);
@@ -162,7 +242,7 @@ namespace Emberfall.DevHarness
                 for (int y = y0; y < y1; y += 2)
                     for (int x = x0; x < x1; x += 2)
                     {
-                        System.Drawing.Color c = bmp.GetPixel(x, y);
+                        R26Pixel c = bmp.GetPixel(x, y);
                         if (c.A < 200) continue;
                         r += c.R; g += c.G; b += c.B; n++;
                     }
@@ -204,14 +284,14 @@ namespace Emberfall.DevHarness
         /// <summary>Mean brightness of the rim: a thin band along the left edge, where the frame is gold.</summary>
         private static double R26RimLuma(string png)
         {
-            using (Bitmap bmp = new Bitmap(png))
+            using (R26Png bmp = new R26Png(png))
             {
                 double total = 0; int n = 0;
                 int x0 = (int)(bmp.Width * 0.015), x1 = (int)(bmp.Width * 0.05);
                 for (int y = bmp.Height / 4; y < bmp.Height * 3 / 4; y += 2)
                     for (int x = x0; x <= x1; x++)
                     {
-                        System.Drawing.Color c = bmp.GetPixel(x, y);
+                        R26Pixel c = bmp.GetPixel(x, y);
                         if (c.A < 200) continue;
                         total += 0.299 * c.R + 0.587 * c.G + 0.114 * c.B; n++;
                     }
@@ -241,8 +321,8 @@ namespace Emberfall.DevHarness
                 string png = Path.Combine(kit, R26PolishPieces[i] + ".png");
                 string pristine = Path.Combine(src, R26PolishPieces[i] + ".png");
                 if (!File.Exists(png) || !File.Exists(pristine)) { sameShape = false; continue; }
-                using (Bitmap a = new Bitmap(png))
-                using (Bitmap b = new Bitmap(pristine))
+                using (R26Png a = new R26Png(png))
+                using (R26Png b = new R26Png(pristine))
                     if (a.Width != b.Width || a.Height != b.Height) sameShape = false;
                 if (!R26Read(kit, R26PolishPieces[i] + ".png.meta").Contains("spriteBorder: {" + borders[i] + "}")) sameShape = false;
             }

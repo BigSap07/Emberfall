@@ -210,7 +210,8 @@ $probeExtra = @{
 foreach ($case in $probeCases) {
     $exe = Join-Path $out ($case.Label + ".exe")
     if (-not (Compile $case.Label $probeSources "exe" $exe $case.Defines)) { $probeOk = $false; continue }
-    $printed = @(& $exe)
+    Write-RuntimeConfig $compiler $exe
+    $printed = @(Invoke-BuiltExe $compiler $exe)
     foreach ($want in $case.Expect) {
         if ($printed -notcontains $want) {
             Write-Host ("  " + $case.Label + ": expected '" + $want + "', probe printed: " + ($printed -join " | ")) -ForegroundColor Red
