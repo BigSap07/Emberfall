@@ -31,6 +31,9 @@ namespace Emberfall.Game
             // fight, so its prices must not retire a guild dungeon replay (ContentDatabase.GuildPath).
             db.LoadGuildPath(ReadTextOptional("guild-path"));
             db.LoadGuildTech(ReadTextOptional("guild-tech"));
+            // And the guild dungeon's ladder length by member count (ContentDatabase.GuildDungeonScale):
+            // it says how many floors a guild has, never what a floor is, so no fight reads it.
+            db.LoadGuildDungeonScale(ReadTextOptional("guild-dungeon-scale"));
             // Outside ContentVersion too: the first session's words and the unlock table are read
             // by no fight (ContentDatabase.Onboarding).
             db.LoadOnboarding(ReadTextOptional("onboarding"));
