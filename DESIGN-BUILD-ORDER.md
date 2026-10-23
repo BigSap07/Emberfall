@@ -1254,7 +1254,11 @@ in the R19 handoff is not applied: **the owner raises the server's `save_limits`
 receipt or a bought paid track.**
 
 **The curve.** The spender's reference walk and fusing walk against the non-spender, per chapter, are measured by
-`--store-curve` (`StoreCurve.cs`). Result: to be filled in from the R19 report when the curve check is final.
+`--store-curve` (`StoreCurve.cs`); the table is in `Docs/DESIGN-STORE.md`, and its control columns were reproduced to the
+third decimal on 2026-10-22. `--store-curve N --store-ads lean|light|full|heavy` walks a rewarded-ad watcher on the same
+clock instead of the spender (a measurement, inert in every other run); the result and the proposed caps are in
+`Docs/DESIGN-REWARDED-ADS.md`. No ad exists in the game and no ads package is in the project. Real euro prices are
+proposed, not applied, in `Docs/STORE-PRICE-PROPOSAL.md`.
 
 ### Late-game spending (R24)
 
@@ -1289,7 +1293,10 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
 - **The whale curve** (`R24WhaleCurve.cs`, opt-in, 60 walks): from 4-12 on a whale who buys everything
   leads a non-spender by under 6 percent at every wall and every wall still binds; the whale spends
   about EUR 289 a month (EUR 34 for the R19 spender), skins one-time on top. The handoff folder holds
-  whale-curve.md and offer-values.md.
+  whale-curve.md and offer-values.md. The study reads every offer's price from the content's `store.json`
+  (`WhalePrice`, `WhaleSkinPrice`), so a scratch content folder re-prices it; the window matters: the same study at
+  the shipped prices reads EUR 271 a month over chapters 2 to 6 and EUR 355 over chapters 4 to 6
+  (`Docs/STORE-PRICE-PROPOSAL.md`).
 
 ### The UI kit (R20)
 
@@ -2255,6 +2262,10 @@ unedited, including:
   37 failures to 3.
 - The known traps carried forward, the numbers already decided, and the relic and aspect hook
   conflict with its resolution.
+
+The security review of every Supabase migration and the receipt functions, with its findings and the two fix
+migrations (`0020_security_review.sql`, `0021_security_review_launch.sql`, neither applied), is
+`Docs/SECURITY-REVIEW-SUPABASE.md`.
 
 Every other `DESIGN-*.md` in this repository is a decision record from its date. The reasoning in
 them is durable; the status claims, names and numbers are not. Never conclude from one that a system

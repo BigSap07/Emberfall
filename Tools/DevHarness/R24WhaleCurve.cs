@@ -196,17 +196,38 @@ namespace Emberfall.DevHarness
         /// 24 sweeps, the monthly pack 96 hours and 60 sweeps; the free tracks are 7 hours and 8 sweeps a week and 24 hours
         /// and 18 sweeps over 28 days. The whale is a diligent player (every quest done, every tier claimed). Relic packs
         /// are builder-b's store.json: Satchel 5,000 Dust, Chest 25,000 Dust, Relic of Choice (WhaleChoice). Prices are the
-        /// shipped tiers (mid 4.99, high 9.99, top 19.99, premium 29.99).</summary>
-        private static List<WhaleOffer> WhaleOffers()
+        /// shipped tiers (mid 4.99, high 9.99, top 19.99, premium 29.99), read from the content's store.json through WhalePrice, so a
+        /// scratch content folder with other prices re-prices the study (Docs/STORE-PRICE-PROPOSAL.md); the literals are the fallback
+        /// for an offer the file does not list.</summary>
+        private static List<WhaleOffer> WhaleOffers(ContentDatabase db)
         {
             List<WhaleOffer> l = new List<WhaleOffer>();
-            l.Add(new WhaleOffer { Name = "satchel", Eur = 4.99, Period = "week", NeedsRelicShop = true, FixedDust = 5000, Source = "builder-b store.json relic_dust_satchel" });
-            l.Add(new WhaleOffer { Name = "chest", Eur = 19.99, Period = _whaleChestMonthly ? "month" : "week", Limit = _whaleChestMonthly ? 2 : 1, NeedsRelicShop = true, FixedDust = 25000, Source = "builder-b store.json relic_dust_chest" });
-            l.Add(new WhaleOffer { Name = "wtrack", Eur = 4.99, Period = "week", NeedsCleared = WhaleEventsFromCleared, GoldHours = 30, DustSweeps = 22, Source = "builder-a live-events.json ember_trials paid track" });
-            l.Add(new WhaleOffer { Name = "mtrack", Eur = 9.99, Period = "event28", NeedsCleared = WhaleEventsFromCleared, GoldHours = 120, DustSweeps = 80, Source = "builder-a live-events.json tidecallers_month paid track" });
-            l.Add(new WhaleOffer { Name = "wpack", Eur = 9.99, Period = "week", NeedsCleared = WhaleEventsFromCleared, GoldHours = 48, DustSweeps = 24, Source = "builder-a live-events.json ember_trials pack" });
-            l.Add(new WhaleOffer { Name = "mpack", Eur = 9.99, Period = "event28", NeedsCleared = WhaleEventsFromCleared, GoldHours = 96, DustSweeps = 60, Source = "builder-a live-events.json tidecallers_month pack" });
+            l.Add(new WhaleOffer { Name = "satchel", Eur = WhalePrice(db, "relic_dust_satchel", 4.99), Period = "week", NeedsRelicShop = true, FixedDust = 5000, Source = "builder-b store.json relic_dust_satchel" });
+            l.Add(new WhaleOffer { Name = "chest", Eur = WhalePrice(db, "relic_dust_chest", 19.99), Period = _whaleChestMonthly ? "month" : "week", Limit = _whaleChestMonthly ? 2 : 1, NeedsRelicShop = true, FixedDust = 25000, Source = "builder-b store.json relic_dust_chest" });
+            l.Add(new WhaleOffer { Name = "wtrack", Eur = WhalePrice(db, "event_track_weekly", 4.99), Period = "week", NeedsCleared = WhaleEventsFromCleared, GoldHours = 30, DustSweeps = 22, Source = "builder-a live-events.json ember_trials paid track" });
+            l.Add(new WhaleOffer { Name = "mtrack", Eur = WhalePrice(db, "event_track_monthly", 9.99), Period = "event28", NeedsCleared = WhaleEventsFromCleared, GoldHours = 120, DustSweeps = 80, Source = "builder-a live-events.json tidecallers_month paid track" });
+            l.Add(new WhaleOffer { Name = "wpack", Eur = WhalePrice(db, "event_pack_weekly", 9.99), Period = "week", NeedsCleared = WhaleEventsFromCleared, GoldHours = 48, DustSweeps = 24, Source = "builder-a live-events.json ember_trials pack" });
+            l.Add(new WhaleOffer { Name = "mpack", Eur = WhalePrice(db, "event_pack_monthly", 9.99), Period = "event28", NeedsCleared = WhaleEventsFromCleared, GoldHours = 96, DustSweeps = 60, Source = "builder-a live-events.json tidecallers_month pack" });
             return l;
+        }
+
+        /// <summary>The euro price of an offer as the content's store.json prices it, or the fallback when the file does not list it.</summary>
+        private static double WhalePrice(ContentDatabase db, string offerId, double fallback)
+        {
+            StoreOfferDef d = db.Store == null ? null : db.Store.Offer(offerId);
+            return d != null && d.PriceEur > 0 ? d.PriceEur : fallback;
+        }
+
+        /// <summary>A skin's price by the hero's stars, read as the rarity store.json's skinTiers prices (5 stars legendary, 4 epic,
+        /// else rare), or the shipped 9.99, 7.99 and 4.99 when the file does not say.</summary>
+        private static double WhaleSkinPrice(ContentDatabase db, int stars)
+        {
+            string rarity = stars >= 5 ? "legendary" : stars == 4 ? "epic" : "rare";
+            double fallback = stars >= 5 ? 9.99 : stars == 4 ? 7.99 : 4.99;
+            string tier;
+            double eur;
+            if (db.Store != null && db.Store.SkinTiers.TryGetValue(rarity, out tier) && db.Store.Tiers.TryGetValue(tier, out eur) && eur > 0) return eur;
+            return fallback;
         }
 
         /// <summary>Stages cleared before the PAID event offers (tracks and packs) are on: 25 is 3-1 cleared (the lead's decision, requiresStage
@@ -339,7 +360,7 @@ namespace Emberfall.DevHarness
             if (!_whaleSkip.Contains("contract")) WhaleContracts(db, s, now);
             if (!_whaleSkip.Contains("choice") && shop) WhaleChoice(db, s, now);
 
-            List<WhaleOffer> offers = WhaleOffers();
+            List<WhaleOffer> offers = WhaleOffers(db);
             for (int i = 0; i < offers.Count; i++)
             {
                 WhaleOffer o = offers[i];
@@ -383,7 +404,7 @@ namespace Emberfall.DevHarness
                 g.Add(new GrantItem(GrantKind.Dust, Math.Round(20000 * WhaleScaleOf("choice"))));
                 if (!PurchaseGrants.Apply(s, g, null, now).Success) return;
                 w.LastPeriod["choice"] = key;
-                WhaleNoteSpend(now, 29.99, "choice");
+                WhaleNoteSpend(now, WhalePrice(db, "relic_of_choice", 29.99), "choice");
                 return;
             }
             OwnedRelic bestUp = null;
@@ -413,7 +434,7 @@ namespace Emberfall.DevHarness
             // the pick is worth its Dust price to the buyer: counted in the Dust bought, but not in GrantedDust (no Dust entered the purse)
             w.DustBought.Add(new KeyValuePair<long, long>(now, worth));
             w.LastPeriod["choice"] = key;
-            WhaleNoteSpend(now, 29.99, "choice");
+            WhaleNoteSpend(now, WhalePrice(db, "relic_of_choice", 29.99), "choice");
             WhaleRelicTimeline(now, p);
         }
 
@@ -463,7 +484,7 @@ namespace Emberfall.DevHarness
                 w.SkinnedDefs[d.Id] = d;
                 d.BaseAttack = d.BaseAttack * (1f + 0.02f * (float)WhaleScaleOf("skins"));
                 d.BaseHp = d.BaseHp * (1f + 0.03f * (float)WhaleScaleOf("skins"));
-                WhaleNoteSpend(now, d.Stars >= 5 ? 9.99 : d.Stars == 4 ? 7.99 : 4.99, "skin");
+                WhaleNoteSpend(now, WhaleSkinPrice(db, d.Stars), "skin");
             }
         }
 

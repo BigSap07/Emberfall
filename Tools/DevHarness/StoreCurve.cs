@@ -26,6 +26,11 @@ namespace Emberfall.DevHarness
     /// The pass premium is walked as a diligent player's: the road is filled each season (the walk plays
     /// no daily orders) and every paid tier is claimed, so the premium's Gold and its Sealed 5-star copy
     /// land once a season.
+    ///
+    /// REWARDED ADS (Docs/DESIGN-REWARDED-ADS.md): --store-ads lean|light|full|heavy replaces the spender columns with an
+    /// AD WATCHER on the same calendar clock: the non-spender who also watches every rewarded ad the variant allows
+    /// in a reward day. The ad rewards go through PurchaseGrants.Apply as fixed lines (Gold, Dust sweeps), so they
+    /// are Sealed exactly as the design proposes, and nothing in the step reads a random number.
     /// </summary>
     internal static partial class Program
     {
@@ -125,15 +130,120 @@ namespace Emberfall.DevHarness
 
         private static List<EconomyRun> StoreCurveRuns(ContentDatabase db, int walks, bool converts, bool ascends, int mode)
         {
+            return StoreCurveRuns(db, walks, converts, ascends, mode, false);
+        }
+
+        private static List<EconomyRun> StoreCurveRuns(ContentDatabase db, int walks, bool converts, bool ascends, int mode, bool ads)
+        {
             int was = _walkStoreMode;
+            bool adsWas = _walkAds;
             _walkStoreMode = mode;
+            _walkAds = ads;
             try
             {
                 List<EconomyRun> runs = new List<EconomyRun>();
                 for (int k = 0; k < walks; k++) runs.Add(SimulateEconomyUnder(db, WalkSeed(k), converts, ascends));
                 return runs;
             }
-            finally { _walkStoreMode = was; }
+            finally { _walkStoreMode = was; _walkAds = adsWas; }
+        }
+
+        // ------------------------------------------------------------------ the ad watcher
+
+        /// <summary>--store-ads: the variant the ad watcher columns walk (lean, light, full or heavy), null when not asked.</summary>
+        private static string _storeAds;
+
+        /// <summary>True only inside an ad watcher column; every other walk is untouched.</summary>
+        private static bool _walkAds;
+
+        /// <summary>One walk's ad counters for its current reward day, and the totals the report reads.</summary>
+        private sealed class AdTally
+        {
+            public long Day = long.MinValue;
+            public long FirstSeen = -1;
+            public int IdleToday, SweepsToday;
+            public long LastFullSweepGold;
+            public long Gold, Dust;
+            public int Watched;
+        }
+
+        private static readonly Dictionary<GameSession, AdTally> _adTallies = new Dictionary<GameSession, AdTally>();
+
+        /// <summary>Double-idle ads a reward day allows: lean, light and full 1, heavy 2.</summary>
+        private static int AdIdlePerDay { get { return _storeAds == "heavy" ? 2 : 1; } }
+
+        /// <summary>The most one double-idle ad may add, in hours of the watcher's own idle Gold. Lean caps it at 2 and
+        /// light at 4; full and heavy pay the whole claim again (the cap is the game's own idle cap).</summary>
+        private static double AdIdleCapHours { get { return _storeAds == "lean" ? 2.0 : _storeAds == "light" ? 4.0 : 0.0; } }
+
+        /// <summary>Extra full-pay repeat clears a reward day allows: lean, light and full 1, heavy 2.</summary>
+        private static int AdSweepsPerDay { get { return _storeAds == "heavy" ? 2 : 1; } }
+
+        private static AdTally AdTallyOf(GameSession s, long now)
+        {
+            AdTally t;
+            if (!_adTallies.TryGetValue(s, out t)) { t = new AdTally(); t.FirstSeen = now; _adTallies[s] = t; }
+            long day = s.DayStartUnix(now);
+            if (day != t.Day) { t.Day = day; t.IdleToday = 0; t.SweepsToday = 0; }
+            return t;
+        }
+
+        /// <summary>Called by the walk right after its idle claim. Ad A1: the same Gold again, Sealed, once (lean, light,
+        /// full) or twice (heavy) a reward day; lean caps the bonus at 2 hours of the watcher's idle Gold and light at 4.</summary>
+        private static void AdWatcherIdleStep(GameSession s, IdleReport idle, long now)
+        {
+            if (!_walkAds || idle == null || idle.Gold <= 0) return;
+            AdTally t = AdTallyOf(s, now);
+            if (t.IdleToday >= AdIdlePerDay) return;
+            long bonus = idle.Gold;
+            if (AdIdleCapHours > 0.0) bonus = Math.Min(bonus, s.IdleYield((long)Math.Round(AdIdleCapHours * 3600.0)).Gold);
+            if (bonus <= 0) return;
+            PurchaseGrant grant = new PurchaseGrant().Add(new GrantItem(GrantKind.Gold, bonus));
+            if (!PurchaseGrants.Apply(s, grant, null, now).Success) return;
+            t.IdleToday++;
+            t.Watched++;
+            t.Gold += bonus;
+        }
+
+        /// <summary>Called by the walk after a walled sitting's repeat clears. Ad A3: one more full-pay repeat clear of
+        /// the farmed stage (lean, light, full; heavy two), paid as what the last full clear of it paid in Gold, Sealed,
+        /// plus one Dust sweep. lastFullGold is this sitting's last paid clear, 0 when the day's clears were used up.</summary>
+        private static void AdWatcherSweepStep(GameSession s, long lastFullGold, long now)
+        {
+            if (!_walkAds) return;
+            AdTally t = AdTallyOf(s, now);
+            if (lastFullGold > 0) t.LastFullSweepGold = lastFullGold;
+            while (t.SweepsToday < AdSweepsPerDay && t.LastFullSweepGold > 0)
+            {
+                PurchaseGrant grant = new PurchaseGrant()
+                    .Add(new GrantItem(GrantKind.Gold, t.LastFullSweepGold))
+                    .Add(new GrantItem(GrantKind.DustSweeps, 1));
+                GrantResult r = PurchaseGrants.Apply(s, grant, null, now);
+                if (!r.Success) return;
+                t.SweepsToday++;
+                t.Watched++;
+                t.Gold += r.Gold;
+                t.Dust += r.Dust;
+            }
+        }
+
+        /// <summary>The median, over walks, of the ad watcher's ad Gold as a percent of all the Gold that walk earned.</summary>
+        private static string AdGoldShare(List<EconomyRun> runs)
+        {
+            List<int> share = new List<int>();
+            List<int> perDay = new List<int>();
+            for (int k = 0; k < runs.Count; k++)
+            {
+                AdTally t;
+                if (!_adTallies.TryGetValue(runs[k].Session, out t)) continue;
+                long total = runs[k].Ledger.GoldTotal + t.Gold;
+                share.Add(total > 0 ? (int)Math.Round(1000.0 * t.Gold / total) : 0);
+                double days = Math.Max(1.0, (runs[k].Now - t.FirstSeen) / 86400.0);
+                perDay.Add((int)Math.Round(10.0 * t.Watched / days));
+            }
+            if (share.Count == 0) return "-";
+            return (Median(share) / 10.0).ToString("0.0", CultureInfo.InvariantCulture) + " percent of all Gold, "
+                   + (Median(perDay) / 10.0).ToString("0.0", CultureInfo.InvariantCulture) + " ads a day (median over walks)";
         }
 
         private static int StoreMedianEntry(List<EconomyRun> runs, int stageIndex)
@@ -178,6 +288,7 @@ namespace Emberfall.DevHarness
             ContentDatabase db = LoadContent(contentDir);
             if (db == null) return 1;
             _walkStoreDb = db;
+            if (_storeAds != null) return RunAdsCurve(db, walks);
             Line("");
             Line("STORE CURVE - " + walks + " walks per column. Median entry power over recommendedPower. Reference = never converts, never ascends. Fusing = does both.");
             Line("  spender buys: " + string.Join(", ", SpenderOrder) + " as each period reopens; the walk's clock starts on the season calendar.");
@@ -217,6 +328,48 @@ namespace Emberfall.DevHarness
             List<int> v = new List<int>();
             for (int k = 0; k < runs.Count; k++) v.Add(runs[k].TotalSessions);
             return Median(v);
+        }
+
+        /// <summary>DevHarness.exe --store-curve [walks] --store-ads lean|light|full|heavy: the reference and the fusing
+        /// non-spender, each without and with the ad watcher of that variant, on the same calendar clock.</summary>
+        private static int RunAdsCurve(ContentDatabase db, int walks)
+        {
+            if (_storeAds != "lean" && _storeAds != "light" && _storeAds != "full" && _storeAds != "heavy")
+            {
+                Line("--store-ads takes lean, light, full or heavy, not " + _storeAds);
+                return 1;
+            }
+            Line("");
+            Line("ADS CURVE (" + _storeAds + ") - " + walks + " walks per column. Median entry power over recommendedPower. Reference = never converts, never ascends. Fusing = does both.");
+            Line("  ad watcher: " + AdIdlePerDay + " double-idle ad(s) a reward day"
+                 + (AdIdleCapHours > 0.0 ? " (bonus capped at " + AdIdleCapHours.ToString("0", CultureInfo.InvariantCulture) + " hours of idle Gold)" : " (the whole claim again)")
+                 + ", " + AdSweepsPerDay + " extra full-pay repeat clear(s) a reward day while walled. Every ad reward is Sealed, through PurchaseGrants.Apply.");
+
+            _adTallies.Clear();
+            List<EconomyRun> refNon = StoreCurveRuns(db, walks, false, false, 1, false);
+            List<EconomyRun> refAds = StoreCurveRuns(db, walks, false, false, 1, true);
+            List<EconomyRun> fuseNon = StoreCurveRuns(db, walks, true, true, 1, false);
+            List<EconomyRun> fuseAds = StoreCurveRuns(db, walks, true, true, 1, true);
+
+            Line("");
+            Line("  stage   rec.Pwr  ref non   ref + ads   fusing non   fusing + ads   extra sittings, median (ref non / ref + ads / fusing non / fusing + ads)");
+            for (int s = 0; s < db.AllStages.Count; s++)
+            {
+                StageDef st = db.AllStages[s];
+                bool wall = st.IsMiniboss || st.IsBoss;
+                if (!wall && st.Index != 1) continue;
+                Line("  " + st.DisplayCode.PadRight(7) + st.RecommendedPower.ToString().PadLeft(7)
+                     + StoreRatio(db, refNon, s).PadLeft(10) + StoreRatio(db, refAds, s).PadLeft(12)
+                     + StoreRatio(db, fuseNon, s).PadLeft(13) + StoreRatio(db, fuseAds, s).PadLeft(15)
+                     + (wall ? "   WALL   " + StoreExtra(refNon, s) + " / " + StoreExtra(refAds, s) + " / " + StoreExtra(fuseNon, s) + " / " + StoreExtra(fuseAds, s) : ""));
+            }
+            Line("");
+            Line("  stuck walks of " + walks + ": reference non " + StoreStuck(refNon) + ", reference + ads " + StoreStuck(refAds)
+                 + ", fusing non " + StoreStuck(fuseNon) + ", fusing + ads " + StoreStuck(fuseAds));
+            Line("  total sittings (median over walks): reference non " + StoreSittings(refNon) + ", + ads " + StoreSittings(refAds)
+                 + "; fusing non " + StoreSittings(fuseNon) + ", + ads " + StoreSittings(fuseAds));
+            Line("  ad income: reference " + AdGoldShare(refAds) + "; fusing " + AdGoldShare(fuseAds));
+            return 0;
         }
     }
 }
