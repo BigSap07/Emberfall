@@ -13,8 +13,10 @@
   // ("requiresStage", listed and locked before): the whale read (R24) put the early lead of a contract at +50 to +77
   // percent at 1-12 and 2-12, so it waits until chapter 4.
   //
-  // PRICES ARE PLACEHOLDERS. "tiers" names euro tiers; the owner sets real prices when store accounts exist.
-  // "productId" is a PLACEHOLDER and never a real store key.
+  // PRICES ARE THE OWNER'S EURO PRICES (2026-10-23, from Docs/STORE-PRICE-PROPOSAL.md): EU prices with tax included,
+  // the same figure the Play Console product must carry. "tiers" names them. The owner set five: Starter Pact 2.99,
+  // Growth Fund 14.99, Weekly Event Track 2.99, Weekly Event Pack 4.99, Relic of Choice 19.99; every other offer kept
+  // its tier. "productId" is still a PLACEHOLDER and never a real store key.
   //
   // SIZING. hours = hours of the buyer's own idle Gold at their frontier (the one idle formula,
   // GameSession.IdleYield), paid as Sealed Gold and never Shards (a Sealed Shard has no sink: a summon
@@ -32,7 +34,7 @@
   //
   // restorable: true only for the two ONE-TIME purchases a store can hand back to a new profile of the same account
   // (starter_pact, growth_fund). A pack, a card, a season pass and a contract are used up and are never restored.
-  "tiers": { "low": 0.99, "small": 1.99, "mid": 4.99, "upper": 7.99, "high": 9.99, "top": 19.99, "premium": 29.99 },
+  "tiers": { "low": 0.99, "small": 1.99, "entry": 2.99, "mid": 4.99, "upper": 7.99, "high": 9.99, "large": 14.99, "top": 19.99, "premium": 29.99 },
 
   // R24 SKINS. One Store offer is DERIVED per skin in skins.json (StoreConfig.Validate), priced by the skin's rarity
   // here, so a skin is data only. EUR 4.99 to 9.99 by rarity. Event skins are not sold and have no offer.
@@ -40,7 +42,7 @@
 
   "offers": [
     {
-      "id": "starter_pact", "name": "Starter Pact", "kind": "starter", "tier": "mid",
+      "id": "starter_pact", "name": "Starter Pact", "kind": "starter", "tier": "entry",
       "productId": "placeholder.emberfall.store.starter_pact",
       "blurb": "A 5-star of your choice and a head start. Once per profile.",
       "limit": 1, "reset": "never", "restorable": true,
@@ -69,7 +71,7 @@
       "days": 30, "hoursPerDay": 2, "idleBonusPct": 10
     },
     {
-      "id": "growth_fund", "name": "Growth Fund", "kind": "growth", "tier": "high",
+      "id": "growth_fund", "name": "Growth Fund", "kind": "growth", "tier": "large",
       "productId": "placeholder.emberfall.store.growth_fund",
       "blurb": "Fixed rewards as you clear the last stage of each chapter. Once per profile.",
       "limit": 1, "reset": "never", "restorable": true,
@@ -94,7 +96,7 @@
     // The paid event offers open at 3-1 (requiresStage ch3_1, listed and locked before): the whale read (R24) put the early lead of
     // the paid event Gold at +48 percent at 2-6. Free events, quests and free tracks are open to everyone from the start.
     {
-      "id": "event_track_weekly", "name": "Weekly Event Track", "kind": "event", "tier": "mid",
+      "id": "event_track_weekly", "name": "Weekly Event Track", "kind": "event", "tier": "entry",
       "productId": "placeholder.emberfall.store.event_track_weekly",
       "blurb": "The paid track of this week's event. Every reward is listed on the Events screen.",
       "eventSlot": "weekly", "eventPart": "track", "requiresStage": "ch3_1"
@@ -106,7 +108,7 @@
       "eventSlot": "monthly", "eventPart": "track", "requiresStage": "ch3_1"
     },
     {
-      "id": "event_pack_weekly", "name": "Weekly Event Pack", "kind": "event", "tier": "high",
+      "id": "event_pack_weekly", "name": "Weekly Event Pack", "kind": "event", "tier": "mid",
       "productId": "placeholder.emberfall.store.event_pack_weekly",
       "blurb": "One fixed bundle themed on this week's event. Once per event.",
       "eventSlot": "weekly", "eventPart": "pack", "requiresStage": "ch3_1"
@@ -144,7 +146,7 @@
       "dust": 25000
     },
     {
-      "id": "relic_of_choice", "name": "Relic of Choice", "kind": "relicChoice", "tier": "premium",
+      "id": "relic_of_choice", "name": "Relic of Choice", "kind": "relicChoice", "tier": "top",
       "productId": "placeholder.emberfall.store.relic_of_choice",
       "blurb": "You name the relic: one you do not own, or one more tier on one you own, worth up to 20,000 Relic Dust at the shop. Once a month.",
       "limit": 1, "reset": "month", "group": "relicPacks", "requires": "Relics",

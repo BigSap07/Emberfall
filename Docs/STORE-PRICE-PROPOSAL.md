@@ -1,6 +1,6 @@
 # Store price proposal: a euro price for every offer
 
-Decision record, dated 2026-10-22. A proposal: `store.json` is unchanged and its prices stay placeholders until the owner decides. Every number here was measured with the harness, and the market prices were read on 2026-10-22.
+Decision record, dated 2026-10-22. **Decided 2026-10-23: the owner took all five changes, and `store.json` carries them** (Starter Pact 2.99, Growth Fund 14.99, Weekly Event Track 2.99, Weekly Event Pack 4.99, Relic of Choice 19.99; two new tiers, `entry` 2.99 and `large` 14.99). The product ids are still placeholders and the Play Console products must be created at the same prices. Every number here was measured with the harness, and the market prices were read on 2026-10-22.
 
 ## How the prices were set
 
