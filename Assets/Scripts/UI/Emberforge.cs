@@ -107,7 +107,16 @@ namespace Emberfall.UI
         /// is that, rounded up with a little air, so a caller that uses it is clear rather than
         /// touching.
         /// </summary>
-        public const float OrnamentClearance = OrnamentSize + Space4;
+        public static float OrnamentClearance
+        {
+            get { return (UiKit.On ? KitOrnamentSize + KitOrnamentInset : OrnamentSize) + Space4; }
+        }
+
+        /// <summary>R26: with the kit on the corner is a filigree (corner_ornament) drawn this large, KitOrnamentInset
+        /// in from the panel's corner, and OrnamentClearance grows with it so a control placed by the clearance still
+        /// stays clear. Kit off, the small diamond and its old clearance are unchanged.</summary>
+        public const float KitOrnamentSize = 48f;
+        public const float KitOrnamentInset = 2f;
 
         // ------------------------------------------------------------------ buttons
         //
@@ -246,6 +255,10 @@ namespace Emberfall.UI
         public static readonly Color TextGold = UITheme.Hex("F6CE6C");
         public static readonly Color TextBody = UITheme.Hex("F2E7D8");
         public static readonly Color TextQuiet = UITheme.Hex("A99380");
+
+        /// <summary>The label of a disabled button (R26): dimmer than TextOnColor so it reads as unavailable, still
+        /// light enough to read on the kit's stone plate (the harness measures the contrast).</summary>
+        public static readonly Color TextDisabled = UITheme.Hex("E0D6C8");
         public static readonly Color TextOnGold = UITheme.Hex("2A1606");
 
         /// <summary>The dark stroke under a label on colour. One distance for the small sizes and

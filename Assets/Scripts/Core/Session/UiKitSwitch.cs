@@ -77,6 +77,9 @@ namespace Emberfall.Core.Session
             // end, so only CurrencyPill asks for it, by the name below.
             { "forge_pill", "btn_secondary" },
             { "forge_pill_currency", "pill_currency" },
+            // R26: the filigree corner (top-left; the UI mirrors it into the other three). Drawn by
+            // Tools/uikit-polish-gen.py. With the kit off the slot keeps its baked diamond.
+            { "forge_ornament", "corner_ornament" },
             { "forge_tab_on", "tab_on" },
             { "forge_tab_off", "tab_off" },
             { "forge_disc", "btn_round" },

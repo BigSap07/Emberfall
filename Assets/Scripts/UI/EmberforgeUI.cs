@@ -371,15 +371,42 @@ namespace Emberfall.UI
         /// whatever is inside the panel's corner.</summary>
         public static void Ornaments(RectTransform panel)
         {
-            // The UI kit's panel carries its own corner pieces; four diamonds on top of them would be
-            // a second set of corners.
-            if (UiKit.Forge(EmberforgeArt.Slot.Panel) != null) return;
+            // With the kit on the corner is the filigree (R26), larger than the diamond, on the big panel only: a
+            // small fixed panel takes the kit's small panel, whose bolted corners are its own ornament.
+            if (UiKit.Forge(EmberforgeArt.Slot.Panel) != null)
+            {
+                if (IsSmallFixed(panel) || UiKit.Forge(EmberforgeArt.Slot.Ornament) == null) return;
+                float k = Emberforge.KitOrnamentSize;
+                float ki = Emberforge.KitOrnamentInset;
+                AddKitOrnament(panel, new Vector2(0f, 1f), ki, k);
+                AddKitOrnament(panel, new Vector2(1f, 1f), ki, k);
+                AddKitOrnament(panel, new Vector2(0f, 0f), ki, k);
+                AddKitOrnament(panel, new Vector2(1f, 0f), ki, k);
+                return;
+            }
             float s = Emberforge.OrnamentSize;
             float inset = s * 0.34f;
             AddOrnament(panel, new Vector2(0f, 1f), inset, -inset, s);
             AddOrnament(panel, new Vector2(1f, 1f), -inset, -inset, s);
             AddOrnament(panel, new Vector2(0f, 0f), inset, inset, s);
             AddOrnament(panel, new Vector2(1f, 0f), -inset, inset, s);
+        }
+
+        /// <summary>One filigree corner: the sprite is drawn top-left, so the other corners mirror it. Centre-pivoted
+        /// so the flip stays inside the panel.</summary>
+        private static void AddKitOrnament(RectTransform panel, Vector2 anchor, float inset, float size)
+        {
+            Image gem = UIBuilder.Img("Ornament", panel, EmberforgeSkin.Get(EmberforgeArt.Slot.Ornament), Color.white);
+            RectTransform rt = gem.rectTransform;
+            rt.anchorMin = anchor;
+            rt.anchorMax = anchor;
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(size, size);
+            float dx = anchor.x < 0.5f ? 1f : -1f;
+            float dy = anchor.y < 0.5f ? 1f : -1f;
+            rt.anchoredPosition = new Vector2(dx * (inset + size * 0.5f), dy * (inset + size * 0.5f));
+            rt.localScale = new Vector3(dx, -dy, 1f);
+            gem.raycastTarget = false;
         }
 
         private static void AddOrnament(RectTransform panel, Vector2 anchor, float x, float y, float size)
@@ -576,7 +603,7 @@ namespace Emberfall.UI
             UIBuilder.Outlined(handle.Label, Emberforge.Outline, Emberforge.StrokeThin);
 
             EmberforgeButtonSkin skin = handle.Root.gameObject.AddComponent<EmberforgeButtonSkin>();
-            skin.Bind(handle.Background, content, glossImage, kind);
+            skin.Bind(handle.Background, content, glossImage, kind, handle.Label);
             handle.InteractableChanged = skin.SetInteractable;
             skin.SetInteractable(true);
             return handle;
@@ -1210,32 +1237,28 @@ namespace Emberfall.UI
         private bool _down;
         private Vector2 _restPosition;
 
+        private Text _label;
+        private Color _labelRest;
+        private bool _dimmed;
+
         public void Bind(Image plate, RectTransform content, Image gloss, ForgeButtonKind kind)
         {
+            Bind(plate, content, gloss, kind, null);
+        }
+
+        public void Bind(Image plate, RectTransform content, Image gloss, ForgeButtonKind kind, Text label)
+        {
+            _label = label;
             _plate = plate;
             _content = content;
             _gloss = gloss;
             _kind = kind;
             if (_content != null) _restPosition = _content.anchoredPosition;
 
-            // THE KIT'S PRIMARY PLATE IS BROWN, and the primary button is the one thing on a screen that has
-            // to read as "press me". Over the plate goes the same plate in warm orange at partial alpha, which
-            // keeps the painted metal and rivets and lifts the colour to today's call to action. Only when the
-            // kit is on; nothing is added otherwise.
-            if (plate != null && UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) != null)
-            {
-                RectTransform warm = UIBuilder.Node("Warm", plate.rectTransform);
-                UIBuilder.FillParent(warm, 0f);
-                warm.SetAsFirstSibling();
-                _warm = warm.gameObject.AddComponent<Image>();
-                _warm.type = Image.Type.Sliced;
-                _warm.raycastTarget = false;
-            }
+            // R26: the kit's primary plate is a real warm orange now (btn_primary), so the old Warm overlay that
+            // tinted a brown plate is gone.
             Apply();
         }
-
-        private Image _warm;
-        private static readonly Color WarmTint = new Color(1f, 0.64f, 0.18f, 0.62f);
 
         public void SetInteractable(bool value)
         {
@@ -1316,11 +1339,15 @@ namespace Emberfall.UI
             // it instead; the baked kit swaps to its own pressed sprite and the colour stays white.
             bool kitPlate = UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) != null;
             if (kitPlate) _plate.color = _down && _interactable ? UITheme.ButtonPressed : Color.white;
-            if (_warm != null)
+            // A disabled button dims its label as well as swapping its plate (R26), so it cannot be mistaken for
+            // a resting one.
+            // The colour the caller gave the label is remembered and put back, so a button with its own label colour
+            // is not repainted white by enabling it.
+            if (_label != null)
             {
-                _warm.enabled = _interactable && _kind == ForgeButtonKind.Primary;
-                _warm.sprite = _plate.sprite;
-                _warm.color = _down ? new Color(WarmTint.r * 0.82f, WarmTint.g * 0.82f, WarmTint.b * 0.82f, WarmTint.a) : WarmTint;
+                bool dim = !_interactable && UiKit.On;   // kit off keeps the old disabled label
+                if (dim && !_dimmed) { _labelRest = _label.color; _dimmed = true; _label.color = Emberforge.TextDisabled; }
+                else if (!dim && _dimmed) { _label.color = _labelRest; _dimmed = false; }
             }
 
             if (_content != null)
