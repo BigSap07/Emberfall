@@ -50,11 +50,16 @@ project owner:
    select, update or delete. Applied by the owner by hand; nothing else in the project reads or
    needs it. `Tools/supabase-rules-test.py` `check_play_events` needs it applied. The owner reads
    the table with `supabase/queries/play-counts.sql` in the SQL editor.
+16. `0016_save_limits_26.sql` - raises `save_limits.max_save_version` to 26, the version this build
+   writes from a first session's first stage clear (live event state). Only ever raises the row
+   (`greatest`), so it is safe after a hand-run update and safe twice. Needs `0013`. The harness
+   check `CheckServerAcceptsWhatThisBuildWrites` fails while the migrations leave the row below
+   `SaveSerializer.CurrentVersion`, so the next version bump ships with its own migration.
 
 `0001`-`0003` are idempotent enough to re-run (`create table if not exists`,
 `create or replace`, `drop trigger if exists` before create), but their policies are not:
 re-running one of those three raises `policy ... already exists`, and re-applying it cleanly
-means dropping its policies first. **`0004`-`0015` are fully re-appliable** - every policy in
+means dropping its policies first. **`0004`-`0016` are fully re-appliable** - every policy in
 them is preceded by `drop policy if exists` - so pasting one of them twice, or pasting it again
 after a half-finished run, is a no-op rather than a failure to unpick.
 

@@ -482,15 +482,15 @@ namespace Emberfall.Core.Save
         ///    drops it would lock a track the player bought.
         /// Upgrade needs NO migration step: every key's absence is the empty state. A save that holds none of
         /// it is byte for byte the document the build before wrote, version included. The server's save_limits
-        /// row must be raised to 25 before a cloud player holds any of it (save_limits_25.sql, never applied).
+        /// row must be raised to 25 before a cloud player holds any of it (0016_save_limits_26.sql raises it to 26).
         ///
         /// 26: the R24 monetization run (Docs/DESIGN-STORE.md). The one bump of the run, stamped ONLY on a
         /// document that holds data a version 25 build would drop, exactly as 24 and 25 are (HoldsVersion26Data).
         /// Each task of the run that adds saved state adds its clause there and writes the data only when the
         /// clause is true. Upgrade needs NO migration step: every key's absence is the empty state. A save that
         /// holds none of it is byte for byte the document the build before wrote, version included. The server's
-        /// save_limits row must be raised to 26 before a cloud player holds any of it (save_limits_26.sql, never
-        /// applied).
+        /// save_limits row must be raised to 26 before a cloud player holds any of it (Server/supabase/migrations/
+        /// 0016_save_limits_26.sql; BugHuntChecks' CheckServerAcceptsWhatThisBuildWrites holds the row to this number).
         public const int CurrentVersion = 26;
 
         /// <summary>The version of the Store (R19), which a save says when it holds any of its data and none of

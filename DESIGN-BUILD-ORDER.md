@@ -990,7 +990,7 @@ purchase receipt) and, inside `wayfarersRoad`, `paid` and `paidClaimed` (a bough
 23. `CheckStoreSave` proves the three cases, the round trip, damaged blocks and the receipt cap. **The owner must
 raise the server's `save_limits` row to 25 before a cloud player holds any of it**:
 `update public.save_limits set max_save_version = 25, updated_at = now();` (`save_limits_25.sql` in the R19
-handoff, not applied).
+handoff, never in the tree; `Server/supabase/migrations/0016_save_limits_26.sql` now raises the row to 26, which covers 25).
 Every action that changes
 something a player owns ends in a `GameApp.SaveNow`, which is why hooking the save is how the
 published team line stays current without any screen having to remember to publish.
@@ -1250,8 +1250,8 @@ asks for the hero (`FinishPurchase`, `FinishRestore`).
 points from them; with `DailyLoopSwitch` off the offer says so and cannot be bought, and the paid track stays locked.
 
 **The save is version 25** (`SaveSerializer.HoldsVersion25Data`, described with version 24 above). `save_limits_25.sql`
-in the R19 handoff is not applied: **the owner raises the server's `save_limits` row to 25 before a cloud player holds a
-receipt or a bought paid track.**
+in the R19 handoff never reached the tree: **the owner applies `0016_save_limits_26.sql`, which raises the server's
+`save_limits` row to 26, before a cloud player holds a receipt or a bought paid track.**
 
 **The curve.** The spender's reference walk and fusing walk against the non-spender, per chapter, are measured by
 `--store-curve` (`StoreCurve.cs`). Result: to be filled in from the R19 report when the curve check is final.
@@ -1284,8 +1284,10 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
   the editor and development builds; real skins wait on art.
 - **Save version 26**, written only when a save holds live event state or skins
   (`SaveSerializer.HoldsVersion26Data`). Because quests count from the first stage win, nearly every
-  active player's save becomes 26: `save_limits_26.sql` must be applied before this build reaches a
-  cloud player.
+  active player's save becomes 26 (from the first stage clear while an event runs):
+  `Server/supabase/migrations/0016_save_limits_26.sql` must be applied before this build reaches a cloud player.
+  `CheckServerAcceptsWhatThisBuildWrites` reads the migrations and fails while they leave the row below
+  `SaveSerializer.CurrentVersion`.
 - **The whale curve** (`R24WhaleCurve.cs`, opt-in, 60 walks): from 4-12 on a whale who buys everything
   leads a non-spender by under 6 percent at every wall and every wall still binds; the whale spends
   about EUR 289 a month (EUR 34 for the R19 spender), skins one-time on top. The handoff folder holds
