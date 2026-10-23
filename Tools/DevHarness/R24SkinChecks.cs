@@ -432,7 +432,7 @@ namespace Emberfall.DevHarness
             GameSession s = R24SkinSession(db);
             R24Own(s, "kael_azure_test");
             string ownedJson = SaveSerializer.Serialize(s.Profile);
-            Check(JsonValue.Parse(ownedJson).GetInt("version", 0) == SaveSerializer.CurrentVersion && SaveSerializer.CurrentVersion == SaveSerializer.R24Version + 1 && ownedJson.Contains("ownedSkins") && !ownedJson.Contains("\"skin\""),
+            Check(JsonValue.Parse(ownedJson).GetInt("version", 0) == SaveSerializer.R24Version && SaveSerializer.R24Version == 26 && ownedJson.Contains("ownedSkins") && !ownedJson.Contains("\"skin\""),
                   "AN OWNED SKIN IS A VERSION 26 DOCUMENT: stamped only now, the key `ownedSkins` written, no hero key yet");
             HeroSkins.Equip(s, s.Profile.FindHeroByDefId(R24Kael), "kael_azure_test");
             string worn = SaveSerializer.Serialize(s.Profile);
