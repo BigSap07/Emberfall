@@ -172,6 +172,49 @@ $okReleaseTest = Compile "release-teststore" $releaseSources "library" (Join-Pat
 
 
 # ---------------------------------------------------------------------------------------------
+# [define-probe] THE SHIPPED DEFINES DO WHAT THE DOCS SAY, executed rather than read (R26).
+#
+# Tools/DefineProbe prints the switches that Core derives from scripting defines. It is compiled with the
+# Core files twice: with no defines (the shipped build, which sets none) and with the opt-out and test
+# defines, then both are run and the printed lines asserted. Every probe file under Tools/DefineProbe
+# rides along, so a switch owner adds a line (and its expectation, below) without a new step.
+# ---------------------------------------------------------------------------------------------
+$probeOk = $true
+Write-Host ""
+$probeSources = @($core + @(Get-ChildItem (Join-Path $root "Tools\DefineProbe") -Filter *.cs | Select-Object -Expand FullName))
+$probeCases = @(
+    @{ Label = "define-probe-shipped"; Defines = ""; Expect = @("UiKitSwitch.Enabled=True", "UiKitSwitch.ShippedDefault=True") },
+    @{ Label = "define-probe-optout"; Defines = "EMBERFALL_UIKIT_OFF;EMBERFALL_TESTSTORE"; Expect = @("UiKitSwitch.Enabled=False", "UiKitSwitch.ShippedDefault=False") }
+)
+# A line only present once its owner's file exists: asserted when the probe prints it, per case.
+$probeExtra = @{
+    "define-probe-shipped" = @("TestStoreSwitch.Enabled=False")
+    "define-probe-optout" = @("TestStoreSwitch.Enabled=True")
+}
+foreach ($case in $probeCases) {
+    $exe = Join-Path $out ($case.Label + ".exe")
+    if (-not (Compile $case.Label $probeSources "exe" $exe $case.Defines)) { $probeOk = $false; continue }
+    $printed = @(& $exe)
+    foreach ($want in $case.Expect) {
+        if ($printed -notcontains $want) {
+            Write-Host ("  " + $case.Label + ": expected '" + $want + "', probe printed: " + ($printed -join " | ")) -ForegroundColor Red
+            $probeOk = $false
+        }
+    }
+    foreach ($want in $probeExtra[$case.Label]) {
+        $name = $want.Split("=")[0]
+        $got = @($printed | Where-Object { $_ -like ($name + "=*") })
+        if ($got.Count -gt 0 -and $got -notcontains $want) {
+            Write-Host ("  " + $case.Label + ": expected '" + $want + "', probe printed: " + ($got -join " | ")) -ForegroundColor Red
+            $probeOk = $false
+        }
+    }
+}
+if ($probeOk) { Write-Host "[define-probe] ok - the shipped build has the kit on, the opt-out define turns it off" -ForegroundColor Green }
+else { Write-Host "[define-probe] FAILED" -ForegroundColor Red }
+
+
+# ---------------------------------------------------------------------------------------------
 # [dev-arena] A RELEASE BUILD CONTAINS NONE OF IT, measured rather than intended.
 #
 # Three things have to hold, and each is checkable from the committed files:
@@ -338,9 +381,11 @@ if (-not $okReleasePlain) { $failures.Add("release-plain: compile FAILED") }
 if (-not $okReleaseTest) { $failures.Add("release-teststore: compile FAILED (EMBERFALL_TESTSTORE in a release build)") }
 if (-not $devOk) { $failures.Add("dev-arena: something reaches a release build") }
 if (-not $offlineOk) { $failures.Add("offline-switch: editor automation can reach the real cloud") }
+if (-not $probeOk) { $failures.Add("define-probe: a scripting define does not do what the docs say") }
 if (-not ($okHarness -and $okEngine -and $okReleasePlain -and $okReleaseTest)) { $harnessNote = "not run, a compile failed"; Finish 1 }
 if (-not $devOk) { $harnessNote = "not run, the dev-arena check failed"; Finish 1 }
 if (-not $offlineOk) { $harnessNote = "not run, the offline-switch check failed"; Finish 1 }
+if (-not $probeOk) { $harnessNote = "not run, the define-probe check failed"; Finish 1 }
 
 if ($NoRun) { $harnessNote = "not run, -NoRun" }
 else {

@@ -25,7 +25,8 @@ namespace Emberfall.Core.Data
         Proving,
         Recital,
         Relics,
-        Quartermaster
+        Quartermaster,
+        Marketplace
     }
 
     /// <summary>One row of the unlock table: the feature, and the stage whose clear opens it ("" is
@@ -183,6 +184,7 @@ namespace Emberfall.Core.Data
                 case "recital": feature = Feature.Recital; return true;
                 case "relics": feature = Feature.Relics; return true;
                 case "quartermaster": feature = Feature.Quartermaster; return true;
+                case "marketplace": feature = Feature.Marketplace; return true;
             }
             feature = Feature.Campaign;
             return false;

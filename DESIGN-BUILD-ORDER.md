@@ -1310,10 +1310,14 @@ A generated art kit (panels, buttons, tabs, pills, currency and navigation icons
 icons, Store card art) that skins the existing screens behind one switch. It is a skin, not a redesign: no layout
 moved, and the kit only replaces the sprite, tint or text colour at the call sites listed below.
 
-**The switch.** `UiKitSwitch` (Core, engine-free) is **off** and is committed off. `EMBERFALL_UIKIT` builds it on:
-add the define to the player's scripting define symbols (`Assets/csc.rsp` carries the one other define, for the
-store, and takes `-define:EMBERFALL_UIKIT` the same way). The field is writable so a harness check or a capture can
-force it. Off is today exactly: every lookup in `UiKitMap` answers null, every call site keeps the drawing it always
+**The switch.** `UiKitSwitch` (Core, engine-free) is **on by default** (R26). `EMBERFALL_UIKIT_OFF` is the opt-out
+that builds the old look (the same shape as `EMBERFALL_STORE_OFF` and `EMBERFALL_SINKS_OFF`); no build script sets a
+define, so a normal build ships the kit. `UiKitSwitch.ShippedDefault` says what the compile ships, and
+`PlayModeScreenshot` restores to it. The field is writable so a harness check or a capture can force it, and the old
+look stays reachable three ways: the define, the field, and the `+plain` capture suffix. `build-check` proves the
+defines by running them: the `[define-probe]` step compiles `Tools/DefineProbe` with the Core files with no defines
+and with `EMBERFALL_UIKIT_OFF;EMBERFALL_TESTSTORE`, runs both and asserts the printed flags. Off is the old look
+exactly: every lookup in `UiKitMap` answers null, every call site keeps the drawing it always
 had as its fallback, and no kit sprite is loaded. The switch reads nothing from a save, writes nothing to one, never
 reaches a fight, and the kit's art is named in none of the eight hashed content files (`ContentVersion` did not move).
 
@@ -1341,8 +1345,33 @@ from it with `Sprite.Create` using the cells in `ability_atlas_map.json`. A hero
 - **Relics:** one icon per relic id in `ItemCard.ForRelic` (Inventory) and on the Relic Shop card.
 - **Victory:** the gold, shards and slag tiles. **Summon:** the shard icon on PULL and the chest on the opening
   guarantee.
-- **Buttons:** the kit's plates have no pressed art, so a press darkens the plate; the primary plate is brown, so a
-  warm overlay keeps it reading as the call to action; the selected tab's outline is off so its dark text is legible.
+- **Buttons:** the kit's plates have no pressed art, so a press darkens the plate; the primary plate is a real warm
+  orange (R26, no overlay any more); the selected tab's outline is off so its dark text is legible.
+- **Panels (R26):** with the kit on, a panel carries a filigree corner (`corner_ornament`, drawn 48 units, mirrored into
+  the four corners by `EmberforgeUI.Ornaments`, skipped on a small fixed panel whose bolts are its own ornament), and
+  `Emberforge.OrnamentClearance` grows with it so a control placed by the clearance stays clear. Kit off keeps the
+  26-unit diamond and its old clearance.
+
+**The R26 polish.** `Tools/uikit-polish-gen.py` (PIL, code-drawn, deterministic, `--check` proves the committed PNGs are
+what a run writes) makes `corner_ornament.png` and re-exports five pieces from the pristine copies in
+`Tools/uikit-polish-src` (so it is re-runnable): `btn_primary` in a clear warm orange, `btn_secondary` and `btn_disabled`
+lighter with a gold hairline so they separate from a dark panel, and `panel_large` and `panel_small` with a stronger
+gilded rim. Sizes and 9-slice borders are unchanged, so no layout moves. A disabled button dims its label
+(`Emberforge.TextDisabled`) with the kit on. The reference images under `ui-gen/concepts/picked` were looked at only and
+are never imported, copied or traced. `CheckR26Ui` measures the result (orange hue, plate against panel brightness,
+label contrast, rim brightness, borders and sizes) rather than trusting it.
+
+**The Marketplace (R26).** The Hub's market stall is labelled MARKETPLACE and opens `MarketplaceScreen`, an overview of
+four shops in the order Relic Shop, Quartermaster, Proving Armory, Recital Archive, with an "N of 4 open" count. The
+four cards are `ShopDoors` (UI), shared with the Store's SHOPS tab, over `MarketplaceShops` (Core: order, words, door
+ids). The stall opens at 2-4 (`Feature.Marketplace`, `marketplace` in `onboarding.json`); each card passes its own door
+id (`marketplace.RelicShop`, `.Quartermaster`, `.Armory`, `.Archive`) bound to its shop's feature, so the Relic Shop
+card stays locked until 3-1 while the Armory is open at 2-4. The one-time new dot sits on the stall and on each card.
+
+**The Hero screen at its level cap (R26).** `LevelCapText` (Core) words it: the owner's sentence "Level cap reached, raise
+your rank." first, in every variant, then the guidance the page already gave (what ascending costs, the highest
+ascension, or that a hero below five stars never ascends). The button keeps the label LEVEL UP and Level Up and x10 are
+both disabled from the same flag, which reads `HeroLevelCapOf` (stars and ascension, not account rank).
 
 **Import.** `Tools/uikit-import.py` copies the generator's import-ready set into `Assets/Resources/Art/UIKit` and
 writes the `.meta` files, so the settings do not depend on what Unity guesses. 68 textures: Sprite (2D and UI), single,
@@ -1412,15 +1441,19 @@ the UI asks through `FeatureGates`, and a locked door says "UNLOCKS AT 1-6" and 
 
 The table in `onboarding.json` `unlocks`:
 
-| opens at start | friends | fusion | talents, armor, forge | guilds | proving | recital | relics |
-|---|---|---|---|---|---|---|---|
-| campaign, summon, heroes, idle | 1-4 | 1-6 | 1-12 | 2-1 | 2-4 | 2-8 | 3-1 |
+| opens at start | friends | fusion | talents, armor, forge | guilds | proving, marketplace | recital | relics | quartermaster |
+|---|---|---|---|---|---|---|---|---|
+| campaign, summon, heroes, idle | 1-4 | 1-6 | 1-12 | 2-1 | 2-4 | 2-8 | 3-1 | 3-12 |
+
+`marketplace` (R26) is the Hub's market stall, which opens at 2-4 with the first of the four shops behind it; each
+shop card inside keeps its own row (see **The UI kit (R20)**, the Marketplace paragraph).
 
 `onboarding.json` is not in `ContentVersion`, so a moved unlock or a rewritten line retires no
 replay. Every line of its text is a placeholder for the designer's pass. The harness walks and
 pinned lines read the table through `FeatureGate.IsUnlockedArriving`, which is what moved the two
 failing checks under **The instruments**. `PlayModeScreenshot` has six `Screen:Onboard*` targets;
-a capture of a feature's own screen uses `FeatureGates.CaptureBypass` and the onboarding targets
+a capture of a feature's own screen uses `FeatureGates.CaptureBypass` (and `CaptureForceLocks` keeps the gate live for
+the one Marketplace-with-locks target) and the onboarding targets
 clear it.
 
 ### Play stats
@@ -1521,8 +1554,8 @@ quarter of the painting to show five lines about a number, and a read-only copy 
 the bottom of a screen that has a formation page for exactly that.
 
 - **0, the map.** Every structure that leads somewhere carries a marker, and nothing above may
-  cover a building or its label. The market stall is the RELIC SHOP rather than a locked
-  MARKETPLACE sign, because a door to a built screen beats a sign for an unbuilt one.
+  cover a building or its label. The market stall is the MARKETPLACE (R26): it opens the
+  overview of the four shops, where it used to open the Relic Shop alone.
 - **1, the HUD frame, edges only.** The player plate and the currencies at the top corners, a rail
   of four icon buttons down one edge, five nav cells across the bottom, and the campaign card with
   the idle chest beside it in the bottom right. All of it inside `Screen.safeArea`, every target at
@@ -1843,7 +1876,15 @@ enemies without sheets), and the battles of chapters 2 to 6 (60 stages) have no 
 
 A branch is named here when it holds work worth naming, and only while it is unmerged.
 
-None. The R4 economy proposal is merged and described under **The economy curve** and **The
+**R26 polish, the UI half** (an unmerged branch of run R26, not yet pushed so not named here; the store half is on a sibling branch of the same run). It
+holds: the UI kit on by default with the `EMBERFALL_UIKIT_OFF` opt-out and the `[define-probe]` build-check step; the
+Hub's market stall as the Marketplace over four shop doors shared with the Store; kit polish (filigree corners, an orange
+primary button, a stronger gilded frame, lighter secondary and disabled plates, drawn by `Tools/uikit-polish-gen.py`);
+and the Hero screen's level cap sentence. All four are described under **The UI kit (R20)**. Their harness checks are
+`CheckR26Ui`. **Owed before it counts:** the screens that changed layout (Hub, Marketplace both ways, Hero at the cap,
+Store shops) have no capture yet; the tester takes them from the `Emberfall/Capture/R26 polish/` menu.
+
+Otherwise none. The R4 economy proposal is merged and described under **The economy curve** and **The
 campaign power curve, and the walls**.
 
 ## Next

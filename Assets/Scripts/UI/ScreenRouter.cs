@@ -43,7 +43,8 @@ namespace Emberfall.UI
         Quartermaster,
         WayfarersRoad,
         Store,
-        LiveEvents
+        LiveEvents,
+        Marketplace
     }
 
     /// <summary>Base class for every full-screen page. Built once, then shown and hidden.</summary>
@@ -172,6 +173,10 @@ namespace Emberfall.UI
         /// limited-time events page as it always did.</summary>
         public Screens.LiveEventsScreen LiveEvents;
 
+        /// <summary>The Marketplace (R26): the overview of the four shops. Always built; a shop this build lacks
+        /// shows NOT IN THIS BUILD on its card.</summary>
+        public Screens.MarketplaceScreen Marketplace;
+
         public UIScreen Current { get; private set; }
 
         public void Build(GameApp app, RectTransform screenLayer, RectTransform overlayLayer)
@@ -194,6 +199,7 @@ namespace Emberfall.UI
             Recital = Create<Screens.RecitalScreen>();
             Proving = Create<Screens.ProvingScreen>();
             Forge = Create<Screens.ForgeScreen>();
+            Marketplace = Create<Screens.MarketplaceScreen>();
 
             // Built whether or not this build has a cloud. Each of the six renders an honest
             // empty state when GameApp.Cloud is null - "this build has no account service" rather

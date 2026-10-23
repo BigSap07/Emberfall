@@ -97,9 +97,9 @@ namespace Emberfall.EditorTools
 
         /// <summary>The UI kit's switch for this run (R20): a target named with +kit forces UiKitSwitch ON
         /// for the capture only, +plain forces it OFF (the before shot and the rollback proof), 0 leaves
-        /// it as the build has it. The switch is a static, so the domain reload Play mode triggers resets
+        /// it as the build has it (ON unless EMBERFALL_UIKIT_OFF, R26). The switch is a static, so the domain reload Play mode triggers resets
         /// it and the static constructor re-applies it before the game boots; KitWasKey is what it was
-        /// before the run, put back by Stop. It is never committed ON.</summary>
+        /// before the run, put back by Stop.</summary>
         private const string KitForceKey = "PlayModeScreenshot.UiKitForce";
         private const string KitWasKey = "PlayModeScreenshot.UiKitWas";
 
@@ -463,6 +463,28 @@ namespace Emberfall.EditorTools
         // with the switch forced for the capture only: +kit ON, +plain OFF. The pair is the before and the
         // after, and the +plain shot is also the rollback proof (it must equal the target with no suffix).
         // The scratch identity and the offline guard are Begin's, as for every other target.
+        // R26 POLISH (the kit is ON by default now; +plain is the rollback shot).
+        [MenuItem("Emberfall/Capture/R26 polish/Hub (kit default)", false, 180)]
+        public static void CaptureR26Hub() { Begin("Screen:MainMenu"); }
+
+        [MenuItem("Emberfall/Capture/R26 polish/Hub, rollback (+plain)", false, 181)]
+        public static void CaptureR26HubPlain() { Begin("Screen:MainMenu+plain"); }
+
+        [MenuItem("Emberfall/Capture/R26 polish/Marketplace, all four open", false, 182)]
+        public static void CaptureR26Marketplace() { Begin("Screen:Marketplace"); }
+
+        [MenuItem("Emberfall/Capture/R26 polish/Marketplace, fresh profile with locks", false, 183)]
+        public static void CaptureR26MarketplaceLocked() { Begin("Screen:MarketplaceLocked"); }
+
+        [MenuItem("Emberfall/Capture/R26 polish/Hero at the level cap", false, 184)]
+        public static void CaptureR26HeroCap() { Begin("Screen:HeroDetailCap"); }
+
+        [MenuItem("Emberfall/Capture/R26 polish/Store packs (kit polish)", false, 185)]
+        public static void CaptureR26StorePacks() { Begin("Screen:StorePacks"); }
+
+        [MenuItem("Emberfall/Capture/R26 polish/Hero detail (kit polish)", false, 186)]
+        public static void CaptureR26Hero() { Begin("Screen:HeroDetail"); }
+
         [MenuItem("Emberfall/Capture/R20 kit/Hub, kit on", false, 150)]
         public static void CaptureKitMainMenuOn() { Begin("Screen:MainMenu+kit"); }
 
@@ -1113,6 +1135,8 @@ namespace Emberfall.EditorTools
             // Every target but the onboarding ones photographs a feature's screen on a fresh
             // profile that has cleared nothing, so they walk past the unlock table.
             FeatureGates.CaptureBypass = !target.StartsWith(OnboardPrefix);
+            // R26: the one non-onboarding target that keeps the gate live (MarketplaceLocked).
+            FeatureGates.CaptureForceLocks = target.Contains("MarketplaceLocked");
 
             if (target == "Recital") PumpRecital(frame);
             else if (target == "Proving") PumpProving(frame);
@@ -1516,7 +1540,7 @@ namespace Emberfall.EditorTools
             // And the UI kit's, so a +kit run cannot leave the switch on for the next one in this editor.
             if (SessionState.GetInt(KitForceKey, 0) != 0)
             {
-                UiKitSwitch.Enabled = SessionState.GetBool(KitWasKey, false);
+                UiKitSwitch.Enabled = SessionState.GetBool(KitWasKey, UiKitSwitch.ShippedDefault);
                 SessionState.SetInt(KitForceKey, 0);
                 UiKit.Forget();
             }
@@ -1728,7 +1752,7 @@ namespace Emberfall.EditorTools
             // are pages a player reaches by tapping, and a page with no capture target is a page
             // whose layout nothing in this repository has ever looked at.
             string[] all = { "MainMenu", "Campaign", "Heroes", "HeroDetail", "Talents", "Formation", "Summon",
-                             "Forge", "Inventory", "RelicShop", "Events", "Recital", "Proving",
+                             "Forge", "Inventory", "RelicShop", "Marketplace", "Events", "Recital", "Proving",
                              "Profile", "Account", "Friends", "FriendTeam", "Settings",
                              "Fusion", "FusionConvert",
                              "Guild", "GuildRequests", "GuildChat", "Battle", "Result",
@@ -1882,6 +1906,11 @@ namespace Emberfall.EditorTools
                     // so it routes to the page and opens the dialog a frame later, exactly as the
                     // Hub's layers do below.
                     case "AbilityNumbers": id = ScreenId.HeroDetail; break;
+                    // R26: the Marketplace with every door open (the capture bypass), and the same page on a
+                    // profile that has cleared through 2-4 only, with the gate live, so the locks show.
+                    case "Marketplace":
+                    case "MarketplaceLocked": id = ScreenId.Marketplace; break;
+                    case "HeroDetailCap": id = ScreenId.HeroDetail; break;
                 }
 
                 // THE ROSTER SHEET (R15): every unit of one side in one clip, built through the battle's own
@@ -1950,7 +1979,7 @@ namespace Emberfall.EditorTools
                     SessionState.SetInt(StageKey, slot + 1);
                     return;
                 }
-                if (name == "HeroDetail" || name == "HeroSkin" || name == "AbilityNumbers")
+                if (name == "HeroDetail" || name == "HeroSkin" || name == "AbilityNumbers" || name == "HeroDetailCap")
                 {
                     List<HeroInstance> owned = app.Session.Profile.Heroes;
                     if (owned == null || owned.Count == 0)
@@ -1963,6 +1992,9 @@ namespace Emberfall.EditorTools
                     // first, because the only thing that capture can disprove is that the block
                     // runs out of the panel, and it only can when an ability carries several
                     // numbers. The hero page itself is photographed on owned[0] as before.
+                    // R26: the first hero raised to the cap its stars and ascension allow, through the same
+                    // HeroLevelCapOf the screen reads, so the page shows its level cap note and the disabled buttons.
+                    if (name == "HeroDetailCap") owned[0].Level = app.Session.HeroLevelCapOf(owned[0]);
                     app.Router.HeroDetail.SetHero(name == "AbilityNumbers" ? BusiestHero(owned) : name == "HeroSkin" ? SkinSubject(owned) : owned[0]);
                     // A frame apart from the Show for the same reason the Hub's layers are:
                     // ScreenRouter.Show closes every open layer before it changes screens, so a
@@ -2023,6 +2055,7 @@ namespace Emberfall.EditorTools
                 // calls rather than poking the profile: a screenshot of state no code path
                 // produces is evidence of nothing.
                 if (name == "Inventory" || name == "Forge") PopulateItems(app);
+                if (name == "MarketplaceLocked") SeedMarketplaceLocks(app);
 
                 // THE DAILY LOOP'S STATES are seeded through DailyLoop's own calls, on the same
                 // clock the page reads, never by writing the state. HubLoopOff seeds nothing: it
@@ -2374,6 +2407,21 @@ namespace Emberfall.EditorTools
             Debug.Log("PlayModeScreenshot: seeded the daily loop for " + name);
         }
 
+
+        /// <summary>MarketplaceLocked: the scratch profile has cleared the campaign through 2-4 and nothing more,
+        /// the moment the Marketplace first opens. The gate stays live for the run (CaptureForceLocks, set by
+        /// Pump), so the Proving Armory card is open and the Relic Shop, Quartermaster and Recital Archive
+        /// cards show their lock lines.</summary>
+        private static void SeedMarketplaceLocks(GameApp app)
+        {
+            ContentDatabase content = app.Session.Content;
+            StageDef gate = content.GetStage("ch2_4");
+            if (gate == null) { Debug.LogWarning("PlayModeScreenshot: no stage ch2_4, MarketplaceLocked shows the page as it is."); return; }
+            PlayerProfile p = app.Session.Profile;
+            for (int i = 0; i < content.AllStages.Count; i++)
+                if (content.AllStages[i].GlobalIndex <= gate.GlobalIndex && !p.HasClearedStage(content.AllStages[i].Id)) p.ClearedStageIds.Add(content.AllStages[i].Id);
+            app.RefreshHud();
+        }
 
         // THE SINKS (DESIGN-SINKS.md). Each target forces SinksSwitch ON for its run, seeds a scratch
         // profile through SinkShop.Buy and photographs a shop or the door that leads to one. Nothing

@@ -1140,67 +1140,12 @@ namespace Emberfall.UI.Screens
 
         // ------------------------------------------------------------------ the shops tab
 
-        private struct ShopDoor
-        {
-            public string Name;
-            public string Pays;
-            public string Sells;
-            public ScreenId Screen;
-            public Sprite Icon;
-            public Color Tint;
-            public bool Built;
-            public string Purse;
-            public string Kit;      // the purse's name for the UI kit's icon ("valor", "coda", ...)
-        }
-
+        /// <summary>The four shop doors are ShopDoors', shared with the Marketplace screen (R26): same order,
+        /// words, locks and new dots. The subtitle carries the count.</summary>
         private void BuildShops()
         {
-            PlayerProfile p = App.Session.Profile;
-            List<ShopDoor> doors = new List<ShopDoor>();
-            doors.Add(new ShopDoor { Name = "PROVING ARMORY", Pays = "Valor", Sells = "Honed armor presets, Brand and Echo refills and one four-star copy a month. Every item is fixed.",
-                                     Screen = ScreenId.Armory, Icon = TextureLab.Plate(128), Tint = UITheme.Ember, Built = Router.Armory != null, Purse = HudTopBar.Format(p.Valor) + " Valor", Kit = "valor" });
-            doors.Add(new ShopDoor { Name = "RECITAL ARCHIVE", Pays = "Coda", Sells = "One four-star hero copy a month, chosen from a fixed list.",
-                                     Screen = ScreenId.Archive, Icon = TextureLab.SpiralIcon(128), Tint = UITheme.Mythic, Built = Router.Archive != null, Purse = HudTopBar.Format(p.Coda) + " Coda", Kit = "coda" });
-            doors.Add(new ShopDoor { Name = "QUARTERMASTER", Pays = "Gold", Sells = "A daily shelf of rolled armor, one piece for each slot, restocked every reward day.",
-                                     Screen = ScreenId.Quartermaster, Icon = TextureLab.Chest(128), Tint = UITheme.Gold, Built = Router.Quartermaster != null, Purse = HudTopBar.Format(p.Gold) + " Gold", Kit = "gold" });
-            doors.Add(new ShopDoor { Name = "RELIC SHOP", Pays = "Relic Dust", Sells = "Relics at their fixed price, and the upgrade of each relic you own.",
-                                     Screen = ScreenId.RelicShop, Icon = TextureLab.Diamond(128), Tint = UITheme.Dust, Built = Router.RelicShop != null, Purse = HudTopBar.Format(p.RelicDust) + " Dust", Kit = "dust" });
-
-            const float cardWidth = 420f, gap = 26f, cardHeight = 600f;
-            float startX = -(cardWidth * doors.Count + gap * (doors.Count - 1)) * 0.5f + cardWidth * 0.5f;
-            for (int i = 0; i < doors.Count; i++)
-            {
-                ShopDoor d = doors[i];
-                RectTransform card = UIBuilder.Node("Shop" + i, _body);
-                UIBuilder.Box(card, startX + i * (cardWidth + gap), -20f, cardWidth, cardHeight, new Vector2(0.5f, 1f));
-                EmberforgeUI.PanelOn(card, true);
-
-                Sprite kitMark = UiKit.Currency(d.Kit);
-                Image mark = UIBuilder.Img("Icon", card, kitMark != null ? kitMark : d.Icon,
-                                           kitMark != null ? Color.white : UITheme.WithAlpha(d.Tint, 0.95f));
-                UIBuilder.Box(mark.rectTransform, 0f, -36f, 120f, 120f, new Vector2(0.5f, 1f));
-                Text name = EmberforgeUI.Title("Name", card, d.Name, UITheme.FontBody, Emberforge.TextGold, TextAnchor.UpperCenter);
-                UIBuilder.Box(name.rectTransform, 0f, -176f, cardWidth - 24f, 40f, new Vector2(0.5f, 1f));
-                UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
-                Text pays = EmberforgeUI.Label("Pays", card, "SPENDS " + d.Pays.ToUpperInvariant(), UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperCenter);
-                UIBuilder.Box(pays.rectTransform, 0f, -222f, cardWidth - 24f, 28f, new Vector2(0.5f, 1f));
-                Text sells = EmberforgeUI.Body("Sells", card, d.Sells, UITheme.FontSmall - 2, Emberforge.TextBody, TextAnchor.UpperCenter);
-                UIBuilder.Box(sells.rectTransform, 0f, -262f, cardWidth - 48f, 150f, new Vector2(0.5f, 1f));
-                Text purse = EmberforgeUI.Label("Purse", card, "YOU HAVE " + d.Purse.ToUpperInvariant(), UITheme.FontTiny, UITheme.Gold, TextAnchor.UpperCenter);
-                UIBuilder.Box(purse.rectTransform, 0f, -430f, cardWidth - 24f, 28f, new Vector2(0.5f, 1f));
-
-                string lockLine = d.Built ? FeatureGates.LockLine(App, FeatureGates.ScreenEntry(d.Screen)) : "NOT IN THIS BUILD";
-                if (lockLine.Length > 0)
-                {
-                    RectTransform chip = EmberforgeUI.Chip("Lock", card, lockLine.ToUpperInvariant(), Emberforge.TextQuiet, UITheme.FontTiny - 2);
-                    UIBuilder.Box(chip, 0f, 30f, cardWidth - 48f, 52f, new Vector2(0.5f, 0f));
-                    continue;
-                }
-                UIButton open = EmberforgeUI.Button("Open", card, "OPEN", UITheme.FontSmall, ForgeButtonKind.Primary);
-                UIBuilder.Box(open.Root, 0f, 30f, cardWidth - 48f, 64f, new Vector2(0.5f, 0f));
-                ScreenId screen = d.Screen;
-                open.OnClick(delegate { App.Audio.Tap(); Router.Show(screen); });
-            }
+            int open = ShopDoors.Build(App, Router, _body, -20f);
+            _headerSubtitle.text = "THE SHOPS YOU SPEND EARNED CURRENCY IN   -   " + MarketplaceShops.CountLine(open).ToUpperInvariant();
         }
 
         // ------------------------------------------------------------------ the hero picker

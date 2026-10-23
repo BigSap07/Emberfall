@@ -9,7 +9,7 @@ namespace Emberfall.DevHarness
 {
     /// <summary>
     /// THE UI KIT (R20): the generated art kit behind UiKitSwitch. One named check per rule: the switch
-    /// ships OFF, OFF IS TODAY (every lookup answers null, so every call site draws what it always drew),
+    /// ships ON (R26; EMBERFALL_UIKIT_OFF is the opt-out), OFF IS THE OLD LOOK (every lookup answers null, so every call site draws what it always drew),
     /// ON maps every slot, relic and ability the kit is supposed to cover, every key it can answer with has
     /// a file and an import setting that make it a sprite, the art references stay out of the eight hashed
     /// content files, and the engine half is wired where the map says.
@@ -28,7 +28,7 @@ namespace Emberfall.DevHarness
             bool was = UiKitSwitch.Enabled;
             try
             {
-                Check(!was, "SHIPPED: UiKitSwitch is OFF unless the build defines EMBERFALL_UIKIT (it is committed off; the owner turns it on)");
+                Check(UiKitSwitch.ShippedDefault && was, "SHIPPED: UiKitSwitch is ON by default (R26); only a build defining EMBERFALL_UIKIT_OFF ships the old look");
                 CheckUiKitOffIsToday(db);
                 CheckUiKitOnMapsEverything(db);
                 CheckUiKitFilesAndImports(db, kitDir);

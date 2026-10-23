@@ -253,18 +253,16 @@ namespace Emberfall.UI.Screens
         /// carries Gold - Gold means currency, progress or the primary action, and a place you can
         /// walk to is none of those.
         ///
-        /// THE MARKET STALL IS THE RELIC SHOP NOW, and that is the one content change in this pass.
-        /// It was a locked MARKETPLACE marker with a SOON tag on it, painted in for a feature that
-        /// does not exist - while the relic shop, which DOES exist and is a real screen, reached
-        /// the player only through a badge in the dock this pass removes. A door to a built screen
-        /// beats a sign for an unbuilt one, and the stall is a market either way.
+        /// THE MARKET STALL IS THE MARKETPLACE (R26). It was the Relic Shop's door for a while; it now opens
+        /// the overview of all four shops (Relic Shop, Quartermaster, Proving Armory, Recital Archive), each
+        /// a card with its own lock. The node opens at 2-4, the first shop to open, under Feature.Marketplace.
         /// </summary>
         private void BuildMapNodes()
         {
             AddMapNode("HEROES", HeroesX, HeroesY, OpenHeroes, "hub.map.HEROES");
             AddMapNode("SUMMON", SummonX, SummonY, OpenSummon, "hub.map.SUMMON");
             AddMapNode("FORGE", ForgeX, ForgeY, OpenForge, "hub.map.FORGE");
-            AddMapNode("RELICS", MarketX, MarketY, OpenRelicShop, "hub.map.RELICS");
+            AddMapNode("MARKETPLACE", MarketX, MarketY, OpenMarketplace, "hub.map.MARKETPLACE");
             AddMapNode("DEEP RECITAL", RecitalX, RecitalY, OpenRecital, "hub.map.RECITAL");
             AddMapNode("PROVING", ProvingX, ProvingY, OpenProving, "hub.map.PROVING");
             // The portal is a place you can walk to, like the others. Its live state and its
@@ -846,10 +844,12 @@ namespace Emberfall.UI.Screens
             Router.Show(ScreenId.Summon);
         }
 
-        private void OpenRelicShop()
+        /// <summary>The market stall opens the Marketplace (R26), the overview of the four shops. The Relic Shop is
+        /// one card inside it and keeps its own lock.</summary>
+        private void OpenMarketplace()
         {
             App.Audio.Tap();
-            Router.Show(ScreenId.RelicShop);
+            Router.Show(ScreenId.Marketplace);
         }
 
         private void OpenInventory()
