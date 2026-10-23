@@ -180,6 +180,22 @@ function Stash-CloudConfig {
     if (Test-Path $configMeta) { Move-Item $configMeta $stashedMeta -Force }
 }
 
+# ProjectSettings.asset: the editor rewrites it on its way out (it drops an m_SubKind line), which the clean-tree
+# check below would call "built from files HEAD does not hold". Its bytes are saved before Unity starts and put back
+# after it exits, before the check; every other file is still checked. Nothing is deleted.
+$settingsFile = Join-Path $root "ProjectSettings\ProjectSettings.asset"
+$script:SettingsBackup = $null
+
+function Restore-ProjectSettings {
+    if ($script:SettingsBackup -eq $null -or -not (Test-Path $settingsFile)) { return $false }
+    $nowBytes = [IO.File]::ReadAllBytes($settingsFile)
+    $same = ($nowBytes.Length -eq $script:SettingsBackup.Length)
+    if ($same) { for ($i = 0; $i -lt $nowBytes.Length; $i++) { if ($nowBytes[$i] -ne $script:SettingsBackup[$i]) { $same = $false; break } } }
+    if ($same) { return $false }
+    [IO.File]::WriteAllBytes($settingsFile, $script:SettingsBackup)
+    return $true
+}
+
 $exitCode = 1
 $script:UnityProcess = $null
 $script:ExpectedFolder = $null
@@ -337,6 +353,8 @@ try {
     )
     if ($definesText) { $unityArgs += @("-emberfallDefines", "`"$definesText`"") }
 
+    if (Test-Path $settingsFile) { $script:SettingsBackup = [IO.File]::ReadAllBytes($settingsFile) }
+
     # Last thing before Unity starts, so every refusal above leaves the config where it was.
     if (-not $Cloud -and (Test-Path $config)) {
         Stash-CloudConfig
@@ -366,6 +384,10 @@ try {
     if ($script:ConfigMoved) {
         if (-not (Restore-CloudConfig)) { Fail "could not put the cloud config back." }
         $script:ConfigMoved = $false
+    }
+
+    if (Restore-ProjectSettings) {
+        Write-Host "  put ProjectSettings.asset back as it was: the editor rewrote it on its way out" -ForegroundColor Yellow
     }
 
     # ---------------------------------------------------------------------------------------- player
@@ -486,6 +508,7 @@ finally {
     if ($script:ConfigMoved) {
         if (Restore-CloudConfig) { Write-Host "  put the cloud config back" }
     }
+    if (-not $succeeded) { $null = Restore-ProjectSettings }
     if (-not $succeeded -and $script:ExpectedFolder -and (Test-Path $script:ExpectedFolder)) {
         if (Test-Path "$($script:ExpectedFolder).zip") { Remove-Item "$($script:ExpectedFolder).zip" -Force }
         Move-Item $script:ExpectedFolder "$($script:ExpectedFolder)-REFUSED"

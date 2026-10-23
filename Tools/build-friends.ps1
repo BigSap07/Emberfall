@@ -135,16 +135,40 @@ New-Item -ItemType Directory -Force $OutputFolder | Out-Null
 $childArgs = @("-Cloud", "-Defines", $Defines, "-OutputRoot", $OutputFolder)
 if ($UnityExe) { $childArgs += @("-UnityExe", $UnityExe) }
 
+# One step must not leave the tree dirty for the next. The editor rewrites ProjectSettings.asset on its way out; each child
+# script already puts it back, and this puts it back again between steps if one did not. Anything else a step left
+# changed is listed before the next step, which refuses a tree that does not match HEAD (it decides by content, so a
+# line-ending-only flag does not stop it). Nothing is deleted or reverted here except those saved bytes.
+$settingsFile = Join-Path $root "ProjectSettings\ProjectSettings.asset"
+$settingsBackup = if (Test-Path $settingsFile) { [IO.File]::ReadAllBytes($settingsFile) } else { $null }
+function Restore-SettingsBetweenSteps([string]$after) {
+    if ($settingsBackup -eq $null -or -not (Test-Path $settingsFile)) { return }
+    $nowBytes = [IO.File]::ReadAllBytes($settingsFile)
+    $same = ($nowBytes.Length -eq $settingsBackup.Length)
+    if ($same) { for ($i = 0; $i -lt $nowBytes.Length; $i++) { if ($nowBytes[$i] -ne $settingsBackup[$i]) { $same = $false; break } } }
+    if (-not $same) {
+        [IO.File]::WriteAllBytes($settingsFile, $settingsBackup)
+        Write-Host "  put ProjectSettings.asset back after the $after step" -ForegroundColor Yellow
+    }
+    $left = @(Invoke-GitText status --porcelain --untracked-files=no)
+    if ($left.Count -gt 0) {
+        Write-Host "  NOTE     after the $after step git lists $($left.Count) changed tracked file(s); the next step checks them by content:" -ForegroundColor Yellow
+        $left | Select-Object -First 8 | ForEach-Object { Write-Host "           $_" -ForegroundColor Yellow }
+    }
+}
+
 $results = @()
 if ($doWindows) {
     Write-Host ""; Write-Host "=== Windows ===" -ForegroundColor Cyan
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-windows.ps1") @childArgs
     $results += [pscustomobject]@{ Name = "Windows zip"; Exit = $LASTEXITCODE }
+    Restore-SettingsBetweenSteps "Windows"
 }
 if ($doAndroid) {
     Write-Host ""; Write-Host "=== Android ===" -ForegroundColor Cyan
     & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "build-android.ps1") @childArgs
     $results += [pscustomobject]@{ Name = "Android APK"; Exit = $LASTEXITCODE }
+    Restore-SettingsBetweenSteps "Android"
 }
 
 Write-Host ""
