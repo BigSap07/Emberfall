@@ -1,0 +1,89 @@
+# R28 screens, builder a: the Leaderboards screen and the REMINDERS card of the Settings page, every state the spec lists,
+# at both shapes, plus the three screens that gained a door.
+#
+#   powershell -NoProfile -ExecutionPolicy Bypass -File Tools/capture-batch.ps1 `
+#       -TargetsFile Tools/capture-r28a-targets.txt -LogDir D:\Emberfall\handoff\<RUN>\logs -Tag r28a
+#
+# Screen:<Name>@<W>x<H> writes screen_<Name>@<W>x<H>.png. 1920x1080 is 16:9, 2400x1080 is 20:9.
+#
+# Everything is reached offline on the scratch identity through the in-memory backends (PlayModeScreenshot.R28aCaptures):
+# LeaderboardBackends.Override for the boards, NotificationBackends.Override for the reminders. A target refuses to run
+# anywhere else. Nothing reaches a server and no notification is scheduled.
+#
+# Leaderboards (Recital board unless the name says otherwise; the profile has cleared through 3-1 except in Locked):
+#   OfflineNoCloud      no cloud in the build: the reason, no TRY AGAIN, no REFRESH, the four tabs still drawn
+#   OfflineSignedOut    signed out or no signal: the reason and TRY AGAIN
+#   Loading             first load: a spinner, REFRESH drawn and disabled
+#   Locked              a fresh profile: the Recital's own lock line over the board
+#   Ready               40 rows, the caller's own row highlighted in place (#2), the submit line, 'You are #2'
+#   Pinned              the top 100 and the caller's own row pinned under a divider (#312)
+#   Refreshing          rows stay under a spinner, REFRESHING disabled (the second load is held)
+#   BannerFailed        rows stay under 'Could not refresh' (the second load fails)
+#   BannerOffline       rows stay under 'Offline. Showing the board as it was ...'
+#   Empty, EmptyWeekly  'Nobody is on this board yet.' and 'Nobody has climbed this week yet.'
+#   Error               the failure's sentence and TRY AGAIN
+#   NotOpen             'The leaderboards are not open yet.' and no TRY AGAIN
+#   Weekly, Proving, Campaign   the other three tabs, with their reset line and value header
+#
+# Settings, REMINDERS card (the page is scrolled so the card is at the top of the view):
+#   Unsupported         today's real state: 'Reminders are not available on this device yet.', every switch disabled, no list
+#   NoStage             not asked, no stage cleared: ALLOW REMINDERS disabled with 'Clear your first stage first.'
+#   NotAsked            ALLOW REMINDERS, switches set ahead, 'Nothing is scheduled until reminders are allowed.'
+#   Asking              the button reads ASKING and is disabled
+#   Denied              OPEN PHONE SETTINGS, every switch disabled with its reason
+#   Granted             the COMING UP list (the planner's own answer)
+#   Off                 allowed, Reminders off: the topics disabled, 'Reminders are off.'
+#
+# Profile, Recital and Proving carry the new LEADERBOARDS and BOARDS buttons.
+Screen:LeaderboardsOfflineNoCloud@1920x1080
+Screen:LeaderboardsOfflineNoCloud@2400x1080
+Screen:LeaderboardsOfflineSignedOut@1920x1080
+Screen:LeaderboardsOfflineSignedOut@2400x1080
+Screen:LeaderboardsLoading@1920x1080
+Screen:LeaderboardsLoading@2400x1080
+Screen:LeaderboardsLocked@1920x1080
+Screen:LeaderboardsLocked@2400x1080
+Screen:LeaderboardsReady@1920x1080
+Screen:LeaderboardsReady@2400x1080
+Screen:LeaderboardsPinned@1920x1080
+Screen:LeaderboardsPinned@2400x1080
+Screen:LeaderboardsRefreshing@1920x1080
+Screen:LeaderboardsRefreshing@2400x1080
+Screen:LeaderboardsBannerFailed@1920x1080
+Screen:LeaderboardsBannerFailed@2400x1080
+Screen:LeaderboardsBannerOffline@1920x1080
+Screen:LeaderboardsBannerOffline@2400x1080
+Screen:LeaderboardsEmpty@1920x1080
+Screen:LeaderboardsEmpty@2400x1080
+Screen:LeaderboardsEmptyWeekly@1920x1080
+Screen:LeaderboardsEmptyWeekly@2400x1080
+Screen:LeaderboardsError@1920x1080
+Screen:LeaderboardsError@2400x1080
+Screen:LeaderboardsNotOpen@1920x1080
+Screen:LeaderboardsNotOpen@2400x1080
+Screen:LeaderboardsWeekly@1920x1080
+Screen:LeaderboardsWeekly@2400x1080
+Screen:LeaderboardsProving@1920x1080
+Screen:LeaderboardsProving@2400x1080
+Screen:LeaderboardsCampaign@1920x1080
+Screen:LeaderboardsCampaign@2400x1080
+Screen:SettingsRemindersUnsupported@1920x1080
+Screen:SettingsRemindersUnsupported@2400x1080
+Screen:SettingsRemindersNoStage@1920x1080
+Screen:SettingsRemindersNoStage@2400x1080
+Screen:SettingsRemindersNotAsked@1920x1080
+Screen:SettingsRemindersNotAsked@2400x1080
+Screen:SettingsRemindersAsking@1920x1080
+Screen:SettingsRemindersAsking@2400x1080
+Screen:SettingsRemindersDenied@1920x1080
+Screen:SettingsRemindersDenied@2400x1080
+Screen:SettingsRemindersGranted@1920x1080
+Screen:SettingsRemindersGranted@2400x1080
+Screen:SettingsRemindersOff@1920x1080
+Screen:SettingsRemindersOff@2400x1080
+Screen:Profile@1920x1080
+Screen:Profile@2400x1080
+Screen:Recital@1920x1080
+Screen:Recital@2400x1080
+Screen:Proving@1920x1080
+Screen:Proving@2400x1080

@@ -3,6 +3,8 @@
 Written 2026-10-23 for the client run that builds these four screens in uGUI. Everything below the screen is built:
 for each screen a presenter in `Assets/Scripts/Core/Screens` that says exactly what is drawn, a controller in
 `Assets/Scripts/Game` that makes the calls, and harness checks for every state (`Tools/DevHarness/R28ScreenChecks.cs`).
+**Built so far:** screen 1 (`LeaderboardsScreen`) and the REMINDERS card of screen 3 (`RemindersCard` on `SettingsScreen`), held
+to this spec by `Tools/DevHarness/R28UiChecks.cs`. Screens 2 and 4 are not built in uGUI yet.
 The UI run writes the screen and binds it. It decides nothing: **no game logic goes in UI**, and here that includes
 whether a button is drawn, whether it can be tapped, every sentence and every countdown.
 
@@ -33,13 +35,17 @@ in `UITheme.TextMuted` at `UITheme.FontBody`, and under it the screen's `Retry` 
 **Look and feel.** `UITheme` for every colour, size and spacing; `HubStyle` for plates, borders and radii where the
 screen opens from the Hub. The header is `ScreenChrome.ForgedHeader` with the view's `Title`; buttons are
 `UIBuilder.GoldButton` (the one primary action), `UIBuilder.SecondaryButton` (everything else); lists are
-`UIBuilder.ScrollList`; tabs and chips are `UIBuilder.Chip`. Panels use `UITheme.Panel` and `UITheme.CornerRadius`,
+`UIBuilder.ScrollList`; tabs and chips are `UIBuilder.Chip`. **With the UI kit on (the default) the built screens draw the same
+roles in the kit's components instead:** `EmberforgeUI.Button` with `ForgeButtonKind.Primary` (the ember button, where the old
+text says gold) and `ForgeButtonKind.Secondary`, `EmberforgeUI.Tab` for tabs, `EmberforgeUI.PlainPanelOn` for rows and
+`EmberforgeUI.PanelOn` for cards. The colours, sizes, fields and taps below are unchanged. Panels use `UITheme.Panel` and `UITheme.CornerRadius`,
 rows `UITheme.PanelRaised` and `UITheme.CornerRadiusSmall`. Values a player reads as a number that matters
 (`HubStyle.ValueGold`) are `UITheme.Gold`; structure is `UITheme.ChromeBrass`, never Gold. Every tap target is at least
-`HubStyle.TouchMin` on both axes. No new art, no new colour, no em or en dash in any string (the checks scan for them).
+`HubStyle.TouchMin` on both axes (so the tab chips are 108 tall, not the Store's 76). No new art, no new colour, no em or en dash in any string (the checks scan for them).
 
 **Captures.** Each screen is captured with `PlayModeScreenshot` at 1920x1080 and 2400x1080 in every state its table
-lists, before the work counts as done. The in-memory backends make every state reachable offline:
+lists, before the work counts as done. Screens 1 and 3 have their targets under `Emberfall/Capture/R28 screens/`, listed in
+`Tools/capture-r28a-targets.txt`. The in-memory backends make every state reachable offline:
 `LeaderboardBackends.Override`, `GuildDungeonBackends.Override`, `NotificationBackends.Override`, `AdBackends.Override`
 (the simulated ad backend's `FinishNext` and `FailNext` rehearse the two no-reward endings).
 
@@ -86,14 +92,14 @@ boards pay nothing, and a medal would read as a prize.
 | Element | Field | Style |
 |---|---|---|
 | Header title | `Title` | `ForgedHeader` |
-| REFRESH | `Refresh` (`ButtonModel`) | `SecondaryButton`, `UITheme.FontSmall`; label is REFRESH or REFRESHING |
-| Tab chips | `Tabs[i].Label`, `Tabs[i].Selected` | `UIBuilder.Chip`; selected chip `UITheme.Gold` text on `UITheme.PanelRaised`, others `UITheme.TextMuted` |
+| REFRESH | `Refresh` (`ButtonModel`) | `SecondaryButton`, `UITheme.FontSmall`; label is REFRESH or REFRESHING; in the header at the right, 300 by `HubStyle.TouchMin`; a disabled one prints its `Reason` under it |
+| Tab chips | `Tabs[i].Label`, `Tabs[i].Selected` | `UIBuilder.Chip`; selected chip `UITheme.Gold` text on `UITheme.PanelRaised`, others `UITheme.TextMuted` (kit: `EmberforgeUI.Tab` and `SetTabSelected`, 280 by `HubStyle.TouchMin`) |
 | Reset line | `ResetLine` (`ResetInSeconds` for the tick) | `UITheme.TextMuted`, `UITheme.FontTiny`, right-aligned |
 | Caption | `Caption` | `UITheme.TextPrimary`, `UITheme.FontSmall` |
 | Updated line | `UpdatedLine` | `UITheme.TextDim`, `UITheme.FontTiny` |
 | Banner | `Banner` | the banner strip |
 | Lock line | `LockLine` | `UITheme.ChromeBrass`, `UITheme.FontTiny`, all caps as given |
-| Value column header | `ValueHeader` | `UITheme.ChromeBrass`, `UITheme.FontTiny` |
+| Value column header | `ValueHeader` | `UITheme.ChromeBrass`, `UITheme.FontTiny`, right-aligned over the value column. The diagram's RANK and NAME headers are not drawn: the view carries no field for them and the screen writes no copy of its own |
 | Row rank | `Rows[i].RankText` | `UITheme.TextMuted`, `UITheme.FontSmall` |
 | Row name | `Rows[i].Name` | `UITheme.TextPrimary` (`UITheme.Gold` when `IsMe`), `UITheme.FontSmall` |
 | Row value | `Rows[i].ValueText` | `HubStyle.ValueGold`, `HubStyle.FontRankValue`, right-aligned |
@@ -267,7 +273,9 @@ return (`NotificationScheduler`), which does nothing until a backend reports the
 | Upcoming rows | `Upcoming[i].Title`, `Upcoming[i].WhenText` (`Body` as a second line) | title `UITheme.TextPrimary`, time `UITheme.TextMuted` right-aligned |
 | Upcoming status | `UpcomingStatus` | `UITheme.TextMuted`, `UITheme.FontTiny` |
 | Rule lines | `RuleLines` | `UITheme.TextDim`, `UITheme.FontTiny` |
-| Whole card | `Phase == Unavailable`: `Status` replaces the permission line, every switch disabled | |
+| Whole card | `Phase == Unavailable`: `Status` replaces the permission line, every switch disabled | A switch's `Reason` is printed under its label in place of its description, except a reason that repeats the `Status` already shown, which would read five times down the card: that switch shows its description instead (`RemindersCardLayout.SubLine`) |
+| Switch | `On`, `Enabled` of each `ToggleModel` | a button reading ON (ember) or OFF (teal), 220 by `HubStyle.TouchMin`, disabled when `Enabled` is false. ALLOW REMINDERS and ASKING are the ember button, OPEN PHONE SETTINGS the teal one |
+| Card heading | constant REMINDERS | the card's name in the spec; `NotificationSettingsView.Title` (NOTIFICATIONS) is not drawn |
 
 ### Taps
 
@@ -368,7 +376,7 @@ for the words of a luck mechanic and fail on any.
   columns, `0022_guild_dungeon_size.sql`), the leaderboards and notifications work (`0023_leaderboards.sql`,
   `NotificationPlanner`) and the rewarded ads record (`Docs/DESIGN-REWARDED-ADS.md`), all of which are on main (merged as the integration branch; migrations 0022 and 0023).
 - **Migration numbers.** The leaderboards migration is `0023_leaderboards.sql` and the guild dungeon size migration is `0022_guild_dungeon_size.sql`; both were renumbered when the branches merged.
-- **Before ads ship:** apply `Server/supabase/owner/save_limits_27.sql`, then turn `AdsSwitch` on (`EMBERFALL_ADS`).
+- **Before ads ship:** apply the migration `Server/supabase/migrations/0026_save_limits_27.sql`, then turn `AdsSwitch` on (`EMBERFALL_ADS`).
 - **Before reminders ship:** add `com.unity.mobile.notifications` and an Android `INotificationBackend` behind
   `EMBERFALL_MOBILE_NOTIFICATIONS`, set as `NotificationBackends.Override` at startup.
 - **Before real ads ship:** add the LevelPlay package and an `IAdBackend` behind `EMBERFALL_LEVELPLAY`, set as

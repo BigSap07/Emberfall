@@ -1049,7 +1049,8 @@ the same save, against ceilings and against server time since the server last ra
 everything with `now()` and logs every refusal. `leaderboard_top()` returns rank, display name, value and
 `is_me`, never a user id. `Tools/supabase-leaderboard-rules-test.py` proves the rules once 0023 is applied;
 it has never been run against a project. `Tools/supabase-local-check.sh` applies it locally and checks the
-boards, the refusals and the closed doors. The client side is built (R28, **The R28 screens**); no screen shows a board yet.
+boards, the refusals and the closed doors. The client side is built (R28, **The R28 screens**): `LeaderboardsScreen` shows the four boards, reached from
+the Profile, the Recital and the Proving, and says so honestly while 0023 is not applied ("The leaderboards are not open yet.").
 
 **The launch server pieces: written, not applied to a project (`Server/README.md`, `Docs/LAUNCH-CHECKLIST.md`).**
 `0016_account_deletion.sql` (`delete_my_account`, `admin_delete_account`), `0017_chat_safety.sql` (block,
@@ -1349,8 +1350,9 @@ and an event's end for a player who has taken part (8 hours before a weekly even
 Quiet hours 22:00 to 09:00 local, at most 2 a local day, 4 hours apart, nothing past 48 hours, nothing
 before the first stage is cleared, and no notification names anything sold. It writes nothing and holds
 no state in the save. `NotificationChecks.cs` proves it, including a sweep of about 1,500 plans. The
-scheduler glue and the settings screen's presenter are built (R28, **The R28 screens**); the package and
-an Android backend are not, so nothing is scheduled on a device.
+scheduler glue, the settings presenter and the REMINDERS card on the Settings page are built (R28, **The R28 screens**);
+the package and an Android backend are not, so nothing is scheduled on a device and the card says reminders are not
+available on this device yet.
 
 ### The Store (R19)
 
@@ -1476,22 +1478,37 @@ switch off equals the build before. Docs/DESIGN-STORE.md has a section for each.
 
 ### The R28 screens (presenters, transport, rewarded ads)
 
-**Everything below four screens except the uGUI (`Docs/ui-specs/R28-SCREENS.md`).** Each screen has a presenter in
+**Four screens built below the uGUI, and the uGUI of two of them (`Docs/ui-specs/R28-SCREENS.md`).** Each screen has a presenter in
 `Assets/Scripts/Core/Screens` that exposes exactly what it draws (phase, rows, buttons with enabled and reason, every
 sentence and countdown) and a controller in `Assets/Scripts/Game` that makes the calls. `R28ScreenChecks.cs` drives
 every presenter through every state, reads the codecs against the shapes of migrations 0022 and 0023, and scans every
-string for an em or en dash and for selling words.
+string for an em or en dash and for selling words. **Built in uGUI:** the Leaderboards screen and the REMINDERS card on
+Settings (below), checked by `R28UiChecks.cs` (`CheckR28Ui`). **Not built in uGUI:** the guild dungeon ladder's floor list
+and the rewarded ad blocks, which have presenters, controllers and checks and no screen yet.
 
 - **Leaderboards.** `LeaderboardCodec` (Core) and `LeaderboardService.cs` (transport, in-memory override, controller)
   for `leaderboard_submit` and `leaderboard_top`; `LeaderboardsPresenter`. Submits at most once a minute, never sends
   a score, words a refusal neutrally, and runs the weekly countdown on the server's clock once known. The THIS
   WEEK tab is the highest-floor board (owner decision of 2026-10-23: the floors-climbed board is gone from the server).
+  **The screen** is `LeaderboardsScreen` (`ScreenId.Leaderboards`, built by `ScreenRouter.Build`, named open in
+  `FeatureEntryPoints.OpenScreens`): four tabs, the caller's own row highlighted and pinned under the list when it ranks
+  below the top, every state of the spec's table, no medals, rows that are not buttons. Its doors are a LEADERBOARDS button
+  on `ProfileScreen` and a BOARDS button on `RecitalScreen` and `ProvingScreen` (`LeaderboardsScreen.OpenBoard`: `SelectTab`
+  before `Open`). It is drawn only from `LeaderboardsView` and taps call only `Open`, `Refresh` and `SelectTab`. Where its
+  bands sit is `LeaderboardsLayout` in `R28ScreenLayout.cs`, engine-free so the harness runs it.
 - **Guild dungeon ladder.** `GuildDungeonSizeService` for the size migration's three functions and its snapshot row;
   `GuildDungeonLadderPresenter` reads the ladder, the cycle cap and every refusal sentence from `GuildDungeonScale`
   and the reward from `GuildDungeonRewards` (still the placeholder).
 - **Notification settings.** `NotificationSettingsPresenter` over `NotificationPlanner`; the switches in `PlayerPrefs`;
   `NotificationScheduler` wired into `GameApp`'s pause and quit hooks, inert with the only backend there is
-  (`UnsupportedNotificationBackend`).
+  (`UnsupportedNotificationBackend`). **The card** is `RemindersCard` on `SettingsScreen`, directly under the audio card:
+  the permission line and button, Reminders with its three topics indented under it, COMING UP, the rule lines. It is drawn
+  only from `NotificationSettingsView` and taps call only `Toggle` and `PermissionButton`. With no notification package
+  installed (the real state today) it reads "Reminders are not available on this device yet." with every switch disabled
+  and no list. `RemindersCardLayout` in `R28ScreenLayout.cs` holds its band heights.
+- **Captures owed.** Both screens changed layout and have no capture yet. Every state is a target under
+  `Emberfall/Capture/R28 screens/` in `PlayModeScreenshot` (`R28aCaptures`, offline through `LeaderboardBackends.Override`
+  and `NotificationBackends.Override`), listed at both shapes in `Tools/capture-r28a-targets.txt`.
 - **Rewarded ads, behind `AdsSwitch`, OFF.** `ads.json` (the lean variant: A1 idle Gold capped at 2 hours, A2 one
   Brand, A3 one more full-pay repeat clear, each once a reward day), `AdRewards` (read-only `View`, `Grant` once per
   impression through `PurchaseGrants.Apply`, so the Gold is Sealed), `AdsState` in the save from **version 27**

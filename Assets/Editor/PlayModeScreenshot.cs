@@ -2129,6 +2129,9 @@ namespace Emberfall.EditorTools
                     }
                     app.Router.Battle.SetStage(next);
                 }
+                // R28a: the Leaderboards and REMINDERS states put up their own backends and show their own screen (R28aCaptures).
+                int r28a = R28aCaptures.Open(app, name);
+                if (r28a == 2) { SessionState.SetInt(StageKey, slot + 1); return; }
                 if (IsWaveResultTarget(name))
                 {
                     // Not Router.Show: the screen resolves a wave as it opens, so it has to be
@@ -2146,7 +2149,7 @@ namespace Emberfall.EditorTools
                         Debug.LogWarning("PlayModeScreenshot: CampaignFlow.Launch returned " + went
                                          + " for " + name + ", not Resolved.");
                 }
-                else app.Router.Show(id);
+                else if (r28a == 0) app.Router.Show(id);
                 if (name == "StageCard") app.Router.Campaign.SelectStageForCapture(SessionState.GetString(BattleStageKey, ""));
                 if (IsSinksScreen(name)) OpenSinksPicker(app, name);
                 if (name == "WayfarersRoadPicker") OpenRoadPicker(app);
@@ -2155,6 +2158,9 @@ namespace Emberfall.EditorTools
                 if (name == "LiveEventsMonthly") ShowLiveSlot(app, LiveEventSlot.Monthly);
                 Debug.Log("PlayModeScreenshot: showing " + name);
             }
+
+            // R28a: the cues an R28a state waits for (a refresh, a tap, a scroll), counted from the frame it was shown.
+            if (frame > showAt) R28aCaptures.Tick(app, name, frame - showAt);
 
             // THE WAVE RESULT waits on the screen, not on a frame count: how long a wave takes to
             // resolve depends on how far the line gets, and the screen paints only after the
@@ -4135,6 +4141,374 @@ namespace Emberfall.EditorTools
             session.Profile.RecitalEchoesBanked = session.Balance.RecitalEchoesMax;
 
             app.RefreshHud();
+        }
+
+        // ================================================================== R28a: Leaderboards and the REMINDERS card
+        //
+        // (run R28-SCREENS, builder a.) Every state the spec lists for the two screens, reachable offline: the
+        // Leaderboards through LeaderboardBackends.Override (an in-memory board that answers, holds, fails or goes
+        // offline on cue) and the REMINDERS card through NotificationBackends.Override (a stand-in that reports a
+        // permission and never shows a prompt). Nothing here talks to a server, and nothing runs off the scratch
+        // identity: the hooks in PumpScreen (Open before the screen is shown, Tick after) refuse otherwise.
+        //
+        // Each target is Screen:<Name> and takes the usual @1920x1080 or @2400x1080 suffix; the list is in
+        // Tools/capture-r28a-targets.txt. Unsupported is the real state of the game (no notification package), so its
+        // target sets no override at all.
+        public static class R28aCaptures
+        {
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, offline, no cloud in the build", false, 400)]
+            public static void CaptureLeaderboardsOfflineNoCloud() { Begin("Screen:LeaderboardsOfflineNoCloud"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, offline, signed out (TRY AGAIN)", false, 401)]
+            public static void CaptureLeaderboardsOfflineSignedOut() { Begin("Screen:LeaderboardsOfflineSignedOut"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, loading", false, 402)]
+            public static void CaptureLeaderboardsLoading() { Begin("Screen:LeaderboardsLoading"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, locked board (lock line)", false, 403)]
+            public static void CaptureLeaderboardsLocked() { Begin("Screen:LeaderboardsLocked"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, ready (own row highlighted)", false, 404)]
+            public static void CaptureLeaderboardsReady() { Begin("Screen:LeaderboardsReady"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, ready, own row pinned", false, 405)]
+            public static void CaptureLeaderboardsPinned() { Begin("Screen:LeaderboardsPinned"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, refreshing over rows", false, 406)]
+            public static void CaptureLeaderboardsRefreshing() { Begin("Screen:LeaderboardsRefreshing"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, banner: refresh failed", false, 407)]
+            public static void CaptureLeaderboardsBannerFailed() { Begin("Screen:LeaderboardsBannerFailed"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, banner: offline with rows", false, 408)]
+            public static void CaptureLeaderboardsBannerOffline() { Begin("Screen:LeaderboardsBannerOffline"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, empty", false, 409)]
+            public static void CaptureLeaderboardsEmpty() { Begin("Screen:LeaderboardsEmpty"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, empty, this week", false, 410)]
+            public static void CaptureLeaderboardsEmptyWeekly() { Begin("Screen:LeaderboardsEmptyWeekly"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, error (TRY AGAIN)", false, 411)]
+            public static void CaptureLeaderboardsError() { Begin("Screen:LeaderboardsError"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, not open yet (no TRY AGAIN)", false, 412)]
+            public static void CaptureLeaderboardsNotOpen() { Begin("Screen:LeaderboardsNotOpen"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, this week tab", false, 413)]
+            public static void CaptureLeaderboardsWeekly() { Begin("Screen:LeaderboardsWeekly"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, the Proving tab", false, 414)]
+            public static void CaptureLeaderboardsProving() { Begin("Screen:LeaderboardsProving"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Leaderboards, campaign tab", false, 415)]
+            public static void CaptureLeaderboardsCampaign() { Begin("Screen:LeaderboardsCampaign"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Settings, REMINDERS: not available on this device (today)", false, 420)]
+            public static void CaptureSettingsRemindersUnsupported() { Begin("Screen:SettingsRemindersUnsupported"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Settings, REMINDERS: not asked, no stage cleared", false, 421)]
+            public static void CaptureSettingsRemindersNoStage() { Begin("Screen:SettingsRemindersNoStage"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Settings, REMINDERS: not asked (ALLOW REMINDERS)", false, 422)]
+            public static void CaptureSettingsRemindersNotAsked() { Begin("Screen:SettingsRemindersNotAsked"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Settings, REMINDERS: asking", false, 423)]
+            public static void CaptureSettingsRemindersAsking() { Begin("Screen:SettingsRemindersAsking"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Settings, REMINDERS: denied (OPEN PHONE SETTINGS)", false, 424)]
+            public static void CaptureSettingsRemindersDenied() { Begin("Screen:SettingsRemindersDenied"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Settings, REMINDERS: allowed, with the COMING UP list", false, 425)]
+            public static void CaptureSettingsRemindersGranted() { Begin("Screen:SettingsRemindersGranted"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Settings, REMINDERS: allowed, Reminders off", false, 426)]
+            public static void CaptureSettingsRemindersOff() { Begin("Screen:SettingsRemindersOff"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Profile with the LEADERBOARDS door", false, 430)]
+            public static void CaptureProfileDoor() { Begin("Screen:Profile"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Recital with the BOARDS door", false, 431)]
+            public static void CaptureRecitalDoor() { Begin("Screen:Recital"); }
+
+            [MenuItem("Emberfall/Capture/R28 screens/Proving with the BOARDS door", false, 432)]
+            public static void CaptureProvingDoor() { Begin("Screen:Proving"); }
+
+            // ---------------------------------------------------------------- the hooks PumpScreen calls
+
+            /// <summary>0: not an R28a target (the in-memory backends are put back and the generic path shows the screen).
+            /// 1: shown here. 2: refused, and the caller skips the target.</summary>
+            public static int Open(GameApp app, string name)
+            {
+                // Put back first, on every target: with the domain reload off a backend left by the last target would
+                // otherwise answer the next one.
+                Emberfall.Game.Cloud.LeaderboardBackends.Override = null;
+                Emberfall.Game.Notifications.NotificationBackends.Override = null;
+                if (!IsLeaderboards(name) && !IsReminders(name)) return 0;
+
+                if (Application.persistentDataPath.IndexOf("Emberfall Scratch", StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    Debug.LogError("PlayModeScreenshot: " + name + " seeds a profile and the device switches, so it only runs on the scratch identity. Skipping.");
+                    return 2;
+                }
+
+                if (IsLeaderboards(name))
+                {
+                    OpenLeaderboards(app, name);
+                    return 1;
+                }
+                OpenReminders(app, name);
+                return 1;
+            }
+
+            /// <summary>Called every frame after the screen is shown, with the frames since: the cues a state waits for.</summary>
+            public static void Tick(GameApp app, string name, int since)
+            {
+                if (IsLeaderboards(name))
+                {
+                    if (since == 24 && name == "LeaderboardsBannerOffline" && _board != null) _board.IsReady = false;
+                    bool refresh = name == "LeaderboardsRefreshing" || name == "LeaderboardsBannerFailed" || name == "LeaderboardsBannerOffline";
+                    if (since == 25 && refresh) app.Router.Leaderboards.RefreshForCapture();
+                    return;
+                }
+                if (!IsReminders(name)) return;
+                Emberfall.Game.Notifications.NotificationSettingsController card = app.Router.Settings.RemindersForCapture;
+                if (since == 5 && card != null && name == "SettingsRemindersAsking") card.PermissionButton();
+                if (since == 5 && card != null && name == "SettingsRemindersOff") card.Toggle(null);
+                // Twice: the card changes height when a state arrives, and the page is scrolled to its top edge after.
+                if (since == 3 || since == 30) app.Router.Settings.ScrollToRemindersForCapture();
+            }
+
+            private static bool IsLeaderboards(string name) { return name.StartsWith("Leaderboards", StringComparison.Ordinal); }
+            private static bool IsReminders(string name) { return name.StartsWith("SettingsReminders", StringComparison.Ordinal); }
+
+            // ---------------------------------------------------------------- the leaderboards
+
+            private static BoardBackend _board;
+
+            private static void OpenLeaderboards(GameApp app, string name)
+            {
+                BoardBackend b = new BoardBackend();
+                b.MeName = app.Session.Profile.PlayerName;
+                Emberfall.Core.Cloud.LeaderboardBoard board = Emberfall.Core.Cloud.LeaderboardBoard.Recital;
+                // Cleared through 3-1 the lock line is gone; the Locked target keeps the scratch profile as it is, so the
+                // Recital's own lock line shows over the board.
+                if (name != "LeaderboardsLocked") ClearThrough(app, "ch3_1");
+                else app.Session.Profile.ClearedStageIds.Clear();   // whatever an earlier target left on the scratch profile
+                switch (name)
+                {
+                    case "LeaderboardsOfflineNoCloud":
+                        b.IsReady = false; b.Connectable = false; b.Reason = "This build has no online features, so there are no boards.";
+                        break;
+                    case "LeaderboardsOfflineSignedOut":
+                        b.IsReady = false; b.Connectable = true; b.Reason = "You are offline, so the boards cannot be reached.";
+                        break;
+                    case "LeaderboardsLoading":
+                        b.HoldFirst = true;
+                        break;
+                    case "LeaderboardsLocked":
+                    case "LeaderboardsReady":
+                        break;
+                    case "LeaderboardsPinned":
+                        b.Count = 100; b.MeRank = 312;
+                        break;
+                    case "LeaderboardsRefreshing":
+                        b.HoldLater = true;
+                        break;
+                    case "LeaderboardsBannerFailed":
+                        b.LaterFailure = Emberfall.Core.Cloud.LeaderboardFailure.Server;
+                        break;
+                    case "LeaderboardsBannerOffline":
+                        break;
+                    case "LeaderboardsEmpty":
+                        b.Count = 0; b.MeRank = 0;
+                        break;
+                    case "LeaderboardsEmptyWeekly":
+                        b.Count = 0; b.MeRank = 0;
+                        board = Emberfall.Core.Screens.LeaderboardsPresenter.WeeklyBoard;
+                        break;
+                    case "LeaderboardsError":
+                        b.FirstFailure = Emberfall.Core.Cloud.LeaderboardFailure.Server;
+                        break;
+                    case "LeaderboardsNotOpen":
+                        b.FirstFailure = Emberfall.Core.Cloud.LeaderboardFailure.NotDeployed;
+                        break;
+                    case "LeaderboardsWeekly":
+                        board = Emberfall.Core.Screens.LeaderboardsPresenter.WeeklyBoard;
+                        break;
+                    case "LeaderboardsProving":
+                        board = Emberfall.Core.Cloud.LeaderboardBoard.Proving;
+                        break;
+                    case "LeaderboardsCampaign":
+                        board = Emberfall.Core.Cloud.LeaderboardBoard.Campaign;
+                        break;
+                    default:
+                        Debug.LogWarning("PlayModeScreenshot: no R28a leaderboards state '" + name + "', showing the ready board.");
+                        break;
+                }
+                _board = b;
+                Emberfall.Game.Cloud.LeaderboardBackends.Override = b;
+                app.Router.Leaderboards.OpenBoard(board);
+            }
+
+            /// <summary>An in-memory board: answers at once, or holds, or fails, or goes offline, on the cue its target sets.</summary>
+            private sealed class BoardBackend : Emberfall.Game.Cloud.ILeaderboardBackend
+            {
+                public bool IsReady = true;
+                public bool Connectable = true;
+                public string Reason = "";
+                public int Count = 40;
+                public int MeRank = 2;
+                public string MeName = "Wayfarer";
+                public bool HoldFirst;
+                public bool HoldLater;
+                public Emberfall.Core.Cloud.LeaderboardFailure FirstFailure;
+                public Emberfall.Core.Cloud.LeaderboardFailure LaterFailure;
+                private int _topCalls;
+
+                public bool Ready { get { return IsReady; } }
+                public string NotReadyReason { get { return Reason; } }
+                public bool CanEverConnect { get { return Connectable; } }
+
+                public System.Collections.IEnumerator Submit(Action<Emberfall.Core.Cloud.LeaderboardSubmitResult, Emberfall.Core.Cloud.LeaderboardFailure> done)
+                {
+                    yield return null;
+                    long now = TimeUtil.NowUnix();
+                    Emberfall.Core.Cloud.LeaderboardSubmitResult r = new Emberfall.Core.Cloud.LeaderboardSubmitResult();
+                    r.ServerTimeUnix = now;
+                    r.WeekStartUnix = Emberfall.Core.Cloud.LeaderboardCodec.NextWeekResetUnix(now) - 7L * 86400L;
+                    r.Recital.Verdict = Emberfall.Core.Cloud.LeaderboardVerdict.Raised; r.Recital.Value = 41;
+                    r.Proving.Verdict = Emberfall.Core.Cloud.LeaderboardVerdict.Kept; r.Proving.Value = 30;
+                    r.Campaign.Verdict = Emberfall.Core.Cloud.LeaderboardVerdict.Kept; r.Campaign.Value = 24;
+                    done(r, Emberfall.Core.Cloud.LeaderboardFailure.None);
+                }
+
+                public System.Collections.IEnumerator Top(Emberfall.Core.Cloud.LeaderboardBoard board, int limit,
+                                                          Action<List<Emberfall.Core.Cloud.LeaderboardRow>, Emberfall.Core.Cloud.LeaderboardFailure> done)
+                {
+                    int call = ++_topCalls;
+                    yield return null;
+                    if (call == 1 ? HoldFirst : HoldLater)
+                    {
+                        while (true) yield return null;
+                    }
+                    Emberfall.Core.Cloud.LeaderboardFailure failure = call == 1 ? FirstFailure : LaterFailure;
+                    if (failure != Emberfall.Core.Cloud.LeaderboardFailure.None)
+                    {
+                        done(null, failure);
+                        yield break;
+                    }
+                    done(RowsFor(board, Count, MeRank, MeName), Emberfall.Core.Cloud.LeaderboardFailure.None);
+                }
+            }
+
+            private static readonly string[] Names =
+            {
+                "Ana", "Bo", "Cass", "Dov", "Eli", "Fenn", "Gia", "Hale", "Ines", "Jory", "Kit", "Lio",
+                "Mara", "Nox", "Orla", "Pike", "Quill", "Rhea", "Sol", "Tove", "Uma", "Vance", "Wren", "Yara"
+            };
+
+            /// <summary>Best first, ties sharing a rank the way the server ranks them. The caller's own row is at meRank, and
+            /// after the top list when that is below it, as leaderboard_top sends it.</summary>
+            private static List<Emberfall.Core.Cloud.LeaderboardRow> RowsFor(Emberfall.Core.Cloud.LeaderboardBoard board, int count, int meRank, string meName)
+            {
+                long top = board == Emberfall.Core.Cloud.LeaderboardBoard.Proving ? 2400L
+                         : board == Emberfall.Core.Cloud.LeaderboardBoard.Campaign ? 118L
+                         : board == Emberfall.Core.Cloud.LeaderboardBoard.RecitalWeek ? 64L : 412L;
+                long step = board == Emberfall.Core.Cloud.LeaderboardBoard.Proving ? 17L : 1L;
+                List<Emberfall.Core.Cloud.LeaderboardRow> rows = new List<Emberfall.Core.Cloud.LeaderboardRow>();
+                long rank = 0;
+                long value = top;
+                for (int i = 1; i <= count; i++)
+                {
+                    // Two players share a value now and then: they share a rank, and the next rank skips.
+                    bool tie = i > 1 && i % 7 == 0;
+                    if (!tie) { rank = i; if (i > 1) value = Math.Max(1L, value - step * (1 + i % 3)); }
+                    Emberfall.Core.Cloud.LeaderboardRow r = new Emberfall.Core.Cloud.LeaderboardRow();
+                    r.Rank = rank;
+                    r.Value = value;
+                    r.IsMe = i == meRank;
+                    r.DisplayName = r.IsMe ? meName : Names[(i - 1) % Names.Length] + (i > Names.Length ? " " + (1 + (i - 1) / Names.Length) : "");
+                    rows.Add(r);
+                }
+                if (meRank > count)
+                {
+                    Emberfall.Core.Cloud.LeaderboardRow me = new Emberfall.Core.Cloud.LeaderboardRow();
+                    me.Rank = meRank;
+                    me.DisplayName = meName;
+                    me.Value = Math.Max(1L, value / 6L);
+                    me.IsMe = true;
+                    rows.Add(me);
+                }
+                return rows;
+            }
+
+            // ---------------------------------------------------------------- the REMINDERS card
+
+            private static void OpenReminders(GameApp app, string name)
+            {
+                // The switches start from the default (all on) so a target never inherits another's. PlayerPrefs of the
+                // scratch identity, never the player's.
+                Emberfall.Game.Notifications.NotificationPrefsStore.Save(new NotificationPrefs());
+
+                switch (name)
+                {
+                    case "SettingsRemindersUnsupported":
+                        // No override at all: this is the game as it ships today, no notification package.
+                        break;
+                    case "SettingsRemindersNoStage":
+                        app.Session.Profile.ClearedStageIds.Clear();   // the point of this state: nothing cleared yet
+                        Emberfall.Game.Notifications.NotificationBackends.Override = new StandIn(Emberfall.Core.Screens.NotificationPermission.NotAsked);
+                        break;
+                    case "SettingsRemindersNotAsked":
+                    case "SettingsRemindersAsking":
+                        ClearThrough(app, "ch1_3");
+                        Emberfall.Game.Notifications.NotificationBackends.Override = new StandIn(Emberfall.Core.Screens.NotificationPermission.NotAsked);
+                        break;
+                    case "SettingsRemindersDenied":
+                        ClearThrough(app, "ch1_3");
+                        Emberfall.Game.Notifications.NotificationBackends.Override = new StandIn(Emberfall.Core.Screens.NotificationPermission.Denied);
+                        break;
+                    case "SettingsRemindersGranted":
+                    case "SettingsRemindersOff":
+                        ClearThrough(app, "ch1_6");
+                        // The idle chest fills in a few hours, so the list has a reminder to show.
+                        app.Session.Profile.LastIdleClaimUnix = TimeUtil.NowUnix() - 3600L;
+                        Emberfall.Game.Notifications.NotificationBackends.Override = new StandIn(Emberfall.Core.Screens.NotificationPermission.Granted);
+                        break;
+                    default:
+                        Debug.LogWarning("PlayModeScreenshot: no R28a reminders state '" + name + "', showing the page as it is.");
+                        break;
+                }
+                app.Router.Show(ScreenId.Settings);
+            }
+
+            /// <summary>A notification backend that reports one permission and never shows a prompt or schedules anything.</summary>
+            private sealed class StandIn : Emberfall.Game.Notifications.INotificationBackend
+            {
+                private readonly Emberfall.Core.Screens.NotificationPermission _permission;
+                public StandIn(Emberfall.Core.Screens.NotificationPermission permission) { _permission = permission; }
+                public Emberfall.Core.Screens.NotificationPermission Permission { get { return _permission; } }
+                public void RequestPermission(Action<Emberfall.Core.Screens.NotificationPermission> done) { }
+                public void OpenSystemSettings() { }
+                public void CancelAll() { }
+                public void Schedule(PlannedNotification note) { }
+            }
+
+            // ---------------------------------------------------------------- a scratch profile that has cleared some stages
+
+            private static void ClearThrough(GameApp app, string throughStageId)
+            {
+                ContentDatabase content = app.Session.Content;
+                PlayerProfile p = app.Session.Profile;
+                for (int i = 0; i < content.AllStages.Count; i++)
+                {
+                    string id = content.AllStages[i].Id;
+                    if (!p.HasClearedStage(id)) p.ClearedStageIds.Add(id);
+                    if (id == throughStageId) break;
+                }
+                app.RefreshHud();
+            }
         }
     }
 }
