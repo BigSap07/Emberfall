@@ -1703,6 +1703,19 @@ a capture of a feature's own screen uses `FeatureGates.CaptureBypass` (and `Capt
 the one Marketplace-with-locks target) and the onboarding targets
 clear it.
 
+### Run tooling (R30)
+
+Runs are cheaper and more independent. `D:\Emberfall\handoff\STANDING-RULES.txt` holds every standing rule, so a prompt
+says "Follow handoff\STANDING-RULES.txt" and nothing more. `CLAUDE.md` is short; the detail sits in `Docs/agent-guide`.
+`.claude/agents` holds the five project subagents (builder, tester, reviewer, scout, docs; Sonnet except the two Haiku ones).
+`.claude/settings.json` runs `Tools/guard/guard.py` before every tool call: it refuses deletes, reads of the secrets,
+Unity launches from 03:00 to 05:30 and a push to main unless a full green `Tools/build-check.ps1` wrote the merge marker
+for that tree (`Tools/guard/write-marker.ps1`); `Tools/guard/test-guard.ps1` proves each rule. `handoffun-queue.ps1`
+runs the prompts in `handoff\QUEUE.txt` one at a time, each in a fresh Sonnet session, and records cost and tokens per run
+in `tmpuns.csv`. `Tools/cockpit` is the owner's live view of runs and cost, and `Tools/playtest` analyses play logs.
+The harness runs on a 256 MB stack thread, and `R26UiChecks` reads PNGs without System.Drawing, so the check also runs on
+Linux; the CI job keeps its log and annotates failing lines.
+
 ### Play stats
 
 Opt-in play counts for the playtest, so we can see where players stop. The design is
