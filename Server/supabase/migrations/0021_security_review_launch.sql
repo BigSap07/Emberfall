@@ -1,10 +1,9 @@
 -- 0021_security_review_launch.sql - the fixes from the security review of 0016 to 0019 and the two
 -- receipt Edge Functions. Docs/SECURITY-REVIEW-SUPABASE.md is the review.
 --
--- WRITTEN, NOT APPLIED. Run after 0019 AND after 0020. It reads user_blocks (0017), purchase_receipts
--- (0019) and friendships (0003), and its friend request rule sits beside 0020's throttle on the same
--- table. 0016 to 0019 are migration files that are not on main yet; this file merges with them or
--- after them, never before.
+-- WRITTEN, NOT APPLIED to any project. Run after 0019 AND after 0020. It reads user_blocks (0017),
+-- purchase_receipts (0019) and friendships (0003), and its friend request rule sits beside 0020's
+-- throttle on the same table.
 --
 -- RE-APPLIABLE: tables are `if not exists`, the limits row is inserted `on conflict do nothing`,
 -- functions are `create or replace`, triggers are dropped before they are created.
@@ -19,12 +18,15 @@
 --       right after it knows the user and before it asks Google (the review gives the three lines).
 --   L5  A block (0017) hid chat lines and nothing else. A blocked player could keep sending the
 --       blocker friend requests, and delete and re-send them. Now a request to a player who has
---       blocked the sender is refused, and blocking someone removes their pending request.
+--       blocked the sender is refused, and blocking someone ends every friendship row between the
+--       two: a pending request in either direction and an accepted friendship alike (the owner's
+--       decision of 2026-10-23, review decision 4).
 --   L6  0017's trigger function guild_messages_refuse_muted is revoked from every client role, for
 --       0020's R5 reason.
 --
 -- NOT fixed here, because none of them is a database change (the review has each one):
---   L1  the auto-refund path (consumables are acknowledged only by the client), an Edge Function change;
+--   L1  the auto-refund path (consumables were acknowledged only by the client), an Edge Function change,
+--       now in verify-google-purchase/index.ts (the server acknowledges every verified purchase);
 --   L3  restoring a one-time purchase after a reinstall or an account deletion, an owner decision;
 --   L4  a refund that lands before the purchase was verified, a polling backstop.
 
@@ -134,10 +136,12 @@ create trigger friendships_block_check
   before insert on public.friendships
   for each row execute function public.friendships_refuse_blocked();
 
--- Blocking someone takes away the request they have pending to the blocker. An ACCEPTED friendship is
--- left alone: ending a friendship is the player's own Remove (0003), and whether a block should also
--- end one is a design call (the review lists it for the owner).
-create or replace function public.user_blocks_drop_pending_request()
+-- Blocking someone ends whatever stood between the two: their request pending to the blocker, the
+-- blocker's own request pending to them, and an ACCEPTED friendship. The owner decided (2026-10-23) that
+-- a block also ends a friendship, so the blocked player stops seeing the blocker on their friend list and
+-- loses 0003's friend read on the blocker's team snapshot in the same statement. Unblocking (0017's
+-- user_unblock) restores nothing: a new friendship starts with a new request, as after a Remove.
+create or replace function public.user_blocks_end_friendship()
 returns trigger
 language plpgsql
 security definer
@@ -145,21 +149,22 @@ set search_path = public, pg_temp
 as $$
 begin
   delete from public.friendships f
-   where f.status = 'pending' and f.requester = new.blocked and f.addressee = new.blocker;
+   where (f.requester = new.blocked and f.addressee = new.blocker)
+      or (f.requester = new.blocker and f.addressee = new.blocked);
   return new;
 end;
 $$;
 
-drop trigger if exists user_blocks_drop_pending on public.user_blocks;
-create trigger user_blocks_drop_pending
+drop trigger if exists user_blocks_end_friendship on public.user_blocks;
+create trigger user_blocks_end_friendship
   after insert on public.user_blocks
-  for each row execute function public.user_blocks_drop_pending_request();
+  for each row execute function public.user_blocks_end_friendship();
 
 -- ---------------------------------------------------------------- L6 and the new trigger functions, revoked
 
 revoke all on function public.guild_messages_refuse_muted() from public, anon, authenticated;
 revoke all on function public.friendships_refuse_blocked() from public, anon, authenticated;
-revoke all on function public.user_blocks_drop_pending_request() from public, anon, authenticated;
+revoke all on function public.user_blocks_end_friendship() from public, anon, authenticated;
 
 -- ---------------------------------------------------------------- what was applied, said once
 
@@ -176,7 +181,7 @@ begin
       raise exception '0021: % can read a purchase verification table', who;
     end if;
     if has_function_privilege(who, 'public.friendships_refuse_blocked()', 'execute')
-       or has_function_privilege(who, 'public.user_blocks_drop_pending_request()', 'execute')
+       or has_function_privilege(who, 'public.user_blocks_end_friendship()', 'execute')
        or has_function_privilege(who, 'public.guild_messages_refuse_muted()', 'execute') then
       raise exception '0021: % can execute a trigger function', who;
     end if;
@@ -184,7 +189,7 @@ begin
   if not has_function_privilege('service_role', 'public.purchase_verify_allow(uuid)', 'execute') then
     raise exception '0021: service_role cannot execute purchase_verify_allow, so the Edge Function could not ask it';
   end if;
-  raise notice '0021: purchase verification is throttled per account (service role), blocks cover friend requests';
+  raise notice '0021: purchase verification is throttled per account (service role), a block refuses friend requests and ends a friendship';
 end;
 $$;
 
