@@ -90,6 +90,8 @@ function Finish([int]$code) {
     } catch {
         Write-Host ("[status] STATUS.md was not written: " + $_.Exception.Message + " - build-check's result is unaffected") -ForegroundColor Yellow
     }
+    # Merge marker for the push guard (Tools/guard/write-marker.ps1): one line, cannot change $code.
+    try { & (Join-Path $PSScriptRoot "guard/write-marker.ps1") -Code $code -Mode $mode -NoRun:$NoRun } catch { }
     exit $code
 }
 
