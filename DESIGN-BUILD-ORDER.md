@@ -257,6 +257,8 @@ relics, events, armor and floor conditions), so an edit to any of them retires e
 dungeon replay. **Four are not**, because no fight reads them and each loads after `Load`:
 `guild-path.json` (`LoadGuildPath`), `guild-tech.json`, `onboarding.json` (`LoadOnboarding`, read
 through `ContentService`) and `vfx.json` (`VfxConfig`, which `ContentDatabase` never reads).
+`guild-dungeon-scale.json` (`LoadGuildDungeonScale`) is not hashed either, for the same reason: it
+says how many floors a guild has, never what a floor is.
 
 - `heroes.json`: 94 heroes, **all 94 authored**. 8 one-star, 12 two-star, 18 three-star,
   26 four-star, 30 five-star.
@@ -1143,6 +1145,73 @@ once per 30 seconds, and `guild_by_code` refuses an account after ten misses in 
 `guild_request_send` taking only a found code. `Tools/supabase-guild-rules-test.py` asserts all
 three. Operator steps are in `Docs/CLOUD-GAPS.md`, **Fixed, pending apply: 0014**.
 
+**Guild dungeon size and attempts (phase two, system 1's "Size" and "Bounded" rules).** System 1
+was built with five floors for every guild, whatever its size. This makes the ladder's length scale
+with the guild and bounds a member's attempts the same at every size. **Unmerged: it is delivered
+as a git bundle with a PR description, not pushed.** Measured with a Linux stand-in for
+`Tools/build-check.ps1` (Roslyn and .NET 8, because the script needs the Windows .NET Framework
+compiler), so it is **unverified by the real build check**.
+
+- **The ladder.** `guild-dungeon-scale.json` maps member count to floors: 5 under ten members, then
+  one more per five members, 10 at the 30-member cap. `GuildDungeonScale.LadderFor` reads it. The
+  smallest ladder is the base five, so no guild has fewer floors than before. The server snapshots
+  the member count when the cycle opens, and the ladder is fixed until the cycle rolls.
+- **A floor never depends on the ladder.** `GuildDungeonGenerator` builds floors in blocks of five
+  (`BlockFloors`: four shuffled themes, then a Champion), and a floor is a function of (seed,
+  floor) alone, so `ThemesFor(n, seed)` agrees with `BuildFloor` for every ladder length the
+  screens pass. **Floors 1 to 5 are unchanged, enemy for enemy**: `CheckBaseBlockUnmoved` pins
+  them over 200 cycles against a value taken from the generator before the change. No hashed file
+  moved, so `ContentVersion` did not move and no recorded replay retired.
+- **Deeper floors are more floors, not harder ones.** Each block's power climb starts again from
+  floor 1's target (`TargetPowerForFloor` reads `PositionInBlock`). Measured first: letting the
+  climb run on past floor 5 took the 3-star-or-fewer rosters under the not-a-hero-check guardrail
+  from floor 6, and to 0% clears on several floors from 7. That is a star check.
+- **Attempts.** Three a floor, as before, and a cycle cap of 15 per account
+  (`GuildDungeonScale.CycleAttemptCap`, derived as `guildDungeonAttemptsPerFloor` x
+  `guildDungeonFloors`). A member of a 10-floor guild has more floors to spend 15 attempts on,
+  never more than 15. `CanAttempt` and `AttemptsLeft` give the client the server's order of
+  refusals and its sentences. The server's count wins over the rows, because a member who changed
+  guild cannot read their old guild's rows.
+- **Rewards: a placeholder, clearly marked.** `GuildDungeonRewards.ForFirstClear` returns
+  `Placeholder` with Amount 0 for every floor, and the server mints nothing for a deep floor. The
+  Waymark pay is untouched and stays blind to depth (only floor 1's boards pay). Whatever is
+  decided must stay a pure function with no seed and no member count, and nothing bought may name
+  the dungeon; `CheckRewardPlaceholder` holds all three now.
+- **Generator fix.** `NeverOneAspect` redraws the last slot of a line that came out single-Aspect.
+  The ten-floor ladder found one such floor in 10,000. It draws only when the line is
+  single-Aspect, so every mixed floor is unchanged (the pin covers it).
+- **Server.** `Server/supabase/migrations/0016_guild_dungeon_size.sql` - **written, not applied,
+  never run against any database.** It needs 0014 applied first and refuses to apply without it.
+  It adds `guild_dungeon_cycles` (the snapshot: RLS on, read by members of the guild, no client
+  write), `guild_dungeon_floor_max`, `guild_dungeon_floors_for`, `guild_dungeon_cycle_attempt_cap`,
+  an internal `guild_dungeon_cycle_floors`, a `cycle_attempt` column with a CHECK and a unique key
+  (so a sixteenth attempt cannot exist), a widened floor constraint, `guild_dungeon_status` with
+  three new columns, and `guild_dungeon_submit` as 0014's body plus the ladder and the cycle cap.
+  It was parsed with the Postgres parser (pglast), statements and PL/pgSQL bodies; nothing
+  resolved names against a schema. The existing live test's assertions still hold for a guild
+  under ten members ("floor 6 does not exist", five floors).
+- **Rules test.** `Tools/supabase-guild-dungeon-size-rules-test.py`, **written, not run.** Reads
+  credentials from `SUPABASE_URL` and `SUPABASE_ANON_KEY` only, never from `supabase.json`, and
+  creates about fourteen tagged throwaway accounts.
+- **Harness.** `GuildDungeonChecks` gains `CheckLadderTable`, `CheckBaseBlockUnmoved`,
+  `CheckFloorIsLadderBlind`, `CheckDeepFloorsMatchBase`, `CheckAttemptBounds`, `CheckSizeReach`,
+  `CheckRewardPlaceholder` and `CheckServerAgreesOnSize`. `CheckFloors`' composition rules and
+  `CheckNotAHeroCheck` now run over all ten floors. `CheckSizeReach` fights guilds of 1 to 30, each
+  member holding three lines from the not-a-hero-check spread, through the real caps: every size
+  finished its own ladder in 7 or 8 of 8 guilds, and no member passed a cap.
+- **FINDING, pre-existing, for the owner.** The base floors themselves break the not-a-hero-check
+  group guardrail (25% of 3-star-or-fewer rosters clear) on about 1.7% of floors, almost all
+  Champion floors: 155 of 9,000 over three seed families of 600 dungeons. `CheckNotAHeroCheck`'s
+  six fixed dungeons never happen to draw one, which is why it has always passed. The deep floors
+  read 181 of 9,000, the same band. Deep floors are therefore judged against the base at the same
+  block position (mean clear share within 10 points), and the per-floor guardrail stays asserted
+  on the base floors exactly as before. Closing the margin means moving `guildDungeonFloorOnePower`
+  or `guildDungeonChampionLevelBonus` in `balance.json`, which retires every replay.
+- **Client.** No screen is changed. The screens already read the server's `floor_count`, so a
+  longer ladder appears once 0016 is applied, but nothing shows the cycle cap, the ladder's
+  origin or the placeholder. `Docs/ui-specs/GUILD-DUNGEON-SIZE.md` is the spec for that run.
+- **Owner decisions:** open decision 5.
+
 ### The Deep Recital, The Proving, events, shop
 
 `RecitalGenerator` builds an endless floor ladder with a Guardian every tenth floor and an unbroken
@@ -1873,11 +1942,12 @@ In order.
 
 ## Open decisions
 
-Four. None of them is a number to nudge, and neither the economy question nor the power-band one
+Five. None of them is a number to nudge, and neither the economy question nor the power-band one
 that used to head this list is still here. The five-star review closed four more - the three
 5-star kit questions and the low-tier Energy one - and the Dispel repair closed the Dispel one,
 which was open decision 3, all recorded below. The numbers on the three that remain were reassigned
-when it closed, so the Hub rail is number 3 now.
+when it closed, so the Hub rail is number 3 now. Number 5, the guild dungeon's size rules, was
+added with them.
 
 **The economy decision is resolved, and what replaced it is open decision 4.** The economy and
 curve passes, the retune after them and the re-solve against real summon rates put a simulated
@@ -2086,6 +2156,22 @@ instead and is named in the coverage note under **Known bugs**.
    band the curve check enforces. **The proposal is to keep A on the multiplicative split and let
    the fusion spec say which of the two levers it pulls, and to grade B at 1 to 2 on chapter 1's
    finale and 2 to 4 from chapter 2 on**, pending the playtests open decision 1 already calls for.
+5. **The guild dungeon's size rules** (**Guild dungeon size and attempts**, under **Guilds, phase
+   one**). Built as proposed below, every one reversible in content or one SQL function:
+   - **What a deep floor pays.** `GuildDungeonRewards` is a placeholder that pays nothing. The
+     design asks for breadth or recognition, never more pay per member for depth, and nothing
+     random or bought.
+   - **The bands.** 5 floors under ten members, one more per five, 10 at the cap. The alternative
+     the design text reads as, fewer floors for a small guild, would take floors away from guilds
+     that have them today.
+   - **The cycle cap's scope.** 15 per account across guilds, so changing guild mid-cycle does not
+     reset it. Per guild is the other reading, and it lets a player who hops guilds attempt more.
+   - **When the snapshot is taken.** On the cycle's first status call or attempt by anyone in the
+     guild. A guild that fills up just before that gets the longer ladder all week; nothing extra
+     is paid for it.
+   - **The pre-existing guardrail margin.** About 1.7% of base floors, mostly Champion floors, are
+     cleared by under 25% of 3-star-or-fewer rosters. Accept it, or move `guildDungeonFloorOnePower`
+     or `guildDungeonChampionLevelBonus` and retire every replay.
 
 ## Known bugs
 
@@ -2202,7 +2288,8 @@ Not scheduled and not blocked on anything in **Next**, listed so it is not redis
   fodder exchange and (parked) guild wars remain, as sequenced in `DESIGN-GUILDS-PHASE-TWO.md`.
   Guild level exists now and gates the tree; `DESIGN-GUILD-TECH.md` in the `claude` folder G6 lists what could read
   it later (a marketplace, a sixth floor, a fourth attempt, a guild hall) and says that none of
-  them is designed today.
+  them is designed today. A sixth to tenth floor now exists by member count, not guild level
+  (**Guild dungeon size and attempts**), so a level-gated floor would be a second, separate rule.
 - **A marketplace.** Nothing built, nothing designed.
 - **Chapters 3 to 6's art and backgrounds**, when they exist. The stages are built.
 - **Texture compression.** The 855 MB figure this entry once carried was re-taken against a real
