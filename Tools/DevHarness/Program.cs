@@ -17613,7 +17613,9 @@ namespace Emberfall.DevHarness
                     long goldBeforeLevels = profile.Gold;
                     int levelsBought;
                     Dictionary<string, int> beforeGold = LevelsByUid(profile);
-                    if (SpendGold(session, out levelsBought, _walkLoopMode > 0 ? run.Now : 0L)) run.CapBlockedSessions++;
+                    // The walk's own clock, always: the two-argument LevelUpHero read the DEVICE clock, which dated every
+                    // level-up's order and live-event count by the day the harness ran, not the day the walk was on.
+                    if (SpendGold(session, out levelsBought, run.Now)) run.CapBlockedSessions++;
                     else run.SpendableSessions++;
                     CreditLevels(profile, beforeGold, run.GoldLevels);
                     run.Ledger.GoldSpentOnLevels += goldBeforeLevels - profile.Gold;
@@ -21654,7 +21656,7 @@ namespace Emberfall.DevHarness
                 while (_walkAscends && session.AscensionBlocker(h) == null)
                 {
                     int levelBefore = h.Level;
-                    if (!session.Ascend(h).Success) break;
+                    if (!session.Ascend(h, run.Now).Success) break;   // the walk's clock, not the device's (as SpendGold above)
                     Credit(run.CopyLevels, h.Uid, h.Level - levelBefore);
                     run.Ledger.Ascensions++;
                     outcome.Ascensions++;
@@ -21995,8 +21997,9 @@ namespace Emberfall.DevHarness
             return SpendGold(session, out levelsBought, 0L);
         }
 
-        /// <summary>nowUnix above 0 dates each level-up by that clock (the daily loop curve's walk, whose orders
-        /// count level-ups by day); 0 keeps the two-argument LevelUpHero, which reads the wall clock.</summary>
+        /// <summary>nowUnix above 0 dates each level-up by that clock: the economy walk always passes its own, so its
+        /// orders and live-event quests count on the walk's day. 0 (the checks' short forms) keeps the two-argument
+        /// LevelUpHero, which reads the device clock.</summary>
         private static bool SpendGold(GameSession session, out int levelsBought, long nowUnix)
         {
             levelsBought = 0;
