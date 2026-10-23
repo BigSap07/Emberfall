@@ -213,6 +213,9 @@ namespace Emberfall.UI
             _root.gameObject.SetActive(false);
         }
 
+        /// <summary>CAPTURE ONLY: the tap on CLAIM, through the same private handler the button drives.</summary>
+        public void ClaimForCapture() { ClaimNow(); }
+
         private void ClaimNow()
         {
             IdleReport report = _app.Session.ClaimIdle(TimeUtil.NowUnix());

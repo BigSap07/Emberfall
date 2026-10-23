@@ -161,6 +161,13 @@ namespace Emberfall.UI.Screens
         /// same private handler the button drives, as SkipToEndForCapture does on the battle screen.</summary>
         public void WatchForCapture() { OnWatch(); }
 
+        /// <summary>CAPTURE ONLY: draws the resolved wave again, so a capture that has changed what the result carries
+        /// (the repeat clear A3 needs, which the campaign sweeps instead of showing) sees it drawn.</summary>
+        public void RepaintForCapture()
+        {
+            if (_result != null && _result.Refused == WaveRefusal.None) Paint(false);
+        }
+
         /// <summary>Presses STATS from outside, so a capture can photograph the panel, on the
         /// scope the panel opens on or the other one.</summary>
         public void StatsForCapture(bool otherScope)
