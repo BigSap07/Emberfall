@@ -432,12 +432,11 @@ def check_boards(watcher, climber):
     week = [r for r in body if r.get("is_me")] if status == 200 and isinstance(body, list) else []
     check(len(week) == 1 and week[0].get("value") == 8, "THE WEEKLY BOARD: the climber is on this week's board at floor 8", (status, week))
     status, body = top(climber, "recital_week_climb", 100)
-    climb = [r for r in body if r.get("is_me")] if status == 200 and isinstance(body, list) else None
-    check(climb == [], "and NOT on the climb board yet: a first submission counts its floor as where the week started", (status, climb))
+    check(status == 400, "there is no floors-climbed board: the weekly board ranks the highest floor this week (owner, 2026-10-23)", (status, body))
 
 
 def check_slow(climber):
-    section("OVER TIME - an older save keeps the board, a climb shows on the week's climb board (waits 2 x 61 s)")
+    section("OVER TIME - an older save keeps the board, a climb raises the weekly board (waits 2 x 61 s)")
     time.sleep(61)
     push(climber, save(stages(20), recital=4))
     status, body = submit(climber)
@@ -448,9 +447,9 @@ def check_slow(climber):
     status, body = submit(climber)
     check(status == 200 and verdict(body, "recital").get("status") == "raised" and verdict(body, "recital").get("value") == 11,
           "floor 11 a minute later (8 + burst 10 allows it) is raised", (status, body))
-    status, body = top(climber, "recital_week_climb", 100)
-    climb = [r for r in body if r.get("is_me")] if status == 200 and isinstance(body, list) else []
-    check(len(climb) == 1 and climb[0].get("value") == 3, "and the week's climb board shows 3 floors climbed (8 to 11)", (status, climb))
+    status, body = top(climber, "recital_week", 100)
+    week = [r for r in body if r.get("is_me")] if status == 200 and isinstance(body, list) else []
+    check(len(week) == 1 and week[0].get("value") == 11, "and this week's board shows floor 11, the highest floor this week", (status, week))
 
 
 # ---------------------------------------------------------------- entry point

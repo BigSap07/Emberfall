@@ -5,8 +5,10 @@ Decision record from 2026-10-22. The reasoning is durable. Names and numbers are
 
 ## What is built and what is not
 
-- **Written, not applied:** `Server/supabase/migrations/0023_leaderboards.sql`, five tables, four functions
-  and their privileges. Nothing has been run against any database.
+- **Written, not applied to any project:** `Server/supabase/migrations/0023_leaderboards.sql`, five tables,
+  four functions and their privileges. Applied on 2026-10-23 to a local PostgreSQL with stand-in Supabase
+  roles (`Tools/supabase-local-check.sh`), which found and fixed a closing check that asked PostgreSQL for a
+  column DELETE privilege, an error that would have failed the whole paste in the SQL editor.
 - **Written, not run:** `Tools/supabase-leaderboard-rules-test.py`, which proves the rules against the live
   project once 0023 is applied. It needs the project's anon key, as the other two rule tests do.
 - **Not built:** anything in the game. No client code calls these functions and no screen shows a board.
@@ -15,7 +17,7 @@ Decision record from 2026-10-22. The reasoning is durable. Names and numbers are
 
 | Board | Value | Read from the save | Resets |
 |---|---|---|---|
-| Deep Recital | highest floor | `recitalHighestFloor` | all-time board never; a **weekly** board every Monday 04:00 UTC |
+| Deep Recital | highest floor | `recitalHighestFloor` | all-time board never; a **weekly** board (highest floor this week) every Monday 04:00 UTC |
 | The Proving | highest standing | `provingHighestStanding` | never |
 | Campaign | stages cleared | distinct ids in `clearedStages` | never |
 
@@ -83,14 +85,13 @@ of work and a separate decision.
 The Recital is an endless ladder and nothing in the game resets it; resetting the mode weekly would be a game
 change. The **board** resets: a week runs from Monday 04:00 UTC (`week_reset_hour_utc`, matching
 `balance.json` `dailyResetHourUtc` and `DailyLoop.WeekOf`) to the next. A player is on a week's board once
-they submit during it. Two readings are kept:
+they submit during it, so the board shows who played this week.
 
 - `recital_week`: the highest floor held at the latest submission this week.
-- `recital_week_climb`: floors climbed this week (best minus the floor the server had for them when the week
-  began; a first-ever submission counts as the starting point, so it climbs 0).
 
-The first favours veterans every week. The second rewards playing that week. Which one the game shows is the
-owner's call; both are served. Weeks older than 8 are pruned by `leaderboard_submit`.
+**Decided by the owner on 2026-10-23: the weekly board ranks the highest floor this week.** A floors-climbed
+board was written beside it and was removed with the decision, with the `start_floor` column it needed.
+Weeks older than 8 are pruned by `leaderboard_submit`.
 
 ## How the client should call it (not built)
 
@@ -116,8 +117,8 @@ with a value argument is no function (the client cannot send a score); no save m
 inside a minute means 429; `server_time` is the server's and `week_start` is the Monday 04:00 UTC before it;
 each campaign, Proving and Recital refusal above, one by one; a refused board does not block another in the
 same call; `leaderboard_top` rows carry no user id, mark `is_me`, come best first and hold to 100; the weekly
-board shows a first submission and the climb board does not; and, with two 61 second waits (skip with
-`--quick`), an older save keeps the board and a climb shows on the climb board.
+board shows a first submission and there is no climb board; and, with two 61 second waits (skip with
+`--quick`), an older save keeps the board and a climb raises the weekly board.
 
 ## Owner steps
 
@@ -129,9 +130,8 @@ board shows a first submission and the climb board does not; and, with two 61 se
 
 ## Decisions for the owner
 
-1. Which Recital weekly board the game shows: highest floor, or floors climbed.
-2. Proving on highest standing (all-time, only rises, chosen here) or current standing (moves both ways, needs
-   a weekly reset to mean anything).
+1. Decided 2026-10-23: the weekly Recital board ranks the highest floor this week.
+2. Decided 2026-10-23: the Proving board ranks the highest standing (all-time, only rises), as built.
 3. The rate numbers, and whether a refusal should also hide the player until reviewed (today it only keeps
    their old value).
 4. Whether boards ever pay, and if so the fixed table.

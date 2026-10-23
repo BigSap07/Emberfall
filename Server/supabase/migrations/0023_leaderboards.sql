@@ -85,16 +85,14 @@
 -- would be a game change, not a server one). The WEEKLY BOARD resets: a week runs from Monday at
 -- week_reset_hour_utc (4, balance.json dailyResetHourUtc, so the board turns with the daily orders and
 -- DailyLoop.WeekOf's week) to the next Monday at that hour, server time. A player appears on a week's
--- board once they submit during it. Two readings are kept per player per week:
+-- board once they submit during it. One reading is kept per player per week:
 --
 --   best_floor    the highest floor they held at their latest submission this week
---   start_floor   the highest floor the server had for them before the week's first submission (their
---                 current floor if they never submitted before), so best_floor - start_floor is the
---                 floors climbed this week
 --
--- leaderboard_top('recital_week') ranks by best_floor and leaderboard_top('recital_week_climb') by the
--- floors climbed. Which one the game shows is the owner's call (Docs/DESIGN-LEADERBOARDS.md). Old weeks
--- are pruned by leaderboard_submit once they are more than weeks_kept weeks old.
+-- leaderboard_top('recital_week') ranks by best_floor: THE WEEKLY BOARD RANKS THE HIGHEST FLOOR THIS
+-- WEEK, the owner's decision of 2026-10-23 (Docs/DESIGN-LEADERBOARDS.md). A floors-climbed board was
+-- written beside it and is gone with that decision. Old weeks are pruned by leaderboard_submit once they
+-- are more than weeks_kept weeks old.
 --
 -- ---------------------------------------------------------------- the limits the server holds
 
@@ -161,8 +159,7 @@ create index if not exists leaderboard_entries_campaign_idx on public.leaderboar
 create table if not exists public.leaderboard_recital_weeks (
   week_start   timestamptz not null,
   user_id      uuid not null references public.profiles (user_id) on delete cascade,
-  start_floor  integer not null check (start_floor >= 0),
-  best_floor   integer not null check (best_floor >= start_floor),
+  best_floor   integer not null check (best_floor >= 0),
   reached_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now(),
   primary key (week_start, user_id)
@@ -286,7 +283,6 @@ declare
   allowed      bigint;
   base_at      timestamptz;
   days         numeric;
-  rec_before   integer;
   result       jsonb;
   verdict      jsonb;
   why          text;
@@ -420,7 +416,6 @@ begin
     why := 'above the floor ceiling';
   end if;
   rec_high := coalesce(rec_high, 0);
-  rec_before := ent.recital_floor;
   base_at := coalesce(ent.recital_reached_at, born);
   days := extract(epoch from (now() - base_at)) / 86400.0;
   allowed := coalesce(ent.recital_floor, 0) + lim.recital_floors_burst + floor(lim.recital_floors_per_day * days);
@@ -442,8 +437,8 @@ begin
   -- ---- the week's Recital row, from what is STORED now (a refused value never reaches a board)
   select recital_floor into ent.recital_floor from public.leaderboard_entries where user_id = uid;
   if coalesce(ent.recital_floor, 0) > 0 then
-    insert into public.leaderboard_recital_weeks (week_start, user_id, start_floor, best_floor, reached_at, updated_at)
-    values (week, uid, least(coalesce(rec_before, ent.recital_floor), ent.recital_floor), ent.recital_floor, now(), now())
+    insert into public.leaderboard_recital_weeks (week_start, user_id, best_floor, reached_at, updated_at)
+    values (week, uid, ent.recital_floor, now(), now())
     on conflict (week_start, user_id) do update
        set best_floor = greatest(public.leaderboard_recital_weeks.best_floor, excluded.best_floor),
            reached_at = case when excluded.best_floor > public.leaderboard_recital_weeks.best_floor
@@ -470,7 +465,6 @@ grant execute on function public.leaderboard_submit() to authenticated;
 --
 --   recital             all-time highest floor
 --   recital_week        highest floor held at the latest submission this week (the weekly board)
---   recital_week_climb  floors climbed this week
 --   proving             all-time highest standing
 --   campaign            stages cleared
 --
@@ -493,7 +487,7 @@ begin
   if uid is null then
     raise exception 'leaderboard_top requires a signed-in user' using errcode = 'PT401';
   end if;
-  if p_board is null or p_board not in ('recital', 'recital_week', 'recital_week_climb', 'proving', 'campaign') then
+  if p_board is null or p_board not in ('recital', 'recital_week', 'proving', 'campaign') then
     raise exception 'leaderboard_top: no board called %', coalesce(p_board, 'null') using errcode = 'PT400';
   end if;
   select week_reset_hour_utc into hr from public.leaderboard_limits where id;
@@ -515,11 +509,9 @@ begin
       from public.leaderboard_entries e
      where p_board in ('recital', 'proving', 'campaign')
     union all
-    select w.user_id,
-           case p_board when 'recital_week' then w.best_floor::bigint else (w.best_floor - w.start_floor)::bigint end,
-           w.reached_at
+    select w.user_id, w.best_floor::bigint, w.reached_at
       from public.leaderboard_recital_weeks w
-     where p_board in ('recital_week', 'recital_week_climb') and w.week_start = week
+     where p_board = 'recital_week' and w.week_start = week
   ),
   visible as (
     select s.* from scored s
@@ -558,7 +550,10 @@ begin
     end if;
     foreach who in array array['anon', 'authenticated'] loop
       foreach verb in array array['select', 'insert', 'update', 'delete'] loop
-        if has_table_privilege(who, 'public.' || t, verb) or has_any_column_privilege(who, 'public.' || t, verb) then
+        -- Column privileges exist for select, insert and update only; asking about a column DELETE is an
+        -- error, not a false (found by applying this file to a local PostgreSQL, 2026-10-23).
+        if has_table_privilege(who, 'public.' || t, verb)
+           or (verb <> 'delete' and has_any_column_privilege(who, 'public.' || t, verb)) then
           raise exception '0023: % can % %', who, verb, t;
         end if;
       end loop;
