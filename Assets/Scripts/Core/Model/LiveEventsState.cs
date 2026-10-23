@@ -43,9 +43,8 @@ namespace Emberfall.Core.Model
 
         public LiveEventSlotState Clone()
         {
-            LiveEventSlotState c = (LiveEventSlotState)MemberwiseClone();
-            c.Progress.Clear();
-            c.Progress.AddRange(Progress);
+            LiveEventSlotState c = new LiveEventSlotState();
+            c.CopyFrom(this);
             return c;
         }
 

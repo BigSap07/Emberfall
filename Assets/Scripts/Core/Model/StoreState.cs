@@ -63,7 +63,10 @@ namespace Emberfall.Core.Model
     public sealed class StoreState
     {
         public const int ReceiptsMax = 500;
-        public const int OffersMax = 64;
+        /// <summary>The most PERIODIC records (Period above 0: a weekly, monthly or season counter, one per hero for the
+        /// Hero Contract) a load reads. A record with Period 0 (a once-only purchase such as the Starter Pact, the Growth
+        /// Fund or a skin, the Ember Ledger's card, the store's clock) is never dropped and does not count toward it.</summary>
+        public const int OffersMax = 1024;
 
         public readonly List<OfferRecord> Offers = new List<OfferRecord>();
         public readonly List<PurchaseReceipt> Receipts = new List<PurchaseReceipt>();
@@ -143,13 +146,14 @@ namespace Emberfall.Core.Model
 
         /// <summary>Reads a saved block. Absent or damaged reads as empty; a damaged entry is skipped, every
         /// number is clamped to what the game could have written, and a repeated receipt id or offer id
-        /// keeps its first entry.</summary>
+        /// keeps its first entry. Every once-only record is read; periodic records stop at OffersMax.</summary>
         public static StoreState Read(JsonValue o)
         {
             StoreState s = new StoreState();
             if (o == null || !o.IsObject) return s;
             List<JsonValue> offers = o.GetList("offers");
-            for (int i = 0; i < offers.Count && s.Offers.Count < OffersMax; i++)
+            int periodic = 0;
+            for (int i = 0; i < offers.Count; i++)
             {
                 JsonValue j = offers[i];
                 if (j == null || !j.IsObject) continue;
@@ -162,7 +166,9 @@ namespace Emberfall.Core.Model
                 r.StartDay = Math.Max(0, j.GetLong("start", 0));
                 r.LastDay = Math.Max(0, j.GetLong("last", 0));
                 r.Mask = (int)(Math.Max(0L, j.GetLong("mask", 0)) & 0x7FFFFFFFL);
-                if (!r.IsEmpty) s.Offers.Add(r);
+                if (r.IsEmpty) continue;
+                if (r.Period != 0 && ++periodic > OffersMax) continue;
+                s.Offers.Add(r);
             }
             List<JsonValue> receipts = o.GetList("receipts");
             for (int i = 0; i < receipts.Count && s.Receipts.Count < ReceiptsMax; i++)
