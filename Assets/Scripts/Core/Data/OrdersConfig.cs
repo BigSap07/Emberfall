@@ -17,7 +17,12 @@ namespace Emberfall.Core.Data
         /// <summary>Summons performed.</summary>
         Summon,
         /// <summary>Fights fought in the Proving or the Recital, won or lost.</summary>
-        Arena
+        Arena,
+        /// <summary>Gold spent, on hero levels or at the Quartermaster: the two Gold sinks. Replaced the
+        /// level order in the pool (owner, 2026-10-23), because a line at its level cap could not finish
+        /// "level up a hero" and an unfinished order kept the daily chest shut. Gold always has a sink: a
+        /// level of any hero below its cap, or a Quartermaster piece once it opens.</summary>
+        Gold
     }
 
     /// <summary>One order a day may carry. The day takes ONE entry of each Slot.</summary>
@@ -163,6 +168,7 @@ namespace Emberfall.Core.Data
                 case "level": kind = OrderKind.Level; return true;
                 case "summon": kind = OrderKind.Summon; return true;
                 case "arena": kind = OrderKind.Arena; return true;
+                case "gold": kind = OrderKind.Gold; return true;
             }
             kind = OrderKind.Waves;
             return false;

@@ -12,24 +12,25 @@ namespace Emberfall.DevHarness
 {
     /// <summary>
     /// THE DAILY LOOP CURVE (Docs/DAILY-LOOP-CURVE.md): what turning the daily orders (DailyLoopSwitch) and the
-    /// free Wayfarer's Road track on by default would do to the reference walk. A measurement, never part of the
-    /// gate, and inert in every other run (_walkLoopMode is 0). It flips no default: the switches are set for the
-    /// length of one arm's batch and put back after it.
+    /// free Wayfarer's Road track on by default does to the reference walk. Both are ON by default since the owner's
+    /// decision of 2026-10-23; the off arm is the build before that. A measurement, never part of the gate, and inert
+    /// in every other run (_walkLoopMode is 0). The switches are set for the length of one arm's batch and put back.
     ///
     ///   DevHarness.exe --daily-loop-curve [walks]      the reference player (never converts, never ascends)
     ///   add --daily-loop-fuse                          to walk the fusing player (converts and ascends) as well
     ///
     /// THE ARMS, on the same seeds (WalkSeed(0) up) and the same clock, the season calendar's (StoreCurve.cs), so
     /// the Road has a season to run in and the only difference between arms is the loop:
-    ///   off   the build as it ships: DailyLoopSwitch off, the Road on and therefore inert.
+    ///   off   the build before 2026-10-23: DailyLoopSwitch off, the Road on and therefore inert.
     ///   on    DailyLoopSwitch on and the Road on, played by a diligent player (DailyLoopWalkStep).
     ///   loop  DailyLoopSwitch on and the Road OFF, to split what the orders pay from what the Road pays.
     ///
     /// THE DILIGENT PLAYER claims at the start and at the end of every sitting: every finished order, the daily
     /// chest, the weekly chest, the calendar, and every reached free tier of the Road. The walk's own play does the
     /// orders (waves, stage wins, levels, summons); the arena order is done by Proving fights from the Brand bank,
-    /// once the Proving is open, and a level order the line could not finish (a line at its star cap) by levelling
-    /// the cheapest bench hero at the end of the sitting, as a player clearing the board would. A selector picks the hero of its star count
+    /// once the Proving is open, and a spend-Gold order the line could not finish (a line at its star cap) by the
+    /// cheapest bench level or Quartermaster piece at the end of the sitting (LoopFinishSpendGold), as a player
+    /// clearing the board would. A selector picks the hero of its star count
     /// with the highest level-1 power score, ties broken by id: a fixed rule, never a draw.
     /// </summary>
     internal static partial class Program
@@ -45,6 +46,7 @@ namespace Emberfall.DevHarness
             public long LoopGold, LoopShards, RoadGold, RoadShards, RoadDust, RoadSlag;
             public long BenchLevelGold;
             public int BenchLevels;
+            public int QuartermasterPieces;
             public int Orders, DailyChests, WeeklyChests, CalendarDays, ProvingFights, Selector4, Selector5;
             public long FirstFiveStarAt = -1, FirstFourStarAt = -1;
             public readonly List<int> TiersPerSeason = new List<int>();
@@ -110,30 +112,17 @@ namespace Emberfall.DevHarness
                 }
             }
 
-            // The level order, which a line at its star cap cannot finish by itself: at the END of a sitting, after
-            // the walk has spent its Gold on the line, the cheapest hero in the roster that can still level, as a
-            // player clearing the board would. Never at the start, where it would take Gold the line was about to use.
-            LoopBoard levels = DailyLoop.Board(s, now);
-            for (int i = 0; i < levels.Orders.Count && endOfSitting && !_loopCurveNoBench; i++)
+            // The spend-Gold order (it replaced the level order, owner 2026-10-23). The walk's own line levels count
+            // toward it; when the line is at its cap, at the END of a sitting, after the walk has spent its Gold on the
+            // line, the cheapest level in the roster and then a Quartermaster piece, as a player clearing the board
+            // would. Never at the start, where it would take Gold the line was about to use.
+            if (endOfSitting && !_loopCurveNoBench)
             {
-                OrderDef def = db.Orders.Order(levels.Orders[i].Id);
-                if (def == null || def.Kind != OrderKind.Level) continue;
-                for (int k = levels.Orders[i].Progress; k < levels.Orders[i].Target; k++)
-                {
-                    HeroInstance cheapest = null;
-                    int cost = int.MaxValue;
-                    for (int h = 0; h < p.Heroes.Count; h++)
-                    {
-                        if (p.Heroes[h].Level >= s.HeroLevelCapOf(p.Heroes[h])) continue;
-                        int c = s.LevelUpCost(p.Heroes[h]);
-                        if (c < cost) { cost = c; cheapest = p.Heroes[h]; }
-                    }
-                    if (cheapest == null || p.Gold < cost) break;
-                    long before = p.Gold;
-                    if (!s.LevelUpHero(cheapest, 1, now).Success) break;
-                    t.BenchLevelGold += before - p.Gold;
-                    t.BenchLevels++;
-                }
+                long spent; int lv, pieces;
+                LoopFinishSpendGold(db, s, now, out spent, out lv, out pieces);
+                t.BenchLevelGold += spent;
+                t.BenchLevels += lv;
+                t.QuartermasterPieces += pieces;
             }
 
             long gold = p.Gold, shards = p.Shards;
@@ -174,6 +163,49 @@ namespace Emberfall.DevHarness
             t.RoadSlag += p.Slag - slag;
         }
 
+        /// <summary>Finishes today's spend-Gold order the way a player clearing the board would: the cheapest level of any
+        /// hero below its cap, one at a time, and when no hero can level, the cheapest Quartermaster piece on the shelf. A
+        /// fixed rule, never a draw. Shared by both daily loop studies (this file and LoopCurve.cs).</summary>
+        private static void LoopFinishSpendGold(ContentDatabase db, GameSession s, long now, out long goldSpent, out int levels, out int pieces)
+        {
+            goldSpent = 0; levels = 0; pieces = 0;
+            PlayerProfile p = s.Profile;
+            LoopBoard board = DailyLoop.Board(s, now);
+            for (int i = 0; i < board.Orders.Count; i++)
+            {
+                OrderDef def = db.Orders.Order(board.Orders[i].Id);
+                if (def == null || def.Kind != OrderKind.Gold) continue;
+                for (int guard = 0; guard < 50 && DailyLoop.Board(s, now).Orders[i].Progress < def.Target; guard++)
+                {
+                    HeroInstance cheapest = null;
+                    int cost = int.MaxValue;
+                    for (int h = 0; h < p.Heroes.Count; h++)
+                    {
+                        if (p.Heroes[h].Level >= s.HeroLevelCapOf(p.Heroes[h])) continue;
+                        int c = s.LevelUpCost(p.Heroes[h]);
+                        if (c < cost) { cost = c; cheapest = p.Heroes[h]; }
+                    }
+                    long before = p.Gold;
+                    if (cheapest != null && p.Gold >= cost)
+                    {
+                        if (!s.LevelUpHero(cheapest, 1, now).Success) break;
+                        levels++;
+                    }
+                    else
+                    {
+                        QuartermasterView shelf = Quartermaster.View(s, now);
+                        int pick = -1;
+                        long price = long.MaxValue;
+                        for (int k = 0; shelf != null && k < shelf.Slots.Count; k++)
+                            if (!shelf.Slots[k].Sold && shelf.Slots[k].Price < price && shelf.Slots[k].Price <= p.FreeGold) { price = shelf.Slots[k].Price; pick = k; }
+                        if (pick < 0 || !Quartermaster.Buy(s, pick, now).Success) break;
+                        pieces++;
+                    }
+                    goldSpent += before - p.Gold;
+                }
+            }
+        }
+
         /// <summary>The selector's fixed rule: the highest level-1 power score of that star count, ties by id.</summary>
         private static string LoopSelectorPick(GameSession s, int stars)
         {
@@ -207,7 +239,7 @@ namespace Emberfall.DevHarness
             try
             {
                 _walkLoopMode = mode;
-                DailyLoopSwitch.Enabled = mode >= 2 ? true : loopWas;
+                DailyLoopSwitch.Enabled = mode >= 2;   // the off arm is the loop OFF, whatever the build's default (ON since 2026-10-23)
                 WayfarersRoadSwitch.Enabled = mode == 3 ? false : roadWas;
                 LoopArm arm = new LoopArm();
                 arm.Name = name;
@@ -272,8 +304,8 @@ namespace Emberfall.DevHarness
             Line("");
             Line("DAILY LOOP CURVE - " + walks + " walks per arm, seeds WalkSeed(0) up, the season calendar's clock. Shipped defaults: daily loop "
                  + (DailyLoopSwitch.Enabled ? "ON" : "off") + ", Road " + (WayfarersRoadSwitch.Enabled ? "on" : "off") + ".");
-            Line("  off = as shipped. on = loop and Road on, everything claimed every sitting. loop = loop on, Road off."
-                 + (_loopCurveNoBench ? " DIAGNOSTIC: no bench levelling for the level order." : ""));
+            Line("  off = loop off (the build before 2026-10-23). on = loop and Road on, everything claimed every sitting. loop = loop on, Road off."
+                 + (_loopCurveNoBench ? " DIAGNOSTIC: nothing spent off the line for the spend-Gold order." : ""));
 
             bool[] players = _loopCurveFuse ? new[] { false, true } : new[] { false };
             for (int pl = 0; pl < players.Length; pl++)
@@ -367,9 +399,10 @@ namespace Emberfall.DevHarness
                     Line("  " + arm.Name + ": over the whole walk, medians per walk: " + Median(orders) + " orders, " + Median(daily) + " daily chests, "
                          + Median(weekly) + " weekly chests, " + Median(cal) + " calendar days, " + Median(fights) + " Proving fights for the arena order");
                     List<int> benchLv = new List<int>();
+                    List<int> qmPieces = new List<int>();
                     long benchGold = 0;
-                    for (int k = 0; k < arm.Runs.Length; k++) { LoopTally t = TallyOf(arm.Runs[k].Session); benchLv.Add(t.BenchLevels); benchGold += t.BenchLevelGold; }
-                    Line("    level orders done on the bench: " + Median(benchLv) + " levels per walk (median), costing " + LoopPct(benchGold, totalGold) + " of all Gold");
+                    for (int k = 0; k < arm.Runs.Length; k++) { LoopTally t = TallyOf(arm.Runs[k].Session); benchLv.Add(t.BenchLevels); qmPieces.Add(t.QuartermasterPieces); benchGold += t.BenchLevelGold; }
+                    Line("    spend-Gold orders finished off the line: " + Median(benchLv) + " bench levels and " + Median(qmPieces) + " Quartermaster pieces per walk (median), costing " + LoopPct(benchGold, totalGold) + " of all Gold");
                     List<string> orderText = new List<string>();
                     foreach (KeyValuePair<string, long[]> kv in byOrder) orderText.Add(kv.Key + " " + LoopPct(kv.Value[1], kv.Value[0]) + " of " + (kv.Value[0] / Math.Max(1, arm.Runs.Length)) + " days");
                     Line("    each order, claimed before its board lapsed (days on a board per walk): " + string.Join(", ", orderText.ToArray()));

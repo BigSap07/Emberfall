@@ -34,8 +34,8 @@ between this build and the Play Store.
 - The Proving, fights against generated opponent lines, and friendly duels against friends.
 - Guilds: founding, codes, roles, chat, a weekly five-floor guild dungeon with replays, the Guild
   Path and a guild tech tree.
-- Daily orders, a login calendar and Wayfarer's Road (a free 28-day track), **off by default**
-  behind `EMBERFALL_DAILY_LOOP_ON`.
+- Daily orders, a login calendar and Wayfarer's Road (a free 28-day track), **on by default**
+  since 2026-10-23 (`EMBERFALL_DAILY_LOOP_OFF` rolls them back).
 - Weekly and monthly live events with free tracks.
 
 **Store**
@@ -109,7 +109,8 @@ Assets/Editor/   project setup, build menu, capture tooling
 
 ## Checking it without the editor
 
-`Tools/build-check.ps1` (PowerShell, Windows) compiles every script against a hand-written Unity
+`Tools/build-check.ps1` (Windows PowerShell with the .NET Framework compiler, or PowerShell 7 with
+Mono's `mcs` and `mono` on Linux) compiles every script against a hand-written Unity
 shim in `Tools/UnityShim` and runs `Tools/DevHarness`: content validation, determinism, save round
 trips, the campaign power curve over many simulated players, the store and economy studies, and
 hundreds of named checks. `-Quick` runs fewer simulated walks during work; only the full run counts
@@ -139,8 +140,11 @@ or `-Cloud`), which zips the player with `Docs/PLAYTEST-README.md` inside. Every
 automatically), operator queries, and Edge Functions for Google Play receipt validation. The game
 talks to Supabase's REST endpoints with the anon key and the player's own token; the service role
 key is never in the game. `Server/README.md` lists every migration and what is applied.
-`Tools/supabase-rules-test.py`, `Tools/supabase-guild-rules-test.py` and
-`Tools/supabase-launch-rules-test.py` prove the database rules against a live project.
+`Tools/supabase-rules-test.py`, `Tools/supabase-guild-rules-test.py`,
+`Tools/supabase-launch-rules-test.py`, `Tools/supabase-guild-dungeon-size-rules-test.py` and
+`Tools/supabase-leaderboard-rules-test.py` prove the database rules against a live project.
+`Tools/supabase-local-check.sh` applies every migration to a throwaway local PostgreSQL with stand-in
+Supabase roles and runs a rules suite there, with no project and no key.
 
 ## Where to read next
 

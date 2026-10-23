@@ -750,9 +750,11 @@ namespace Emberfall.DevHarness
 
                 JsonValue root = JsonValue.Parse(offJson);
                 List<string> keys = new List<string>();
-                foreach (string key in root.Keys) keys.Add(key);
+                // The daily loop's own key (a version 22 key) is not counted: the loop is on by default since 2026-10-23, and
+                // whether it writes is DailyLoopChecks' business, not this rollback's.
+                foreach (string key in root.Keys) if (key != "dailyLoop") keys.Add(key);
                 Check(root.GetInt("version", 0) == 22 && !keys.Contains("sinks") && keys.Count == 40,
-                      "and the save is version 22 with the 40 keys main writes (" + keys.Count + " keys, no sinks key)");
+                      "and the save is version 22 with the 40 keys main writes, the daily loop's own key aside (" + keys.Count + " keys, no sinks key)");
 
                 // The same session with a block on file differs from the off save in the version and the one key, and nothing else.
                 SinksSwitch.Enabled = true;

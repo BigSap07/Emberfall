@@ -25,8 +25,17 @@
 
   // THE POOL. A day's board takes ONE entry of each slot, chosen by the day alone, so the same
   // day is the same board for everyone with the same unlocks.
+  //
+  // SLOT 2 IS "SPEND GOLD" (owner, 2026-10-23). It replaced "level up a hero" and "buy 3 hero levels",
+  // which a line at its level cap could not finish, and an unfinished order keeps the daily chest, the
+  // weekly chest and the road's points shut. 1,000 Gold is sized so one action always finishes it: the
+  // cheapest level of any hero below its cap costs 1,070 (balance.json levelCostA + levelCostB at level 1),
+  // and from 3-12 the cheapest Quartermaster piece costs 30 hours of idle Gold, far above it. So a capped
+  // line finishes it with one bench level, and a roster with every hero at its cap with one Quartermaster
+  // piece. DailyLoopChecks asserts both bounds. 0.3 hours is the mean of the two level orders it replaced,
+  // so the loop's daily income is unchanged.
   //   slot      the group. Slots are taken in ascending order.
-  //   kind      waves | stage | level | summon | arena
+  //   kind      waves | stage | level | summon | arena | gold (Gold spent on hero levels or at the Quartermaster)
   //   target    how many of the kind completes it
   //   hours     the reward
   //   text      what the player reads; {0} is the target
@@ -42,8 +51,7 @@
     { "id": "stage_1",   "slot": 1, "kind": "stage",  "target": 1, "hours": 0.25, "text": "Win a stage" },
     { "id": "stage_2",   "slot": 1, "kind": "stage",  "target": 2, "hours": 0.4,  "text": "Win {0} stages" },
 
-    { "id": "level_1",   "slot": 2, "kind": "level",  "target": 1, "hours": 0.25, "text": "Level up a hero" },
-    { "id": "level_3",   "slot": 2, "kind": "level",  "target": 3, "hours": 0.35, "text": "Buy {0} hero levels" },
+    { "id": "gold_1000", "slot": 2, "kind": "gold",   "target": 1000, "hours": 0.3, "text": "Spend {0} Gold" },
 
     { "id": "summon_1",  "slot": 3, "kind": "summon", "target": 1, "hours": 0.25, "text": "Summon once" },
 

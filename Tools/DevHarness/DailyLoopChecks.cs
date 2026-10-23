@@ -39,6 +39,7 @@ namespace Emberfall.DevHarness
                 CheckDailyLoopContent(db);
                 CheckDailyLoopBoard(db);
                 CheckDailyLoopProgress(db);
+                CheckDailyLoopSpendGold(db);
                 CheckDailyLoopClaims(db);
                 CheckDailyLoopChests(db);
                 CheckDailyLoopCalendar(db);
@@ -241,7 +242,7 @@ namespace Emberfall.DevHarness
             StageDef first = db.AllStages[0];
             GameSession s = LoopSession(db, 0);
             long t0 = LoopAt(s, 1, 6);
-            LoopSetBoard(s, t0, "waves_8", "stage_2", "level_3", "summon_1", "arena_2");
+            LoopSetBoard(s, t0, "waves_8", "stage_2", "gold_1000", "summon_1", "arena_2");
             Check(s.Profile.DailyLoop.Orders.Count == 5 && LoopProgress(s, "waves_8") == 0, "a stored board starts every order at zero");
 
             // ---- a wave cleared: the fight is the game's own ResolveWave, counted once per wave
@@ -272,15 +273,18 @@ namespace Emberfall.DevHarness
                   "A SWEEP IS A STAGE WIN AND ITS WAVES: it moves 'win 2 stages' to " + LoopProgress(s, "stage_2")
                   + " and 'clear 8 waves' to " + LoopProgress(s, "waves_8") + " (the stage has " + first.WaveCount + " waves)");
 
-            // ---- a level bought; a refused one counts nothing
+            // ---- Gold spent on a level; a refused level counts nothing
             HeroInstance hero = s.Profile.Heroes[0];
+            OrderDef goldDef = db.Orders.Order("gold_1000");
             s.Profile.Gold = 0;
             LevelUpResult broke = s.LevelUpHero(hero, 1, t0 + 600);
-            Check(!broke.Success && LoopProgress(s, "level_3") == 0, "a level-up the gold cannot pay for counts nothing");
+            Check(!broke.Success && LoopProgress(s, "gold_1000") == 0, "a level-up the gold cannot pay for counts nothing toward 'spend Gold'");
             s.Profile.Gold = 1000000000L;
-            LevelUpResult bought = s.LevelUpHero(hero, 2, t0 + 601);
-            Check(bought.Success && LoopProgress(s, "level_3") == Math.Min(3, bought.LevelsGained),
-                  "A LEVEL-UP COUNTS: " + bought.LevelsGained + " levels bought move 'level heroes up 3 times' to " + LoopProgress(s, "level_3"));
+            LevelUpResult bought = s.LevelUpHero(hero, 1, t0 + 601);
+            Check(goldDef != null && goldDef.Kind == OrderKind.Gold && bought.Success
+                  && LoopProgress(s, "gold_1000") == (int)Math.Min(goldDef.Target, bought.GoldSpent),
+                  "GOLD SPENT ON A LEVEL COUNTS: one level for " + bought.GoldSpent + " Gold moves 'spend " + (goldDef == null ? 0 : goldDef.Target)
+                  + " Gold' to " + LoopProgress(s, "gold_1000") + ", so one level of any hero finishes it");
 
             // ---- a summon; a refused one counts nothing
             s.Profile.Shards = 0;
@@ -306,7 +310,7 @@ namespace Emberfall.DevHarness
             // ---- a LOST fight counts nothing: a wave lost, a stage not won, a sweep lost
             GameSession weak = LoopSession(db, 11);
             long tw = LoopAt(weak, 1, 6);
-            LoopSetBoard(weak, tw, "waves_8", "stage_2", "level_3", "summon_1", "arena_2");
+            LoopSetBoard(weak, tw, "waves_8", "stage_2", "gold_1000", "summon_1", "arena_2");
             StageDef hard = db.AllStages[11];
             WaveResolution lostRes = weak.ResolveWave(hard, 4242, tw + 1);
             Check(lostRes.LostBattle > 0 && !lostRes.WaveCleared && !lostRes.StageCleared
@@ -321,7 +325,7 @@ namespace Emberfall.DevHarness
             // ---- a sweep past the repeat cap pays nothing, so it counts nothing
             GameSession capped = LoopSession(db, 1);
             long tc = LoopAt(capped, 1, 6);
-            LoopSetBoard(capped, tc, "waves_8", "stage_2", "level_3", "summon_1", "arena_2");
+            LoopSetBoard(capped, tc, "waves_8", "stage_2", "gold_1000", "summon_1", "arena_2");
             capped.RollDailyReset(tc);
             capped.Profile.StageClearsToday[first.Id] = capped.RepeatFullClearsPerDay;
             long goldBefore = capped.Profile.Gold;
@@ -334,7 +338,7 @@ namespace Emberfall.DevHarness
             // ---- watching a replay is free and counts nothing
             GameSession watcher = LoopSession(db, 0);
             long tr = LoopAt(watcher, 1, 6);
-            LoopSetBoard(watcher, tr, "waves_8", "stage_2", "level_3", "summon_1", "arena_2");
+            LoopSetBoard(watcher, tr, "waves_8", "stage_2", "gold_1000", "summon_1", "arena_2");
             WaveResolution played = watcher.ResolveWave(first, 7100, tr + 1);
             string beforeReplay = SaveSerializer.Serialize(watcher.Profile);
             if (played.Replay != null) watcher.ReplayBattle(played.Replay);
@@ -357,7 +361,7 @@ namespace Emberfall.DevHarness
         {
             GameSession s = LoopSession(db, 6);
             long t0 = LoopAt(s, 1, 6);
-            LoopSetBoard(s, t0, "waves_3", "stage_1", "level_1", "summon_1", "waves_6f");
+            LoopSetBoard(s, t0, "waves_3", "stage_1", "gold_1000", "summon_1", "waves_6f");
             OrderDef def = db.Orders.Order("waves_3");
 
             LoopPayout early = DailyLoop.ClaimOrder(s, "waves_3", t0);
@@ -407,17 +411,60 @@ namespace Emberfall.DevHarness
                   + " at stage 30, and the floor rate (" + floorPay.Gold + ") before anything is cleared");
         }
 
+        // ------------------------------------------------------------------ spend Gold (owner, 2026-10-23)
+
+        /// <summary>The spend-Gold order replaced "level up a hero", which a capped line could not finish. Its size
+        /// is the promise: ONE action always finishes it. One level of any hero below its cap costs at least the
+        /// target, at every ascension tier, and from the Quartermaster's opening stage its cheapest piece does too;
+        /// a Quartermaster purchase counts like a level.</summary>
+        private static void CheckDailyLoopSpendGold(ContentDatabase db)
+        {
+            List<OrderDef> goldOrders = new List<OrderDef>();
+            bool levelOrders = false;
+            for (int i = 0; i < db.Orders.Orders.Count; i++)
+            {
+                if (db.Orders.Orders[i].Kind == OrderKind.Gold) goldOrders.Add(db.Orders.Orders[i]);
+                if (db.Orders.Orders[i].Kind == OrderKind.Level) levelOrders = true;
+            }
+            Check(goldOrders.Count > 0 && !levelOrders,
+                  "THE POOL HOLDS A SPEND-GOLD ORDER AND NO LEVEL ORDER (" + goldOrders.Count + " spend-Gold entries): a capped line can always finish its board");
+
+            int cheapestLevel = int.MaxValue;
+            for (int tier = 0; tier <= StatMath.MaxAscensionTier(db.Balance); tier++)
+                cheapestLevel = Math.Min(cheapestLevel, StatMath.LevelUpCost(db.Balance, 1, tier));
+            int biggest = 0;
+            for (int i = 0; i < goldOrders.Count; i++) biggest = Math.Max(biggest, goldOrders[i].Target);
+            Check(goldOrders.Count > 0 && biggest <= cheapestLevel,
+                  "ONE LEVEL FINISHES IT: the largest spend-Gold target (" + biggest + ") is at most the cheapest level of any hero at any tier (" + cheapestLevel + ")");
+
+            GameSession s = LoopSession(db, LoopClearedToOpen(db, Feature.Quartermaster));
+            long t0 = LoopAt(s, 2, 8);
+            s.Profile.Gold = 1000000000L;
+            Quartermaster.Open(s, t0);
+            QuartermasterView view = Quartermaster.View(s, t0);
+            long cheapestPiece = long.MaxValue;
+            for (int i = 0; view != null && i < view.Slots.Count; i++) cheapestPiece = Math.Min(cheapestPiece, view.Slots[i].Price);
+            Check(view != null && view.Slots.Count > 0 && biggest <= cheapestPiece,
+                  "ONE QUARTERMASTER PIECE FINISHES IT, from the stage it opens at: the cheapest piece costs " + cheapestPiece + " Gold, so a roster with every hero at its cap still has a way");
+
+            if (goldOrders.Count == 0) return;
+            LoopSetBoard(s, t0, goldOrders[0].Id);
+            QuartermasterResult bought = Quartermaster.Buy(s, 0, t0 + 1);
+            Check(bought.Success && LoopProgress(s, goldOrders[0].Id) == (int)Math.Min(goldOrders[0].Target, bought.Price),
+                  "A QUARTERMASTER PURCHASE COUNTS: " + bought.Price + " Gold moves '" + goldOrders[0].Line + "' to " + LoopProgress(s, goldOrders[0].Id) + " of " + goldOrders[0].Target);
+        }
+
         // ------------------------------------------------------------------ the chests
 
         private static void CheckDailyLoopChests(ContentDatabase db)
         {
             GameSession s = LoopSession(db, 12);
             long t0 = LoopAt(s, 1, 6);
-            LoopSetBoard(s, t0, "waves_3", "stage_1", "level_1", "summon_1", "waves_6f");
+            LoopSetBoard(s, t0, "waves_3", "stage_1", "gold_1000", "summon_1", "waves_6f");
             LoopBoard board = DailyLoop.Board(s, t0);
             Check(!board.ChestCanClaim && !DailyLoop.ClaimDailyChest(s, t0).Success, "THE DAILY CHEST IS SHUT while any order is unclaimed");
 
-            string[] ids = { "waves_3", "stage_1", "level_1", "summon_1", "waves_6f" };
+            string[] ids = { "waves_3", "stage_1", "gold_1000", "summon_1", "waves_6f" };
             for (int i = 0; i < ids.Length - 1; i++)
             {
                 s.Profile.DailyLoop.Find(ids[i]).Progress = db.Orders.Order(ids[i]).Target;
@@ -546,7 +593,7 @@ namespace Emberfall.DevHarness
             GameSession s = LoopSession(db, 12);
             long d1 = LoopAt(s, 1, 6);
             DailyLoop.Roll(s, d1);
-            LoopSetBoard(s, d1, "waves_3", "stage_1", "level_1", "summon_1", "waves_6f");
+            LoopSetBoard(s, d1, "waves_3", "stage_1", "gold_1000", "summon_1", "waves_6f");
             s.Profile.DailyLoop.Find("waves_3").Progress = 3;
             DailyLoop.ClaimOrder(s, "waves_3", d1);
             s.Profile.DailyLoop.Find("stage_1").Progress = 1;
@@ -573,7 +620,7 @@ namespace Emberfall.DevHarness
             // ---- REWIND IMMUNITY: a device clock wound back reopens nothing
             GameSession r = LoopSession(db, 12);
             long today = LoopAt(r, 10, 6);
-            LoopSetBoard(r, today, "waves_3", "stage_1", "level_1", "summon_1", "waves_6f");
+            LoopSetBoard(r, today, "waves_3", "stage_1", "gold_1000", "summon_1", "waves_6f");
             LoopClaimAll(r, today);
             DailyLoop.ClaimDailyChest(r, today);
             DailyLoop.ClaimCalendar(r, today);
@@ -620,7 +667,7 @@ namespace Emberfall.DevHarness
             // ---- a rich state, round trip
             GameSession s = LoopSession(db, 12);
             long t0 = LoopAt(s, 4, 6);
-            LoopSetBoard(s, t0, "waves_5", "stage_2", "level_3", "summon_1", "waves_6f");
+            LoopSetBoard(s, t0, "waves_5", "stage_2", "gold_1000", "summon_1", "waves_6f");
             s.Profile.DailyLoop.Find("waves_5").Progress = 5;
             DailyLoop.ClaimOrder(s, "waves_5", t0);
             s.Profile.DailyLoop.Find("stage_2").Progress = 1;

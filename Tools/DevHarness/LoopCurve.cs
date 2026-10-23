@@ -13,9 +13,9 @@ namespace Emberfall.DevHarness
     /// WHAT TURNING THE DAILY LOOP ON WOULD DO TO THE CURVE (content pass, 2026-10-22). A measurement, not a gate:
     /// run by DevHarness.exe --loop-curve [walks] [scale], inert in every other run (_walkLoop is false).
     ///
-    /// The daily loop (daily orders, the daily and weekly chests, the login calendar) is built and off by default
-    /// (DailyLoopSwitch, EMBERFALL_DAILY_LOOP_ON), and Wayfarer's Road's free track earns its points only from the
-    /// loop's claims. Neither is in the reference walk that recommendedPower and the power band are derived from,
+    /// The daily loop (daily orders, the daily and weekly chests, the login calendar) is ON by default since the owner's
+    /// decision of 2026-10-23 (DailyLoopSwitch, EMBERFALL_DAILY_LOOP_OFF rolls it back), and Wayfarer's Road's free
+    /// track earns its points only from the loop's claims. The off column forces the switch off. Neither is in the reference walk that recommendedPower and the power band are derived from,
     /// so switching the loop on is a change to the economy the curve was solved against. This study measures how
     /// big a change, on the reference walk itself:
     ///
@@ -29,8 +29,8 @@ namespace Emberfall.DevHarness
     /// chest, the weekly chest and the day's calendar reward. Orders are progressed by the walk's own actions (its
     /// waves, stage wins, level ups and summons count through GameSession exactly as in the game), except the arena
     /// order: the walk never fights the Proving or the Recital, so this player is credited with the one or two fights
-    /// a day that order asks for, and with the level order, which the walk's capped line cannot finish on its own (see
-    /// LoopClaimAll). That makes the loop's income an upper bound for a player who plays twice a day.
+    /// a day that order asks for. The spend-Gold order is finished with real Gold when the capped line cannot (see
+    /// LoopClaimAll). The arena credit makes the loop's income an upper bound for a player who plays twice a day.
     ///
     /// THE ROAD PLAYER claims every free tier as soon as it is reached; a selector names the first hero of the pool
     /// the walk does not own yet (else the first of the pool), which is a fair reading of "a 5-star of your choice"
@@ -47,14 +47,12 @@ namespace Emberfall.DevHarness
         private static bool _walkLoopClock;
 
         /// <summary>
-        /// THE STUDY'S CLOCK STARTS FAR IN THE FUTURE, ON PURPOSE. A few calls the walk makes have a form that reads the
-        /// device clock instead of taking the walk's (GameSession.LevelUpHero(hero, times) is one: its own comment says
-        /// "The two-argument form reads the device clock"). With the loop on, that recorded an order at today's real date,
-        /// which rolled the board months ahead of the walk's clock on the first sitting and froze it there, so after day
-        /// one no order could ever be claimed again. Measured, not guessed: the first run of this study claimed one board
-        /// in 134 reward days. Starting the walk's clock a couple of decades ahead makes any device-clock call "an earlier
-        /// day", which DailyLoop.Roll ignores (a wound-back clock reopens nothing), while its progress still counts on the
-        /// board of the walk's own day. Every column walks this clock, the control included.
+        /// THE STUDY'S CLOCK STARTS FAR IN THE FUTURE. It was a workaround: the walk's level-ups and ascensions used the
+        /// GameSession forms that read the DEVICE clock, which dated an order at the harness's real date, rolled the board
+        /// months ahead of the walk and froze it (the first run claimed one board in 134 reward days). The walk passes its
+        /// own clock to both since 2026-10-23 (SpendGold and EconomyConvertAscendAndDeploy in Program.cs), so the far
+        /// season is no longer needed; it is kept so the columns stay comparable with the content pass's record. Every
+        /// column walks this clock, the control included.
         /// </summary>
         private const int LoopClockSeason = 300;
         private static bool _walkLoopRoad;
@@ -96,11 +94,11 @@ namespace Emberfall.DevHarness
             DailyLoop.Roll(s, at);
             if (_loopDaySeen.Add(s.DayStartUnix(at))) _loopDays++;
             DailyLoop.Record(s, OrderKind.Arena, 2, at);   // the Proving or Recital fight the walk does not play
-            // The level order, likewise. The walk spends Gold only on its deployed line, which sits at its level cap on most
-            // days (the reference player never ascends), so on its own it finished the level order on 17 of 135 days and
-            // the daily chest with it. A player levels a cheap bench hero for the order; that costs a sliver of Gold the walk
-            // does not spend, which makes this an upper bound, as the arena credit is.
-            DailyLoop.Record(s, OrderKind.Level, 3, at);
+            // The spend-Gold order (it replaced the level order, owner 2026-10-23). The walk's line levels count toward it
+            // through GameSession; when the line sits at its level cap, the player spends real Gold on the cheapest bench
+            // level or a Quartermaster piece (LoopFinishSpendGold, DailyLoopCurve.cs). Not credited: the Gold is spent.
+            long benchGold; int benchLevels, qmPieces;
+            LoopFinishSpendGold(db, s, at, out benchGold, out benchLevels, out qmPieces);
 
             DailyLoopState st = s.Profile.DailyLoop;
             if (Environment.GetEnvironmentVariable("EMBERFALL_LOOP_DEBUG") == "1" && _loopDebugLines < 40)

@@ -101,10 +101,10 @@ Measured length: see the table below.
 
 ## Notes for the owner (delete before publishing)
 
-- **"MORE TO DO EVERY DAY"** deliberately does not promise daily orders, a login calendar or
-  Wayfarer's Road: they are off by default (`DailyLoopSwitch`, `EMBERFALL_DAILY_LOOP_ON`). If the
-  launch build turns them on, add: "Complete daily orders, collect your login rewards and climb
-  Wayfarer's Road for free heroes every season."
+- **"MORE TO DO EVERY DAY"** does not yet promise daily orders, a login calendar or Wayfarer's
+  Road. They are on by default since 2026-10-23 (`DailyLoopSwitch`), so the launch build has them
+  unless it defines `EMBERFALL_DAILY_LOOP_OFF`; add: "Complete daily orders, collect your login
+  rewards and climb Wayfarer's Road for free heroes every season."
 - **"FAIR BY DESIGN"** is true to the Sealed rule (`Docs/DESIGN-SEALED.md`): purchases grant fixed,
   shown contents and never enter a summon, a conversion or a forge gamble. Keep it only while that
   rule holds. It also matters in Belgium, where paid random rewards are treated as gambling.

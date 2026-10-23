@@ -15,8 +15,8 @@ shard payout is generous at chapter 2 and worthless at chapter 4, because shard 
 about 36 times (the owner's `IDEAS-ECONOMY-PACKS.md`) while a summon stays at 120 shards. An hour of income scales with the player and
 never needs retuning.
 
-It is gated by `DailyLoopSwitch.Enabled`, off unless the build defines `EMBERFALL_DAILY_LOOP_ON`.
-Off, the game is the game that existed before this run.
+It is gated by `DailyLoopSwitch.Enabled`, **on by default since the owner's decision of 2026-10-23**;
+defining `EMBERFALL_DAILY_LOOP_OFF` rolls it back. Off, the game is the game that existed before this run.
 
 ## The rules
 
@@ -195,13 +195,13 @@ the owner's action.
 
 ## The flag
 
-`DailyLoopSwitch.Enabled` is false unless the scripting define `EMBERFALL_DAILY_LOOP_ON` is set.
-It follows the pattern of `TelemetrySwitch`. Off, no order is generated, no progress is counted,
+`DailyLoopSwitch.Enabled` is true unless the scripting define `EMBERFALL_DAILY_LOOP_OFF` is set
+(on by default since 2026-10-23; before that it was off unless `EMBERFALL_DAILY_LOOP_ON` was set).
+It follows the pattern of `StoreSwitch`. Off, no order is generated, no progress is counted,
 no key is written and the hub shows no door.
 
-To play it, add `EMBERFALL_DAILY_LOOP_ON` under Player Settings, Scripting Define Symbols, and
-let the editor recompile. The field is writable so the harness and the capture targets can force
-it on. Whatever sets it puts it back. Rollback is the define removed.
+The field is writable so the harness and the capture targets can force it. Whatever sets it puts
+it back. Rollback is `EMBERFALL_DAILY_LOOP_OFF` under Player Settings, Scripting Define Symbols.
 `CheckDailyLoopOff` proves the off state.
 
 ## The screen and the hub entry

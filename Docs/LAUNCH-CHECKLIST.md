@@ -39,7 +39,7 @@ The first pass of this audit (a chat answer, before this file) was checked again
 
 Everything else in the earlier list was confirmed: no ads SDK, no push notifications, no crash
 reporting, no localisation, no leaderboards, no account deletion, no chat moderation, no server
-receipt checks, device clock only, the daily loop off by default, 63 heroes without battle art,
+receipt checks, device clock only, the daily loop off by default (on since 2026-10-23), 63 heroes without battle art,
 several migrations written and not applied, and no real playtest yet.
 
 ---
@@ -119,8 +119,12 @@ several migrations written and not applied, and no real playtest yet.
 - [ ] **Apply the written migrations, in order.** Owner: `server`.
   - 0012 (guild tech) and 0014 (guild rule gaps) are written and not applied, per
     `DESIGN-BUILD-ORDER.md`; confirm 0015 (play stats) is applied before any cloud build hands out
-    the consent prompt; then 0016, 0017, 0018, 0019. Run `Tools/supabase-rules-test.py`,
-    `Tools/supabase-guild-rules-test.py` and `Tools/supabase-launch-rules-test.py` after.
+    the consent prompt; then 0016 to 0024 in number order (account deletion, chat safety, server time,
+    receipts, the two security review fixes, guild dungeon size, leaderboards, the refund clawback;
+    `Server/README.md` lists them). Run `Tools/supabase-rules-test.py`, `Tools/supabase-guild-rules-test.py`,
+    `Tools/supabase-launch-rules-test.py`, `Tools/supabase-guild-dungeon-size-rules-test.py` and
+    `Tools/supabase-leaderboard-rules-test.py` after. `Tools/supabase-local-check.sh` runs the same order on
+    a local PostgreSQL first, with no project and no key.
 - [ ] **Supabase project on a paid plan in an EU region**, with backups. Owner: `owner decision`,
   `server`. The privacy policy names the region; a free project pauses when idle.
 
@@ -149,10 +153,10 @@ several migrations written and not applied, and no real playtest yet.
   - None exist. Local notifications are enough to start (idle chest full at `idleCapHours`, daily
     reset, an event ending) and need no server; Android 13 and later need the runtime notification
     permission, asked at a sensible moment rather than at first launch.
-- [ ] **Turn the daily loop on.** Owner: `owner decision`, `code`.
-  - Daily orders, the login calendar, the weekly chest and Wayfarer's Road are built but off
-    (`DailyLoopSwitch`, `EMBERFALL_DAILY_LOOP_ON`), and the hours in `orders.json` are placeholders
-    for a balance pass. The paid pass track depends on it.
+- [x] **Turn the daily loop on.** Done 2026-10-23 (owner decision): `DailyLoopSwitch` is on by default
+    (`EMBERFALL_DAILY_LOOP_OFF` rolls it back), which also wakes Wayfarer's Road's free track. The level
+    order became "spend 1,000 Gold", which a capped roster can always finish. The hours in `orders.json`
+    were measured on the curve by the content pass. Left: the Orders screen's final layout (UI work).
 - [ ] **Real playtests.** Owner: `owner decision`.
   - `DESIGN-BUILD-ORDER.md` open decision 1 says the walls must be validated by players, not more
     simulation, and the Windows playtest package and `Docs/PLAYTEST-FEEDBACK.md` exist for it. Do
