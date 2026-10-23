@@ -199,8 +199,9 @@ pips. **The divider** is a `UIBuilder.Divider` in `UITheme.ChromeBrass` with `Di
 | Tap | Call | What happens |
 |---|---|---|
 | Screen opens, REFRESH, TRY AGAIN | `Refresh()` | Status, then this cycle's attempts, then the server's ladder for the live member count. |
-| ATTEMPT | router | Opens `GuildFloorScreen` for `Rows[i].Floor`. When its fight is over it hands the attempt to `RecordAttempt(attempt)`, which disables every ATTEMPT (RECORDING), stores it, and reloads. A refusal comes back as the banner with the server's sentence. |
+| ATTEMPT | router | Opens `GuildFloorScreen` for `Rows[i].Floor`. That screen fights the line and files it through `GuildDungeonFlow.Attempt`, which stores the attempt BEFORE the fight is shown, so the ladder screen never calls `RecordAttempt` (it would file one fight twice); coming back, `OnShow` reloads. A refusal in that flow is `GuildFloorScreen`'s notice, so the RECORDING label and the refused-attempt banner exist in the presenter and the controller but nothing in the shipped flow drives them yet. |
 | BOARDS | router | Opens `GuildDungeonBoardsScreen`. |
+| GUILD TECH | router | Opens `GuildTechScreen`. Not in the view: the old screen's door to the tree this dungeon pays into, kept, drawn only on a loaded ladder. |
 | FIND A GUILD | router | Opens `GuildScreen` at its join view. |
 
 There is no button that buys, refills or plays an ad for an attempt, and the checks fail the build if a label here
@@ -217,9 +218,21 @@ says so. Attempts cannot be bought.
 | `Ready` | loaded | the layout above |
 | `Ready` + banner | refresh failed, offline, refused attempt, cycle over | ladder under the banner; offline and cycle over disable every ATTEMPT |
 
-The five states `GUILD-DUNGEON-SIZE.md` asks to capture are all reachable through `GuildDungeonBackends.Override`:
-a guild of 4 on cycle open, a guild of 30 at the cycle cap, a guild of 12 whose cycle opened at 9, a member who changed
-guild after 15 attempts, and the result after floor 8 (`RewardText` "Reward not decided yet").
+The five states `GUILD-DUNGEON-SIZE.md` asks to capture are all reachable through `GuildDungeonBackends.Override`
+(`Tools/capture-r28b-targets.txt`, `Screen:GuildLadder=<state>`): a guild of 4 on cycle open (`g4-open`), a guild of 30
+at the cycle cap (`g30-cap`), a guild of 12 whose cycle opened at 9 (`g12-grew`), a member who changed guild after 15
+attempts (`changed-guild`), and floor 8 just cleared (`after-floor8`). The last is a capture of the ladder: its rows read
+"Reward not decided yet", muted. `GuildDungeonResultScreen` is not replaced and draws no reward line at all, so there is
+no result screen to show that sentence on.
+
+**As built.** The buttons are the kit's: ATTEMPT and FIND A GUILD are `EmberforgeUI.Button` with `ForgeButtonKind.Primary`
+(the spec's `GoldButton`), the others `ForgeButtonKind.Secondary`; text colours are `Emberforge.TextBody` and
+`Emberforge.TextQuiet` on the kit's plates, gold values `HubStyle.ValueGold`. REFRESH sits in the header's right end.
+A row is 96 tall, but the ATTEMPT button is `HubStyle.TouchMin` (108) tall and overhangs its row by 6 a side
+(`LadderLayout`), so the list spacing is 14. The Reason of a disabled ATTEMPT is printed verbatim in the row's lower
+line, left of the button, since there is no room under a button that fills the row. The Champion floors (5 and 10) keep a
+gold framed plate, locked floors a recess, and the row has no enemy portraits: the floor view is where a floor is
+inspected. The spinner is eight dots in a ring, the only motion on the screen.
 
 ## 3. Notification settings
 
@@ -300,13 +313,23 @@ the save is client-authoritative and `Docs/DESIGN-REWARDED-ADS.md` proposes no s
 built and captured now (flip it in the capture tool) and ship invisible until the owner decides.
 
 **Where.** Never on `StoreScreen`, `EventsScreen`, `LiveEventsScreen`, `WayfarersRoadScreen` or any offer card (the
-checks hold every UI file with those names to it). Exactly three places:
+checks hold every UI file with those names to it, and `R28AdsLadderUiChecks.cs` holds the identifiers `RewardedAdBlock`,
+`RewardedAdController`, `RewardedAdPresenter`, `AdRewards`, `AdBackends`, `AdContext` and `AdPlacementKind` to the
+three files below and the block's own). Exactly three places:
 
 | Placement | Screen | Context the screen passes |
 |---|---|---|
 | A1 `AdPlacementKind.IdleGold` | `IdleClaimPopup`, after the claim, under the claimed amounts | `AdContext.ClaimGold` = the Gold that claim paid |
 | A2 `AdPlacementKind.Brand` | `ProvingScreen`, beside the Brands counter | none |
 | A3 `AdPlacementKind.RepeatClear` | `WaveResultScreen`'s stage cleared view, on a repeat clear that paid the floor | `AdContext.Stage` = the stage |
+
+**A3 cannot be seen today.** A stage with a wave curve that is already cleared is swept (`CampaignFlow.Launch` calls
+`CampaignFlow.Sweep`, a toast) and never reaches `WaveResultScreen`, which refuses a cleared stage
+(`WaveRefusal.StageCleared`); a stage with no curve shows its repeat clear on `BattleScreen`'s result. So the stage cleared
+view only ever shows a FIRST clear, and `BattleRewards.RepeatCapped` is never true there. The block is built there as
+specified and asked about only for `!FirstClear && RepeatCapped`, so it is dormant, and the A3 captures forge the repeat on
+the screen's copy of the result. Where a repeat clear that paid the floor is shown to a player is an owner decision (the
+sweep toast has no room for a button).
 
 ### Layout (one block, the same in all three)
 
@@ -325,6 +348,15 @@ after the ad:
 A `UITheme.PanelSunken` plate at `HubStyle.PlateAlpha`, `HubStyle.BorderWarm` hairline, `UITheme.CornerRadiusSmall`,
 placed below the screen's own primary action, never above it and never as the primary action: the screen's own
 button (COLLECT, FIGHT, CONTINUE) stays the `GoldButton`, and WATCH AN AD is a `SecondaryButton`.
+
+**As built.** `RewardedAdBlock` is one class for all three. It is a kit `Sunken` plate (not a `PanelSunken` colour at
+`HubStyle.PlateAlpha`), its buttons `ForgeButtonKind.Secondary` and `HubStyle.TouchMin` tall, and it is empty and inactive
+while the view is Hidden. A1: under the claim plate (the plate is a fixed size and the block is only there after a
+claim), 760 wide, the context the Gold of the last claim in that visit. A2: right of the opponent card at the height of its
+Brands rows, 430 wide, so it stacks (the line, the small line, the buttons) instead of putting the small line beside the
+text; "beside the Brands counter" cannot mean inside the card, whose width the stat rows fill. A3: 760 wide under the
+CONTINUE row. The disabled PLAYING button prints no Reason under it (the label says it). A screen holds a new controller
+per visit, so an old result does not follow the player in.
 
 ### Bindings
 
