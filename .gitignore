@@ -47,7 +47,10 @@ ProjectSettings/Packages/
 
 Assets/_Incoming.meta
 Tools/Screenshots/
-.claude/
+# local Claude Code state stays out; the project agents and the shared settings (guard hooks) are tracked
+.claude/*
+!.claude/agents/
+!.claude/settings.json
 Captures/
 Tools/converted_heroes.json
 
