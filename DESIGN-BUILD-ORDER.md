@@ -1439,7 +1439,8 @@ shop card inside keeps its own row (see **The UI kit (R20)**, the Marketplace pa
 replay. Every line of its text is a placeholder for the designer's pass. The harness walks and
 pinned lines read the table through `FeatureGate.IsUnlockedArriving`, which is what moved the two
 failing checks under **The instruments**. `PlayModeScreenshot` has six `Screen:Onboard*` targets;
-a capture of a feature's own screen uses `FeatureGates.CaptureBypass` and the onboarding targets
+a capture of a feature's own screen uses `FeatureGates.CaptureBypass` (and `CaptureForceLocks` keeps the gate live for
+the one Marketplace-with-locks target) and the onboarding targets
 clear it.
 
 ### Play stats
@@ -1540,8 +1541,8 @@ quarter of the painting to show five lines about a number, and a read-only copy 
 the bottom of a screen that has a formation page for exactly that.
 
 - **0, the map.** Every structure that leads somewhere carries a marker, and nothing above may
-  cover a building or its label. The market stall is the RELIC SHOP rather than a locked
-  MARKETPLACE sign, because a door to a built screen beats a sign for an unbuilt one.
+  cover a building or its label. The market stall is the MARKETPLACE (R26): it opens the
+  overview of the four shops, where it used to open the Relic Shop alone.
 - **1, the HUD frame, edges only.** The player plate and the currencies at the top corners, a rail
   of four icon buttons down one edge, five nav cells across the bottom, and the campaign card with
   the idle chest beside it in the bottom right. All of it inside `Screen.safeArea`, every target at
