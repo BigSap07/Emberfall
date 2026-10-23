@@ -416,7 +416,7 @@ namespace Emberfall.UI.Screens
 
             _capNote = EmberforgeUI.Label("CapNote", bar, "", UITheme.FontTiny, Emberforge.TextQuiet,
                                           TextAnchor.UpperCenter);
-            UIBuilder.Box(_capNote.rectTransform, 0f, -6f, 1200f, 24f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_capNote.rectTransform, 0f, -6f, 1740f, 24f, new Vector2(0.5f, 1f));
             UIBuilder.Outlined(_capNote, Emberforge.Outline, Emberforge.StrokeThin);
 
             _levelUpButton = EmberforgeUI.Button("LevelUp", bar, "LEVEL UP", UITheme.FontHeading,
@@ -435,7 +435,7 @@ namespace Emberfall.UI.Screens
             // outside the harness. It sits here rather than up on the banner because this bar is
             // where levelling is bought, and ascension is what levelling turns into at the cap.
             _fusionButton = EmberforgeUI.Button("Fusion", bar, "ASCEND", UITheme.FontSmall,
-                                                ForgeButtonKind.Secondary);
+                                                ForgeButtonKind.Primary);
             UIBuilder.Box(_fusionButton.Root, -UITheme.ScreenPadding, 14f, 300f, 88f,
                           new Vector2(1f, 0f));
             _fusionButton.OnClick(OpenFusion);
@@ -904,7 +904,7 @@ namespace Emberfall.UI.Screens
             int cost = StatMath.LevelUpCost(session.Balance, _hero.Level);
             bool affordable = !atCap && session.Profile.Gold >= cost;
 
-            _levelUpButton.SetText(atCap ? "LEVEL CAP" : "LEVEL UP   " + cost + "G");
+            _levelUpButton.SetText(atCap ? LevelCapText.ButtonLabel : "LEVEL UP   " + cost + "G");
             _levelUpButton.Interactable = affordable;
             _levelUpTenButton.Interactable = affordable;
 
@@ -919,15 +919,7 @@ namespace Emberfall.UI.Screens
             _capNote.text = _prologueView
                 ? "A thousand years of levels. None of them yours to spend."
                 : atCap
-                ? (def.Stars >= 5
-                    ? (copiesNeeded >= 0
-                        ? "Level cap reached. Ascend with " + copiesNeeded + " more cop"
-                          + (copiesNeeded == 1 ? "y" : "ies") + " of " + def.Name
-                          + " to lift it  -  you hold " + (_hero.Copies - 1) + " to spare."
-                        : "Level cap reached at the highest ascension this game authors.")
-                    : "Below five stars, this is as far as a hero levels. It never ascends - but it"
-                      + " is worth " + session.FodderPoints(def) + " points towards converting"
-                      + " fodder into a five-star.")
+                ? LevelCapText.Note(def.Stars, copiesNeeded, _hero.Copies - 1, def.Name, session.FodderPoints(def))
                 : "Next level costs " + cost + " gold  -  you hold " + session.Profile.Gold;
 
             // Fusion is offered on every owned hero, not only a capped one: a five-star short of
