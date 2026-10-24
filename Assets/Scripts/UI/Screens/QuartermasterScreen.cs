@@ -124,8 +124,10 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(iconTile, 0f, -top, tile, tile, new Vector2(0.5f, 1f));
             Image tileBg = EmberforgeUI.SunkenOn(iconTile);
             tileBg.raycastTarget = false;
-            Image mark = UIBuilder.Img("Mark", iconTile, TextureLab.Sigil((int)piece.Slot * 2 + 1, 128),
-                                       UITheme.WithAlpha(tint, sold ? 0.5f : 0.95f));
+            Color markTint = UITheme.WithAlpha(tint, sold ? 0.5f : 0.95f);
+            Image mark = UIBuilder.Img("Mark", iconTile,
+                                       UiKit.SetGlyph(piece.Aspect, TextureLab.Sigil((int)piece.Slot * 2 + 1, 128), ref markTint),
+                                       markTint);
             UIBuilder.Box(mark.rectTransform, 0f, 0f, tile * 0.62f, tile * 0.62f, new Vector2(0.5f, 0.5f));
             top += tile + UITheme.Space8;
 

@@ -341,7 +341,8 @@ namespace Emberfall.UI.Screens
         {
             switch (item.Kind)
             {
-                case SinkKind.Armor: return TextureLab.Sigil((int)item.Armor.Slot * 2 + 1, 128);
+                case SinkKind.Armor:
+                    return UiKit.SetGlyph(item.Armor.Aspect, TextureLab.Sigil((int)item.Armor.Slot * 2 + 1, 128), ref tint);
                 case SinkKind.Brand: return TextureLab.Sigil(3, 128);
                 case SinkKind.Echo: return TextureLab.HourglassIcon(128);
             }

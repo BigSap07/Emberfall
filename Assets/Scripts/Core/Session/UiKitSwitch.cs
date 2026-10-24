@@ -109,6 +109,13 @@ namespace Emberfall.Core.Session
             { "item_plate", "items/plate" },
             { "item_boots", "items/boots" },
             { "item_accessory", "items/accessory" },
+            // R45: one mark per aspect set, drawn on the Armory and Quartermaster armor cards.
+            { "set_ember", "items/set_ember" },
+            { "set_tide", "items/set_tide" },
+            { "set_verdant", "items/set_verdant" },
+            { "set_gale", "items/set_gale" },
+            { "set_umbra", "items/set_umbra" },
+            { "set_lumen", "items/set_lumen" },
             { "rift_portal", "rift_portal" },
             { "xp_gem", "xp_gem" },
             { "avatar_ring", "avatar_ring" },

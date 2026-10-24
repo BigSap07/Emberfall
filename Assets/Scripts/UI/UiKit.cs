@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using Emberfall.Core.Data;
 using Emberfall.Core.Json;
 using Emberfall.Core.Session;
 
@@ -124,6 +125,13 @@ namespace Emberfall.UI
             return sprite;
         }
         public static Sprite AspectBadge(string aspect) { return Get(UiKitMap.AspectBadge(aspect)); }
+
+        /// <summary>The set mark for an armor piece's aspect (UiKitMap.Icons set_*) when the kit has one, else the
+        /// old shape in its old tint. Through Glyph, so the tint becomes white for the kit mark.</summary>
+        public static Sprite SetGlyph(Aspect aspect, Sprite fallback, ref Color tint)
+        {
+            return Glyph("set_" + aspect.ToString().ToLowerInvariant(), fallback, ref tint);
+        }
         public static Sprite CardFrame(int stars) { return Get(UiKitMap.CardFrame(stars)); }
         public static Sprite CardFrameOpen(int stars) { return Get(UiKitMap.CardFrameOpen(stars)); }
 

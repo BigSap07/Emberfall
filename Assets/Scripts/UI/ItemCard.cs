@@ -100,7 +100,7 @@ namespace Emberfall.UI
             if (icon != null)
             {
                 Image glyph = UIBuilder.Img("Icon", card, icon, iconTint);
-                float iconSize = size * iconFraction;
+                float iconSize = size * iconFraction * MarkScale(icon);
                 float lift = maxPips > 0 ? size * 0.06f : 0f;
                 UIBuilder.Box(glyph.rectTransform, 0f, lift, iconSize, iconSize, new Vector2(0.5f, 0.5f));
             }
@@ -202,6 +202,19 @@ namespace Emberfall.UI
                 case ArmorSlot.AccessoryB: return "item_accessory";
             }
             return "item_weapon";
+        }
+
+        /// <summary>
+        /// R45: the kit's sword is a thin blade in a tall frame, so at the same box size it reads far smaller than
+        /// the helm, plate and boots. Its mark is drawn larger (the blade still sits inside the card, clear of the
+        /// pips); every other mark, and the flat fallback sword, is drawn at 1.
+        /// </summary>
+        private const float WeaponMarkScale = 1.28f;
+
+        private static float MarkScale(Sprite icon)
+        {
+            if (icon == null || !UiKit.On) return 1f;
+            return icon == UiKit.Icon(KitName(ArmorSlot.Weapon)) ? WeaponMarkScale : 1f;
         }
 
         /// <summary>The tint for a slot mark. The kit's marks are painted grey and gold, so they are drawn

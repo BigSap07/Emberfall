@@ -36,6 +36,7 @@ namespace Emberfall.UI.Screens
         private const float RowTop = SummaryHeight + 12f;
         private const float PaidTop = RowTop + TileHeight + 12f;
         private const float PaidHeight = 104f;
+        private static readonly Color DustPlate = new Color(0.90f, 0.82f, 0.64f, 1f);   // light sand behind the dark dust sack
         private const int PickPerRow = 7;
         private const int PickPerPage = 14;
         private const float PagerCentre = PaidTop + PaidHeight + 6f + 15f;
@@ -246,6 +247,13 @@ namespace Emberfall.UI.Screens
             Image bg = EmberforgeUI.SunkenOn(iconTile);
             bg.raycastTarget = false;
             Color markTint = UITheme.WithAlpha(tint, t.Claimed ? 0.5f : 0.95f);
+            // R45: the kit's dust sack is dark brown and vanished on the dark tile, so it sits on a light plate.
+            if (t.Kind == PassRewardKind.Dust && UiKit.Icon("road_dust") != null)
+            {
+                Image plate = UIBuilder.Img("Plate", iconTile, TextureLab.Circle(128), UITheme.WithAlpha(DustPlate, t.Claimed ? 0.5f : 0.92f));
+                plate.raycastTarget = false;
+                UIBuilder.Box(plate.rectTransform, 0f, 0f, icon + 4f, icon + 4f, new Vector2(0.5f, 0.5f));
+            }
             Image mark = UIBuilder.Img("Mark", iconTile, IconFor(t.Kind, ref markTint), markTint);
             UIBuilder.Box(mark.rectTransform, 0f, 0f, icon, icon, new Vector2(0.5f, 0.5f));
 
