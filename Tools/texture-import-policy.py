@@ -221,6 +221,32 @@ GROUPS = [
         win_format=BC7, android_format=ASTC_4x4, crunch_quality=50,
         note="10 relic icons",
     ),
+    # R44 UI ART: the item marks, the Wayfarers Road reward icons and the Hub rail icons. Their metas carry
+    # BC7 and ASTC 4x4 already and a 2048 ceiling above every file, so the policy states what they have.
+    Group(
+        name="UI kit (R44): item marks",
+        folder="Assets/Resources/Art/UIKit/items",
+        max_size=2048,
+        npot=0, mipmap=0, filter_mode=1,
+        win_format=BC7, android_format=ASTC_4x4, crunch_quality=50,
+        note="5 item slot marks",
+    ),
+    Group(
+        name="UI kit (R44): road reward icons",
+        folder="Assets/Resources/Art/UIKit/road",
+        max_size=2048,
+        npot=0, mipmap=0, filter_mode=1,
+        win_format=BC7, android_format=ASTC_4x4, crunch_quality=50,
+        note="6 reward icons",
+    ),
+    Group(
+        name="UI kit (R44): Hub rail icons",
+        folder="Assets/Resources/Sprites/Hud",
+        max_size=2048,
+        npot=0, mipmap=0, filter_mode=1,
+        win_format=BC7, android_format=ASTC_4x4, crunch_quality=50,
+        note="4 rail icons, drawn only while the kit is on",
+    ),
     # R26 EMBERFORGE SPRITES: the code-built UI's 9-slice pieces (panels, buttons, tabs, chips, frames).
     # Their metas never named a Standalone or Android platform, so they inherited
     # DefaultTexturePlatform's textureCompression 0 and shipped as uncompressed RGBA32: 31 files, 1.27 MB

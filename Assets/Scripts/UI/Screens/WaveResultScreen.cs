@@ -299,7 +299,7 @@ namespace Emberfall.UI.Screens
             Image box = EmberforgeUI.Sunken("Box", _autoToggle);
             UIBuilder.Box(box.rectTransform, 8f, 0f, 46f, 46f, LeftMiddle);
             box.raycastTarget = false;
-            _autoCheck = UIBuilder.Img("Check", box.rectTransform, TextureLab.Check(64), Emberforge.GoldLit);
+            _autoCheck = UiKit.CheckImage("Check", box.rectTransform, 64, Emberforge.GoldLit);
             UIBuilder.FillParent(_autoCheck.rectTransform, 7f);
             _autoCheck.raycastTarget = false;
 
@@ -581,7 +581,7 @@ namespace Emberfall.UI.Screens
             if (!lost && r.WaveGold > 0)
                 AddChip(chips, chipWidths, "Gold", UiKit.Currency("gold"), TextureLab.CoinIcon(64), UITheme.Gold, "+" + r.WaveGold);
             if (!lost && r.WaveAccountXp > 0)
-                AddChip(chips, chipWidths, "Xp", null, TextureLab.Star(64), Emberforge.GoldLit, "+" + r.WaveAccountXp + " XP");
+                AddChip(chips, chipWidths, "Xp", UiKit.Icon("xp_gem"), TextureLab.Star(64), Emberforge.GoldLit, "+" + r.WaveAccountXp + " XP");
 
             float track = (n - 1) * PipWidth + PipCurrentWidth + (n - 1) * PipGap;
             float total = track + Emberforge.Space16 + countWidth;
@@ -686,7 +686,7 @@ namespace Emberfall.UI.Screens
                 const float icon = 30f;
                 float rowWidth = icon + Emberforge.Space12 + textWidth;
                 UIBuilder.Box(row, 0f, y, rowWidth, 40f, TopCentre);
-                Image padlock = UIBuilder.Img("Icon", row, TextureLab.Padlock(64), Emberforge.GoldMid);
+                Image padlock = UiKit.GlyphImage("Icon", row, "lock", TextureLab.Padlock(64), Emberforge.GoldMid);
                 UIBuilder.Box(padlock.rectTransform, 0f, 0f, icon, icon, LeftMiddle);
                 UIBuilder.Box(text.rectTransform, icon + Emberforge.Space12, 0f, textWidth, 40f, LeftMiddle);
                 y -= 40f;
@@ -775,6 +775,7 @@ namespace Emberfall.UI.Screens
             // The UI kit's icon for the purse this tile pays (gold, shards, slag), painted in colour so drawn
             // white; the flat tinted glyph otherwise, and always for a tile the kit has no icon for (XP).
             Sprite kitIcon = UiKit.Currency(name);
+            if (kitIcon == null && name == "Xp") kitIcon = UiKit.Icon("xp_gem");
             Image mark = UIBuilder.Img("Icon", tile, kitIcon != null ? kitIcon : icon,
                                        kitIcon != null ? Color.white : tint);
             UIBuilder.Box(mark.rectTransform, 0f, -22f, 64f, 64f, TopCentre);

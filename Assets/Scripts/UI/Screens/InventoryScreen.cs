@@ -147,7 +147,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(tab.Root, 0f, -(8f + index * 82f), 92f, 74f, new Vector2(0.5f, 1f));
             tab.Caption.gameObject.SetActive(false);
 
-            Image glyph = UIBuilder.Img("Glyph", tab.Root, icon, Emberforge.TextQuiet);
+            Image glyph = UIBuilder.Img("Glyph", tab.Root, icon, ItemCard.IconTint(icon, Emberforge.TextQuiet));
             UIBuilder.Box(glyph.rectTransform, 0f, 6f, 34f, 34f, new Vector2(0.5f, 0.5f));
 
             Text label = EmberforgeUI.Label("Tip", tab.Root, tip, UITheme.FontTiny - 8,
@@ -626,7 +626,7 @@ namespace Emberfall.UI.Screens
                 EmberforgeUI.SetTabSelected(_railButtons[i], active);
                 Transform glyph = _railButtons[i].Root.Find("Glyph");
                 if (glyph != null)
-                    glyph.GetComponent<Image>().color = active ? Emberforge.TextGold : Emberforge.TextQuiet;
+                    ItemCard.RailGlyph(glyph.GetComponent<Image>(), active);
                 Transform tip = _railButtons[i].Root.Find("Tip");
                 if (tip != null)
                     tip.GetComponent<Text>().color = active ? Emberforge.TextGold : Emberforge.TextQuiet;
@@ -788,7 +788,7 @@ namespace Emberfall.UI.Screens
         /// <summary>A worn item is marked, so the grid says what is already in use.</summary>
         private static void MarkWorn(RectTransform cell)
         {
-            Image worn = UIBuilder.Img("Worn", cell, TextureLab.Check(32), UITheme.Success);
+            Image worn = UiKit.CheckImage("Worn", cell, 32, UITheme.Success);
             UIBuilder.Box(worn.rectTransform, -6f, -6f, 22f, 22f, new Vector2(1f, 1f));
         }
 

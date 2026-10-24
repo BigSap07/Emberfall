@@ -297,10 +297,11 @@ namespace Emberfall.UI.Screens
             if (claimable) EmberforgeUI.PanelOn(tile, false);
             else EmberforgeUI.SunkenOn(tile);
 
-            Sprite glyph = claimed ? TextureLab.Check(64)
-                         : (!reached ? TextureLab.Padlock(64)
+            Color markTint = tint;
+            Sprite glyph = claimed ? UiKit.Check(64, ref markTint)
+                         : (!reached ? UiKit.Glyph("lock", TextureLab.Padlock(64), ref markTint)
                          : (isLast ? TextureLab.Chest(64) : TextureLab.GemIcon(64)));
-            Image mark = UIBuilder.Img("Mark", tile, glyph, tint);
+            Image mark = UIBuilder.Img("Mark", tile, glyph, markTint);
             UIBuilder.Box(mark.rectTransform, 0f, 0f, 44f, 44f, new Vector2(0.5f, 0.5f));
 
             // The tile is the button. A separate CLAIM control under a 96px tile would double the

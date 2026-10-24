@@ -202,8 +202,9 @@ namespace Emberfall.UI.Screens
             }
             else
             {
-                Image ring = UIBuilder.Img("Empty", _avatarHost, TextureLab.Ring(160, 3),
-                                           UITheme.WithAlpha(Emberforge.GoldDeep, 0.8f));
+                Color ringTint = UITheme.WithAlpha(Emberforge.GoldDeep, 0.8f);
+                Image ring = UIBuilder.Img("Empty", _avatarHost, UiKit.Glyph("avatar_ring", TextureLab.Ring(160, 3), ref ringTint),
+                                           ringTint);
                 UIBuilder.FillParent(ring.rectTransform, 0f);
             }
 

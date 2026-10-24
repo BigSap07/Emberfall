@@ -159,7 +159,7 @@ namespace Emberfall.UI
             plate.sprite = TextureLab.Circle(64);
             plate.color = UITheme.WithAlpha(HubStyle.Plate, HubStyle.PlateAlphaSolid);
             plate.raycastTarget = false;
-            Image glyph = UIBuilder.Img("Glyph", view._padlock, TextureLab.Padlock(64), UITheme.Gold);
+            Image glyph = UiKit.GlyphImage("Glyph", view._padlock, "lock", TextureLab.Padlock(64), UITheme.Gold);
             UIBuilder.FillParent(glyph.rectTransform, 5f);
             glyph.raycastTarget = false;
 

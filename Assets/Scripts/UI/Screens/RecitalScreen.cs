@@ -182,7 +182,7 @@ namespace Emberfall.UI.Screens
             Image recordPlate = EmberforgeUI.SunkenOn(record);
             recordPlate.raycastTarget = false;
 
-            Image crown = UIBuilder.Img("Crown", record, TextureLab.Crown(64), UITheme.Gold);
+            Image crown = UiKit.GlyphImage("Crown", record, "crown", TextureLab.Crown(64), UITheme.Gold);
             UIBuilder.Box(crown.rectTransform, UITheme.Space12, 0f, 28f, 28f, new Vector2(0f, 0.5f));
 
             _highestValue = EmberforgeUI.Label("Highest", record, "", UITheme.FontSmall,
@@ -210,7 +210,7 @@ namespace Emberfall.UI.Screens
             RectTransform echoRow = UIBuilder.Node("Echoes", banner);
             UIBuilder.Box(echoRow, 0f, -inner, BannerWidth - UITheme.Space48, 40f, new Vector2(0.5f, 1f));
 
-            Image hourglass = UIBuilder.Img("Hourglass", echoRow, TextureLab.HourglassIcon(64), UITheme.Echo);
+            Image hourglass = UiKit.GlyphImage("Hourglass", echoRow, "echo_pip", TextureLab.HourglassIcon(64), UITheme.Echo);
             UIBuilder.Box(hourglass.rectTransform, 0f, 0f, 32f, 32f, new Vector2(0f, 0.5f));
 
             _echoMeter = UIBuilder.Node("Meter", echoRow);

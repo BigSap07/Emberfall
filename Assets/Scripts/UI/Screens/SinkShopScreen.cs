@@ -240,7 +240,8 @@ namespace Emberfall.UI.Screens
             tileBg.raycastTarget = false;
 
             Color tint = MarkTint(item);
-            Image mark = UIBuilder.Img("Mark", iconTile, MarkSprite(item), UITheme.WithAlpha(tint, soldOut ? 0.5f : 0.95f));
+            Color markTint = UITheme.WithAlpha(tint, soldOut ? 0.5f : 0.95f);
+            Image mark = UIBuilder.Img("Mark", iconTile, MarkSprite(item, ref markTint), markTint);
             UIBuilder.Box(mark.rectTransform, 0f, 0f, tile * 0.62f, tile * 0.62f, new Vector2(0.5f, 0.5f));
 
             top += tile + UITheme.Space8;
@@ -336,7 +337,7 @@ namespace Emberfall.UI.Screens
             return UITheme.Gold;
         }
 
-        private static Sprite MarkSprite(SinkItemDef item)
+        private static Sprite MarkSprite(SinkItemDef item, ref Color tint)
         {
             switch (item.Kind)
             {
@@ -344,7 +345,7 @@ namespace Emberfall.UI.Screens
                 case SinkKind.Brand: return TextureLab.Sigil(3, 128);
                 case SinkKind.Echo: return TextureLab.HourglassIcon(128);
             }
-            return TextureLab.Crown(128);
+            return UiKit.Glyph("crown", TextureLab.Crown(128), ref tint);
         }
 
         private string BodyOf(SinkItemView v)

@@ -370,6 +370,9 @@ namespace Emberfall.UI
             return root;
         }
 
+        /// <summary>The badge size from which a placeholder face is the mannequin, not the initial.</summary>
+        private const float BigFaceSize = 200f;
+
         /// <summary>
         /// THE PORTRAIT OF A HERO WHO HAS NO PORTRAIT ART: the hero's initial, in the same
         /// lifted aspect colour the battlefield mannequin is tinted with.
@@ -407,6 +410,20 @@ namespace Emberfall.UI
         /// </summary>
         private static void PlaceholderFace(RectTransform root, UnitDef def, float size)
         {
+            // R44: at the Hero screen's size the kit's mannequin stands in the badge, over a disc of the
+            // aspect colour so the aspect still reads, and the initial is dropped (the name is beside it).
+            // Roster sizes, and any size with no kit art, keep the initial exactly as before.
+            Sprite mannequin = size >= BigFaceSize ? UiKit.Icon("mannequin") : null;
+            if (mannequin != null)
+            {
+                Image back = UIBuilder.Img("AspectBack", root, TextureLab.Circle(160),
+                                           UITheme.WithAlpha(UITheme.PlaceholderTint(def.Aspect), 0.35f));
+                UIBuilder.FillParent(back.rectTransform, size * 0.1465f);
+                Image figure = UIBuilder.Img("Mannequin", root, mannequin, Color.white);
+                figure.preserveAspect = true;
+                UIBuilder.FillParent(figure.rectTransform, size * 0.1465f);
+                return;
+            }
             // 0.46 of the badge: large enough to read at the 76px roster size, small enough to sit
             // inside the disc's inner glow rather than on the aspect ring.
             int fontSize = Mathf.Max(10, Mathf.RoundToInt(size * 0.46f));

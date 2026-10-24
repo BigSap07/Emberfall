@@ -58,6 +58,7 @@ namespace Emberfall.UI.Summon
         private Image _lightHot;
         private RectTransform _rays;
         private Image[] _rayStreaks;
+        private Image _portal;   // the kit's rift portal behind the light; null with no kit art
         private Image _ringOne;
         private Image _ringTwo;
         private readonly Image[] _motes = new Image[MoteCount];
@@ -144,6 +145,10 @@ namespace Emberfall.UI.Summon
 
             _rayStreaks = Streaks("Rays", _stage, LightSize * 2.6f, 34f, out _rays);
             _lightOuter = Decor("LightOuter", _stage, TextureLab.Glow(256, 1.4f), LightSize * 1.6f);
+            // R44: the kit's portal sits behind the light, growing and turning with it. The shockwave rings
+            // stay (they expand to several times the stage, which a portal disc should not). No sprite, no portal.
+            Sprite portal = UiKit.Icon("rift_portal");
+            if (portal != null) _portal = Decor("Portal", _stage, portal, LightSize * 0.62f);
             _ringOne = Decor("RingOne", _stage, TextureLab.Ring(256, 6), LightSize * 0.5f);
             _ringTwo = Decor("RingTwo", _stage, TextureLab.Ring(256, 10), LightSize * 0.5f);
 
@@ -832,6 +837,11 @@ namespace Emberfall.UI.Summon
             float appear = Mini ? 1f : Mathf.Clamp01(t / 0.15f);
 
             SetImage(_lightOuter, body, 0.55f * appear, scale);
+            if (_portal != null)
+            {
+                SetImage(_portal, Color.white, 0.9f * appear * (1f - charge), scale);
+                _portal.rectTransform.localRotation = Quaternion.Euler(0f, 0f, -t * 18f);
+            }
             SetImage(_lightCore, body, 0.95f * appear, scale);
             SetImage(_lightHot, centre, appear, scale * (1f + 0.06f * Mathf.Sin(t * 30f)));
 

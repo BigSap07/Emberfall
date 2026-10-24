@@ -46,7 +46,8 @@ namespace Emberfall.UI
         public static RectTransform Build(string name, Transform parent, float size, Sprite icon,
                                           Color rarity, int pips, int maxPips, Color aspectGlow)
         {
-            return Build(name, parent, size, icon, rarity, pips, maxPips, aspectGlow, Emberforge.TextBody, IconFraction);
+            return Build(name, parent, size, icon, rarity, pips, maxPips, aspectGlow,
+                         IconTint(icon, Emberforge.TextBody), IconFraction);
         }
 
         /// <summary>The card with the icon's tint and size stated: a UI kit icon is painted in colour, so
@@ -183,15 +184,55 @@ namespace Emberfall.UI
             RectTransform card = Build(name, parent, size, SlotIcon(slot),
                                        Emberforge.TextQuiet, 0, 4, Color.clear);
             Image icon = card.Find("Icon") != null ? card.Find("Icon").GetComponent<Image>() : null;
-            if (icon != null) icon.color = UITheme.WithAlpha(Emberforge.TextQuiet, 0.55f);
+            if (icon != null) icon.color = IconTint(icon.sprite, UITheme.WithAlpha(Emberforge.TextQuiet, 0.55f));
             return card;
         }
 
         // ------------------------------------------------------------------ glyphs
 
+        /// <summary>The kit's name for a slot's mark (UiKitMap.Icons). Both accessories share one.</summary>
+        private static string KitName(ArmorSlot slot)
+        {
+            switch (slot)
+            {
+                case ArmorSlot.Helm: return "item_helm";
+                case ArmorSlot.Plate: return "item_plate";
+                case ArmorSlot.Boots: return "item_boots";
+                case ArmorSlot.AccessoryA:
+                case ArmorSlot.AccessoryB: return "item_accessory";
+            }
+            return "item_weapon";
+        }
+
+        /// <summary>The tint for a slot mark. The kit's marks are painted grey and gold, so they are drawn
+        /// white (the old tint's alpha kept); the flat fallback shapes keep the tint they always had.</summary>
+        public static Color IconTint(Sprite icon, Color old)
+        {
+            return IsKitMark(icon) ? new Color(1f, 1f, 1f, old.a) : old;
+        }
+
+        private static bool IsKitMark(Sprite icon)
+        {
+            if (icon == null || !UiKit.On) return false;
+            ArmorSlot[] slots = ArmorInfo.AllSlots;
+            for (int i = 0; i < slots.Length; i++)
+                if (icon == UiKit.Icon(KitName(slots[i]))) return true;
+            return false;
+        }
+
+        /// <summary>A filter rail glyph's colour for selected or not: gold or quiet for the flat shapes, white
+        /// (dimmed when not selected) for a kit mark.</summary>
+        public static void RailGlyph(Image glyph, bool active)
+        {
+            if (IsKitMark(glyph.sprite)) glyph.color = new Color(1f, 1f, 1f, active ? 1f : 0.6f);
+            else glyph.color = active ? Emberforge.TextGold : Emberforge.TextQuiet;
+        }
+
         /// <summary>The mark for a slot. Both accessories share the ring, differing only by stone.</summary>
         public static Sprite SlotIcon(ArmorSlot slot)
         {
+            Sprite kit = UiKit.Icon(KitName(slot));
+            if (kit != null) return kit;
             switch (slot)
             {
                 case ArmorSlot.Weapon: return TextureLab.Sword(128);

@@ -470,7 +470,7 @@ namespace Emberfall.UI.Screens
             TileFace(tile, t.Kind, t.Short, "SEALED", owned ? (t.Claimed ? 0.5f : 0.95f) : 0.4f, height);
             if (!owned)
             {
-                Image pad = UIBuilder.Img("Lock", tile, TextureLab.Padlock(64), UITheme.WithAlpha(Emberforge.TextQuiet, 0.9f));
+                Image pad = UiKit.GlyphImage("Lock", tile, "lock", TextureLab.Padlock(64), UITheme.WithAlpha(Emberforge.TextQuiet, 0.9f));
                 UIBuilder.Box(pad.rectTransform, -8f, -8f, 30f, 30f, new Vector2(1f, 1f));   // the corner, clear of the SEALED label
                 return;
             }

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using Emberfall.Core.Json;
 using Emberfall.Core.Session;
 
@@ -66,6 +67,48 @@ namespace Emberfall.UI
         public static Sprite Hud(string slot) { return Get(UiKitMap.HudSlot(slot)); }
         public static Sprite Forge(string slot) { return Get(UiKitMap.ForgeSlot(slot)); }
         public static Sprite Currency(string purse) { return Get(UiKitMap.Currency(purse)); }
+        /// <summary>A small glyph or item mark by its UiKitMap.Icons name, or null (switch off, no file).</summary>
+        public static Sprite Icon(string name) { return Get(UiKitMap.Icon(name)); }
+
+        /// <summary>
+        /// The kit's glyph when it has one, else the old shape. A kit glyph is painted in colour, so the
+        /// tint becomes white (its alpha kept); the fallback keeps the tint it always had. One helper so
+        /// no call site repeats the null check or the tint rule.
+        /// </summary>
+        public static Sprite Glyph(string name, Sprite fallback, ref Color tint)
+        {
+            Sprite kit = Icon(name);
+            if (kit == null) return fallback;
+            tint = new Color(1f, 1f, 1f, tint.a);
+            return kit;
+        }
+
+        /// <summary>An Image named objName under parent: the kit's glyph (white) or the old shape in its old tint.</summary>
+        public static Image GlyphImage(string objName, Transform parent, string name, Sprite fallback, Color tint)
+        {
+            Sprite sprite = Glyph(name, fallback, ref tint);
+            return UIBuilder.Img(objName, parent, sprite, tint);
+        }
+
+        /// <summary>The check mark as an Image, through Check so CheckWired governs it.</summary>
+        public static Image CheckImage(string objName, Transform parent, int fallbackSize, Color tint)
+        {
+            Sprite sprite = Check(fallbackSize, ref tint);
+            return UIBuilder.Img(objName, parent, sprite, tint);
+        }
+
+        /// <summary>
+        /// THE CHECK MARK, every place the game draws a tick. The kit's check art is a weak piece, so
+        /// CheckWired is the one switch: false and every tick is the old drawn check again.
+        /// </summary>
+        public const bool CheckWired = true;
+
+        public static Sprite Check(int fallbackSize, ref Color tint)
+        {
+            Sprite old = TextureLab.Check(fallbackSize);
+            return CheckWired ? Glyph("check", old, ref tint) : old;
+        }
+
         public static Sprite OfferCard(string offerId) { return Get(UiKitMap.OfferCard(offerId)); }
         public static Sprite PassHeader() { return Get(UiKitMap.PassHeader()); }
         public static Sprite Splash() { return Get(UiKitMap.Splash()); }

@@ -245,7 +245,8 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(iconTile, 0f, -52f, icon + 16f, icon + 16f, new Vector2(0.5f, 1f));
             Image bg = EmberforgeUI.SunkenOn(iconTile);
             bg.raycastTarget = false;
-            Image mark = UIBuilder.Img("Mark", iconTile, IconFor(t.Kind), UITheme.WithAlpha(tint, t.Claimed ? 0.5f : 0.95f));
+            Color markTint = UITheme.WithAlpha(tint, t.Claimed ? 0.5f : 0.95f);
+            Image mark = UIBuilder.Img("Mark", iconTile, IconFor(t.Kind, ref markTint), markTint);
             UIBuilder.Box(mark.rectTransform, 0f, 0f, icon, icon, new Vector2(0.5f, 0.5f));
 
             Text line = EmberforgeUI.Body("Line", tile, t.Line, UITheme.FontTiny - 4, Emberforge.TextBody, TextAnchor.UpperCenter);
@@ -273,14 +274,14 @@ namespace Emberfall.UI.Screens
             }
         }
 
-        private static Sprite IconFor(PassRewardKind kind)
+        private static Sprite IconFor(PassRewardKind kind, ref Color tint)
         {
             switch (kind)
             {
                 case PassRewardKind.Hourglass: return TextureLab.HourglassIcon(128);
-                case PassRewardKind.Dust: return TextureLab.SpiralIcon(128);
+                case PassRewardKind.Dust: return UiKit.Glyph("road_dust", TextureLab.SpiralIcon(128), ref tint);
                 case PassRewardKind.Slag: return TextureLab.IngotIcon(128);
-                case PassRewardKind.Selector: return TextureLab.Crown(128);
+                case PassRewardKind.Selector: return UiKit.Glyph("crown", TextureLab.Crown(128), ref tint);
             }
             return TextureLab.Sigil(3, 128);
         }

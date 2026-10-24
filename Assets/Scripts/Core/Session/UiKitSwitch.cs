@@ -99,6 +99,34 @@ namespace Emberfall.Core.Session
             { "echo", "hourglass" },
         };
 
+        // R44: small glyphs and item marks by the name the call site asks for. Painted in colour, so a call
+        // site draws them white; with the kit off none of them is asked for and the old shape is drawn.
+        // The road_* pieces have no reward kind yet (gold, energy, summon, chest, relic): they load, nothing draws them.
+        private static readonly Dictionary<string, string> Icons = new Dictionary<string, string>
+        {
+            { "item_weapon", "items/weapon" },
+            { "item_helm", "items/helm" },
+            { "item_plate", "items/plate" },
+            { "item_boots", "items/boots" },
+            { "item_accessory", "items/accessory" },
+            { "rift_portal", "rift_portal" },
+            { "xp_gem", "xp_gem" },
+            { "avatar_ring", "avatar_ring" },
+            { "crown", "crown" },
+            { "lock", "lock" },
+            { "check", "check" },
+            { "pip_lit", "pip_lit" },
+            { "pip_unlit", "pip_unlit" },
+            { "echo_pip", "echo_pip" },
+            { "mannequin", "mannequin" },
+            { "road_gold", "road/gold" },
+            { "road_dust", "road/dust" },
+            { "road_energy", "road/energy" },
+            { "road_summon", "road/summon" },
+            { "road_chest", "road/chest" },
+            { "road_relic", "road/relic" },
+        };
+
         // Store offer ids (StoreOffers in the Store) to a card.
         private static readonly Dictionary<string, string> OfferCards = new Dictionary<string, string>
         {
@@ -123,6 +151,11 @@ namespace Emberfall.Core.Session
         public static string Currency(string purse)
         {
             return Look(Currencies, purse == null ? null : purse.ToLowerInvariant());
+        }
+
+        public static string Icon(string name)
+        {
+            return Look(Icons, name);
         }
 
         public static string OfferCard(string offerId)
@@ -187,6 +220,7 @@ namespace Emberfall.Core.Session
             foreach (KeyValuePair<string, string> kv in HudSlots) if (!keys.Contains(kv.Value)) keys.Add(kv.Value);
             foreach (KeyValuePair<string, string> kv in ForgeSlots) if (!keys.Contains(kv.Value)) keys.Add(kv.Value);
             foreach (KeyValuePair<string, string> kv in Currencies) if (!keys.Contains(kv.Value)) keys.Add(kv.Value);
+            foreach (KeyValuePair<string, string> kv in Icons) if (!keys.Contains(kv.Value)) keys.Add(kv.Value);
             foreach (KeyValuePair<string, string> kv in OfferCards) if (!keys.Contains(kv.Value)) keys.Add(kv.Value);
             string[] aspects = { "ember", "tide", "verdant", "gale", "umbra", "lumen" };
             for (int i = 0; i < aspects.Length; i++) keys.Add("aspect_" + aspects[i]);
@@ -205,6 +239,11 @@ namespace Emberfall.Core.Session
         public static List<string> AllForgeSlots()
         {
             return new List<string>(ForgeSlots.Keys);
+        }
+
+        public static List<string> AllIcons()
+        {
+            return new List<string>(Icons.Keys);
         }
 
         public static List<string> AllOfferIds()

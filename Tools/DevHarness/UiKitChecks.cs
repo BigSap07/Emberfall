@@ -51,6 +51,7 @@ namespace Emberfall.DevHarness
             int asked = 0, answered = 0;
             foreach (string s in UiKitMap.AllHudSlots()) { asked++; if (UiKitMap.HudSlot(s) != null) answered++; }
             foreach (string s in UiKitMap.AllForgeSlots()) { asked++; if (UiKitMap.ForgeSlot(s) != null) answered++; }
+            foreach (string s in UiKitMap.AllIcons()) { asked++; if (UiKitMap.Icon(s) != null) answered++; }
             foreach (string s in UiKitMap.AllOfferIds()) { asked++; if (UiKitMap.OfferCard(s) != null) answered++; }
             foreach (string s in UiKitMap.AllCurrencies()) { asked++; if (UiKitMap.Currency(s) != null) answered++; }
             asked++; if (UiKitMap.PassHeader() != null) answered++;
@@ -74,6 +75,7 @@ namespace Emberfall.DevHarness
             int missing = 0;
             foreach (string s in UiKitMap.AllHudSlots()) if (UiKitMap.HudSlot(s) == null) missing++;
             foreach (string s in UiKitMap.AllForgeSlots()) if (UiKitMap.ForgeSlot(s) == null) missing++;
+            foreach (string s in UiKitMap.AllIcons()) if (UiKitMap.Icon(s) == null) missing++;
             foreach (string s in UiKitMap.AllOfferIds()) if (UiKitMap.OfferCard(s) == null) missing++;
             Check(missing == 0 && UiKitMap.PassHeader() != null && UiKitMap.HudSlot("not_a_slot") == null && UiKitMap.ForgeSlot("") == null,
                   "ON: every slot in the tables answers a piece, and a slot the kit does not cover answers null");

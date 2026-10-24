@@ -59,6 +59,7 @@ namespace Emberfall.UI
         public const string IconMail = "hud_rail_mail";
         public const string IconEvents = "hud_rail_events";
         public const string IconMore = "hud_rail_more";
+        public const string IconOrders = "hud_rail_orders";
 
         public const string IconHeroes = "hud_nav_heroes";
         public const string IconBag = "hud_nav_bag";
@@ -96,8 +97,18 @@ namespace Emberfall.UI
         /// </summary>
         private static readonly Dictionary<string, Sprite> Overrides = new Dictionary<string, Sprite>();
 
+        /// <summary>R44: the rail icons painted in colour for the kit. They are files under Sprites/Hud
+        /// rather than kit pieces, so they are used only while the kit is on (off is the old look) and are
+        /// drawn white like a kit piece.</summary>
+        private static bool IsKitFile(string slot)
+        {
+            return slot == IconFriends || slot == IconMail || slot == IconEvents || slot == IconOrders;
+        }
+
         private static Sprite Authored(string slot)
         {
+            if (IsKitFile(slot) && !UiKit.On) return null;
+
             // THE UI KIT FIRST, and only while its switch is on (UiKit answers null otherwise). The
             // kit's sprite is never put in Overrides, so flipping the switch cannot serve the other state.
             Sprite kit = UiKit.Hud(slot);
@@ -114,6 +125,7 @@ namespace Emberfall.UI
         /// painted in colour, so a caller that tints a glyph draws it white instead.</summary>
         public static bool IsKit(string slot)
         {
+            if (IsKitFile(slot)) return UiKit.On && Authored(slot) != null;
             return UiKit.Hud(slot) != null;
         }
 

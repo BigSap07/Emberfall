@@ -529,7 +529,7 @@ namespace Emberfall.UI.Screens
 
             if (DailyLoopSwitch.Enabled)
             {
-                _ordersButton = HudWidgets.RailButton("Orders", _hud, "", TextureLab.Check(64),
+                _ordersButton = HudWidgets.RailButton("Orders", _hud, HudSkin.IconOrders, TextureLab.Check(64),
                                                       Emberforge.TextGold, OpenOrders);
                 Place(_ordersButton.Root, top + step * slot);
                 slot++;

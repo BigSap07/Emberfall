@@ -344,8 +344,19 @@ namespace Emberfall.UI.Screens
             for (int i = 0; i < v.PipCount; i++)
             {
                 bool lit = i < v.PipsCleared;
-                Image pip = lit ? UIBuilder.Panel("Pip" + (i + 1), _info, UITheme.Waymark, 9)
-                                : EmberforgeUI.Sunken("Pip" + (i + 1), _info);
+                // R44: the kit's lit and unlit pips, square in the same slot; no kit art, the old plates.
+                Sprite kitPip = UiKit.Icon(lit ? "pip_lit" : "pip_unlit");
+                Image pip;
+                if (kitPip != null)
+                {
+                    pip = UIBuilder.Img("Pip" + (i + 1), _info, kitPip, Color.white);
+                    pip.preserveAspect = true;
+                }
+                else
+                {
+                    pip = lit ? UIBuilder.Panel("Pip" + (i + 1), _info, UITheme.Waymark, 9)
+                              : EmberforgeUI.Sunken("Pip" + (i + 1), _info);
+                }
                 UIBuilder.Box(pip.rectTransform, LadderLayout.PipX(i, LadderLayout.PipSize, spacing, LadderLayout.PipBlockGap), y,
                               LadderLayout.PipSize, PipHeight, new Vector2(0f, 1f));
                 pip.raycastTarget = false;
@@ -392,7 +403,7 @@ namespace Emberfall.UI.Screens
 
             if (r.ClearedByMe)
             {
-                Image tick = UIBuilder.Img("Mine", row, TextureLab.Check(64), UITheme.Success);
+                Image tick = UiKit.CheckImage("Mine", row, 64, UITheme.Success);
                 UIBuilder.Box(tick.rectTransform, 224f, -14f, 32f, 32f, new Vector2(0f, 1f));
                 tick.raycastTarget = false;
             }
