@@ -74,6 +74,14 @@ namespace Emberfall.UI
         /// many are open.</summary>
         public static int Build(GameApp app, ScreenRouter router, RectTransform parent, float top)
         {
+            return Build(app, router, parent, top, CardHeight);
+        }
+
+        /// <summary>The same cards at a chosen height, for a parent shorter than the cards' own 600 (the
+        /// Store's body at 20:9). The purse line ends near 460, so the cards do not go below 520.</summary>
+        public static int Build(GameApp app, ScreenRouter router, RectTransform parent, float top, float cardHeight)
+        {
+            cardHeight = Mathf.Clamp(cardHeight, 520f, CardHeight);
             PlayerProfile p = app.Session.Profile;
             int count = MarketplaceShops.All.Length;
             float startX = -(CardWidth * count + CardGap * (count - 1)) * 0.5f + CardWidth * 0.5f;
@@ -107,7 +115,7 @@ namespace Emberfall.UI
 
                 // The padlock and the one-time new dot of this shop's own door. No tag: the card has its chip.
                 FeatureLockView.Attach(card, EntryOf(shop), name,
-                                       new Vector2(-CardWidth * 0.5f + 40f, CardHeight * 0.5f - 40f),
+                                       new Vector2(-CardWidth * 0.5f + 40f, cardHeight * 0.5f - 40f),
                                        FeatureLockView.TagSide.Above, false).Refresh(app);
 
                 string lockLine = built ? FeatureGates.LockLine(app, EntryOf(shop)) : "NOT IN THIS BUILD";

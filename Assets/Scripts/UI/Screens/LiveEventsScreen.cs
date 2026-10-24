@@ -30,7 +30,7 @@ namespace Emberfall.UI.Screens
 
         private const float ContentWidth = 1760f;
         private const float TabWidth = 300f;
-        private const float BodyHeight = 700f;
+        private const float BodyBottomMargin = 24f;   // the body stretches to the canvas bottom less this, so it follows the aspect
         private const float SummaryHeight = 156f;
         private const float LabelColumn = 96f;
         private const float TileGap = 8f;
@@ -47,6 +47,7 @@ namespace Emberfall.UI.Screens
         private Text _banner;
         private RectTransform _testChip;
         private RectTransform _body;
+        private RectTransform _questHost;
         private readonly ForgeTab[] _tabs = new ForgeTab[2];
         private LiveEventSlot _slot = LiveEventSlot.Weekly;
         private PurchaseService _service;
@@ -76,7 +77,13 @@ namespace Emberfall.UI.Screens
             _testChip = TestStoreBanner.Create(Root, top);
 
             _body = UIBuilder.Node("Body", Root);
-            UIBuilder.Box(_body, 0f, -(top + HubStyle.TabHeight + 12f), ContentWidth, BodyHeight, new Vector2(0.5f, 1f));
+            float bodyTop = top + HubStyle.TabHeight + 12f;
+            // top centre pivot, stretched down to the bottom margin: children hang off the top as before
+            _body.anchorMin = new Vector2(0.5f, 0f);
+            _body.anchorMax = new Vector2(0.5f, 1f);
+            _body.pivot = new Vector2(0.5f, 1f);
+            _body.sizeDelta = new Vector2(ContentWidth, -(bodyTop + BodyBottomMargin));
+            _body.anchoredPosition = new Vector2(0f, -bodyTop);
         }
 
         // ------------------------------------------------------------------ lifecycle
@@ -320,18 +327,26 @@ namespace Emberfall.UI.Screens
 
             float colWidth = (ContentWidth - 16f) * 0.5f;
             int perColumn = (v.Quests.Count + 1) / 2;
+
+            // The quest rows scroll in the space under the track: at 20:9 there is room for three or four,
+            // at 16:9 for most of them, and the rest is a swipe away rather than under the screen edge.
+            ScrollRect questScroll;
+            RectTransform questContent = UIBuilder.ScrollList("QuestScroll", _body, out questScroll, 0f, new RectOffset(0, 0, 0, 0));
+            UIBuilder.FillParent(questScroll.GetComponent<RectTransform>(), 0f, QuestTop + 28f, 0f, 0f);
+            _questHost = UIBuilder.Node("QuestRows", questContent);
+            UIBuilder.Sized(_questHost, 0f, perColumn * (QuestRowHeight + QuestRowGap));
             for (int i = 0; i < v.Quests.Count; i++)
             {
                 int column = i / perColumn, row = i % perColumn;
                 float x = column * (colWidth + 16f);
-                float y = -(QuestTop + 28f + row * (QuestRowHeight + QuestRowGap));
+                float y = -(row * (QuestRowHeight + QuestRowGap));
                 BuildQuestRow(v.Quests[i], x, y, colWidth);
             }
         }
 
         private void BuildQuestRow(LiveQuestView q, float x, float y, float width)
         {
-            RectTransform row = UIBuilder.Node("Quest_" + q.Id, _body);
+            RectTransform row = UIBuilder.Node("Quest_" + q.Id, _questHost);
             UIBuilder.Box(row, x, y, width, QuestRowHeight, TopLeft);
             if (q.CanClaim) EmberforgeUI.PanelOn(row, false);
             else EmberforgeUI.PlainPanelOn(row);

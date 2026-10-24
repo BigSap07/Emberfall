@@ -40,13 +40,13 @@ namespace Emberfall.UI.Screens
     {
         public override ScreenId Id { get { return ScreenId.Forge; } }
 
-        private const float RailX = -872f;
+        private const float RailX = -820f;   // 16:10 is the narrowest canvas (half 910): the rail clears its left edge by the screen padding
         private const float RailWidth = 116f;
         private const float AnvilX = -232f;
         private const float FocusSize = 196f;
         private const float PartnerSize = 108f;
         private const float TraySize = 92f;
-        private const float PanelX = 620f;
+        private const float PanelX = 598f;   // and the compare panel clears the right edge by the same
         private const float PanelWidth = 560f;
 
         /// <summary>
@@ -55,6 +55,10 @@ namespace Emberfall.UI.Screens
         /// which reads as a rendering fault rather than as an invitation to scroll.
         /// </summary>
         private const float TrayBlock = 242f;
+
+        /// <summary>Seven 92 cells, six 12 gaps and the 8 padding each side is 732: the tray's shell is this wide so the
+        /// first and last columns are not cut by the viewport mask.</summary>
+        private const float TrayWidth = 740f;
 
         private Text _headerSubtitle;
         private Text _slagValue;
@@ -187,7 +191,7 @@ namespace Emberfall.UI.Screens
                                          new Vector2(UITheme.Space12, UITheme.Space12), 7,
                                          new RectOffset(8, 8, 8, 8));
             RectTransform shell = scroll.GetComponent<RectTransform>();
-            UIBuilder.Box(shell, AnvilX, -(top + 30f), 700f, TrayBlock - 30f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(shell, AnvilX, -(top + 30f), TrayWidth, TrayBlock - 30f, new Vector2(0.5f, 1f));
         }
 
         private void BuildActions(float top)
