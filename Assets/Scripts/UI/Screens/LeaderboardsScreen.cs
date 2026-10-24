@@ -222,13 +222,7 @@ namespace Emberfall.UI.Screens
         {
             RectTransform strip = UIBuilder.Node("Banner", _body);
             UIBuilder.TopStrip(strip, LeaderboardsLayout.BannerHeight, plan.BannerTop, UITheme.ScreenPadding);
-            Image plate = strip.gameObject.AddComponent<Image>();
-            plate.sprite = UISkin.Panel((int)UITheme.CornerRadiusSmall);
-            plate.type = Image.Type.Sliced;
-            plate.color = UITheme.WithAlpha(UITheme.PanelSunken, HubStyle.PlateAlpha);
-            plate.raycastTarget = false;
-            UIBuilder.Frame("Edge", strip, UITheme.WithAlpha(HubStyle.BorderWarm, HubStyle.BorderAlpha),
-                            (int)UITheme.CornerRadiusSmall, HubStyle.BorderWeight);
+            EmberforgeUI.SunkenOn(strip).raycastTarget = false;
 
             _bannerText = EmberforgeUI.Label("Text", strip, v.Banner, UITheme.FontTiny, UITheme.Warning, TextAnchor.MiddleLeft);
             UIBuilder.FillParent(_bannerText.rectTransform, UITheme.Space16, 0f, UITheme.Space16, 0f);
@@ -291,18 +285,11 @@ namespace Emberfall.UI.Screens
         /// <summary>One row, ordinary or pinned. The caller's own is the same plate with a gold frame and a gold name.</summary>
         private static void BuildRow(RectTransform row, LeaderboardRowView r)
         {
-            // The spec's row: UITheme.PanelRaised, CornerRadiusSmall. The kit's plain panel carries a gold rim of its own,
-            // which put a gold frame round EVERY row and left the caller's row told apart by its name colour alone; so
-            // an ordinary row is a flat raised plate with a soft hairline, and only the caller's has the gold frame.
-            Image plate = row.gameObject.AddComponent<Image>();
-            plate.sprite = UISkin.Panel((int)UITheme.CornerRadiusSmall);
-            plate.type = Image.Type.Sliced;
-            plate.color = UITheme.PanelRaised;
+            // The kit's plain panel carries a gold rim of its own, which on EVERY row would leave the caller's row told
+            // apart by its name colour alone; so an ordinary row is the brown recess, and only the caller's is the
+            // raised plate with the rim.
+            Image plate = r.IsMe ? EmberforgeUI.PlainPanelOn(row) : EmberforgeUI.SunkenOn(row);
             plate.raycastTarget = false;
-            if (r.IsMe)
-                UIBuilder.Frame("Mine", row, UITheme.Gold, (int)UITheme.CornerRadiusSmall, HubStyle.BorderWeightHeavy);
-            else
-                UIBuilder.Frame("Edge", row, UITheme.BorderSoft, (int)UITheme.CornerRadiusSmall, HubStyle.BorderWeight);
 
             Text rank = EmberforgeUI.Label("Rank", row, r.RankText, UITheme.FontSmall, UITheme.TextMuted, TextAnchor.MiddleLeft);
             UIBuilder.Box(rank.rectTransform, ValueInset, 0f, LeaderboardsLayout.RankColumn, LeaderboardsLayout.RowHeight, new Vector2(0f, 0.5f));
@@ -355,11 +342,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(spin, 0f, -y, size, size, new Vector2(0.5f, 1f));
             if (!alone)
             {
-                Image plate = spin.gameObject.AddComponent<Image>();
-                plate.sprite = UISkin.Panel((int)UITheme.CornerRadius);
-                plate.type = Image.Type.Sliced;
-                plate.color = UITheme.WithAlpha(UITheme.PanelSunken, HubStyle.PlateAlpha);
-                plate.raycastTarget = false;
+                EmberforgeUI.SunkenOn(spin).raycastTarget = false;
             }
             spin.gameObject.AddComponent<ForgeSpinner>();
         }

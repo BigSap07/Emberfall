@@ -283,8 +283,9 @@ namespace Emberfall.UI
             float step = 1f / segments;
             for (int i = 0; i < segments; i++)
             {
-                Image seg = UIBuilder.Img("Seg" + i, track, UISkin.Panel(4),
-                                          i < lit ? tint : Emberforge.SunkenTop);
+                Image seg = UIBuilder.Img("Seg" + i, track,
+                                          EmberforgeSkin.Get(i < lit ? EmberforgeArt.Slot.BarFill : EmberforgeArt.Slot.BarTrough),
+                                          i < lit ? tint : Color.white);
                 seg.type = Image.Type.Sliced;
                 RectTransform rt = seg.rectTransform;
                 rt.anchorMin = new Vector2(i * step, 0f);

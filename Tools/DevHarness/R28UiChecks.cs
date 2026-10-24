@@ -150,8 +150,8 @@ namespace Emberfall.DevHarness
                   "R28 UI LEADERBOARDS: the kit's header, tabs and secondary buttons; the screen has no primary action (boards pay nothing)");
             Check(code.Contains("r.IsMe ? UITheme.Gold : UITheme.TextPrimary"),
                   "R28 UI LEADERBOARDS: the caller's own name is the one gold name");
-            Check(code.Contains("UITheme.Gold, (int)UITheme.CornerRadiusSmall, HubStyle.BorderWeightHeavy") && code.Contains("if (r.IsMe)"),
-                  "R28 UI LEADERBOARDS: the caller's row wears a gold frame of HubStyle.BorderWeightHeavy");
+            Check(code.Contains("r.IsMe ? EmberforgeUI.PlainPanelOn(row)"),
+                  "R28 UI LEADERBOARDS: the caller's row is the kit's raised plate with its gold rim");
 
             // ---- taps call only the controller methods the spec names; nothing else is reached
             List<string> calls = R28UiCalls(code, "_controller");
@@ -183,10 +183,8 @@ namespace Emberfall.DevHarness
                   && !Regex.IsMatch(code, @"Rank\s*(==|<=|<)\s*[1-4]\b") && !Regex.IsMatch(code, @"Rows\[\s*[0-2]\s*\]"),
                   "R28 UI LEADERBOARDS: no medal, no crown and no row treated differently by its place; boards pay nothing");
             string buildRow = R28UiBody(code, "private static void BuildRow(");
-            Check(buildRow.Contains("plate.color = UITheme.PanelRaised") && !buildRow.Contains("PlainPanelOn") && Regex.Matches(buildRow, @"UITheme\.Gold,").Count == 1
-                  && Regex.IsMatch(buildRow, @"if \(r\.IsMe\)\s*UIBuilder\.Frame\(""Mine"", row, UITheme\.Gold, \(int\)UITheme\.CornerRadiusSmall, HubStyle\.BorderWeightHeavy\);\s*else\s*UIBuilder\.Frame\(""Edge"", row, UITheme\.BorderSoft"),
-                  "R28 UI LEADERBOARDS: an ordinary row is a flat raised plate with a soft hairline (the kit's plain panel carries a gold rim of its own); only the caller's row has the gold frame"
-                  + " of HubStyle.BorderWeightHeavy");
+            Check(buildRow.Contains("r.IsMe ? EmberforgeUI.PlainPanelOn(row) : EmberforgeUI.SunkenOn(row)") && !buildRow.Contains("UISkin.") && !buildRow.Contains("UIBuilder.Frame("),
+                  "R28 UI LEADERBOARDS: an ordinary row is the kit's brown recess (the kit's plain panel carries a gold rim of its own); only the caller's row is the raised plate with the rim");
             Check(buildRow.Length > 0 && !buildRow.Contains("Button") && !buildRow.Contains("OnClick") && !buildRow.Contains("raycastTarget = true"),
                   "R28 UI LEADERBOARDS: a row is not tappable (the server sends no user id, so no profile opens from a board)");
             Check(code.Contains("BuildRow(pinned, v.PinnedSelf)") && code.Contains("UIBuilder.Divider(") && code.Contains("if (v.PinnedSelf != null)"),

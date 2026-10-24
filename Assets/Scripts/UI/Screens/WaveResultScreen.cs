@@ -299,8 +299,6 @@ namespace Emberfall.UI.Screens
             Image box = EmberforgeUI.Sunken("Box", _autoToggle);
             UIBuilder.Box(box.rectTransform, 8f, 0f, 46f, 46f, LeftMiddle);
             box.raycastTarget = false;
-            Image edge = UIBuilder.Frame("Edge", box.rectTransform, Emberforge.GoldLow, 8, 3);
-            edge.raycastTarget = false;
             _autoCheck = UIBuilder.Img("Check", box.rectTransform, TextureLab.Check(64), Emberforge.GoldLit);
             UIBuilder.FillParent(_autoCheck.rectTransform, 7f);
             _autoCheck.raycastTarget = false;
@@ -598,13 +596,9 @@ namespace Emberfall.UI.Screens
                 Color fill = done ? Emberforge.GoldLow
                            : current ? (lost ? UITheme.Danger : Emberforge.GoldLit)
                            : Emberforge.SunkenTop;
-                Image pip = UIBuilder.Panel("Pip" + i, _rowHost, fill, 6);
+                Image pip = done || current ? UIBuilder.Panel("Pip" + i, _rowHost, fill, 6)
+                                            : EmberforgeUI.Sunken("Pip" + i, _rowHost);
                 UIBuilder.Box(pip.rectTransform, x + w * 0.5f, 0f, w, current ? PipHeight + 6f : PipHeight, Middle);
-                if (!done && !current)
-                {
-                    Image edge = UIBuilder.Frame("Edge", pip.rectTransform, UITheme.WithAlpha(Emberforge.GoldDeep, 0.8f), 6, 2);
-                    edge.raycastTarget = false;
-                }
                 pip.raycastTarget = false;
                 x += w + PipGap;
             }
