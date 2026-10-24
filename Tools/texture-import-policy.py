@@ -39,18 +39,20 @@ DXT5_CRUNCHED = 29
 ASTC_4x4 = 48
 ASTC_5x5 = 49
 ASTC_6x6 = 50
+ASTC_8x8 = 51
 
 # Bytes per pixel each format costs in the player, used by --report.
 BPP = {RGBA32: 4.0, DXT5: 1.0, BC7: 1.0, DXT5_CRUNCHED: 1.0,
-       ASTC_4x4: 1.0, ASTC_5x5: 0.64, ASTC_6x6: 16.0 / 36.0}
+       ASTC_4x4: 1.0, ASTC_5x5: 0.64, ASTC_6x6: 16.0 / 36.0, ASTC_8x8: 16.0 / 64.0}
 
 FORMAT_NAMES = {RGBA32: "RGBA32", DXT5: "DXT5", BC7: "BC7", DXT5_CRUNCHED: "DXT5 Crunched",
-                ASTC_4x4: "ASTC 4x4", ASTC_5x5: "ASTC 5x5", ASTC_6x6: "ASTC 6x6"}
+                ASTC_4x4: "ASTC 4x4", ASTC_5x5: "ASTC 5x5", ASTC_6x6: "ASTC 6x6", ASTC_8x8: "ASTC 8x8"}
 
 
 class Group(object):
     def __init__(self, name, folder, max_size, npot, mipmap, filter_mode,
-                 win_format, android_format, crunch_quality, note, multiple_of_4_only=False):
+                 win_format, android_format, crunch_quality, note, multiple_of_4_only=False,
+                 android_overrides=None):
         self.name = name
         self.folder = folder
         self.max_size = max_size
@@ -65,6 +67,12 @@ class Group(object):
         # sides are not multiples of 4. With this set, such a file is left exactly as it is (it is
         # tiny, and the report names it) instead of being given an entry that cannot take effect.
         self.multiple_of_4_only = multiple_of_4_only
+        # File name -> Android format, for the few files of a group that want a different block size
+        # than the rest. Windows is never overridden: this exists to shrink the Android download.
+        self.android_overrides = android_overrides or {}
+
+    def android_for(self, filename):
+        return self.android_overrides.get(filename, self.android_format)
 
 
 GROUPS = [
@@ -182,10 +190,17 @@ GROUPS = [
         filter_mode=1,
         # BC7: these are sunset skies, and banding in a smooth gradient is DXT5's signature.
         win_format=BC7,
-        # ASTC 6x6 is affordable here and nowhere else in this project. A backdrop carries no cel
-        # outline to smear - it sits behind a scrim and under the whole HUD - so it is the one
-        # group where a bigger block costs nothing anyone can see.
-        android_format=ASTC_6x6,
+        # ASTC 8x8 (R46), 2.0 bits per pixel against 6x6's 3.56. A backdrop carries no cel outline
+        # to smear: it sits behind a scrim and under the whole HUD, so it is the one group where a
+        # bigger block costs little anyone can see. Measured with the reference ASTC encoder on
+        # the 1920x1080 city painting: 49.8 dB at 6x6, 47.1 dB at 8x8, 45.2 dB at 10x10, and the
+        # 8x8 crop shows no banding in the sky. The hub painting is the one backdrop seen on every
+        # session with the UI kit's gold edges against it, and it is 1536x828 (36.3 dB at 6x6, 32.8
+        # dB at 8x8, visibly softer in the roof tiles), so it and the 960x420 campaign strip stay at
+        # 6x6 through android_overrides. 10x10 was tried and rejected: the gradients start to show
+        # block corners.
+        android_format=ASTC_8x8,
+        android_overrides={"hub.png": ASTC_6x6, "campaign.png": ASTC_6x6},
         crunch_quality=50,
         note="5 paintings, all five currently stretched to a power of two",
     ),
@@ -281,7 +296,7 @@ PLATFORM_ENTRY = """  - serializedVersion: 4
 """
 
 
-def platform_block(group):
+def platform_block(group, android_format=None):
     out = []
     # DefaultTexturePlatform is the fallback for any target not named below (WebGL, iOS, the
     # editor's own preview). Left on Automatic so an unnamed target still gets something sane,
@@ -289,7 +304,7 @@ def platform_block(group):
     out.append(PLATFORM_ENTRY.format(
         target="DefaultTexturePlatform", max_size=group.max_size, fmt=-1,
         compression=1, quality=50, crunched=0, overridden=0, force_hq=0))
-    for target, fmt in (("Standalone", group.win_format), ("Android", group.android_format)):
+    for target, fmt in (("Standalone", group.win_format), ("Android", android_format or group.android_format)):
         crunched = 1 if fmt == DXT5_CRUNCHED else 0
         quality = group.crunch_quality if crunched else 50
         # forceMaximumCompressionQuality_BC6H_BC7 is BC7's own quality switch and is free at
@@ -316,7 +331,7 @@ def png_size(path):
     return struct.unpack(">II", head[16:24])
 
 
-def rewrite(meta_text, group):
+def rewrite(meta_text, group, android_format=None):
     """Return the .meta with this group's policy applied. The guid is never touched."""
     text = meta_text
 
@@ -332,7 +347,7 @@ def rewrite(meta_text, group):
 
     start = text.index("  platformSettings:\n")
     end = text.index("  spriteSheet:\n", start)
-    return text[:start] + "  platformSettings:\n" + platform_block(group) + text[end:]
+    return text[:start] + "  platformSettings:\n" + platform_block(group, android_format) + text[end:]
 
 
 def walk(group, limit=None):
@@ -354,13 +369,13 @@ def main():
 
     limit = args.only.split(",") if args.only else None
     mb = 1024 * 1024
-    total_before = total_after = 0
+    total_before = total_after = total_android = 0
 
     for group in GROUPS:
         if args.group and args.group not in group.folder:
             continue
         n = changed = 0
-        before = after = 0
+        before = after = android = 0
         for png in walk(group, limit):
             meta = png + ".meta"
             if not os.path.exists(meta):
@@ -374,9 +389,11 @@ def main():
 
             old = open(meta, "r", encoding="utf-8").read()
             before += predict(old, w, h)
-            new = rewrite(old, group)
+            afmt = group.android_for(os.path.basename(png))
+            new = rewrite(old, group, afmt)
             aw, ah = clamp(w, h, group.max_size)
             after += aw * ah * BPP[group.win_format] * (4.0 / 3.0 if group.mipmap else 1.0)
+            android += aw * ah * BPP[afmt] * (4.0 / 3.0 if group.mipmap else 1.0)
             if new != old:
                 changed += 1
                 if args.apply:
@@ -384,12 +401,14 @@ def main():
                         f.write(new)
         total_before += before
         total_after += after
+        total_android += android
         print("%-34s %3d files  %8.1f -> %8.1f MB (Windows, uncrunched)  %d to write"
               % (group.name, n, before / mb, after / mb, changed))
-        print("    max %-5d npot=%d mip=%d  Windows %-14s  Android %s"
+        extra = " (+%d override)" % len(group.android_overrides) if group.android_overrides else ""
+        print("    max %-5d npot=%d mip=%d  Windows %-14s  Android %s%s = %.1f MB"
               % (group.max_size, group.npot, group.mipmap,
-                 FORMAT_NAMES[group.win_format], FORMAT_NAMES[group.android_format]))
-    print("%-34s            %8.1f -> %8.1f MB" % ("TOTAL", total_before / mb, total_after / mb))
+                 FORMAT_NAMES[group.win_format], FORMAT_NAMES[group.android_format], extra, android / mb))
+    print("%-34s            %8.1f -> %8.1f MB   Android packed %8.1f MB" % ("TOTAL", total_before / mb, total_after / mb, total_android / mb))
     if not args.apply:
         print("\n(nothing written - pass --apply)")
 
