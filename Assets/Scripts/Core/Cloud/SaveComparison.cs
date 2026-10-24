@@ -157,7 +157,7 @@ namespace Emberfall.Core.Cloud
                 (a, b) => a.Gold.CompareTo(b.Gold),
                 (ahead, behind) => "+" + Amount(ahead.Gold - behind.Gold));
 
-            Add("EMBER SHARDS", "shards", local, cloud,
+            Add("SHARDS", "shards", local, cloud,
                 s => Amount(s.Shards),
                 (a, b) => a.Shards.CompareTo(b.Shards),
                 (ahead, behind) => "+" + Amount(ahead.Shards - behind.Shards));

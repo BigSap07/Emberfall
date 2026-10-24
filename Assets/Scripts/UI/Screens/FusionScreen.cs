@@ -414,7 +414,7 @@ namespace Emberfall.UI.Screens
             // the first. It is the one that goes DOWN, it is the number a player is about to watch
             // fall, and putting it under the rising cap would be the page hiding the thing it is
             // here to warn about.
-            _moveRows.Add(MoveRow("TierLevel", "TIER LEVEL", top));
+            _moveRows.Add(MoveRow("TierLevel", "TIER LEVEL RESETS", top));
             top += MoveRowHeight;
             _moveRows.Add(MoveRow("Cap", "TIER CAP", top));
         }

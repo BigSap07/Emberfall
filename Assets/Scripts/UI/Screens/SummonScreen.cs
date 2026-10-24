@@ -504,7 +504,7 @@ namespace Emberfall.UI.Screens
             long cost = unit * count;
             if (App.Session.Profile.FreeShards < cost)
             {
-                App.Notify("You need " + cost + " Ember Shards for " + count + " pulls.");
+                App.Notify("You need " + cost + " shards for " + count + " pulls.");
                 return;
             }
 

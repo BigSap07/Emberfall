@@ -2885,7 +2885,7 @@ namespace Emberfall.UI.Screens
                 if (rewards.AdvancedFloor)
                     AddRewardRow("FLOOR CLEARED", App.Session.Profile.RecitalHighestFloor.ToString(), UITheme.Success);
                 AddRewardRow("GOLD", "+" + rewards.Gold, UITheme.Gold);
-                AddRewardRow("EMBER SHARDS", "+" + rewards.Shards, UITheme.Shard);
+                AddRewardRow("SHARDS", "+" + rewards.Shards, UITheme.Shard);
                 if (!string.IsNullOrEmpty(rewards.GrantedRelicId))
                 {
                     RelicDef relic = App.Session.Content.GetRelic(rewards.GrantedRelicId);
@@ -3047,7 +3047,7 @@ namespace Emberfall.UI.Screens
             else if (rewards.RepeatCapped) AddRewardRow(list, "DAILY REPEAT CAP", "REACHED", UITheme.Warning);
             else AddRewardRow(list, "PAID REPEATS LEFT TODAY", rewards.RepeatClearsRemaining.ToString(), UITheme.TextMuted);
             AddRewardRow(list, "GOLD", "+" + rewards.Gold, UITheme.Gold);
-            AddRewardRow(list, "EMBER SHARDS", "+" + rewards.Shards, UITheme.Shard);
+            AddRewardRow(list, "SHARDS", "+" + rewards.Shards, UITheme.Shard);
             AddRewardRow(list, "WAYFARER XP", "+" + rewards.AccountXp, UITheme.Shard);
             if (rewards.PlayerLevelsGained > 0)
                 AddRewardRow(list, "RANK UP", "+" + rewards.PlayerLevelsGained, UITheme.Success);

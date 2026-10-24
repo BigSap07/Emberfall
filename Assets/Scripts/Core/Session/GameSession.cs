@@ -2705,7 +2705,7 @@ namespace Emberfall.Core.Session
             {
                 outcome.Message = Profile.Shards >= Balance.SummonCost
                     ? "Sealed Shards never enter a summon."
-                    : "Not enough Ember Shards.";
+                    : "Not enough shards.";
                 return outcome;
             }
 
