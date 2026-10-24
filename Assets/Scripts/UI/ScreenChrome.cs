@@ -27,6 +27,11 @@ namespace Emberfall.UI
         /// Every metric a page measures its body against is unchanged, and that is why converting
         /// twenty screens did not also move everything that happened to sit under their headers.
         ///
+        /// THE ONE RULE FOR THE CORNER (R52): the disc reads "<" where it steps back one screen, and
+        /// HOME only where it really goes to the main menu (Campaign, the battle and the results, via
+        /// the home overload below and HomeDisc). A text button that leaves the screen names where it
+        /// goes ("BACK TO THE RESULT"). A bare BACK is only a step inside one page (a pick panel).
+        ///
         /// The back control is a DISC rather than a chunky button. A rectangular ember button in
         /// the corner of every page would be a second primary action competing with whatever the
         /// page's own is, and back is never the thing a screen wants pressed.

@@ -935,7 +935,7 @@ namespace Emberfall.UI.Screens
             run.Subtitle = "REPLAY   " + fight.Rounds + " ROUNDS   BANNER AT "
                            + Mathf.RoundToInt(fight.PlayerHpRatio * 100f) + "%";
             run.Rows.Add(new KeyValuePair<string, string>("REWARDS", "NONE"));
-            run.PrimaryLabel = "BACK";
+            run.PrimaryLabel = "BACK TO THE RESULT";
             run.OnPrimary = delegate
             {
                 _returning = true;
