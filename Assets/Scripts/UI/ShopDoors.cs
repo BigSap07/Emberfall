@@ -18,6 +18,7 @@ namespace Emberfall.UI
         public const float CardWidth = 420f;
         public const float CardGap = 26f;
         public const float CardHeight = 600f;
+        public const float MinCardHeight = 440f;
 
         /// <summary>The router's screen for a shop, or null when this build does not contain it.</summary>
         public static UIScreen ScreenOf(ScreenRouter router, MarketplaceShop shop)
@@ -78,10 +79,22 @@ namespace Emberfall.UI
         }
 
         /// <summary>The same cards at a chosen height, for a parent shorter than the cards' own 600 (the
-        /// Store's body at 20:9). The purse line ends near 460, so the cards do not go below 520.</summary>
+        /// Store's body at 20:9). Down to <see cref="MinCardHeight"/> the inside spacing shrinks with the card
+        /// (icon, gaps, description room, purse and button), so nothing overlaps; at full height it is unchanged.</summary>
         public static int Build(GameApp app, ScreenRouter router, RectTransform parent, float top, float cardHeight)
         {
-            cardHeight = Mathf.Clamp(cardHeight, 520f, CardHeight);
+            cardHeight = Mathf.Clamp(cardHeight, MinCardHeight, CardHeight);
+            // 0 at the smallest card, 1 at the full one: the inner measures blend between the two
+            float t = (cardHeight - MinCardHeight) / (CardHeight - MinCardHeight);
+            float iconTop = Mathf.Lerp(20f, 36f, t);
+            float iconSize = Mathf.Lerp(88f, 120f, t);
+            float nameTop = Mathf.Lerp(116f, 176f, t);
+            float paysTop = Mathf.Lerp(158f, 222f, t);
+            float sellsTop = Mathf.Lerp(192f, 262f, t);
+            float sellsHeight = Mathf.Lerp(84f, 150f, t);
+            float buttonBottom = Mathf.Lerp(20f, 30f, t);
+            float buttonHeight = Mathf.Lerp(56f, 64f, t);
+            float purseBottom = buttonBottom + buttonHeight + Mathf.Lerp(8f, 48f, t);
             PlayerProfile p = app.Session.Profile;
             int count = MarketplaceShops.All.Length;
             float startX = -(CardWidth * count + CardGap * (count - 1)) * 0.5f + CardWidth * 0.5f;
@@ -96,22 +109,22 @@ namespace Emberfall.UI
                 bool built = ScreenOf(router, shop) != null;
 
                 RectTransform card = UIBuilder.Node("Shop" + i, parent);
-                UIBuilder.Box(card, startX + i * (CardWidth + CardGap), top, CardWidth, CardHeight, new Vector2(0.5f, 1f));
+                UIBuilder.Box(card, startX + i * (CardWidth + CardGap), top, CardWidth, cardHeight, new Vector2(0.5f, 1f));
                 EmberforgeUI.PanelOn(card, true);
 
                 Sprite kitMark = UiKit.Currency(kit);
                 Image mark = UIBuilder.Img("Icon", card, kitMark != null ? kitMark : icon,
                                            kitMark != null ? Color.white : UITheme.WithAlpha(tint, 0.95f));
-                UIBuilder.Box(mark.rectTransform, 0f, -36f, 120f, 120f, new Vector2(0.5f, 1f));
+                UIBuilder.Box(mark.rectTransform, 0f, -iconTop, iconSize, iconSize, new Vector2(0.5f, 1f));
                 Text name = EmberforgeUI.Title("Name", card, shop.Name, UITheme.FontBody, Emberforge.TextGold, TextAnchor.UpperCenter);
-                UIBuilder.Box(name.rectTransform, 0f, -176f, CardWidth - 24f, 40f, new Vector2(0.5f, 1f));
+                UIBuilder.Box(name.rectTransform, 0f, -nameTop, CardWidth - 24f, 40f, new Vector2(0.5f, 1f));
                 UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
                 Text pays = EmberforgeUI.Label("Pays", card, "SPENDS " + shop.Pays.ToUpperInvariant(), UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.UpperCenter);
-                UIBuilder.Box(pays.rectTransform, 0f, -222f, CardWidth - 24f, 28f, new Vector2(0.5f, 1f));
+                UIBuilder.Box(pays.rectTransform, 0f, -paysTop, CardWidth - 24f, 28f, new Vector2(0.5f, 1f));
                 Text sells = EmberforgeUI.Body("Sells", card, shop.Sells, UITheme.FontSmall - 2, Emberforge.TextBody, TextAnchor.UpperCenter);
-                UIBuilder.Box(sells.rectTransform, 0f, -262f, CardWidth - 48f, 150f, new Vector2(0.5f, 1f));
+                UIBuilder.Box(sells.rectTransform, 0f, -sellsTop, CardWidth - 48f, sellsHeight, new Vector2(0.5f, 1f));
                 Text purseLabel = EmberforgeUI.Label("Purse", card, "YOU HAVE " + purse.ToUpperInvariant(), UITheme.FontTiny, UITheme.Gold, TextAnchor.UpperCenter);
-                UIBuilder.Box(purseLabel.rectTransform, 0f, -430f, CardWidth - 24f, 28f, new Vector2(0.5f, 1f));
+                UIBuilder.Box(purseLabel.rectTransform, 0f, purseBottom, CardWidth - 24f, 28f, new Vector2(0.5f, 0f));
 
                 // The padlock and the one-time new dot of this shop's own door. No tag: the card has its chip.
                 FeatureLockView.Attach(card, EntryOf(shop), name,
@@ -122,11 +135,11 @@ namespace Emberfall.UI
                 if (lockLine.Length > 0)
                 {
                     RectTransform chip = EmberforgeUI.Chip("Lock", card, lockLine.ToUpperInvariant(), Emberforge.TextBody, UITheme.FontTiny - 2);
-                    UIBuilder.Box(chip, 0f, 30f, CardWidth - 48f, 52f, new Vector2(0.5f, 0f));
+                    UIBuilder.Box(chip, 0f, buttonBottom, CardWidth - 48f, Mathf.Min(52f, buttonHeight), new Vector2(0.5f, 0f));
                     continue;
                 }
                 UIButton open = EmberforgeUI.Button("Open", card, "OPEN", UITheme.FontSmall, ForgeButtonKind.Primary);
-                UIBuilder.Box(open.Root, 0f, 30f, CardWidth - 48f, 64f, new Vector2(0.5f, 0f));
+                UIBuilder.Box(open.Root, 0f, buttonBottom, CardWidth - 48f, buttonHeight, new Vector2(0.5f, 0f));
                 ScreenId target = IdOf(shop);
                 ScreenRouter capturedRouter = router;
                 GameApp capturedApp = app;
