@@ -4798,3 +4798,200 @@ the same drawing either way. The finding survives; the wording did not.
 **`Docs/PINOY-LIST.md` is new** and is now the only place the art and text questions are maintained,
 because they were spread across a section of the status file, the engine gaps file and four commit
 messages, and they need to be sendable as one message.
+
+## Displaced by the R39 refresh (2026-10-24)
+
+Each block below is the text DESIGN-BUILD-ORDER.md carried before the refresh, verbatim.
+
+### Was: The header paragraph (checked against the repository on 2026-09-23)
+
+Checked against the repository on 2026-09-23, after the roster reached 94 of 94, the five-star
+review and the Dispel repair closed the open kit decisions, every talent was measured for what it
+costs its own hero, and ENGINE-GAPS pass 3 said the nine clauses pass 2 left, turned `buffsOnly` on
+and re-solved the campaign once at the end, and the economy model started summoning at the real
+placeholder rates in `balance.json` and the campaign was re-solved against them, and then after the
+fusion and ascension spine (star-gated level caps, conversions, ascension) was built and measured
+against the campaign as committed, and then after the battle stats, the battle HUD, the 336 by 396
+sprite cell and the first session with its unlock table were merged into one tree and measured
+together - against a live `Tools/build-check.ps1` run, a live
+`validate_heroes.py` run and the files themselves, not against this document's own prior claims.
+
+### Was: The instruments: the build-check bullet as of 2026-10-23
+
+- **`Tools/build-check.ps1`: all checks pass, measured from a clean run of the tree after the R4
+  economy proposal was merged.** Re-measured 2026-10-23 by the integration that merged the launch
+  prep, the security review, guild dungeon size, leaderboards and notifications and the content pass,
+  on Linux under Mono with PowerShell 7 (see **Tooling**), the full check with the 60-walk guard:
+  **3,707 checks, 0 failures, exit 0** on `main` before it, and **3,778 checks, 0 failures, exit 0**
+  after it, the owner's decisions of 2026-10-23 included. It lints the docs,
+  compiles the core and the Unity-facing code against the shim in `Tools/UnityShim`, checks that
+  nothing of the Dev Arena reaches a release build, checks that editor automation cannot reach the
+  real cloud (the offline-switch stage, under **Tooling**), and runs `Tools/DevHarness`. Until the
+  economy merge it carried two harness failures, both reading the 72-stage campaign against
+  numbers carried by position from the shipped 24: **the geared CEIL band** failed first at `1-3`
+  (100% against [78%, 92%]) and **the campaign power-band guard** had eleven stages out of their
+  band. The merge re-solved the campaign from `1-7` on and re-expressed both checks (**The campaign
+  power curve, and the walls**); the history below is how the two failures arose. The balance line is Kael, Kiva, Isara, Adric and Orelle, and the pinned line the CEIL is read with is
+  Kael, Aeron, Nereia, Seraphine and Isolde. ENGINE-GAPS pass 3 turned `buffsOnly` on, which took
+  chapter 1's finale CEIL from 68% to 27% and four walls out of the power band, so
+  `Tools/solve-recommended-power.ps1` was re-run once, after every other change had landed: 22 of 24
+  stages moved, 18 of them in the authored roster, and every `recommendedPower` rose by up to 9%.
+  Two stages were then moved by hand with the solver's own kind of move: 1-11's Hollow Husk down
+  one level, where the solver's 600-sample reading and the gate's 200-sample one disagreed at the
+  CEIL band's edge, and at 1-10 the three units under its Stone Warden two levels down. 1-10 is
+  floor-pinned, which the solver does not measure, and the re-solve had left it reading 55% at its
+  ceiling; it reads 83%. Lowering 1-10's ceiling instead fixed that and pushed 2-12 over its band,
+  because the simulated player's losses at 1-10 change the whole economy path after it: across the
+  moves tried there, 2-12 read anywhere from x0.98 to x1.04.
+  **The campaign was then re-solved against real summon rates.** Until then the economy model
+  summoned a five-star every time, so every number above was measured against a roster no player
+  gets. At the 20 / 30 / 30 / 17 / 3 rates in `balance.json` the simulated line is weaker, and
+  `1-9` (x1.00), `1-12` (x0.96) and `2-1` (x1.10) had slid just under their bands. The solver moved
+  18 stages and put all three back on their band middles. It left `1-12`'s geared CEIL at 53%,
+  under the finale band's 55%, where its 600-sample reading said 62%, so one of `1-12`'s Grave Moths
+  went down a level by hand, and it reads 57.5%. **The two readings were one instrument and the 53%
+  was luck.** `DevHarness.exe --ceil-reconcile` fields both lines and reads each at the other's
+  seed: the solver and the guard build the same five heroes at the same levels and power (8,627), in
+  the same gear, against the same ceiling battle, and each reproduces the other's number exactly at
+  the other's seed base. They differ only in seed base and sample count. A 5,000-sample reference
+  read 60.8% before the hand move and 61.7% after it, so the Grave Moth moved the truth by under a
+  point and moved the guard's draw from its low tail to 57.5%. Across all fourteen stages the guard
+  grades, the solver sits within 1.5 standard errors of a 4,000-sample reference everywhere and the
+  guard falls outside two once, at `1-9` (80% against a reference of 87.8%). That one level moved `2-12` from x0.98 to x0.95,
+  just under its band, through the armor the simulated player happens to pick up on the way
+  (4,807 to 3,772), so the solver was run again on top of the hand move. It changed only chapter 2,
+  and `2-12` reads x0.99. The solver and `build-check.ps1` compile the harness from the same file
+  list, and `CheckSolverAndGateCompileOneList` asserts it: it reads both scripts, expands every
+  variable and glob against the tree, and fails if the two resolved lists differ or if any `.cs`
+  file directly under `Tools/DevHarness` is missing from either.
+  **The power-band guard allows 0.005 past either edge** (`BandTolerance`) **and prints ratios to
+  three decimals.** `2-1` once failed the build by 0.09% and printed as "x1.1 under x1.1".
+  **The unlock table moved both, and nothing was retuned to answer it** (`DESIGN-ONBOARDING.md`).
+  Before it, the CEIL band failed first at `1-7` (62.7%) and the power band had ten stages out, both
+  walls of every chapter from 2 to 6, from x1.097 over x1.091 at `4-12` to x1.189 over x1.135 at
+  `3-12`. The walks and the pinned lines now spend a feature only once a player arriving at the
+  stage has it (`FeatureGate.IsUnlockedArriving`): no conversion or ascension before 1-6 is
+  cleared, no armor worn before 1-12, no guild tech before 2-1, and the walks never used relics or
+  talents. Measured against the base run:
+  **the geared CEIL band now fails first at `1-3`** (100% against [78%, 92%]): 1-3 to 1-5 were
+  floor-pinned while the line wore armor and are graded now that it cannot. Chapter 1's CEIL moved
+  1-6 86.8% to 71.8%, 1-7 62.7% to 74.1%, 1-8 87.2% to 94.1%, 1-9 83.6% to 71.4%, 1-10 83.8% to
+  55.3%, 1-11 42.6% to 1.8% and 1-12 68% to 67.2%; chapter 2 onwards did not move. **The power
+  band has eleven stages out, not ten**: `1-12` and `2-1` are new, `4-12` came back inside (x1.095
+  within tolerance), and the other nine moved by up to x0.027 (3-12 x1.189 to x1.207, 6-6 x1.168
+  to x1.195, 2-12 x1.142 to x1.118). The reference walk's 1-12 wall entry fell from x1.074 to
+  x1.003. `CheckFusionNeverGates` still passes (all 20 reference walks finish; the 1-6 wall's
+  worst case went from 3 extra sittings to 4), `CheckGuildTechNeverGates` and
+  `CheckStageWinnability` still pass, and `CheckEconomyRespondsToIncome`'s response rose from 0.6
+  to 0.89. No pinned baseline moved: the recall leaves a new player byte for byte on the profile
+  every walk starts from. The merged tree reproduces the same two failures at the same values.
+  **The owner accepted these values as the known failures until the economy merge retuned
+  `recommendedPower` and the stage levels, which cleared both.**
+  **Any failure now is a regression.** Diagnose it; do not add it to a list. One caveat that is not
+  a regression: a turned-around tripwire goes red if the content it names stops using what it
+  names.
+
+### Was: The instruments: the doc lint figures as of 2026-10-22
+
+scans 80 tracked markdown files and reports 124
+  baselined violations and **0 new** (measured 2026-10-22).
+
+### Was: The instruments: the validator bullet and its failure history
+
+- **`Tools/HeroValidator/validate_heroes.py Assets/Resources/Content/heroes.json`: 0 failures.**
+  It was the scoreboard for the authoring work and the authoring work is finished. It read 86
+  before any kit was written, 70 before the 5-star pass, 56 when the 4-star pass opened, 30 when
+  all 26 of those were authored, 12 once the 3-star tier landed, and 0 now that the 2-stars and
+  1-stars have real kits. **Every one of the 94 heroes carries an authored kit**, and no hero in
+  `heroes.json` has a `placeholder` in an ability id any more.
+
+### Was: In progress: R26 and R28 as unmerged branches with captures owed
+
+A branch is named here when it holds work worth naming, and only while it is unmerged.
+
+**R26 polish, the UI half** (an unmerged branch of run R26, not yet pushed so not named here; the store half is on a sibling branch of the same run). It
+holds: the UI kit on by default with the `EMBERFALL_UIKIT_OFF` opt-out and the `[define-probe]` build-check step; the
+Hub's market stall as the Marketplace over four shop doors shared with the Store; kit polish (filigree corners, an orange
+primary button, a stronger gilded frame, lighter secondary and disabled plates, drawn by `Tools/uikit-polish-gen.py`);
+and the Hero screen's level cap sentence. All four are described under **The UI kit (R20)**. Their harness checks are
+`CheckR26Ui`. **Owed before it counts:** the screens that changed layout (Hub, Marketplace both ways, Hero at the cap,
+Store shops) have no capture yet; the tester takes them from the `Emberfall/Capture/R26 polish/` menu.
+
+**R28 screens, the ladder and the ads** (an unmerged branch of run R28, not named here). It holds the guild dungeon ladder
+screen and the rewarded ad block described under **The R28 screens**. **Owed before it counts:** the captures. The
+tester runs `Tools/capture-r28b-targets.txt` through `Tools/capture-batch.ps1` (70 targets: every ladder state and
+every ad state in each of the three places, at 1920x1080 and 2400x1080); the same states are in the editor under
+`Emberfall/Capture/R28 screens/`. Nothing has been looked at in Unity yet.
+
+### Was: Next: the fidelity passes, the UI design system and the twelve dormancy tripwires
+
+1. **What the fidelity passes left.** Pass 3 closed C13 and every finding pass 2 recorded as left
+   for later. What remains is **G1, G2 and G3**, the three proposed primitives not built, which
+   would close groups 25, 30 and 23, and one unmeasured suspicion: a counter the per-target budget
+   refuses still spends the Resolve its effect carries (Caldus's Defined Duty is the shipped shape).
+   The file holds 25 capabilities and 36 clauses. **Groups 20 and 22 stay marked as different in
+   kind rather than as debt**, because an information layer and a movement system are games this
+   one is not.
+2. **Then the UI design system.** The Hub now has one, `HubStyle`, and the other twenty screens do
+   not: they read `UITheme` for colour and reference resolution and then write their own metrics at
+   the call site. `HubStyle`'s own scope note says it is the Hub's chrome language rather than the
+   game's, which is the honest description of a dialect that has not been generalised yet.
+3. **The dormancy tripwires that will now stay dormant.** Twelve are still guarded as dormant
+   because nothing reaches them: `LinkedUnit`, `AllLinkedUnits`, `OnLinkedUnitTargeted`,
+   `linkAmountPower`, `linkFromCaster`, `ScaleByLastMoved`, `ShieldBrokenByCaster`, `EvasionUp`,
+   `Interrupt`, `PerTarget`, `LedgerMitigates` and `maxHpCap`. `HpTransfer` and `GuaranteedCrit`
+   came off the list during the 4-star pass, lit by Rhys's Crossing Cut and Maera's Watch the
+   Water; `AccuracyDown`, `Splash` and `OnDodge` came off during the 3-star pass, lit by Adric,
+   Aster and Cal; and the standing `TargetBan` came off with Yara's Second Bearing. **The roster is
+   authored, so no future kit will light the remainder** - each is now a feature the engine has and
+   the content does not use, which is a decision to make rather than a wait, and
+   `ShieldBrokenByCaster` in particular is the near-miss: `Docs/ENGINE-GAPS.md` group 32 is Arno
+   asking for exactly it, from a side of the event where the condition cannot be read. A tripwire
+   is **flipped, never deleted**, so a lit one asserts the feature IS used and names the content
+   using it, and goes red again the day that content stops.
+
+### Was: Known bugs: the arena matrix coverage item, which closed
+
+1. **The arena matrix's two coverage checks are green.** They were the two standing reds, and the
+   talent pass on `talents/make-them-work` closed both. The talent half read (c) 3 - Aeron I,
+   Aminah III and Caldus III - and reads (a) 70, (b) 20, (c) 0. The rule half read (c) 4 and reads
+   zero: every basic, active and passive in the roster is observed changing a fight, in the sweep
+   arena or in a named room.
+
+   **`MatrixWaits` is empty, and that is the finding rather than a list nobody filled in.** Three of
+   the four rules were re-authored, because a rule that fires and changes nothing is broken and not
+   quiet, and the fourth only ever needed a different room:
+
+   - `finn_ringing_toll` took Energy off the bar of the enemy whose cast raised it, and `TakeTurn`
+     sets that bar to 0 for the cast before the trigger goes out. That is not an ordering bug and it
+     was measured as one: every active costs a full bar against a cap of one, so the toll lands on an
+     empty bar whichever happens first. The bell is heard by the OTHER Ringing enemies now.
+   - `eira_leave_no_corner` asked for an ally holding Mobile Cover to be singled out. Each gate lands
+     alone in its room and the pair never did in 96 rooms - one firing with only the Cover gate, six
+     with only the single-target gate, none with both. It keeps the gate it is named for.
+   - `vaelis_opening_moves` asked for the DEFEATED body to carry Departure, and none did in 360
+     rooms, because an ally's hit on a linked body spends the link before a killing blow finds it.
+     The link is mutual, so the clause reads it from the end that survives.
+   - `aminah_emergency_release` is the one where the rule was right and the ROOM was wrong, which is
+     what this entry used to suspect when it said the three rooms broke rather than the rules.
+     Beside Eira AND Isara nothing holding Priority ever crossed the line; beside Isara alone it
+     crosses once. Eira's Mobile Cover stood between them. The hero is untouched.
+
+   Aminah III and Caldus III were the other two of those three rooms, and both turned out to be the
+   talent rather than the room: Aminah III hung off `aminah_emergency_release` itself and now hangs
+   off the Priority expiring, and Caldus III waited on a Declared Target falling under a third of its
+   HP, once per battle, which no arena arranges.
+
+   **What a class (b) pass is worth in play is still measured rather than assumed.**
+   `EMBERFALL_MATRIX_NORMAL=both` fields each class (b) rule's hero in the pinned line and in the
+   balance line across every shipped stage, 1,152 battles a rule. That reading is a report and not a
+   check, and it is the slow half of the matrix by a wide margin - the coverage checks alone run in
+   about two seconds. The list of rules that fire in a room and never change a normal-play fight was
+   last taken before the talent pass and eight of its ten entries are talents the pass rewrote, so it
+   is worth retaking rather than quoting.
+
+### Was: Known bugs: the closing sentence of the talent screen entry
+
+The fix is a call about what the screen shows: more seeds for an unclear reading, and an
+  `Unclear` line that prints its estimate and how many fights it changed, rather than a word that
+  reads as zero.
