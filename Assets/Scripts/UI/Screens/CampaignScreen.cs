@@ -194,7 +194,7 @@ namespace Emberfall.UI.Screens
             RectTransform block = UIBuilder.Node("SquadPower", Root);
             UIBuilder.Box(block, -UITheme.ScreenPadding, -(ScreenChrome.HeaderTop + 210f), 420f, 90f, new Vector2(1f, 1f));
 
-            Text caption = EmberforgeUI.Label("Caption", block, "YOUR SQUAD", UITheme.FontTiny,
+            Text caption = EmberforgeUI.Label("Caption", block, "YOUR SQUAD POWER", UITheme.FontTiny,
                                               Emberforge.TextBody, TextAnchor.UpperRight);
             UIBuilder.Box(caption.rectTransform, 0f, 0f, 420f, 26f, new Vector2(1f, 1f));
             UIBuilder.Outlined(caption, Emberforge.Outline, Emberforge.StrokeThin);
@@ -383,7 +383,7 @@ namespace Emberfall.UI.Screens
 
                 Text name = EmberforgeUI.Title("Name", tab.Root, chapter.Name.ToUpperInvariant(),
                                                UITheme.FontSmall,
-                                               active ? Emberforge.TextGold : Emberforge.TextQuiet,
+                                               active ? Emberforge.TextOnColor : Emberforge.TextBody,
                                                TextAnchor.UpperCenter);
                 // -14 over two lines' worth of box, and best-fit inside it. Chapter names are
                 // authored content - "BENEATH THE OLD KINGDOM" is twenty-three characters, which
@@ -400,7 +400,7 @@ namespace Emberfall.UI.Screens
                 Text count = EmberforgeUI.Label("Count", tab.Root,
                                                 cleared + " / " + chapter.Stages.Count + " CLEARED",
                                                 UITheme.FontTiny,
-                                                active ? Emberforge.TextBody : Emberforge.TextQuiet,
+                                                active ? Emberforge.TextOnColor : Emberforge.TextBody,
                                                 TextAnchor.UpperCenter);
                 UIBuilder.Box(count.rectTransform, 0f, -58f, textWidth, 22f, new Vector2(0.5f, 1f));
                 UIBuilder.BestFit(count, UITheme.FontTiny - 6, UITheme.FontTiny);
@@ -460,6 +460,13 @@ namespace Emberfall.UI.Screens
                                                  UITheme.WithAlpha(Emberforge.GoldDeep, 0.85f));
                     dashed.raycastTarget = false;
                     UIBuilder.Box(dashed.rectTransform, 0f, 0f, PortraitSize, PortraitSize, new Vector2(0.5f, 0.5f));
+
+                    // Said in a word, so a dashed ring reads as a free place in the line.
+                    Text empty = EmberforgeUI.Label("EmptyLabel", cell, "EMPTY", UITheme.FontTiny,
+                                                    Emberforge.TextBody, TextAnchor.MiddleCenter);
+                    UIBuilder.Box(empty.rectTransform, 0f, 0f, PortraitSize, 26f, new Vector2(0.5f, 0.5f));
+                    UIBuilder.Outlined(empty, Emberforge.Outline, Emberforge.StrokeThin);
+                    empty.raycastTarget = false;
                 }
             }
 
