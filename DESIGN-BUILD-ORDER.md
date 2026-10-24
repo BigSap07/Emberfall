@@ -38,7 +38,8 @@ about reasoning.
   background wiring (R21), the speed pass (R23), late-game spending (R24), the test store and UI
   polish (R26), the friends build plumbing (R27), the guild dungeon ladder, leaderboards, reminders
   and rewarded ads screens (R28), the battle formation table and its retune (R29), and the run
-  tooling (R30): CI green on `ubuntu-latest`, the guard hooks, the queue runner and the cockpit.
+  tooling (R30): CI green on `ubuntu-latest`, the guard hooks, the queue runner and the cockpit, and the
+  UI layout pass (R42, see Next).
   Accounts, cloud save, guilds, friends and duels were already in place and are described below.
   Each has its own section.
 
@@ -1702,7 +1703,7 @@ See `Docs/DESIGN-AUDIO.md`.
 ### UI, and the Hub's four layers
 
 uGUI, built entirely in code, scene deliberately near-empty. `ScreenRouter` moves between the
-twenty-one screens under `Assets/Scripts/UI/Screens`. `UITheme` owns the reference resolution and
+screens under `Assets/Scripts/UI/Screens` (39 `*Screen.cs` presenters). `UITheme` owns the reference resolution and
 the palette; `UIBuilder`, `Widgets`, `ScreenChrome` and `CurrencyStrip` are the shared furniture.
 Landscape, touch-first, everything hung off `Screen.safeArea`.
 
@@ -2152,10 +2153,18 @@ In order.
    effect carries (Caldus's Defined Duty is the shipped shape). The file holds 25 capabilities and
    36 clauses. **Groups 20 and 22 stay marked as different in kind rather than as debt**, because an
    information layer and a movement system are games this one is not.
-2. **Then the UI design system.** The Hub now has one, `HubStyle`, and the other twenty screens do
-   not: they read `UITheme` for colour and reference resolution and then write their own metrics at
-   the call site. `HubStyle`'s own scope note says it is the Hub's chrome language rather than the
-   game's, which is the honest description of a dialect that has not been generalised yet.
+2. **The UI design system, second half (art).** R42 (2026-10-24) generalised the Hub's look: every
+   screen already built on `EmberforgeUI`, so the gap was layout, not style. Landed: `EmberforgeUI.ClearCornerOrnament`
+   (panel titles no longer run into the corner ornaments), kit currency icons through `UiKit.Currency`,
+   `UISkin.Panel` and `UIBuilder.Frame` retired from Leaderboards, GuildDungeon, WaveResult and `ItemCard`, bodies that
+   stretch to the bottom edge instead of a fixed height (Store x4, Hero detail, Forge, Orders, Recital, LiveEvents,
+   Talents, Wayfarers Road), `ShopDoors.MinCardHeight`, and `HubOverflowMenu.Show` above the nav. Captured at 1920x1080,
+   1920x1200 and 2400x1080 into `Docs/ui-shots/r42` (local, the folder is git-ignored). Left on purpose: Settings, Account,
+   Events and Profile were already scroll pages; the Coda cell stays out of `CurrencyStrip` (the rule above); the
+   GuildLadder ATTEMPT button keeps the 108 touch minimum and so overflows its row. What remains is art, not code:
+   item silhouettes, hub rail icons, the rift portal, pips and the rest are placeholders listed with drop paths in the
+   run's ART-NEEDED.md; there is no capture target yet for GuildTech, GuildDungeon, GuildFloor, GuildDungeonResult,
+   GuildDungeonBoards or Bag.
 3. **The dormancy tripwires that will now stay dormant.** Eleven are guarded as dormant because
    nothing reaches them: `EvasionUp`, `Interrupt`, `LedgerMitigates`, `maxHpCap`,
    `ShieldBrokenByCaster`, `ScaleByLastMoved`, and the link family `LinkedUnit` (as a target),
