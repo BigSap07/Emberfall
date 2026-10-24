@@ -157,6 +157,7 @@ namespace Emberfall.UI.Screens
             Text count = EmberforgeUI.Label("Count", _ordersBody, claimed + " OF " + board.Orders.Count + " CLAIMED",
                                             UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.UpperRight);
             UIBuilder.Box(count.rectTransform, OrdersWidth - PanelPad - 8f - 400f, -20f, 400f, 32f, TopLeft);
+            EmberforgeUI.ClearCornerOrnamentRight(count.rectTransform, OrdersWidth);
 
             for (int i = 0; i < board.Orders.Count; i++) BuildOrderRow(board.Orders[i], i);
         }
@@ -278,6 +279,7 @@ namespace Emberfall.UI.Screens
                                                  board.CalendarCanClaim ? "CLAIM DAY " + next : "COME BACK TOMORROW",
                                                  UITheme.FontTiny, ForgeButtonKind.Primary);
             UIBuilder.Box(claim.Root, ContentWidth - PanelPad - 360f, -10f, 360f, 50f, TopLeft);
+            EmberforgeUI.ClearCornerOrnamentRight(claim.Root, ContentWidth);
             claim.Interactable = board.CalendarCanClaim;
             claim.OnClick(OnClaimCalendar);
 
