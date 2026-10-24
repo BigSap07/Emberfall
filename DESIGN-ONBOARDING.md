@@ -26,13 +26,13 @@ recalling heroes through the Cinder, so the first guided tap is a recall.
      without code.
 2. **First tap: the Cinder.**
    - The hub with everything dimmed except the Summon obelisk, ringed and spotlit.
-   - A short card: "The Cinder remembers." / "Call back someone who once stood here."
+   - A short card: "The Cinder remembers." / "Someone stood here once. Call them back."
    - One RECALL button, and a tap on the lit obelisk presses it too. Nothing else on the hub takes
      input. It is a free, scripted recall that always yields Kael (the current Kael
      id in `heroes.json`, `kael_the_unyielding`).
    - It costs nothing and never touches the normal summon pool, pity, rates or summon counters.
 3. **The prologue battle.** The existing prologue battle and squad, unchanged. The player
-   watches. One line: "Your heroes fight on their own."
+   watches. One line: "Your heroes fight on their own. Watch who they strike."
 4. **Guided core loop**, with forced arrows, one step at a time:
    1. set team (Kael is placed automatically if the player does nothing; as built the step has no
       confirm control, it ends when the player leaves the banner, and its line says "go back to
@@ -71,9 +71,10 @@ recalling heroes through the Cinder, so the first guided tap is a recall.
 | 1-6 | Fusion |
 | 1-12 | Talents, Armor and Forge |
 | 2-1 | Guilds |
-| 2-4 | Proving |
+| 2-4 | Proving, Marketplace |
 | 2-8 | Recital |
 | 3-1 | Relics (endgame by design) |
+| 3-12 | Quartermaster |
 
 - Gating covers every entry point to a feature: hub buildings, bottom nav, hero detail buttons,
   deep links. A harness check enumerates the entry points and proves each respects the table.
