@@ -67,6 +67,12 @@ namespace Emberfall.UI
             _plate.anchorMin = new Vector2(right ? 1f : 0f, 1f);
             _plate.anchorMax = _plate.anchorMin;
             _plate.pivot = _plate.anchorMin;
+            // Kept above the nav bar and inside the safe area: a short canvas (20:9) or a narrow one (16:10, where the
+            // nav reaches this column) slides the menu up instead of letting it run under the nav or off the bottom.
+            RectTransform safe = _plate.parent as RectTransform;
+            float safeHeight = safe != null && safe.rect.height > 200f ? safe.rect.height : UITheme.ReferenceResolution.y;
+            float lowest = safeHeight - HubStyle.NavBarHeight - RowGap - _plate.sizeDelta.y;
+            topOffset = Mathf.Max(0f, Mathf.Min(topOffset, lowest));
             _plate.anchoredPosition = new Vector2(right ? -column : column, -topOffset);
             _root.gameObject.SetActive(true);
             _root.SetAsLastSibling();
