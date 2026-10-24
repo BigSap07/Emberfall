@@ -596,7 +596,8 @@ namespace Emberfall.UI.Screens
                 ArmorSlot slot = ArmorInfo.AllSlots[i];
                 bool leftSide = i < 3;
                 float x = leftSide ? -columnX : columnX;
-                float y = rowY[i % 3] + 34f;
+                // 24, not 34: on a 20:9 canvas the top slot of the right column rose into the CHANGE BANNER button.
+                float y = rowY[i % 3] + 24f;
 
                 RectTransform host = UIBuilder.Node("Slot_" + slot, _slotHost);
                 UIBuilder.Box(host, x, y, SlotSize, SlotSize, new Vector2(0.5f, 0.5f));
