@@ -101,11 +101,11 @@ namespace Emberfall.UI
             UIBuilder.Box(note.rectTransform, 0f, -320f, 900f, 40f, new Vector2(0.5f, 1f));
             note.raycastTarget = false;
 
-            _yes = EmberforgeUI.Button("Yes", card, TelemetryText.Yes, UITheme.FontHeading, ForgeButtonKind.Secondary);
+            _yes = EmberforgeUI.Button("Yes", card, TelemetryText.Yes, UITheme.FontHeading, ForgeButtonKind.Primary);
             UIBuilder.Box(_yes.Root, -230f, 56f, 380f, 96f, new Vector2(0.5f, 0f));
             _yes.OnClick(delegate { Answer(true); });
 
-            _no = EmberforgeUI.Button("No", card, TelemetryText.No, UITheme.FontHeading, ForgeButtonKind.Primary);
+            _no = EmberforgeUI.Button("No", card, TelemetryText.No, UITheme.FontHeading, ForgeButtonKind.Secondary);
             UIBuilder.Box(_no.Root, 230f, 56f, 380f, 96f, new Vector2(0.5f, 0f));
             _no.OnClick(delegate { Answer(false); });
 

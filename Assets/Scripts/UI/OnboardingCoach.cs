@@ -63,6 +63,7 @@ namespace Emberfall.UI
         private readonly RectTransform[] _dims = new RectTransform[4];
         private RectTransform _spot;
         private RectTransform _fullBlock;
+        private RectTransform _litTap;
         private RectTransform _ring;
         private RectTransform _arrow;
         private RectTransform _captionPlate;
@@ -188,6 +189,20 @@ namespace Emberfall.UI
             Image full = UIBuilder.Img("FullBlock", _guided, TextureLab.White, clear);
             _fullBlock = full.rectTransform;
             UIBuilder.FillParent(_fullBlock, 0f);
+
+            // The Cinder step's lit obelisk: a tap on it presses RECALL, the same as the card's
+            // button. Sits over the full block, so it is the only thing under the overlay that
+            // takes input, and only in the recall step (ShowOnly, ShowRecall).
+            Image litTap = UIBuilder.Img("LitTap", _guided, TextureLab.White, clear);
+            _litTap = litTap.rectTransform;
+            _litTap.anchorMin = Vector2.zero;
+            _litTap.anchorMax = Vector2.zero;
+            _litTap.pivot = Vector2.zero;
+            Button litButton = litTap.gameObject.AddComponent<Button>();
+            litButton.transition = Selectable.Transition.None;
+            litButton.targetGraphic = litTap;
+            litButton.onClick.AddListener(OnRecall);
+            _litTap.gameObject.SetActive(false);
 
             Image ring = UIBuilder.Img("Ring", _guided, TextureLab.Ring(128, 6), UITheme.Gold);
             ring.raycastTarget = false;
@@ -411,6 +426,7 @@ namespace Emberfall.UI
             _wake.gameObject.SetActive(mode == Mode.Wake);
             _guided.gameObject.SetActive(mode == Mode.Guided || mode == Mode.Recall);
             _recallCard.gameObject.SetActive(mode == Mode.Recall);
+            _litTap.gameObject.SetActive(mode == Mode.Recall);
             _result.gameObject.SetActive(mode == Mode.RecallResult);
             _battleLine.gameObject.SetActive(mode == Mode.Prologue);
             _skip.Root.gameObject.SetActive(mode != Mode.None);
@@ -455,7 +471,8 @@ namespace Emberfall.UI
             }
 
             // The obelisk is painted under its marker: the light takes the marker and reaches
-            // down the marker's lift to the stone, and none of it takes a tap.
+            // down the marker's lift to the stone. A tap there presses RECALL (_litTap); the
+            // marker itself and the rest of the hub stay inert under the full block.
             RectTransform node = FindDeep(_app.Router.MainMenu.Root, "NodeSUMMON");
             Rect lit;
             if (node != null && TryRectOf(node, out lit))
@@ -463,8 +480,14 @@ namespace Emberfall.UI
                 float drop = HubStyle.LabelLift + 170f;
                 lit = new Rect(lit.x - 40f, lit.y - drop, lit.width + 80f, lit.height + drop);
                 Light(lit, false);
+                _litTap.anchoredPosition = lit.position;
+                _litTap.sizeDelta = lit.size;
             }
-            else Light(new Rect(0f, 0f, 0f, 0f), false);
+            else
+            {
+                Light(new Rect(0f, 0f, 0f, 0f), false);
+                _litTap.sizeDelta = Vector2.zero;
+            }
             HideCoachText();
         }
 

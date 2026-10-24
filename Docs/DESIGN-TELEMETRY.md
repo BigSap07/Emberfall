@@ -15,7 +15,7 @@ The playtest tells us where players stop. Nothing else. We want to see which onb
 ## Consent
 
 - A one-time prompt: "Share anonymous play stats to help us improve the game? No account, no name, no personal data."
-- Buttons: Yes, No. The default is No.
+- Buttons: Yes, No. The default is No (nothing is sent until Yes). Yes is the primary button and No the secondary one.
 - Shown once, after the onboarding Wake step and before Recall. It sits between Wake and Recall without changing R1's order (wake, recall, prologue, team, 1-1, wave result, 1-2, level up, idle) or the onboarding step numbers.
 - Changeable in Settings at any time.
 - Nothing is recorded or queued before Yes. At the moment of Yes the game queues `stats_opt_change` (on), `session_start` and, if the first session is not finished, `onboarding_step` with the current step. Events before that (the Wake step, the first launch) are not reported.

@@ -27,7 +27,8 @@ recalling heroes through the Cinder, so the first guided tap is a recall.
 2. **First tap: the Cinder.**
    - The hub with everything dimmed except the Summon obelisk, ringed and spotlit.
    - A short card: "The Cinder remembers." / "Call back someone who once stood here."
-   - One RECALL button. It is a free, scripted recall that always yields Kael (the current Kael
+   - One RECALL button, and a tap on the lit obelisk presses it too. Nothing else on the hub takes
+     input. It is a free, scripted recall that always yields Kael (the current Kael
      id in `heroes.json`, `kael_the_unyielding`).
    - It costs nothing and never touches the normal summon pool, pity, rates or summon counters.
 3. **The prologue battle.** The existing prologue battle and squad, unchanged. The player
