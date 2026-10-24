@@ -113,7 +113,7 @@ namespace Emberfall.UI.Screens
 
             if (App.Cloud == null || !App.Cloud.SignedIn)
             {
-                _note.text = "You are offline, so their line cannot be loaded.";
+                _note.text = "You are offline, so their line cannot be loaded. Connect to the internet and open this page again.";
                 return;
             }
             if (string.IsNullOrEmpty(_userId))

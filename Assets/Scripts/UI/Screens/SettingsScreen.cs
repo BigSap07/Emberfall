@@ -405,7 +405,7 @@ namespace Emberfall.UI.Screens
             string local = "Your progress saves to this device automatically.";
             if (cloud == null)
             {
-                _saveNote.text = local + " This build has no account service, so it stays here.";
+                _saveNote.text = local + " This version cannot connect to an online account, so it stays here.";
                 return;
             }
             if (!cloud.SignedIn)

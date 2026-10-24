@@ -180,9 +180,10 @@ namespace Emberfall.UI.Screens
             {
                 _headerSubtitle.text = backend == null ? "LOCAL ONLY" : "OFFLINE";
                 _emptyNote.text = backend == null
-                    ? "This build has no cloud configured, so there is no guild chat."
+                    ? "Guild chat needs an online account, and this version cannot connect to one. "
+                      + "Everything else in the game works as normal."
                     : "You are offline, so the chat cannot be loaded. It will be here when you are "
-                      + "back online.";
+                      + "back online. Connect to the internet and open this page again.";
                 SetComposerEnabled(false);
                 ClearRows();
                 return;

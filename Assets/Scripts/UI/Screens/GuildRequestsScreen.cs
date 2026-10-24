@@ -116,8 +116,10 @@ namespace Emberfall.UI.Screens
             {
                 _headerSubtitle.text = cloud == null ? "LOCAL ONLY" : "OFFLINE";
                 _note.text = cloud == null
-                    ? "This build has no cloud configured, so there are no guilds and no requests."
-                    : "You are offline, so requests cannot be loaded.";
+                    ? "Guilds need an online account, and this version cannot connect to one, so there "
+                      + "are no requests. Everything else in the game works as normal."
+                    : "You are offline, so requests cannot be loaded. Connect to the internet and open this "
+                      + "page again.";
                 return;
             }
 

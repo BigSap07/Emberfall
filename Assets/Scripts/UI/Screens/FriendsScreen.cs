@@ -278,7 +278,7 @@ namespace Emberfall.UI.Screens
             if (cloud == null)
             {
                 _headerSubtitle.text = "LOCAL ONLY";
-                _emptyNote.text = "This build has no cloud configured, so there is nobody to add. "
+                _emptyNote.text = "Friends need an online account, and this version cannot connect to one, so there is nobody to add. "
                                 + "Everything else in the game works as normal.";
                 SetAddEnabled(false);
                 return;

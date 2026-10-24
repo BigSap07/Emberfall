@@ -440,7 +440,7 @@ namespace Emberfall.UI.Screens
                 ShowFace(false, false);
                 _headerSubtitle.text = "LOCAL ONLY";
                 _rosterNote.text = "";
-                ShowOfflineNote("This build has no cloud configured, so there are no guilds to join. "
+                ShowOfflineNote("Guilds need an online account, and this version cannot connect to one, so there are no guilds to join. "
                                 + "Everything else in the game works as normal.");
                 return;
             }

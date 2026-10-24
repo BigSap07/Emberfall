@@ -143,7 +143,7 @@ namespace Emberfall.UI.Screens
             IGuildTechBackend tech = GuildTechBackends.For(App);
             if (purse == null || tech == null)
             {
-                _offline = "This build has no cloud configured, so there is no guild tech here.";
+                _offline = "Guild tech needs an online account, and this version cannot connect to one.";
             }
             else
             {

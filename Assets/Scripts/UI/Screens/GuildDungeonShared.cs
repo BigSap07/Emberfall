@@ -61,7 +61,7 @@ namespace Emberfall.UI.Screens
         public IEnumerator Load(IGuildDungeonBackend backend)
         {
             Error = "";
-            if (backend == null) { Error = "This build has no cloud configured, so there is no guild."; yield break; }
+            if (backend == null) { Error = "Guilds need an online account, and this version cannot connect to one."; yield break; }
             if (!backend.Ready) { Error = backend.NotReadyReason; yield break; }
 
             GuildDungeonStatus status = null;

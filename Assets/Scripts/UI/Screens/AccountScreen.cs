@@ -289,7 +289,7 @@ namespace Emberfall.UI.Screens
                 _headerSubtitle.text = "LOCAL ONLY";
                 _statusValue.text = "NO ACCOUNT SERVICE";
                 _statusValue.color = Emberforge.TextQuiet;
-                _statusNote.text = "This build has no cloud configured. Your progress is saved on this "
+                _statusNote.text = "This version cannot connect to an online account. Your progress is saved on this "
                                  + "device and nowhere else, and everything in the game works as normal.";
                 SetAll(false);
                 _friendCode.text = "------";

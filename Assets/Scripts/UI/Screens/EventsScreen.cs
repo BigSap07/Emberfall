@@ -102,7 +102,7 @@ namespace Emberfall.UI.Screens
 
             if (events.Count == 0)
             {
-                Text empty = EmberforgeUI.Label("Empty", _listContent, "No events in the content database.",
+                Text empty = EmberforgeUI.Label("Empty", _listContent, "No events are running right now. Check back soon.",
                                              UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.Sized(empty.rectTransform, 0f, 80f);
             }
