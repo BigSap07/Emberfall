@@ -108,7 +108,7 @@ namespace Emberfall.UI.Screens
         private void BuildArchiveDoor()
         {
             UIButton archive = EmberforgeUI.Button("Archive", Root, "ARCHIVE", UITheme.FontSmall, ForgeButtonKind.Secondary);
-            UIBuilder.Box(archive.Root, -UITheme.ScreenPadding, -CurrencyStrip.DefaultTop, DoorWidth, CurrencyStrip.Height,
+            UIBuilder.Box(archive.Root, -UITheme.ScreenPadding, -CurrencyStrip.DefaultTop, DoorWidth, HubStyle.TouchMin,
                           new Vector2(1f, 1f));
             archive.OnClick(delegate
             {

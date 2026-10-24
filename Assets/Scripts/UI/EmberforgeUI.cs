@@ -845,6 +845,18 @@ namespace Emberfall.UI
             title.sizeDelta = new Vector2(Mathf.Max(0f, title.sizeDelta.x - shift), title.sizeDelta.y);
         }
 
+        /// <summary>
+        /// The right-hand counterpart of ClearCornerOrnament: keeps a control boxed at a panel's top left
+        /// (anchor and pivot (0,1)) off the top right corner ornament. When its right edge sits closer to the
+        /// panel's right edge than Emberforge.OrnamentClearance it slides left by the difference; the width is kept.
+        /// </summary>
+        public static void ClearCornerOrnamentRight(RectTransform item, float panelWidth)
+        {
+            float over = item.anchoredPosition.x + item.sizeDelta.x - (panelWidth - Emberforge.OrnamentClearance);
+            if (over <= 0f) return;
+            item.anchoredPosition = new Vector2(item.anchoredPosition.x - over, item.anchoredPosition.y);
+        }
+
         // ------------------------------------------------------------------ tabs
 
         /// <summary>One tab. Selected is a different plate and a different text tone, so a bar of
