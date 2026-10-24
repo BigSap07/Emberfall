@@ -2157,8 +2157,7 @@ In order.
    screen already built on `EmberforgeUI`, so the gap was layout, not style. Landed: `EmberforgeUI.ClearCornerOrnament`
    (panel titles no longer run into the corner ornaments), kit currency icons through `UiKit.Currency`,
    `UISkin.Panel` and `UIBuilder.Frame` retired from Leaderboards, GuildDungeon, WaveResult and `ItemCard`, bodies that
-   stretch to the bottom edge instead of a fixed height (Store x4, Hero detail, Forge, Orders, Recital, LiveEvents,
-   Talents, Wayfarers Road), `ShopDoors.MinCardHeight`, and `HubOverflowMenu.Show` above the nav. Captured at 1920x1080,
+   stretch to the bottom edge instead of a fixed height (Store x4, Hero detail, LiveEvents), clearance and spacing fixes for 16:10 and 20:9 (Forge rail and tray, Orders, Recital doors, Talents names, Wayfarers Road pager), `ShopDoors.MinCardHeight`, and `HubOverflowMenu.Show` above the nav. Captured at 1920x1080,
    1920x1200 and 2400x1080 into `Docs/ui-shots/r42` (local, the folder is git-ignored). Left on purpose: Settings, Account,
    Events and Profile were already scroll pages; the Coda cell stays out of `CurrencyStrip` (the rule above); the
    GuildLadder ATTEMPT button keeps the 108 touch minimum and so overflows its row. What remains is art, not code:
