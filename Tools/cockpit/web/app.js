@@ -41,6 +41,19 @@ function runCost(d) {
   return card('costs', 'Run cost', r.desc, badge(r.badge || ''), `<div class="body">${head}${rows}${r.hint ? `<div class="lbl" style="padding-top:8px">${esc(r.hint)}</div>` : ''}</div>`);
 }
 
+function runs(d) {
+  const r = d.runs, cols = '2fr 70px 1fr 100px 60px 60px';
+  const head = `<div class="tr h" style="grid-template-columns:${cols}"><div>Run</div><div>Found by</div><div>State</div><div class="r">Started</div><div class="r">Time</div><div class="r">Last</div></div>`;
+  const rows = r.rows.map((x) => `<div class="tr row" style="grid-template-columns:${cols}" title="${esc(x.flag || x.note)}"><div style="display:flex;gap:8px;align-items:center;min-width:0">${dot(x.state_tone)}<span style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.name)}</span>${x.flag ? `<span style="color:${TONE.warn}">!</span>` : ''}</div><div class="lbl">${esc(x.source_label)}</div><div style="color:${tone(x.state_tone)}">${esc(x.state)}</div><div class="r n lbl">${esc(x.started)}</div><div class="r n lbl">${esc(x.elapsed)}</div><div class="r n lbl">${esc(x.last)}</div></div>`).join('');
+  return card('runs', 'Runs', r.desc, badge(r.badge || ''), `<div class="body">${head}${rows}</div>`);
+}
+function replicate(d) {
+  const r = d.replicate, cols = '2fr 90px 60px 70px 1.4fr 90px';
+  const head = `<div class="tr h" style="grid-template-columns:${cols}"><div>Ledger</div><div>State</div><div class="r">Images</div><div class="r">Cost</div><div>Cap</div><div class="r">Rate</div></div>`;
+  const rows = r.rows.map((x) => `<div class="tr row" style="grid-template-columns:${cols}"><div style="display:flex;gap:8px;align-items:center;min-width:0">${dot(x.tone)}<span style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.name)}</span></div><div style="color:${tone(x.tone)}">${esc(x.state)}</div><div class="r n">${esc(x.images)}</div><div class="r n" style="font-weight:500">${esc(x.cost)}</div><div class="lbl">${esc(x.cap)}</div><div class="r n lbl">${esc(x.rate)}</div></div>`).join('');
+  const t = r.total;
+  return card('replicate', 'Replicate spend', r.desc, badge(r.badge || '', r.live ? 'warn' : ''), `<div class="body">${head}${rows}<div class="tr row" style="grid-template-columns:1fr auto"><div class="lbl">${esc(t.label)}<div>${esc(t.sub)}</div></div><div class="r n" style="font-weight:500">${esc(t.value)}</div></div></div>`);
+}
 function waiting(d) {
   const w = d.waiting;
   return card('', 'Needs you', w.desc, badge(w.open + ' open', w.open ? 'warn' : 'ok'),
@@ -90,7 +103,7 @@ function render() {
   const d = S;
   $('#hdr').innerHTML = `${badge(d.header.unity.text, d.header.unity.tone)}${d.header.waiting ? badge(d.header.waiting + ' need you', 'warn') : ''}<span class="badge n" style="font-family:'Geist Mono',monospace;color:#a1a1aa">main ${esc(d.header.main)}</span><div class="n" style="text-align:right;line-height:1.2"><div style="font-size:14px;font-weight:500">${esc(d.header.clock)}</div><div class="lbl">${esc(d.header.date)}</div></div>${d.header.mock ? '<span class="mock">MOCK DATA</span>' : ''}`;
   const hints = (d.hints || []).map((h) => `<div class="card hint">${esc(h)}</div>`).join('');
-  $('#app').innerHTML = `${hints}${kpis(d)}<div class="grid"><div class="col s8">${chain(d)}${runCost(d)}</div><div class="col s4">${waiting(d)}${shipped(d)}</div></div><div class="grid"><div class="col s5">${road(d)}</div><div class="col s4">${plan(d)}</div><div class="col s3">${side(d)}</div></div>`;
+  $('#app').innerHTML = `${hints}${kpis(d)}<div class="grid"><div class="col s8">${chain(d)}${runCost(d)}${replicate(d)}${runs(d)}</div><div class="col s4">${waiting(d)}${shipped(d)}</div></div><div class="grid"><div class="col s5">${road(d)}</div><div class="col s4">${plan(d)}</div><div class="col s3">${side(d)}</div></div>`;
 }
 
 async function load() {

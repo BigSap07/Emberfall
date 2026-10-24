@@ -108,3 +108,12 @@ A browser view of the same data, in an Edge app window. The terminal dashboard a
 - `web/SCHEMA.md` is the contract with `web/app.js`, `web/state.sample.json` the sample. `python state_builder.py [--mock]` prints the JSON.
 - Inputs that are not collected: `progress.json` (the six Road to a real game tracks and milestones, edit by hand) and the `plan` block of `costs.json` (prices, start month, renewal day, optional `api_value_eur`).
 - `python test_cockpit.py` covers the builder (keys and types against the sample) and the server (header, keys, formats).
+
+### Run sources and Replicate spend
+
+- A run is listed from any of three sources, and a run known to more than one shows once (the key is the run id up to the first dash, so R43 and R43-UI-ART-GEN are one run):
+  the queue runner (`tmp/runs.csv`, `handoff/QUEUE.txt`, `handoff/run-queue.lock`), the convention `tmp/<RUN>_running_log.md`, and discovery of any `*running_log*.md` / `RUNNING_LOG*.md` under the roots `tmp`, `ui-gen`, `handoff` (two folders deep; set `run_roots` in `costs.json` to change them).
+- A discovered log is running when it changed in the last 20 minutes and has no final line, DONE on `RUN DONE`, BLOCKED on a last line with `BLOCKED`, otherwise stale. The queue's recorded end beats a log that never got a final line (a FAILED run no longer shows as running).
+- A log stamp later than now or later than the file time is clamped to that time and flagged, so no elapsed time is negative or in the future.
+- Spend ledgers: every `ui-gen/ledger*.json` and `ui-gen/*/ledger*.json`. The Replicate card shows images, cost and the cap per ledger, and a total labelled as an estimate (price per image assumed, `replicate_price_per_image` in `costs.json`, default 0.04; check Replicate billing). A ledger changed in the last 5 minutes shows as generating with images per minute. An unreadable ledger is listed, not counted, and raises a hint.
+- Rule for agents: interactive runs log to `tmp/<RUN>_running_log.md` and end with `RUN DONE` or `BLOCKED` (handoff/STANDING-RULES.txt).

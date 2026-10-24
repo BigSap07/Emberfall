@@ -196,6 +196,117 @@
    }
   ]
  },
+ "runs": {
+  "desc": "Queued, logged by convention, or found by discovery. no queue lock file.",
+  "badge": "1 running",
+  "found": 0,
+  "rows": [
+   {
+    "name": "R27-store-polish",
+    "state": "running",
+    "state_tone": "warn",
+    "source": "log",
+    "source_label": "log",
+    "started": "11:02",
+    "elapsed": "2h58",
+    "last": "13:20",
+    "flag": "",
+    "note": ""
+   },
+   {
+    "name": "R25-relic-icons",
+    "state": "DONE",
+    "state_tone": "ok",
+    "source": "log",
+    "source_label": "log",
+    "started": "07:30",
+    "elapsed": "2h50",
+    "last": "10:20",
+    "flag": "",
+    "note": ""
+   },
+   {
+    "name": "nightly-fixups",
+    "state": "DONE",
+    "state_tone": "ok",
+    "source": "log",
+    "source_label": "log",
+    "started": "22 Oct 19:30",
+    "elapsed": "2h45",
+    "last": "22:15",
+    "flag": "",
+    "note": ""
+   },
+   {
+    "name": "hero-batch-9",
+    "state": "BLOCKED",
+    "state_tone": "bad",
+    "source": "log",
+    "source_label": "log",
+    "started": "22 Oct 13:05",
+    "elapsed": "4h45",
+    "last": "17:50",
+    "flag": "",
+    "note": ""
+   },
+   {
+    "name": "R26-toast-anchor",
+    "state": "DONE",
+    "state_tone": "ok",
+    "source": "log",
+    "source_label": "log",
+    "started": "22 Oct 09:10",
+    "elapsed": "3h30",
+    "last": "12:40",
+    "flag": "",
+    "note": ""
+   },
+   {
+    "name": "economy-r5",
+    "state": "waiting",
+    "state_tone": "mute",
+    "source": "log",
+    "source_label": "log",
+    "started": "21 Oct 08:00",
+    "elapsed": "8h00",
+    "last": "16:00",
+    "flag": "",
+    "note": ""
+   }
+  ]
+ },
+ "replicate": {
+  "desc": "Estimate: the price per image is assumed, check Replicate billing.",
+  "badge": "idle",
+  "live": 0,
+  "rows": [
+   {
+    "name": "r20/ledger.json",
+    "state": "idle",
+    "tone": "dim",
+    "images": "420",
+    "cost": "$16.80",
+    "cap": "",
+    "rate": "",
+    "updated": "12:42"
+   },
+   {
+    "name": "r21/ledger.json",
+    "state": "idle",
+    "tone": "dim",
+    "images": "2",
+    "cost": "$15.55",
+    "cap": "",
+    "rate": "",
+    "updated": "12:42"
+   }
+  ],
+  "total": {
+   "label": "Replicate total (estimate)",
+   "value": "$32.35",
+   "sub": "422 images in 2 ledgers, price assumed at $0.04 per image where a ledger has none"
+  }
+ },
  "waiting": {
   "desc": "Only things that block or advance the game.",
   "open": 2,

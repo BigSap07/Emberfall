@@ -739,5 +739,157 @@ class V3bDataFixes(unittest.TestCase):
         self.assertIn("Sonnet 69%, Opus 31%", sub)
 
 
+# ---------------------------------------------------------------- run sources and spend ledgers
+
+R43_LOG = ("12:40 R43 start, token present, 2 images to test\n"
+           "12:48 batch 2 of the UI art set running\n")
+GEN_PY = ('import os\nROOT = os.path.dirname(__file__)\nLEDGER = os.path.join(ROOT, "ledger_r43.json")\n'
+          'MAX_IMAGES = 220\nMAX_COST = 9.00\n')
+
+
+def put(root: Path, rel: str, text: str) -> Path:
+    p = root / rel
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def runs_by_key(env: data.Env) -> dict:
+    return {r["key"]: r for r in data.collect_runs(env)["runs"]}
+
+
+class RunSources(unittest.TestCase):
+    NOW = D(2026, 10, 24, 12, 55)
+
+    def env(self, root: Path, mtimes: dict, files: dict | None = None) -> data.Env:
+        for rel, text in (files or {}).items():
+            put(root, rel, text)
+        return temp_env(root, {}, mtimes, self.NOW)
+
+    def test_interactive_log_is_found_while_it_is_fresh(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {"ui-gen/RUNNING_LOG_R43.md": "2026-10-24T12:50:00"},
+                           {"ui-gen/RUNNING_LOG_R43.md": R43_LOG})
+            r = runs_by_key(env)["R43"]
+            self.assertEqual((r["state"], r["source"]), ("running", "found"))
+            self.assertEqual(r["start"], D(2026, 10, 24, 12, 40))
+
+    def test_stale_log_is_not_running(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {"ui-gen/RUNNING_LOG_R43.md": "2026-10-24T12:10:00"},
+                           {"ui-gen/RUNNING_LOG_R43.md": R43_LOG})
+            r = runs_by_key(env)["R43"]
+            self.assertEqual(r["state"], "stale")
+            self.assertIsNone(data.collect_runs(env)["active"])
+
+    def test_blocked_and_done_logs_by_their_last_line(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {"ui-gen/RUNNING_LOG_R43.md": "2026-10-24T12:54:00", "handoff/x/RUNNING_LOG_R44.md": "2026-10-24T12:54:00"},
+                           {"ui-gen/RUNNING_LOG_R43.md": R43_LOG + "12:53 BLOCKED: token missing\n",
+                            "handoff/x/RUNNING_LOG_R44.md": R43_LOG + "RUN DONE\n"})
+            by = runs_by_key(env)
+            self.assertEqual((by["R43"]["state"], by["R44"]["state"]), ("BLOCKED", "DONE"))
+
+    def test_a_run_in_runs_csv_and_a_log_counts_once(self):
+        csv_text = ("run,start,end,minutes,total_cost_usd,model,result\n"
+                    "R43-UI-ART-GEN,2026-10-24T12:40:00,,,,,\n")
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {"ui-gen/RUNNING_LOG_R43.md": "2026-10-24T12:50:00",
+                                     "tmp/R43-UI-ART-GEN_running_log.md": "2026-10-24T12:50:00"},
+                           {"ui-gen/RUNNING_LOG_R43.md": R43_LOG, "tmp/runs.csv": csv_text,
+                            "tmp/R43-UI-ART-GEN_running_log.md": R43_LOG})
+            hits = [r for r in data.collect_runs(env)["runs"] if r["key"] == "R43"]
+            self.assertEqual(len(hits), 1)
+            self.assertEqual(hits[0]["source"], "queue")
+
+    def test_runs_csv_end_settles_a_log_that_never_got_a_final_line(self):
+        csv_text = ("run,start,end,minutes,total_cost_usd,model,result\n"
+                    "R31-ENGINE-GAPS,2026-10-24T08:00:00,2026-10-24T09:48:00,,,,FAILED\n")
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {"tmp/R31-ENGINE-GAPS_running_log.md": "2026-10-24T08:54:00"},
+                           {"tmp/runs.csv": csv_text, "tmp/R31-ENGINE-GAPS_running_log.md": "08:00 start\n08:54 resumed\n"})
+            r = runs_by_key(env)["R31"]
+            self.assertNotEqual(r["state"], "running")
+            self.assertEqual(r["end"], D(2026, 10, 24, 9, 48))
+            self.assertIn("FAILED", r["note"])
+
+    def test_future_stamp_is_clamped_and_flagged(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {"ui-gen/RUNNING_LOG_R43.md": "2026-10-24T12:50:00"},
+                           {"ui-gen/RUNNING_LOG_R43.md": R43_LOG + "15:30 clock written ahead\n"})
+            r = runs_by_key(env)["R43"]
+            self.assertTrue(r["future"])
+            self.assertGreaterEqual(r["elapsed"], timedelta(0))
+            self.assertLessEqual(r["last"], self.NOW)
+            ok = runs_by_key(self.env(Path(t) / "b", {"ui-gen/RUNNING_LOG_R43.md": "2026-10-24T12:50:00"},
+                                      {"ui-gen/RUNNING_LOG_R43.md": R43_LOG}))["R43"]
+            self.assertFalse(ok["future"])
+
+    def test_discovery_roots_come_from_costs_json(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {"elsewhere/RUNNING_LOG_R50.md": "2026-10-24T12:50:00"},
+                           {"elsewhere/RUNNING_LOG_R50.md": R43_LOG})
+            self.assertNotIn("R50", runs_by_key(env))
+            self.assertEqual([p.name for p in data.find_run_logs(env, {"run_roots": ["elsewhere"]})], ["RUNNING_LOG_R50.md"])
+
+    # ---- ledgers
+    def test_ledger_of_a_run_in_progress_is_generating_with_a_rate(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {"ui-gen/RUNNING_LOG_R43.md": "2026-10-24T12:54:00", "ui-gen/ledger_r43.json": "2026-10-24T12:54:00"},
+                           {"ui-gen/RUNNING_LOG_R43.md": R43_LOG, "ui-gen/ledger_r43.json": '{"images": 86, "cost": 3.44}',
+                            "ui-gen/tools/gen.py": GEN_PY})
+            lg = data.collect_ledgers(env, data.collect_runs(env)["runs"])
+            row = lg["ledgers"][0]
+            self.assertEqual((row["images"], row["live"], row["cap_images"], row["cap_cost"]), (86, True, 220, 9.0))
+            self.assertAlmostEqual(row["cost"], 3.44)
+            self.assertAlmostEqual(row["ipm"], 86 / 14, places=2)      # 14 minutes since R43 started at 12:40
+
+    def test_ledger_untouched_for_a_while_is_idle(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {"ui-gen/ledger_r43.json": "2026-10-24T12:30:00"},
+                           {"ui-gen/ledger_r43.json": '{"images": 86, "cost": 3.44}'})
+            row = data.collect_ledgers(env, [])["ledgers"][0]
+            self.assertFalse(row["live"])
+            self.assertIsNone(row["ipm"])
+            self.assertIsNone(row["cap_images"])                       # no generator states a cap: blank
+
+    def test_unreadable_ledger_is_listed_and_not_counted(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {}, {"ui-gen/ledger_bad.json": "{not json", "ui-gen/sub/ledger.json": '{"images": 10, "cost": 0.4}'})
+            lg = data.collect_ledgers(env, [])
+            self.assertEqual({r["name"]: r["ok"] for r in lg["ledgers"]}, {"ledger_bad.json": False, "sub/ledger.json": True})
+            self.assertEqual((lg["total_images"], round(lg["total_usd"], 2)), (10, 0.4))
+
+    def test_old_entries_shape_still_counts(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {}, {"ui-gen/r1/ledger.json": '{"entries": [{"date": "2026-10-01", "images": 5, "cost_usd": 0.2}]}'})
+            row = data.collect_ledgers(env, [])["ledgers"][0]
+            self.assertEqual((row["images"], round(row["cost"], 2)), (5, 0.2))
+
+    # ---- what the page gets
+    def test_state_has_runs_and_replicate_cards(self):
+        with tempfile.TemporaryDirectory() as t:
+            env = self.env(Path(t), {"ui-gen/RUNNING_LOG_R43.md": "2026-10-24T12:54:00", "ui-gen/ledger_r43.json": "2026-10-24T12:54:00",
+                                     "ui-gen/ledger_bad.json": "2026-10-24T10:00:00"},
+                           {"ui-gen/RUNNING_LOG_R43.md": R43_LOG, "ui-gen/ledger_r43.json": '{"images": 86, "cost": 3.44}',
+                            "ui-gen/ledger_bad.json": "oops", "ui-gen/tools/gen.py": GEN_PY})
+            s = state_builder.build_state(data.collect(env), progress={})
+        row = next(r for r in s["runs"]["rows"] if r["name"] == "R43")
+        self.assertEqual((row["source"], row["state"]), ("found", "running"))
+        rep = s["replicate"]
+        self.assertEqual(rep["badge"], "1 generating")
+        gen = next(r for r in rep["rows"] if r["name"] == "ledger_r43.json")
+        self.assertEqual((gen["images"], gen["cost"], gen["cap"], gen["state"]), ("86", "$3.44", "220 images, $9.00", "generating"))
+        self.assertIn("estimate", rep["total"]["label"])
+        self.assertEqual(rep["total"]["value"], "$3.44")
+        self.assertTrue(any("ledger_bad.json" in h for h in s["hints"]))
+
+    def test_no_dashes_in_the_new_docs_and_rules(self):
+        for p in (Path(__file__).resolve().parent / "web" / "SCHEMA.md", Path(__file__).resolve().parent / "README.md"):
+            txt = p.read_text(encoding="utf-8")
+            self.assertNotIn(chr(0x2014), txt, p.name)
+            self.assertNotIn(chr(0x2013), txt, p.name)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

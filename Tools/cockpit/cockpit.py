@@ -29,7 +29,7 @@ REFRESH_S = 30
 ACTIONS_MAX_AGE = timedelta(days=2)   # older sections are in `u`, not in the panel or the badge
 GOLD, EMBER, TEXT, DIM, RED, GREEN, YELLOW, BLUE = (
     "#e8b04a", "#e2571e", "#d8cfc4", "#7a6f66", "#e5484d", "#46c26a", "#e0c341", "#5b9bd5")
-STATE = {"running": GREEN, "BLOCKED": RED, "waiting": YELLOW, "queued": BLUE, "DONE": DIM}
+STATE = {"running": GREEN, "BLOCKED": RED, "waiting": YELLOW, "stale": DIM, "queued": BLUE, "DONE": DIM}
 
 
 def dot(color: str) -> Text:

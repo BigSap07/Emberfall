@@ -29,7 +29,9 @@ OPUS_SHARE_LIMIT = tips.OPUS_SHARE_LIMIT
 IDLE_HOT = 0.30
 BLOCK_LEN = timedelta(hours=5)
 WEEK_LEN = timedelta(days=7)
-TONE_OF_STATE = {"DONE": "ok", "running": "warn", "BLOCKED": "bad", "waiting": "mute", "queued": "dim"}
+TONE_OF_STATE = {"DONE": "ok", "running": "warn", "BLOCKED": "bad", "waiting": "mute", "stale": "mute", "queued": "dim"}
+SOURCE_LABEL = {"queue": "queue", "log": "log", "found": "found"}   # runs.csv / tmp convention log / discovery
+RUNS_SHOWN = timedelta(days=3)
 MODEL_TONE = {"sonnet": "ok", "opus": "hot", "haiku": "text"}
 BULLET = re.compile(r"^\s*(?:[-*]\s+|\d+[.)]\s+)")
 STAMP = re.compile(r"^[-*\s]*(?:\d{4}-\d{2}-\d{2}[ T])?\d{1,2}:\d{2}(?::\d{2})?\s*")
@@ -409,6 +411,58 @@ def run_cost_section(d: dict) -> dict:
             "hint": d["local"]["hint"], "rows": rows}
 
 
+def runs_section(d: dict) -> dict:
+    """Every run the cockpit knows, whichever way it found it: the queue runner (runs.csv, QUEUE.txt), the
+    tmp/<RUN>_running_log.md convention, or discovery of a log elsewhere (ui-gen, handoff)."""
+    now = d["now"]
+    rows = []
+    shown = [r for r in d["runs"]["runs"] if r["state"] != "queued" and r["start"]
+             and (r["state"] in ("running", "BLOCKED") or now - r["start"] <= RUNS_SHOWN)]
+    shown.sort(key=lambda r: r["start"], reverse=True)
+    for r in shown[:RUN_ROWS]:
+        day = "" if r["start"].date() == now.date() else f"{r['start']:%d %b} "
+        flag = "a log stamp was ahead of the clock and is clamped" if r.get("future") else ""
+        rows.append({"name": r["name"], "state": r["state"], "state_tone": TONE_OF_STATE.get(r["state"], "dim"),
+                     "source": r["source"], "source_label": SOURCE_LABEL.get(r["source"], r["source"]),
+                     "started": f"{day}{hm(r['start'])}", "elapsed": dur_hm(r["elapsed"]),
+                     "last": hm(r["last"]), "flag": flag, "note": trunc(r.get("note") or "", 80)})
+    n_found = sum(1 for r in rows if r["source"] == "found")
+    n_run = sum(1 for r in rows if r["state"] == "running")
+    lock = d.get("queue_lock", "")
+    lock_txt = "queue runner idle" if lock.upper() == "FREE" else f"queue runner lock {lock}" if lock else "no queue lock file"
+    return {"desc": f"Queued, logged by convention, or found by discovery. {lock_txt}.", "badge": f"{n_run} running",
+            "found": n_found, "rows": rows}
+
+
+def money(x: float) -> str:
+    return usd(x, 2)
+
+
+def replicate_section(d: dict, hints: list[str]) -> dict:
+    """Replicate spend per ledger (ui-gen/ledger*.json) and in total. Prices are assumed, so it is an estimate."""
+    lg = d["ledgers"]
+    rows = []
+    for x in lg["ledgers"]:
+        cap_i, cap_c = x["cap_images"], x["cap_cost"]
+        if not x["ok"]:
+            hints.append(f"ledger {x['name']} is unreadable (not valid JSON), it is not counted.")
+            rows.append({"name": x["name"], "state": "unreadable", "tone": "bad", "images": "-", "cost": "-", "cap": "",
+                         "rate": "", "updated": "-"})
+            continue
+        cap = ", ".join(c for c in (f"{cap_i} images" if cap_i else "", money(cap_c) if cap_c else "") if c)
+        near = (cap_i and x["images"] >= cap_i * 0.9) or (cap_c and x["cost"] >= cap_c * 0.9)
+        rows.append({"name": x["name"], "state": "generating" if x["live"] else "idle",
+                     "tone": "hot" if near and x["live"] else "warn" if x["live"] else "dim",
+                     "images": str(x["images"]), "cost": money(x["cost"]), "cap": cap,
+                     "rate": f"{x['ipm']:.1f} images/min" if x["ipm"] else "", "updated": hm(x["changed"])})
+    live = sum(1 for r in rows if r["state"] == "generating")
+    n_img = lg["total_images"]
+    return {"desc": "Estimate: the price per image is assumed, check Replicate billing.",
+            "badge": f"{live} generating" if live else "idle", "live": live, "rows": rows,
+            "total": {"label": "Replicate total (estimate)", "value": money(lg["total_usd"]),
+                      "sub": f"{n_img} images in {plural(len(rows), 'ledger')}, price assumed at {money(lg['price'])} per image where a ledger has none"}}
+
+
 def action_items(d: dict) -> list[dict]:
     """USER ACTIONS from the last 2 days, one item per bullet. A line that starts a bullet or number begins
     a new item; any other line continues the one before. A bold first sentence is the title."""
@@ -694,7 +748,8 @@ def build_state(d: dict, progress: dict | None = None) -> dict:
             {"label": "Plan", "value": plan["_name"], "tone": "text", "sub": f"renews {plan['_renew']}" if plan["_renew"] else "renewal day not set"}]
     plan = {k: v for k, v in plan.items() if not k.startswith("_")}
     return {"now": iso(d["now"]), "mock": d["env"].mock, "header": header_section(d, waiting["open"]),
-            "hints": hints, "kpis": kpis, "chain": chain_card, "run_cost": run_cost_section(d), "waiting": waiting,
+            "hints": hints, "kpis": kpis, "chain": chain_card, "run_cost": run_cost_section(d), "runs": runs_section(d),
+            "replicate": replicate_section(d, hints), "waiting": waiting,
             "shipped": shipped_section(d), "road": road, "plan": plan, "limits": limits_section(d),
             "week": week_section(d), "playtest": playtest_section(d), "health": health_section(d),
             "tips": [t.text for t in tips.tips_for(d)]}
