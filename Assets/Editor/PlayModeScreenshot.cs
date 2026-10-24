@@ -575,6 +575,9 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/Inventory", false, 63)]
         public static void CaptureInventory() { Begin("Screen:Inventory"); }
 
+        [MenuItem("Emberfall/Capture/Item tile, one per tier", false, 64)]
+        public static void CaptureItemTiers() { Begin("Screen:ItemTiers"); }
+
         [MenuItem("Emberfall/Capture/Relic Shop", false, 64)]
         public static void CaptureRelicShop() { Begin("Screen:RelicShop"); }
 
@@ -2230,6 +2233,8 @@ namespace Emberfall.EditorTools
                     case "Summon": id = ScreenId.Summon; break;
                     case "Forge": id = ScreenId.Forge; break;
                     case "Inventory": id = ScreenId.Inventory; break;
+                    // R47: the Inventory page with the one-tile-per-tier sheet drawn over it.
+                    case "ItemTiers": id = ScreenId.Inventory; break;
                     case "RelicShop": id = ScreenId.RelicShop; break;
                     case "Events": id = ScreenId.Events; break;
                     case "Recital": id = ScreenId.Recital; break;
@@ -2559,6 +2564,8 @@ namespace Emberfall.EditorTools
                 if (name == "WayfarersRoadPicker") OpenRoadPicker(app);
                 if ((name == "WayfarersRoadPage2" || name == "WayfarersRoadPage2Claimed") && app.Router.WayfarersRoad != null)
                     app.Router.WayfarersRoad.PageForCapture(1);
+                if (name == "ItemTiers" && app.Router.Inventory != null)
+                    ItemTileGallery.Build(app.Router.Inventory.Root, app.Session.Content.Relics);
                 if (IsStoreScreen(name)) OpenStoreView(app, name);
                 if (name == "LiveEventsWeekly" || name == "LiveEventsTrack") ShowLiveSlot(app, LiveEventSlot.Weekly);
                 if (name == "LiveEventsMonthly") ShowLiveSlot(app, LiveEventSlot.Monthly);

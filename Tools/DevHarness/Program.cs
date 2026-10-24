@@ -373,6 +373,8 @@ namespace Emberfall.DevHarness
             // The R28 screens' presenters, codecs and rewarded ad rules (R28ScreenChecks.cs).
             CheckR28Screens(content, contentDir);
             CheckUiKit(content, contentDir);
+            // R47: the item tile's rarity palette and wiring (ItemTileChecks.cs).
+            CheckItemTile(content, contentDir);
             CheckR26Ui(content, contentDir);
             CheckR26Store(content, contentDir);
             CheckR27PlayLog(contentDir);

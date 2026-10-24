@@ -556,9 +556,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(host, UITheme.Space16, -UITheme.Space8, 116f, 116f, new Vector2(0f, 1f));
 
             // The SHARED component, at a third size, on a third screen. Same frame, same pip row.
-            RectTransform card = ItemCard.Build("Card", host, 116f, ItemCard.SlotIcon(piece.Slot),
-                                                tint, (int)temper + 1, 4,
-                                                UITheme.WithAlpha(UITheme.AspectAccent(piece.Aspect), 0.16f));
+            RectTransform card = ItemCard.ForSlot("Card", host, 116f, piece.Slot, temper, piece.Aspect);
             UIBuilder.FillParent(card, 0f);
 
             Text rung = EmberforgeUI.Label("Rung", block, ArmorInfo.TemperLabel(temper).ToUpperInvariant(),

@@ -6,186 +6,50 @@ using Emberfall.Core.Model;
 namespace Emberfall.UI
 {
     /// <summary>
-    /// The one way an item is drawn, anywhere. The Inventory grid, the Hero Detail equip slots and
-    /// the Forge's anvil and comparison table all call this, so a Radiant helm looks the same in
-    /// all three places by construction rather than by three screens agreeing to keep matching.
+    /// The one way an item is drawn, anywhere, by name. Since R47 the drawing itself lives in ItemTile (a rounded
+    /// plate coloured by tier, fixed corners, at most four marks); this class keeps the callers' familiar entry
+    /// points and the slot glyph helpers (SlotIcon, MarkScale, RailGlyph) and the segmented StatBar.
     ///
-    /// ANATOMY, from the mockups: a chamfered square on a sunken fill, a THIN CRISP border in the
-    /// item's rarity colour, the item's glyph centred, and a row of small diamond pips along the
-    /// bottom counting its tier. Nothing else. The border is the rarity read and the pips are the
-    /// tier read, and they are deliberately different channels - colour for which ladder rung,
-    /// count for how far along - so neither has to be inferred from the other.
-    ///
-    /// TWO LADDERS, NEVER MIXED. Relics use RelicGrade, which has exactly two rungs, Legendary and
-    /// Mythic, and takes its colour from UITheme.RelicGradeColor. Armor uses ArmorTemper, which has
-    /// exactly four, Rough through Radiant, and takes its colour from UITheme.ArmorTemperColor.
-    /// Those two functions already share no colour with each other, on purpose - see their notes -
-    /// so a card can never say "this armour is Mythic" or "this relic is Gilded".
-    ///
-    /// ASPECT ACCENTS ARE A GLOW, NEVER THE BORDER. An armour piece carries its own rolled Aspect
-    /// (ArmorPiece.Aspect), which is a different fact from its temper. Painting it on the border
-    /// would overwrite the rarity read with something unrelated, so it is a soft glow behind the
-    /// card instead: present when the piece has an aspect worth showing, invisible when it does
-    /// not, and never competing with the frame for the same meaning.
+    /// TWO LADDERS, NEVER MIXED. Relics use RelicGrade (Legendary, Mythic) and armor uses ArmorTemper (Rough,
+    /// Honed, Gilded, Radiant). Each ladder has its own table in ItemTilePalette, and a relic's painted icon
+    /// is never a slot silhouette, so a card does not say "this armour is Mythic" or "this relic is Gilded".
     /// </summary>
     public static class ItemCard
     {
-        /// <summary>Pip diameter, and the gap between pips, as fractions of the card's own size.</summary>
-        private const float PipFraction = 0.115f;
-        private const float PipGapFraction = 0.045f;
-        private const float IconFraction = 0.60f;
-
-        /// <summary>
-        /// The card, at its most general. Everything else here funnels into this so there is one
-        /// place that decides what an item card IS.
-        /// </summary>
-        /// <param name="rarity">Border, pip and glow tint. The rarity ladder's colour, never an aspect.</param>
-        /// <param name="pips">Filled pips. 0 draws the row dim, which is what an empty slot wants.</param>
-        /// <param name="maxPips">Total pips. 0 omits the row entirely.</param>
-        /// <param name="aspectGlow">Soft backing glow, or Color.clear for none.</param>
-        public static RectTransform Build(string name, Transform parent, float size, Sprite icon,
-                                          Color rarity, int pips, int maxPips, Color aspectGlow)
-        {
-            return Build(name, parent, size, icon, rarity, pips, maxPips, aspectGlow,
-                         IconTint(icon, Emberforge.TextBody), IconFraction);
-        }
-
-        /// <summary>The card with the icon's tint and size stated: a UI kit icon is painted in colour, so
-        /// it is drawn white (the flat glyphs are tinted) and a little larger.</summary>
-        private static RectTransform Build(string name, Transform parent, float size, Sprite icon,
-                                           Color rarity, int pips, int maxPips, Color aspectGlow,
-                                           Color iconTint, float iconFraction)
-        {
-            RectTransform card = UIBuilder.Node(name, parent);
-            UIBuilder.Size(card, size, size);
-
-            int cut = Mathf.Max(6, Mathf.RoundToInt(size * 0.14f));
-
-            // The aspect glow sits OUTSIDE the card's own bounds and behind everything, so the card
-            // reads as lit rather than as tinted - the same treatment a mythic relic gets in the
-            // shop, for the same reason.
-            if (aspectGlow.a > 0.001f)
-            {
-                Image glow = UIBuilder.Img("AspectGlow", card, TextureLab.Glow(128, 1.8f), aspectGlow);
-                UIBuilder.FillParent(glow.rectTransform, -size * 0.16f);
-            }
-
-            // THE CHAMFERED SILHOUETTE STAYS, and this is the one place in the game where it
-            // does. Emberforge rounds every corner it draws, which is right for chrome - a panel,
-            // a button, a pill - and wrong for the thing chrome CONTAINS: a card cut square is
-            // how this game has drawn an object since the mockups, and rounding it would have
-            // made a helm and the panel behind it the same shape.
-            //
-            // What the kit does bring is the outline. It is the one property every element in
-            // Emberforge shares without exception, and a rarity border with no dark line outside
-            // it was the one silhouette in the game floating free of the rest - see the outline
-            // note in Emberforge on why that single shared property is what makes a kit read as
-            // one kit.
-            Image fill = card.gameObject.AddComponent<Image>();
-            fill.sprite = TextureLab.NotchedRect(cut);
-            fill.type = Image.Type.Sliced;
-            fill.color = Emberforge.SunkenMid;
-
-            UIBuilder.NotchedFrame("Outline", card, Emberforge.Outline, cut, Emberforge.OutlineWeight);
-
-            // THIN and CRISP, per the mockups: a 3px edge at full strength, not a wide soft one.
-            // Thickness does not scale with the card - a 96px slot and a 180px forge focus want the
-            // same weight of line, or the big one reads as a heavier grade than the small one.
-            //
-            // Inset by the outline's own weight so the two lines sit side by side rather than on
-            // top of each other: the rarity read is the INNER line and the dark one wraps it.
-            Image edge = UIBuilder.NotchedFrame("Edge", card, rarity, cut, 3);
-            UIBuilder.FillParent(edge.rectTransform, Emberforge.OutlineWeight);
-
-            if (icon != null)
-            {
-                Image glyph = UIBuilder.Img("Icon", card, icon, iconTint);
-                float iconSize = size * iconFraction * MarkScale(icon);
-                float lift = maxPips > 0 ? size * 0.06f : 0f;
-                UIBuilder.Box(glyph.rectTransform, 0f, lift, iconSize, iconSize, new Vector2(0.5f, 0.5f));
-            }
-
-            if (maxPips > 0) BuildPips(card, size, rarity, pips, maxPips);
-            return card;
-        }
-
-        /// <summary>
-        /// The tier row. Diamonds, because the mockups draw diamonds and because a diamond reads as
-        /// a discrete step at 11px where a circle reads as a bullet and a bar reads as progress.
-        ///
-        /// Laid out by hand rather than with an HStack: the row must stay centred on the card at any
-        /// pip count, and a layout group on a node this small brings a rebuild pass along with it
-        /// for six 11px children.
-        /// </summary>
-        private static void BuildPips(RectTransform card, float size, Color rarity, int pips, int maxPips)
-        {
-            float pip = size * PipFraction;
-            float gap = size * PipGapFraction;
-            float total = maxPips * pip + (maxPips - 1) * gap;
-            float left = -total * 0.5f + pip * 0.5f;
-
-            RectTransform row = UIBuilder.Node("Pips", card);
-            UIBuilder.Box(row, 0f, size * 0.055f, total, pip, new Vector2(0.5f, 0f));
-
-            for (int i = 0; i < maxPips; i++)
-            {
-                Image dot = UIBuilder.Img("Pip" + i, row, TextureLab.Diamond(32),
-                                          i < pips ? rarity : Emberforge.TextQuiet);
-                UIBuilder.Box(dot.rectTransform, left + i * (pip + gap), 0f, pip, pip, new Vector2(0.5f, 0.5f));
-            }
-        }
-
         // ------------------------------------------------------------------ domain wrappers
+        // R47: every card is an ItemTile. The wrappers stay so callers keep one familiar name, and so the
+        // tile can change in one file without any screen noticing.
 
-        /// <summary>
-        /// An armour piece. Border and pips come from its Temper, the glow from its own Aspect.
-        ///
-        /// Four pips always, filled to the temper's rung, so an empty pip states the rungs this
-        /// piece did NOT reach. A Rough piece showing one of four is a different sentence from a
-        /// Rough piece showing one of one.
-        /// </summary>
+        /// <summary>An armour piece: plate, rim and pips from its Temper, the set icon from its Aspect.</summary>
         public static RectTransform ForArmor(string name, Transform parent, float size, ArmorPiece piece)
         {
-            Color temper = UITheme.ArmorTemperColor(piece.Temper);
-            return Build(name, parent, size, SlotIcon(piece.Slot), temper,
-                         (int)piece.Temper + 1, 4,
-                         UITheme.WithAlpha(UITheme.AspectAccent(piece.Aspect), 0.16f));
+            return ItemTile.ForArmor(name, parent, size, piece, false);
         }
 
-        /// <summary>
-        /// A relic. Border and pips come from its Grade and Tier.
-        ///
-        /// NO ASPECT GLOW, and that is a rule rather than an omission: a relic is never flavoured or
-        /// paired to an aspect anywhere in this game, so giving one an aspect tint would say the
-        /// opposite of what UITheme.RelicGradeColor's own note is careful to protect.
-        /// </summary>
+        /// <summary>The same tile with the worn mark, for a slot the hero is wearing.</summary>
+        public static RectTransform ForArmor(string name, Transform parent, float size, ArmorPiece piece, bool equipped)
+        {
+            return ItemTile.ForArmor(name, parent, size, piece, equipped);
+        }
+
+        /// <summary>A piece that is not owned (a store offer, a reward preview): slot, temper and aspect only.</summary>
+        public static RectTransform ForSlot(string name, Transform parent, float size, ArmorSlot slot,
+                                            ArmorTemper temper, Aspect aspect)
+        {
+            return ItemTile.ForSlot(name, parent, size, slot, temper, aspect, false);
+        }
+
+        /// <summary>A relic. Two grades, so two plates; no aspect mark, because a relic has no aspect.</summary>
         public static RectTransform ForRelic(string name, Transform parent, float size,
                                              RelicDef def, int tier, int maxTier)
         {
-            Color grade = UITheme.RelicGradeColor(def.Grade);
-
-            // The UI kit's icon for this relic id, when the kit is on: drawn white and larger. Otherwise
-            // the sigil it always had.
-            Sprite kit = UiKit.Relic(def.Id);
-            if (kit != null)
-                return Build(name, parent, size, kit, grade,
-                             Mathf.Clamp(tier, 0, Mathf.Max(1, maxTier)), Mathf.Max(1, maxTier), Color.clear,
-                             Color.white, 0.72f);
-            return Build(name, parent, size, TextureLab.Sigil(RelicSigil(def.Id), 128), grade,
-                         Mathf.Clamp(tier, 0, Mathf.Max(1, maxTier)), Mathf.Max(1, maxTier), Color.clear);
+            return ItemTile.ForRelic(name, parent, size, def, tier, maxTier, false);
         }
 
-        /// <summary>
-        /// A slot with nothing in it. Same frame, same footprint, so a half-equipped hero's slot
-        /// column stays a column instead of collapsing into gaps.
-        /// </summary>
+        /// <summary>A slot with nothing in it: the same footprint, the plate dimmed.</summary>
         public static RectTransform Vacant(string name, Transform parent, float size, ArmorSlot slot)
         {
-            RectTransform card = Build(name, parent, size, SlotIcon(slot),
-                                       Emberforge.TextQuiet, 0, 4, Color.clear);
-            Image icon = card.Find("Icon") != null ? card.Find("Icon").GetComponent<Image>() : null;
-            if (icon != null) icon.color = IconTint(icon.sprite, UITheme.WithAlpha(Emberforge.TextQuiet, 0.55f));
-            return card;
+            return ItemTile.Vacant(name, parent, size, slot);
         }
 
         // ------------------------------------------------------------------ glyphs
@@ -211,7 +75,7 @@ namespace Emberfall.UI
         /// </summary>
         private const float WeaponMarkScale = 1.28f;
 
-        private static float MarkScale(Sprite icon)
+        public static float MarkScale(Sprite icon)
         {
             if (icon == null || !UiKit.On) return 1f;
             return icon == UiKit.Icon(KitName(ArmorSlot.Weapon)) ? WeaponMarkScale : 1f;

@@ -362,25 +362,17 @@ namespace Emberfall.UI
         }
 
         /// <summary>
-        /// Colour for an armor piece's Temper rung. A four-step ramp from muted to bright, so the
-        /// ladder reads as a ladder at a glance in a list of pieces - which is the one thing a
-        /// player scanning an inventory needs from it.
+        /// Colour for an armor piece's Temper rung, for text rows and chips. It is the RIM colour of that tier's
+        /// item tile, read out of ItemTilePalette (the one place the rarity colours are defined), so a tier is the
+        /// same colour on a tile and on a line of text.
         ///
-        /// Deliberately shares no colour with RelicGradeColor. Gold means "legendary relic" and
-        /// Mythic means "mythic relic" everywhere else in the UI, and a Radiant armor piece is
-        /// neither - reusing either would say the two ladders were one ladder, which is exactly the
-        /// confusion the Temper naming exists to avoid.
+        /// A four-step ramp from muted to bright. Gilded is a worn gold close to the Legendary relic gold: the two
+        /// ladders are told apart by their tile (a relic is a painted icon with its own plate) and by their words,
+        /// not by hue alone.
         /// </summary>
         public static Color ArmorTemperColor(ArmorTemper temper)
         {
-            switch (temper)
-            {
-                case ArmorTemper.Rough: return TextDim;
-                case ArmorTemper.Honed: return Hex("8FB3C9");
-                case ArmorTemper.Gilded: return Hex("6FD0A8");
-                case ArmorTemper.Radiant: return Hex("FF9E4A");
-            }
-            return TextMuted;
+            return ItemTile.Rgb(ItemTilePalette.ArmorRim((int)temper));
         }
 
         /// <summary>
