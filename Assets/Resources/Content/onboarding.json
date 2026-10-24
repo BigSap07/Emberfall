@@ -65,7 +65,7 @@
   // the level up comes after 1-2, when a new player can afford one (780 gold after 1-1 against a
   // 1070 first level on every starter, 1235 after 1-2).
   "steps": [
-    { "id": "team",        "line": "Kael stands in your line now. Confirm it to march." },
+    { "id": "team",        "line": "Kael already stands in your line. Look over your banner, then go back to march." },
     { "id": "campaign",    "line": "The road starts at the shrine. Fight the first stage." },
     { "id": "waveResult",  "line": "Each wave pays as it falls. Keep going until the stage is clear." },
     { "id": "secondStage", "line": "One more step down the road. Fight the next stage." },

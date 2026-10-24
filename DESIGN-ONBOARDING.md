@@ -33,7 +33,9 @@ recalling heroes through the Cinder, so the first guided tap is a recall.
 3. **The prologue battle.** The existing prologue battle and squad, unchanged. The player
    watches. One line: "Your heroes fight on their own."
 4. **Guided core loop**, with forced arrows, one step at a time:
-   1. set team (Kael is placed automatically if the player does nothing)
+   1. set team (Kael is placed automatically if the player does nothing; as built the step has no
+      confirm control, it ends when the player leaves the banner, and its line says "go back to
+      march")
    2. campaign 1-1
    3. the wave result screen
    4. campaign 1-2 (added as built, see "As built": the level up is unaffordable after 1-1)
