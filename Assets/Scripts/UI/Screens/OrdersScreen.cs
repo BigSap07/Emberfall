@@ -151,6 +151,7 @@ namespace Emberfall.UI.Screens
             Text title = EmberforgeUI.Title("Title", _ordersBody, "TODAY'S ORDERS", UITheme.FontBody,
                                             Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(title.rectTransform, PanelPad + 8f, -16f, 600f, 40f, TopLeft);
+            EmberforgeUI.ClearCornerOrnament(title.rectTransform);
             UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
 
             Text count = EmberforgeUI.Label("Count", _ordersBody, claimed + " OF " + board.Orders.Count + " CLAIMED",
@@ -229,6 +230,7 @@ namespace Emberfall.UI.Screens
         {
             Text name = EmberforgeUI.Title("Title", body, title, UITheme.FontBody, Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(name.rectTransform, PanelPad + 8f, -16f, 400f, 40f, TopLeft);
+            EmberforgeUI.ClearCornerOrnament(name.rectTransform);
             UIBuilder.Outlined(name, Emberforge.Outline, Emberforge.StrokeThin);
 
             Text line = EmberforgeUI.Label("Counted", body, counted, UITheme.FontSmall, Emberforge.TextBody, TextAnchor.UpperLeft);
@@ -263,6 +265,7 @@ namespace Emberfall.UI.Screens
             Text title = EmberforgeUI.Title("Title", _calendarBody, "LOGIN CALENDAR", UITheme.FontBody,
                                             Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(title.rectTransform, PanelPad + 8f, -16f, 420f, 40f, TopLeft);
+            EmberforgeUI.ClearCornerOrnament(title.rectTransform);
             UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
 
             Text note = EmberforgeUI.Label("Note", _calendarBody, "ONE REWARD A DAY. IT REPEATS AFTER DAY 7.",

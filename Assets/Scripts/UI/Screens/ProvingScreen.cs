@@ -114,6 +114,7 @@ namespace Emberfall.UI.Screens
             _opponentName = EmberforgeUI.Title("Name", card, "", UITheme.FontTitle,
                                                Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(_opponentName.rectTransform, 30f, -inner, 560f, 56f, new Vector2(0f, 1f));
+            EmberforgeUI.ClearCornerOrnament(_opponentName.rectTransform);
 
             _ghostChip = EmberforgeUI.Chip("GhostChip", card, "", UITheme.CinderGlass, UITheme.FontTiny);
             UIBuilder.Box(_ghostChip, -30f, -inner, 260f, 42f, new Vector2(1f, 1f));

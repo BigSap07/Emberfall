@@ -581,9 +581,9 @@ namespace Emberfall.UI.Screens
             List<RectTransform> chips = new List<RectTransform>();
             List<float> chipWidths = new List<float>();
             if (!lost && r.WaveGold > 0)
-                AddChip(chips, chipWidths, "Gold", TextureLab.CoinIcon(64), UITheme.Gold, "+" + r.WaveGold);
+                AddChip(chips, chipWidths, "Gold", UiKit.Currency("gold"), TextureLab.CoinIcon(64), UITheme.Gold, "+" + r.WaveGold);
             if (!lost && r.WaveAccountXp > 0)
-                AddChip(chips, chipWidths, "Xp", TextureLab.Star(64), Emberforge.GoldLit, "+" + r.WaveAccountXp + " XP");
+                AddChip(chips, chipWidths, "Xp", null, TextureLab.Star(64), Emberforge.GoldLit, "+" + r.WaveAccountXp + " XP");
 
             float track = (n - 1) * PipWidth + PipCurrentWidth + (n - 1) * PipGap;
             float total = track + Emberforge.Space16 + countWidth;
@@ -622,10 +622,11 @@ namespace Emberfall.UI.Screens
         }
 
         /// <summary>A reward chip: the kit's chip with the currency's icon at its left end.</summary>
-        private void AddChip(List<RectTransform> chips, List<float> widths, string name, Sprite icon, Color tint, string text)
+        private void AddChip(List<RectTransform> chips, List<float> widths, string name, Sprite kitIcon, Sprite icon, Color tint, string text)
         {
             RectTransform chip = EmberforgeUI.Chip(name, _rowHost, text, tint, UITheme.FontSmall);
-            Image mark = UIBuilder.Img("Icon", chip, icon, tint);
+            Image mark = UIBuilder.Img("Icon", chip, kitIcon != null ? kitIcon : icon,
+                                       kitIcon != null ? Color.white : tint);
             UIBuilder.Box(mark.rectTransform, Emberforge.Space8, 0f, ChipIcon, ChipIcon, LeftMiddle);
             mark.raycastTarget = false;
 

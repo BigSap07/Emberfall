@@ -426,6 +426,7 @@ namespace Emberfall.UI.Screens
             Text caption = EmberforgeUI.Label(name + "Label", _ascendCardBody, label, UITheme.FontTiny,
                                               Emberforge.TextQuiet, TextAnchor.MiddleLeft);
             UIBuilder.Box(caption.rectTransform, CardPad, -top, 220f, 30f, new Vector2(0f, 1f));
+            EmberforgeUI.ClearCornerOrnament(caption.rectTransform);
             UIBuilder.Outlined(caption, Emberforge.Outline, Emberforge.StrokeThin);
 
             Text before = EmberforgeUI.Label(name + "Before", _ascendCardBody, "", HubStyle.FontValue,

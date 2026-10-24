@@ -183,6 +183,7 @@ namespace Emberfall.UI.Screens
             Text title = EmberforgeUI.Title("Title", _summary, "TIER " + view.Reached + " OF " + WayfarersRoadConfig.TierCount, UITheme.FontBody,
                                             Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(title.rectTransform, 28f, -16f, 520f, 40f, new Vector2(0f, 1f));
+            EmberforgeUI.ClearCornerOrnament(title.rectTransform);
             UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
 
             int into = view.Points % Mathf.Max(1, view.TierPoints);
