@@ -38,6 +38,8 @@ namespace Emberfall.UI.Screens
         private const float PaidHeight = 104f;
         private const int PickPerRow = 7;
         private const int PickPerPage = 14;
+        private const float PagerCentre = PaidTop + PaidHeight + 6f + 15f;
+        private const float PagerArrowX = 220f;
         private const float PickCardWidth = 150f;
         private const float PickCardHeight = 180f;
 
@@ -79,9 +81,10 @@ namespace Emberfall.UI.Screens
             _pick = UIBuilder.Node("Picker", _content);
             UIBuilder.Box(_pick, 0f, -RowTop, ContentWidth, TileHeight + 12f + PaidHeight, new Vector2(0.5f, 1f));
 
-            float rowWidth = PageSize * TileWidth + (PageSize - 1) * TileGap;
-            _prev = Arrow("Prev", "<", -(rowWidth * 0.5f + 52f), top);
-            _next = Arrow("Next", ">", rowWidth * 0.5f + 52f, top);
+            // The page arrows flank the page label under the cards. Beside the row they sat at half the row's width
+            // plus 52 from the centre, which is off the edge of a 1821 wide canvas (16:10).
+            _prev = Arrow("Prev", "<", -PagerArrowX, top);
+            _next = Arrow("Next", ">", PagerArrowX, top);
             _prev.OnClick(delegate { TurnPage(-1); });
             _next.OnClick(delegate { TurnPage(1); });
 
@@ -92,7 +95,7 @@ namespace Emberfall.UI.Screens
         private UIButton Arrow(string name, string glyph, float x, float top)
         {
             ForgeDisc disc = EmberforgeUI.IconButton(name, Root, "", TextureLab.Sigil(0, 64), Emberforge.TextGold, 64f, null);
-            UIBuilder.Box(disc.Root, x, -(top + RowTop + TileHeight * 0.5f - HubStyle.TouchMin * 0.5f),
+            UIBuilder.Box(disc.Root, x, -(top + PagerCentre - HubStyle.TouchMin * 0.5f),
                           HubStyle.TouchMin, HubStyle.TouchMin, new Vector2(0.5f, 1f));
             disc.Glyph.enabled = false;
             Text mark = EmberforgeUI.Title("Glyph", disc.Face, glyph, UITheme.FontHeading, Emberforge.TextGold, TextAnchor.MiddleCenter);

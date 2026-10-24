@@ -64,6 +64,10 @@ namespace Emberfall.UI.Screens
         private const float HexSize = 210f;
         private const float CycleWidth = 900f;
 
+        /// <summary>Width of the ARCHIVE and BOARDS doors. Two of them and the gap have to fit between the currency
+        /// strip's right edge and the screen padding on the narrowest canvas (16:10, about 1821 wide), which is 489.</summary>
+        private const float DoorWidth = 220f;
+
         private Text _headerSubtitle;
         private readonly CurrencyStrip _currencies = new CurrencyStrip();
 
@@ -104,7 +108,7 @@ namespace Emberfall.UI.Screens
         private void BuildArchiveDoor()
         {
             UIButton archive = EmberforgeUI.Button("Archive", Root, "ARCHIVE", UITheme.FontSmall, ForgeButtonKind.Secondary);
-            UIBuilder.Box(archive.Root, -UITheme.ScreenPadding, -CurrencyStrip.DefaultTop, 260f, CurrencyStrip.Height,
+            UIBuilder.Box(archive.Root, -UITheme.ScreenPadding, -CurrencyStrip.DefaultTop, DoorWidth, CurrencyStrip.Height,
                           new Vector2(1f, 1f));
             archive.OnClick(delegate
             {
@@ -120,9 +124,9 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void BuildBoardsDoor()
         {
-            float archive = SinksSwitch.Enabled ? 260f + UITheme.Space16 : 0f;
+            float archive = SinksSwitch.Enabled ? DoorWidth + UITheme.Space16 : 0f;
             UIButton boards = EmberforgeUI.Button("Boards", Root, "BOARDS", UITheme.FontSmall, ForgeButtonKind.Secondary);
-            UIBuilder.Box(boards.Root, -(UITheme.ScreenPadding + archive), -CurrencyStrip.DefaultTop, 260f, HubStyle.TouchMin,
+            UIBuilder.Box(boards.Root, -(UITheme.ScreenPadding + archive), -CurrencyStrip.DefaultTop, DoorWidth, HubStyle.TouchMin,
                           new Vector2(1f, 1f));
             boards.OnClick(delegate
             {

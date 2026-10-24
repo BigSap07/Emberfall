@@ -280,9 +280,9 @@ namespace Emberfall.UI.Screens
             view.Name.rectTransform.pivot = new Vector2(0f, 1f);
             view.Name.rectTransform.offsetMin = new Vector2(CardPad + 70f, -(NameTop + NameHeight));
             view.Name.rectTransform.offsetMax = new Vector2(-(CardPad + HelpReserve + StateChipWidth + 10f), -NameTop);
-            view.Name.resizeTextForBestFit = true;
-            view.Name.resizeTextMinSize = UITheme.FontTiny - 4;
-            view.Name.resizeTextMaxSize = UITheme.FontSmall;
+            // Wrap and truncate, not the default overflow: a long name at the smallest size runs on to a second line inside its
+            // box rather than out of it and under the RUNNING chip (16:10 cards are 585 wide).
+            UIBuilder.BestFit(view.Name, UITheme.FontTiny - 4, UITheme.FontSmall);
             UIBuilder.Outlined(view.Name, Emberforge.Outline, Emberforge.StrokeThin);
 
             view.StateChip = EmberforgeUI.Chip("Running", root, "RUNNING", UITheme.Success, UITheme.FontTiny - 4);
