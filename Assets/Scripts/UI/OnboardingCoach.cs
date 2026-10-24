@@ -480,8 +480,8 @@ namespace Emberfall.UI
                 float drop = HubStyle.LabelLift + 170f;
                 lit = new Rect(lit.x - 40f, lit.y - drop, lit.width + 80f, lit.height + drop);
                 Light(lit, false);
-                _litTap.anchoredPosition = lit.position;
-                _litTap.sizeDelta = lit.size;
+                _litTap.anchoredPosition = new Vector2(lit.x, lit.y);
+                _litTap.sizeDelta = new Vector2(lit.width, lit.height);
             }
             else
             {
