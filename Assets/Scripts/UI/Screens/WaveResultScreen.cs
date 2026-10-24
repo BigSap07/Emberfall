@@ -682,13 +682,10 @@ namespace Emberfall.UI.Screens
                 Text text = EmberforgeUI.Label("Text", row, "STAGE " + unlocked.DisplayCode + " UNLOCKED", UITheme.FontBody,
                                                Emberforge.TextGold, TextAnchor.MiddleLeft);
                 UIBuilder.Outlined(text, Emberforge.Outline, Emberforge.StrokeThin);
+                // No padlock beside it: a lock reads as "still locked", the opposite of UNLOCKED.
                 float textWidth = text.preferredWidth + 4f;
-                const float icon = 30f;
-                float rowWidth = icon + Emberforge.Space12 + textWidth;
-                UIBuilder.Box(row, 0f, y, rowWidth, 40f, TopCentre);
-                Image padlock = UiKit.GlyphImage("Icon", row, "lock", TextureLab.Padlock(64), Emberforge.GoldMid);
-                UIBuilder.Box(padlock.rectTransform, 0f, 0f, icon, icon, LeftMiddle);
-                UIBuilder.Box(text.rectTransform, icon + Emberforge.Space12, 0f, textWidth, 40f, LeftMiddle);
+                UIBuilder.Box(row, 0f, y, textWidth, 40f, TopCentre);
+                UIBuilder.Box(text.rectTransform, 0f, 0f, textWidth, 40f, LeftMiddle);
                 y -= 40f;
             }
 
@@ -747,7 +744,7 @@ namespace Emberfall.UI.Screens
             if (rewards.Gold + chestGold > 0)
                 tiles.Add(CurrencyTile("Gold", TextureLab.CoinIcon(64), UITheme.Gold, "+" + (rewards.Gold + chestGold), "GOLD"));
             if (rewards.Shards > 0)
-                tiles.Add(CurrencyTile("Shards", TextureLab.CrystalIcon(64), UITheme.Shard, "+" + rewards.Shards, "EMBER SHARDS"));
+                tiles.Add(CurrencyTile("Shards", TextureLab.CrystalIcon(64), UITheme.Shard, "+" + rewards.Shards, "SHARDS"));
             if (rewards.Chest != null && rewards.Chest.Slag > 0)
                 tiles.Add(CurrencyTile("Slag", TextureLab.IngotIcon(64), UITheme.Slag, "+" + rewards.Chest.Slag,
                                        rewards.Chest.Finale ? "SLAG - FINALE CHEST" : "SLAG - WALL CHEST"));
@@ -788,8 +785,8 @@ namespace Emberfall.UI.Screens
             RectTransform tile = Tile("Armor");
             RectTransform card = ItemCard.ForArmor("Icon", tile, 76f, piece);
             UIBuilder.Box(card, 0f, -16f, 76f, 76f, TopCentre);
-            Color temper = UITheme.ArmorTemperColor(piece.Temper);
-            TileText(tile, piece.Name, ArmorInfo.TemperLabel(piece.Temper).ToUpperInvariant(), temper);
+            // No tier word under the name: the card already shows the tier by its plate colour and pips.
+            TileText(tile, piece.Name, "", UITheme.ArmorTemperColor(piece.Temper));
 
             // A piece's name is longer than a currency amount, so it gets a margin inside the card and may
             // shrink further (R47: the name touched both card edges).
@@ -807,6 +804,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.BestFit(value, 16, UITheme.FontHeading);
             UIBuilder.Outlined(value, Emberforge.Outline, Emberforge.StrokeThin);
 
+            if (string.IsNullOrEmpty(label)) return;
             Text caption = EmberforgeUI.Label("Label", tile, label, UITheme.FontTiny, tint, TextAnchor.MiddleCenter);
             UIBuilder.Box(caption.rectTransform, 0f, -140f, TileSize - Emberforge.Space16, 28f, TopCentre);
             UIBuilder.BestFit(caption, 12, UITheme.FontTiny);

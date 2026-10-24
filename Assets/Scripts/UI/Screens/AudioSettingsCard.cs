@@ -72,7 +72,7 @@ namespace Emberfall.UI.Screens
             _muteButton.SetText(muted ? "SOUND: OFF" : "SOUND: ON");
             bool real = _app.Audio != null && _app.Audio.RealAudio;
             if (muted) _muteNote.text = "Every sound in the game is silenced, including battle hits and rewards.";
-            else if (real) _muteNote.text = "Drag a slider to set how loud that kind of sound is. There is no music yet, so that slider has nothing to turn.";
+            else if (real) _muteNote.text = "Drag a slider to set how loud that kind of sound is.";
             else _muteNote.text = "This build is playing the original tones, which the sliders do not change.";
         }
 

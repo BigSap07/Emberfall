@@ -67,7 +67,7 @@ namespace Emberfall.UI.Screens
         protected override void Build()
         {
             EmberforgeUI.Ground(Root);
-            ScreenChrome.ForgedHeader(Root, "EVENTS", Router, out _headerSubtitle);
+            ScreenChrome.ForgedHeader(Root, "LIMITED-TIME EVENTS", Router, out _headerSubtitle);
             _currencies.Build(Root);
 
             ScrollRect scroll;

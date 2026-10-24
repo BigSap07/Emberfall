@@ -169,7 +169,9 @@ namespace Emberfall.UI.Screens
 
             switch (Mode)
             {
-                case StoreMode.Test: _banner.text = TestStoreBanner.Shown(StoreMode.Test) ? "" : "TEST STORE  -  NO REAL MONEY MOVES"; _banner.color = Emberforge.TextGold; break;
+                // The only TEST STORE mark on this page is the chip below, which TestStoreBanner.Shown draws
+                // only under the EMBERFALL_TESTSTORE define (or the capture flag). No plain-text fallback.
+                case StoreMode.Test: _banner.text = ""; break;
                 case StoreMode.Live: _banner.text = ""; break;
                 default: _banner.text = "COMING SOON  -  PURCHASES OPEN WITH THE STORE"; _banner.color = Emberforge.TextQuiet; break;
             }
