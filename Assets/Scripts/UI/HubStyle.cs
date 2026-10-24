@@ -101,6 +101,12 @@ namespace Emberfall.UI
         /// <summary>Whole-element opacity for an entry that is not available yet.</summary>
         public const float DimAlpha = 0.55f;
 
+        /// <summary>How much of its strength a rail disc keeps (R51). The rail is the Hub's third tier
+        /// of control, below the card and the nav bar, so its disc plates and glyphs recede. Applied to
+        /// the disc and glyph colours, not to the button's group, so the pending dot and the captions
+        /// keep full strength.</summary>
+        public const float RailAlpha = 0.72f;
+
         // ------------------------------------------------------------------ font sizes
 
         public const int FontValue = UITheme.FontSmall;      // currency and reward values

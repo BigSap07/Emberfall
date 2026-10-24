@@ -142,13 +142,16 @@ namespace Emberfall.UI.Screens
         private const float CardInner = 22f;
 
         /// <summary>
-        /// Where the card's content starts, measured from its top edge.
-        ///
-        /// The ribbon STRADDLES that edge - half of it hangs above the card - so the first row
-        /// inside has to clear the half that hangs BELOW, not the whole ribbon. The first capture
-        /// of this card cleared neither, and put the cleared-count across the ribbon's own text.
+        /// The card's first row: the chapter name on the left, the cleared count on the right, both
+        /// inside the plate (R51 - the ribbon that used to straddle the top edge is gone). Rows under
+        /// it are placed from the title row's bottom edge.
         /// </summary>
-        private const float CardContentTop = Emberforge.RibbonHeight * 0.5f + Emberforge.Space8;
+        private const float CardTitleTop = 16f;
+        private const float CardTitleHeight = 40f;
+        private const float CardCountWidth = 220f;
+        private const float CardBarTop = CardTitleTop + CardTitleHeight + Emberforge.Space8;
+        private const float CardBarHeight = 22f;
+        private const float CardSubTop = CardBarTop + CardBarHeight + 6f;
 
         /// <summary>
         /// Deliberately NOT static, and deliberately not cached between builds. It was a static
@@ -403,33 +406,40 @@ namespace Emberfall.UI.Screens
             RectTransform card = UIBuilder.Node("Campaign", _hud);
             UIBuilder.Box(card, -HubStyle.HudEdge, HubStyle.NavBarHeight + Emberforge.Space16,
                           CardWidth, CardHeight, new Vector2(1f, 0f));
-            EmberforgeUI.PanelOn(card, true);
+            // R51: the card is the Hub's one focal point, so it is the FLAT plate (the kit's lightest
+            // surface: a translucent warm fill and a thin gold edge) and not the framed panel with
+            // corner diamonds and a red ribbon. Three loud things in one corner (gold frame, red
+            // ribbon, orange button) left the button as one of three; now it is the only saturated one.
+            EmberforgeUI.MarkerPlateOn(card);
 
-            // The ribbon straddles the card's top edge and overhangs it on both sides, which is
-            // what makes the card read as a labelled object rather than as a box with a heading
-            // inside it. It takes the chapter name, because that is what this card is ABOUT; the
-            // count and the progress belong to the rows under it.
-            //
-            // Its BODY is the card's width less the padding, so the two tails reach out to about
-            // the card's own edges rather than past them. It was 0.62 of the width, and the first
-            // capture showed the title running out of both ends of a ribbon too short to hold it.
-            _chapterLabel = EmberforgeUI.TitleRibbon("Chapter", card, "",
-                                                     CardWidth - Emberforge.Space32 * 2f);
+            // The chapter name is a gold title on the card's first row, level with the count, in
+            // place of the ribbon. Best fit down to the size the ribbon used, so a long chapter name
+            // shrinks to one line exactly as it did before and nothing gets smaller than it was.
+            _chapterLabel = EmberforgeUI.Title("Chapter", card, "", UITheme.FontSmall,
+                                               Emberforge.TextGold, TextAnchor.MiddleLeft);
+            UIBuilder.Box(_chapterLabel.rectTransform, CardInner, -CardTitleTop,
+                          CardWidth - CardInner * 2f - CardCountWidth, CardTitleHeight, new Vector2(0f, 1f));
+            UIBuilder.Outlined(_chapterLabel, Emberforge.Outline, Emberforge.StrokeThin);
+            _chapterLabel.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _chapterLabel.verticalOverflow = VerticalWrapMode.Truncate;
+            _chapterLabel.resizeTextForBestFit = true;
+            _chapterLabel.resizeTextMinSize = UITheme.FontTiny - 4;
+            _chapterLabel.resizeTextMaxSize = UITheme.FontSmall;
 
             _chapterCount = EmberforgeUI.Label("Count", card, "", HubStyle.FontSecondary,
-                                               Emberforge.TextGold, TextAnchor.UpperRight);
-            UIBuilder.Box(_chapterCount.rectTransform, -CardInner, -CardContentTop, 280f, 28f,
+                                               Emberforge.TextGold, TextAnchor.MiddleRight);
+            UIBuilder.Box(_chapterCount.rectTransform, -CardInner, -CardTitleTop, CardCountWidth, CardTitleHeight,
                           new Vector2(1f, 1f));
             UIBuilder.Outlined(_chapterCount, Emberforge.Outline, Emberforge.StrokeThin);
 
             _chapterFill = EmberforgeUI.ProgressBar("Bar", card);
             RectTransform barRoot = _chapterFill.rectTransform.parent as RectTransform;
-            UIBuilder.Box(barRoot, 0f, -(CardContentTop + 32f), CardWidth - CardInner * 2f, 22f,
+            UIBuilder.Box(barRoot, 0f, -CardBarTop, CardWidth - CardInner * 2f, CardBarHeight,
                           new Vector2(0.5f, 1f));
 
             _continueSub = EmberforgeUI.Label("Sub", card, "", HubStyle.FontCaption,
                                               Emberforge.TextBody, TextAnchor.UpperCenter);
-            UIBuilder.Box(_continueSub.rectTransform, 0f, -(CardContentTop + 60f),
+            UIBuilder.Box(_continueSub.rectTransform, 0f, -CardSubTop,
                           CardWidth - CardInner * 2f, 26f, new Vector2(0.5f, 1f));
             UIBuilder.Outlined(_continueSub, Emberforge.Outline, Emberforge.StrokeThin);
 
@@ -438,11 +448,9 @@ namespace Emberfall.UI.Screens
             // action of that layer - so at any moment there is exactly one orange thing to press.
             _continueButton = EmberforgeUI.Button("Continue", card, "CONTINUE CAMPAIGN",
                                                   HubStyle.FontButton, ForgeButtonKind.Primary);
-            // Inset by the ornament's clearance rather than by the card's own padding: at
-            // CardInner the button's lower corners land exactly on the two bottom corner diamonds
-            // and print over them - see Emberforge.OrnamentClearance.
+            // The flat plate has no corner ornaments to clear, so the card's own padding is the inset.
             UIBuilder.Box(_continueButton.Root, 0f, CardInner,
-                          CardWidth - Emberforge.OrnamentClearance * 2f,
+                          CardWidth - CardInner * 2f,
                           HubStyle.TouchMin, new Vector2(0.5f, 0f));
             _continueButton.OnClick(Gated("hub.card.Campaign", OpenCampaign));
         }
@@ -456,9 +464,13 @@ namespace Emberfall.UI.Screens
         private void BuildIdleChest()
         {
             _chest = HudWidgets.ChestButton("IdleChest", _hud, Gated("hub.chest", OpenClaim));
-            UIBuilder.Box(_chest.Root, -(HubStyle.HudEdge + CardWidth + Emberforge.Space16),
-                          HubStyle.NavBarHeight + Emberforge.Space16,
-                          HubStyle.ChestSize, HubStyle.ChestSize, new Vector2(1f, 0f));
+            // R51: the chest joins the bottom row, level with the nav discs and just left of them,
+            // instead of floating in the plaza beside the card. Its bubble still hangs above it.
+            float navWidth = HubStyle.NavCellWidth * 5f + HubStyle.NavCellGap * 4f;
+            float discCentre = HubStyle.NavBottomMargin + HubStyle.NavCellHeight - HubStyle.NavIcon * 0.5f;
+            UIBuilder.Box(_chest.Root, -(navWidth * 0.5f + HubStyle.NavCellGap + HubStyle.ChestSize * 0.5f),
+                          discCentre - HubStyle.ChestSize * 0.5f,
+                          HubStyle.ChestSize, HubStyle.ChestSize, new Vector2(0.5f, 0f));
         }
 
         /// <summary>
@@ -481,6 +493,7 @@ namespace Emberfall.UI.Screens
                                                    TextureLab.Heart(64), HubStyle.LabelText,
                                                    Gated("hub.rail.Friends", OpenFriends));
             Place(_friendsButton.Root, top);
+            Recede(_friendsButton);
             // On the disc rather than its larger hit rect, so the padlock and the one-time dot sit
             // on the art the way the pending-work badge does.
             FeatureLockView.Attach(_friendsButton.Disc.rectTransform, "hub.rail.Friends", null,
@@ -497,6 +510,7 @@ namespace Emberfall.UI.Screens
                                                   TextureLab.Sigil(8, 64), UITheme.Success,
                                                   OpenEvents);
             Place(_eventsButton.Root, top + step * 2f);
+            Recede(_eventsButton);
             // A caption under the disc, in the Store door's own style, so the door reads as Events and not as one more icon.
             Text eventsCaption = EmberforgeUI.Label("EventsCaption", _eventsButton.Root, "EVENTS", UITheme.FontTiny - 6,
                                                     Emberforge.TextGold, TextAnchor.LowerCenter);
@@ -518,6 +532,7 @@ namespace Emberfall.UI.Screens
                 _storeButton = HudWidgets.RailButton("Store", _hud, HudSkin.IconStore, TextureLab.CoinIcon(64),
                                                      UITheme.Gold, OpenStore);
                 Place(_storeButton.Root, top + step * slot);
+                Recede(_storeButton);
                 Text caption = EmberforgeUI.Label("StoreCaption", _storeButton.Root, "STORE", UITheme.FontTiny - 6,
                                                   Emberforge.TextGold, TextAnchor.LowerCenter);
                 UIBuilder.Box(caption.rectTransform, 0f, -2f, HubStyle.TouchMin, 22f, new Vector2(0.5f, 0f));
@@ -532,6 +547,7 @@ namespace Emberfall.UI.Screens
                 _ordersButton = HudWidgets.RailButton("Orders", _hud, HudSkin.IconOrders, TextureLab.Check(64),
                                                       Emberforge.TextGold, OpenOrders);
                 Place(_ordersButton.Root, top + step * slot);
+                Recede(_ordersButton);
                 slot++;
                 RefreshOrdersBadge();
             }
@@ -541,6 +557,25 @@ namespace Emberfall.UI.Screens
                                                     OpenOverflow);
             _overflowButtonTop = top + step * slot;
             Place(more.Root, _overflowButtonTop);
+            Recede(more);
+        }
+
+        /// <summary>R51: a rail door is the Hub's third tier, so its plate and glyph sit at
+        /// HubStyle.RailAlpha. The dot and the caption are separate graphics and stay full strength.</summary>
+        private static void Recede(HudElement element)
+        {
+            if (element.Disc != null)
+            {
+                Color c = element.Disc.color;
+                c.a *= HubStyle.RailAlpha;
+                element.Disc.color = c;
+            }
+            if (element.Glyph != null)
+            {
+                Color c = element.Glyph.color;
+                c.a *= HubStyle.RailAlpha;
+                element.Glyph.color = c;
+            }
         }
 
         /// <summary>One rail slot. The edge it hangs off is HubStyle.RailOnRightEdge's to decide,

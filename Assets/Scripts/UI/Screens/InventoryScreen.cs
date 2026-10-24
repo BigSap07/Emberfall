@@ -100,9 +100,12 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
-            EmberforgeUI.Ground(Root);
+            // R51: the Hub plate instead of the kit brown, a plain gold title instead of the red
+            // ribbon, so the rarity plates in the grid are the loudest colour on the page and the
+            // one orange thing is EQUIP.
+            EmberforgeUI.Ground(Root, HubStyle.Plate);
 
-            ScreenChrome.ForgedHeader(Root, "INVENTORY", Router, out _headerSubtitle);
+            ScreenChrome.ForgedHeader(Root, "INVENTORY", Router, false, true, out _headerSubtitle);
 
             float top = ScreenChrome.HeaderTop + 108f + UITheme.Space16;
             BuildRail(top);
@@ -117,9 +120,8 @@ namespace Emberfall.UI.Screens
             _rail = UIBuilder.Node("Rail", Root);
             UIBuilder.Box(_rail, UITheme.ScreenPadding, -top, RailWidth, 8f * 82f + 8f, new Vector2(0f, 1f));
 
-            Image bg = EmberforgeUI.SunkenOn(_rail);
-            bg.raycastTarget = false;
-
+            // R51: no trough behind the tabs. Eight gold-framed tabs inside a framed recess was two
+            // frames for one row; the open tab is now the only one at full strength.
             AddRailButton(0, TextureLab.Chest(64), "ALL");
             AddRailButton(1, TextureLab.Sigil(13, 64), "RELIC");
             for (int i = 0; i < ArmorInfo.AllSlots.Length; i++)
@@ -157,6 +159,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
 
             _railButtons.Add(tab);
+            tab.Root.gameObject.AddComponent<CanvasGroup>();
 
             // Relics open at their own row of the unlock table, later than armor and this page.
             if (index == RelicFilter)
@@ -164,13 +167,19 @@ namespace Emberfall.UI.Screens
                                        FeatureLockView.TagSide.Right);
         }
 
+        /// <summary>R51: how much of its strength a tab keeps while it is not the open one.</summary>
+        private const float InactiveTabAlpha = 0.62f;
+
+        /// <summary>Gap between the bottom of the grid and detail panel and the bottom of the canvas.</summary>
+        private const float BottomMargin = UITheme.Space24;
+
         /// <summary>The rail index of the RELIC tab.</summary>
         private const int RelicFilter = 1;
 
         private void BuildGrid(float top)
         {
             _gridHeading = EmberforgeUI.Title("GridHeading", Root, "", UITheme.FontTiny,
-                                              Emberforge.TextGold, TextAnchor.UpperLeft);
+                                              Emberforge.TextQuiet, TextAnchor.UpperLeft);
             // Centred on the grid with left-aligned TEXT, not anchored to the parent's left edge.
             // Box's anchor is also its pivot, so a (0,1) anchor measures x from the canvas edge -
             // which put this heading at x=-1708, off screen and through the rail.
@@ -183,16 +192,30 @@ namespace Emberfall.UI.Screens
                                          new Vector2(CardSize, CardSize),
                                          new Vector2(UITheme.Space16, UITheme.Space16), 7,
                                          new RectOffset(10, 10, 10, 10));
-            UIBuilder.Box(scroll.GetComponent<RectTransform>(), GridX, -(top + 32f), GridWidth, 604f,
-                          new Vector2(0.5f, 1f));
+            // R51: stretched down to the bottom margin instead of a fixed 604, so the lower third of
+            // the canvas is the grid's and not an empty band. The canvas is not a fixed 1080 tall
+            // (the scaler matches half width, half height), so this is anchors and not a height.
+            RectTransform gridRect = scroll.GetComponent<RectTransform>();
+            UIBuilder.Box(gridRect, GridX, -(top + 32f), GridWidth, 604f, new Vector2(0.5f, 1f));
+            gridRect.anchorMin = new Vector2(0.5f, 0f);
+            gridRect.anchorMax = new Vector2(0.5f, 1f);
+            gridRect.offsetMin = new Vector2(GridX - GridWidth * 0.5f, BottomMargin);
+            gridRect.offsetMax = new Vector2(GridX + GridWidth * 0.5f, -(top + 32f));
         }
 
         private void BuildDetail(float top)
         {
             _detail = UIBuilder.Node("Detail", Root);
             UIBuilder.Box(_detail, -UITheme.ScreenPadding, -top, DetailWidth, 636f, new Vector2(1f, 1f));
+            // Stretched to the bottom margin like the grid; EQUIP is anchored to the panel's bottom
+            // edge, so it follows.
+            _detail.anchorMin = new Vector2(1f, 0f);
+            _detail.anchorMax = new Vector2(1f, 1f);
+            _detail.offsetMin = new Vector2(-UITheme.ScreenPadding - DetailWidth, BottomMargin);
+            _detail.offsetMax = new Vector2(-UITheme.ScreenPadding, -top);
 
-            Image bg = EmberforgeUI.PanelOn(_detail, true);
+            // R51: the plain panel, no corner diamonds. The grid's tiles are what this screen is about.
+            Image bg = EmberforgeUI.PlainPanelOn(_detail);
             bg.raycastTarget = false;
         }
 
@@ -625,6 +648,8 @@ namespace Emberfall.UI.Screens
             {
                 bool active = i == _filter;
                 EmberforgeUI.SetTabSelected(_railButtons[i], active);
+                CanvasGroup tabGroup = _railButtons[i].Root.GetComponent<CanvasGroup>();
+                if (tabGroup != null) tabGroup.alpha = active ? 1f : InactiveTabAlpha;
                 Transform glyph = _railButtons[i].Root.Find("Glyph");
                 if (glyph != null)
                     ItemCard.RailGlyph(glyph.GetComponent<Image>(), active);
@@ -850,8 +875,8 @@ namespace Emberfall.UI.Screens
                           DetailWidth - textLeft - UITheme.Space24, 26f, new Vector2(0f, 1f));
             UIBuilder.Outlined(rungLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
-            // The tier row, bracketed by rule lines exactly as the mockup draws it.
-            Rule(textLeft, top + 98f, DetailWidth - textLeft - UITheme.Space24);
+            // The tier row. R51: the two gold rule lines that bracketed it are gone; the tile
+            // already carries the same pips and the tier name sits right above.
             RectTransform pipRow = UIBuilder.Node("Pips", _detail);
             UIBuilder.Box(pipRow, textLeft, -(top + 104f), 220f, 30f, new Vector2(0f, 1f));
             for (int i = 0; i < maxPips; i++)
@@ -860,7 +885,6 @@ namespace Emberfall.UI.Screens
                                           i < pips ? tint : Emberforge.TextQuiet);
                 UIBuilder.Box(pip.rectTransform, 13f + i * 34f, 0f, 24f, 24f, new Vector2(0f, 0.5f));
             }
-            Rule(textLeft, top + 140f, DetailWidth - textLeft - UITheme.Space24);
 
             return top + 168f;
         }

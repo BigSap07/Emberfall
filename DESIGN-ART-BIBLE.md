@@ -160,9 +160,31 @@ Teal is the quiet second voice.
 
 ## One focal point per screen
 
-TODO, not yet done: one focal point per screen, secondary surfaces quieter than the primary. Several screens
-still show many surfaces at the same weight. The tile run only fixed the clutter inside the tile and wrote
-the rules above. A pass over the busy screens is a separate piece of work.
+Rule: every screen has one focal point, the one thing the player is meant to do or look at first. Ember orange
+marks it, secondary surfaces are quieter than the primary, and a surface that is neither is demoted by weight,
+not removed. The rule is tested on two screens so far, the Hub and the Inventory. The other screens still show
+many surfaces at the same weight and have not had the pass.
+
+What was tested, and the counts reached:
+
+- Hub: the focal point is the Continue Campaign button on the campaign card. Visible groups went from 8 to 6.
+  The card lost its gold panel, corner diamonds and red ribbon, so the orange button is the only saturated
+  control on the screen. The idle chest joined the bottom navigation row, and the left rail (Friends, Events,
+  Store, Orders, More) is drawn at lower strength than the bottom navigation.
+- Inventory: the focal point is the selected item and its Equip button. Visible groups went from 8 to 6. The
+  ground is the Hub's neutral plate instead of the kit brown, the title is plain gold type instead of the red
+  ribbon, the category rail has no trough and the tabs that are not open are dimmed, and the detail panel has
+  no corner diamonds and no rule lines. The rarity plates in the grid are the loudest colour on the page and
+  Equip is the one orange control.
+
+On both screens the existing rules above were applied as written: gold marks an edge, ember orange is the one
+thing to press, teal is the quiet second voice. Nothing was removed, anything made quieter is still one tap
+away, and no text went below the smallest size already on that screen.
+
+Colour spread measured by a script (share of pixels in the three biggest colour clusters, count of hue bands
+over 3 percent) barely moved on either screen, so it does not show the hierarchy and is not a pass criterion.
+The judgement rests on the captures. Phone size, touch targets, colour vision, motion and sound have not been
+checked. Quartermaster, Forge, Hero Detail and Campaign are not yet done.
 
 ---
 

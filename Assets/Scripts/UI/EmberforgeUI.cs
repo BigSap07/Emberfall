@@ -189,7 +189,15 @@ namespace Emberfall.UI
         /// </summary>
         public static Image Ground(RectTransform root)
         {
-            Image ground = UIBuilder.Img("Ground", root, TextureLab.White, Emberforge.PanelLow);
+            return Ground(root, Emberforge.PanelLow);
+        }
+
+        /// <summary>The same ground in a colour the screen chooses (R51: the Inventory sits on the
+        /// Hub plate so the rarity colours are the loudest thing on it). The one-argument call keeps
+        /// the kit brown, so no other screen changes.</summary>
+        public static Image Ground(RectTransform root, Color color)
+        {
+            Image ground = UIBuilder.Img("Ground", root, TextureLab.White, color);
             UIBuilder.FillParent(ground.rectTransform, 0f);
             ground.raycastTarget = false;
             ground.rectTransform.SetAsFirstSibling();

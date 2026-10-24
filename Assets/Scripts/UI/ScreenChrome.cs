@@ -45,6 +45,18 @@ namespace Emberfall.UI
         public static RectTransform ForgedHeader(RectTransform root, string title, ScreenRouter router,
                                                  bool home, out Text subtitle)
         {
+            return ForgedHeader(root, title, router, home, false, out subtitle);
+        }
+
+        /// <summary>
+        /// The header with quiet set draws the title as plain gold type in the ribbon's own rect, and
+        /// the subtitle in the quiet text tone (R51). Same rect, same height, same subtitle line, so a
+        /// body measured against the header does not move. Only a screen that passes true changes;
+        /// every other call keeps the red ribbon.
+        /// </summary>
+        public static RectTransform ForgedHeader(RectTransform root, string title, ScreenRouter router,
+                                                 bool home, bool quiet, out Text subtitle)
+        {
             RectTransform header = UIBuilder.Node("Header", root);
             UIBuilder.TopStrip(header, 108f, HeaderTop, UITheme.ScreenPadding);
 
@@ -54,13 +66,25 @@ namespace Emberfall.UI
                 : CornerDisc("Back", header, "<", UITheme.FontHeading, capturedRouter.Back);
             UIBuilder.Box(back.Root, 0f, 0f, HubStyle.TouchMin, HubStyle.TouchMin, new Vector2(0f, 0.5f));
 
-            Text titleLabel = EmberforgeUI.TitleRibbon("Title", header, title, 640f);
-            UIBuilder.Box(titleLabel.rectTransform.parent as RectTransform, 0f, 0f,
-                          640f + Emberforge.RibbonOverhang * 2f, Emberforge.RibbonHeight,
-                          new Vector2(0.5f, 1f));
+            if (quiet)
+            {
+                Text plain = EmberforgeUI.Title("Title", header, title, UITheme.FontHeading,
+                                                Emberforge.TextGold, TextAnchor.MiddleCenter);
+                UIBuilder.Box(plain.rectTransform, 0f, 0f, 640f, Emberforge.RibbonHeight,
+                              new Vector2(0.5f, 1f));
+                UIBuilder.Outlined(plain, Emberforge.Outline, Emberforge.StrokeThin);
+            }
+            else
+            {
+                Text titleLabel = EmberforgeUI.TitleRibbon("Title", header, title, 640f);
+                UIBuilder.Box(titleLabel.rectTransform.parent as RectTransform, 0f, 0f,
+                              640f + Emberforge.RibbonOverhang * 2f, Emberforge.RibbonHeight,
+                              new Vector2(0.5f, 1f));
+            }
 
             subtitle = EmberforgeUI.Label("Subtitle", header, "", UITheme.FontTiny,
-                                          Emberforge.TextGold, TextAnchor.UpperCenter);
+                                          quiet ? Emberforge.TextQuiet : Emberforge.TextGold,
+                                          TextAnchor.UpperCenter);
             UIBuilder.Box(subtitle.rectTransform, 0f, -(Emberforge.RibbonHeight + Emberforge.Space8),
                           860f, 30f, new Vector2(0.5f, 1f));
             UIBuilder.Outlined(subtitle, Emberforge.Outline, Emberforge.StrokeThin);
