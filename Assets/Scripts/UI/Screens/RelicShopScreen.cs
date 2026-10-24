@@ -273,22 +273,13 @@ namespace Emberfall.UI.Screens
 
             // ---- icon tile
             const float tile = 178f;
-            RectTransform iconTile = UIBuilder.Node("Tile", card);
+            // The same tile the Inventory draws for this relic (R47): grade plate, the relic's own icon
+            // (the kit's painted one, else the Sigil keyed off the relic id), pips for the tier. A relic
+            // not yet owned is shown at tier 1, which is what buying it gives.
+            int shownTier = owned ? view.Tier : 1;
+            RectTransform iconTile = ItemTile.ForRelic("Tile", card, tile, relic, shownTier, view.MaxTier, false);
             UIBuilder.Box(iconTile, 0f, -top, tile, tile, new Vector2(0.5f, 1f));
-
-            Image tileBg = EmberforgeUI.SunkenOn(iconTile);
-            tileBg.raycastTarget = false;
-
-            // The relic's own mark. Sigil is the project's existing emblem set, indexed off the
-            // relic id's hash so a given relic always draws the same mark - stable between sessions
-            // and between here and anywhere else that wants to draw it later.
-            // With the UI kit on, the relic's own icon (painted in colour: white, larger, dimmed when owned).
-            Sprite kitRelic = UiKit.Relic(relic.Id);
-            Image mark = UIBuilder.Img("Mark", iconTile, kitRelic != null ? kitRelic : TextureLab.Sigil(SigilFor(index), 128),
-                                       kitRelic != null ? new Color(1f, 1f, 1f, owned ? 0.7f : 1f)
-                                                        : UITheme.WithAlpha(grade, owned ? 0.55f : 0.9f));
-            float markSize = kitRelic != null ? tile * 0.82f : tile * 0.58f;
-            UIBuilder.Box(mark.rectTransform, 0f, 0f, markSize, markSize, new Vector2(0.5f, 0.5f));
+            if (owned) iconTile.gameObject.AddComponent<CanvasGroup>().alpha = 0.7f;
 
             top += tile + UITheme.Space12;
 
@@ -361,29 +352,6 @@ namespace Emberfall.UI.Screens
                 RelicDef captured = relic;
                 buy.OnClick(delegate { OnBuy(captured); });
             }
-        }
-
-        /// <summary>
-        /// PLACEHOLDER relic marks, until relics have art of their own.
-        ///
-        /// Ten emblems for ten relics, hand-picked out of TextureLab's fourteen after rendering the
-        /// set and looking at it. Four are dropped: 2 and 7 are soft blobs, 10 is a golem's filled
-        /// square, and 11 is a row of diamonds that reads as a repeating pattern rather than a mark.
-        ///
-        /// Assigned BY POSITION, not by hashing the relic id. Hashing was the first attempt and it
-        /// is the more obviously "correct" choice - stable across content edits - but with ten ids
-        /// falling into thirteen buckets it put the same emblem on three of the five relics on page
-        /// one, which is the one thing a per-relic mark must not do. Position guarantees every relic
-        /// on a shelf has a distinct mark. The cost is that inserting a relic mid-list shifts the
-        /// marks after it, which is cosmetic drift on placeholder art and is the cheaper problem.
-        ///
-        /// None of this survives real relic icons, and none of it should.
-        /// </summary>
-        private static readonly int[] RelicSigils = { 0, 1, 3, 4, 5, 6, 8, 9, 12, 13 };
-
-        private static int SigilFor(int index)
-        {
-            return RelicSigils[Mathf.Abs(index) % RelicSigils.Length];
         }
 
         // ------------------------------------------------------------------ actions

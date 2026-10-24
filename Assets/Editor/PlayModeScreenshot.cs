@@ -2215,6 +2215,9 @@ namespace Emberfall.EditorTools
             // stage can be photographed with its chest on the result. Same pump, same name below.
             bool chestResult = name == "ChestResult";
             if (chestResult) name = "Result";
+            // R47: ResultArmorDrop is Result with the armor drop row put on the spoils list, so the tile on the debrief can be seen.
+            bool dropResult = name == "ResultArmorDrop";
+            if (dropResult) name = "Result";
             int showAt = 10 + slot * Step;
             int shotAt = showAt + Settle;
 
@@ -2770,8 +2773,9 @@ namespace Emberfall.EditorTools
                     return;
                 }
 
+                if (dropResult && frame == armed + BattlePaintDelay - 8) screen.ShowArmorDropForCapture();
                 if (frame == armed + BattlePaintDelay - 5) Canvas.ForceUpdateCanvases();
-                if (frame == armed + BattlePaintDelay) Shoot(name, frame, slot);
+                if (frame == armed + BattlePaintDelay) Shoot(dropResult ? "ResultArmorDrop" : name, frame, slot);
                 return;
             }
 

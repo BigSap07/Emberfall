@@ -312,7 +312,9 @@ namespace Emberfall.UI.Screens
                 ArmorPiece piece = pool[i];
                 RectTransform cell = UIBuilder.Node("Tray_" + piece.Uid, _tray);
 
-                RectTransform card = ItemCard.ForArmor("Card", cell, TraySize, piece);
+                // a worn piece carries the tile's own worn mark, in its fixed spot
+                bool isWorn = App.Session.Profile.HeroWearingArmor(piece.Uid) != null;
+                RectTransform card = ItemTile.ForArmor("Card", cell, TraySize, piece, isWorn);
                 UIBuilder.FillParent(card, 0f);
 
                 // The selected piece is lifted rather than recoloured: recolouring would fight the
@@ -323,12 +325,6 @@ namespace Emberfall.UI.Screens
                                                UITheme.WithAlpha(UITheme.Gold, 0.30f));
                     UIBuilder.FillParent(halo.rectTransform, -12f);
                     halo.rectTransform.SetAsFirstSibling();
-                }
-
-                if (App.Session.Profile.HeroWearingArmor(piece.Uid) != null)
-                {
-                    Image worn = UiKit.CheckImage("Worn", cell, 32, UITheme.Success);
-                    UIBuilder.Box(worn.rectTransform, -4f, -4f, 20f, 20f, new Vector2(1f, 1f));
                 }
 
                 Button press = cell.gameObject.AddComponent<Button>();

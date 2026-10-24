@@ -234,15 +234,27 @@ namespace Emberfall.UI.Screens
 
             // ---- the mark
             const float tile = 150f;
-            RectTransform iconTile = UIBuilder.Node("Tile", card);
-            UIBuilder.Box(iconTile, 0f, -top, tile, tile, new Vector2(0.5f, 1f));
-            Image tileBg = EmberforgeUI.SunkenOn(iconTile);
-            tileBg.raycastTarget = false;
-
             Color tint = MarkTint(item);
-            Color markTint = UITheme.WithAlpha(tint, soldOut ? 0.5f : 0.95f);
-            Image mark = UIBuilder.Img("Mark", iconTile, MarkSprite(item, ref markTint), markTint);
-            UIBuilder.Box(mark.rectTransform, 0f, 0f, tile * 0.62f, tile * 0.62f, new Vector2(0.5f, 0.5f));
+            RectTransform iconTile;
+            if (item.Kind == SinkKind.Armor)
+            {
+                // armor and weapons are the same tile the Inventory draws for that piece (R47)
+                iconTile = ItemTile.ForSlot("Tile", card, tile, item.Armor.Slot, item.Armor.Temper, item.Armor.Aspect, false);
+                UIBuilder.Box(iconTile, 0f, -top, tile, tile, new Vector2(0.5f, 1f));
+                if (soldOut) iconTile.gameObject.AddComponent<CanvasGroup>().alpha = 0.5f;
+            }
+            else
+            {
+                // Brand, Echo and the hero copy purse are not items: they keep their own art
+                iconTile = UIBuilder.Node("Tile", card);
+                UIBuilder.Box(iconTile, 0f, -top, tile, tile, new Vector2(0.5f, 1f));
+                Image tileBg = EmberforgeUI.SunkenOn(iconTile);
+                tileBg.raycastTarget = false;
+
+                Color markTint = UITheme.WithAlpha(tint, soldOut ? 0.5f : 0.95f);
+                Image mark = UIBuilder.Img("Mark", iconTile, MarkSprite(item, ref markTint), markTint);
+                UIBuilder.Box(mark.rectTransform, 0f, 0f, tile * 0.62f, tile * 0.62f, new Vector2(0.5f, 0.5f));
+            }
 
             top += tile + UITheme.Space8;
 
@@ -341,8 +353,6 @@ namespace Emberfall.UI.Screens
         {
             switch (item.Kind)
             {
-                case SinkKind.Armor:
-                    return UiKit.SetGlyph(item.Armor.Aspect, TextureLab.Sigil((int)item.Armor.Slot * 2 + 1, 128), ref tint);
                 case SinkKind.Brand: return TextureLab.Sigil(3, 128);
                 case SinkKind.Echo: return TextureLab.HourglassIcon(128);
             }

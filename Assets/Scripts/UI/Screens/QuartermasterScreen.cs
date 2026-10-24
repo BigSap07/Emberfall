@@ -118,17 +118,11 @@ namespace Emberfall.UI.Screens
             float top = UITheme.Space12;
             Color tint = Emberforge.Accent(piece.Aspect);
 
-            // ---- the mark
+            // ---- the mark: the same tile the Inventory draws for this piece (R47)
             const float tile = 120f;
-            RectTransform iconTile = UIBuilder.Node("Tile", card);
+            RectTransform iconTile = ItemTile.ForSlot("Tile", card, tile, piece.Slot, piece.Temper, piece.Aspect, false);
             UIBuilder.Box(iconTile, 0f, -top, tile, tile, new Vector2(0.5f, 1f));
-            Image tileBg = EmberforgeUI.SunkenOn(iconTile);
-            tileBg.raycastTarget = false;
-            Color markTint = UITheme.WithAlpha(tint, sold ? 0.5f : 0.95f);
-            Image mark = UIBuilder.Img("Mark", iconTile,
-                                       UiKit.SetGlyph(piece.Aspect, TextureLab.Sigil((int)piece.Slot * 2 + 1, 128), ref markTint),
-                                       markTint);
-            UIBuilder.Box(mark.rectTransform, 0f, 0f, tile * 0.62f, tile * 0.62f, new Vector2(0.5f, 0.5f));
+            if (sold) iconTile.gameObject.AddComponent<CanvasGroup>().alpha = 0.5f;
             top += tile + UITheme.Space8;
 
             // ---- name and the chip under it

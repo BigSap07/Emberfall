@@ -790,6 +790,12 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(card, 0f, -16f, 76f, 76f, TopCentre);
             Color temper = UITheme.ArmorTemperColor(piece.Temper);
             TileText(tile, piece.Name, ArmorInfo.TemperLabel(piece.Temper).ToUpperInvariant(), temper);
+
+            // A piece's name is longer than a currency amount, so it gets a margin inside the card and may
+            // shrink further (R47: the name touched both card edges).
+            Text name = tile.Find("Amount").GetComponent<Text>();
+            UIBuilder.Box(name.rectTransform, 0f, -96f, TileSize - Emberforge.Space16 * 2f, 40f, TopCentre);
+            UIBuilder.BestFit(name, 10, UITheme.FontTiny);
             return tile;
         }
 

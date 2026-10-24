@@ -160,6 +160,24 @@ namespace Emberfall.DevHarness
             // The plate colours live in ONE place: no hex literal for a tier in the tile or in the theme's tier function.
             Check(!Regex.IsMatch(tile, "Hex\\(\"[0-9A-Fa-f]{6}\"\\)"),
                   "ITEM TILE: the tile defines no colour of its own, the palette is the only table");
+
+            // R47 phase 2: every screen that draws an item goes through the tile; the old odd icon paths are gone.
+            string screens = Path.Combine(ui, "Screens");
+            string qm = File.ReadAllText(Path.Combine(screens, "QuartermasterScreen.cs"));
+            string sink = File.ReadAllText(Path.Combine(screens, "SinkShopScreen.cs"));
+            string relicShop = File.ReadAllText(Path.Combine(screens, "RelicShopScreen.cs"));
+            string battle = File.ReadAllText(Path.Combine(screens, "BattleScreen.cs"));
+            string inv = File.ReadAllText(Path.Combine(screens, "InventoryScreen.cs"));
+            Check(qm.Contains("ItemTile.ForSlot") && !qm.Contains("UiKit.SetGlyph"),
+                  "ITEM TILE: the Quartermaster offers draw the shared tile, not an aspect glyph");
+            Check(sink.Contains("ItemTile.ForSlot") && !sink.Contains("UiKit.SetGlyph"),
+                  "ITEM TILE: the Armory and Archive armor rows draw the shared tile, not an aspect glyph");
+            Check(relicShop.Contains("ItemTile.ForRelic") && !relicShop.Contains("SigilFor"),
+                  "ITEM TILE: the relic shop draws the shared relic tile");
+            Check(battle.Contains("ItemTile.ForArmor"),
+                  "ITEM TILE: the battle debrief armor drop draws the shared tile");
+            Check(inv.Contains("ItemTile.ForArmor") && inv.Contains("ItemTile.ForRelic") && !inv.Contains("MarkWorn"),
+                  "ITEM TILE: the Inventory worn mark is the tile's own, in its fixed spot");
         }
 
         private static double Grey(int rgb)

@@ -755,11 +755,11 @@ namespace Emberfall.UI.Screens
             string key = "R:" + owned.RelicId;
             RectTransform cell = MakeCell(key);
 
-            RectTransform card = ItemCard.ForRelic("Card", cell, CardSize, def,
-                                                   owned.Tier, App.Session.RelicMaxTier);
+            bool worn = App.Session.Profile.HeroHoldingRelic(owned.RelicId) != null;
+            RectTransform card = ItemTile.ForRelic("Card", cell, CardSize, def,
+                                                   owned.Tier, App.Session.RelicMaxTier, worn);
             UIBuilder.FillParent(card, 0f);
 
-            if (App.Session.Profile.HeroHoldingRelic(owned.RelicId) != null) MarkWorn(cell);
             FinishCell(cell, key);
         }
 
@@ -768,10 +768,10 @@ namespace Emberfall.UI.Screens
             string key = "A:" + piece.Uid;
             RectTransform cell = MakeCell(key);
 
-            RectTransform card = ItemCard.ForArmor("Card", cell, CardSize, piece);
+            bool worn = App.Session.Profile.HeroWearingArmor(piece.Uid) != null;
+            RectTransform card = ItemTile.ForArmor("Card", cell, CardSize, piece, worn);
             UIBuilder.FillParent(card, 0f);
 
-            if (App.Session.Profile.HeroWearingArmor(piece.Uid) != null) MarkWorn(cell);
             FinishCell(cell, key);
         }
 
@@ -784,13 +784,6 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(halo.rectTransform, -14f);
             halo.gameObject.SetActive(key == _selected);
             return cell;
-        }
-
-        /// <summary>A worn item is marked, so the grid says what is already in use.</summary>
-        private static void MarkWorn(RectTransform cell)
-        {
-            Image worn = UiKit.CheckImage("Worn", cell, 32, UITheme.Success);
-            UIBuilder.Box(worn.rectTransform, -6f, -6f, 22f, 22f, new Vector2(1f, 1f));
         }
 
         private void FinishCell(RectTransform cell, string key)

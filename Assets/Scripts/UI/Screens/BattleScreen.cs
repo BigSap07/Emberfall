@@ -3064,10 +3064,51 @@ namespace Emberfall.UI.Screens
             // already gets this right, showing the name with the temper as a chip beside it,
             // so the Debrief was the only place inventing a second title. Label names the kind
             // of reward, value carries the item and its rung in the order the Bag shows them.
-            if (rewards.ArmorDrop != null)
-                AddRewardRow(list, "ARMOR DROP",
-                             rewards.ArmorDrop.Name + "  -  " + ArmorInfo.TemperLabel(rewards.ArmorDrop.Temper).ToUpperInvariant(),
-                             UITheme.ArmorTemperColor(rewards.ArmorDrop.Temper));
+            if (rewards.ArmorDrop != null) AddArmorDropRow(list, rewards.ArmorDrop);
+        }
+
+        /// <summary>For the capture tool only: puts the armor drop row on the spoils list for the first piece the
+        /// profile owns, so the row can be photographed without rolling a drop. Grants and saves nothing.</summary>
+        public void ShowArmorDropForCapture()
+        {
+            if (_rewardList == null)
+            {
+                Debug.LogWarning("BattleScreen: ShowArmorDropForCapture found no spoils list.");
+                return;
+            }
+            ArmorPiece piece;
+            if (App.Session.Profile.OwnedArmor.Count > 0) piece = App.Session.Profile.OwnedArmor[0];
+            else
+            {
+                // The scratch capture profile owns no armor, so the row is shown on a stand-in piece.
+                piece = new ArmorPiece();
+                piece.Name = "Ashen Greatblade";
+                piece.Slot = ArmorSlot.Weapon;
+                piece.Aspect = Aspect.Ember;
+                piece.Temper = ArmorTemper.Gilded;
+            }
+            Debug.Log("BattleScreen: armor drop row added for capture (" + piece.Name + ").");
+            AddArmorDropRow(_rewardList, piece);
+        }
+
+        /// <summary>The armor drop row: the same tile the Inventory draws for this piece, then the text (R47).
+        /// A taller row than the others, because a tile under 50 units cannot carry its marks.</summary>
+        private static void AddArmorDropRow(Transform list, ArmorPiece piece)
+        {
+            const float rowHeight = 64f;
+            const float tileSize = 54f;
+            Text value = Widgets.StatRow("ArmorDrop", list, "ARMOR DROP",
+                                         piece.Name + "  -  " + ArmorInfo.TemperLabel(piece.Temper).ToUpperInvariant(),
+                                         UITheme.ArmorTemperColor(piece.Temper), rowHeight);
+            RectTransform row = (RectTransform)value.rectTransform.parent;
+            RectTransform tile = ItemTile.ForArmor("Tile", row, tileSize, piece, false);
+            UIBuilder.Box(tile, UITheme.Space12, 3f, tileSize, tileSize, new Vector2(0f, 0.5f));
+            Transform label = row.Find("Label");
+            if (label != null)
+            {
+                RectTransform lr = (RectTransform)label;
+                lr.offsetMin = new Vector2(UITheme.Space12 + tileSize + UITheme.Space12, lr.offsetMin.y);
+            }
         }
 
         private void ComputeStats()
