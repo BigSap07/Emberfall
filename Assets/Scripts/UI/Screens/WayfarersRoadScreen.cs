@@ -36,7 +36,8 @@ namespace Emberfall.UI.Screens
         private const float RowTop = SummaryHeight + 12f;
         private const float PaidTop = RowTop + TileHeight + 12f;
         private const float PaidHeight = 104f;
-        private static readonly Color DustPlate = new Color(0.90f, 0.82f, 0.64f, 1f);   // light sand behind the dark dust sack
+        internal static readonly Color DustPlate = new Color(0.90f, 0.82f, 0.64f, 1f);   // light sand behind the dark dust sack
+        internal static readonly Color SlagPlate = new Color(0.78f, 0.72f, 0.64f, 1f);   // R46: warm stone grey behind the near black slag chunk
         private const int PickPerRow = 7;
         private const int PickPerPage = 14;
         private const float PagerCentre = PaidTop + PaidHeight + 6f + 15f;
@@ -246,11 +247,14 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(iconTile, 0f, -52f, icon + 16f, icon + 16f, new Vector2(0.5f, 1f));
             Image bg = EmberforgeUI.SunkenOn(iconTile);
             bg.raycastTarget = false;
-            Color markTint = UITheme.WithAlpha(tint, t.Claimed ? 0.5f : 0.95f);
+            Color markTint = UITheme.WithAlpha(tint, t.Claimed ? 0.7f : 0.95f);   // R46: 0.5 left the claimed hourglass and hero medallion too dim on the tile
             // R45: the kit's dust sack is dark brown and vanished on the dark tile, so it sits on a light plate.
-            if (t.Kind == PassRewardKind.Dust && UiKit.Icon("road_dust") != null)
+            // R46: the slag chunk is near black and weak on the same tile, so it gets one too.
+            Color plateTone = t.Kind == PassRewardKind.Dust && UiKit.Icon("road_dust") != null ? DustPlate
+                            : t.Kind == PassRewardKind.Slag && UiKit.Icon("road_slag") != null ? SlagPlate : Color.clear;
+            if (plateTone.a > 0f)
             {
-                Image plate = UIBuilder.Img("Plate", iconTile, TextureLab.Circle(128), UITheme.WithAlpha(DustPlate, t.Claimed ? 0.5f : 0.92f));
+                Image plate = UIBuilder.Img("Plate", iconTile, TextureLab.Circle(128), UITheme.WithAlpha(plateTone, t.Claimed ? 0.5f : 0.92f));
                 plate.raycastTarget = false;
                 UIBuilder.Box(plate.rectTransform, 0f, 0f, icon + 4f, icon + 4f, new Vector2(0.5f, 0.5f));
             }
@@ -286,10 +290,10 @@ namespace Emberfall.UI.Screens
         {
             switch (kind)
             {
-                case PassRewardKind.Hourglass: return TextureLab.HourglassIcon(128);
+                case PassRewardKind.Hourglass: return UiKit.Glyph("road_idle", TextureLab.HourglassIcon(128), ref tint);
                 case PassRewardKind.Dust: return UiKit.Glyph("road_dust", TextureLab.SpiralIcon(128), ref tint);
-                case PassRewardKind.Slag: return TextureLab.IngotIcon(128);
-                case PassRewardKind.Selector: return UiKit.Glyph("crown", TextureLab.Crown(128), ref tint);
+                case PassRewardKind.Slag: return UiKit.Glyph("road_slag", TextureLab.IngotIcon(128), ref tint);
+                case PassRewardKind.Selector: return UiKit.Glyph("road_hero", TextureLab.Crown(128), ref tint);
             }
             return TextureLab.Sigil(3, 128);
         }
@@ -335,6 +339,14 @@ namespace Emberfall.UI.Screens
             _pickTier = tier;
             _pickPage = 0;
             _chosen = heroId;
+            Rebuild();
+        }
+
+        /// <summary>CAPTURE ONLY: turns to a page (0 based) to photograph the tiles on it. The game never calls this;
+        /// the arrows do the same through TurnPage.</summary>
+        public void PageForCapture(int page)
+        {
+            _page = Mathf.Clamp(page, 0, WayfarersRoadConfig.TierCount / PageSize - 1);
             Rebuild();
         }
 

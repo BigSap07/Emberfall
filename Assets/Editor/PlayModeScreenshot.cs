@@ -398,6 +398,12 @@ namespace Emberfall.EditorTools
         [MenuItem("Emberfall/Capture/R17 sinks/Wayfarer's Road, selector picker", false, 125)]
         public static void CaptureWayfarersRoadPicker() { Begin("Screen:WayfarersRoadPicker"); }
 
+        [MenuItem("Emberfall/Capture/R17 sinks/Wayfarer's Road, second page", false, 126)]
+        public static void CaptureWayfarersRoadPage2() { Begin("Screen:WayfarersRoadPage2"); }
+
+        [MenuItem("Emberfall/Capture/R17 sinks/Wayfarer's Road, second page claimed", false, 127)]
+        public static void CaptureWayfarersRoadPage2Claimed() { Begin("Screen:WayfarersRoadPage2Claimed"); }
+
         // R24 LIVE EVENTS (Docs/DESIGN-STORE.md, the events section): the Events page and the Hub's door.
         [MenuItem("Emberfall/Capture/R24 events/Events, weekly tab", false, 160)]
         public static void CaptureLiveEventsWeekly() { Begin("Screen:LiveEventsWeekly"); }
@@ -2263,6 +2269,8 @@ namespace Emberfall.EditorTools
                     case "RelicShopUpgrade": id = ScreenId.RelicShop; break;
                     case "WayfarersRoad":
                     case "WayfarersRoadPaid":
+                    case "WayfarersRoadPage2":
+                    case "WayfarersRoadPage2Claimed":
                     case "WayfarersRoadPicker": id = ScreenId.WayfarersRoad; break;
                     case "LiveEventsWeekly":
                     case "LiveEventsMonthly":
@@ -2549,6 +2557,8 @@ namespace Emberfall.EditorTools
                 if (name == "StageCard") app.Router.Campaign.SelectStageForCapture(SessionState.GetString(BattleStageKey, ""));
                 if (IsSinksScreen(name)) OpenSinksPicker(app, name);
                 if (name == "WayfarersRoadPicker") OpenRoadPicker(app);
+                if ((name == "WayfarersRoadPage2" || name == "WayfarersRoadPage2Claimed") && app.Router.WayfarersRoad != null)
+                    app.Router.WayfarersRoad.PageForCapture(1);
                 if (IsStoreScreen(name)) OpenStoreView(app, name);
                 if (name == "LiveEventsWeekly" || name == "LiveEventsTrack") ShowLiveSlot(app, LiveEventSlot.Weekly);
                 if (name == "LiveEventsMonthly") ShowLiveSlot(app, LiveEventSlot.Monthly);
@@ -3306,7 +3316,8 @@ namespace Emberfall.EditorTools
         private static bool IsR17SinkScreen(string name)
         {
             return name == "Quartermaster" || name == "QuartermasterBought" || name == "RelicShopUpgrade"
-                || name == "WayfarersRoad" || name == "WayfarersRoadPaid" || name == "WayfarersRoadPicker";
+                || name == "WayfarersRoad" || name == "WayfarersRoadPaid" || name == "WayfarersRoadPicker"
+                || name == "WayfarersRoadPage2" || name == "WayfarersRoadPage2Claimed";
         }
 
         /// <summary>
@@ -3351,7 +3362,8 @@ namespace Emberfall.EditorTools
                     for (int t = 0; t < i; t++) session.UpgradeRelic(relics[i].Id, now);
                 }
             }
-            else if (name == "WayfarersRoad" || name == "WayfarersRoadPaid" || name == "WayfarersRoadPicker")
+            else if (name == "WayfarersRoad" || name == "WayfarersRoadPaid" || name == "WayfarersRoadPicker"
+                     || name == "WayfarersRoadPage2" || name == "WayfarersRoadPage2Claimed")
             {
                 // Mid-season: points through the pass's own call (the daily loop's claims are its only source),
                 // the first six tiers claimed through Claim, Valor and Coda in hand for the buy buttons.
@@ -3359,9 +3371,15 @@ namespace Emberfall.EditorTools
                 PassPaidSwitch.Enabled = name == "WayfarersRoadPaid";
                 profile.Valor = 5000;
                 profile.Coda = 5000;
-                int orders = name == "WayfarersRoadPicker" ? 90 : 50;   // 8 points each, 46 a tier: 720 points is tier 15, 400 is tier 8
+                int orders = name == "WayfarersRoadPicker" || name == "WayfarersRoadPage2" || name == "WayfarersRoadPage2Claimed" ? 90 : 50;   // 8 points each, 46 a tier: 720 points is tier 15, 400 is tier 8
                 for (int i = 0; i < orders; i++) WayfarersRoad.OnClaim(session, PassPointSource.Order, now);
                 for (int t = 1; t <= 6; t++) WayfarersRoad.Claim(session, t, null, now);
+                if (name == "WayfarersRoadPage2Claimed")
+                {
+                    // R46: page two with tiers 11 to 15 claimed too, the selector's claimed tile (the dimmest state of its icon).
+                    List<HeroDef> pool = WayfarersRoad.SelectorHeroes(session, 4);
+                    for (int t = 11; t <= 15; t++) WayfarersRoad.Claim(session, t, t == 15 && pool.Count > 0 ? pool[0].Id : null, now);
+                }
             }
             app.RefreshHud();
             Debug.Log("PlayModeScreenshot: seeded the R17 sinks for " + name);

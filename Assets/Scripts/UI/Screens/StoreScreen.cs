@@ -497,6 +497,15 @@ namespace Emberfall.UI.Screens
             // The kit's own icon for the purse this reward pays (painted in colour, so white, at the same
             // alpha); the flat tinted glyph otherwise.
             Sprite kitMark = KitIconFor(kind);
+            // R46: the road's own dust and slag marks are dark, so on this tile they sit on the same light plate the road uses.
+            Color plateTone = kind == PassRewardKind.Dust && UiKit.Icon("road_dust") != null ? WayfarersRoadScreen.DustPlate
+                            : kind == PassRewardKind.Slag && UiKit.Icon("road_slag") != null ? WayfarersRoadScreen.SlagPlate : Color.clear;
+            if (plateTone.a > 0f)
+            {
+                Image plate = UIBuilder.Img("Plate", tile, TextureLab.Circle(128), UITheme.WithAlpha(plateTone, alpha * 0.92f));
+                plate.raycastTarget = false;
+                UIBuilder.Box(plate.rectTransform, 0f, -(compact ? 6f : 10f), icon + 4f, icon + 4f, new Vector2(0.5f, 1f));
+            }
             Image mark = UIBuilder.Img("Mark", tile, kitMark != null ? kitMark : IconFor(kind),
                                        kitMark != null ? UITheme.WithAlpha(Color.white, alpha) : UITheme.WithAlpha(tint, alpha));
             UIBuilder.Box(mark.rectTransform, 0f, -(compact ? 8f : 12f), icon, icon, new Vector2(0.5f, 1f));
@@ -527,10 +536,10 @@ namespace Emberfall.UI.Screens
         {
             switch (kind)
             {
-                case PassRewardKind.Hourglass: return UiKit.Currency("echo");
-                case PassRewardKind.Dust: return UiKit.Currency("dust");
-                case PassRewardKind.Slag: return UiKit.Currency("slag");
-                case PassRewardKind.Selector: return null;
+                case PassRewardKind.Hourglass: return UiKit.Icon("road_idle") ?? UiKit.Currency("echo");
+                case PassRewardKind.Dust: return UiKit.Icon("road_dust") ?? UiKit.Currency("dust");
+                case PassRewardKind.Slag: return UiKit.Icon("road_slag") ?? UiKit.Currency("slag");
+                case PassRewardKind.Selector: return UiKit.Icon("road_hero");
                 case PassRewardKind.Cosmetic: return null;
             }
             return UiKit.Currency("gold");

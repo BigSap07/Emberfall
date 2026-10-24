@@ -101,7 +101,8 @@ namespace Emberfall.Core.Session
 
         // R44: small glyphs and item marks by the name the call site asks for. Painted in colour, so a call
         // site draws them white; with the kit off none of them is asked for and the old shape is drawn.
-        // The road_* pieces have no reward kind yet (gold, energy, summon, chest, relic): they load, nothing draws them.
+        // The road_* pieces: idle, dust, slag and hero are the four free reward kinds of the Wayfarer's Road. gold, energy,
+        // summon, chest and relic match no reward kind yet: they load, nothing draws them.
         private static readonly Dictionary<string, string> Icons = new Dictionary<string, string>
         {
             { "item_weapon", "items/weapon" },
@@ -132,6 +133,9 @@ namespace Emberfall.Core.Session
             { "road_summon", "road/summon" },
             { "road_chest", "road/chest" },
             { "road_relic", "road/relic" },
+            { "road_idle", "road/idle" },
+            { "road_slag", "road/slag" },
+            { "road_hero", "road/hero" },
         };
 
         // Store offer ids (StoreOffers in the Store) to a card.
