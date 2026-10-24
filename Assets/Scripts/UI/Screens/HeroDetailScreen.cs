@@ -65,7 +65,10 @@ namespace Emberfall.UI.Screens
         private const float PanelTop = 252f;
         private const float ActionBarHeight = 140f;
         private const float PanelBottomGap = 8f;
-        private const float PanelWidth = 920f;
+
+        /// <summary>The panel width to lay content against when its host has no size yet: each panel is 920 at 16:9
+        /// and 16:10, the narrowest canvas, leaves this.</summary>
+        private const float NarrowPanelWidth = 870f;
 
         /// <summary>The shortest logical canvas this game targets - a 20:9 phone, not the 16:9
         /// editor window. Every height on this page is checked against it.</summary>
@@ -75,8 +78,7 @@ namespace Emberfall.UI.Screens
         /// against. At 16:9 the panel is taller than this and the contents simply have air under
         /// them; at 20:9 this is exactly what there is.</summary>
         private const float PanelHeight = ShortestCanvasHeight - PanelTop - ActionBarHeight - PanelBottomGap;
-        private const float LeftX = -480f;
-        private const float RightX = 480f;
+        private const float PanelSideMargin = 20f;   // from the canvas edge, and from the centre line
         private const float SlotSize = 112f;
 
         /// <summary>
@@ -227,7 +229,7 @@ namespace Emberfall.UI.Screens
 
         private void BuildLeftPanel()
         {
-            _left = Panel("Hero", LeftX);
+            _left = Panel("Hero", false);
 
             // THE HERO, AND NO RING ROUND THEM.
             //
@@ -273,7 +275,7 @@ namespace Emberfall.UI.Screens
 
             _attunementLabel = EmberforgeUI.Body("Attunement", _left, "", UITheme.FontTiny - 4,
                                                  Emberforge.TextQuiet, TextAnchor.UpperCenter);
-            UIBuilder.Box(_attunementLabel.rectTransform, 0f, 34f, PanelWidth - 60f, 34f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_attunementLabel.rectTransform, 0f, 34f, NarrowPanelWidth - 60f, 34f, new Vector2(0.5f, 0f));
             UIBuilder.Outlined(_attunementLabel, Emberforge.Outline, Emberforge.StrokeThin);
 
             _slotStatus = EmberforgeUI.Label("SlotStatus", _left, "", UITheme.FontTiny,
@@ -286,7 +288,7 @@ namespace Emberfall.UI.Screens
                 _slotStatus.alignment = TextAnchor.UpperLeft;
                 UIBuilder.Box(_slotStatus.rectTransform, Emberforge.OrnamentClearance + UITheme.Space8, -(UITheme.Space16 + 34f), 400f, 26f, new Vector2(0f, 1f));
             }
-            else UIBuilder.Box(_slotStatus.rectTransform, 0f, 8f, PanelWidth - 60f, 26f, new Vector2(0.5f, 0f));
+            else UIBuilder.Box(_slotStatus.rectTransform, 0f, 8f, NarrowPanelWidth - 60f, 26f, new Vector2(0.5f, 0f));
             UIBuilder.Outlined(_slotStatus, Emberforge.Outline, Emberforge.StrokeThin);
 
             // Teal, because it is the way OUT of this page and into the formation. The one thing
@@ -300,7 +302,7 @@ namespace Emberfall.UI.Screens
 
         private void BuildRightPanel()
         {
-            _right = Panel("Sheet", RightX);
+            _right = Panel("Sheet", true);
 
             float top = PanelTopPad;
 
@@ -349,13 +351,12 @@ namespace Emberfall.UI.Screens
             top += DividerGap;
 
             _statHost = UIBuilder.Node("Stats", _right);
-            UIBuilder.Box(_statHost, 0f, -top, PanelWidth - UITheme.Space48, 6f * RowPitch, new Vector2(0.5f, 1f));
+            StretchTop(_statHost, top, 6f * RowPitch);
 
             top += 6f * RowPitch + SectionGap;
 
             _aspectRow = UIBuilder.Node("Aspects", _right);
-            UIBuilder.Box(_aspectRow, 0f, -top, PanelWidth - UITheme.Space48, AspectRowHeight,
-                          new Vector2(0.5f, 1f));
+            StretchTop(_aspectRow, top, AspectRowHeight);
 
             Image aspectBg = EmberforgeUI.SunkenOn(_aspectRow);
             aspectBg.raycastTarget = false;
@@ -363,8 +364,7 @@ namespace Emberfall.UI.Screens
             top += AspectRowHeight + SectionGap;
 
             _abilityHost = UIBuilder.Node("Abilities", _right);
-            UIBuilder.Box(_abilityHost, 0f, -top, PanelWidth - UITheme.Space48, AbilityCardHeight,
-                          new Vector2(0.5f, 1f));
+            StretchTop(_abilityHost, top, AbilityCardHeight);
 
             // THE ONE CAVEAT, SAID ONCE. Every number on the cards above is the ability's own
             // output: it ignores the target's Defence, the crit roll and the damage variance,
@@ -374,8 +374,7 @@ namespace Emberfall.UI.Screens
             _abilityNote = EmberforgeUI.Label("AbilityNote", _right, AbilityText.Caveat + "  " + AbilityText.TapHint,
                                               UITheme.FontTiny - 6, Emberforge.TextQuiet,
                                               TextAnchor.UpperCenter);
-            UIBuilder.Box(_abilityNote.rectTransform, 0f, -(top + AbilityCardHeight + AbilityNoteGap),
-                          PanelWidth - UITheme.Space48, AbilityNoteHeight, new Vector2(0.5f, 1f));
+            StretchTop(_abilityNote.rectTransform, top + AbilityCardHeight + AbilityNoteGap, AbilityNoteHeight);
             UIBuilder.Outlined(_abilityNote, Emberforge.Outline, Emberforge.StrokeThin);
 
             // Says out loud when this page has outgrown the shortest canvas, for the reason
@@ -389,16 +388,18 @@ namespace Emberfall.UI.Screens
                     + ". It fits at 16:9 and runs under the action bar at 20:9.");
         }
 
-        private RectTransform Panel(string name, float x)
+        private RectTransform Panel(string name, bool right)
         {
             RectTransform panel = UIBuilder.Node(name, Root);
             // Stretched top to bottom rather than Boxed at a fixed height - see the note on
-            // PanelTop. x is still the panel's own centre on a 0.5 horizontal anchor.
-            panel.anchorMin = new Vector2(0.5f, 0f);
-            panel.anchorMax = new Vector2(0.5f, 1f);
+            // PanelTop - and each panel takes its half of the canvas width less the margins, so
+            // the pair is 920 wide each at 16:9 and narrows with a 16:10 canvas instead of
+            // running off both edges.
+            panel.anchorMin = new Vector2(right ? 0.5f : 0f, 0f);
+            panel.anchorMax = new Vector2(right ? 1f : 0.5f, 1f);
             panel.pivot = new Vector2(0.5f, 0.5f);
-            panel.sizeDelta = new Vector2(PanelWidth, -(PanelTop + ActionBarHeight + PanelBottomGap));
-            panel.anchoredPosition = new Vector2(x, (ActionBarHeight + PanelBottomGap - PanelTop) * 0.5f);
+            panel.offsetMin = new Vector2(PanelSideMargin, ActionBarHeight + PanelBottomGap);
+            panel.offsetMax = new Vector2(-PanelSideMargin, -PanelTop);
 
             Image bg = EmberforgeUI.PanelOn(panel, true);
             bg.raycastTarget = false;
@@ -408,8 +409,25 @@ namespace Emberfall.UI.Screens
         private void Divider(float top)
         {
             Image rule = EmberforgeUI.Rule("Rule" + top, _right);
-            UIBuilder.Box(rule.rectTransform, 0f, -top, PanelWidth - UITheme.Space48,
-                          Emberforge.RuleHeight, new Vector2(0.5f, 1f));
+            StretchTop(rule.rectTransform, top, Emberforge.RuleHeight);
+        }
+
+        /// <summary>Pins to the panel's top, the full panel width less the 24 gutter each side, at the given depth.</summary>
+        private static void StretchTop(RectTransform rt, float top, float height)
+        {
+            rt.anchorMin = new Vector2(0f, 1f);
+            rt.anchorMax = new Vector2(1f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
+            rt.offsetMin = new Vector2(UITheme.Space24, 0f);
+            rt.offsetMax = new Vector2(-UITheme.Space24, 0f);
+            rt.sizeDelta = new Vector2(rt.sizeDelta.x, height);
+            rt.anchoredPosition = new Vector2(0f, -top);
+        }
+
+        /// <summary>A stretched host's width, or the narrowest panel's when it has no size yet.</summary>
+        private static float HostWidth(RectTransform host)
+        {
+            return host.rect.width > 100f ? host.rect.width : NarrowPanelWidth - UITheme.Space48;
         }
 
         private void BuildActionBar()
@@ -430,7 +448,7 @@ namespace Emberfall.UI.Screens
 
             _levelUpButton = EmberforgeUI.Button("LevelUp", bar, "LEVEL UP", UITheme.FontHeading,
                                                  ForgeButtonKind.Primary);
-            UIBuilder.Box(_levelUpButton.Root, -190f, 14f, 640f, 88f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_levelUpButton.Root, -170f, 14f, 600f, 88f, new Vector2(0.5f, 0f));
             _levelUpButton.OnClick(delegate { LevelUp(1); });
 
             _levelUpTenButton = EmberforgeUI.Button("LevelUpTen", bar, "x10", UITheme.FontHeading,
@@ -455,7 +473,7 @@ namespace Emberfall.UI.Screens
             // hero the player owns (none, then each in turn); the label says which is worn and what it gives. Hidden
             // for a hero the content has no skin for, so a build with zero skins shows nothing new.
             _skinButton = EmberforgeUI.Button("Skin", bar, "SKIN", UITheme.FontTiny, ForgeButtonKind.Secondary);
-            UIBuilder.Box(_skinButton.Root, -740f, 14f, 420f, 88f, new Vector2(0.5f, 0f));
+            UIBuilder.Box(_skinButton.Root, UITheme.ScreenPadding, 14f, 380f, 88f, new Vector2(0f, 0f));   // on the left edge, clear of LEVEL UP at 16:10
             _skinButton.OnClick(CycleSkin);
 
             _obtainButton = EmberforgeUI.Button("Obtain", bar, "OPEN THE RIFT", UITheme.FontHeading,
@@ -623,7 +641,7 @@ namespace Emberfall.UI.Screens
         {
             for (int i = _aspectRow.childCount - 1; i >= 0; i--) Destroy(_aspectRow.GetChild(i).gameObject);
 
-            float width = PanelWidth - UITheme.Space48;
+            float width = HostWidth(_aspectRow);
             float step = width / 6f;
 
             for (int i = 0; i < 6; i++)
@@ -710,7 +728,7 @@ namespace Emberfall.UI.Screens
             if (abilities.Count == 0) return;
 
             BalanceConfig balance = App.Session.Balance;
-            float width = PanelWidth - UITheme.Space48;
+            float width = HostWidth(_abilityHost);
             float step = width / abilities.Count;
             float cardWidth = Mathf.Min(step - UITheme.Space16, 260f);
 
@@ -1031,10 +1049,10 @@ namespace Emberfall.UI.Screens
 
             RectTransform row = ItemCard.StatBar("Stat" + index, _statHost, icon, tint, ratio, 8, StatBarHeight);
             row.anchorMin = new Vector2(0f, 1f);
-            row.anchorMax = new Vector2(0f, 1f);
+            row.anchorMax = new Vector2(1f, 1f);   // stretched: the value and delta columns keep their 250 on the right
             row.pivot = new Vector2(0f, 1f);
             row.anchoredPosition = new Vector2(0f, -(rowTop + 16f));
-            row.sizeDelta = new Vector2(PanelWidth - UITheme.Space48 - 250f, StatBarHeight);
+            row.sizeDelta = new Vector2(-250f, StatBarHeight);
 
             string shown = percent ? Pct(value) : Whole(value);
             Text valueLabel = EmberforgeUI.Label("Value" + index, _statHost, shown, UITheme.FontSmall,
