@@ -150,7 +150,7 @@ namespace Emberfall.UI.Screens
         }
 
         /// <summary>
-        /// A sunken track, an ember fill and a gold handle, with a transparent full-height hit
+        /// A sunken track, a teal fill (ember orange is for the one thing to press) and a gold handle, with a transparent full-height hit
         /// area behind them so the touch target is the row, not the thin track.
         ///
         /// THE SLIDER OWNS THE ANCHORS OF ITS FILL AND HANDLE. Unity's Slider resets both rects'
@@ -177,7 +177,7 @@ namespace Emberfall.UI.Screens
 
             RectTransform fillArea = UIBuilder.Node("FillArea", root);
             Band(fillArea, trackHeight, HandleSize * 0.5f);
-            Image fill = UIBuilder.Panel("Fill", fillArea, Emberforge.PrimaryMid, 0);
+            Image fill = UIBuilder.Panel("Fill", fillArea, Emberforge.SecondaryMid, 0);
             fill.raycastTarget = false;
             RectTransform fr = fill.rectTransform;
             fr.anchorMin = Vector2.zero;

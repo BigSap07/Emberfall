@@ -146,7 +146,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.VStack(statList, 4f, new RectOffset(0, 0, 0, 0), TextAnchor.UpperCenter);
 
             _standingValue = Widgets.StatRow("Standing", statList, "YOUR STANDING", "", Emberforge.TextGold, 34f);
-            _brandsValue = Widgets.StatRow("Brands", statList, "BRANDS AVAILABLE", "", UITheme.Ember, 34f);
+            _brandsValue = Widgets.StatRow("Brands", statList, "BRANDS AVAILABLE", "", Emberforge.SecondaryTop, 34f);
             _nextBrandValue = Widgets.StatRow("NextBrand", statList, "NEXT BRAND IN", "", Emberforge.TextQuiet, 34f);
 
             inner += 114f + UITheme.Space16;

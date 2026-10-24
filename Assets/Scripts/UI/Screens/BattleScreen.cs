@@ -2894,7 +2894,7 @@ namespace Emberfall.UI.Screens
                 else if (rewards.RelicDust > 0)
                 {
                     AddRewardRow(rewards.IsDeepMilestone ? "DEEP MILESTONE DUST" : "MILESTONE DUST",
-                                 "+" + rewards.RelicDust, UITheme.Ember);
+                                 "+" + rewards.RelicDust, Emberforge.SecondaryTop);
                 }
                 App.Audio.Victory();
             }
@@ -3051,7 +3051,7 @@ namespace Emberfall.UI.Screens
             AddRewardRow(list, "WAYFARER XP", "+" + rewards.AccountXp, UITheme.Shard);
             if (rewards.PlayerLevelsGained > 0)
                 AddRewardRow(list, "RANK UP", "+" + rewards.PlayerLevelsGained, UITheme.Success);
-            if (rewards.UnlockedNextStage) AddRewardRow(list, "NEW STAGE UNLOCKED", "AHEAD", UITheme.Ember);
+            if (rewards.UnlockedNextStage) AddRewardRow(list, "NEW STAGE UNLOCKED", "AHEAD", Emberforge.SecondaryTop);
             if (rewards.Chest != null && rewards.Chest.Present)
                 AddRewardRow(list, rewards.Chest.Finale ? "FINALE CHEST" : "WALL CHEST",
                              "+" + rewards.Chest.Gold + " gold  +" + rewards.Chest.Slag + " slag", UITheme.Success);
