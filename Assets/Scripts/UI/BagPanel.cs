@@ -159,10 +159,10 @@ namespace Emberfall.UI
             // drawer. A player looking for "all my money" should find all of it here, including
             // the two they can already see behind this panel.
             Row("GOLD", HudTopBar.Format(profile.Gold), UITheme.Gold, TextureLab.CoinIcon(64),
-                "On every screen. Spent levelling heroes.");
+                "On every screen. Spent levelling heroes.", "gold");
 
             Row("SHARDS", HudTopBar.Format(profile.Shards), UITheme.Shard, TextureLab.CrystalIcon(64),
-                "On every screen. Spent summoning at the Rift.");
+                "On every screen. Spent summoning at the Rift.", "shards");
 
             Row("RELIC DUST", HudTopBar.Format(profile.RelicDust), UITheme.Dust, TextureLab.SpiralIcon(64),
                 "Spent in the Relic Shop.");
@@ -212,6 +212,13 @@ namespace Emberfall.UI
         /// </summary>
         private void Row(string name, string balance, Color tint, Sprite icon, string spentWhere)
         {
+            Row(name, balance, tint, icon, spentWhere, null);
+        }
+
+        /// <summary>The same row, with the purse key the UI kit's currency icon is looked up by (the way
+        /// CurrencyStrip.Cell does it); the flat tinted icon is the fallback when the kit has none.</summary>
+        private void Row(string name, string balance, Color tint, Sprite icon, string spentWhere, string purse)
+        {
             RectTransform row = UIBuilder.Node(name, _list);
             // The well, less the list's own 12-per-side padding. The VStack force-expands width,
             // so this is what the row will actually BE and not merely what it asks for - which
@@ -220,7 +227,9 @@ namespace Emberfall.UI
             UIBuilder.Sized(row, width, RowHeight);
             EmberforgeUI.PlainPanelOn(row).raycastTarget = false;
 
-            Image glyph = UIBuilder.Img("Icon", row, icon, tint);
+            Sprite kitIcon = purse != null ? UiKit.Currency(purse) : null;
+            Image glyph = UIBuilder.Img("Icon", row, kitIcon != null ? kitIcon : icon,
+                                        kitIcon != null ? Color.white : tint);
             UIBuilder.Box(glyph.rectTransform, UITheme.Space16, 0f, JewelSize, JewelSize,
                           new Vector2(0f, 0.5f));
             glyph.raycastTarget = false;

@@ -66,6 +66,7 @@ namespace Emberfall.UI.Screens
             _name = EmberforgeUI.Title("Name", card, "", UITheme.FontTitle, Emberforge.TextGold,
                                        TextAnchor.UpperLeft);
             UIBuilder.Box(_name.rectTransform, 34f, -26f, 700f, 56f, new Vector2(0f, 1f));
+            EmberforgeUI.ClearCornerOrnament(_name.rectTransform);
 
             _power = EmberforgeUI.Label("Power", card, "", UITheme.FontSmall, Emberforge.TextGold,
                                         TextAnchor.UpperLeft);

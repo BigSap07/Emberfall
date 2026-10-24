@@ -826,8 +826,23 @@ namespace Emberfall.UI
             Text label = Title(name, parent, text, UITheme.FontSmall, Emberforge.TextGold,
                                TextAnchor.UpperLeft);
             UIBuilder.Box(label.rectTransform, x, y, 700f, 30f, new Vector2(0f, 1f));
+            ClearCornerOrnament(label.rectTransform);
             UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
             return label;
+        }
+
+        /// <summary>
+        /// Keeps a title boxed at a panel's top left (anchor and pivot (0,1), as UIBuilder.Box leaves it)
+        /// off the corner ornament: the left edge moves in to Emberforge.OrnamentClearance when it sat
+        /// closer, and the width gives up what the move took. Call it after the Box, once, from every
+        /// section title hung at a panel's top left.
+        /// </summary>
+        public static void ClearCornerOrnament(RectTransform title)
+        {
+            float shift = Emberforge.OrnamentClearance - title.anchoredPosition.x;
+            if (shift <= 0f) return;
+            title.anchoredPosition = new Vector2(Emberforge.OrnamentClearance, title.anchoredPosition.y);
+            title.sizeDelta = new Vector2(Mathf.Max(0f, title.sizeDelta.x - shift), title.sizeDelta.y);
         }
 
         // ------------------------------------------------------------------ tabs

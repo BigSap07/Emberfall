@@ -299,8 +299,6 @@ namespace Emberfall.UI.Screens
             Image box = EmberforgeUI.Sunken("Box", _autoToggle);
             UIBuilder.Box(box.rectTransform, 8f, 0f, 46f, 46f, LeftMiddle);
             box.raycastTarget = false;
-            Image edge = UIBuilder.Frame("Edge", box.rectTransform, Emberforge.GoldLow, 8, 3);
-            edge.raycastTarget = false;
             _autoCheck = UIBuilder.Img("Check", box.rectTransform, TextureLab.Check(64), Emberforge.GoldLit);
             UIBuilder.FillParent(_autoCheck.rectTransform, 7f);
             _autoCheck.raycastTarget = false;
@@ -581,9 +579,9 @@ namespace Emberfall.UI.Screens
             List<RectTransform> chips = new List<RectTransform>();
             List<float> chipWidths = new List<float>();
             if (!lost && r.WaveGold > 0)
-                AddChip(chips, chipWidths, "Gold", TextureLab.CoinIcon(64), UITheme.Gold, "+" + r.WaveGold);
+                AddChip(chips, chipWidths, "Gold", UiKit.Currency("gold"), TextureLab.CoinIcon(64), UITheme.Gold, "+" + r.WaveGold);
             if (!lost && r.WaveAccountXp > 0)
-                AddChip(chips, chipWidths, "Xp", TextureLab.Star(64), Emberforge.GoldLit, "+" + r.WaveAccountXp + " XP");
+                AddChip(chips, chipWidths, "Xp", null, TextureLab.Star(64), Emberforge.GoldLit, "+" + r.WaveAccountXp + " XP");
 
             float track = (n - 1) * PipWidth + PipCurrentWidth + (n - 1) * PipGap;
             float total = track + Emberforge.Space16 + countWidth;
@@ -598,13 +596,9 @@ namespace Emberfall.UI.Screens
                 Color fill = done ? Emberforge.GoldLow
                            : current ? (lost ? UITheme.Danger : Emberforge.GoldLit)
                            : Emberforge.SunkenTop;
-                Image pip = UIBuilder.Panel("Pip" + i, _rowHost, fill, 6);
+                Image pip = done || current ? UIBuilder.Panel("Pip" + i, _rowHost, fill, 6)
+                                            : EmberforgeUI.Sunken("Pip" + i, _rowHost);
                 UIBuilder.Box(pip.rectTransform, x + w * 0.5f, 0f, w, current ? PipHeight + 6f : PipHeight, Middle);
-                if (!done && !current)
-                {
-                    Image edge = UIBuilder.Frame("Edge", pip.rectTransform, UITheme.WithAlpha(Emberforge.GoldDeep, 0.8f), 6, 2);
-                    edge.raycastTarget = false;
-                }
                 pip.raycastTarget = false;
                 x += w + PipGap;
             }
@@ -622,10 +616,11 @@ namespace Emberfall.UI.Screens
         }
 
         /// <summary>A reward chip: the kit's chip with the currency's icon at its left end.</summary>
-        private void AddChip(List<RectTransform> chips, List<float> widths, string name, Sprite icon, Color tint, string text)
+        private void AddChip(List<RectTransform> chips, List<float> widths, string name, Sprite kitIcon, Sprite icon, Color tint, string text)
         {
             RectTransform chip = EmberforgeUI.Chip(name, _rowHost, text, tint, UITheme.FontSmall);
-            Image mark = UIBuilder.Img("Icon", chip, icon, tint);
+            Image mark = UIBuilder.Img("Icon", chip, kitIcon != null ? kitIcon : icon,
+                                       kitIcon != null ? Color.white : tint);
             UIBuilder.Box(mark.rectTransform, Emberforge.Space8, 0f, ChipIcon, ChipIcon, LeftMiddle);
             mark.raycastTarget = false;
 

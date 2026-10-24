@@ -161,7 +161,9 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(cost, 0f, 62f, CardWidth - UITheme.Space16, 32f, new Vector2(0.5f, 0f));
             Image costPlate = EmberforgeUI.SunkenOn(cost);
             costPlate.raycastTarget = false;
-            Image costIcon = UIBuilder.Img("Icon", cost, TextureLab.CoinIcon(64), UITheme.Gold);
+            Sprite kitCoin = UiKit.Currency("gold");
+            Image costIcon = UIBuilder.Img("Icon", cost, kitCoin != null ? kitCoin : TextureLab.CoinIcon(64),
+                                           kitCoin != null ? Color.white : UITheme.Gold);
             UIBuilder.Box(costIcon.rectTransform, UITheme.Space8, 0f, 24f, 24f, new Vector2(0f, 0.5f));
             Text costText = EmberforgeUI.Label("Value", cost, HudTopBar.Format(v.Price), UITheme.FontTiny - 2,
                                                poor ? UITheme.Danger : Emberforge.TextGold, TextAnchor.MiddleLeft);

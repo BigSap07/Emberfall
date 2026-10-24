@@ -344,15 +344,11 @@ namespace Emberfall.UI.Screens
             for (int i = 0; i < v.PipCount; i++)
             {
                 bool lit = i < v.PipsCleared;
-                Image pip = UIBuilder.Panel("Pip" + (i + 1), _info, lit ? UITheme.Waymark : UITheme.WithAlpha(Emberforge.Outline, 0.85f), 9);
+                Image pip = lit ? UIBuilder.Panel("Pip" + (i + 1), _info, UITheme.Waymark, 9)
+                                : EmberforgeUI.Sunken("Pip" + (i + 1), _info);
                 UIBuilder.Box(pip.rectTransform, LadderLayout.PipX(i, LadderLayout.PipSize, spacing, LadderLayout.PipBlockGap), y,
                               LadderLayout.PipSize, PipHeight, new Vector2(0f, 1f));
                 pip.raycastTarget = false;
-                if (!lit)
-                {
-                    Image rim = UIBuilder.Frame("Rim", pip.transform, UITheme.WithAlpha(UITheme.Waymark, 0.45f), 9, 2);
-                    rim.raycastTarget = false;
-                }
             }
         }
 
