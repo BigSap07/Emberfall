@@ -37,8 +37,7 @@ namespace Emberfall.UI.Screens
         private const float PageWidth = 1680f;
         private const float TrackHeight = 268f;
         private const float StatusHeight = 176f;
-        private const float RungWidth = 232f;
-        private const float SlotWidth = 300f;
+        private const float RungWidth = 220f;
 
         private Text _headerSubtitle;
         private RectTransform _content;
@@ -347,7 +346,10 @@ namespace Emberfall.UI.Screens
 
             float left = 352f + tree.RungsPerFamily * (RungWidth + 14f);
             RectTransform host = UIBuilder.Node("Slot", row);
-            UIBuilder.Box(host, left, -22f, PageWidth - left - 30f, TrackHeight - 44f, new Vector2(0f, 1f));
+            // The row is as wide as the list's view, which is wider than PageWidth on a wide screen, so the host
+            // spans from the rungs to the row's right edge and the talent cards share what it has (R46: at
+            // 1920 wide the third card used to run off the end).
+            SpanX(host, left, 30f, -22f, TrackHeight - 44f);
 
             Text heading = EmberforgeUI.Title("SlotTitle", host,
                 open ? "GUILD TALENT   -   YOUR GUILD PICKS ONE" : "GUILD TALENT   -   OPENS AT GUILD LEVEL " + needs,
@@ -360,22 +362,27 @@ namespace Emberfall.UI.Screens
                 bool live = open && talent.Id == active;
 
                 RectTransform card = UIBuilder.Node(talent.Id, host);
-                UIBuilder.Box(card, 4f + t * (SlotWidth + 12f), -30f, SlotWidth, TrackHeight - 78f, new Vector2(0f, 1f));
+                float count = Mathf.Max(1, family.Talents.Count);
+                card.anchorMin = new Vector2(t / count, 1f);
+                card.anchorMax = new Vector2((t + 1) / count, 1f);
+                card.pivot = new Vector2(0.5f, 1f);
+                card.sizeDelta = new Vector2(-12f, TrackHeight - 78f);
+                card.anchoredPosition = new Vector2(0f, -30f);
                 if (live) EmberforgeUI.PlainPanelOn(card); else EmberforgeUI.SunkenOn(card);
 
                 Text tname = EmberforgeUI.Title("Name", card, talent.Name.ToUpperInvariant(), UITheme.FontTiny,
                                                 live ? Emberforge.TextGold : open ? Emberforge.TextBody : Emberforge.TextQuiet,
                                                 TextAnchor.UpperLeft);
-                UIBuilder.Box(tname.rectTransform, 14f, -10f, SlotWidth - 28f, 26f, new Vector2(0f, 1f));
+                SpanX(tname.rectTransform, 14f, 14f, -10f, 26f);
 
                 Text text = EmberforgeUI.Body("Text", card, talent.Description, UITheme.FontTiny - 5,
                                               open ? Emberforge.TextBody : Emberforge.TextQuiet, TextAnchor.UpperLeft);
-                UIBuilder.Box(text.rectTransform, 14f, -38f, SlotWidth - 28f, 76f, new Vector2(0f, 1f));
+                SpanX(text.rectTransform, 14f, 14f, -38f, 76f);
 
                 if (live)
                 {
                     RectTransform chip = EmberforgeUI.Chip("Live", card, "RUNNING", UITheme.Success, UITheme.FontTiny - 5);
-                    UIBuilder.Box(chip, 14f, 12f, SlotWidth - 28f, 28f, new Vector2(0f, 0f));
+                    SpanX(chip, 14f, 14f, 12f, 28f, false);
                     continue;
                 }
 
@@ -383,11 +390,23 @@ namespace Emberfall.UI.Screens
                 UIButton pick = EmberforgeUI.Button("Pick", card,
                     !open ? "LOCKED" : !mayLead ? "YOUR GUILD'S CHOICE" : "RUN THIS NEXT WEEK",
                     UITheme.FontTiny - 4, mayPick ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
-                UIBuilder.Box(pick.Root, 14f, 10f, SlotWidth - 28f, 42f, new Vector2(0f, 0f));
+                SpanX(pick.Root, 14f, 14f, 10f, 42f, false);
                 pick.Interactable = mayPick && string.IsNullOrEmpty(_offline) && !_busy;
                 string fid = family.Id, tid = talent.Id;
                 pick.OnClick(delegate { OnPick(fid, tid); });
             }
+        }
+
+        /// <summary>Spans a child across its parent with the given insets, hung from the top (y is the drop from
+        /// the top edge, negative) or standing on the bottom (y is the rise).</summary>
+        private static void SpanX(RectTransform rt, float left, float right, float y, float h, bool top = true)
+        {
+            float a = top ? 1f : 0f;
+            rt.anchorMin = new Vector2(0f, a);
+            rt.anchorMax = new Vector2(1f, a);
+            rt.pivot = new Vector2(0.5f, a);
+            rt.sizeDelta = new Vector2(-(left + right), h);
+            rt.anchoredPosition = new Vector2((left - right) * 0.5f, y);
         }
 
         // ================================================================== spending

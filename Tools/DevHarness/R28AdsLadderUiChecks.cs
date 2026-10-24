@@ -177,9 +177,9 @@ namespace Emberfall.DevHarness
 
             float touch = HubStyleTouchMin(root);
             float row = LadderLayout.RowHeight;
-            Check(row == 96f && LadderLayout.TapSize(row, touch) == touch && LadderLayout.TapSize(300f, touch) == 300f
+            Check(row == 108f && LadderLayout.TapSize(row, touch) == touch && LadderLayout.TapSize(300f, touch) == 300f
                   && LadderLayout.TapOverhang(row, touch) == (touch - row) * 0.5f && LadderLayout.MinRowSpacing(row, touch) == touch - row,
-                  "LADDER ROWS: a row is 96 tall, its tap target is at least HubStyle.TouchMin (" + touch + ") and overhangs the row by " + LadderLayout.TapOverhang(row, touch) + " a side");
+                  "LADDER ROWS: a row is 108 tall (the touch minimum), its tap target is at least HubStyle.TouchMin (" + touch + ") and overhangs the row by " + LadderLayout.TapOverhang(row, touch) + " a side");
             string screen = R28bSource(root, "Assets/Scripts/UI/Screens/GuildDungeonScreen.cs");
             float spacingUsed = R28bConst(screen, "RowSpacing");
             Check(!float.IsNaN(spacingUsed) && spacingUsed >= LadderLayout.MinRowSpacing(row, touch),

@@ -1553,6 +1553,7 @@ namespace Emberfall.EditorTools
                 SessionState.SetInt(KitForceKey, 0);
                 UiKit.Forget();
             }
+            R46Restore();
             R28bRestore();
             SessionState.SetInt(ReplayStageKey, 0);
             SessionState.SetInt(MomentStageKey, 0);
@@ -1612,6 +1613,134 @@ namespace Emberfall.EditorTools
             GuildDungeonBackends.Override = null;
             _r28bOverlay = null;
             SessionState.SetInt(R28bArmKey, 0);
+        }
+
+        // ================================================================== R46: the guild screens and the Bag
+        //
+        // Screens that had no capture target until R46. All of them run on the scratch identity only, with the in-memory
+        // guild of GuildDungeonShots in front of the real controllers (GuildDungeonBackends, GuildPathBackends and
+        // GuildTechBackends Override), and nothing is written to a profile that is not the scratch one.
+        //
+        //   Screen:GuildDungeon          the ladder, with the player's clears on floors 1 and 2 (lit pips, the Mine tick)
+        //   Screen:GuildFloor            floor 3 of that guild
+        //   Screen:GuildDungeonResult    the player's own floor 2 attempt
+        //   Screen:GuildDungeonBoards    the boards of floor 2
+        //   Screen:GuildTech             the guild tech tree, partway up
+        //   Screen:Bag                   the Bag panel, with every purse holding something
+
+        // "GuildDungeon=bottom" is the ladder scrolled to its last row, so a capture shows the last floor is reachable.
+        // Begin splits the "=bottom" off the target and keeps it in BattleStageKey, as it does for every state target.
+        private static bool IsR46Target(string name)
+        {
+            return name == "GuildDungeon" || name == "GuildFloor" || name == "GuildDungeonResult"
+                   || name == "GuildDungeonBoards" || name == "GuildTech" || name == "Bag";
+        }
+
+        // The Bag target fills the purses of the scratch profile; the values it found are put back after the shot so the
+        // targets that follow in the same batch do not photograph a rich player.
+        private static PlayerProfile _r46BagProfile;
+        private static long[] _r46BagSaved;
+
+        private static void R46Restore()
+        {
+            GuildDungeonShots.ClearCaptureOverrides();
+            if (_r46BagProfile != null && _r46BagSaved != null)
+            {
+                PlayerProfile p = _r46BagProfile;
+                p.Gold = _r46BagSaved[0];
+                p.Shards = _r46BagSaved[1];
+                p.RelicDust = _r46BagSaved[2];
+                p.Slag = _r46BagSaved[3];
+                p.Coda = _r46BagSaved[4];
+                p.Valor = _r46BagSaved[5];
+                p.Waymarks = _r46BagSaved[6];
+            }
+            _r46BagProfile = null;
+            _r46BagSaved = null;
+        }
+
+        private static void PumpR46(GameApp app, string name, int frame, int slot)
+        {
+            const int ShowAt = 10;
+            const int FollowAt = ShowAt + 50;
+            const int ShotAt = ShowAt + 140;
+            if (frame < ShowAt) return;
+            bool bottom = name == "GuildDungeon" && SessionState.GetString(BattleStageKey, "") == "bottom";
+
+            if (frame == ShowAt)
+            {
+                R46Restore();
+                if (!EditorScratchIdentity.IsScratch)
+                {
+                    Debug.LogError("PlayModeScreenshot: " + name + " seeds a profile, so it only runs on the scratch identity. Skipping.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                    return;
+                }
+                if (name == "Bag")
+                {
+                    PlayerProfile bagProfile = app.Session.Profile;
+                    _r46BagProfile = bagProfile;
+                    _r46BagSaved = new long[] { bagProfile.Gold, bagProfile.Shards, bagProfile.RelicDust, bagProfile.Slag,
+                                                bagProfile.Coda, bagProfile.Valor, bagProfile.Waymarks };
+                    bagProfile.Gold = 1840250;
+                    bagProfile.Shards = 612;
+                    bagProfile.RelicDust = 3480;
+                    bagProfile.Slag = 905;
+                    bagProfile.Coda = 140;
+                    bagProfile.Valor = 260;
+                    bagProfile.Waymarks = 75;
+                    app.Bag.Open();
+                    Debug.Log("PlayModeScreenshot: showing the Bag");
+                    return;
+                }
+                GuildDungeonShots.SeedForCapture(app);
+                GuildDungeonState fresh = app.Router.GuildDungeon.State;
+                fresh.Loaded = false;
+                fresh.Status = null;
+                fresh.Attempts.Clear();
+                fresh.LastAttempt = null;
+                app.Router.Show(name == "GuildTech" ? ScreenId.GuildTech : ScreenId.GuildDungeon);
+                Debug.Log("PlayModeScreenshot: showing " + name);
+                return;
+            }
+
+            if (frame == FollowAt && name != "Bag" && name != "GuildTech" && name != "GuildDungeon")
+            {
+                GuildDungeonState st = app.Router.GuildDungeon.State;
+                string self = GuildDungeonBackends.For(app).SelfUserId;
+                if (name == "GuildFloor")
+                {
+                    st.Floor = 3;
+                    app.Router.GuildFloor.ResetOnNextShow();
+                    app.Router.Show(ScreenId.GuildFloor);
+                }
+                else if (name == "GuildDungeonResult")
+                {
+                    st.LastAttempt = st.Attempts.Find(a => a.UserId == self && a.Floor == 2);
+                    app.Router.Show(ScreenId.GuildDungeonResult);
+                }
+                else
+                {
+                    app.Router.GuildDungeonBoards.SetFloor(2);
+                    app.Router.Show(ScreenId.GuildDungeonBoards);
+                }
+                return;
+            }
+
+            if (frame == ShotAt - 20) Canvas.ForceUpdateCanvases();
+            if (frame < ShotAt) KeepGameViewFresh(frame);
+            if (bottom && frame == ShotAt - 10)
+            {
+                UnityEngine.UI.ScrollRect list = app.Router.GuildDungeon.GetComponentInChildren<UnityEngine.UI.ScrollRect>(true);
+                if (list != null) list.verticalNormalizedPosition = 0f;
+            }
+            if (frame == ShotAt)
+            {
+                Debug.Log("PlayModeScreenshot: R46 shot of " + name + (bottom ? " scrolled to the bottom" : "") + ", router shows "
+                          + (app.Router.Current != null ? app.Router.Current.Id.ToString() : "nothing"));
+                Shoot(name, frame, slot);
+                R46Restore();
+            }
         }
 
         private static void PumpR28b(GameApp app, string name, int frame, int slot)
@@ -1762,6 +1891,19 @@ namespace Emberfall.EditorTools
         public static void CaptureLadderBannerRefused() { Begin("Screen:GuildLadder=banner-refused"); }
         [MenuItem("Emberfall/Capture/R28 screens/Guild dungeon ladder/Banner, cycle over", false, 313)]
         public static void CaptureLadderBannerCycleOver() { Begin("Screen:GuildLadder=banner-cycleover"); }
+
+        [MenuItem("Emberfall/Capture/R46 screens/Guild dungeon ladder (seeded guild)", false, 400)]
+        public static void CaptureGuildDungeon() { Begin("Screen:GuildDungeon"); }
+        [MenuItem("Emberfall/Capture/R46 screens/Guild dungeon floor", false, 401)]
+        public static void CaptureGuildFloor() { Begin("Screen:GuildFloor"); }
+        [MenuItem("Emberfall/Capture/R46 screens/Guild dungeon result", false, 402)]
+        public static void CaptureGuildDungeonResult() { Begin("Screen:GuildDungeonResult"); }
+        [MenuItem("Emberfall/Capture/R46 screens/Guild dungeon boards", false, 403)]
+        public static void CaptureGuildDungeonBoards() { Begin("Screen:GuildDungeonBoards"); }
+        [MenuItem("Emberfall/Capture/R46 screens/Guild tech", false, 404)]
+        public static void CaptureGuildTech() { Begin("Screen:GuildTech"); }
+        [MenuItem("Emberfall/Capture/R46 screens/Bag", false, 405)]
+        public static void CaptureBag() { Begin("Screen:Bag"); }
 
         [MenuItem("Emberfall/Capture/R28 screens/Rewarded ads/A1 idle claim/Hidden (ads off)", false, 320)]
         public static void CaptureAdClaimHidden() { Begin("Screen:AdClaim=hidden"); }
@@ -2056,6 +2198,7 @@ namespace Emberfall.EditorTools
 
             string name = list[slot];
             if (IsR28bTarget(name)) { PumpR28b(app, name, frame, Math.Min(slot, list.Length - 1)); return; }
+            if (IsR46Target(name)) { PumpR46(app, name, frame, Math.Min(slot, list.Length - 1)); return; }
             // R24: BattleSkin is Battle with Azure Kael, an owned test skin, worn by the line's first hero.
             bool skinBattle = name == "BattleSkin";
             if (skinBattle) name = "Battle";
@@ -2401,6 +2544,8 @@ namespace Emberfall.EditorTools
                                          + " for " + name + ", not Resolved.");
                 }
                 else if (r28a == 0) app.Router.Show(id);
+                _shownId = id;
+                _shownPlain = r28a == 0 && id != ScreenId.MainMenu && !IsWaveResultTarget(name);
                 if (name == "StageCard") app.Router.Campaign.SelectStageForCapture(SessionState.GetString(BattleStageKey, ""));
                 if (IsSinksScreen(name)) OpenSinksPicker(app, name);
                 if (name == "WayfarersRoadPicker") OpenRoadPicker(app);
@@ -2412,6 +2557,7 @@ namespace Emberfall.EditorTools
 
             // R28a: the cues an R28a state waits for (a refresh, a tap, a scroll), counted from the frame it was shown.
             if (frame > showAt) R28aCaptures.Tick(app, name, frame - showAt);
+            if (frame > showAt && frame < shotAt) KeepGameViewFresh(frame);
 
             // THE WAVE RESULT waits on the screen, not on a frame count: how long a wave takes to
             // resolve depends on how far the line gets, and the screen paints only after the
@@ -2635,8 +2781,41 @@ namespace Emberfall.EditorTools
             if ((name == "Toast" || name == "ToastLong") && frame == shotAt - 30) app.Notify(ToastSample(name));
 
             if (IsStoreScreen(name)) PumpStore(app, name, frame, showAt);
+
+            // R46: a plain screen target must be photographing its own screen. A batch of 45 once came back with the
+            // Hub where Settings, Account or Inventory had been shown ("showing X" was logged and nothing threw), so
+            // the router is checked here, a long way ahead of the shot, and the screen is put up again if it is not
+            // on it. The line is logged either way, so a wrong picture can be traced to a wrong router.
+            if (_shownPlain && frame == shotAt - 45 && app.Router.Current != null && app.Router.Current.Id != _shownId)
+            {
+                Debug.LogWarning("PlayModeScreenshot: " + name + " was shown but the router is on " + app.Router.Current.Id
+                                 + ". Showing " + _shownId + " again.");
+                app.Router.Show(_shownId);
+            }
             if (frame == shotAt - 20) Canvas.ForceUpdateCanvases();
-            if (frame == shotAt) Shoot(name, frame, slot);
+            if (frame == shotAt)
+            {
+                if (_shownPlain)
+                    Debug.Log("PlayModeScreenshot: shot of " + name + ", router shows "
+                              + (app.Router.Current != null ? app.Router.Current.Id.ToString() : "nothing"));
+                Shoot(name, frame, slot);
+            }
+        }
+
+        private static ScreenId _shownId;
+        private static bool _shownPlain;
+
+        /// <summary>
+        /// R46: a Game view that did not present what the router shows photographs the Hub it last drew (the stale frame
+        /// hazard of Docs/CAPTURE.md). Settings, Account, Inventory, Events and Profile came back as the Hub in a few
+        /// batches with the router logged on the right screen, so every plain target now asks for a canvas pass and a
+        /// player loop every sixth frame between the show and the shot, as the R28a states always did.
+        /// </summary>
+        private static void KeepGameViewFresh(int frame)
+        {
+            if (frame % 6 != 0) return;
+            Canvas.ForceUpdateCanvases();
+            EditorApplication.QueuePlayerLoopUpdate();
         }
 
         // ------------------------------------------------------------------ the daily loop

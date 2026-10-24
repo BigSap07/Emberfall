@@ -122,11 +122,12 @@ namespace Emberfall.UI.Screens
             Text title = EmberforgeUI.Title("Title", card, GuildDungeon.BoardTitle(board), UITheme.FontBody,
                                             Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(title.rectTransform, 26f, -16f, 380f, 36f, new Vector2(0f, 1f));
+            EmberforgeUI.ClearCornerOrnament(title.rectTransform);
             UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
 
             Text count = EmberforgeUI.Label("Count", card, ranked.Count == 1 ? "1 ENTRY" : ranked.Count + " ENTRIES",
                                             UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.UpperRight);
-            UIBuilder.Box(count.rectTransform, -26f, -22f, 160f, 24f, new Vector2(1f, 1f));
+            UIBuilder.Box(count.rectTransform, -Emberforge.OrnamentClearance, -22f, 160f, 24f, new Vector2(1f, 1f));
 
             Text rule = EmberforgeUI.Label("Rule", card, GuildDungeon.BoardRule(board), UITheme.FontTiny - 4,
                                            Emberforge.TextQuiet, TextAnchor.UpperLeft);

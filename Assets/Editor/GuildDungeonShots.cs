@@ -590,6 +590,30 @@ namespace Emberfall.EditorTools
                  + " with " + _miraLoss.Team.Units.Count + " heroes (shared)");
         }
 
+        /// <summary>
+        /// The seeded guild for the PlayModeScreenshot targets (GuildDungeon, GuildFloor, GuildDungeonResult,
+        /// GuildDungeonBoards, GuildTech): SeedGuild, plus two clears by the player on floors 1 and 2 so the pips
+        /// are lit, the floor rows carry the player's tick and the result has an attempt of its own. Scratch only.
+        /// </summary>
+        internal static void SeedForCapture(GameApp app)
+        {
+            SeedGuild(app);
+            ContentDatabase content = app.Content;
+            int seed = GuildDungeon.SeedFor(LocalGuildDungeonBackend.Guild, _guild.Cycle);
+            DeterministicRng rng = new DeterministicRng(0x46C0DE);
+            List<HeroDef> all = new List<HeroDef>(content.Heroes);
+            Submit(content, You, Find(content, all, 5, rng, seed, 1, true), seed, 1);
+            Submit(content, You, Find(content, all, 5, rng, seed, 2, true), seed, 2);
+        }
+
+        /// <summary>Puts the three in-memory backends away, as the end of the full run does.</summary>
+        internal static void ClearCaptureOverrides()
+        {
+            GuildDungeonBackends.Override = null;
+            GuildPathBackends.Override = null;
+            GuildTechBackends.Override = null;
+        }
+
         private static GuildDungeonAttempt Submit(ContentDatabase content, string user, TeamSnapshot line, int seed, int floor)
         {
             BattleResult fought;

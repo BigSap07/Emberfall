@@ -150,7 +150,8 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(_watchedHost, 0f);
 
             _attemptsLeft = EmberforgeUI.Label("AttemptsLeft", _linePanel, "", UITheme.FontSmall, Emberforge.TextBody, TextAnchor.MiddleRight);
-            UIBuilder.Box(_attemptsLeft.rectTransform, -300f, 26f, 280f, 60f, new Vector2(1f, 0f));
+            // Ends a gap short of the button's left edge (the button is 260 wide, OrnamentClearance in from the right).
+            UIBuilder.Box(_attemptsLeft.rectTransform, -(Emberforge.OrnamentClearance + 260f + UITheme.Space16), 26f, 280f, 60f, new Vector2(1f, 0f));
 
             _attemptButton = EmberforgeUI.Button("Attempt", _linePanel, "ATTEMPT", UITheme.FontBody, ForgeButtonKind.Primary);
             UIBuilder.Box(_attemptButton.Root, -Emberforge.OrnamentClearance, 20f, 260f, 72f, new Vector2(1f, 0f));
@@ -160,16 +161,18 @@ namespace Emberfall.UI.Screens
         private void BuildRosterPanel()
         {
             RectTransform panel = UIBuilder.Node("Roster", Root);
-            UIBuilder.Box(panel, PanelWidth / 2f + 14f, -(Top + 452f), PanelWidth, 176f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(panel, PanelWidth / 2f + 14f, -(Top + 452f), PanelWidth, 184f, new Vector2(0.5f, 1f));
             EmberforgeUI.PanelOn(panel, false);
 
             Text label = EmberforgeUI.Label("Label", panel, "YOUR HEROES   -   TAP TO ADD OR REMOVE", UITheme.FontTiny - 2,
                                             Emberforge.TextQuiet, TextAnchor.UpperLeft);
-            UIBuilder.Box(label.rectTransform, 28f, -12f, 800f, 26f, new Vector2(0f, 1f));
+            // Hung below the frame's top rail (-12 sat on it and the caps were cut).
+            UIBuilder.Box(label.rectTransform, 28f, -20f, 800f, 26f, new Vector2(0f, 1f));
+            EmberforgeUI.ClearCornerOrnament(label.rectTransform);
 
             ScrollRect scroll;
             _rosterContent = UIBuilder.ScrollStrip("Strip", panel, out scroll, 10f, new RectOffset(4, 4, 0, 0));
-            UIBuilder.FillParent(scroll.GetComponent<RectTransform>(), 22f, 42f, 22f, 12f);
+            UIBuilder.FillParent(scroll.GetComponent<RectTransform>(), 22f, 48f, 22f, 10f);
         }
 
         // ================================================================== lifecycle

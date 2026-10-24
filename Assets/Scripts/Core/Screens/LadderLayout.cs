@@ -8,15 +8,15 @@ namespace Emberfall.Core.Screens
     /// these numbers into rects and decides nothing else.
     ///
     /// Two rules live here. The pip strip: PipCount pips, a gap after every fifth (between the
-    /// blocks), and at ten the SPACING shrinks to fit, never the pips. The tap target: a row is 96
-    /// tall and a tap target is at least the hub's touch minimum, so the ATTEMPT button is taller
-    /// than its row, overhangs it equally top and bottom, and the list's spacing is at least the
-    /// two overhangs so two neighbouring hit rects never overlap.
+    /// blocks), and at ten the SPACING shrinks to fit, never the pips. The tap target: a tap target is at
+    /// least the hub's touch minimum and a row is that tall (R46), so the ATTEMPT button fills its row with no
+    /// overhang. For a row shorter than a tap target the button overhangs it equally top and bottom, and the
+    /// list's spacing is at least the two overhangs so two neighbouring hit rects never overlap.
     /// </summary>
     public static class LadderLayout
     {
-        /// <summary>A floor row is this tall (R28-SCREENS.md).</summary>
-        public const float RowHeight = 96f;
+        /// <summary>A floor row is this tall: the hub's touch minimum, so the ATTEMPT button sits inside its row frame (R28-SCREENS.md).</summary>
+        public const float RowHeight = 108f;
 
         /// <summary>A pip is this wide and this tall, in canvas units. It never changes.</summary>
         public const float PipSize = 30f;

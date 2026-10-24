@@ -27,11 +27,11 @@ namespace Emberfall.UI.Screens
     /// this screen never calls RecordAttempt itself: doing both would file one fight twice. When the player comes back
     /// OnShow reloads, which is the reload RecordAttempt would have done.
     ///
-    /// A FLOOR ROW KEEPS ITS PEEK AT THE ENEMIES ON THE LINE-UP SCREEN. The row is 96 tall and the view carries no enemy
+    /// A FLOOR ROW KEEPS ITS PEEK AT THE ENEMIES ON THE LINE-UP SCREEN. The row is 108 tall and the view carries no enemy
     /// list; the floor view (GuildFloorScreen) is where a floor is inspected, as it was.
     ///
     /// THE REASON UNDER A DISABLED ATTEMPT is printed inside the row, under the floor's name, left of the button: the
-    /// button is a full touch minimum tall and overhangs its 96 tall row, so there is no room under it.
+    /// button is a full touch minimum tall and fills its 108 tall row, so there is no room under it.
     /// </summary>
     public sealed class GuildDungeonScreen : UIScreen
     {
@@ -386,7 +386,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(text.rectTransform, 0f);
         }
 
-        /// <summary>One floor, 96 tall. Every string, chip, tick and button on it is a field of the row.</summary>
+        /// <summary>One floor, LadderLayout.RowHeight tall. Every string, chip, tick and button on it is a field of the row.</summary>
         private void AddRow(GuildFloorRowView r)
         {
             RectTransform row = UIBuilder.Node("Floor" + r.Floor, _content);
@@ -396,46 +396,49 @@ namespace Emberfall.UI.Screens
             else if (r.State == GuildFloorState.Locked) EmberforgeUI.SunkenOn(row);
             else EmberforgeUI.PlainPanelOn(row);
 
+            // The strings were laid out for a 96 tall row; the extra height is split top and bottom.
+            float lift = (LadderLayout.RowHeight - 96f) * 0.5f;
+
             Color titleColor = r.State == GuildFloorState.Locked ? Emberforge.TextQuiet : Emberforge.TextBody;
             Text title = EmberforgeUI.Title("Title", row, r.Title, UITheme.FontBody, titleColor, TextAnchor.MiddleLeft);
-            UIBuilder.Box(title.rectTransform, 28f, -10f, 190f, 40f, new Vector2(0f, 1f));
+            UIBuilder.Box(title.rectTransform, 28f, -10f - lift, 190f, 40f, new Vector2(0f, 1f));
             UIBuilder.Outlined(title, Emberforge.Outline, Emberforge.StrokeThin);
 
             if (r.ClearedByMe)
             {
                 Image tick = UiKit.CheckImage("Mine", row, 64, UITheme.Success);
-                UIBuilder.Box(tick.rectTransform, 224f, -14f, 32f, 32f, new Vector2(0f, 1f));
+                UIBuilder.Box(tick.rectTransform, 224f, -14f - lift, 32f, 32f, new Vector2(0f, 1f));
                 tick.raycastTarget = false;
             }
 
             Color chipTint = r.State == GuildFloorState.Cleared ? UITheme.Success
                            : r.State == GuildFloorState.Open ? UITheme.Gold : UITheme.TextDim;
             RectTransform chip = EmberforgeUI.Chip("State", row, r.StateText, chipTint, UITheme.FontTiny - 2);
-            UIBuilder.Box(chip, 272f, -12f, 150f, 36f, new Vector2(0f, 1f));
+            UIBuilder.Box(chip, 272f, -12f - lift, 150f, 36f, new Vector2(0f, 1f));
 
             if (r.FirstClearText.Length > 0)
             {
                 Text first = EmberforgeUI.Label("FirstClear", row, r.FirstClearText, UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleLeft);
-                UIBuilder.Box(first.rectTransform, 446f, -14f, 500f, 32f, new Vector2(0f, 1f));
+                UIBuilder.Box(first.rectTransform, 446f, -14f - lift, 500f, 32f, new Vector2(0f, 1f));
             }
 
             Text attemptsText = EmberforgeUI.Label("Attempts", row, r.AttemptsText, UITheme.FontSmall, Emberforge.TextBody, TextAnchor.MiddleLeft);
-            UIBuilder.Box(attemptsText.rectTransform, 960f, -12f, 200f, 36f, new Vector2(0f, 1f));
+            UIBuilder.Box(attemptsText.rectTransform, 960f, -12f - lift, 200f, 36f, new Vector2(0f, 1f));
 
             Text reward = EmberforgeUI.Label("Reward", row, r.RewardText, UITheme.FontTiny,
                                              r.RewardMuted ? Emberforge.TextQuiet : HubStyle.ValueGold, TextAnchor.MiddleLeft);
-            UIBuilder.Box(reward.rectTransform, 1170f, -14f, 320f, 32f, new Vector2(0f, 1f));
+            UIBuilder.Box(reward.rectTransform, 1170f, -14f - lift, 320f, 32f, new Vector2(0f, 1f));
 
             // The Reason, verbatim, in the row's lower line, left of the button.
             if (r.Attempt.Visible && !r.Attempt.Enabled && r.Attempt.Reason.Length > 0)
             {
                 Text reason = EmberforgeUI.Label("Reason", row, r.Attempt.Reason, UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleLeft);
-                UIBuilder.Box(reason.rectTransform, 28f, 10f, 1380f, 32f, new Vector2(0f, 0f));
+                UIBuilder.Box(reason.rectTransform, 28f, 10f + lift, 1380f, 32f, new Vector2(0f, 0f));
             }
 
             if (r.Attempt.Visible)
             {
-                // A full touch minimum tall, so it overhangs the 96 tall row equally top and bottom (LadderLayout).
+                // A full touch minimum tall, which is the row's own height (LadderLayout), so it sits inside the row frame.
                 float tap = LadderLayout.TapSize(LadderLayout.RowHeight, HubStyle.TouchMin);
                 UIButton attempt = EmberforgeUI.Button("Attempt", row, r.Attempt.Label, UITheme.FontSmall, ForgeButtonKind.Primary);
                 UIBuilder.Box(attempt.Root, -24f, 0f, ButtonWidth, tap, new Vector2(1f, 0.5f));

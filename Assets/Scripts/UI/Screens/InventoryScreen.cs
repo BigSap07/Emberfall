@@ -42,12 +42,13 @@ namespace Emberfall.UI.Screens
     {
         public override ScreenId Id { get { return ScreenId.Inventory; } }
 
-        private const float RailX = -872f;
+        // The rail hangs from the screen's left edge and the detail from its right (R46): both used to be
+        // measured from the centre, which put the rail partly off screen on a 16:10 canvas (1920x1200 is
+        // about 1822 reference units wide). The grid between them keeps its centre.
         private const float RailWidth = 116f;
         private const float GridX = -226f;
         private const float GridWidth = 1044f;
         private const float CardSize = 128f;
-        private const float DetailX = 626f;
         private const float DetailWidth = 552f;
 
         private Text _headerSubtitle;
@@ -114,7 +115,7 @@ namespace Emberfall.UI.Screens
         private void BuildRail(float top)
         {
             _rail = UIBuilder.Node("Rail", Root);
-            UIBuilder.Box(_rail, RailX, -top, RailWidth, 8f * 82f + 8f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_rail, UITheme.ScreenPadding, -top, RailWidth, 8f * 82f + 8f, new Vector2(0f, 1f));
 
             Image bg = EmberforgeUI.SunkenOn(_rail);
             bg.raycastTarget = false;
@@ -189,7 +190,7 @@ namespace Emberfall.UI.Screens
         private void BuildDetail(float top)
         {
             _detail = UIBuilder.Node("Detail", Root);
-            UIBuilder.Box(_detail, DetailX, -top, DetailWidth, 636f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(_detail, -UITheme.ScreenPadding, -top, DetailWidth, 636f, new Vector2(1f, 1f));
 
             Image bg = EmberforgeUI.PanelOn(_detail, true);
             bg.raycastTarget = false;

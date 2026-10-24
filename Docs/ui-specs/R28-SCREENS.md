@@ -172,7 +172,7 @@ replaced; ATTEMPT and BOARDS open them as today.
 ```
 
 **Ten rows fit** because the list is a `UIBuilder.ScrollList` between the header block and the BOARDS row; it never
-covers the header or the bottom bar. Rows are 96 tall. **The pip strip** is `PipCount` pips, `PipsCleared` filled in
+covers the header or the bottom bar. Rows are 108 tall (R46: the touch minimum, so the ATTEMPT button sits inside its row frame). **The pip strip** is `PipCount` pips, `PipsCleared` filled in
 `UITheme.Waymark`, a gap of `UITheme.Space8` after every fifth (between blocks); at ten, shrink the spacing, never the
 pips. **The divider** is a `UIBuilder.Divider` in `UITheme.ChromeBrass` with `DividerCaption` centred on it in
 `UITheme.ChromeBrass` at `UITheme.FontTiny`, so floor 6 is not read as harder than floor 5. It is not.
@@ -235,8 +235,8 @@ no result screen to show that sentence on.
 **As built.** The buttons are the kit's: ATTEMPT and FIND A GUILD are `EmberforgeUI.Button` with `ForgeButtonKind.Primary`
 (the spec's `GoldButton`), the others `ForgeButtonKind.Secondary`; text colours are `Emberforge.TextBody` and
 `Emberforge.TextQuiet` on the kit's plates, gold values `HubStyle.ValueGold`. REFRESH sits in the header's right end.
-A row is 96 tall, but the ATTEMPT button is `HubStyle.TouchMin` (108) tall and overhangs its row by 6 a side
-(`LadderLayout`), so the list spacing is 14. The Reason of a disabled ATTEMPT is printed verbatim in the row's lower
+A row is `HubStyle.TouchMin` (108) tall and the ATTEMPT button fills it, so nothing overhangs
+(`LadderLayout`; a row shorter than a tap target would overhang it equally, and the list spacing is 14). The Reason of a disabled ATTEMPT is printed verbatim in the row's lower
 line, left of the button, since there is no room under a button that fills the row. The Champion floors (5 and 10) keep a
 gold framed plate, locked floors a recess, and the row has no enemy portraits: the floor view is where a floor is
 inspected. The spinner is eight dots in a ring, the only motion on the screen.

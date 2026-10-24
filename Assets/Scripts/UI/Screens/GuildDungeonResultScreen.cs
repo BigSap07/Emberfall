@@ -82,7 +82,7 @@ namespace Emberfall.UI.Screens
             EmberforgeUI.Heading("Heading", right, "THE BOARDS", 36f, -20f);
 
             _boards = EmberforgeUI.Button("OpenBoards", right, "SEE THE BOARDS", UITheme.FontTiny, ForgeButtonKind.Secondary);
-            UIBuilder.Box(_boards.Root, -Emberforge.OrnamentClearance, -14f, 230f, 54f, new Vector2(1f, 1f));
+            UIBuilder.Box(_boards.Root, -Emberforge.OrnamentClearance, -20f, 230f, 54f, new Vector2(1f, 1f));
             _boards.OnClick(OnBoards);
 
             _boardRows = UIBuilder.Node("Rows", right);
