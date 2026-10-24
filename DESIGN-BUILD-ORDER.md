@@ -6,9 +6,10 @@ unedited. The archive is the reasoning: why a mechanic is shaped the way it is, 
 measured, what it refused to build and why. This file is the state: what exists, where it lives,
 what is moving, and what is owed.
 
-Checked against the repository on 2026-10-24 (run R39), against a live full `Tools/build-check.ps1`
-run, a live `validate_heroes.py` run and the files themselves, not against this document's own
-prior claims.
+Checked against the repository on 2026-10-24. The combat, content and hero sections were last
+checked in run R39, against a live `validate_heroes.py` run. The UI, art and build sections were
+checked in run R46, against a live full `Tools/build-check.ps1` run and the files themselves, not
+against this document's own prior claims.
 Where this file and the archive disagree, this file is right about status and the archive is right
 about reasoning.
 
@@ -29,17 +30,22 @@ about reasoning.
 - **Hero art.** 31 of the 94 have a delivered sprite sheet (the 30 five-stars and one four-star).
   The other 63 carry `visual.spriteStatus` `pending` and stand as mannequins.
 - **Screens.** 39 `*Screen.cs` presenters in `Assets/Scripts/UI/Screens`, with the cards and shared
-  helpers beside them (43 files).
+  helpers beside them (43 files). Every one of the 38 `ScreenId` values has at least one
+  `PlayModeScreenshot` target, so no screen is without a capture (R46 added GuildTech,
+  GuildDungeon, GuildFloor, GuildDungeonResult, GuildDungeonBoards and Bag). A target is one state
+  of a screen: not every state of every screen has one.
 - **Talents observed.** All 90 are seen changing a fight: 69 in the sweep arena, and the 21 it
   leaves dark are raised on purpose in `TalentRaiseChecks.cs`, which names a reason for any talent
   no legal lineup can raise (there is none).
-- **Landed since 2026-09-21, runs R15 to R30.** The feel pass (R15), the core balance re-solve
+- **Landed since 2026-09-21, runs R15 to R46.** The feel pass (R15), the core balance re-solve
   (R16), the core gaps and the ability card (R17), the Store (R19), the UI kit (R20), the battle
   background wiring (R21), the speed pass (R23), late-game spending (R24), the test store and UI
   polish (R26), the friends build plumbing (R27), the guild dungeon ladder, leaderboards, reminders
   and rewarded ads screens (R28), the battle formation table and its retune (R29), and the run
-  tooling (R30): CI green on `ubuntu-latest`, the guard hooks, the queue runner and the cockpit, and the
-  UI layout pass (R42, see Next).
+  tooling (R30): CI green on `ubuntu-latest`, the guard hooks, the queue runner and the cockpit, the
+  UI layout pass (R42), the UI art import (R43 to R45) and the R46 round: capture targets and layout
+  fixes for the guild screens, Bag and Inventory, Wayfarers Road reward icons, Android texture
+  compression for backdrops, and a size check of the R44 and R45 screens (see Next).
   Accounts, cloud save, guilds, friends and duels were already in place and are described below.
   Each has its own section.
 
@@ -2114,6 +2120,15 @@ opaque green disc over the torso. `VfxEntry` now has a start frame (`start` in `
 0), and the `heal` and `buff` entries, played by `VfxDirector.Flipbook`, start at the ring frames
 of that sheet. The ring is now about a third of a second long.
 
+**The Android player ships smaller, not small.** `Tools/texture-import-policy.py` carries an Android
+column and a per-file Android override: the thirteen backdrops outside `hub` and `campaign` are
+ASTC 8x8 on Android (the two exceptions stay 6x6 because they are the most seen), everything else
+keeps its earlier format. The battle sprite sheets are 91 percent of the player and stay ASTC 6x6,
+the largest block that keeps their 336 by 396 cells aligned. A cloud release APK built with
+`Tools/build-android.ps1 -Cloud` measured 430,547,299 bytes against 434,357,355 for the earlier
+friends build, from a reference encoder's numbers and not a device capture. A further cut needs a
+decision (fewer sheet variants, smaller cells or an asset pack), not a setting.
+
 **Open visual issues:** units with no sheet draw as placeholder figures (63 of 94 heroes, and the
 enemies without sheets). **Every chapter has a painted battle background since R21**: chapter 1's
 ashen, ember and hollow, and `crossing`, `city`, `old_kingdom`, `divided_realm` and `sanctuary` for
@@ -2153,17 +2168,29 @@ In order.
    effect carries (Caldus's Defined Duty is the shipped shape). The file holds 25 capabilities and
    36 clauses. **Groups 20 and 22 stay marked as different in kind rather than as debt**, because an
    information layer and a movement system are games this one is not.
-2. **The UI design system, second half (art).** R42 (2026-10-24) generalised the Hub's look: every
-   screen already built on `EmberforgeUI`, so the gap was layout, not style. Landed: `EmberforgeUI.ClearCornerOrnament`
-   (panel titles no longer run into the corner ornaments), kit currency icons through `UiKit.Currency`,
-   `UISkin.Panel` and `UIBuilder.Frame` retired from Leaderboards, GuildDungeon, WaveResult and `ItemCard`, bodies that
-   stretch to the bottom edge instead of a fixed height (Store x4, Hero detail, LiveEvents), clearance and spacing fixes for 16:10 and 20:9 (Forge rail and tray, Orders, Recital doors, Talents names, Wayfarers Road pager), `ShopDoors.MinCardHeight`, and `HubOverflowMenu.Show` above the nav. Captured at 1920x1080,
-   1920x1200 and 2400x1080 into `Docs/ui-shots/r42` (local, the folder is git-ignored). Left on purpose: Settings, Account,
-   Events and Profile were already scroll pages; the Coda cell stays out of `CurrencyStrip` (the rule above); the
-   GuildLadder ATTEMPT button keeps the 108 touch minimum and so overflows its row. What remains is art, not code:
-   item silhouettes, hub rail icons, the rift portal, pips and the rest are placeholders listed with drop paths in the
-   run's ART-NEEDED.md; there is no capture target yet for GuildTech, GuildDungeon, GuildFloor, GuildDungeonResult,
-   GuildDungeonBoards or Bag.
+2. **The UI design system, what is left.** The look is general: every screen is built on `EmberforgeUI`
+   and the layout work is done. R42 (2026-10-24) fixed the layout (`EmberforgeUI.ClearCornerOrnament`,
+   kit currency icons through `UiKit.Currency`, `UISkin.Panel` and `UIBuilder.Frame` retired from
+   Leaderboards, GuildDungeon, WaveResult and `ItemCard`, bodies that stretch to the bottom edge in
+   Store, Hero detail and LiveEvents, `ShopDoors.MinCardHeight`, `HubOverflowMenu.Show` above the
+   nav). R43 to R45 imported and wired the art: the five item silhouettes through `ItemCard.SlotIcon`
+   (the weapon mark enlarged by `ItemCard.MarkScale`), the Hub rail icons through `HudSkin`, the six
+   aspect set icons through `UiKit.SetGlyph` on the Armory, the Archive and the Quartermaster,
+   `rift_portal` on the summon sequence, `xp_gem`, `avatar_ring`, `crown`, `lock`, `check`, the
+   floor pips and the echo pips, and the mannequin face through `Widgets`. R46 added the Wayfarers
+   Road reward icons for idle hours, slag and the hero copy (`UiKitSwitch`, `WayfarersRoadScreen.IconFor`,
+   the slag plate, and the Store Pass tab, which draws the same marks), captured the Guild screens
+   and Bag, and shifted the Hero detail armor slots so the right column clears CHANGE BANNER on a
+   20:9 canvas. Every screen changed in R44 and R45 was opened at 1920x1200 and 2400x1080 in R46
+   and found free of clipping. Left on purpose: Settings, Account, Events and Profile are scroll
+   pages; the Coda cell stays out of `CurrencyStrip` (the rule above); the GuildLadder ATTEMPT
+   button keeps the 108 touch minimum and so overflows its row. **What remains is art and one
+   unviewed set of states.** Art: the Summon idle screen still draws two flat rings (the rift
+   portal exists only on the summon sequence); the Slag, `check` and `echo_pip` marks are the
+   weakest drawings; five road icons (gold, energy, summon, chest, relic) are imported and mapped
+   in `UiKitMap` but no reward kind uses them; the hub rank bar still has no `xp_gem`; hero art is
+   Pinoy's. Unviewed: the GuildLadder states and the Account screen at 1920x1200 and 2400x1080
+   after the R46 fixes were not opened one by one.
 3. **The dormancy tripwires that will now stay dormant.** Eleven are guarded as dormant because
    nothing reaches them: `EvasionUp`, `Interrupt`, `LedgerMitigates`, `maxHpCap`,
    `ShieldBrokenByCaster`, `ScaleByLastMoved`, and the link family `LinkedUnit` (as a target),
@@ -2190,7 +2217,7 @@ In order.
   mannequins; no enemy sheet has been delivered for chapters 3 to 6, and chapter 1's
   `lost_villager` and `wild_bear` are still owed. `DESIGN-WORLD`'s
   contested-region proposal for chapter 3 is moot: his chapter 3 is City of Strangers.
-- **An APK**, on having an Android device to run it on.
+- **An APK that has run on a device**, on having an Android device. A release APK builds (R46), and nothing has run it.
 - **iOS**, on a Mac and an Apple developer account. Neither exists.
 
 ## Open decisions
@@ -2447,6 +2474,10 @@ unless they say so.
 
 Beyond the harness:
 
+- **Small layout roughness seen in the R46 captures, not fixed.** The Campaign chapter tabs are
+  crowded at 1920x1200 and 2400x1080 (labels near the tab edges, "0 / 12 CLEARED" tight). The item
+  names on the WaveResult reward tiles ("CINDERGAIT", "SCORCHPLATE") fill the tile width edge to
+  edge at all three sizes. Neither clips.
 - **Marn's Relief After Loss healed an enemy once in 8,832 campaign battles**, because the
   Coverguard it answers was on an enemy when it was spent. How the Guard got there was not traced.
 

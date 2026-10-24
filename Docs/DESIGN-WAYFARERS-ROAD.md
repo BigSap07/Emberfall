@@ -93,7 +93,7 @@ point has been earned. Version 24 (`SaveSerializer.HoldsVersion24Data`). `wayfar
 three pages of ten with every reward and what it is worth today, a hero picker for the two selectors with a confirm
 step that names the hero, and the locked paid row when its switch is on. The door is a button in the header of the
 Orders page, since its points are that page's claims. It decides nothing: `WayfarersRoad.View`, `Claim` and
-`BuyTier` do. Capture targets: `Screen:WayfarersRoad`, `WayfarersRoadPaid`, `WayfarersRoadPicker`.
+`BuyTier` do. Capture targets: `Screen:WayfarersRoad`, `WayfarersRoadPaid`, `WayfarersRoadPage2`, `WayfarersRoadPage2Claimed`, `WayfarersRoadPicker`. Reward icons come from `UiKitSwitch` through `WayfarersRoadScreen.IconFor` (idle hours, slag, hero copy and dust); gold, energy, summon, chest and relic icons are imported and unused.
 
 ## Limits
 
