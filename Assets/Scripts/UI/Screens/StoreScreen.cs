@@ -39,8 +39,8 @@ namespace Emberfall.UI.Screens
         private const float SkinGap = 20f;
 
         private const float ContentWidth = 1760f;
-        private const float BodyHeight = 700f;   // the body starts about 350 units down: 350 + 700 leaves the buy bar on screen at 1080
-        private const float TabWidth = 300f;
+        private const float BodyBottomMargin = 24f;   // the body stretches to the canvas bottom less this, so it follows the aspect
+        private const float TabWidth = 240f;         // four tabs leave the right edge to the TEST STORE chip and the COMING SOON line even at 16:10
         private const int PageSize = 10;
         private const float TileWidth = 150f;
         private const float TileGap = 10f;
@@ -55,6 +55,7 @@ namespace Emberfall.UI.Screens
 
         private Text _headerSubtitle;
         private RectTransform _body;
+        private float _bodyTop;
         private Text _banner;
         private RectTransform _testChip;
         private readonly ForgeTab[] _tabs = new ForgeTab[TabCount];
@@ -103,7 +104,23 @@ namespace Emberfall.UI.Screens
             _testChip = TestStoreBanner.Create(Root, top);
 
             _body = UIBuilder.Node("Body", Root);
-            UIBuilder.Box(_body, 0f, -(top + HubStyle.TabHeight + 12f), ContentWidth, BodyHeight, new Vector2(0.5f, 1f));
+            _bodyTop = top + HubStyle.TabHeight + 12f;
+            // top centre pivot, stretched down to the bottom margin: children hang off the top as before
+            _body.anchorMin = new Vector2(0.5f, 0f);
+            _body.anchorMax = new Vector2(0.5f, 1f);
+            _body.pivot = new Vector2(0.5f, 1f);
+            _body.sizeDelta = new Vector2(ContentWidth, -(_bodyTop + BodyBottomMargin));
+            _body.anchoredPosition = new Vector2(0f, -_bodyTop);
+        }
+
+        /// <summary>The body's height now: the canvas height less where the body starts and the bottom margin (1080 until the canvas has a size).</summary>
+        private float BodyHeight
+        {
+            get
+            {
+                float canvas = Root.rect.height > 200f ? Root.rect.height : UITheme.ReferenceResolution.y;
+                return canvas - _bodyTop - BodyBottomMargin;
+            }
         }
 
         // ------------------------------------------------------------------ lifecycle
@@ -340,7 +357,8 @@ namespace Emberfall.UI.Screens
             // the two tracks, ten tiers a page
             float rowTop = 128f;
             float free = rowTop + 34f;
-            const float tileHeight = 214f;
+            // two tracks, the pager under them: the tiles shrink to the body at 20:9
+            float tileHeight = Mathf.Clamp((BodyHeight - (free + 10f + 14f + 52f)) * 0.5f, 170f, 214f);
             float paid = free + tileHeight + 10f;
             float gridX = -(ContentWidth * 0.5f) + 12f;
             Text freeLabel = EmberforgeUI.Title("FreeLabel", _body, "FREE", UITheme.FontSmall, Emberforge.TextGold, TextAnchor.MiddleCenter);
@@ -474,19 +492,21 @@ namespace Emberfall.UI.Screens
                        : kind == PassRewardKind.Dust ? UITheme.Dust
                        : kind == PassRewardKind.Slag ? UITheme.Slag
                        : kind == PassRewardKind.Cosmetic ? Emberforge.TextGold : UITheme.Gold;
-            const float icon = 56f;
+            bool compact = height < 200f;   // a short body: smaller mark, the detail line moves up under the text
+            float icon = compact ? 44f : 56f;
             // The kit's own icon for the purse this reward pays (painted in colour, so white, at the same
             // alpha); the flat tinted glyph otherwise.
             Sprite kitMark = KitIconFor(kind);
             Image mark = UIBuilder.Img("Mark", tile, kitMark != null ? kitMark : IconFor(kind),
                                        kitMark != null ? UITheme.WithAlpha(Color.white, alpha) : UITheme.WithAlpha(tint, alpha));
-            UIBuilder.Box(mark.rectTransform, 0f, -12f, icon, icon, new Vector2(0.5f, 1f));
+            UIBuilder.Box(mark.rectTransform, 0f, -(compact ? 8f : 12f), icon, icon, new Vector2(0.5f, 1f));
             Text text = EmberforgeUI.Body("Line", tile, line, UITheme.FontTiny - 4, Emberforge.TextBody, TextAnchor.UpperCenter);
-            UIBuilder.Box(text.rectTransform, 0f, -74f, TileWidth - 16f, 70f, new Vector2(0.5f, 1f));
+            float textTop = compact ? 56f : 74f;
+            UIBuilder.Box(text.rectTransform, 0f, -textTop, TileWidth - 16f, compact ? 56f : 70f, new Vector2(0.5f, 1f));
             if (detail != null && detail.Length > 0)
             {
                 Text d = EmberforgeUI.Label("Detail", tile, detail, UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperCenter);
-                UIBuilder.Box(d.rectTransform, 0f, -146f, TileWidth - 8f, 22f, new Vector2(0.5f, 1f));
+                UIBuilder.Box(d.rectTransform, 0f, compact ? -(height - 78f) : -146f, TileWidth - 8f, 22f, new Vector2(0.5f, 1f));
             }
         }
 
@@ -585,27 +605,29 @@ namespace Emberfall.UI.Screens
             int selectedIndex = -1;
             for (int i = 0; i < shown.Count; i++) if (shown[i].Id == _selected) selectedIndex = i;
             if (selectedIndex < 0) { _selected = shown[0].Id; selectedIndex = 0; }
-            int pages = Mathf.Max(1, (shown.Count + RowsPerPage - 1) / RowsPerPage);
-            if (_listPage * RowsPerPage > selectedIndex || (_listPage + 1) * RowsPerPage <= selectedIndex) _listPage = selectedIndex / RowsPerPage;
+            // the rows a page follow the body: the pager and the restore button keep their room under them
+            int rowsPerPage = Mathf.Clamp((int)((BodyHeight - 108f) / (RowHeight + 8f)), 3, RowsPerPage);
+            int pages = Mathf.Max(1, (shown.Count + rowsPerPage - 1) / rowsPerPage);
+            if (_listPage * rowsPerPage > selectedIndex || (_listPage + 1) * rowsPerPage <= selectedIndex) _listPage = selectedIndex / rowsPerPage;
             _listPage = Mathf.Clamp(_listPage, 0, pages - 1);
 
-            int first = _listPage * RowsPerPage;
-            for (int i = first; i < first + RowsPerPage && i < shown.Count; i++) BuildRow(shown[i], i - first);
+            int first = _listPage * rowsPerPage;
+            for (int i = first; i < first + rowsPerPage && i < shown.Count; i++) BuildRow(shown[i], i - first);
             BuildDetail(Find(view, _selected), now);
 
             if (pages > 1)
             {
-                float pagerY = RowsPerPage * (RowHeight + 8f) + 4f;
+                float pagerY = rowsPerPage * (RowHeight + 8f) + 4f;
                 UIButton prev = EmberforgeUI.Button("PrevList", _body, "<", UITheme.FontTiny, ForgeButtonKind.Secondary);
                 UIBuilder.Box(prev.Root, 0f, -pagerY, 80f, 44f, new Vector2(0f, 1f));
                 prev.Interactable = _listPage > 0;
-                prev.OnClick(delegate { _listPage--; App.Audio.Tap(); _selected = shown[Mathf.Max(0, _listPage * RowsPerPage)].Id; Rebuild(); });
+                prev.OnClick(delegate { _listPage--; App.Audio.Tap(); _selected = shown[Mathf.Max(0, _listPage * rowsPerPage)].Id; Rebuild(); });
                 Text pageLabel = EmberforgeUI.Label("ListPage", _body, "PAGE " + (_listPage + 1) + " OF " + pages, UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
                 UIBuilder.Box(pageLabel.rectTransform, 90f, -pagerY, ListWidth - 180f, 44f, new Vector2(0f, 1f));
                 UIButton next = EmberforgeUI.Button("NextList", _body, ">", UITheme.FontTiny, ForgeButtonKind.Secondary);
                 UIBuilder.Box(next.Root, ListWidth - 80f, -pagerY, 80f, 44f, new Vector2(0f, 1f));
                 next.Interactable = _listPage < pages - 1;
-                next.OnClick(delegate { _listPage++; App.Audio.Tap(); _selected = shown[Mathf.Min(shown.Count - 1, _listPage * RowsPerPage)].Id; Rebuild(); });
+                next.OnClick(delegate { _listPage++; App.Audio.Tap(); _selected = shown[Mathf.Min(shown.Count - 1, _listPage * rowsPerPage)].Id; Rebuild(); });
             }
 
             if (_service != null && _service.Flow != null && _service.Flow.CanBuy)
@@ -626,14 +648,16 @@ namespace Emberfall.UI.Screens
             List<StoreOfferView> skins = new List<StoreOfferView>();
             for (int i = 0; i < view.Offers.Count; i++) if (view.Offers[i].Kind == StoreOfferKind.Skin) skins.Add(view.Offers[i]);
             if (skins.Count == 0) return;
-            int pages = Mathf.Max(1, (skins.Count + SkinPerPage - 1) / SkinPerPage);
+            // two rows of cards when the body holds them and the pager under, one row at 20:9
+            int perPage = BodyHeight >= 2f * (SkinCardHeight + SkinGap) + 52f ? SkinPerPage : SkinPerPage / 2;
+            int pages = Mathf.Max(1, (skins.Count + perPage - 1) / perPage);
             _listPage = Mathf.Clamp(_listPage, 0, pages - 1);
-            int first = _listPage * SkinPerPage;
-            for (int i = first; i < first + SkinPerPage && i < skins.Count; i++) BuildSkinCard(skins[i], i - first);
+            int first = _listPage * perPage;
+            for (int i = first; i < first + perPage && i < skins.Count; i++) BuildSkinCard(skins[i], i - first);
 
             if (pages > 1)
             {
-                float pagerY = 2f * (SkinCardHeight + SkinGap) + 4f;
+                float pagerY = (perPage / 4) * (SkinCardHeight + SkinGap) + 4f;
                 UIButton prev = EmberforgeUI.Button("PrevSkins", _body, "<", UITheme.FontTiny, ForgeButtonKind.Secondary);
                 UIBuilder.Box(prev.Root, 0f, -pagerY, 80f, 44f, new Vector2(0f, 1f));
                 prev.Interactable = _listPage > 0;
@@ -665,17 +689,17 @@ namespace Emberfall.UI.Screens
             Text name = EmberforgeUI.Title("Name", body, skin.Name.ToUpperInvariant(), UITheme.FontSmall - 2, Emberforge.TextGold, TextAnchor.UpperLeft);
             UIBuilder.Box(name.rectTransform, 150f, -16f, SkinCardWidth - 166f, 34f, new Vector2(0f, 1f));
             UIBuilder.BestFit(name, 14, UITheme.FontSmall - 2);
-            Text forHero = EmberforgeUI.Label("ForHero", body, "FOR " + hero.Name.ToUpperInvariant() + "   -   " + skin.Rarity.ToUpperInvariant(), UITheme.FontTiny - 4, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+            Text forHero = EmberforgeUI.Label("ForHero", body, "FOR " + hero.Name.ToUpperInvariant() + "   -   " + skin.Rarity.ToUpperInvariant(), UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(forHero.rectTransform, 150f, -54f, SkinCardWidth - 166f, 26f, new Vector2(0f, 1f));
-            Text bonus = EmberforgeUI.Label("Bonus", body, skin.BonusLine().ToUpperInvariant(), UITheme.FontTiny - 2, UITheme.Success, TextAnchor.UpperLeft);
+            Text bonus = EmberforgeUI.Label("Bonus", body, skin.BonusLine().ToUpperInvariant(), UITheme.FontTiny, UITheme.Success, TextAnchor.UpperLeft);
             UIBuilder.Box(bonus.rectTransform, 150f, -84f, SkinCardWidth - 166f, 28f, new Vector2(0f, 1f));
-            Text note = EmberforgeUI.Body("Note", body, (skin.Test ? "TEST SKIN. " : "") + "On that hero only. One skin per hero, never stacked.", UITheme.FontTiny - 6, Emberforge.TextQuiet, TextAnchor.UpperLeft);
+            Text note = EmberforgeUI.Body("Note", body, (skin.Test ? "TEST SKIN. " : "") + "On that hero only. One skin per hero, never stacked.", UITheme.FontTiny - 2, Emberforge.TextQuiet, TextAnchor.UpperLeft);
             UIBuilder.Box(note.rectTransform, 16f, -150f, SkinCardWidth - 32f, 60f, new Vector2(0f, 1f));
 
             bool pending = _service != null && _service.Flow != null && _service.Flow.IsPending(o.Id);
             if (o.Owned)
             {
-                RectTransform chip = EmberforgeUI.Chip("Owned", body, "YOURS  -  WEAR IT ON THE HERO SCREEN", UITheme.Success, UITheme.FontTiny - 4);
+                RectTransform chip = EmberforgeUI.Chip("Owned", body, "YOURS  -  WEAR IT ON THE HERO SCREEN", UITheme.Success, UITheme.FontTiny - 2);
                 UIBuilder.Box(chip, 16f, 16f, SkinCardWidth - 32f, 48f, new Vector2(0f, 0f));
                 return;
             }
@@ -842,7 +866,10 @@ namespace Emberfall.UI.Screens
         private void BuildDetail(StoreOfferView o, long now)
         {
             RectTransform pane = UIBuilder.Node("Detail", _body);
-            UIBuilder.Box(pane, 0f, 0f, ContentWidth - ListWidth - 20f, BodyHeight, new Vector2(1f, 1f));
+            UIBuilder.Box(pane, 0f, 0f, ContentWidth - ListWidth - 20f, 0f, new Vector2(1f, 1f));
+            pane.anchorMin = new Vector2(1f, 0f);   // top right pivot, stretched to the body's bottom
+            pane.sizeDelta = new Vector2(ContentWidth - ListWidth - 20f, 0f);
+            pane.anchoredPosition = Vector2.zero;
             EmberforgeUI.PanelOn(pane, true);
             if (o == null) return;
 
@@ -1145,7 +1172,7 @@ namespace Emberfall.UI.Screens
         /// words, locks and new dots. The subtitle carries the count.</summary>
         private void BuildShops()
         {
-            int open = ShopDoors.Build(App, Router, _body, -20f);
+            int open = ShopDoors.Build(App, Router, _body, -20f, BodyHeight - 24f);
             _headerSubtitle.text = "THE SHOPS YOU SPEND EARNED CURRENCY IN   -   " + MarketplaceShops.CountLine(open).ToUpperInvariant();
         }
 
