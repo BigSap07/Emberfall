@@ -2168,6 +2168,13 @@ In order.
    is Arno asking for exactly it, from a side of the event where the condition cannot be read. A
    tripwire is **flipped, never deleted**, so a lit one asserts the feature IS used and names the
    content using it, and goes red again the day that content stops.
+4. **The campaign yardstick is the owner's call.** Measured on 2026-10-24 and changed nowhere: the
+   reference player (never converts, never ascends) is inside its band at all 72 stages, x1.107 to
+   x1.226 from chapter 2 on. The fusing player reads x1.19 to x3.19 across chapter 2 and about x6 to
+   x7 from chapter 3 on, which is the plateau the ascension tier 2 multiplier of 1.5 was set to
+   give. `Tools/solve-recommended-power.ps1` does not converge on current content (its third pass
+   leaves the reference walk stuck at 6-6), so it cannot be used to retune until it does. Whether
+   a fusing player at x6 to x7 is the intended feel is a decision, not a defect.
 
 ## Blocked
 
