@@ -98,6 +98,74 @@ The Cinder never grows a face, speaks through a mouth, sprouts mascot features, 
 
 ---
 
+# 6. UI rules
+
+These are rules for drawing things in the interface. They do not change anything above. The colours of the
+item tile live in one table, `ItemTilePalette` in `ItemTilePalette.cs`, and the tile itself is drawn in one
+place, `ItemTile` in `ItemTile.cs`. Every screen that shows an item calls it. A screen never picks a rarity
+colour of its own.
+
+## Rarity palette
+
+Armor has four tiers, the `ArmorTemper` ladder. Relics have two grades, the `RelicGrade` ladder. They are two
+separate ladders and each has its own colours. The value is the plate, then the rim.
+
+| Tier | Ladder | Plate | Rim |
+|---|---|---|---|
+| Rough | armor | #3C342E | #7A6D62 |
+| Honed | armor | #1B4E5C | #3FA7B8 |
+| Gilded | armor | #6B4F14 | #D9A441 |
+| Radiant | armor | #A24A0E | #FFC070 |
+| Legendary | relic | #5A4411 | #F2C14E |
+| Mythic | relic | #5C1A52 | #E84FD1 |
+
+Shared colours: item silhouette #E9E3D8, outline #0B0C18. An empty or locked slot is the same plate dimmed:
+plate #1E1712, rim #4A3F36.
+
+A tier must read without its colour. Four things rise together from Rough to Radiant: the plate gets lighter
+or more saturated, the rim gets thicker, one more pip is lit, and the number goes up. The top tier of each
+ladder also gets a faint glow ring and a gem on the bottom-right corner of the frame. The harness checks that
+all four channels rise, and that the tiers stay in order when the tile is turned to greyscale.
+
+## Tile layout
+
+The tile is a rounded square plate, scaled to whatever size the caller asks for, with fixed corners:
+
+- top left: the aspect set icon, small
+- top right: the tier number
+- bottom row: the tier pips
+- bottom left: the worn check, only when the piece is worn
+- centre: the item silhouette, with weapons drawn larger because their art is narrow
+
+## At most four marks
+
+A tile carries at most four marks: the aspect icon, the number, the pips and the worn check. The silhouette is
+the item itself and the corner gem is part of the plate, so neither counts. A fifth mark is not added to make
+a screen more informative. If a screen needs to say more, it says it in text beside the tile. Under about
+50 units a tile cannot carry its four marks, so a row that shows one is made taller instead of the tile smaller.
+
+## Plate and gold rim
+
+The panels around items use one family of colours:
+
+| Role | Colour |
+|---|---|
+| Plate, dark brown | #2A1D17 |
+| Rim, worn gold | #D9A441 |
+| Accent and primary action, ember orange | #E8802A |
+| Secondary accent, teal | the Honed plate and rim above |
+
+Gold marks the edge of a surface. Ember orange is for the one thing on a screen the player is meant to press.
+Teal is the quiet second voice.
+
+## One focal point per screen
+
+TODO, not yet done: one focal point per screen, secondary surfaces quieter than the primary. Several screens
+still show many surfaces at the same weight. The tile run only fixed the clutter inside the tile and wrote
+the rules above. A pass over the busy screens is a separate piece of work.
+
+---
+
 ## Engine notes
 
 The two notes below are **not art direction**. Nothing above changes. These are implementation
