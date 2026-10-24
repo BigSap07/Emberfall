@@ -30252,6 +30252,7 @@ namespace Emberfall.DevHarness
 
             List<string> lines = new List<string>();
             List<string> gated = new List<string>();
+            List<string> sweepDark = new List<string>();
             List<string> twins = new List<string>();
             Dictionary<string, bool> isLive = new Dictionary<string, bool>();
             _talentExercise = new List<string>();
@@ -30280,6 +30281,7 @@ namespace Emberfall.DevHarness
                         fires += _lastTalentFires;
                     }
                     isLive[def.Id + "|" + t] = moved > 0;
+                    if (moved == 0) sweepDark.Add(def.Id + " " + RomanOf(t));
                     if (moved == 0 && !TalentIsStructurallyDead(def, talent))
                         gated.Add(def.Id + " " + RomanOf(t) + " needs " + TalentGate(talent));
                     report += " | " + RomanOf(t) + " " + TalentShape(talent)
@@ -30358,6 +30360,9 @@ namespace Emberfall.DevHarness
                           + " the matrix (" + sweepSeen + " in the sweep arena, " + roomSeen + " only in a named room),"
                           + " each with what it waits on: " + string.Join("; ", nowhere.ToArray()));
             }
+
+            // The same dark set, raised on purpose: see TalentRaiseChecks.cs.
+            CheckTalentRaise(matrix, sweepDark, talentCount);
 
             // Only among talents that DO something. Two dead talents being identical is the dead
             // check's finding, not this one's, and counting it twice would make this red decorative.
