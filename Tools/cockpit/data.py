@@ -8,6 +8,7 @@ returns plain dicts and lists, and a `hint` string instead of raising when its s
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 import re
@@ -15,6 +16,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from datetime import date, datetime, time as dtime, timedelta
 from pathlib import Path
@@ -27,6 +29,12 @@ LIVE_ROOT = Path(os.environ.get("EMBERFALL_ROOT", r"D:\Emberfall"))
 RUNNING_WINDOW = timedelta(minutes=15)
 PARALLEL_WINDOW = timedelta(hours=1)
 YOUNG_BLOCK = timedelta(minutes=30)
+DISCOVER_RUNNING = timedelta(minutes=20)   # a discovered log changed this recently, with no final line, is running
+LEDGER_LIVE = timedelta(minutes=5)         # a ledger changed this recently is generating
+RUN_ROOTS = ("tmp", "ui-gen", "handoff")   # roots scanned for run logs; "run_roots" in costs.json overrides
+DISCOVER_DEPTH = 2                         # folders below a root that are searched
+IMAGE_PRICE = 0.04                         # assumed Replicate price per image when a ledger states none
+RECENT_RUNS = timedelta(days=3)            # a queue row without a log only shows when it ended this recently
 SUB_TIMEOUT = 60
 HISTORY_DAYS = 12
 QUIET_FROM, QUIET_TO = dtime(3, 0), dtime(5, 30)
@@ -195,6 +203,11 @@ START_BARE = re.compile(r"^\s*(?:[-*]\s*)?(?:\d{4}-\d{2}-\d{2}[ T])?\d{1,2}:\d{2
 DONE_NAMED = re.compile(rf"\b({NAME})\s+RUN DONE\b")
 CHAIN_UPDATE = re.compile(r"OWNER CHAIN UPDATE\b[^:]*:\s*after\s+(.+?)\s+(?-i:run)\s+(\S.+)$", re.I)
 NO_NEW = re.compile(r"(?:no new run after|do not start a new run after|not after)\s+(\d{1,2}:\d{2})", re.I)
+# "Cutoff lifted by owner", "the cutoff was removed", "lifted the no new run rule": the newest cutoff line wins, lift or not
+LIFT = re.compile(r"cut-?off\s+(?:is\s+|was\s+|has\s+been\s+)?(?:lifted|removed|cancell?ed|waived)"
+                  r"|(?:lifted|removed|waived|cancell?ed)\s+the\s+(?:no[- ]new[- ]run\s+)?(?:cut-?off|rule)", re.I)
+FUTURE_SLACK = timedelta(hours=3)   # a first stamp this far past the file's mtime means the run began the day before
+IDLE_GAP_S = 300                    # no transcript message for this long inside a run counts as waiting
 DEADLINE = re.compile(r"Deadline\s+(\d{1,2}:\d{2})", re.I)
 STOP_START = re.compile(r"stop starting work\s+(\d{1,2}:\d{2})", re.I)
 
@@ -284,10 +297,161 @@ def parse_chain_update(line: str) -> list[str]:
     return names
 
 
+def name_tokens(name: str) -> list[str]:
+    """'friends build b' -> ['friends', 'b']; the folder 'friends-b-2026-10-23' -> ['friends', 'b', '2026', '10', '23']."""
+    return [w for w in re.findall(r"[a-z0-9]+", name.lower()) if w not in ("build", "the", "run")]
+
+
+def output_exists(name: str, since: datetime, builds: list) -> bool:
+    """A queued entry whose Builds folder (named like it, changed after the entry was queued) already exists."""
+    want = name_tokens(name)
+    return bool(want) and any(tok[: len(want)] == want and when >= since for tok, when in builds)
+
+
+FUTURE_TOLERANCE = timedelta(minutes=1)    # HH:MM stamps against a file time that has seconds
+
+
+def stamps_for(text: str, changed: datetime, now: datetime) -> tuple[list[tuple[datetime, str]], bool]:
+    """The log's stamps, dated and clamped. The file date anchors HH:MM-only stamps; if that puts the
+    first stamp well after the file's own change time, the run started the day before. A stamp past the
+    file's change time (or past now) is a clock written ahead (R30's 21:35 at 21:21): it counts as that
+    time, never later, so no elapsed time is negative or in the future. The flag says a stamp was clamped."""
+    stamps = line_times(text, changed.date())
+    if stamps and stamps[0][0] > changed + FUTURE_SLACK:
+        stamps = line_times(text, changed.date() - timedelta(days=1))
+    ceil = min(changed, now)
+    future = any(t > ceil + FUTURE_TOLERANCE for t, _ in stamps)
+    return [(min(t, ceil), line) for t, line in stamps], future
+
+
+def read_runs_csv(env: Env) -> dict[str, dict]:
+    """tmp/runs.csv written by the queue runner, newest row per run name (upper case). {} if missing or unreadable."""
+    p = env.root / "tmp" / "runs.csv"
+    rows: dict[str, dict] = {}
+    try:
+        with p.open(encoding="utf-8-sig", errors="replace", newline="") as f:
+            for row in csv.DictReader(f):
+                name = (row.get("run") or "").strip()
+                if not name:
+                    continue
+                rows[name.upper()] = {"name": name, "start": parse_time((row.get("start") or "").strip()),
+                                      "end": parse_time((row.get("end") or "").strip()),
+                                      "result": (row.get("result") or "").strip()}
+    except (OSError, csv.Error):
+        return {}
+    return rows
+
+
+def read_queue_lock(env: Env) -> str:
+    """Contents of handoff/run-queue.lock: 'FREE', a PID, or '' when there is no lock file."""
+    return read_text(env.root / "handoff" / "run-queue.lock").strip()[:40]
+
+
+def log_id(p: Path) -> str:
+    """Run id from a log file name: RUNNING_LOG_R43.md -> R43, R20B_running_log.md -> R20B, RUNNING_LOG.md -> its folder."""
+    s = re.sub(r"(?i)[_\- ]*running[_\- ]*log[_\- ]*", "-", p.stem).strip("-_ ")
+    return s or p.parent.name
+
+
+def find_run_logs(env: Env, cfg: dict) -> list[Path]:
+    """*running_log*.md files in the configured roots, at most DISCOVER_DEPTH folders down. The queue's own
+    tmp/<RUN>_running_log.md files are left out: collect_runs reads those by convention."""
+    roots = cfg.get("run_roots") if isinstance(cfg.get("run_roots"), list) and cfg.get("run_roots") else RUN_ROOTS
+    tmp = env.root / "tmp"
+    out: list[Path] = []
+
+    def walk(d: Path, depth: int) -> None:
+        try:
+            with os.scandir(d) as it:
+                for e in sorted(it, key=lambda x: x.name.lower()):
+                    if e.is_dir(follow_symlinks=False):
+                        if depth < DISCOVER_DEPTH:
+                            walk(Path(e.path), depth + 1)
+                    elif e.name.lower().endswith(".md") and "running_log" in e.name.lower():
+                        out.append(Path(e.path))
+        except OSError:
+            pass
+
+    for r in roots:
+        walk(env.root / str(r), 0)
+    return [p for p in out if not (p.parent == tmp and p.name.endswith("_running_log.md"))]
+
+
+def discovered_run(env: Env, p: Path, now: datetime) -> dict | None:
+    """One run from a log found by discovery. None when the file cannot be read."""
+    try:
+        changed = env.mtime(p)
+        text = p.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    name = log_id(p)
+    stamps, future = stamps_for(text, changed, now)
+    lines = [l for l in text.splitlines() if l.strip()]
+    last_line = lines[-1].upper() if lines else ""
+    r = blank_run(name)
+    r.update(path=str(p), changed=changed, lines=lines, has_log=True, source="found", future=future)
+    r["start"] = stamps[0][0] if stamps else min(changed, now)
+    r["last"] = stamps[-1][0] if stamps else min(changed, now)
+    if "RUN DONE" in last_line:
+        r["state"], r["end"] = "DONE", r["last"]
+    elif "BLOCKED" in last_line:
+        r["state"], r["end"] = "BLOCKED", r["last"]
+    elif now - changed <= DISCOVER_RUNNING:
+        r["state"], r["end"] = "running", now
+    else:
+        r["state"], r["end"] = "stale", r["last"]
+    r["elapsed"] = max(timedelta(0), r["end"] - r["start"])
+    return r
+
+
+RESULT_STATE = (("DONE", "DONE"), ("BLOCKED", "BLOCKED"))
+
+
+def apply_queue_rows(runs: list[dict], rows: dict[str, dict], now: datetime) -> None:
+    """Mark runs the queue runner also knows (source "queue"), let its recorded end settle a log that has no
+    final line (R31: FAILED at 09:48 while its log stopped at 08:54), and add rows that have no log at all."""
+    by_name = {r["name"].upper(): r for r in runs}
+    for key, row in rows.items():
+        r = by_name.get(key)
+        word = row["result"].upper()
+        state = next((st for w, st in RESULT_STATE if word.startswith(w)), "stale")
+        if r is None:
+            if row["end"] and now - row["end"] <= RECENT_RUNS:
+                n = blank_run(row["name"])
+                n.update(state=state, start=row["start"], end=row["end"], last=row["end"], changed=row["end"],
+                         source="queue", note=row["result"][:120])
+                n["elapsed"] = max(timedelta(0), row["end"] - row["start"]) if row["start"] else None
+                runs.append(n)
+                by_name[key] = n
+            continue
+        r["source"] = "queue"
+        if r["state"] in ("running", "waiting") and row["end"] and row["end"] <= now and (
+                not r["last"] or row["end"] >= r["last"] - timedelta(minutes=2)):
+            r["state"], r["end"] = state, row["end"]
+            r["note"] = row["result"][:120]
+            if r["start"]:
+                r["elapsed"] = max(timedelta(0), r["end"] - r["start"])
+
+
+def discover_runs(env: Env, cfg: dict, runs: list[dict], now: datetime) -> None:
+    """Add every discovered log that is not already a run. The same run counts once: a log whose id shares its
+    key with a queue or convention run (R43 and R43-UI-ART-GEN) is that run."""
+    have = {r["key"] for r in runs} | {r["name"].lower() for r in runs}
+    for p in find_run_logs(env, cfg):
+        name = log_id(p)
+        if key_of(name) in have or name.lower() in have:
+            continue
+        r = discovered_run(env, p, now)
+        if r:
+            runs.append(r)
+            have |= {r["key"], name.lower()}
+
+
 def blank_run(name: str) -> dict:
     return {"name": name, "key": key_of(name), "path": "", "state": "queued", "changed": None, "start": None,
             "last": None, "end": None, "elapsed": None, "lines": [], "idle_s": 0, "sleep_hits": 0,
-            "limit_hits": 0, "deadline": None, "stop_start": None, "prompt": None, "has_log": False}
+            "limit_hits": 0, "deadline": None, "stop_start": None, "prompt": None, "has_log": False,
+            "source": "queue", "future": False, "note": ""}
 
 
 def collect_runs(env: Env) -> dict:
@@ -300,11 +464,7 @@ def collect_runs(env: Env) -> dict:
         name = p.name[: -len("_running_log.md")]
         text = read_text(p)
         changed = env.mtime(p)
-        # The file date anchors HH:MM-only stamps. If that puts the last stamp after the file's
-        # own change time, the run started the day before.
-        stamps = line_times(text, changed.date())
-        if stamps and stamps[-1][0] > changed + timedelta(minutes=5):
-            stamps = line_times(text, changed.date() - timedelta(days=1))
+        stamps, future = stamps_for(text, changed, now)
         lines = [l for l in text.splitlines() if l.strip()]
         last_line = lines[-1] if lines else ""
         ev = log_events(stamps, name, last_line, changed)
@@ -314,8 +474,10 @@ def collect_runs(env: Env) -> dict:
                 updates.append((t, parse_chain_update(line)))
             for m in NO_NEW.finditer(line):
                 no_new.append((t, clock_after(m.group(1), t)))
+            if LIFT.search(line):
+                no_new.append((t, None))
         logs.append({"name": name, "path": p, "text": text, "changed": changed, "stamps": stamps,
-                     "lines": lines, "last_line": last_line})
+                     "lines": lines, "last_line": last_line, "future": future})
 
     # step state per key: newest start, newest done
     by_key: dict[str, dict] = {}
@@ -340,7 +502,7 @@ def collect_runs(env: Env) -> dict:
         done = bool(dones) and (not starts or dones[-1][0] >= starts[-1][0])
         if lg:
             first = lg["stamps"][0][0] if lg["stamps"] else None
-            r.update(path=str(lg["path"]), changed=lg["changed"], lines=src_lines)
+            r.update(path=str(lg["path"]), changed=lg["changed"], lines=src_lines, future=lg["future"], source="log")
             r["start"] = starts[0][0] if starts and (not first or starts[0][0] <= first) else (first or (starts[0][0] if starts else None))
             r["last"] = lg["stamps"][-1][0] if lg["stamps"] else lg["changed"]
             sleeps = [int(m.group(1)) if m.group(1) else 60 for m in SLEEP_RE.finditer(lg["text"])]
@@ -359,7 +521,8 @@ def collect_runs(env: Env) -> dict:
                 r["lines"] = src["lines"][idx:]
             blocked = False
         if done:
-            r["state"], r["end"] = "DONE", dones[-1][0]
+            # the first done after the last start: a later "(R28 RUN DONE)" quoted as another run's start condition is not its end
+            r["state"], r["end"] = "DONE", min(t for t, _, _ in dones if not starts or t >= starts[-1][0])
         elif k == active_key:
             r["state"], r["end"] = ("BLOCKED" if blocked else "running"), now
         elif blocked:
@@ -382,19 +545,29 @@ def collect_runs(env: Env) -> dict:
         runs.append(r)
         seen.add(k)
 
+    # run sources: the queue runner's runs.csv settles and adds runs, discovery adds interactive runs by their log
+    cfg, _ = load_costs(env)
+    apply_queue_rows(runs, read_runs_csv(env), now)
+    discover_runs(env, cfg, runs, now)
+    seen |= {r["key"] for r in runs}
+
     # queued: only the newest OWNER CHAIN UPDATE plus handoff\QUEUE.txt
-    queued_names = max(updates, key=lambda u: u[0])[1] if updates else []
+    newest =max(updates, key=lambda u: u[0]) if updates else None
+    queued_names = [(n, newest[0]) for n in newest[1]] if newest else []
     qfile = handoff / "QUEUE.txt"
     if qfile.is_file():
         for line in read_text(qfile).splitlines():
             line = line.strip()
             if line and not line.startswith("#"):
                 p = re.search(r"PROMPT_([\w-]+)\.txt", line)
-                queued_names.append(p.group(1) if p else line)
+                queued_names.append((p.group(1) if p else line, env.mtime(qfile)))
+    builds = [(name_tokens(p.name), env.mtime(p)) for p in (env.root / "Builds").iterdir() if p.is_dir()]         if (env.root / "Builds").is_dir() else []
     queue = []
-    for name in queued_names:
+    for name, since in queued_names:
         k = key_of(name)
         if k in seen or name.lower() in {q["name"].lower() for q in queue}:
+            continue
+        if output_exists(name, since, builds):  # its build folder is already there: done, not queued
             continue
         q = blank_run(name)
         pf = handoff / f"PROMPT_{name}.txt"
@@ -403,12 +576,13 @@ def collect_runs(env: Env) -> dict:
         queue.append(q)
     runs += queue
 
-    live = [r for r in runs if r["state"] == "running"] or [r for r in runs if r["changed"]]
-    active = next((r for r in runs if r["key"] == active_key), None) or (
+    live = [r for r in runs if r["state"] == "running"] or [r for r in runs if r["changed"] and r["state"] != "stale"]
+    # a step the queue runner recorded as ended (R31, FAILED) is no longer the active run
+    active = next((r for r in runs if r["key"] == active_key and r["state"] != "stale"), None) or (
         max(live, key=lambda r: r["changed"]) if live else None)
-    order = {"running": 0, "BLOCKED": 1, "waiting": 2, "queued": 3, "DONE": 4}
+    order = {"running": 0, "BLOCKED": 1, "waiting": 2, "stale": 3, "queued": 4, "DONE": 5}
     runs.sort(key=lambda r: (order[r["state"]], -(r["changed"].timestamp() if r["changed"] else 0)))
-    chain_no_new = max(no_new, key=lambda n: n[0])[1] if no_new else None
+    chain_no_new = no_new[max(range(len(no_new)), key=lambda i: (no_new[i][0], i))][1] if no_new else None
     return {"runs": runs, "active": active, "tail": active["lines"][-4:] if active else [],
             "queue": queue, "no_new_after": chain_no_new, "hint": ""}
 
@@ -642,7 +816,22 @@ def ccusage_json(env: Env, name: str, args: list[list[str]]) -> dict | None:
     return None
 
 
+USAGE_TTL = 0.0          # seconds to reuse a live ccusage result; the web server sets it, the TUI leaves it off
+_USAGE_MEMO: dict = {}
+
+
 def collect_usage(env: Env) -> dict:
+    if USAGE_TTL > 0 and not env.mock:
+        hit = _USAGE_MEMO.get("v")
+        if hit and time.monotonic() - hit[0] < USAGE_TTL:
+            return hit[1]
+        out = _collect_usage(env)
+        _USAGE_MEMO["v"] = (time.monotonic(), out)
+        return out
+    return _collect_usage(env)
+
+
+def _collect_usage(env: Env) -> dict:
     daily = ccusage_json(env, "daily", [["daily", "--json", "--breakdown"], ["daily", "--json"]])
     blocks = ccusage_json(env, "blocks", [["blocks", "--json", "--token-limit", "max"], ["blocks", "--json"]])
     if daily is None and blocks is None:
@@ -729,7 +918,7 @@ def attribute_runs(env: Env, local: dict, runs: list[dict], cfg: dict) -> dict:
     cwd_re = re.compile(cfg.get("run_cwd_regex", RUN_CWD), re.I)
     root = env.cwd_root.lower().rstrip("/")
     wins = [r for r in runs if r["start"] and r["end"] and r["state"] != "queued"]
-    out = {r["name"]: {"cost": 0.0, "opus": 0.0, "n": 0} for r in wins}
+    out = {r["name"]: {"cost": 0.0, "opus": 0.0, "n": 0, "ts": []} for r in wins}
     for m in local.get("msgs", []):
         cwd = m.cwd.replace("\\", "/").rstrip("/")
         if not cwd.lower().startswith(root + "/") and cwd.lower() != root:
@@ -757,9 +946,17 @@ def attribute_runs(env: Env, local: dict, runs: list[dict], cfg: dict) -> dict:
         o = out[pick["name"]]
         o["cost"] += c
         o["n"] += 1
+        o["ts"].append(m.ts)
         if localusage.family(m.model) == "opus":
             o["opus"] += c
     return out
+
+
+def idle_seconds(ts: list[float], start: datetime, end: datetime) -> float:
+    """Time inside a run with no transcript message from any of its sessions for IDLE_GAP_S or more,
+    counted from the run's start to its end (waiting on a build, a sub agent, the owner or a limit)."""
+    pts = sorted([start.timestamp(), end.timestamp()] + [t for t in ts if start.timestamp() <= t <= end.timestamp()])
+    return sum(b - a for a, b in zip(pts, pts[1:]) if b - a >= IDLE_GAP_S)
 
 
 def per_run_rows(runs: list[dict], attributed: dict) -> list[dict]:
@@ -769,7 +966,10 @@ def per_run_rows(runs: list[dict], attributed: dict) -> list[dict]:
         if not a or a["cost"] <= 0 or not r["start"]:
             continue
         mins = r["elapsed"].total_seconds() / 60 if r["elapsed"] else 0
-        idle = min(1.0, (r["idle_s"] / 60) / mins) if mins else 0.0
+        idle = 0.0
+        if mins:
+            gaps = idle_seconds(a["ts"], r["start"], r["end"]) if a.get("ts") and r["end"] else 0.0
+            idle = min(1.0, max(r["idle_s"], gaps) / 60 / mins)
         rows.append({"name": r["name"], "state": r["state"], "cost": a["cost"], "sessions": a["n"],
                      "minutes": mins, "per_h": a["cost"] / (mins / 60) if mins else 0.0,
                      "opus_share": a["opus"] / a["cost"] if a["cost"] else 0.0, "idle_share": idle,
@@ -826,6 +1026,96 @@ def ledger_entries(obj) -> list[tuple[float, str]]:
     return out
 
 
+def ledger_files(env: Env) -> list[Path]:
+    """ui-gen/ledger*.json and ui-gen/*/ledger*.json."""
+    ui = env.root / "ui-gen"
+    if not ui.is_dir():
+        return []
+    found = {p for pat in ("ledger*.json", "*/ledger*.json") for p in ui.glob(pat) if p.is_file()}
+    return sorted(found, key=lambda p: p.as_posix().lower())
+
+
+def generator_caps(ui: Path, rel: str) -> dict:
+    """Best effort: the caps and price a generator script under ui-gen/tools states for the ledger `rel`
+    (path below ui-gen). It must name the ledger file in a LEDGER line and carry MAX_IMAGES / MAX_COST."""
+    for script in sorted((ui / "tools").glob("*.py")) if (ui / "tools").is_dir() else []:
+        text = read_text(script)
+        if not re.search(rf"^LEDGER\s*=.*[\"']{re.escape(rel)}[\"']", text, re.M):
+            continue
+        m = re.search(r"^MAX_IMAGES\s*,\s*MAX_COST\s*,\s*PRICE\s*=\s*(\d+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)", text, re.M)
+        if m:
+            return {"images": int(m.group(1)), "cost": float(m.group(2)), "price": float(m.group(3))}
+        imgs = re.search(r"^MAX_IMAGES\s*=\s*(\d+)", text, re.M)
+        cost = re.search(r"^MAX_COST\s*=\s*([\d.]+)", text, re.M)
+        price = re.search(r"^PRICE\s*=\s*([\d.]+)", text, re.M)
+        if imgs or cost:
+            return {"images": int(imgs.group(1)) if imgs else None, "cost": float(cost.group(1)) if cost else None,
+                    "price": float(price.group(1)) if price else None}
+    return {}
+
+
+def ledger_run_start(path: Path, runs: list[dict]) -> datetime | None:
+    """Start of the run a ledger belongs to: ledger_r43.json -> the run whose key is R43."""
+    m = re.search(r"ledger[_\-]([A-Za-z]\d+[A-Za-z]?)", path.stem, re.I)
+    if not m:
+        return None
+    hit = next((r for r in runs if r["key"] == m.group(1).upper() and r["start"]), None)
+    return hit["start"] if hit else None
+
+
+def collect_ledgers(env: Env, runs: list[dict] | None = None, cfg: dict | None = None) -> dict:
+    """Every Replicate spend ledger under ui-gen. Shape: {"images": n, "cost": usd}, or the older list-of-entries
+    shape. An unreadable one is listed with ok False and counts for nothing. A ledger changed in the last
+    LEDGER_LIVE is generating, with images per minute taken from the start of its run (or, failing that, the
+    time the file was created). The total is an estimate: the price per image is assumed, Replicate's billing
+    is the truth."""
+    cfg = cfg or {}
+    now = env.now()
+    default_price = cfg.get("replicate_price_per_image")
+    default_price = float(default_price) if isinstance(default_price, (int, float)) and default_price > 0 else IMAGE_PRICE
+    ui = env.root / "ui-gen"
+    rows, total_usd, total_images = [], 0.0, 0
+    for p in ledger_files(env):
+        rel = p.relative_to(ui).as_posix()
+        try:
+            changed = env.mtime(p)
+            obj = json.loads(p.read_text(encoding="utf-8-sig"))
+        except (OSError, ValueError):
+            rows.append({"name": rel, "path": str(p), "ok": False, "images": 0, "cost": 0.0, "entries": [],
+                         "cap_images": None, "cap_cost": None, "price": default_price, "live": False, "ipm": None,
+                         "changed": None})
+            continue
+        if isinstance(obj, dict) and isinstance(obj.get("cost"), (int, float)) and not isinstance(obj.get("cost"), bool):
+            images = obj.get("images") if isinstance(obj.get("images"), (int, float)) else 0
+            entries = [(float(obj["cost"]), changed.date().isoformat())]
+        else:
+            entries = ledger_entries(obj)
+            images = sum(e.get("images", 0) for e in (obj.get("entries") if isinstance(obj, dict) else obj) or []
+                         if isinstance(e, dict) and isinstance(e.get("images"), (int, float))) or len(entries)
+        cost = sum(u for u, _ in entries)
+        caps = generator_caps(ui, rel)
+        price = obj.get("price") if isinstance(obj, dict) and isinstance(obj.get("price"), (int, float)) else (
+            caps.get("price") or default_price)
+        live = timedelta(0) <= now - changed <= LEDGER_LIVE
+        ipm = None
+        if live and images:
+            began = ledger_run_start(p, runs or [])
+            if not began and sys.platform == "win32":
+                try:
+                    created = datetime.fromtimestamp(p.stat().st_ctime)
+                    began = created if created < changed else None
+                except OSError:
+                    began = None
+            if began and changed > began:
+                ipm = images / max(1.0, (changed - began).total_seconds() / 60)
+        rows.append({"name": rel, "path": str(p), "ok": True, "images": int(images), "cost": cost, "entries": entries,
+                     "cap_images": caps.get("images"), "cap_cost": caps.get("cost"), "price": price, "live": live,
+                     "ipm": ipm, "changed": changed})
+        total_usd += cost
+        total_images += int(images)
+    return {"ledgers": rows, "total_usd": total_usd, "total_images": total_images, "price": default_price}
+
+
 def load_costs(env: Env) -> tuple[dict, str]:
     try:
         return json.loads(env.costs.read_text(encoding="utf-8")), ""
@@ -846,7 +1136,8 @@ def api_credit(cfg: dict, now: datetime) -> dict | None:
     return {"usd": float(left), "expires": exp, "days": (exp - now.date()).days if exp else None}
 
 
-def collect_project_cost(env: Env, usage_total_usd: float, cfg: dict | None = None, hint: str = "") -> dict:
+def collect_project_cost(env: Env, usage_total_usd: float, cfg: dict | None = None, hint: str = "",
+                         ledgers: dict | None = None) -> dict:
     if cfg is None:
         cfg, hint = load_costs(env)
     rate = float(cfg.get("usd_to_eur", 0.92))
@@ -882,18 +1173,14 @@ def collect_project_cost(env: Env, usage_total_usd: float, cfg: dict | None = No
             add(o.get("category") or "Other", eur, eur if str(o.get("date", "")).startswith(month) else 0.0)
             starts.append(str(o.get("date", ""))[:7])
     rep_files = 0
-    ui = env.root / "ui-gen"
-    if ui.is_dir():
-        for p in ui.rglob("ledger.json"):
-            try:
-                entries = ledger_entries(json.loads(read_text(p)))
-            except json.JSONDecodeError:
-                continue
-            rep_files += 1
-            for usd, when in entries:
-                add("Replicate", usd * rate, usd * rate if when.startswith(month) else 0.0)
-                if when[:7]:
-                    starts.append(when[:7])
+    for lg in (ledgers if ledgers is not None else collect_ledgers(env, [], cfg))["ledgers"]:
+        if not lg["ok"]:
+            continue
+        rep_files += 1
+        for usd, when in lg["entries"]:
+            add("Replicate", usd * rate, usd * rate if when.startswith(month) else 0.0)
+            if when[:7]:
+                starts.append(when[:7])
     total = sum(c[0] for c in cats.values())
     claude_paid = sum(cats.get(k, [0, 0])[0] for k in ("Subscriptions", "API credit"))
     equiv = usage_total_usd * rate
@@ -918,12 +1205,14 @@ def collect(env: Env) -> dict:
     finished = [c["cost"] for c in per_run if c["state"] == "DONE"]
     active = runs["active"]
     unity = collect_unity(env)
+    ledgers = collect_ledgers(env, runs["runs"], cfg)
     return {"env": env, "now": now, "runs": runs, "chain": chain, "usage": usage, "local": local,
             "block": current_block(env, local, usage, state), "state": state, "per_run": per_run,
             "median_run": statistics.median(finished) if finished else 0.0,
             "active_cost": attributed.get(active["name"], {}).get("cost", 0.0) if active else 0.0,
             "today": local_today(local, now), "actions": collect_actions(env), "git": collect_git(env),
             "unity": unity, "health": collect_health(env, unity),
-            "project": collect_project_cost(env, usage["total"], cfg, cost_hint),
+            "project": collect_project_cost(env, usage["total"], cfg, cost_hint, ledgers),
+            "ledgers": ledgers, "queue_lock": read_queue_lock(env),
             "api_credit": api_credit(cfg, now),
             "claude_md_words": len(read_text(env.claude_md).split())}

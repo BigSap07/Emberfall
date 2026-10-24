@@ -1,6 +1,17 @@
 {
  "_help": "All amounts in EUR. Months are YYYY-MM, dates YYYY-MM-DD. end_month null means still paying. Entries with 0 are ignored. See README.md.",
  "usd_to_eur": 0.92,
+ "plan": {
+  "_help": "Read by the web cockpit (state_builder.py). default is the plan shown first. start_month is YYYY-MM of the first payment, renew_day the day of the month it renews. api_value_eur null means the API price equivalent from ccusage x usd_to_eur; a number overrides it. capacity is the plan's usage multiple (5 or 20), used for the 'would 5x have held' line.",
+  "default": "x20",
+  "start_month": "2026-08",
+  "renew_day": 29,
+  "api_value_eur": null,
+  "options": [
+   {"id": "x5", "name": "Max 5x", "monthly_eur": 110, "capacity": 5},
+   {"id": "x20", "name": "Max 20x", "monthly_eur": 220, "capacity": 20}
+  ]
+ },
  "subscriptions": [
   {"name": "Claude", "monthly_eur": 0, "start_month": "2026-01", "end_month": null}
  ],

@@ -1,0 +1,18 @@
+{
+ "_help": "Road to a real game, read by state_builder.py. Edit by hand when DESIGN-BUILD-ORDER.md changes. pct is 0-100, sub is the one line under the bar, tone is optional (ok, warn, hot; default from pct: 70+ ok, 40+ warn, else hot). Milestones are on the overall percent (the mean of the six tracks).",
+ "updated": "2026-10-23",
+ "source": "DESIGN-BUILD-ORDER.md (checked 2026-09-23 plus the R28 and R29 work since) and the hero validator.",
+ "milestones": [
+  {"pct": 40, "label": "Friends playtest"},
+  {"pct": 70, "label": "Soft launch"},
+  {"pct": 100, "label": "Store launch"}
+ ],
+ "tracks": [
+  {"name": "Core systems", "pct": 92, "sub": "combat, economy, accounts, guilds, store"},
+  {"name": "UI screens", "pct": 72, "sub": "uGUI, 21 screens, R28 done"},
+  {"name": "Hero kits", "pct": 100, "sub": "94 of 94 authored, validator at 0 failures"},
+  {"name": "Hero art", "pct": 33, "sub": "31 of 94 drawn, 63 placeholder mannequins"},
+  {"name": "Chapters", "pct": 33, "sub": "2 of 6 with art, 3 to 6 wait on Pinoy"},
+  {"name": "Android release", "pct": 30, "sub": "debug APK built, final app id open", "tone": "warn"}
+ ]
+}

@@ -1,0 +1,617 @@
+{
+ "now": "2026-10-23T21:12:08+02:00",
+ "mock": true,
+ "header": {
+  "main": "42696f3",
+  "unity": {
+   "text": "Unity running, up 3h35",
+   "tone": "ok"
+  },
+  "waiting": 2,
+  "clock": "21:12:08",
+  "date": "Fri 23 Oct 2026",
+  "mock": true
+ },
+ "hints": [],
+ "kpis": [
+  {
+   "label": "Chain",
+   "value": "Idle",
+   "tone": "warn",
+   "sub": "R30-EFFICIENCY is ready to start"
+  },
+  {
+   "label": "Spend today",
+   "value": "$149",
+   "tone": "text",
+   "sub": "Sonnet 54%, Opus 45%"
+  },
+  {
+   "label": "5h block",
+   "value": "3h48",
+   "tone": "text",
+   "sub": "left, resets 01:05 (set by hand)"
+  },
+  {
+   "label": "Weekly limit",
+   "value": "62%",
+   "tone": "warn",
+   "sub": "5 points ahead of an even pace"
+  },
+  {
+   "label": "Road to a real game",
+   "value": "49%",
+   "tone": "hot",
+   "sub": "six tracks, details below"
+  },
+  {
+   "label": "Plan",
+   "value": "Max 20x",
+   "tone": "text",
+   "sub": "renews 29 Oct, in 6 days"
+  }
+ ],
+ "chain": {
+  "axis_start": "2026-10-23T18:00:00+02:00",
+  "axis_end": "2026-10-24T06:00:00+02:00",
+  "quiet": {
+   "start": "2026-10-24T03:00:00+02:00",
+   "end": "2026-10-24T05:30:00+02:00"
+  },
+  "desc": "Today 18:00 to 06:00. Dashed bars are projected from the median of finished runs.",
+  "badge": {
+   "text": "No cutoff tonight",
+   "tone": "ok"
+  },
+  "note": "If R30 starts now it ends about 00:12, well before the quiet window.",
+  "rows": [
+   {
+    "name": "R28-SCREENS",
+    "meta": "done 20:43, 2h54, $27.24",
+    "bars": [
+     {
+      "start": "2026-10-23T17:49:00+02:00",
+      "end": "2026-10-23T20:43:00+02:00",
+      "kind": "done"
+     }
+    ]
+   },
+   {
+    "name": "R29B-FORMATION-TUNE",
+    "meta": "done 20:51, 0h34, $9.80",
+    "bars": [
+     {
+      "start": "2026-10-23T20:17:00+02:00",
+      "end": "2026-10-23T20:51:00+02:00",
+      "kind": "done"
+     }
+    ]
+   },
+   {
+    "name": "Friends build b",
+    "meta": "done 21:00, 0h08",
+    "bars": [
+     {
+      "start": "2026-10-23T20:52:00+02:00",
+      "end": "2026-10-23T21:00:00+02:00",
+      "kind": "done"
+     }
+    ]
+   },
+   {
+    "name": "R30-EFFICIENCY",
+    "meta": "ready, ETA 00:12",
+    "bars": [
+     {
+      "start": "2026-10-23T21:12:00+02:00",
+      "end": "2026-10-24T00:12:00+02:00",
+      "kind": "proj"
+     }
+    ]
+   }
+  ]
+ },
+ "run_cost": {
+  "desc": "API price equivalent, newest first. Median run $11.75.",
+  "badge": "6 runs today",
+  "hint": "",
+  "rows": [
+   {
+    "name": "Friends build b",
+    "state_tone": "ok",
+    "cost": "$3.10",
+    "bar": 11,
+    "time": "0h08",
+    "rate": "23.3",
+    "opus": "3%",
+    "idle": "2%",
+    "hot": false,
+    "opus_hot": false,
+    "idle_hot": false
+   },
+   {
+    "name": "R29B-FORMATION-TUNE",
+    "state_tone": "ok",
+    "cost": "$9.80",
+    "bar": 36,
+    "time": "0h34",
+    "rate": "17.3",
+    "opus": "8%",
+    "idle": "3%",
+    "hot": false,
+    "opus_hot": false,
+    "idle_hot": false
+   },
+   {
+    "name": "R28-SCREENS",
+    "state_tone": "ok",
+    "cost": "$27.24",
+    "bar": 100,
+    "time": "2h54",
+    "rate": "9.4",
+    "opus": "14%",
+    "idle": "22%",
+    "hot": true,
+    "opus_hot": false,
+    "idle_hot": false
+   },
+   {
+    "name": "R29-FORMATION",
+    "state_tone": "ok",
+    "cost": "$11.75",
+    "bar": 43,
+    "time": "1h38",
+    "rate": "7.2",
+    "opus": "6%",
+    "idle": "4%",
+    "hot": false,
+    "opus_hot": false,
+    "idle_hot": false
+   },
+   {
+    "name": "R27-FRIENDS-BUILD",
+    "state_tone": "ok",
+    "cost": "$6.10",
+    "bar": 22,
+    "time": "1h12",
+    "rate": "5.1",
+    "opus": "4%",
+    "idle": "9%",
+    "hot": false,
+    "opus_hot": false,
+    "idle_hot": false
+   },
+   {
+    "name": "R26-POLISH",
+    "state_tone": "ok",
+    "cost": "$13.13",
+    "bar": 48,
+    "time": "7h47",
+    "rate": "1.7",
+    "opus": "31%",
+    "idle": "41%",
+    "hot": false,
+    "opus_hot": true,
+    "idle_hot": true
+   }
+  ]
+ },
+ "runs": {
+  "desc": "Queued, logged by convention, or found by discovery. no queue lock file.",
+  "badge": "1 running",
+  "found": 0,
+  "rows": [
+   {
+    "name": "R27-store-polish",
+    "state": "running",
+    "state_tone": "warn",
+    "source": "log",
+    "source_label": "log",
+    "started": "11:02",
+    "elapsed": "2h58",
+    "last": "13:20",
+    "flag": "",
+    "note": ""
+   },
+   {
+    "name": "R25-relic-icons",
+    "state": "DONE",
+    "state_tone": "ok",
+    "source": "log",
+    "source_label": "log",
+    "started": "07:30",
+    "elapsed": "2h50",
+    "last": "10:20",
+    "flag": "",
+    "note": ""
+   },
+   {
+    "name": "nightly-fixups",
+    "state": "DONE",
+    "state_tone": "ok",
+    "source": "log",
+    "source_label": "log",
+    "started": "22 Oct 19:30",
+    "elapsed": "2h45",
+    "last": "22:15",
+    "flag": "",
+    "note": ""
+   },
+   {
+    "name": "hero-batch-9",
+    "state": "BLOCKED",
+    "state_tone": "bad",
+    "source": "log",
+    "source_label": "log",
+    "started": "22 Oct 13:05",
+    "elapsed": "4h45",
+    "last": "17:50",
+    "flag": "",
+    "note": ""
+   },
+   {
+    "name": "R26-toast-anchor",
+    "state": "DONE",
+    "state_tone": "ok",
+    "source": "log",
+    "source_label": "log",
+    "started": "22 Oct 09:10",
+    "elapsed": "3h30",
+    "last": "12:40",
+    "flag": "",
+    "note": ""
+   },
+   {
+    "name": "economy-r5",
+    "state": "waiting",
+    "state_tone": "mute",
+    "source": "log",
+    "source_label": "log",
+    "started": "21 Oct 08:00",
+    "elapsed": "8h00",
+    "last": "16:00",
+    "flag": "",
+    "note": ""
+   }
+  ]
+ },
+ "replicate": {
+  "desc": "Estimate: the price per image is assumed, check Replicate billing.",
+  "badge": "idle",
+  "live": 0,
+  "rows": [
+   {
+    "name": "r20/ledger.json",
+    "state": "idle",
+    "tone": "dim",
+    "images": "420",
+    "cost": "$16.80",
+    "cap": "",
+    "rate": "",
+    "updated": "12:42"
+   },
+   {
+    "name": "r21/ledger.json",
+    "state": "idle",
+    "tone": "dim",
+    "images": "2",
+    "cost": "$15.55",
+    "cap": "",
+    "rate": "",
+    "updated": "12:42"
+   }
+  ],
+  "total": {
+   "label": "Replicate total (estimate)",
+   "value": "$32.35",
+   "sub": "422 images in 2 ledgers, price assumed at $0.04 per image where a ledger has none"
+  }
+ },
+ "waiting": {
+  "desc": "Only things that block or advance the game.",
+  "open": 2,
+  "items": [
+   {
+    "tone": "warn",
+    "title": "Send friends build b to Pinoy",
+    "sub": "Ready in Builds\\friends-b-2026-10-23. The APK has never been installed on a device."
+   },
+   {
+    "tone": "warn",
+    "title": "Start R30-EFFICIENCY",
+    "sub": "Fresh Sonnet session, effort high, about 3 hours."
+   },
+   {
+    "tone": "mute",
+    "title": "Cloud bundle agent/idle-power-study",
+    "sub": "Download to handoff, git fetch, git push. Fetch and push only."
+   },
+   {
+    "tone": "mute",
+    "title": "Decide idle power for non-spenders",
+    "sub": "After the playtest, not before."
+   }
+  ]
+ },
+ "shipped": {
+  "date": "Fri 23 Oct",
+  "counters": [
+   {
+    "n": "6",
+    "label": "Runs done"
+   },
+   {
+    "n": "5",
+    "label": "Merges"
+   },
+   {
+    "n": "2",
+    "label": "Builds"
+   },
+   {
+    "n": "9",
+    "label": "Checks green"
+   }
+  ],
+  "feed": [
+   {
+    "time": "21:00",
+    "text": "Friends build b ready: Windows zip 734 MB, APK 434 MB, smoke test passed."
+   },
+   {
+    "time": "20:51",
+    "text": "R29B-FORMATION-TUNE done, merged to main 42696f3. Rows straight, 8 of 8 shots real."
+   },
+   {
+    "time": "20:43",
+    "text": "R28-SCREENS done, main 4718cb7. 106 of 106 captures real, none stale."
+   },
+   {
+    "time": "17:48",
+    "text": "R29-FORMATION merged, main 4ef4cb7."
+   },
+   {
+    "time": "16:09",
+    "text": "Friends build 1: zip 700 MB and APK 414 MB, smoke test passed."
+   }
+  ]
+ },
+ "road": {
+  "pct": 49,
+  "desc": "Average of six tracks, from DESIGN-BUILD-ORDER.md and the hero validator.",
+  "milestones": [
+   {
+    "pct": 40,
+    "label": "Friends playtest",
+    "tone": "ok"
+   },
+   {
+    "pct": 70,
+    "label": "Soft launch",
+    "tone": "warn"
+   },
+   {
+    "pct": 99.5,
+    "label": "Store launch",
+    "tone": "dim"
+   }
+  ],
+  "tracks": [
+   {
+    "name": "Core systems",
+    "pct": 92,
+    "sub": "combat, economy, accounts, guilds, store",
+    "tone": "ok"
+   },
+   {
+    "name": "UI screens",
+    "pct": 72,
+    "sub": "uGUI migration, R28 done",
+    "tone": "ok"
+   },
+   {
+    "name": "Hero kits",
+    "pct": 32,
+    "sub": "30 of 94 authored, validator at 56 failures",
+    "tone": "hot"
+   },
+   {
+    "name": "Hero art",
+    "pct": 33,
+    "sub": "31 of 94 drawn",
+    "tone": "hot"
+   },
+   {
+    "name": "Chapters",
+    "pct": 33,
+    "sub": "2 of 6, waiting on art from Pinoy",
+    "tone": "hot"
+   },
+   {
+    "name": "Android release",
+    "pct": 30,
+    "sub": "debug APK built, final app id open",
+    "tone": "warn"
+   }
+  ]
+ },
+ "plan": {
+  "default": "x20",
+  "since": "Aug",
+  "api_value": "EUR 7,562",
+  "options": [
+   {
+    "id": "x5",
+    "name": "Max 5x",
+    "price_label": "EUR 110",
+    "paid": "EUR 330",
+    "multiple": "22.9x"
+   },
+   {
+    "id": "x20",
+    "name": "Max 20x",
+    "price_label": "EUR 220",
+    "paid": "EUR 660",
+    "multiple": "11.5x"
+   }
+  ],
+  "bars": [
+   {
+    "label": "API price",
+    "pct": 100,
+    "val": "EUR 7,562"
+   },
+   {
+    "label": "Max 20x",
+    "plan_id": "x20",
+    "pct": 8.7,
+    "val": "EUR 660"
+   },
+   {
+    "label": "Max 5x",
+    "plan_id": "x5",
+    "pct": 4.4,
+    "val": "EUR 330"
+   }
+  ],
+  "note": "Renews 29 Oct, in 6 days. Log the weekly % just before each reset. If 20x never passes about 25% of its week, 5x would have held."
+ },
+ "limits": {
+  "block": {
+   "sub": "resets 01:05, set by hand 20:41",
+   "pct": 22,
+   "left": "$18.60 in block",
+   "right": "burn $26/h"
+  },
+  "weekly": {
+   "sub": "resets in 2d 13h",
+   "pct": 62,
+   "pace": 57,
+   "tone": "warn",
+   "note": "62% used, 5 points ahead of an even pace (white tick)."
+  },
+  "models": [
+   {
+    "name": "Sonnet",
+    "pct": 54,
+    "tone": "ok"
+   },
+   {
+    "name": "Opus",
+    "pct": 45,
+    "tone": "hot"
+   },
+   {
+    "name": "Haiku",
+    "pct": 1,
+    "tone": "text"
+   }
+  ]
+ },
+ "week": {
+  "days": [
+   {
+    "day": "Sat",
+    "label": "$307",
+    "value": 307,
+    "today": false
+   },
+   {
+    "day": "Sun",
+    "label": "$317",
+    "value": 317,
+    "today": false
+   },
+   {
+    "day": "Mon",
+    "label": "$470",
+    "value": 470,
+    "today": false
+   },
+   {
+    "day": "Tue",
+    "label": "$199",
+    "value": 199,
+    "today": false
+   },
+   {
+    "day": "Wed",
+    "label": "$49",
+    "value": 49,
+    "today": false
+   },
+   {
+    "day": "Thu",
+    "label": "$0",
+    "value": 0,
+    "today": false
+   },
+   {
+    "day": "Fri",
+    "label": "$149",
+    "value": 149,
+    "today": true
+   }
+  ]
+ },
+ "playtest": {
+  "desc": "No date yet. 0 sessions logged.",
+  "items": [
+   {
+    "title": "Friends build 1 smoke test passed",
+    "done": true
+   },
+   {
+    "title": "Friends build b ready",
+    "done": true
+   },
+   {
+    "title": "APK installed on a real phone or BlueStacks",
+    "done": false
+   },
+   {
+    "title": "Both play a day, share the PLAY LOG",
+    "done": false
+   },
+   {
+    "title": "Run Tools\\playtest\\analyse.py on the logs",
+    "done": false
+   },
+   {
+    "title": "Pinoy answers: 27 kit questions, 63 stage names",
+    "done": false
+   }
+  ]
+ },
+ "health": [
+  {
+   "tone": "ok",
+   "label": "Unity",
+   "value": "running, quiet window in 5h48"
+  },
+  {
+   "tone": "ok",
+   "label": "Build-check",
+   "value": "pass, full, 20:51"
+  },
+  {
+   "tone": "ok",
+   "label": "Friends build",
+   "value": "friends-b-2026-10-23, 12m old"
+  },
+  {
+   "tone": "warn",
+   "label": "Playtest logs",
+   "value": "0 new since last analyse"
+  },
+  {
+   "tone": "dim",
+   "label": "Branches",
+   "value": "6 on origin, not merged"
+  }
+ ],
+ "tips": [
+  "R28-SCREENS cost 2.3x the median run and 22% of it was waiting.",
+  "Opus is 45% of today. The same work on Sonnet would be about $41 less."
+ ]
+}

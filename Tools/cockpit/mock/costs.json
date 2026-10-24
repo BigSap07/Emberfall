@@ -1,5 +1,15 @@
 {
  "usd_to_eur": 0.92,
+ "plan": {
+  "default": "x20",
+  "start_month": "2026-08",
+  "renew_day": 29,
+  "api_value_eur": null,
+  "options": [
+   {"id": "x5", "name": "Max 5x", "monthly_eur": 110, "capacity": 5},
+   {"id": "x20", "name": "Max 20x", "monthly_eur": 220, "capacity": 20}
+  ]
+ },
  "subscriptions": [
   {
    "name": "Claude Max 20x",

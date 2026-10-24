@@ -94,3 +94,7 @@ Assets/Resources/BuildStamp.txt.meta
 
 # Tools/cockpit: the 5h reset and weekly values typed with keys b and w
 /Tools/cockpit/state.json
+
+# Tools/cockpit web: a snapshot of /api/state from real data
+/Tools/cockpit/web/state.real-snapshot.json
+/Tools/cockpit/web/screenshot-real.png
