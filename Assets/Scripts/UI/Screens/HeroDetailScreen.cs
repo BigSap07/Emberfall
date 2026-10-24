@@ -908,6 +908,8 @@ namespace Emberfall.UI.Screens
 
             RefreshArmorBlock(session);
 
+            // LEVEL FORMAT (R52): "LV n" is the short form on every card and row; "LEVEL n / cap" is the
+            // long form and lives only on this page.
             // The "/ cap" half is a progress readout against this hero's own cap - its star tier
             // and ascension tier set it, not Wayfarer rank - which means nothing for a prologue
             // hero and reads as broken next to one: Kael at 42 would render as "LEVEL 42 / 10".

@@ -381,7 +381,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(sub.rectTransform, 124f, -18f, 620f, 28f, new Vector2(0f, 0.5f));
             UIBuilder.Outlined(sub, Emberforge.Outline, Emberforge.StrokeThin);
 
-            Text power = EmberforgeUI.Label("Power", content, hero.Power.ToString(), UITheme.FontSmall,
+            Text power = EmberforgeUI.Label("Power", content, "POWER " + hero.Power, UITheme.FontSmall,
                                             Emberforge.TextGold, TextAnchor.MiddleRight);
             UIBuilder.Box(power.rectTransform, -230f, 0f, 190f, 34f, new Vector2(1f, 0.5f));
             UIBuilder.Outlined(power, Emberforge.Outline, Emberforge.StrokeThin);

@@ -574,12 +574,12 @@ namespace Emberfall.UI
                                                     UITheme.RoleColor(def.Role), UITheme.FontTiny);
             UIBuilder.Box(roleChip, 0f, -(CardNameTop + 68f), 180f, 34f, new Vector2(0.5f, 1f));
 
-            Text level = EmberforgeUI.Label("Level", card.Root, "Lv " + hero.Level, UITheme.FontTiny,
+            Text level = EmberforgeUI.Label("Level", card.Root, "LV " + hero.Level, UITheme.FontTiny,
                                             Emberforge.TextQuiet, TextAnchor.LowerLeft);
             UIBuilder.Box(level.rectTransform, CardPad, CardPad, 140f, 28f, new Vector2(0f, 0f));
             UIBuilder.Outlined(level, Emberforge.Outline, Emberforge.StrokeThin);
 
-            Text power = EmberforgeUI.Label("Power", card.Root, hero.Power.ToString(), UITheme.FontTiny,
+            Text power = EmberforgeUI.Label("Power", card.Root, "POWER " + hero.Power, UITheme.FontTiny,
                                             Emberforge.TextGold, TextAnchor.LowerRight);
             UIBuilder.Box(power.rectTransform, -CardPad, CardPad, 160f, 28f, new Vector2(1f, 0f));
             UIBuilder.Outlined(power, Emberforge.Outline, Emberforge.StrokeThin);
