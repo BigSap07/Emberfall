@@ -198,7 +198,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(_passwordField.GetComponent<RectTransform>(), 570f, -174f, 380f, 76f, new Vector2(0f, 1f));
 
             _linkButton = EmberforgeUI.Button("Link", _linkCard, "LINK EMAIL", UITheme.FontBody,
-                                              ForgeButtonKind.Primary);
+                                              ForgeButtonKind.Secondary);
             UIBuilder.Box(_linkButton.Root, 30f, -266f, 460f, 84f, new Vector2(0f, 1f));
             _linkButton.OnClick(OnLinkEmail);
         }

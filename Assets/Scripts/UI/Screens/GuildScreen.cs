@@ -160,7 +160,7 @@ namespace Emberfall.UI.Screens
                                              GuildRules.NameMax, false);
             UIBuilder.Box(_nameField.GetComponent<RectTransform>(), 30f, -56f, 520f, 76f, new Vector2(0f, 1f));
 
-            _createButton = EmberforgeUI.Button("Create", create, "CREATE", UITheme.FontBody, ForgeButtonKind.Primary);
+            _createButton = EmberforgeUI.Button("Create", create, "CREATE", UITheme.FontBody, ForgeButtonKind.Secondary);
             UIBuilder.Box(_createButton.Root, 570f, -56f, 300f, 76f, new Vector2(0f, 1f));
             _createButton.OnClick(OnCreate);
 
@@ -249,16 +249,17 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(_requestsButton.Root, -30f, -78f, 260f, 72f, new Vector2(1f, 1f));
             _requestsButton.OnClick(OnOpenRequests);
 
-            _chatButton = EmberforgeUI.Button("Chat", card, "CHAT", UITheme.FontSmall, ForgeButtonKind.Primary);
+            _chatButton = EmberforgeUI.Button("Chat", card, "CHAT", UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(_chatButton.Root, -300f, -78f, 240f, 72f, new Vector2(1f, 1f));
             _chatButton.OnClick(OnOpenChat);
 
             _leaveButton = EmberforgeUI.Button("Leave", card, "LEAVE", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            EmberforgeUI.Danger(_leaveButton);
             UIBuilder.Box(_leaveButton.Root, -30f, -162f, 260f, 66f, new Vector2(1f, 1f));
             _leaveButton.OnClick(OnLeave);
 
-            // The guild dungeon's door. Under CHAT, which is where its handover lands, and ember
-            // like CHAT: these are the two things a member opens this card to do.
+            // The guild dungeon's door. Under CHAT, which is where its handover lands. DUNGEON is the one
+            // orange button on this card (R53): it is the guild's play loop, CHAT is the talking beside it.
             _dungeonButton = EmberforgeUI.Button("Dungeon", card, "DUNGEON", UITheme.FontSmall, ForgeButtonKind.Primary);
             UIBuilder.Box(_dungeonButton.Root, -300f, -162f, 240f, 66f, new Vector2(1f, 1f));
             _dungeonButton.OnClick(OnOpenDungeon);
@@ -302,7 +303,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(_openToggle.Root, 750f, -56f, 400f, 76f, new Vector2(0f, 1f));
             _openToggle.OnClick(OnToggleOpen);
 
-            _saveSettings = EmberforgeUI.Button("Save", _settingsCard, "SAVE", UITheme.FontSmall, ForgeButtonKind.Primary);
+            _saveSettings = EmberforgeUI.Button("Save", _settingsCard, "SAVE", UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(_saveSettings.Root, 30f, -144f, 300f, 72f, new Vector2(0f, 1f));
             _saveSettings.OnClick(OnSaveSettings);
 
@@ -575,7 +576,7 @@ namespace Emberfall.UI.Screens
             if (_transferCancel == null)
             {
                 _transferCancel = EmberforgeUI.Button("TransferCancel", _transferBanner.rectTransform,
-                                                            "CANCEL", UITheme.FontSmall, ForgeButtonKind.Secondary);
+                                                            "CANCEL", UITheme.FontSmall, ForgeButtonKind.Quiet);
                 UIBuilder.Box(_transferCancel.Root, 0f, 0f, 200f, 40f, new Vector2(1f, 0.5f));
                 _transferCancel.OnClick(OnCancelTransfer);
             }
@@ -648,7 +649,8 @@ namespace Emberfall.UI.Screens
                 if (GuildRules.CanMakeLeader(mine, entry.Role, entry.IsSelf))
                 {
                     UIButton make = EmberforgeUI.Button("MakeLeader", row, "MAKE LEADER",
-                                                         UITheme.FontSmall, ForgeButtonKind.Primary);
+                                                         UITheme.FontSmall, ForgeButtonKind.Secondary);
+                    EmberforgeUI.Danger(make);   // hands the guild over: the warning tone, never orange
                     UIBuilder.Box(make.Root, -24f, 0f, 320f, 72f, new Vector2(1f, 0.5f));
                     make.OnClick(delegate { OnMakeLeader(capturedId, capturedName); });
                 }
@@ -694,7 +696,7 @@ namespace Emberfall.UI.Screens
 
             if (!entry.IsSelf)
             {
-                UIButton team = EmberforgeUI.Button("Team", row, "THEIR TEAM", UITheme.FontSmall, ForgeButtonKind.Primary);
+                UIButton team = EmberforgeUI.Button("Team", row, "THEIR TEAM", UITheme.FontSmall, ForgeButtonKind.Secondary);
                 UIBuilder.Box(team.Root, right, 0f, 250f, 72f, new Vector2(1f, 0.5f));
                 team.OnClick(delegate { OnOpenTeam(capturedId, capturedName); });
             }

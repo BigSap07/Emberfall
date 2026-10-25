@@ -56,6 +56,7 @@ namespace Emberfall.UI.Screens
         private Text _headerSubtitle;
 
         private RectTransform _ordersBody;
+        private bool _primaryGiven;   // the loop-card rule: see EmberforgeUI.LoopCardKind
         private RectTransform _dailyBody;
         private RectTransform _weeklyBody;
         private RectTransform _calendarBody;
@@ -114,6 +115,7 @@ namespace Emberfall.UI.Screens
         {
             long now = TimeUtil.NowUnix();
             LoopBoard board = DailyLoop.Board(App.Session, now);
+            _primaryGiven = false;
 
             Clear(_ordersBody);
             Clear(_dailyBody);
@@ -196,7 +198,8 @@ namespace Emberfall.UI.Screens
             }
             else
             {
-                UIButton claim = EmberforgeUI.Button("Claim", row, "CLAIM", UITheme.FontSmall, ForgeButtonKind.Primary);
+                UIButton claim = EmberforgeUI.Button("Claim", row, "CLAIM", UITheme.FontSmall,
+                                                 EmberforgeUI.LoopCardKind(o.CanClaim, ref _primaryGiven));
                 UIBuilder.Box(claim.Root, 934f, 0f, 150f, 56f, MidLeft);
                 claim.Interactable = o.CanClaim;
                 claim.OnClick(delegate { OnClaimOrder(id); });
@@ -253,7 +256,8 @@ namespace Emberfall.UI.Screens
                 UIBuilder.Box(chip, PanelPad, -(CardHeight - 12f - 46f), SideWidth - PanelPad * 2f, 46f, TopLeft);
                 return;
             }
-            UIButton open = EmberforgeUI.Button("Open", body, buttonText, UITheme.FontTiny, ForgeButtonKind.Primary);
+            UIButton open = EmberforgeUI.Button("Open", body, buttonText, UITheme.FontTiny,
+                                             EmberforgeUI.LoopCardKind(canOpen, ref _primaryGiven));
             UIBuilder.Box(open.Root, PanelPad, -(CardHeight - 12f - 50f), SideWidth - PanelPad * 2f, 50f, TopLeft);
             open.Interactable = canOpen;
             open.OnClick(action);
@@ -277,7 +281,8 @@ namespace Emberfall.UI.Screens
             for (int i = 0; i < board.Calendar.Count; i++) if (board.Calendar[i].Next) next = board.Calendar[i].Day;
             UIButton claim = EmberforgeUI.Button("ClaimDay", _calendarBody,
                                                  board.CalendarCanClaim ? "CLAIM DAY " + next : "COME BACK TOMORROW",
-                                                 UITheme.FontTiny, ForgeButtonKind.Primary);
+                                                 UITheme.FontTiny,
+                                                 EmberforgeUI.LoopCardKind(board.CalendarCanClaim, ref _primaryGiven));
             UIBuilder.Box(claim.Root, ContentWidth - PanelPad - 360f, -10f, 360f, 50f, TopLeft);
             EmberforgeUI.ClearCornerOrnamentRight(claim.Root, ContentWidth);
             claim.Interactable = board.CalendarCanClaim;

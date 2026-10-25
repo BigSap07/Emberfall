@@ -268,12 +268,13 @@ namespace Emberfall.UI.Screens
                                            TextAnchor.UpperLeft);
             UIBuilder.Box(_resetNote.rectTransform, 30f, -56f, CardWidth - 90f, 70f, new Vector2(0f, 1f));
 
-            // TEAL, and that is the point rather than an oversight. The kit has two voices and
-            // ember is the thing to press; the one destructive control in the game is deliberately
-            // NOT the thing to press, which is the same reasoning that put the destructive answer
-            // on the confirm dialog's secondary button.
+            // A SECONDARY, and that is the point rather than an oversight. Ember is the thing to
+            // press; the one destructive control in the game is deliberately NOT the thing to
+            // press, which is the same reasoning that put the destructive answer on the confirm
+            // dialog's secondary button.
             UIButton reset = EmberforgeUI.Button("Reset", card, "RESET PROGRESS", HubStyle.FontButton,
                                                  ForgeButtonKind.Secondary);
+            EmberforgeUI.Danger(reset);   // the warning tone on the words (R53); the plate stays a Secondary
             UIBuilder.Box(reset.Root, 30f, 24f, 420f, HubStyle.TouchMin, new Vector2(0f, 0f));
             reset.OnClick(ConfirmReset);
         }

@@ -36,6 +36,7 @@ namespace Emberfall.UI.Screens
         private Text _note;
 
         private readonly List<GuildRequestEntry> _requests = new List<GuildRequestEntry>();
+        private bool _primaryGiven;   // the loop-card rule: see EmberforgeUI.LoopCardKind
         private bool _loading;
 
         protected override void Build()
@@ -108,6 +109,7 @@ namespace Emberfall.UI.Screens
 
         private void Render()
         {
+            _primaryGiven = false;
             for (int i = _listHost.childCount - 1; i >= 0; i--)
                 Destroy(_listHost.GetChild(i).gameObject);
 
@@ -181,7 +183,8 @@ namespace Emberfall.UI.Screens
             string capturedId = entry.Id;
             string capturedName = shown;
 
-            UIButton accept = EmberforgeUI.Button("Accept", row, "ACCEPT", UITheme.FontSmall, ForgeButtonKind.Primary);
+            UIButton accept = EmberforgeUI.Button("Accept", row, "ACCEPT", UITheme.FontSmall,
+                                                  EmberforgeUI.LoopCardKind(!full, ref _primaryGiven));
             UIBuilder.Box(accept.Root, -230f, 0f, 200f, 72f, new Vector2(1f, 0.5f));
             accept.Interactable = !full;
             accept.OnClick(delegate { OnAccept(capturedId, capturedName); });

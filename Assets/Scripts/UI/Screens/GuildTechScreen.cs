@@ -48,6 +48,7 @@ namespace Emberfall.UI.Screens
         private Text _levelNote;
         private Text _pays;
         private RectTransform _tracks;
+        private bool _primaryGiven;   // the loop-card rule: see EmberforgeUI.LoopCardKind
         private Text _note;
         private bool _loading;
         private bool _busy;
@@ -210,6 +211,7 @@ namespace Emberfall.UI.Screens
         private void DrawTracks(GuildTechConfig tree, GameSession session, GuildTechState state, int level)
         {
             for (int i = _tracks.childCount - 1; i >= 0; i--) Destroy(_tracks.GetChild(i).gameObject);
+            _primaryGiven = false;
             for (int f = 0; f < tree.Families.Count; f++) DrawTrack(tree, tree.Families[f], session, state, level);
         }
 
@@ -317,7 +319,7 @@ namespace Emberfall.UI.Screens
             }
 
             UIButton buy = EmberforgeUI.Button("Buy", card, can ? "BUY" : !open ? "GUILD LEVEL " + needs : why.ToUpperInvariant(),
-                                               UITheme.FontTiny - 2, can ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
+                                               UITheme.FontTiny - 2, EmberforgeUI.LoopCardKind(can, ref _primaryGiven));
             UIBuilder.Box(buy.Root, 16f, 14f, RungWidth - 32f, 50f, new Vector2(0f, 0f));
             buy.Interactable = can && string.IsNullOrEmpty(_offline) && !_busy;
             string id = family.Id;
@@ -389,7 +391,7 @@ namespace Emberfall.UI.Screens
                 bool mayPick = open && mayLead;
                 UIButton pick = EmberforgeUI.Button("Pick", card,
                     !open ? "LOCKED" : !mayLead ? "YOUR GUILD'S CHOICE" : "RUN THIS NEXT WEEK",
-                    UITheme.FontTiny - 4, mayPick ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
+                    UITheme.FontTiny - 4, EmberforgeUI.LoopCardKind(mayPick, ref _primaryGiven));
                 SpanX(pick.Root, 14f, 14f, 10f, 42f, false);
                 pick.Interactable = mayPick && string.IsNullOrEmpty(_offline) && !_busy;
                 string fid = family.Id, tid = talent.Id;

@@ -42,6 +42,7 @@ namespace Emberfall.UI.Screens
         private Text _myCode;
         private Text _myCodeNote;
         private UIButton _copyButton;
+        private bool _primaryGiven;   // the loop-card rule: see EmberforgeUI.LoopCardKind
 
         private InputField _codeField;
         private UIButton _addButton;
@@ -129,7 +130,7 @@ namespace Emberfall.UI.Screens
                                       TextAnchor.UpperLeft);
             UIBuilder.Box(_myCode.rectTransform, 30f, -54f, 520f, 64f, new Vector2(0f, 1f));
 
-            _copyButton = EmberforgeUI.Button("Copy", _myCodeCard, "COPY", UITheme.FontBody, ForgeButtonKind.Primary);
+            _copyButton = EmberforgeUI.Button("Copy", _myCodeCard, "COPY", UITheme.FontBody, ForgeButtonKind.Secondary);
             UIBuilder.Box(_copyButton.Root, 580f, -50f, 260f, 76f, new Vector2(0f, 1f));
             _copyButton.OnClick(OnCopyCode);
 
@@ -272,6 +273,9 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void RenderList()
         {
+            // One orange button: SEND REQUEST until a request is waiting for an answer, then the first ACCEPT (R53).
+            _primaryGiven = false;
+            EmberforgeUI.SetKind(_addButton, ForgeButtonKind.Primary);
             for (int i = _listHost.childCount - 1; i >= 0; i--) Destroy(_listHost.GetChild(i).gameObject);
 
             CloudCoordinator cloud = App.Cloud;
@@ -375,7 +379,9 @@ namespace Emberfall.UI.Screens
 
             if (entry.AwaitingMyAnswer)
             {
-                UIButton accept = EmberforgeUI.Button("Accept", row, "ACCEPT", UITheme.FontSmall, ForgeButtonKind.Primary);
+                UIButton accept = EmberforgeUI.Button("Accept", row, "ACCEPT", UITheme.FontSmall,
+                                                      EmberforgeUI.LoopCardKind(true, ref _primaryGiven));
+                if (_primaryGiven) EmberforgeUI.SetKind(_addButton, ForgeButtonKind.Secondary);
                 UIBuilder.Box(accept.Root, -230f, 0f, 200f, 72f, new Vector2(1f, 0.5f));
                 accept.OnClick(delegate { OnAccept(capturedId, capturedName); });
 
@@ -391,7 +397,7 @@ namespace Emberfall.UI.Screens
 
             if (entry.Status == "accepted")
             {
-                UIButton open = EmberforgeUI.Button("Open", row, "THEIR TEAM", UITheme.FontSmall, ForgeButtonKind.Primary);
+                UIButton open = EmberforgeUI.Button("Open", row, "THEIR TEAM", UITheme.FontSmall, ForgeButtonKind.Secondary);
                 UIBuilder.Box(open.Root, -230f, 0f, 220f, 72f, new Vector2(1f, 0.5f));
                 open.OnClick(delegate { OnOpenTeam(capturedUser, capturedName); });
             }
@@ -399,6 +405,7 @@ namespace Emberfall.UI.Screens
             UIButton remove = EmberforgeUI.Button("Remove", row,
                                                         entry.Status == "accepted" ? "REMOVE" : "CANCEL",
                                                         UITheme.FontSmall, ForgeButtonKind.Secondary);
+            if (entry.Status == "accepted") EmberforgeUI.Danger(remove);   // unfriending: the warning tone, never orange
             UIBuilder.Box(remove.Root, -24f, 0f, 190f, 72f, new Vector2(1f, 0.5f));
             remove.OnClick(delegate
             {

@@ -182,17 +182,16 @@ namespace Emberfall.UI
             UIBuilder.Box(warning.rectTransform, 0f, 132f, CardWidth - 140f, 32f, new Vector2(0.5f, 0f));
             UIBuilder.Outlined(warning, Emberforge.Outline, Emberforge.StrokeThin);
 
-            // BOTH PRIMARY, both the same size. Neither is the recommended one because there is no
-            // recommendation to make - see the class note. This is the one place in the game where
-            // two ember buttons sit side by side, and it is the exception the two-voice rule is
-            // worth making: teal means "the way back out", and on this card there is no way out.
+            // BOTH SECONDARY, both the same size. Neither is the recommended one because there is no
+            // recommendation to make - see the class note - and orange means "the thing to press now",
+            // which a choice the game does not favour has none of (R53). There is no way out on this card.
             _keepLocal = EmberforgeUI.Button("KeepLocal", card, "KEEP THIS DEVICE", UITheme.FontBody,
-                                             ForgeButtonKind.Primary);
+                                             ForgeButtonKind.Secondary);
             UIBuilder.Box(_keepLocal.Root, -ColumnOffset, 32f, ColumnWidth, 88f, new Vector2(0.5f, 0f));
             _keepLocal.OnClick(delegate { Answer(ConflictChoice.KeepLocal); });
 
             _keepCloud = EmberforgeUI.Button("KeepCloud", card, "KEEP THE CLOUD", UITheme.FontBody,
-                                             ForgeButtonKind.Primary);
+                                             ForgeButtonKind.Secondary);
             UIBuilder.Box(_keepCloud.Root, ColumnOffset, 32f, ColumnWidth, 88f, new Vector2(0.5f, 0f));
             _keepCloud.OnClick(delegate { Answer(ConflictChoice.KeepCloud); });
 

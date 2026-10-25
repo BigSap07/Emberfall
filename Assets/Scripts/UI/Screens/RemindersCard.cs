@@ -206,7 +206,7 @@ namespace Emberfall.UI.Screens
             // settings first." would say nothing is blocked. The view's own On and Enabled decide (SwitchShowsOn).
             bool shownOn = RemindersCardLayout.SwitchShowsOn(t);
             UIButton toggle = EmberforgeUI.Button("Switch" + index, _card, shownOn ? SwitchOn : SwitchOff, HubStyle.FontButton,
-                                                  shownOn ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
+                                                  ForgeButtonKind.Secondary);   // ON or OFF is in the label; orange is not a state (R53)
             UIBuilder.Box(toggle.Root, -RemindersCardLayout.Pad, -(plan.ToggleTops[index] + (plan.ToggleHeights[index] - RemindersCardLayout.TapMin) * 0.5f),
                           RemindersCardLayout.SwitchWidth, RemindersCardLayout.TapMin, new Vector2(1f, 1f));
             toggle.Interactable = t.Enabled;

@@ -33,6 +33,8 @@ namespace Emberfall.UI.Screens
         private const float BodyBottomMargin = 24f;   // the body stretches to the canvas bottom less this, so it follows the aspect
         private const float SummaryHeight = 156f;
         private const float LabelColumn = 96f;
+        private bool _primaryGiven;   // the loop-card rule: see EmberforgeUI.LoopCardKind
+
         private const float TileGap = 8f;
         private const float TileHeight = 108f;
         private const float TrackTop = SummaryHeight + 8f;
@@ -163,6 +165,7 @@ namespace Emberfall.UI.Screens
         private void Rebuild()
         {
             long now = TimeUtil.NowUnix();
+            _primaryGiven = false;
             Clear(_body);
             EmberforgeUI.SetTabSelected(_tabs[0], _slot == LiveEventSlot.Weekly);
             EmberforgeUI.SetTabSelected(_tabs[1], _slot == LiveEventSlot.Monthly);
@@ -253,7 +256,8 @@ namespace Emberfall.UI.Screens
             }
             bool pending = _service != null && _service.Flow != null && _service.Flow.IsPending(offerId);
             string text = stop.Length > 0 ? stop : !CanBuy ? "COMING SOON  -  " + price : pending ? "WAITING FOR THE STORE" : label + "  -  " + price;
-            UIButton b = EmberforgeUI.Button("Buy_" + offerId, parent, text, UITheme.FontTiny - 4, ForgeButtonKind.Primary);
+            // A paid (EUR) action is a Secondary with the price in its label, never orange (R53).
+            UIButton b = EmberforgeUI.Button("Buy_" + offerId, parent, text, UITheme.FontTiny - 4, ForgeButtonKind.Secondary);
             UIBuilder.Box(b.Root, x, y, w, 36f, TopLeft);
             b.Interactable = CanBuy && canBuy && !pending;
             string id = offerId;
@@ -308,7 +312,8 @@ namespace Emberfall.UI.Screens
             }
             else if (canClaim)
             {
-                UIButton claim = EmberforgeUI.Button("Claim", tile, "CLAIM", UITheme.FontTiny - 4, ForgeButtonKind.Primary);
+                UIButton claim = EmberforgeUI.Button("Claim", tile, "CLAIM", UITheme.FontTiny - 4,
+                                                     EmberforgeUI.LoopCardKind(true, ref _primaryGiven));
                 UIBuilder.Box(claim.Root, 0f, Emberforge.SmallPadY(6f), width - 14f, 30f, new Vector2(0.5f, 0f));
                 int index = t.Index;
                 claim.OnClick(delegate { if (paid) OnClaimPaid(index); else OnClaimFree(index); });
@@ -368,7 +373,8 @@ namespace Emberfall.UI.Screens
             }
             else if (q.CanClaim)
             {
-                UIButton claim = EmberforgeUI.Button("Claim", row, "CLAIM", UITheme.FontTiny - 4, ForgeButtonKind.Primary);
+                UIButton claim = EmberforgeUI.Button("Claim", row, "CLAIM", UITheme.FontTiny - 4,
+                                                     EmberforgeUI.LoopCardKind(true, ref _primaryGiven));
                 UIBuilder.Box(claim.Root, -Emberforge.SmallPadX(12f), 0f, 120f, 38f, new Vector2(1f, 0.5f));
                 string id = q.Id;
                 claim.OnClick(delegate { OnClaimQuest(id); });

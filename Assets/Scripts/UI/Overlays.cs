@@ -148,7 +148,7 @@ namespace Emberfall.UI
             // word on whichever of the two it wants pressed, and SettingsScreen's reset already
             // puts it on the way-out one.
             _cancel = EmberforgeUI.Button("Cancel", _panel, "CANCEL", UITheme.FontBody,
-                                          ForgeButtonKind.Secondary);
+                                          ForgeButtonKind.Quiet);
             UIBuilder.Box(_cancel.Root, -180f, 44f, 300f, 96f, new Vector2(0.5f, 0f));
             _cancel.OnClick(HandleCancel);
 

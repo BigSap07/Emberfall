@@ -48,6 +48,7 @@ namespace Emberfall.UI.Screens
         private Text _headerSubtitle;
         private RectTransform _content;
         private RectTransform _summary;
+        private bool _primaryGiven;   // the loop-card rule: see EmberforgeUI.LoopCardKind
         private RectTransform _row;
         private RectTransform _paid;
         private RectTransform _pick;
@@ -148,6 +149,7 @@ namespace Emberfall.UI.Screens
         {
             long now = TimeUtil.NowUnix();
             PassView view = WayfarersRoad.View(App.Session, now);
+            _primaryGiven = false;
 
             Clear(_summary);
             Clear(_row);
@@ -273,7 +275,8 @@ namespace Emberfall.UI.Screens
             }
             else if (t.CanClaim)
             {
-                UIButton claim = EmberforgeUI.Button("Claim", tile, t.Kind == PassRewardKind.Selector ? "CHOOSE" : "CLAIM", UITheme.FontSmall, ForgeButtonKind.Primary);
+                UIButton claim = EmberforgeUI.Button("Claim", tile, t.Kind == PassRewardKind.Selector ? "CHOOSE" : "CLAIM", UITheme.FontSmall,
+                                                 EmberforgeUI.LoopCardKind(true, ref _primaryGiven));
                 UIBuilder.Box(claim.Root, 0f, UITheme.Space12, TileWidth - 16f, 46f, new Vector2(0.5f, 0f));
                 int tier = t.Tier;
                 bool selector = t.Kind == PassRewardKind.Selector;
@@ -382,7 +385,7 @@ namespace Emberfall.UI.Screens
             }
 
             float y = 56f + PickCardHeight * 2f + 12f + 16f;
-            UIButton back = EmberforgeUI.Button("Back", _pick, "BACK", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIButton back = EmberforgeUI.Button("Back", _pick, "BACK", UITheme.FontSmall, ForgeButtonKind.Quiet);
             UIBuilder.Box(back.Root, -(gridWidth * 0.5f) + 100f, -y, 200f, 56f, new Vector2(0.5f, 1f));
             back.OnClick(delegate { TryStepBack(); });
 

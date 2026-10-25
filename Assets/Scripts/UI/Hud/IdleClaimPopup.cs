@@ -201,7 +201,7 @@ namespace Emberfall.UI
             _claim.OnClick(ClaimNow);
 
             UIButton close = EmberforgeUI.Button("Close", popup, "CLOSE", HubStyle.FontButton,
-                                                 ForgeButtonKind.Secondary);
+                                                 ForgeButtonKind.Quiet);
             UIBuilder.Box(close.Root, inner, inner, 260f, HubStyle.TouchMin, new Vector2(0f, 0f));
             close.OnClick(Close);
 

@@ -100,7 +100,7 @@ namespace Emberfall.UI
             UIBuilder.Outlined(_note, Emberforge.Outline, Emberforge.StrokeThin);
 
             UIButton close = EmberforgeUI.Button("Close", panel, "CLOSE", UITheme.FontBody,
-                                                 ForgeButtonKind.Primary);
+                                                 ForgeButtonKind.Secondary);
             UIBuilder.Box(close.Root, 0f, Emberforge.OrnamentClearance, 400f, 88f, new Vector2(0.5f, 0f));
             close.OnClick(Close);
 

@@ -249,7 +249,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Outlined(_pickerItemLine, Emberforge.Outline, Emberforge.StrokeThin);
 
             UIButton cancel = EmberforgeUI.Button("Cancel", panel, "CANCEL", UITheme.FontSmall,
-                                                  ForgeButtonKind.Secondary);
+                                                  ForgeButtonKind.Quiet);
             UIBuilder.Box(cancel.Root, 0f, 20f, 240f, 76f, new Vector2(0.5f, 0f));
             cancel.OnClick(ClosePicker);
 
@@ -390,11 +390,10 @@ namespace Emberfall.UI.Screens
         /// </summary>
         private void AddCandidateRow(HeroInstance hero, bool isHolder)
         {
-            // THE HOLDER IS THE EMBER BUTTON AND EVERY OTHER HERO IS TEAL, which is the kit's
-            // whole button vocabulary applied to a list: the row that is already true is the one
-            // standing proud of the others.
+            // Every hero row is a Secondary (R53): orange means "the thing to press now", and the holder is
+            // the one row that needs no press. It says "(equipped)" on its name line instead.
             UIButton row = EmberforgeUI.Button("Hero_" + hero.Uid, _pickerHeroList, "", UITheme.FontSmall,
-                                               isHolder ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
+                                               ForgeButtonKind.Secondary);
             UIBuilder.Sized(row.Root, 0f, CandidateRowHeight);
             row.Label.gameObject.SetActive(false);   // this row lays its own text out
 

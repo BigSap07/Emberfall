@@ -99,7 +99,7 @@ namespace Emberfall.UI
             UIBuilder.FillParent((RectTransform)scroll.transform, 0f);
 
             UIButton close = EmberforgeUI.Button("Close", _panel, "CLOSE", UITheme.FontBody,
-                                                 ForgeButtonKind.Secondary);
+                                                 ForgeButtonKind.Quiet);
             UIBuilder.Box(close.Root, 0f, 26f, 340f, 92f, new Vector2(0.5f, 0f));
             close.OnClick(Close);
 

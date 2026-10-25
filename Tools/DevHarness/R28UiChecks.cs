@@ -400,8 +400,8 @@ namespace Emberfall.DevHarness
                   "R28 UI REMINDERS: a switch is tappable only when the view says Enabled, and the permission button is built only when Visible");
             Check(code.Contains("float indent = index == 0 ? 0f : RemindersCardLayout.TopicIndent") && RemindersCardLayout.TopicIndent == 24f,
                   "R28 UI REMINDERS: the three topics are indented UITheme.Space24 (24) under Reminders");
-            Check(code.Contains("shownOn ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary") && code.Contains("model.Label == OpenSettingsLabel ? ForgeButtonKind.Secondary : ForgeButtonKind.Primary"),
-                  "R28 UI REMINDERS: ALLOW REMINDERS and ASKING are the primary button, OPEN PHONE SETTINGS the secondary one");
+            Check(!code.Contains("shownOn ? ForgeButtonKind.Primary") && code.Contains("model.Label == OpenSettingsLabel ? ForgeButtonKind.Secondary : ForgeButtonKind.Primary"),
+                  "R28 UI REMINDERS: ALLOW REMINDERS and ASKING are the primary button, OPEN PHONE SETTINGS the secondary one, and an ON switch is never orange (R53)");
 
             // ---- where it sits on the page
             string build = R28UiBody(settings, "protected override void Build()");

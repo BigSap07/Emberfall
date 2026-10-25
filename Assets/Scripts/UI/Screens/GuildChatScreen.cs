@@ -351,7 +351,7 @@ namespace Emberfall.UI.Screens
             bool current = !state.Loaded || state.Cycle == a.Cycle;
 
             UIButton watch = EmberforgeUI.Button("Watch", card, sameContent ? "WATCH" : "CAN'T REPLAY",
-                                                 UITheme.FontSmall, ForgeButtonKind.Primary);
+                                                 UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(watch.Root, -30f, -36f, 330f, 70f, new Vector2(1f, 1f));
             watch.Interactable = sameContent;
             GuildDungeonAttempt captured = a;
