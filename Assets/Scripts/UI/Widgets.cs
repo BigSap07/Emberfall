@@ -458,12 +458,16 @@ namespace Emberfall.UI
             RectTransform root = UIBuilder.Node(name, parent);
             UIBuilder.Size(root, starSize * Total + gap * (Total - 1), starSize);
             UIBuilder.HStack(root, gap, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
-            Color filled = UITheme.StarColor(stars);
-            Color empty  = UITheme.WithAlpha(UITheme.TextDim, 0.55f);
-            Sprite starSprite = TextureLab.Star(64);
+            // R57: under A2 the row is the shared gold star with a dim outline for the empty ones.
+            bool a2 = A2Skin.On;
+            Color filled = a2 ? A2Kit.StarGold : UITheme.StarColor(stars);
+            Color empty  = a2 ? A2Kit.StarDim : UITheme.WithAlpha(UITheme.TextDim, 0.55f);
+            int texSize = TextureLab.StarTexSize(starSize);
+            Sprite starSprite = TextureLab.Star(texSize);
+            Sprite emptySprite = a2 ? TextureLab.StarEmpty(texSize) : starSprite;
             for (int i = 0; i < Total; i++)
             {
-                Image img = UIBuilder.Img("Star" + i, root, starSprite, i < stars ? filled : empty);
+                Image img = UIBuilder.Img("Star" + i, root, i < stars ? starSprite : emptySprite, i < stars ? filled : empty);
                 UIBuilder.Sized(img.rectTransform, starSize, starSize);
             }
             return root;

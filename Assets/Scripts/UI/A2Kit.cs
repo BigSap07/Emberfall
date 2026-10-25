@@ -36,6 +36,10 @@ namespace Emberfall.UI
         public static readonly Color TealBevel = Hex(0x2E8A99);
         public static readonly Color StarOn = Hex(0xFFD66B);
         public static readonly Color StarOff = Hex(0x8A6A4A);
+        // R57: the hero tier star. StarOn stays the warm accent the pills and cards use; the star itself is #F4A62A
+        // with a dim rim for the empty ones (the language doc's "Stars #F4A62A").
+        public static readonly Color StarGold = Hex(0xF4A62A);
+        public static readonly Color StarDim = Hex(0x9A8266);
         public static readonly Color Good = Hex(0x5DD36A);
         public static readonly Color GoodStroke = Hex(0x1F5A2A);
         public static readonly Color TextOnDark = Hex(0xFFF4DC);
@@ -292,6 +296,27 @@ namespace Emberfall.UI
         }
 
         // ------------------------------------------------------------------ backdrop
+
+        /// <summary>
+        /// A row of five hero tier stars (R57): gold #F4A62A with a thin dark outline when earned, a dim outline
+        /// when not. One widget for every A2 screen; the shape is TextureLab.Star and StarShape.
+        /// </summary>
+        public static RectTransform Stars(string name, Transform parent, int stars, float size, float gap)
+        {
+            RectTransform root = UIBuilder.Node(name, parent);
+            UIBuilder.HStack(root, gap, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
+            int tex = TextureLab.StarTexSize(size);
+            Sprite on = TextureLab.Star(tex);
+            Sprite off = TextureLab.StarEmpty(tex);
+            for (int i = 0; i < 5; i++)
+            {
+                bool earned = i < stars;
+                Image image = UIBuilder.Img("Star" + i, root, earned ? on : off, earned ? StarGold : StarDim);
+                UIBuilder.Sized(image.rectTransform, size, size);
+                image.raycastTarget = false;
+            }
+            return root;
+        }
 
         /// <summary>
         /// The screen ground: the hub painting dimmed behind a flat warm overlay and a vignette, so the

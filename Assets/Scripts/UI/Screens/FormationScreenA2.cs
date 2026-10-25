@@ -762,18 +762,10 @@ namespace Emberfall.UI.Screens
             }
         }
 
-        /// <summary>A row of five stars in the A2 star colours (on and off).</summary>
+        /// <summary>A row of five stars in the A2 star colours (on and off); the shared A2Kit widget since R57.</summary>
         private static RectTransform A2Stars(string name, Transform parent, int stars, float size)
         {
-            RectTransform root = UIBuilder.Node(name, parent);
-            UIBuilder.HStack(root, 2f, new RectOffset(0, 0, 0, 0), TextAnchor.MiddleCenter);
-            Sprite star = TextureLab.Star(64);
-            for (int i = 0; i < 5; i++)
-            {
-                Image image = UIBuilder.Img("Star" + i, root, star, i < stars ? A2Kit.StarOn : A2Kit.StarOff);
-                UIBuilder.Sized(image.rectTransform, size, size);
-            }
-            return root;
+            return A2Kit.Stars(name, parent, stars, size, 2f);
         }
 
         /// <summary>Repaints each tile's selected ring and its in squad check (the check dims the face).</summary>

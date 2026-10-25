@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Emberfall.Core.Session;
 using UnityEngine;
 
 namespace Emberfall.UI
@@ -252,35 +253,74 @@ namespace Emberfall.UI
 
         // ------------------------------------------------------------------ star icon
 
+        // Samples per pixel edge. 4 means a 64 px sprite is drawn at 256 and averaged down, which is
+        // what keeps a one pixel outline and the five points crisp when the icon is shown at 16 px.
+        private const int StarSuper = 4;
+
         /// <summary>
-        /// Five-pointed star shape, white on transparent, sized at <paramref name="size"/> px.
-        /// Tint with Image.color: StarColor(n) for filled, WithAlpha(TextDim, 0.55f) for empty.
-        /// Generated procedurally via a signed-distance field — no external asset needed.
-        /// Placeholder: drop a real PNG at Assets/Resources/Art/UI/star_icon.png and redirect
-        /// this method to Resources.Load it; the sprite contract (white, centred pivot) stays
-        /// identical, so every call site works without further changes.
+        /// Filled five-pointed star: a white body inside a thin dark outline, on transparent, sized at
+        /// <paramref name="size"/> px. Tint with Image.color; the outline stays dark under any tint.
+        /// The shape is StarShape (R57: the old distance field drew a rounded pentagon). Asks for 32 when
+        /// the icon is shown at 16 px and 64 for anything bigger, so the supersampled edge is never
+        /// minified by more than 2x.
         /// </summary>
         public static Sprite Star(int size)
         {
-            string key = "star_" + size;
+            return StarSprite(size, true);
+        }
+
+        /// <summary>
+        /// The empty counterpart: no body, a light rim and a faint dark socket, so it reads as a dim
+        /// outline once tinted with the empty colour.
+        /// </summary>
+        public static Sprite StarEmpty(int size)
+        {
+            return StarSprite(size, false);
+        }
+
+        /// <summary>Sprite size to request for a star shown <paramref name="drawSize"/> canvas units wide.</summary>
+        public static int StarTexSize(float drawSize)
+        {
+            return drawSize <= 18f ? 32 : 64;
+        }
+
+        private static Sprite StarSprite(int size, bool filled)
+        {
+            string key = (filled ? "star_" : "starempty_") + size;
             Sprite cached;
             if (Cache.TryGetValue(key, out cached)) return cached;
 
             Texture2D tex = NewTexture(size, size);
             Color32[] pixels = new Color32[size * size];
             float half = size * 0.5f;
+            float sub = 1f / StarSuper;
+            // Body white and rim dark when filled; the other way round for the empty icon.
+            float bodyL = filled ? 1f : 0.17f, bodyA = filled ? 1f : 0.38f;
+            float rimL = filled ? 0.13f : 1f;
 
             for (int y = 0; y < size; y++)
             {
                 for (int x = 0; x < size; x++)
                 {
-                    float nx = (x + 0.5f - half) / half; // -1..1
-                    float ny = (y + 0.5f - half) / half;
-                    // Rotate so the top point faces up: map screen-up (+ny) → SDF-right (+px)
-                    float sdf = StarSdf(ny, -nx, 0.85f);
-                    // ~1.5-pixel anti-aliased edge in normalised space
-                    float a = Mathf.Clamp01(-sdf * half / 1.5f + 0.5f);
-                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)(a * 255f));
+                    float aSum = 0f, lSum = 0f;
+                    for (int sy = 0; sy < StarSuper; sy++)
+                    {
+                        for (int sx = 0; sx < StarSuper; sx++)
+                        {
+                            float nx = (x + (sx + 0.5f) * sub - half) / half;
+                            float ny = (y + (sy + 0.5f) * sub - half) / half;
+                            float d = StarShape.Distance(nx, ny);
+                            if (d > 0f) continue;
+                            bool rim = d > -StarShape.RimWidth;
+                            float a = rim ? 1f : bodyA;
+                            aSum += a;
+                            lSum += a * (rim ? rimL : bodyL);
+                        }
+                    }
+                    float samples = StarSuper * StarSuper;
+                    float alpha = aSum / samples;
+                    byte lum = alpha > 0f ? (byte)Mathf.Round(Mathf.Clamp01(lSum / aSum) * 255f) : (byte)0;
+                    pixels[y * size + x] = new Color32(lum, lum, lum, (byte)Mathf.Round(alpha * 255f));
                 }
             }
 
@@ -289,39 +329,6 @@ namespace Emberfall.UI
             Sprite sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
             Cache[key] = sprite;
             return sprite;
-        }
-
-        // Signed-distance field for a regular 5-pointed star with outer radius r in [-1,1] space.
-        // Returns negative inside the star, positive outside.
-        // Adapted from iquilezles.org/articles/distfunctions2d — sdStar(p, r, n=5, m=2).
-        private static float StarSdf(float px, float py, float r)
-        {
-            const float n  = 5f;
-            // m=2 gives the classic sharp-pointed star; with m=2, en=π/2 so ecs=(0,1).
-            // All ecs terms collapse: dot(q,ecs)=qy, ecx=0 → qx unchanged, ecy/ecy=1.
-            float an  = Mathf.PI / n;             // 36°
-            float acx = Mathf.Cos(an);            // cos(36°) ≈ 0.809
-            float acy = Mathf.Sin(an);            // sin(36°) ≈ 0.588
-
-            // Reduce the point to the first sector [-an, an] around angle 0.
-            // Mathf.Floor gives true floor division so mod is always ≥ 0.
-            float angle = Mathf.Atan2(py, px);
-            float twoAn = 2f * an;
-            float mod   = angle - twoAn * Mathf.Floor(angle / twoAn);
-            float bn    = mod - an;
-
-            float len = Mathf.Sqrt(px * px + py * py);
-            float qx  = len * Mathf.Cos(bn);
-            float qy  = len * Mathf.Abs(Mathf.Sin(bn));
-
-            // Translate by r * acs.
-            qx -= r * acx;
-            qy -= r * acy;
-
-            // Project onto edge. With ecs=(0,1): dot(q,ecs)=qy, ecx=0, ecs.y/ecs.y=1.
-            qy += Mathf.Clamp(-qy, 0f, r * acy);
-
-            return Mathf.Sqrt(qx * qx + qy * qy) * Mathf.Sign(qx);
         }
 
         // ------------------------------------------------------------------ hero sigils
