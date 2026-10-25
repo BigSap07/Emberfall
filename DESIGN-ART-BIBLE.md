@@ -156,7 +156,8 @@ The panels around items use one family of colours:
 | Secondary accent, teal | the Honed plate and rim above |
 
 Gold marks the edge of a surface. Ember orange is for the one thing on a screen the player is meant to press.
-Teal is the quiet second voice.
+Teal is the quiet second voice of the kit-off look. With the Emberforge kit on, the second voice is the Secondary
+plate (tan-brown with a gold rim), see Button hierarchy below.
 
 ## One focal point per screen
 
@@ -206,11 +207,24 @@ it. Ember orange means "the thing to press now" and nothing else. Four kinds, in
 - When two actions compete, the one the player can act on now is Primary. A second action that is also open stays a
   Secondary until the first one is unavailable.
 - Slider fills and values are not orange (R52).
+- `EmberforgeUI.LoopCardKind` is the one helper for the shelf rule: pass a flag that is false at the start of the
+  shelf, and the first card the player can act on gets Primary, every later or unaffordable card gets Secondary.
+  Quartermaster, Armory, Relic Shop, the Store pass and growth claims and the Talents RUN buttons use it.
+- A button whose kind moves with the state (Hero Detail: LEVEL UP while affordable, ASCEND only once LEVEL UP is
+  not available and the hero can ascend) calls `EmberforgeUI.SetKind`. The screen owns when; the skin follows.
+- Equal choices (the four Marketplace doors, the two ConflictChooser answers, the three Forge actions when none is
+  open) are all Secondary. Forge prefers COMBINE over REROLL as its one Primary, and SALVAGE is never orange.
+- Back, close and cancel are Quiet. The battle speed, skip and auto controls stay Secondary: the fight is
+  automatic, so the HUD has no "press now". The result panel's REMATCH is the Primary there.
+- Orange title ribbons are art, not buttons, and `UITheme.Ember` is also used for status tints and glows. Neither
+  counts as a Primary, and neither is a button.
 
 The check: in the editor, `PlayModeScreenshot` logs one `BUTTONCHECK` line per capture, written by
 `ButtonHierarchyCheck`, which counts the active, interactable Primary buttons on screen (and any hand-built button
 painted ember). `Tools/button-check-table.ps1` turns the lines of a capture run into the table, one row per screen
-and size, and lists every screen with more than one Primary. The check lives in the editor assembly, so no release
+and size, and lists every screen with more than one Primary. When the R53 pass was captured, 6 of 28 target screens
+had more than one Primary (Armory, Live Events weekly, Marketplace, Quartermaster, Store pass, Talents) and none
+did after it. A screen with none is allowed: it means nothing there is the thing to press now. The check lives in the editor assembly, so no release
 build holds it and none can fail on it. It counts what a capture shows; a screen state no capture reaches is not
 checked. Phone size, touch targets, colour vision, motion and sound have not been checked.
 
