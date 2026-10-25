@@ -87,7 +87,13 @@ namespace Emberfall.UI
             // before; the kit's sprite is never put in Cache, so the switch cannot leak between states.
             Sprite kit = UiKit.Forge(slot);
             if (kit != null) return kit;
+            return GetBaked(slot);
+        }
 
+        /// <summary>The slot's own art (painted override, then baked, then generated), never the UI kit's
+        /// piece. For the one state where the kit's art says the wrong thing: a disabled button.</summary>
+        public static Sprite GetBaked(string slot)
+        {
             Sprite cached;
             if (Cache.TryGetValue(slot, out cached)) return cached;
 

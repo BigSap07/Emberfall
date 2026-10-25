@@ -8,13 +8,28 @@ using Emberfall.Core.Progression;
 
 namespace Emberfall.UI
 {
-    /// <summary>Which voice a button speaks in. Two and a disabled state, and deliberately no
-    /// more: Ember orange is the thing to press and teal is the way back out, so a screen with
-    /// three colours of button is a screen that has stopped saying which one matters.</summary>
+    /// <summary>
+    /// How loud a button is. Four kinds, and the weight is the whole point: a screen has at most
+    /// one Primary, and everything else is visibly lighter than it.
+    ///
+    /// Primary   ember orange. The one thing to press now. At most one on a screen at once.
+    /// Secondary a plate with its rim and no orange. The default: a call that names no kind gets this.
+    /// Quiet     a faint plate and a muted label, for the way back out: back, close, cancel, dismiss.
+    /// Disabled  the dark rimless plate and a dim label. A button built as Disabled stays dark until
+    ///           it is enabled, and then speaks as a Secondary. Any other kind shows the same art
+    ///           while its Interactable is false.
+    ///
+    /// Paid (EUR) actions are Secondary with the price in the label, never Primary, unless the
+    /// screen exists for that one purchase. Danger actions (salvage, disband, delete) are Secondary
+    /// with EmberforgeUI.Danger on them, never orange. Explicit values, because Secondary must be
+    /// the zero value: a default(ForgeButtonKind) is the plate with a rim, not the orange one.
+    /// </summary>
     public enum ForgeButtonKind
     {
-        Primary,
-        Secondary
+        Secondary = 0,
+        Primary = 1,
+        Quiet = 2,
+        Disabled = 3
     }
 
     /// <summary>A built tab. Returned rather than discarded so a bar can repaint its selection
@@ -576,6 +591,11 @@ namespace Emberfall.UI
         /// of a button with the brightness turned down. Swapping to art drawn at the pressed depth
         /// is the only way the highlight moves.
         /// </summary>
+        public static UIButton Button(string name, Transform parent, string text, int fontSize)
+        {
+            return Button(name, parent, text, fontSize, ForgeButtonKind.Secondary);
+        }
+
         public static UIButton Button(string name, Transform parent, string text, int fontSize,
                                       ForgeButtonKind kind)
         {
@@ -622,8 +642,24 @@ namespace Emberfall.UI
             EmberforgeButtonSkin skin = handle.Root.gameObject.AddComponent<EmberforgeButtonSkin>();
             skin.Bind(handle.Background, content, glossImage, kind, handle.Label);
             handle.InteractableChanged = skin.SetInteractable;
-            skin.SetInteractable(true);
+            // A button built as Disabled starts dark and un-pressable; the screen enables it later
+            // with Interactable = true, and it then speaks as a Secondary.
+            handle.Interactable = kind != ForgeButtonKind.Disabled;
             return handle;
+        }
+
+        /// <summary>
+        /// Puts the warning tone on a button's label: for salvage, disband, delete and the like.
+        /// The plate stays a Secondary's (a danger action is never orange); only the words change.
+        /// </summary>
+        public static UIButton Danger(UIButton button)
+        {
+            if (button != null && button.Root != null)
+            {
+                EmberforgeButtonSkin skin = button.Root.GetComponent<EmberforgeButtonSkin>();
+                if (skin != null) skin.Tone(UITheme.Danger);
+            }
+            return button;
         }
 
         /// <summary>
@@ -1281,9 +1317,14 @@ namespace Emberfall.UI
         private bool _down;
         private Vector2 _restPosition;
 
+        private const float QuietPlateAlpha = 0.34f;
+        private const float QuietPlateAlphaDown = 0.6f;
+
         private Text _label;
         private Color _labelRest;
-        private bool _dimmed;
+        private bool _labelOverridden;
+        private bool _hasTone;
+        private Color _tone;
 
         public void Bind(Image plate, RectTransform content, Image gloss, ForgeButtonKind kind)
         {
@@ -1303,6 +1344,20 @@ namespace Emberfall.UI
             // tinted a brown plate is gone.
             Apply();
         }
+
+        /// <summary>The voice this button speaks in now. Read by the button hierarchy check (editor captures) and nothing in play.</summary>
+        public ForgeButtonKind Kind { get { return _kind; } }
+
+        /// <summary>Paints the label in a tone of its own (the danger tone) while the button is live.</summary>
+        public void Tone(Color tone)
+        {
+            _hasTone = true;
+            _tone = tone;
+            Apply();
+        }
+
+        /// <summary>False while the button shows its disabled art.</summary>
+        public bool IsInteractable { get { return _interactable; } }
 
         public void SetInteractable(bool value)
         {
@@ -1370,28 +1425,49 @@ namespace Emberfall.UI
         {
             if (_plate == null) return;
 
+            // A Disabled kind that has been enabled speaks as a Secondary.
+            ForgeButtonKind voice = _kind == ForgeButtonKind.Disabled ? ForgeButtonKind.Secondary : _kind;
+            bool quiet = voice == ForgeButtonKind.Quiet;
+
             string slot;
             if (!_interactable) slot = EmberforgeArt.Slot.ButtonDisabled;
-            else if (_kind == ForgeButtonKind.Secondary)
+            else if (voice == ForgeButtonKind.Secondary || quiet)
                 slot = _down ? EmberforgeArt.Slot.ButtonSecondaryDown : EmberforgeArt.Slot.ButtonSecondary;
             else
                 slot = _down ? EmberforgeArt.Slot.ButtonPrimaryDown : EmberforgeArt.Slot.ButtonPrimary;
 
-            _plate.sprite = EmberforgeSkin.Get(slot);
+            // Disabled is always the baked dark plate, with the kit on as well: the kit's own disabled
+            // piece is a LIGHT grey with a bronze rim, which reads as a Secondary that someone left
+            // in the sun. Dark, rimless and dim is what "not available" has to look like (R53).
+            _plate.sprite = _interactable ? EmberforgeSkin.Get(slot) : EmberforgeSkin.GetBaked(slot);
 
             // The UI kit has one plate for rest and press (painted metal, no pressed art), so a press darkens
             // it instead; the baked kit swaps to its own pressed sprite and the colour stays white.
             bool kitPlate = UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) != null;
-            if (kitPlate) _plate.color = _down && _interactable ? UITheme.ButtonPressed : Color.white;
+            Color plateColor = Color.white;
+            if (kitPlate && _interactable && _down) plateColor = UITheme.ButtonPressed;
+            // Quiet keeps the Secondary's shape (it is still a button) at a fraction of its strength.
+            if (quiet && _interactable) plateColor.a = _down ? QuietPlateAlphaDown : QuietPlateAlpha;
+            _plate.color = plateColor;
+
             // A disabled button dims its label as well as swapping its plate (R26), so it cannot be mistaken for
-            // a resting one.
+            // a resting one. A Quiet one speaks in the quiet text colour, and a toned one (Danger) in its tone.
             // The colour the caller gave the label is remembered and put back, so a button with its own label colour
             // is not repainted white by enabling it.
             if (_label != null)
             {
-                bool dim = !_interactable && UiKit.On;   // kit off keeps the old disabled label
-                if (dim && !_dimmed) { _labelRest = _label.color; _dimmed = true; _label.color = Emberforge.TextDisabled; }
-                else if (!dim && _dimmed) { _label.color = _labelRest; _dimmed = false; }
+                bool hasWant = false;
+                Color want = Color.white;
+                if (!_interactable && UiKit.On) { hasWant = true; want = Emberforge.ButtonDisabledText; }   // kit off keeps the old disabled label
+                else if (_interactable && _hasTone) { hasWant = true; want = _tone; }
+                else if (_interactable && quiet) { hasWant = true; want = Emberforge.TextQuiet; }
+
+                if (hasWant)
+                {
+                    if (!_labelOverridden) { _labelRest = _label.color; _labelOverridden = true; }
+                    _label.color = want;
+                }
+                else if (_labelOverridden) { _label.color = _labelRest; _labelOverridden = false; }
             }
 
             if (_content != null)
@@ -1401,7 +1477,7 @@ namespace Emberfall.UI
 
             // The gloss is a property of a lit face, and a disabled button is not lit. Hiding it
             // is what stops a greyed-out button still looking glossy and therefore still pressable.
-            if (_gloss != null) _gloss.enabled = _interactable && UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) == null;
+            if (_gloss != null) _gloss.enabled = _interactable && !quiet && UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) == null;
         }
     }
 

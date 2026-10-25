@@ -186,6 +186,34 @@ over 3 percent) barely moved on either screen, so it does not show the hierarchy
 The judgement rests on the captures. Phone size, touch targets, colour vision, motion and sound have not been
 checked. Quartermaster, Forge, Hero Detail and Campaign are not yet done.
 
+## Button hierarchy
+
+Rule: a screen has at most one Primary button visible at once, and every other button is visibly lighter than
+it. Ember orange means "the thing to press now" and nothing else. Four kinds, in `ForgeButtonKind`:
+
+| Kind | Look | Use |
+|---|---|---|
+| Primary | ember orange plate | the one action the screen exists for, or the one the player most likely wants next |
+| Secondary | the plate with its rim, no orange. This is the default: a button built without a kind is a Secondary | every other action, paid (EUR) actions with the price in the label, and danger actions |
+| Quiet | the Secondary plate at about a third of its strength and a muted label | the way back out: back, close, cancel, dismiss |
+| Disabled | a dark, rimless plate and a dim label, not the light grey kit piece | not available now; the reason is in text beside it wherever there is room |
+
+- A paid action is never Primary, unless the whole screen exists for that one purchase.
+- A danger action (salvage, disband, delete) is a Secondary with `EmberforgeUI.Danger` on it, which tints the label
+  with the Danger colour. It is never orange.
+- A list of cards that each carry the same action (shop shelves, claim rows) shows Primary on at most one card: the
+  one the player can afford and most likely wants. The rest are Secondary. Where no card is clearly the one, none is.
+- When two actions compete, the one the player can act on now is Primary. A second action that is also open stays a
+  Secondary until the first one is unavailable.
+- Slider fills and values are not orange (R52).
+
+The check: in the editor, `PlayModeScreenshot` logs one `BUTTONCHECK` line per capture, written by
+`ButtonHierarchyCheck`, which counts the active, interactable Primary buttons on screen (and any hand-built button
+painted ember). `Tools/button-check-table.ps1` turns the lines of a capture run into the table, one row per screen
+and size, and lists every screen with more than one Primary. The check lives in the editor assembly, so no release
+build holds it and none can fail on it. It counts what a capture shows; a screen state no capture reaches is not
+checked. Phone size, touch targets, colour vision, motion and sound have not been checked.
+
 ---
 
 ## Engine notes

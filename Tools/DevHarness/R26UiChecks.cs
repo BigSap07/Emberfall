@@ -371,7 +371,7 @@ namespace Emberfall.DevHarness
                   "kit POLISH: panels draw the filigree corner (mirrored into the four corners) with the kit on, and OrnamentClearance grows with it");
             Check(!ui.Contains("WarmTint") && !ui.Contains("\"Warm\""),
                   "kit POLISH: the Warm overlay on the primary button is gone, the plate itself is orange");
-            Check(ui.Contains("Emberforge.TextDisabled") && ui.Contains("!_interactable && UiKit.On"),
+            Check(ui.Contains("Emberforge.ButtonDisabledText") && ui.Contains("!_interactable && UiKit.On"),   // R53: the dimmer label of the dark disabled plate
                   "kit POLISH: a disabled button dims its label, with the kit on only");
             string hero = R26Read(root, "Assets", "Scripts", "UI", "Screens", "HeroDetailScreen.cs");
             string fusion = R26Read(root, "Assets", "Scripts", "UI", "Screens", "FusionScreen.cs");

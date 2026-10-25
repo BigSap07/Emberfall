@@ -272,6 +272,9 @@ namespace Emberfall.UI
         /// <summary>The label of a disabled button (R26): dimmer than TextOnColor so it reads as unavailable, still
         /// light enough to read on the kit's stone plate (the harness measures the contrast).</summary>
         public static readonly Color TextDisabled = UITheme.Hex("E0D6C8");
+        /// <summary>The label of a disabled button on the dark rimless plate: the disabled text at about
+        /// 55 percent, so it still reads but cannot be taken for a live one.</summary>
+        public static readonly Color ButtonDisabledText = new Color(0.878f, 0.839f, 0.784f, 0.55f);
         public static readonly Color TextOnGold = UITheme.Hex("2A1606");
 
         /// <summary>The dark stroke under a label on colour. One distance for the small sizes and

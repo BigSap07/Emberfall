@@ -3898,6 +3898,7 @@ namespace Emberfall.EditorTools
             // would photograph "Measuring..." or a reading still on its first batch.
             if (name == "Talents" && GameApp.Instance != null) GameApp.Instance.Router.Talents.FinishTrialForCapture();
             if (name == "SettingsCredits" && GameApp.Instance != null) GameApp.Instance.Router.Settings.ScrollToEndForCapture();
+            ButtonHierarchyCheck.Report(file);   // R53: one BUTTONCHECK line per capture, read by Tools/button-check-table.ps1
             ScreenCapture.CaptureScreenshot(OutputPath(file), 1);
             Debug.Log("PlayModeScreenshot: requested " + file);
             SessionState.SetInt(LastShotKey, frame);
