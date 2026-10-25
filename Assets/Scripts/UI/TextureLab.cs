@@ -1064,5 +1064,269 @@ namespace Emberfall.UI
             Cache[key] = sprite;
             return sprite;
         }
+
+        // ---------------------------------------------------------------- A2 screens (R55)
+        //
+        // Shapes the A2 Formation screen draws and the shared A2 kit reuses: a rounded square with one
+        // cut corner, a dashed outline, the Cinder Notch aspect emblem, a plus, a cross and the Cinder
+        // Seam. Additive: nothing above changes, and no existing screen asks for any of them.
+
+        private const float Sqrt2Inv = 0.70710678f;
+
+        /// <summary>
+        /// A rounded square with its TOP LEFT corner cut flat (the A2 slot and tile frame). Nine-sliced like
+        /// RoundedRect; cut is the length of the flat cut along each edge, in texels.
+        /// </summary>
+        public static Sprite CutCornerRect(int radius, int cut)
+        {
+            return CutCorner("ccr_" + radius + "_" + cut, radius, cut, 0);
+        }
+
+        /// <summary>The frame that goes around a CutCornerRect.</summary>
+        public static Sprite CutCornerOutline(int radius, int cut, int thickness)
+        {
+            return CutCorner("cco_" + radius + "_" + cut + "_" + thickness, radius, cut, thickness);
+        }
+
+        private static Sprite CutCorner(string key, int radius, int cut, int thickness)
+        {
+            Sprite cached;
+            if (Cache.TryGetValue(key, out cached)) return cached;
+
+            int reach = Mathf.Max(radius, cut);
+            int size = reach * 2 + 8;
+            Texture2D tex = NewTexture(size, size);
+            Color32[] pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float d = CutCornerDistance(x + 0.5f, y + 0.5f, size, radius, cut);
+                    float a;
+                    if (thickness <= 0) a = Mathf.Clamp01(-d + 0.5f);
+                    else a = Mathf.Clamp01(Mathf.Clamp01(-d + 0.5f) - Mathf.Clamp01(-(d + thickness) + 0.5f));
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.Clamp(a * 255f, 0f, 255f));
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            float b = reach + 3;
+            Sprite sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0,
+                                          SpriteMeshType.FullRect, new Vector4(b, b, b, b));
+            Cache[key] = sprite;
+            return sprite;
+        }
+
+        /// <summary>Signed distance to a rounded square with the top left corner cut, negative inside.
+        /// Texture y runs up, so the top left corner is small x and large y.</summary>
+        private static float CutCornerDistance(float px, float py, float size, float radius, float cut)
+        {
+            float round = RoundedDistance(px, py, size, size, radius);
+            float diagonal = (cut - (px + (size - py))) * Sqrt2Inv;
+            return Mathf.Max(round, diagonal);
+        }
+
+        /// <summary>
+        /// A dashed rounded outline at a fixed size (not nine-sliced: a dash that stretched would not stay a
+        /// dash). The empty slot's frame. Dashes run clockwise from the top edge.
+        /// </summary>
+        public static Sprite DashedRoundedOutline(int w, int h, int radius, int thickness, int dash, int gap)
+        {
+            string key = "dro_" + w + "_" + h + "_" + radius + "_" + thickness + "_" + dash + "_" + gap;
+            Sprite cached;
+            if (Cache.TryGetValue(key, out cached)) return cached;
+
+            Texture2D tex = NewTexture(w, h);
+            Color32[] pixels = new Color32[w * h];
+            float period = dash + gap;
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float d = RoundedDistance(x + 0.5f, y + 0.5f, w, h, radius);
+                    float ring = Mathf.Clamp01(Mathf.Clamp01(-d + 0.5f) - Mathf.Clamp01(-(d + thickness) + 0.5f));
+                    float a = 0f;
+                    if (ring > 0f)
+                    {
+                        float s = PerimeterPosition(x + 0.5f, y + 0.5f, w, h, radius);
+                        float phase = s - Mathf.Floor(s / period) * period;
+                        float on = Mathf.Clamp01(Mathf.Min(phase, dash - phase) + 0.5f);
+                        a = ring * on;
+                    }
+                    pixels[y * w + x] = new Color32(255, 255, 255, (byte)Mathf.Clamp(a * 255f, 0f, 255f));
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            Sprite sprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            Cache[key] = sprite;
+            return sprite;
+        }
+
+        /// <summary>How far along a rounded rectangle's outline a point is, clockwise from the left end of the
+        /// top edge. Used to lay a dash pattern around the outline.</summary>
+        private static float PerimeterPosition(float px, float py, float w, float h, float r)
+        {
+            float cx = w * 0.5f, cy = h * 0.5f;
+            float ax = px - cx, ay = py - cy;
+            float cornerX = cx - r, cornerY = cy - r;
+            float arc = 1.5707963f * r;
+            float top = w - 2f * r;
+            float side = h - 2f * r;
+            float toDegrees = 57.29578f;
+
+            if (Mathf.Abs(ax) <= cornerX)
+            {
+                if (ay > 0f) return px - r;
+                return top + arc + side + arc + (w - r - px);
+            }
+            if (Mathf.Abs(ay) <= cornerY)
+            {
+                if (ax > 0f) return top + arc + (h - r - py);
+                return top + arc + side + arc + top + arc + (py - r);
+            }
+
+            float sx = ax > 0f ? 1f : -1f;
+            float sy = ay > 0f ? 1f : -1f;
+            float theta = Mathf.Atan2(ay - sy * cornerY, ax - sx * cornerX) * toDegrees;
+            if (sx > 0f && sy > 0f) return top + ((90f - theta) / 90f) * arc;
+            if (sx > 0f) return top + arc + side + (-theta / 90f) * arc;
+            if (sy < 0f) return top + arc + side + arc + top + ((-90f - theta) / 90f) * arc;
+            return top + arc + side + arc + top + arc + side + ((180f - theta) / 90f) * arc;
+        }
+
+        /// <summary>
+        /// THE CINDER NOTCH (aspect emblem): the five wedges of CinderNotch.Segments that are not the
+        /// aspect's gap. stroke false is the white fill (tint it with the aspect colour); stroke true is the
+        /// one unit outline (tint it dark). Two sprites so the outline keeps its colour whatever the fill is.
+        /// </summary>
+        public static Sprite CinderNotch(int aspect, int size, bool stroke)
+        {
+            int gap = Emberfall.Core.Session.CinderNotch.GapOf(aspect);
+            string key = "cn_" + gap + "_" + size + (stroke ? "_s" : "_f");
+            Sprite cached;
+            if (Cache.TryGetValue(key, out cached)) return cached;
+
+            float scale = size / Emberfall.Core.Session.CinderNotch.Box;
+            float halfStroke = 0.5f * scale;
+            Texture2D tex = NewTexture(size, size);
+            Color32[] pixels = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float u = (x + 0.5f) / scale;
+                    float v = (size - y - 0.5f) / scale;
+                    float best = 1000f;
+                    for (int s = 0; s < Emberfall.Core.Session.CinderNotch.SegmentCount; s++)
+                    {
+                        if (s == gap) continue;
+                        float sd = ConvexQuadDistance(u, v, Emberfall.Core.Session.CinderNotch.Segments[s]);
+                        if (sd < best) best = sd;
+                    }
+                    float px = best * scale;
+                    float a = stroke
+                        ? Mathf.Clamp01(halfStroke + 0.5f - Mathf.Abs(px))
+                        : Mathf.Clamp01(0.5f - px);
+                    pixels[y * size + x] = new Color32(255, 255, 255, (byte)Mathf.Clamp(a * 255f, 0f, 255f));
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            Sprite sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            Cache[key] = sprite;
+            return sprite;
+        }
+
+        /// <summary>Signed distance (in the quad's own units, negative inside) to a convex quad given as
+        /// eight numbers. The largest edge distance, which is exact inside and a close bound outside.</summary>
+        private static float ConvexQuadDistance(float u, float v, float[] quad)
+        {
+            float area = 0f;
+            for (int i = 0; i < 4; i++)
+            {
+                int j = (i + 1) % 4;
+                area += quad[i * 2] * quad[j * 2 + 1] - quad[j * 2] * quad[i * 2 + 1];
+            }
+            float orientation = area >= 0f ? 1f : -1f;
+            float worst = -1000f;
+            for (int i = 0; i < 4; i++)
+            {
+                int j = (i + 1) % 4;
+                float ex = quad[j * 2] - quad[i * 2];
+                float ey = quad[j * 2 + 1] - quad[i * 2 + 1];
+                float len = Mathf.Sqrt(ex * ex + ey * ey);
+                if (len <= 0f) continue;
+                float nx = orientation * ey / len;
+                float ny = -orientation * ex / len;
+                float dist = (u - quad[i * 2]) * nx + (v - quad[i * 2 + 1]) * ny;
+                if (dist > worst) worst = dist;
+            }
+            return worst;
+        }
+
+        /// <summary>A plus (the empty slot's invitation). White; tint it.</summary>
+        public static Sprite Plus(int size)
+        {
+            return Mask("plus_" + size, size, delegate (float u, float v)
+            {
+                float a = OnSegment(u, v, 0.18f, 0.5f, 0.82f, 0.5f, 0.07f);
+                float b = OnSegment(u, v, 0.5f, 0.18f, 0.5f, 0.82f, 0.07f);
+                return Mathf.Max(a, b);
+            });
+        }
+
+        /// <summary>A cross (the remove control's glyph). White; tint it.</summary>
+        public static Sprite Cross(int size)
+        {
+            return Mask("cross_" + size, size, delegate (float u, float v)
+            {
+                float a = OnSegment(u, v, 0.24f, 0.24f, 0.76f, 0.76f, 0.075f);
+                float b = OnSegment(u, v, 0.24f, 0.76f, 0.76f, 0.24f, 0.075f);
+                return Mathf.Max(a, b);
+            });
+        }
+
+        /// <summary>
+        /// THE CINDER SEAM: a one pixel, low contrast crack, a jagged line running left to right through the
+        /// middle of a w by h strip. White; tint it with a low alpha and lay it across a panel rim. One per
+        /// screen at most, never over text or a control.
+        /// </summary>
+        public static Sprite Seam(int w, int h)
+        {
+            string key = "seam_" + w + "_" + h;
+            Sprite cached;
+            if (Cache.TryGetValue(key, out cached)) return cached;
+
+            float[] wander = { 0.50f, 0.64f, 0.38f, 0.58f, 0.44f, 0.66f, 0.36f, 0.56f, 0.46f };
+            int steps = wander.Length - 1;
+            Texture2D tex = NewTexture(w, h);
+            Color32[] pixels = new Color32[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    float best = 1000f;
+                    for (int s = 0; s < steps; s++)
+                    {
+                        float ax = (float)s / steps * w, ay = wander[s] * h;
+                        float bx = (float)(s + 1) / steps * w, by = wander[s + 1] * h;
+                        float dx = bx - ax, dy = by - ay;
+                        float len2 = dx * dx + dy * dy;
+                        float t = len2 <= 0f ? 0f : Mathf.Clamp01(((x + 0.5f - ax) * dx + (y + 0.5f - ay) * dy) / len2);
+                        float ex = ax + dx * t - (x + 0.5f), ey = ay + dy * t - (y + 0.5f);
+                        float dist = Mathf.Sqrt(ex * ex + ey * ey);
+                        if (dist < best) best = dist;
+                    }
+                    float a = Mathf.Clamp01(1f - best);
+                    pixels[y * w + x] = new Color32(255, 255, 255, (byte)Mathf.Clamp(a * 255f, 0f, 255f));
+                }
+            }
+            tex.SetPixels32(pixels);
+            tex.Apply();
+            Sprite sprite = Sprite.Create(tex, new Rect(0, 0, w, h), new Vector2(0.5f, 0.5f), 100f, 0, SpriteMeshType.FullRect);
+            Cache[key] = sprite;
+            return sprite;
+        }
     }
 }

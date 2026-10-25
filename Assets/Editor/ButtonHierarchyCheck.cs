@@ -54,12 +54,31 @@ namespace Emberfall.EditorTools
                 }
             }
 
+            // R55: the A2 buttons carry their own skin (the A2 ember is not the kit ember), counted the same way.
+            A2ButtonSkin[] a2Skins = Object.FindObjectsByType<A2ButtonSkin>(FindObjectsSortMode.None);
+            for (int i = 0; i < a2Skins.Length; i++)
+            {
+                A2ButtonSkin skin = a2Skins[i];
+                if (skin == null || !OnScreen(skin.transform as RectTransform)) continue;
+                if (!skin.IsInteractable) { r.Disabled++; continue; }
+                switch (skin.Kind)
+                {
+                    case A2ButtonKind.Primary:
+                        r.Primary++;
+                        r.PrimaryNames.Add(Describe(skin.gameObject));
+                        break;
+                    case A2ButtonKind.Quiet: r.Quiet++; break;
+                    default: r.Secondary++; break;
+                }
+            }
+
             Button[] buttons = Object.FindObjectsByType<Button>(FindObjectsSortMode.None);
             for (int i = 0; i < buttons.Length; i++)
             {
                 Button b = buttons[i];
                 if (b == null || !b.interactable) continue;
                 if (b.GetComponent<EmberforgeButtonSkin>() != null) continue;
+                if (b.GetComponent<A2ButtonSkin>() != null) continue;
                 Image face = b.targetGraphic as Image;
                 if (face == null || !IsEmber(face.color)) continue;
                 if (!OnScreen(b.transform as RectTransform)) continue;
