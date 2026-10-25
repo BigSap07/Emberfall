@@ -254,11 +254,12 @@ namespace Emberfall.UI
             while (t != null)
             {
                 UnityEngine.UI.Image image = t.GetComponent<UnityEngine.UI.Image>();
+                // A node a screen marked as dark backed owns its labels, even when its own plate is cream.
+                if (HasDarkBacking(t)) return null;
                 if (image != null && image.sprite != null && image.sprite.name != null
                     && image.sprite.name.StartsWith(Prefix))
                     return image.sprite.name;
-                // A node a screen marked as dark backed owns its labels.
-                if (HasDarkBacking(t) || (t.parent != null && HasDarkBacking(t.parent))) return null;
+                if (t.parent != null && HasDarkBacking(t.parent)) return null;
                 // A dark plate of another kit (a hexagon, a chip, an icon backing) owns its labels too.
                 if (image != null && image.sprite != null && image.color.a > 0.5f && IsDark(image.color))
                     return null;
