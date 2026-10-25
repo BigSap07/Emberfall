@@ -66,6 +66,7 @@ namespace Emberfall.UI.Screens
         private Text _dustValue;
 
         private int _page;
+        private bool _primaryGiven;   // the loop-card rule: see EmberforgeUI.LoopCardKind
 
         private static float ShelfWidth { get { return CardWidth * PageSize + CardGap * (PageSize - 1); } }
 
@@ -224,6 +225,7 @@ namespace Emberfall.UI.Screens
             }
 
             int first = _page * PageSize;
+            _primaryGiven = false;
             for (int i = first; i < first + PageSize && i < relics.Count; i++)
                 BuildRelicCard(relics[i], i);
         }
@@ -336,7 +338,8 @@ namespace Emberfall.UI.Screens
             }
             else if (owned)
             {
-                UIButton up = EmberforgeUI.Button("Upgrade", card, "UPGRADE TO " + (view.Tier + 1), UITheme.FontSmall, ForgeButtonKind.Primary);
+                UIButton up = EmberforgeUI.Button("Upgrade", card, "UPGRADE TO " + (view.Tier + 1), UITheme.FontSmall,
+                                                 EmberforgeUI.LoopCardKind(affordable, ref _primaryGiven));
                 UIBuilder.Box(up.Root, 0f, UITheme.Space12, CardWidth - UITheme.Space24, 46f, new Vector2(0.5f, 0f));
                 up.Interactable = affordable;
 
@@ -345,7 +348,8 @@ namespace Emberfall.UI.Screens
             }
             else
             {
-                UIButton buy = EmberforgeUI.Button("Buy", card, "BUY", UITheme.FontSmall, ForgeButtonKind.Primary);
+                UIButton buy = EmberforgeUI.Button("Buy", card, "BUY", UITheme.FontSmall,
+                                                   EmberforgeUI.LoopCardKind(affordable, ref _primaryGiven));
                 UIBuilder.Box(buy.Root, 0f, UITheme.Space12, CardWidth - UITheme.Space24, 46f, new Vector2(0.5f, 0f));
                 buy.Interactable = affordable;
 

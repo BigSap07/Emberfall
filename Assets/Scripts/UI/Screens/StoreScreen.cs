@@ -310,8 +310,13 @@ namespace Emberfall.UI.Screens
 
         // ------------------------------------------------------------------ the pass tab
 
+        // R53: the pass shows one orange Claim at a time, the first claimable tile (lowest tier, free track
+        // before paid), and the loop-card rule (EmberforgeUI.LoopCardKind) says why. The other Claims are Secondary.
+        private bool _passPrimaryGiven;
+
         private void BuildPass(StoreView view, long now)
         {
+            _passPrimaryGiven = false;
             if (!view.PassOpen)
             {
                 Text none = EmberforgeUI.Label("None", _body, "No season is running.", UITheme.FontBody, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
@@ -527,7 +532,8 @@ namespace Emberfall.UI.Screens
 
         private void TileButton(RectTransform tile, string text, Action action)
         {
-            UIButton b = EmberforgeUI.Button("Claim", tile, text, UITheme.FontTiny, ForgeButtonKind.Primary);
+            UIButton b = EmberforgeUI.Button("Claim", tile, text, UITheme.FontTiny,
+                                             EmberforgeUI.LoopCardKind(true, ref _passPrimaryGiven));
             UIBuilder.Box(b.Root, 0f, UITheme.Space8, TileWidth - 18f, 42f, new Vector2(0.5f, 0f));
             b.OnClick(delegate { action(); });
         }
@@ -719,7 +725,8 @@ namespace Emberfall.UI.Screens
                 return;
             }
             string text = !CanBuy ? "COMING SOON  -  " + o.PriceLabel : pending ? "WAITING FOR THE STORE" : "BUY  -  " + o.PriceLabel;
-            UIButton buy = EmberforgeUI.Button("Buy", body, text, UITheme.FontTiny, ForgeButtonKind.Primary);
+            // A paid (EUR) action is a Secondary with the price in its label, never orange (R53).
+            UIButton buy = EmberforgeUI.Button("Buy", body, text, UITheme.FontTiny, ForgeButtonKind.Secondary);
             UIBuilder.Box(buy.Root, 16f, 16f, SkinCardWidth - 32f, 52f, new Vector2(0f, 0f));
             buy.Interactable = CanBuy && !pending;
             string id = o.Id;
@@ -742,7 +749,8 @@ namespace Emberfall.UI.Screens
                 bool isRestore = restore[i];
                 StoreOffer offer = StoreRules.Shared.FindByProduct(entry[0]);
                 string name = offer == null ? "PURCHASE" : App.Session.Content.Store.Offer(offer.Id) != null ? App.Session.Content.Store.Offer(offer.Id).Name.ToUpperInvariant() : offer.Id.ToUpperInvariant();
-                UIButton pick = EmberforgeUI.Button("Waiting" + i, _body, (isRestore ? "RESTORED: " : "PAID: ") + name + "  -  CHOOSE YOUR HERO", UITheme.FontTiny, ForgeButtonKind.Primary);
+                UIButton pick = EmberforgeUI.Button("Waiting" + i, _body, (isRestore ? "RESTORED: " : "PAID: ") + name + "  -  CHOOSE YOUR HERO", UITheme.FontTiny,
+                                                  i == 0 ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
                 UIBuilder.Box(pick.Root, ListWidth + 24f, i * 56f, 620f, 48f, new Vector2(0f, 0f));
                 pick.OnClick(delegate { OpenWaitingPicker(entry, isRestore); });
             }
@@ -910,6 +918,7 @@ namespace Emberfall.UI.Screens
             UIBuilder.Box(contents.rectTransform, 28f, -176f, 600f, 28f, new Vector2(0f, 1f));
 
             float y = 210f;
+            bool growthPrimaryGiven = false;
             if (o.Kind == StoreOfferKind.Growth && o.Milestones.Count > 0)
             {
                 for (int i = 0; i < o.Milestones.Count; i++)
@@ -925,7 +934,8 @@ namespace Emberfall.UI.Screens
                     }
                     else if (m.CanClaim)
                     {
-                        UIButton claim = EmberforgeUI.Button("Claim" + i, pane, "CLAIM", UITheme.FontTiny, ForgeButtonKind.Primary);
+                        UIButton claim = EmberforgeUI.Button("Claim" + i, pane, "CLAIM", UITheme.FontTiny,
+                                                                EmberforgeUI.LoopCardKind(true, ref growthPrimaryGiven));
                         UIBuilder.Box(claim.Root, 860f, -y - 4f, 190f, 42f, new Vector2(0f, 1f));
                         claim.OnClick(delegate { ClaimGrowth(index); });
                     }
@@ -1000,7 +1010,8 @@ namespace Emberfall.UI.Screens
             string label = pending ? "WAITING FOR THE STORE"
                          : o.NeedsChoice ? (o.Kind == StoreOfferKind.RelicChoice ? "CHOOSE A RELIC  -  " : "CHOOSE A HERO  -  ") + o.PriceLabel
                          : "BUY  -  " + o.PriceLabel;
-            UIButton buy = EmberforgeUI.Button("Buy", pane, label, UITheme.FontSmall, ForgeButtonKind.Primary);
+            // A paid (EUR) action is a Secondary with the price in its label, never orange (R53).
+            UIButton buy = EmberforgeUI.Button("Buy", pane, label, UITheme.FontSmall, ForgeButtonKind.Secondary);
             UIBuilder.Box(buy.Root, 28f, 24f, 560f, 64f, new Vector2(0f, 0f));
             buy.Interactable = o.Available && !pending;
             StoreOfferView captured = o;
@@ -1080,7 +1091,7 @@ namespace Emberfall.UI.Screens
             }
 
             float y = 92f + rows * (rowHeight + 8f) + 20f;
-            UIButton back = EmberforgeUI.Button("Back", _body, "BACK", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIButton back = EmberforgeUI.Button("Back", _body, "BACK", UITheme.FontSmall, ForgeButtonKind.Quiet);
             UIBuilder.Box(back.Root, -560f, -y, 200f, 56f, new Vector2(0.5f, 1f));
             back.OnClick(delegate { TryStepBack(); });
             if (pages > 1)
@@ -1219,7 +1230,7 @@ namespace Emberfall.UI.Screens
             }
 
             float y = 92f + PickCardHeight * 2f + 12f + 20f;
-            UIButton back = EmberforgeUI.Button("Back", _body, "BACK", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            UIButton back = EmberforgeUI.Button("Back", _body, "BACK", UITheme.FontSmall, ForgeButtonKind.Quiet);
             UIBuilder.Box(back.Root, -(gridWidth * 0.5f) + 100f, -y, 200f, 56f, new Vector2(0.5f, 1f));
             back.OnClick(delegate { TryStepBack(); });
 
@@ -1274,7 +1285,8 @@ namespace Emberfall.UI.Screens
         {
             bool pending = _service != null && _service.Flow != null && _service.Flow.IsPending(o.Id);
             string text = !CanBuy ? "COMING SOON  -  " + o.PriceLabel : pending ? "WAITING FOR THE STORE" : label + "  -  " + o.PriceLabel;
-            UIButton b = EmberforgeUI.Button("Buy" + o.Id, parent, text, font, ForgeButtonKind.Primary);
+            // A paid (EUR) action is a Secondary with the price in its label, never orange (R53).
+            UIButton b = EmberforgeUI.Button("Buy" + o.Id, parent, text, font, ForgeButtonKind.Secondary);
             UIBuilder.Box(b.Root, x, y, w, h, new Vector2(1f, 1f));
             b.Interactable = CanBuy && o.Available && !pending;
             string id = o.Id;

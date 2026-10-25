@@ -138,7 +138,8 @@ namespace Emberfall.UI
                     UIBuilder.Box(chip, 0f, buttonBottom, CardWidth - 48f, Mathf.Min(52f, buttonHeight), new Vector2(0.5f, 0f));
                     continue;
                 }
-                UIButton open = EmberforgeUI.Button("Open", card, "OPEN", UITheme.FontSmall, ForgeButtonKind.Primary);
+                // Four doors that are equal choices, none of them the thing to press now: all Secondary (R53).
+                UIButton open = EmberforgeUI.Button("Open", card, "OPEN", UITheme.FontSmall, ForgeButtonKind.Secondary);
                 UIBuilder.Box(open.Root, 0f, buttonBottom, CardWidth - 48f, buttonHeight, new Vector2(0.5f, 0f));
                 ScreenId target = IdOf(shop);
                 ScreenRouter capturedRouter = router;

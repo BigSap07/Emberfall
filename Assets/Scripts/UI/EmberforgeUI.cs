@@ -649,6 +649,23 @@ namespace Emberfall.UI
         }
 
         /// <summary>
+        /// THE LOOP-CARD RULE (R53). A shelf of cards that all sell or pay the same way (Armory,
+        /// Quartermaster, Relic Shop, the pass tiles) must not show one orange button per card: orange
+        /// means "the thing to press now", and six of them say nothing. So exactly one card gets it: the
+        /// first card the player can act on, in the order the shelf is drawn, because that is the card the
+        /// shelf leads with and the one they are most likely there for. Every later card, and every card
+        /// they cannot afford, is a Secondary (an unaffordable one also shows its disabled plate). A shelf
+        /// with nothing affordable has no Primary at all. Pass a flag that is false at the start of the
+        /// shelf and the same flag for every card on it.
+        /// </summary>
+        public static ForgeButtonKind LoopCardKind(bool actionable, ref bool primaryGiven)
+        {
+            if (!actionable || primaryGiven) return ForgeButtonKind.Secondary;
+            primaryGiven = true;
+            return ForgeButtonKind.Primary;
+        }
+
+        /// <summary>
         /// Puts the warning tone on a button's label: for salvage, disband, delete and the like.
         /// The plate stays a Secondary's (a danger action is never orange); only the words change.
         /// </summary>

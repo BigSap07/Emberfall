@@ -97,10 +97,13 @@ namespace Emberfall.UI.Screens
                 footer += "\nSEALED GOLD CANNOT BUY ROLLED ARMOR";
             _footer.text = footer;
 
+            _primaryGiven = false;
             for (int i = 0; i < view.Slots.Count; i++) BuildCard(view.Slots[i]);
         }
 
         // ------------------------------------------------------------------ the shelf
+
+        private bool _primaryGiven;   // the loop-card rule: see EmberforgeUI.LoopCardKind
 
         private void BuildCard(QuartermasterSlotView v)
         {
@@ -169,7 +172,8 @@ namespace Emberfall.UI.Screens
             // ---- the action, or the reason there is none
             if (!sold)
             {
-                UIButton buy = EmberforgeUI.Button("Buy", card, "BUY", UITheme.FontSmall, ForgeButtonKind.Primary);
+                UIButton buy = EmberforgeUI.Button("Buy", card, "BUY", UITheme.FontSmall,
+                                                   EmberforgeUI.LoopCardKind(buyable, ref _primaryGiven));
                 UIBuilder.Box(buy.Root, 0f, UITheme.Space12, CardWidth - UITheme.Space16, 46f, new Vector2(0.5f, 0f));
                 buy.Interactable = buyable;
                 int index = v.Index;

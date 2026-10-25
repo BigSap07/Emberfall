@@ -60,6 +60,7 @@ namespace Emberfall.UI.Screens
         private UIButton _back;
 
         private int _page;
+        private bool _primaryGiven;   // the loop-card rule: see EmberforgeUI.LoopCardKind
         private SinkItemView _picking;
         private string _chosen;
 
@@ -211,6 +212,7 @@ namespace Emberfall.UI.Screens
             }
 
             int first = _page * PageSize;
+            _primaryGiven = false;
             for (int i = first; i < first + PageSize && i < view.Items.Count; i++)
                 BuildCard(view.Items[i], now);
         }
@@ -298,7 +300,8 @@ namespace Emberfall.UI.Screens
             if (buyable || poor)
             {
                 bool hero = item.Kind == SinkKind.HeroCopy;
-                UIButton buy = EmberforgeUI.Button("Buy", card, hero ? "CHOOSE" : "BUY", UITheme.FontSmall, ForgeButtonKind.Primary);
+                UIButton buy = EmberforgeUI.Button("Buy", card, hero ? "CHOOSE" : "BUY", UITheme.FontSmall,
+                                                   EmberforgeUI.LoopCardKind(buyable, ref _primaryGiven));
                 UIBuilder.Box(buy.Root, 0f, UITheme.Space12, CardWidth - UITheme.Space24, 46f, new Vector2(0.5f, 0f));
                 buy.Interactable = buyable;
                 SinkItemView captured = v;
@@ -469,7 +472,7 @@ namespace Emberfall.UI.Screens
                 if (def != null) chosenName = def.Name.ToUpperInvariant();
             }
 
-            _back = EmberforgeUI.Button("Back", _pick, "BACK", UITheme.FontSmall, ForgeButtonKind.Secondary);
+            _back = EmberforgeUI.Button("Back", _pick, "BACK", UITheme.FontSmall, ForgeButtonKind.Quiet);
             UIBuilder.Box(_back.Root, -(ShelfWidth * 0.5f) + 130f, 4f, 240f, 60f, new Vector2(0.5f, 0f));
             _back.OnClick(delegate { TryStepBack(); });
 
