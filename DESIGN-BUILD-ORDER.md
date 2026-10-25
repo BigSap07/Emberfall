@@ -58,6 +58,16 @@ about reasoning.
   not durable across a reload, because `NormaliseTeam` refills empty slots on load. The capture targets
   are `FormationPick`, `FormationFull` and `FormationFilter` with `Legacy` twins for the old screen, and
   `R55FormationChecks.cs` proves the rules and the names the onboarding coach and `FeatureLockView` find.
+- **The A2 skin on every shared widget (R56).** `A2Skin.cs` sits in front of `EmberforgeSkin.Get` and
+  answers the shared widget slots in `EmberforgeUI` (panel, plain panel, sunken well, button plates, discs,
+  ribbon, tabs, pills, progress bars, rule) with A2 sprites of the same geometry, so no screen layout
+  moves, and swaps `Emberforge.UiFont` to Nunito Bold and `TitleFont` to Lilita One. `ForgeButtonKind` and
+  its 172 call sites are unchanged, so the Primary counts match R53. Text on a cream plate is mapped to
+  its ink twin when built and held there by `A2InkGuard`; a screen whose children sit on a dark backing
+  of their own marks the node with `A2DarkBacking`. `SkinA2Switch` is on by default
+  (`EMBERFALL_SKIN_A2_OFF` gives the old look); `R56SkinChecks.cs` pins the slot list and the switch.
+  The Hub name tags, rarity chips, hero frames and jewel art are not re-skinned. `FormationScreenA2` is
+  untouched and its 12 captures are pixel-identical to before.
 
 ## The instruments
 
