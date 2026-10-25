@@ -119,7 +119,7 @@ namespace Emberfall.UI
             if (font == null)
             {
                 fellBack = true;
-                font = Emberforge.UiFont;
+                font = Emberforge.BarlowFont;
                 Debug.LogWarning("A2Kit: font '" + path + "' did not load, using the Barlow fallback.");
             }
             return font;

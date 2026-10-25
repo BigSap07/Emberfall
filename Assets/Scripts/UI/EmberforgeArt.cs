@@ -36,6 +36,11 @@ namespace Emberfall.UI
         public Color Edge;
         public int EdgeWeight;
 
+        /// <summary>R56: draw the whole edge band in Edge. Off (every baked slot) the outermost
+        /// Emberforge.OutlineWeight pixels are the shared near black outline; the A2 skin wants its own
+        /// warm ink there, so A2Skin sets this and leaves the baker's output unchanged.</summary>
+        public bool EdgeOnly;
+
         /// <summary>The band inside the outline: gold on a panel, a rarity colour on a portrait
         /// frame, absent on most buttons. Four stops read through the surface normal, so the same
         /// numbers light the top edge and shade the underside.</summary>
@@ -683,7 +688,7 @@ namespace Emberfall.UI
                 // The shared dark outline is always the OUTERMOST pixels, whatever the element's
                 // own edge colour is. On a panel the two are the same colour and this is invisible;
                 // on a button it is the difference between a rimmed object and a boxed one.
-                if (depth < Emberforge.OutlineWeight) return Emberforge.Outline;
+                if (!spec.EdgeOnly && depth < Emberforge.OutlineWeight) return Emberforge.Outline;
                 return spec.Edge;
             }
 
@@ -774,7 +779,7 @@ namespace Emberfall.UI
                 {
                     face = spec.LipColor;
                 }
-                else if (fromBottom < spec.Lip + 1f)
+                else if (!spec.EdgeOnly && fromBottom < spec.Lip + 1f)
                 {
                     // One lighter scanline where the face meets the lip. Without it the two tones
                     // meet as a colour change; with it the face reads as sitting ON the lip.

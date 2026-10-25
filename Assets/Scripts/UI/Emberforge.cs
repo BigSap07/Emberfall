@@ -323,9 +323,20 @@ namespace Emberfall.UI
         {
             get
             {
+                // R56: while the A2 skin is on, titles are Lilita One. Cinzel stays what the off state draws.
+                if (Emberfall.Core.Session.SkinA2Switch.Enabled) return A2Kit.Display;
+                return CinzelFont;
+            }
+        }
+
+        /// <summary>Cinzel, whatever the A2 skin says. What TitleFont answers while the skin is off.</summary>
+        public static Font CinzelFont
+        {
+            get
+            {
                 if (_title != null) return _title;
                 _title = Resources.Load<Font>("Fonts/Cinzel");
-                if (_title == null) _title = UiFont;
+                if (_title == null) _title = BarlowFont;
                 return _title;
             }
         }
@@ -334,6 +345,18 @@ namespace Emberfall.UI
         /// because this game's numbers live in pills and cells sized for a thumb, and a condensed
         /// face is the difference between a full XP fraction fitting and being abbreviated.</summary>
         public static Font UiFont
+        {
+            get
+            {
+                // R56: while the A2 skin is on, the body face is Nunito Bold (A2Kit.Load falls back to
+                // BarlowFont, never to this getter, so a missing file cannot recurse).
+                if (Emberfall.Core.Session.SkinA2Switch.Enabled) return A2Kit.BodyBold;
+                return BarlowFont;
+            }
+        }
+
+        /// <summary>Barlow Condensed, whatever the A2 skin says. What UiFont answers while the skin is off.</summary>
+        public static Font BarlowFont
         {
             get
             {

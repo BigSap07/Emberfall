@@ -178,6 +178,12 @@ namespace Emberfall.UI
             Outline outline = label.gameObject.AddComponent<Outline>();
             outline.effectColor = color;
             outline.effectDistance = new Vector2(distance, distance);
+            // R56: under the A2 skin a stroke belongs on light lettering only (in the deep ink); a dark stroke on dark ink is mud.
+            if (A2Skin.On)
+            {
+                if (A2Skin.IsDark(label.color)) outline.enabled = false;
+                else if (color.r < 0.1f && color.b < 0.2f) outline.effectColor = A2Kit.InkDeep;
+            }
             return label;
         }
 
