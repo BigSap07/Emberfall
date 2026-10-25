@@ -57,6 +57,12 @@ namespace Emberfall.Core.Session
         /// <summary>The one line a locked hero's card says, in place of an action.</summary>
         public const string LockedLine = "Summon this hero in the Rift to get them.";
 
+        /// <summary>R58: the label of the one Primary. A hero not yet summoned is previewed, an owned one is opened.</summary>
+        public static string OpenLabel(bool locked)
+        {
+            return locked ? "PREVIEW" : "OPEN HERO";
+        }
+
         /// <summary>The next sort in the cycle: Power, Level, Stars, Aspect, then Power again.</summary>
         public static int NextSort(int mode)
         {

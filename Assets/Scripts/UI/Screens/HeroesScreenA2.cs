@@ -37,6 +37,11 @@ namespace Emberfall.UI.Screens
         private const float A2CardWidth = 560f;
         private const float A2ColumnGap = 16f;
         private const float A2MinTile = 190f;
+        /// <summary>R58: the tile stars are 22 (they were 16, about 1.4 times larger); the band is tall enough to keep them clear of the level label.</summary>
+        private const float A2TileStar = 22f;
+        private const float A2BandHeight = 64f;
+        /// <summary>R58: the tint on a locked hero's face (tile and card), lifted from (0.45, 0.40, 0.38, 0.55) so the face still reads.</summary>
+        private static readonly Color A2LockedFace = new Color(0.78f, 0.74f, 0.72f, 0.9f);
         private const float A2TileGap = 10f;
         private const float A2TileAspect = 148f / 118f;     // tile height over width, as in Formation
         private const float A2OpenHeight = 96f;             // twice the 48 touch floor; the card must also fit a wide screen, where the canvas scales up and the card is short
@@ -345,7 +350,7 @@ namespace Emberfall.UI.Screens
             RectTransform window = UIBuilder.Node("Window", body);
             window.anchorMin = new Vector2(0f, 0f);
             window.anchorMax = new Vector2(1f, 1f);
-            window.offsetMin = new Vector2(7f, 58f);
+            window.offsetMin = new Vector2(7f, 7f + A2BandHeight);
             window.offsetMax = new Vector2(-7f, -7f);
             Image windowFill = UIBuilder.Panel("Fill", window, A2Kit.WithAlpha(A2Kit.InkDeep, 0.25f), 8);
             windowFill.raycastTarget = false;
@@ -356,7 +361,7 @@ namespace Emberfall.UI.Screens
             if (!locked) SkinArt.Dress(windowFill.rectTransform, App.Session, hero);
             Transform badgeNode = windowFill.rectTransform.Find("Badge");
             Image badge = badgeNode != null ? badgeNode.GetComponent<Image>() : null;
-            if (locked && badge != null) badge.color = new Color(0.45f, 0.4f, 0.38f, 0.55f);
+            if (locked && badge != null) badge.color = A2LockedFace;
 
             // The role badge, top right: a glyph, not a name.
             RectTransform role = UIBuilder.Node("Role", body);
@@ -388,16 +393,16 @@ namespace Emberfall.UI.Screens
             band.pivot = new Vector2(0.5f, 0f);
             band.offsetMin = new Vector2(7f, 7f);
             band.offsetMax = new Vector2(-7f, 7f);
-            band.sizeDelta = new Vector2(band.sizeDelta.x, 50f);
+            band.sizeDelta = new Vector2(band.sizeDelta.x, A2BandHeight);
             Image bandFill = UIBuilder.Panel("Fill", band, A2Kit.Ink, 8);
             bandFill.raycastTarget = false;
             UIBuilder.FillParent(bandFill.rectTransform, 0f);
-            RectTransform stars = A2Kit.Stars("Stars", band, def.Stars, 16f, 2f);
-            UIBuilder.Box(stars, 0f, -4f, 16f * 5 + 8f, 16f, new Vector2(0.5f, 1f));
+            RectTransform stars = A2Kit.Stars("Stars", band, def.Stars, A2TileStar, 2f);
+            UIBuilder.Box(stars, 0f, -4f, A2TileStar * 5 + 8f, A2TileStar, new Vector2(0.5f, 1f));
             if (!locked)
             {
                 Text level = A2Kit.Label("Level", band, "LV " + hero.Level, 22, A2Kit.TextOnDark, TextAnchor.LowerCenter, A2Kit.BodyBold);
-                UIBuilder.Box(level.rectTransform, 0f, 2f, 104f, 26f, new Vector2(0.5f, 0f));
+                UIBuilder.Box(level.rectTransform, 0f, 4f, 104f, 26f, new Vector2(0.5f, 0f));
             }
 
             _a2Tiles.Add(view);
@@ -450,7 +455,7 @@ namespace Emberfall.UI.Screens
             else
             {
                 Transform art = faceWindow.rectTransform.Find("Badge");
-                if (art != null) art.GetComponent<Image>().color = new Color(0.45f, 0.4f, 0.38f, 0.55f);
+                if (art != null) art.GetComponent<Image>().color = A2LockedFace;
             }
 
             // Name, role, aspect, stars and level.
@@ -487,12 +492,13 @@ namespace Emberfall.UI.Screens
             if (locked) BuildA2LockedBody(panel.rectTransform);
             else BuildA2OwnedBody(panel.rectTransform, hero);
 
-            // The one Primary. A hero not yet summoned shows it disabled.
-            UIButton open = A2Kit.Button("OpenHero", panel.rectTransform, "OPEN HERO", 38, A2ButtonKind.Primary);
+            // The one Primary. A hero not yet summoned shows it as PREVIEW, which opens the locked preview.
+            UIButton open = A2Kit.Button("OpenHero", panel.rectTransform, HeroesPick.OpenLabel(locked), 38, A2ButtonKind.Primary);
             UIBuilder.Box(open.Root, 0f, 20f, A2CardWidth - 48f, A2OpenHeight, new Vector2(0.5f, 0f));
             if (locked)
             {
-                open.Interactable = false;
+                HeroDef preview = def;
+                open.OnClick(delegate { OpenPreviewA2(preview); });
             }
             else
             {
@@ -555,6 +561,13 @@ namespace Emberfall.UI.Screens
         {
             App.Audio.Tap();
             Router.HeroDetail.SetHero(hero);
+            Router.Show(ScreenId.HeroDetail);
+        }
+
+        private void OpenPreviewA2(HeroDef def)
+        {
+            App.Audio.Tap();
+            Router.HeroDetail.SetLockedHero(def);
             Router.Show(ScreenId.HeroDetail);
         }
 

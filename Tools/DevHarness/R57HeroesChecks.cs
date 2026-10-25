@@ -119,7 +119,13 @@ namespace Emberfall.DevHarness
             Check(src.Contains("Router.HeroDetail.SetHero(hero)") && src.Contains("Router.Show(ScreenId.HeroDetail)"), "WIRING: OPEN HERO opens Hero Detail");
             Check(CountR57(src, "A2ButtonKind.Primary") == 1, "WIRING: exactly one Primary in the A2 Heroes screen (" + CountR57(src, "A2ButtonKind.Primary") + ")");
             Check(CountR57(src, "A2ButtonKind.Secondary") == 0, "WIRING: no Secondary button on the A2 Heroes screen");
-            Check(src.Contains("open.Interactable = false"), "WIRING: a hero not yet summoned shows OPEN HERO disabled");
+            // R58 step 0: a hero not yet summoned is PREVIEW, still the one Primary, and opens the locked preview.
+            Check(HeroesPick.OpenLabel(true) == "PREVIEW" && HeroesPick.OpenLabel(false) == "OPEN HERO", "HEROES R58: the Primary reads PREVIEW for a locked hero, OPEN HERO for an owned one");
+            Check(!src.Contains("open.Interactable = false"), "WIRING R58: the Primary is no longer disabled for a locked hero");
+            Check(src.Contains("Router.HeroDetail.SetLockedHero(def)"), "WIRING R58: PREVIEW opens the locked hero preview in Hero Detail");
+            Check(ConstAtLeast(src, "A2TileStar", 22f), "SIZE R58: the tile stars are about 1.4 times the old 16 (" + ConstOf(src, "A2TileStar") + ")");
+            Check(ConstAtLeast(src, "A2BandHeight", 64f), "SIZE R58: the tile band is tall enough to keep the stars clear of the level label (" + ConstOf(src, "A2BandHeight") + ")");
+            Check(src.Contains("A2LockedFace") && !src.Contains("new Color(0.45f, 0.4f, 0.38f, 0.55f)"), "WIRING R58: the locked face tint is lifted from the R57 value");
             Check(src.Contains("if (key == _a2Selected) return;"), "WIRING: a second tap on the selected tile does nothing (no double tap open)");
             Check(src.Contains("_a2Filter = aspect == _a2Filter ? -1 : aspect;"), "WIRING: an emblem filters, tapping it again clears, ALL clears");
             Check(src.Contains("HeroesPick.NextSort(_a2Sort)"), "WIRING: the sort control cycles");
