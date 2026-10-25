@@ -105,7 +105,8 @@ namespace Emberfall.EditorTools
         /// it as the build has it (ON unless EMBERFALL_UIKIT_OFF, R26). The switch is a static, so the domain reload Play mode triggers resets
         /// it and the static constructor re-applies it before the game boots; KitWasKey is what it was
         /// before the run, put back by Stop.</summary>
-        private const string KitForceKey = "PlayModeScreenshot.UiKitForce";
+        private const string FormationForceKey = "PlayModeScreenshot.FormationForce";
+        private const string KitForceKey ="PlayModeScreenshot.UiKitForce";
         private const string KitWasKey = "PlayModeScreenshot.UiKitWas";
 
         /// <summary>
@@ -165,6 +166,7 @@ namespace Emberfall.EditorTools
             ApplyLoopForce();
             ApplySinksForce();
             ApplyKitForce();
+            ApplyFormationForce();
             EditorApplication.update += Pump;
             EditorApplication.update += PollTriggerFile;
             EditorApplication.update += WatchdogTick;
@@ -202,6 +204,15 @@ namespace Emberfall.EditorTools
             if (force == 0) return;
             UiKitSwitch.Enabled = force == 1;
             UiKit.Forget();
+        }
+
+        /// <summary>R55: applies the Formation A2 switch for the run (1 on, 2 off), as ApplyKitForce does the kit's.
+        /// Only the six Formation state targets set it; every other target leaves the switch alone.</summary>
+        private static void ApplyFormationForce()
+        {
+            if (!SessionState.GetBool(ActiveKey, false)) return;
+            int force = SessionState.GetInt(FormationForceKey, 0);
+            if (force != 0) FormationA2Switch.Enabled = force == 1;
         }
 
         private static void PollTriggerFile()
@@ -842,6 +853,8 @@ namespace Emberfall.EditorTools
             SessionState.SetInt(KitForceKey, kitForce);
             SessionState.SetBool(KitWasKey, UiKitSwitch.Enabled);
             ApplyKitForce();
+            SessionState.SetInt(FormationForceKey, R55Force(target));
+            ApplyFormationForce();
             SessionState.SetBool(VerifiedKey, false);
             SessionState.SetString(TargetKey, target);
             SessionState.SetInt(WidthKey, width);
@@ -1562,6 +1575,11 @@ namespace Emberfall.EditorTools
                 SessionState.SetInt(KitForceKey, 0);
                 UiKit.Forget();
             }
+            if (SessionState.GetInt(FormationForceKey, 0) != 0)
+            {
+                FormationA2Switch.Enabled = FormationA2Switch.ShippedDefault;
+                SessionState.SetInt(FormationForceKey, 0);
+            }
             R46Restore();
             R28bRestore();
             SessionState.SetInt(ReplayStageKey, 0);
@@ -1750,6 +1768,132 @@ namespace Emberfall.EditorTools
                 Shoot(name, frame, slot);
                 R46Restore();
             }
+        }
+
+        // ================================================================== R55: the Formation screen
+        //
+        // Three states of the A2 Formation screen, each with a Legacy twin that forces FormationA2Switch off and shows the
+        // screen as it was before R55 on the same seeded roster:
+        //
+        //   Screen:FormationPick     two empty slots lit, the strongest unplaced hero selected, its power change on the card
+        //   Screen:FormationFull     a full squad, an unplaced hero selected (the swap reading on the card)
+        //   Screen:FormationFilter   the aspect filter on Tide, nothing selected
+        //
+        // All of them seed the scratch identity only (heroes through GrantHeroDirect, the squad through AssignToTeam and
+        // ClearTeamSlot) and nothing is saved. Each A2 shot logs the font of every Text on the screen, which is the proof that
+        // the screen draws in Lilita One and Nunito and not the Barlow fallback.
+
+        private static bool IsR55Target(string name)
+        {
+            return name == "FormationPick" || name == "FormationFull" || name == "FormationFilter"
+                   || name == "FormationPickLegacy" || name == "FormationFullLegacy" || name == "FormationFilterLegacy";
+        }
+
+        /// <summary>1 forces the switch on, 2 off, 0 leaves it (every target but the six above).</summary>
+        private static int R55Force(string target)
+        {
+            string name = target.StartsWith("Screen:") ? target.Substring(7) : target;
+            if (!IsR55Target(name)) return 0;
+            return name.EndsWith("Legacy") ? 2 : 1;
+        }
+
+        private static void PumpR55(GameApp app, string name, int frame, int slot)
+        {
+            const int ShowAt = 10;
+            const int SelectAt = ShowAt + 70;
+            const int ShotAt = ShowAt + 150;
+            if (frame < ShowAt) return;
+            bool legacy = name.EndsWith("Legacy");
+            string state = name.Replace("Legacy", "").Replace("Formation", "");
+
+            if (frame == ShowAt)
+            {
+                if (!EditorScratchIdentity.IsScratch)
+                {
+                    Debug.LogError("PlayModeScreenshot: " + name + " seeds a profile, so it only runs on the scratch identity. Skipping.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                    return;
+                }
+                R55Seed(app, state);
+                app.Router.Show(ScreenId.Formation);
+                Debug.Log("PlayModeScreenshot: showing " + name + ", FormationA2Switch.Enabled=" + FormationA2Switch.Enabled);
+                return;
+            }
+
+            if (frame == SelectAt && !legacy)
+            {
+                PlayerProfile profile = app.Session.Profile;
+                string pick = "";
+                if (state != "Filter")
+                {
+                    int best = -1;
+                    for (int i = 0; i < profile.Heroes.Count; i++)
+                    {
+                        HeroInstance h = profile.Heroes[i];
+                        if (h.Def == null || profile.IsDeployed(h.Uid)) continue;
+                        if (h.Power > best) { best = h.Power; pick = h.Uid; }
+                    }
+                }
+                app.Router.Formation.ApplyCaptureState(state == "Filter" ? (int)Aspect.Tide : -1, pick);
+                Debug.Log("PlayModeScreenshot: " + name + " selected '" + pick + "', filter " + (state == "Filter" ? "Tide" : "all"));
+                return;
+            }
+
+            if (frame == ShotAt - 20) Canvas.ForceUpdateCanvases();
+            if (frame < ShotAt) KeepGameViewFresh(frame);
+            if (frame == ShotAt)
+            {
+                if (!legacy)
+                {
+                    Debug.Log("PlayModeScreenshot: " + A2Kit.FontReport() + ", FontsLoaded=" + A2Kit.FontsLoaded);
+                    UnityEngine.UI.Text[] texts = app.Router.Formation.GetComponentsInChildren<UnityEngine.UI.Text>(true);
+                    Dictionary<string, int> byFont = new Dictionary<string, int>();
+                    for (int i = 0; i < texts.Length; i++)
+                    {
+                        string fontName = texts[i].font != null ? texts[i].font.name : "none";
+                        int n;
+                        byFont.TryGetValue(fontName, out n);
+                        byFont[fontName] = n + 1;
+                    }
+                    string summary = "";
+                    foreach (KeyValuePair<string, int> pair in byFont) summary += pair.Key + "=" + pair.Value + " ";
+                    Debug.Log("PlayModeScreenshot: FORMATION FONTS on screen (" + texts.Length + " Text components): " + summary.Trim());
+                }
+                Debug.Log("PlayModeScreenshot: shot of " + name + ", router shows "
+                          + (app.Router.Current != null ? app.Router.Current.Id.ToString() : "nothing"));
+                Shoot(name, frame, slot);
+            }
+        }
+
+        /// <summary>
+        /// A roster worth looking at: up to two heroes of each aspect that the scratch profile does not own yet, levelled apart so
+        /// the power differs. Idempotent, so every target in a batch sees the same roster. The squad is then set for the state:
+        /// Pick leaves two empty slots, the other two fill all five with the strongest.
+        /// </summary>
+        private static void R55Seed(GameApp app, string state)
+        {
+            GameSession session = app.Session;
+            PlayerProfile profile = session.Profile;
+            long now = TimeUtil.NowUnix();
+            int[] perAspect = new int[6];
+            List<HeroDef> defs = session.Content.Heroes;
+            for (int i = 0; i < defs.Count; i++)
+            {
+                HeroDef d = defs[i];
+                int a = (int)d.Aspect;
+                if (a < 0 || a >= perAspect.Length || perAspect[a] >= 2 || profile.Owns(d.Id)) continue;
+                HeroInstance granted = session.GrantHeroDirect(d, now);
+                if (granted == null) continue;
+                granted.Level = 8 + ((i * 7) % 23);
+                perAspect[a]++;
+            }
+
+            for (int s = 0; s < PlayerProfile.TeamSize; s++) profile.ClearTeamSlot(s);
+            List<HeroInstance> byPower = new List<HeroInstance>(profile.Heroes);
+            byPower.Sort(delegate (HeroInstance x, HeroInstance y) { return x.Power.CompareTo(y.Power); });
+            // The three weakest take slots 0 to 2; Full adds two more. The strongest stay on the bench so the card reads a gain.
+            int fill = state == "Pick" ? 3 : (state == "Full" ? 5 : 4);
+            for (int s = 0; s < fill && s < byPower.Count; s++) profile.AssignToTeam(s, byPower[s].Uid);
         }
 
         private static void PumpR28b(GameApp app, string name, int frame, int slot)
@@ -2208,6 +2352,7 @@ namespace Emberfall.EditorTools
             string name = list[slot];
             if (IsR28bTarget(name)) { PumpR28b(app, name, frame, Math.Min(slot, list.Length - 1)); return; }
             if (IsR46Target(name)) { PumpR46(app, name, frame, Math.Min(slot, list.Length - 1)); return; }
+            if (IsR55Target(name)) { PumpR55(app, name, frame, Math.Min(slot, list.Length - 1)); return; }
             // R24: BattleSkin is Battle with Azure Kael, an owned test skin, worn by the line's first hero.
             bool skinBattle = name == "BattleSkin";
             if (skinBattle) name = "Battle";
