@@ -48,6 +48,16 @@ about reasoning.
   compression for backdrops, and a size check of the R44 and R45 screens (see Next).
   Accounts, cloud save, guilds, friends and duels were already in place and are described below.
   Each has its own section.
+- **The A2 Formation screen (R55), the pilot of the screen language.** `FormationScreenA2.cs` is the
+  second half of `FormationScreen` and is on by default through `FormationA2Switch` (set
+  `EMBERFALL_FORMATION_A2_OFF` to get the old screen back; the old `Build` is kept). It is built from
+  `A2Kit` (cream plates, one Primary button, Lilita One and Nunito from `Resources/Fonts`, licence files
+  beside them) and the pure rules in `SquadPick`. Interactions: tap a roster hero then a slot, swap,
+  remove, a detail card with the squad power change, an aspect filter, AUTO FILL (`NormaliseTeam`) and
+  CONFIRM (save, then `Router.Back`). Drag is not built (the UI shim has no drag handlers). Remove is
+  not durable across a reload, because `NormaliseTeam` refills empty slots on load. The capture targets
+  are `FormationPick`, `FormationFull` and `FormationFilter` with `Legacy` twins for the old screen, and
+  `R55FormationChecks.cs` proves the rules and the names the onboarding coach and `FeatureLockView` find.
 
 ## The instruments
 
