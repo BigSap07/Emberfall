@@ -15,6 +15,8 @@ internal static partial class Probe
         List<string> lines = new List<string>();
         lines.Add("UiKitSwitch.Enabled=" + UiKitSwitch.Enabled);
         lines.Add("UiKitSwitch.ShippedDefault=" + UiKitSwitch.ShippedDefault);
+        lines.Add("SkinA2Switch.Enabled=" + SkinA2Switch.Enabled);
+        lines.Add("SkinA2Switch.ShippedDefault=" + SkinA2Switch.ShippedDefault);
         Extra(lines);
         for (int i = 0; i < lines.Count; i++) Console.WriteLine(lines[i]);
         return 0;

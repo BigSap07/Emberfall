@@ -140,9 +140,11 @@ namespace Emberfall.UI
             if (smallKit)
                 plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.PanelPlain);
             plate.type = Image.Type.Sliced;
-            if (smallKit) plate.pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier;   // a thinner rim on small panels (R26)
+            // R56: an A2 plate has its own 3 unit edge, so the kit's thinner rim multiplier is not applied to it.
+            if (smallKit && !A2Skin.On) plate.pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier;   // a thinner rim on small panels (R26)
             plate.color = Color.white;
             if (ornaments) Ornaments(rect);
+            A2Skin.Retint(rect);   // R56
             return plate;
         }
 
@@ -165,7 +167,8 @@ namespace Emberfall.UI
             plate.type = Image.Type.Sliced;
             plate.color = Color.white;
             // With the kit on a plain panel is a small one: thinner rim, so a label at its edge is not under it (R26).
-            if (UiKit.Forge(EmberforgeArt.Slot.PanelPlain) != null) plate.pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier;
+            if (!A2Skin.On && UiKit.Forge(EmberforgeArt.Slot.PanelPlain) != null) plate.pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier;
+            A2Skin.Retint(rect);   // R56
             return plate;
         }
 
@@ -176,6 +179,7 @@ namespace Emberfall.UI
             plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.Sunken);
             plate.type = Image.Type.Sliced;
             plate.color = Color.white;
+            A2Skin.Retint(rect);   // R56
             return plate;
         }
 
@@ -204,7 +208,8 @@ namespace Emberfall.UI
         /// </summary>
         public static Image Ground(RectTransform root)
         {
-            return Ground(root, Emberforge.PanelLow);
+            // R56: under A2 the kit brown floor is A2Kit.Backdrop's floor colour, so the cream panels sit on the same warm dark.
+            return Ground(root, A2Skin.On ? A2Kit.Hex(0x2A150A) : Emberforge.PanelLow);
         }
 
         /// <summary>The same ground in a colour the screen chooses (R51: the Inventory sits on the
@@ -278,6 +283,15 @@ namespace Emberfall.UI
             if (card == null || card.Plate == null) return;
             card.Plate.sprite = EmberforgeSkin.Get(selected ? EmberforgeArt.Slot.Panel
                                                             : EmberforgeArt.Slot.PanelPlain);
+
+            // R56: under A2 the chosen card is the cream plate warmed toward StarOn, the rest stay the light card.
+            // Nothing is dimmed (a dim card on cream reads as disabled) and no frame changes weight.
+            if (A2Skin.On)
+            {
+                card.Plate.pixelsPerUnitMultiplier = 1f;
+                card.Plate.color = selected ? Color.Lerp(Color.white, A2Kit.StarOn, 0.55f) : Color.white;
+                return;
+            }
 
             // With the kit on, the big panel's corner blocks sit on the contents of a short card (a Store row is
             // 90 units tall), so a short card keeps the kit's small frame in both states and says "selected" by
@@ -400,6 +414,8 @@ namespace Emberfall.UI
         /// whatever is inside the panel's corner.</summary>
         public static void Ornaments(RectTransform panel)
         {
+            // R56: the A2 look has no corner ornaments at all.
+            if (A2Skin.On) return;
             // With the kit on the corner is the filigree (R26), larger than the diamond, on the big panel only: a
             // small fixed panel takes the kit's small panel, whose bolted corners are its own ornament.
             if (UiKit.Forge(EmberforgeArt.Slot.Panel) != null)
@@ -484,6 +500,7 @@ namespace Emberfall.UI
                                TextAnchor.MiddleCenter);
             UIBuilder.FillParent(label.rectTransform, Emberforge.RibbonOverhang + Emberforge.Space12,
                                  0f, Emberforge.RibbonOverhang + Emberforge.Space12, 0f);
+            if (A2Skin.On) label.color = A2Kit.TextOnDark;   // R56: cream on the ink ribbon, whatever panel it hangs on
             UIBuilder.Outlined(label, Emberforge.Outline, Emberforge.StrokeThin);
 
             // BEST FIT, and it is not optional here. A ribbon's width comes from the panel it
@@ -629,15 +646,16 @@ namespace Emberfall.UI
             glossImage.type = Image.Type.Sliced;
             glossImage.raycastTarget = false;
 
-            handle.Label = Label("Text", content, text, fontSize, Emberforge.TextOnColor,
+            handle.Label = Label("Text", content, text, fontSize, A2Skin.On ? A2Kit.TextOnDark : Emberforge.TextOnColor,
                                  TextAnchor.MiddleCenter);
+            if (A2Skin.On) handle.Label.font = A2Kit.Display;   // R56: buttons are Lilita One
             // The label sits over the FACE, so it is lifted by half the lip: centred in the
             // button's rect it would read as slightly low, because the bottom of that rect is the
             // lip rather than part of the face.
             UIBuilder.FillParent(handle.Label.rectTransform, Emberforge.Space12,
                                  Emberforge.Space4, Emberforge.Space12,
                                  Emberforge.Space4 + Emberforge.ButtonLip);
-            UIBuilder.Outlined(handle.Label, Emberforge.Outline, Emberforge.StrokeThin);
+            UIBuilder.Outlined(handle.Label, A2Skin.On ? A2Kit.InkDeep : Emberforge.Outline, Emberforge.StrokeThin);
 
             EmberforgeButtonSkin skin = handle.Root.gameObject.AddComponent<EmberforgeButtonSkin>();
             skin.Bind(handle.Background, content, glossImage, kind, handle.Label);
@@ -769,7 +787,7 @@ namespace Emberfall.UI
                           HubStyle.TouchMin, HubStyle.TouchMin, new Vector2(1f, 1f));
             // THE UI KIT'S OWN CLOSE BUTTON is a whole painted disc with its cross in it, so it
             // replaces the disc and the glyph and the text cross all at once.
-            Sprite kitClose = UiKit.Hud(HudSkin.IconClose);
+            Sprite kitClose = A2Skin.On ? null : UiKit.Hud(HudSkin.IconClose);   // R56: the A2 close is the ink disc with its cross
             if (kitClose != null)
             {
                 disc.Disc.enabled = false;
@@ -970,7 +988,15 @@ namespace Emberfall.UI
             if (tab.Plate != null)
                 tab.Plate.sprite = EmberforgeSkin.Get(selected
                     ? EmberforgeArt.Slot.TabOn : EmberforgeArt.Slot.TabOff);
-            if (tab.Caption != null)
+            if (tab.Caption != null && A2Skin.On)
+            {
+                // R56: lit teal tab with cream lettering and its stroke; the unlit tab is a tan well with ink lettering and no stroke.
+                tab.Caption.font = A2Kit.Display;
+                tab.Caption.color = selected ? A2Kit.TextOnDark : A2Kit.Ink;
+                Outline a2Edge = tab.Caption.GetComponent<Outline>();
+                if (a2Edge != null) { a2Edge.effectColor = A2Kit.InkDeep; a2Edge.enabled = selected; }
+            }
+            else if (tab.Caption != null)
             {
                 bool kitTab = UiKit.Forge(EmberforgeArt.Slot.TabOn) != null;
                 tab.Caption.color = selected
@@ -1018,7 +1044,7 @@ namespace Emberfall.UI
 
             Image plate = pill.Root.gameObject.AddComponent<Image>();
             // The kit's currency plate when it is on and the purse has its icon; the pill otherwise.
-            Sprite kitPlate = purse != null ? UiKit.Forge(UiKitPill) : null;
+            Sprite kitPlate = (purse != null && !A2Skin.On) ? UiKit.Forge(UiKitPill) : null;
             plate.sprite = kitPlate != null ? kitPlate : EmberforgeSkin.Get(EmberforgeArt.Slot.Pill);
             plate.type = Image.Type.Sliced;
             plate.color = Color.white;
@@ -1053,11 +1079,12 @@ namespace Emberfall.UI
             float valueLeft = jewelPad + jewelSize + Emberforge.Space8;
             float valueRight = height * 0.3f;
 
-            pill.Value = Label("Value", pill.Root, "0", UITheme.FontSmall, Emberforge.TextGold,
+            pill.Value = Label("Value", pill.Root, "0", UITheme.FontSmall, A2Skin.On ? A2Kit.StarOn : Emberforge.TextGold,
                                TextAnchor.MiddleRight);
+            if (A2Skin.On) pill.Value.font = A2Kit.Display;   // R56: figures are Lilita One
             UIBuilder.Box(pill.Value.rectTransform, -valueRight, 0f,
                           width - valueLeft - valueRight, jewelSize, new Vector2(1f, 0.5f));
-            UIBuilder.Outlined(pill.Value, Emberforge.Outline, Emberforge.StrokeThin);
+            UIBuilder.Outlined(pill.Value, A2Skin.On ? A2Kit.InkDeep : Emberforge.Outline, Emberforge.StrokeThin);
 
             if (onPlus != null)
             {
@@ -1301,6 +1328,7 @@ namespace Emberfall.UI
         {
             Text label = UIBuilder.Label(name, parent, text, size, color, anchor);
             label.font = Emberforge.UiFont;
+            A2Skin.Style(label);   // R56
             return label;
         }
 
@@ -1310,6 +1338,7 @@ namespace Emberfall.UI
         {
             Text label = UIBuilder.Label(name, parent, text, size, color, anchor);
             label.font = Emberforge.TitleFont;
+            A2Skin.Style(label);   // R56
             return label;
         }
 
@@ -1319,6 +1348,7 @@ namespace Emberfall.UI
         {
             Text label = UIBuilder.WrappedLabel(name, parent, text, size, color, anchor);
             label.font = Emberforge.UiFont;
+            A2Skin.Style(label);   // R56
             return label;
         }
     }
@@ -1460,6 +1490,8 @@ namespace Emberfall.UI
 
             string slot;
             if (!_interactable) slot = EmberforgeArt.Slot.ButtonDisabled;
+            else if (quiet && A2Skin.On)
+                slot = _down ? A2Skin.QuietButtonDown : A2Skin.QuietButton;   // R56: A2 Quiet is the ink plate, not a faded teal one
             else if (voice == ForgeButtonKind.Secondary || quiet)
                 slot = _down ? EmberforgeArt.Slot.ButtonSecondaryDown : EmberforgeArt.Slot.ButtonSecondary;
             else
@@ -1468,15 +1500,16 @@ namespace Emberfall.UI
             // Disabled is always the baked dark plate, with the kit on as well: the kit's own disabled
             // piece is a LIGHT grey with a bronze rim, which reads as a Secondary that someone left
             // in the sun. Dark, rimless and dim is what "not available" has to look like (R53).
-            _plate.sprite = _interactable ? EmberforgeSkin.Get(slot) : EmberforgeSkin.GetBaked(slot);
+            // R56: the A2 disabled plate is A2Skin's own, so while the skin is on Get answers it.
+            _plate.sprite = (_interactable || A2Skin.On) ? EmberforgeSkin.Get(slot) : EmberforgeSkin.GetBaked(slot);
 
             // The UI kit has one plate for rest and press (painted metal, no pressed art), so a press darkens
             // it instead; the baked kit swaps to its own pressed sprite and the colour stays white.
-            bool kitPlate = UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) != null;
+            bool kitPlate = !A2Skin.On && UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) != null;
             Color plateColor = Color.white;
             if (kitPlate && _interactable && _down) plateColor = UITheme.ButtonPressed;
             // Quiet keeps the Secondary's shape (it is still a button) at a fraction of its strength.
-            if (quiet && _interactable) plateColor.a = _down ? QuietPlateAlphaDown : QuietPlateAlpha;
+            if (quiet && _interactable && !A2Skin.On) plateColor.a = _down ? QuietPlateAlphaDown : QuietPlateAlpha;
             _plate.color = plateColor;
 
             // A disabled button dims its label as well as swapping its plate (R26), so it cannot be mistaken for
@@ -1487,9 +1520,10 @@ namespace Emberfall.UI
             {
                 bool hasWant = false;
                 Color want = Color.white;
-                if (!_interactable && UiKit.On) { hasWant = true; want = Emberforge.ButtonDisabledText; }   // kit off keeps the old disabled label
+                if (!_interactable && A2Skin.On) { hasWant = true; want = new Color(A2Kit.TextOnDark.r, A2Kit.TextOnDark.g, A2Kit.TextOnDark.b, 0.75f); }   // R56: muted cream on the dark grey plate
+                else if (!_interactable && UiKit.On) { hasWant = true; want = Emberforge.ButtonDisabledText; }   // kit off keeps the old disabled label
                 else if (_interactable && _hasTone) { hasWant = true; want = _tone; }
-                else if (_interactable && quiet) { hasWant = true; want = Emberforge.TextQuiet; }
+                else if (_interactable && quiet && !A2Skin.On) { hasWant = true; want = Emberforge.TextQuiet; }
 
                 if (hasWant)
                 {
@@ -1497,6 +1531,13 @@ namespace Emberfall.UI
                     _label.color = want;
                 }
                 else if (_labelOverridden) { _label.color = _labelRest; _labelOverridden = false; }
+
+                // R56: dark lettering carries no stroke under A2 (the disabled plate), and the stroke comes back with the light text.
+                if (A2Skin.On)
+                {
+                    Outline stroke = _label.GetComponent<Outline>();
+                    if (stroke != null) stroke.enabled = !A2Skin.IsDark(_label.color);
+                }
             }
 
             if (_content != null)
@@ -1506,7 +1547,7 @@ namespace Emberfall.UI
 
             // The gloss is a property of a lit face, and a disabled button is not lit. Hiding it
             // is what stops a greyed-out button still looking glossy and therefore still pressable.
-            if (_gloss != null) _gloss.enabled = _interactable && !quiet && UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) == null;
+            if (_gloss != null) _gloss.enabled = _interactable && !quiet && !A2Skin.On && UiKit.Forge(EmberforgeArt.Slot.ButtonPrimary) == null;
         }
     }
 

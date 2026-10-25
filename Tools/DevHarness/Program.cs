@@ -383,6 +383,8 @@ namespace Emberfall.DevHarness
             CheckR29Formation(content, contentDir);
             // R55: the A2 squad screen rules and the names the coach and lock view find (R55FormationChecks.cs).
             CheckR55Formation(contentDir);
+            // R56: the A2 skin on the shared widgets (R56SkinChecks.cs).
+            CheckR56Skin(contentDir);
             // R28 UI: the Leaderboards screen and the REMINDERS card, read and run (R28UiChecks.cs).
             CheckR28Ui(content, contentDir);
             // R28 builder b: the guild dungeon ladder screen and the rewarded ad block, as built (R28AdsLadderUiChecks.cs).

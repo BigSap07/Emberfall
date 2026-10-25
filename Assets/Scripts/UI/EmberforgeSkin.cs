@@ -85,6 +85,10 @@ namespace Emberfall.UI
             // THE UI KIT FIRST, while its switch is on and the map has a piece for this slot. UiKit
             // answers null otherwise, which falls straight through to the three steps below exactly as
             // before; the kit's sprite is never put in Cache, so the switch cannot leak between states.
+            // R56: THE A2 SKIN BEFORE THAT, while SkinA2Switch is on and A2Skin covers the slot. It answers
+            // null otherwise, so every uncovered slot and the whole off state take the path below as before.
+            Sprite a2 = A2Skin.Forge(slot);
+            if (a2 != null) return a2;
             Sprite kit = UiKit.Forge(slot);
             if (kit != null) return kit;
             return GetBaked(slot);
@@ -170,6 +174,7 @@ namespace Emberfall.UI
             Cache.Clear();
             Reported.Clear();
             EmberforgeArt.Forget();
+            A2Skin.Forget();
             _generatedCount = 0;
             _generatedReported = false;
         }

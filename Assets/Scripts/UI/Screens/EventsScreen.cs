@@ -283,7 +283,8 @@ namespace Emberfall.UI.Screens
             Text threshold = EmberforgeUI.Label("Threshold", column, milestone.Threshold.ToString(),
                                              UITheme.FontTiny - 2, reached ? Emberforge.TextBody : Emberforge.TextQuiet,
                                              TextAnchor.UpperCenter);
-            UIBuilder.Box(threshold.rectTransform, 0f, -top, 140f, 24f, new Vector2(0.5f, 1f));
+            // R56: the A2 node edge is drawn dark and wide, so the figure sits a little lower (padding only).
+            UIBuilder.Box(threshold.rectTransform, 0f, -(top + (A2Skin.On ? 6f : 0f)), 140f, 24f, new Vector2(0.5f, 1f));
             top += 26f;
 
             // ---- the reward tile

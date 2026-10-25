@@ -65,7 +65,7 @@ namespace Emberfall.DevHarness
             Check(shot.Contains("SessionState.GetBool(KitWasKey, UiKitSwitch.ShippedDefault)") && !shot.Contains("GetBool(KitWasKey, false)"),
                   "uiKit DEFAULT: the capture tool restores to UiKitSwitch.ShippedDefault, not to a literal");
             string bc = R26Read(root, "Tools", "build-check.ps1");
-            Check(bc.Contains("[define-probe]") && bc.Contains("EMBERFALL_UIKIT_OFF;EMBERFALL_TESTSTORE") && bc.Contains("UiKitSwitch.Enabled=True"),
+            Check(bc.Contains("[define-probe]") && bc.Contains("EMBERFALL_UIKIT_OFF;EMBERFALL_SKIN_A2_OFF;EMBERFALL_TESTSTORE") && bc.Contains("UiKitSwitch.Enabled=True"),
                   "uiKit DEFAULT: build-check runs the define probe once with no defines and once with the opt-out and test defines");
             string rsp = R26Read(root, "Assets", "csc.rsp");
             Check(!rsp.Contains("EMBERFALL_UIKIT"), "uiKit DEFAULT: Assets/csc.rsp sets no kit define, so a normal build ships the kit");
