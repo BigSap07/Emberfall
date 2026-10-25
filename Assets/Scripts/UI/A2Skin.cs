@@ -253,12 +253,12 @@ namespace Emberfall.UI
             Transform t = node;
             while (t != null)
             {
-                // A dark backing laid across the parent (a painting's scrim, a hexagon's fill) owns its labels.
-                if (t.parent != null && HasDarkBacking(t.parent)) return null;
                 UnityEngine.UI.Image image = t.GetComponent<UnityEngine.UI.Image>();
                 if (image != null && image.sprite != null && image.sprite.name != null
                     && image.sprite.name.StartsWith(Prefix))
                     return image.sprite.name;
+                // A node a screen marked as dark backed owns its labels.
+                if (t.parent != null && HasDarkBacking(t.parent)) return null;
                 // A dark plate of another kit (a hexagon, a chip, an icon backing) owns its labels too.
                 if (image != null && image.sprite != null && image.color.a > 0.5f && IsDark(image.color))
                     return null;
@@ -270,36 +270,14 @@ namespace Emberfall.UI
             return null;
         }
 
-        private static bool Stretches(RectTransform rect)
-        {
-            return rect != null && rect.anchorMin.x < 0.01f && rect.anchorMin.y < 0.01f
-                && rect.anchorMax.x > 0.99f && rect.anchorMax.y > 0.99f;
-        }
-
-        private static bool DarkFill(Transform node)
-        {
-            UnityEngine.UI.Image image = node.GetComponent<UnityEngine.UI.Image>();
-            if (image == null || !Stretches(node as RectTransform)) return false;
-            if (image.sprite != null && image.sprite.name != null && image.sprite.name.StartsWith(Prefix)) return false;
-            return image.color.a >= 0.5f && IsDark(image.color);
-        }
-
         /// <summary>
-        /// True when a child of this node (or a child of a stretched child) is a dark fill laid across the whole node and
-        /// not an A2 plate: a scrim over a painting, a hexagon's fill. Labels on that node sit on the dark, not on
-        /// the cream behind it, so they keep their light colours.
+        /// True when a screen has marked this node as carrying a dark backing of its own (a painting under a scrim, a
+        /// hexagon's fill) with A2DarkBacking. Labels on that node sit on the dark, not on the cream plate behind
+        /// it, so they keep their light colours. A marker, not a guess: a guess misreads every ground and rim.
         /// </summary>
         public static bool HasDarkBacking(Transform node)
         {
-            for (int i = 0; i < node.childCount; i++)
-            {
-                Transform child = node.GetChild(i);
-                if (DarkFill(child)) return true;
-                if (Stretches(child as RectTransform))
-                    for (int k = 0; k < child.childCount; k++)
-                        if (DarkFill(child.GetChild(k))) return true;
-            }
-            return false;
+            return node != null && node.GetComponent<A2DarkBacking>() != null;
         }
 
         public static bool IsCreamSurface(string spriteName)
@@ -433,4 +411,7 @@ namespace Emberfall.UI
             if (now.r != _last.r || now.g != _last.g || now.b != _last.b || now.a != _last.a) Apply();
         }
     }
+
+    /// <summary>Marks a node whose children sit on a dark backing of their own; see A2Skin.HasDarkBacking.</summary>
+    public sealed class A2DarkBacking : MonoBehaviour { }
 }

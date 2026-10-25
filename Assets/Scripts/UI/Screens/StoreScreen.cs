@@ -407,6 +407,7 @@ namespace Emberfall.UI.Screens
             Text label = EmberforgeUI.Label("Page", _body, "TIERS " + (_page * PageSize + 1) + " TO " + ((_page + 1) * PageSize) + "   -   PAGE " + (_page + 1) + " OF " + pages,
                                             UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
             UIBuilder.Box(label.rectTransform, 0f, -navY, A2Skin.On ? 216f : 320f, 52f, new Vector2(0.5f, 1f));   // R56: the wider body face must stay between the arrows
+            if (A2Skin.On) { label.fontSize = Mathf.Max(9, Mathf.RoundToInt(label.fontSize * 0.72f)); label.resizeTextMaxSize = label.fontSize; label.resizeTextMinSize = Mathf.Min(label.resizeTextMinSize, label.fontSize); }
         }
 
         /// <summary>
@@ -419,6 +420,7 @@ namespace Emberfall.UI.Screens
         {
             Sprite header = UiKit.PassHeader();
             if (header == null) return;
+            summary.gameObject.AddComponent<A2DarkBacking>();   // R56: the scrim keeps the summary's lettering light
             RectTransform window = UIBuilder.Node("KitHeader", summary);
             UIBuilder.FillParent(window, 10f);
             window.gameObject.AddComponent<RectMask2D>();

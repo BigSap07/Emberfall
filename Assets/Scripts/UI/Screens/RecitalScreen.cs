@@ -153,6 +153,7 @@ namespace Emberfall.UI.Screens
             RectTransform hex = UIBuilder.Node("Hex", banner);
             UIBuilder.Box(hex, 0f, -inner, HexSize, HexSize, new Vector2(0.5f, 1f));
 
+            hex.gameObject.AddComponent<A2DarkBacking>();   // R56: the figure on the dark hexagon keeps its light colour
             _hexFill = UIBuilder.Img("Fill", hex, TextureLab.Hexagon(256), UITheme.WithAlpha(UITheme.Panel, 0.95f));
             UIBuilder.FillParent(_hexFill.rectTransform, 0f);
 
