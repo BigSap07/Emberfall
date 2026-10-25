@@ -258,7 +258,7 @@ namespace Emberfall.UI
                     && image.sprite.name.StartsWith(Prefix))
                     return image.sprite.name;
                 // A node a screen marked as dark backed owns its labels.
-                if (t.parent != null && HasDarkBacking(t.parent)) return null;
+                if (HasDarkBacking(t) || (t.parent != null && HasDarkBacking(t.parent))) return null;
                 // A dark plate of another kit (a hexagon, a chip, an icon backing) owns its labels too.
                 if (image != null && image.sprite != null && image.color.a > 0.5f && IsDark(image.color))
                     return null;
