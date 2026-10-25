@@ -39,10 +39,10 @@ namespace Emberfall.UI.Screens
         // Portrait crops. A badge is a square with a gold ring baked in; a window shows the middle of it, scaled
         // up so the ring falls outside. Scale is the badge size over the window width, Focus is where the face
         // sits down the badge (0 top, 1 bottom). The tile crop is tighter than the board's 185 percent.
-        private const float A2SlotCrop = 1.85f;
-        private const float A2SlotFocus = 0.40f;
-        private const float A2TileCrop = 2.45f;
-        private const float A2TileFocus = 0.37f;
+        internal const float A2SlotCrop = 1.85f;
+        internal const float A2SlotFocus = 0.40f;
+        internal const float A2TileCrop = 2.45f;
+        internal const float A2TileFocus = 0.37f;
 
         // ------------------------------------------------------------------ state
 
@@ -379,7 +379,7 @@ namespace Emberfall.UI.Screens
         /// outside. The Image is named Badge so SkinArt.Dress still dresses it. A hero with no declared badge
         /// gets its initial on the window.
         /// </summary>
-        private static void BuildCrop(RectTransform window, UnitDef def, float crop, float focus, Color tint)
+        internal static void BuildCrop(RectTransform window, UnitDef def, float crop, float focus, Color tint)
         {
             Sprite sprite = Widgets.DeclaredBadge(def.Id, def.Name, def.Visual);
             if (sprite == null)
@@ -745,7 +745,7 @@ namespace Emberfall.UI.Screens
             _a2Tiles.Add(view);
         }
 
-        private static Sprite RoleGlyph(HeroRole role, int size)
+        internal static Sprite RoleGlyph(HeroRole role, int size)
         {
             switch (role)
             {

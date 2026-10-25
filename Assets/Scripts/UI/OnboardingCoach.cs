@@ -688,7 +688,7 @@ namespace Emberfall.UI
                     if (id == ScreenId.WaveResult) return FindDeep(root, "Home");
                     if (id == ScreenId.MainMenu) return FindDeep(root, "NodeHEROES");
                     if (id == ScreenId.Formation) return FindDeep(root, "ViewAll");
-                    if (id == ScreenId.Heroes) return FindDeep(root, "Card0");
+                    if (id == ScreenId.Heroes) return FindDeep(root, "OpenHero") ?? FindDeep(root, "Card0");
                     if (id == ScreenId.HeroDetail) return FindDeep(root, "LevelUp");
                     break;
                 case Onboarding.StepIdle:

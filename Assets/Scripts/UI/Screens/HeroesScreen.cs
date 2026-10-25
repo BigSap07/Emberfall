@@ -3,11 +3,16 @@ using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
+using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
 {
-    /// <summary>The collection. Every hero in the game, owned or not - owned ones sorted strongest first, locked ones after.</summary>
-    public sealed class HeroesScreen : UIScreen
+    /// <summary>
+    /// The collection. Every hero in the game, owned or not - owned ones sorted strongest first, locked ones after.
+    /// R57: while HeroesA2Switch is on this is drawn by HeroesScreenA2 (the other half of this partial class);
+    /// the build below is the screen as it was and is what EMBERFALL_HEROES_A2_OFF gives back.
+    /// </summary>
+    public sealed partial class HeroesScreen : UIScreen
     {
         public override ScreenId Id { get { return ScreenId.Heroes; } }
 
@@ -27,6 +32,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
+            if (HeroesA2Switch.Enabled) { BuildA2(); return; }
+
             // The page's own ground. The shared backdrop is the near-black violet every
             // unconverted screen sits on, and a grid of warm brown cards on it reads as two
             // different pieces of software. One Image, on one screen, rather than changing the
@@ -56,6 +63,7 @@ namespace Emberfall.UI.Screens
 
         public override void OnShow()
         {
+            if (_a2) { App.RefreshHud(); OnShowA2(); return; }
             App.RefreshHud();
             Rebuild();
         }

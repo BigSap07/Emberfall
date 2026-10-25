@@ -537,6 +537,12 @@ namespace Emberfall.Game
             if (_topBar != null && _topBar.Root != null) _topBar.Root.gameObject.SetActive(visible);
         }
 
+        /// <summary>R57: the slim top bar (Gold and Shards only, no rank card, no Dust, no backing). See HudTopBar.SetSlim.</summary>
+        public void SetTopBarSlim(bool slim)
+        {
+            if (_topBar != null) _topBar.SetSlim(slim);
+        }
+
         /// <summary>
         /// Shows or hides the bar's full-width backing plate, leaving the plate and the pills on it
         /// exactly where they are.

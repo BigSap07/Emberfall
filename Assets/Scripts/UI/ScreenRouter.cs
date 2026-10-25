@@ -60,6 +60,12 @@ namespace Emberfall.UI
         public virtual bool HidesTopBar { get { return false; } }
 
         /// <summary>
+        /// R57: True when the shared top bar stays but shows only Gold and Shards (no rank card, no Dust pill,
+        /// no backing). The screen draws its own back control and title in the space that frees.
+        /// </summary>
+        public virtual bool SlimTopBar { get { return false; } }
+
+        /// <summary>
         /// True while this screen is being drawn INSIDE a panel rather than as a full page.
         ///
         /// A hosted screen is the same object either way - same fields, same services, same
@@ -353,6 +359,7 @@ namespace Emberfall.UI
             next.Root.SetAsLastSibling();
             next.OnShow();
             App.SetTopBarVisible(!next.HidesTopBar);
+            App.SetTopBarSlim(next.SlimTopBar);
             StopAllCoroutines();
             StartCoroutine(FadeIn(next.Group));
             if (FeatureGates.NoteOpened(App, id))

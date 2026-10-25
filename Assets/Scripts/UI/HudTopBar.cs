@@ -40,6 +40,9 @@ namespace Emberfall.UI
         private Text _goldText;
         private Text _shardText;
         private Text _dustText;
+        private Transform _dustPill;
+        private bool _backingWanted = true;
+        private bool _slim;
 
         public void Build(RectTransform parent)
         {
@@ -68,6 +71,7 @@ namespace Emberfall.UI
 
             BuildRankBlock();
             BuildCurrencies();
+            _dustPill = Root.Find("Dust");
         }
 
         /// <summary>
@@ -164,8 +168,29 @@ namespace Emberfall.UI
         /// GameApp.SetTopBarBackingVisible for why.</summary>
         public void SetBackingVisible(bool visible)
         {
-            if (_backing != null) _backing.enabled = visible;
-            if (_underline != null) _underline.enabled = visible;
+            _backingWanted = visible;
+            ApplyBacking();
+        }
+
+        private void ApplyBacking()
+        {
+            bool on = _backingWanted && !_slim;
+            if (_backing != null) _backing.enabled = on;
+            if (_underline != null) _underline.enabled = on;
+        }
+
+        /// <summary>
+        /// R57: the slim bar. The rank card, the Dust pill, the backing plate and the hairline are hidden, and
+        /// Gold and Shards stay where they are (their offsets hang from the right edge). A screen asks for it
+        /// through UIScreen.SlimTopBar, and the router turns it off again for the next screen, so it is a
+        /// property of one screen at a time and never a setting.
+        /// </summary>
+        public void SetSlim(bool slim)
+        {
+            _slim = slim;
+            if (_plate != null && _plate.Root != null) _plate.Root.gameObject.SetActive(!slim);
+            if (_dustPill != null) _dustPill.gameObject.SetActive(!slim);
+            ApplyBacking();
         }
 
         /// <summary>

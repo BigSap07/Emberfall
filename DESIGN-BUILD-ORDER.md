@@ -68,6 +68,18 @@ about reasoning.
   (`EMBERFALL_SKIN_A2_OFF` gives the old look); `R56SkinChecks.cs` pins the slot list and the switch.
   The Hub name tags, rarity chips, hero frames and jewel art are not re-skinned. `FormationScreenA2` is
   untouched and its 12 captures are pixel-identical to before.
+- **The A2 Heroes screen and the true five point star (R57).** `HeroesScreenA2.cs` is the second half of
+  `HeroesScreen` and is on by default through `HeroesA2Switch` (set `EMBERFALL_HEROES_A2_OFF` to get the old
+  screen back; the old `Build` is kept). One cream panel holds the aspect filter, the hero count, one SORT
+  control (`HeroesPick.NextSort`: Power, Level, Stars, Aspect), the roster of Formation tiles (owned first,
+  locked trailing and dimmed, one mark per tile: check for the squad, padlock for locked) and a detail card
+  with one Primary, OPEN HERO (disabled with a Summon line for a hero not yet owned, so the locked hero preview
+  in `HeroDetail` is no longer reached from here). The screen sets `UIScreen.SlimTopBar`, so `HudTopBar.SetSlim`
+  hides the rank card and the Dust pill on this screen only. There is no "new" dot: `HeroInstance` has no such
+  flag and adding one would change the save. Capture targets are `HeroesDefault`, `HeroesFilter` and
+  `HeroesLocked` with `Legacy` twins, each on a fresh scratch profile. `StarShape` is an explicit ten corner
+  polygon: the old star distance field was a pentagon. `R57HeroesChecks.cs` pins the shape, the switch, the
+  order, the node names the onboarding coach finds and the size floors.
 
 ## The instruments
 
