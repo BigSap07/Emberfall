@@ -80,6 +80,18 @@ about reasoning.
   `HeroesLocked` with `Legacy` twins, each on a fresh scratch profile. `StarShape` is an explicit ten corner
   polygon: the old star distance field was a pentagon. `R57HeroesChecks.cs` pins the shape, the switch, the
   order, the node names the onboarding coach finds and the size floors.
+- **The A2 Hero Detail screen** (`HeroDetailScreenA2.cs`, the A2 half of the partial `HeroDetailScreen`; the old
+  `Build` stays beside it). The switch is `HeroDetailA2Switch` in Core, on by default, and
+  `EMBERFALL_HERODETAIL_A2_OFF` gives the old screen back. One cream panel on the left (portrait on the aspect
+  colour, name, role and aspect, level and stars, POWER, the slot line, CHANGE BANNER and SKINS as Quiet links) and
+  one panel on the right with a tab rail: STATS (four rows with the gear share beside each, one More line, the
+  aspect strip), SKILLS (five tiles, the damage line and the before-Defence note below, TALENTS as the one
+  Secondary) and GEAR (six slot tiles and the attunement line). The bar holds one Primary: LEVEL UP, or ASCEND the
+  moment it is ready; an unaffordable LEVEL UP stays orange but disabled with "Need N gold" in the hint line.
+  `HeroDetailPick` holds the words and the order. Node names are unchanged (`LevelUp`, `Header/Back`, `Slot_*`,
+  `Talents`, `Fusion`, `Obtain`, `Formation`, `Skin`). Capture targets are `HeroDetailStats`, `HeroDetailSkills`,
+  `HeroDetailGear`, `HeroDetailLocked` and `HeroDetailAscend`, with `Legacy` twins for Stats, Locked and Ascend.
+  `R58HeroDetailChecks.cs` pins the switch, the tabs, the one Primary, the node names and the size floors.
 
 ## The instruments
 

@@ -295,6 +295,44 @@ namespace Emberfall.UI
             return handle;
         }
 
+        /// <summary>
+        /// R58: re-dresses a button built with <see cref="Button"/> as another kind, for a control whose role changes
+        /// with the state of the screen (LEVEL UP is the Primary until ASCEND is ready, then it steps down). The
+        /// skin is rebound so the hierarchy check reads the new kind.
+        /// </summary>
+        public static void SetKind(UIButton button, A2ButtonKind kind)
+        {
+            if (button == null || button.Root == null) return;
+            A2ButtonSkin skin = button.Root.GetComponent<A2ButtonSkin>();
+            if (skin == null || skin.Kind == kind) return;
+            Color bevel;
+            switch (kind)
+            {
+                case A2ButtonKind.Primary: bevel = EmberBevel; break;
+                case A2ButtonKind.Secondary: bevel = TealBevel; break;
+                default: bevel = InkDeep; break;
+            }
+            if (button.Frame != null) button.Frame.color = bevel;
+            Transform edge = button.Background != null ? button.Background.rectTransform.Find("Edge") : null;
+            if (edge != null)
+            {
+                Image edgeImage = edge.GetComponent<Image>();
+                if (edgeImage != null) edgeImage.color = kind == A2ButtonKind.Quiet ? InkDeep : WithAlpha(InkDeep, 0.85f);
+            }
+            skin.Bind(button.Background, kind);
+        }
+
+        /// <summary>
+        /// R58: how far a disabled face greys toward neutral (0 keeps the kind's colour, 1 is grey). The default is
+        /// 0.65; a Primary that is disabled only for want of gold stays orange with a lower mix.
+        /// </summary>
+        public static void SetDisabledMix(UIButton button, float mix)
+        {
+            if (button == null || button.Root == null) return;
+            A2ButtonSkin skin = button.Root.GetComponent<A2ButtonSkin>();
+            if (skin != null) skin.SetDisabledMix(mix);
+        }
+
         // ------------------------------------------------------------------ backdrop
 
         /// <summary>
@@ -367,6 +405,16 @@ namespace Emberfall.UI
         private A2ButtonKind _kind;
         private bool _interactable = true;
         private bool _down;
+        private float _disabledMix = DefaultDisabledMix;
+
+        /// <summary>The share of grey a disabled face is mixed with.</summary>
+        public const float DefaultDisabledMix = 0.65f;
+
+        public void SetDisabledMix(float mix)
+        {
+            _disabledMix = Mathf.Clamp01(mix);
+            Apply();
+        }
 
         public void Bind(Image face, A2ButtonKind kind)
         {
@@ -419,7 +467,7 @@ namespace Emberfall.UI
                 case A2ButtonKind.Secondary: baseColor = A2Kit.Teal; break;
                 default: baseColor = A2Kit.Ink; break;
             }
-            _face.color = _interactable ? baseColor : Color.Lerp(baseColor, new Color(0.55f, 0.52f, 0.5f, 1f), 0.65f);
+            _face.color = _interactable ? baseColor : Color.Lerp(baseColor, new Color(0.55f, 0.52f, 0.5f, 1f), _disabledMix);
         }
     }
 }

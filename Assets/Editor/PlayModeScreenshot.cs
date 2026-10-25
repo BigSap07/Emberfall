@@ -107,6 +107,7 @@ namespace Emberfall.EditorTools
         /// before the run, put back by Stop.</summary>
         private const string FormationForceKey = "PlayModeScreenshot.FormationForce";
         private const string HeroesForceKey = "PlayModeScreenshot.HeroesForce";
+        private const string HeroDetailForceKey = "PlayModeScreenshot.HeroDetailForce";
         private const string KitForceKey ="PlayModeScreenshot.UiKitForce";
         private const string KitWasKey = "PlayModeScreenshot.UiKitWas";
 
@@ -169,6 +170,7 @@ namespace Emberfall.EditorTools
             ApplyKitForce();
             ApplyFormationForce();
             ApplyHeroesForce();
+            ApplyHeroDetailForce();
             EditorApplication.update += Pump;
             EditorApplication.update += PollTriggerFile;
             EditorApplication.update += WatchdogTick;
@@ -223,6 +225,14 @@ namespace Emberfall.EditorTools
             if (!SessionState.GetBool(ActiveKey, false)) return;
             int force = SessionState.GetInt(HeroesForceKey, 0);
             if (force != 0) HeroesA2Switch.Enabled = force == 1;
+        }
+
+        /// <summary>R58: the same for the Hero Detail A2 switch (1 on, 2 off), set only by the R58 state targets.</summary>
+        private static void ApplyHeroDetailForce()
+        {
+            if (!SessionState.GetBool(ActiveKey, false)) return;
+            int force = SessionState.GetInt(HeroDetailForceKey, 0);
+            if (force != 0) HeroDetailA2Switch.Enabled = force == 1;
         }
 
         private static void PollTriggerFile()
@@ -867,6 +877,8 @@ namespace Emberfall.EditorTools
             ApplyFormationForce();
             SessionState.SetInt(HeroesForceKey, R57Force(target));
             ApplyHeroesForce();
+            SessionState.SetInt(HeroDetailForceKey, R58Force(target));
+            ApplyHeroDetailForce();
             SessionState.SetBool(VerifiedKey, false);
             SessionState.SetString(TargetKey, target);
             SessionState.SetInt(WidthKey, width);
@@ -1597,6 +1609,11 @@ namespace Emberfall.EditorTools
                 HeroesA2Switch.Enabled = HeroesA2Switch.ShippedDefault;
                 SessionState.SetInt(HeroesForceKey, 0);
             }
+            if (SessionState.GetInt(HeroDetailForceKey, 0) != 0)
+            {
+                HeroDetailA2Switch.Enabled = HeroDetailA2Switch.ShippedDefault;
+                SessionState.SetInt(HeroDetailForceKey, 0);
+            }
             R46Restore();
             R28bRestore();
             SessionState.SetInt(ReplayStageKey, 0);
@@ -2009,6 +2026,217 @@ namespace Emberfall.EditorTools
                     foreach (KeyValuePair<string, int> pair in byFont) summary += pair.Key + "=" + pair.Value + " ";
                     Debug.Log("PlayModeScreenshot: HEROES FONTS on screen (" + texts.Length + " Text components): " + summary.Trim());
                 }
+                Debug.Log("PlayModeScreenshot: shot of " + name + ", router shows "
+                          + (app.Router.Current != null ? app.Router.Current.Id.ToString() : "nothing"));
+                Shoot(name, frame, slot);
+            }
+        }
+
+        // ================================================================== R58: the Hero Detail screen
+        //
+        // Five states of the A2 Hero Detail screen, each with a Legacy twin that forces HeroDetailA2Switch off and shows the
+        // page as it was before R58 on the same seeded profile:
+        //
+        //   Screen:HeroDetailStats    an owned hero, STATS, with gold to level up and armour worn
+        //   Screen:HeroDetailSkills   the same hero, SKILLS, the second ability selected
+        //   Screen:HeroDetailGear     the same hero, GEAR
+        //   Screen:HeroDetailLocked   a hero not yet summoned (the PREVIEW door)
+        //   Screen:HeroDetailAscend   a five star hero holding the copies for its next ascension
+        //
+        // The old page is one long page, so its twins of Stats, Skills and Gear are the same picture. They seed the scratch
+        // identity only and nothing is saved. Each A2 shot logs the font of every Text on the screen.
+
+        private static bool IsR58Target(string name)
+        {
+            string core = name.EndsWith("Legacy") ? name.Substring(0, name.Length - 6) : name;
+            return core == "HeroDetailStats" || core == "HeroDetailSkills" || core == "HeroDetailGear"
+                   || core == "HeroDetailLocked" || core == "HeroDetailAscend";
+        }
+
+        private static int R58Force(string target)
+        {
+            string name = target.StartsWith("Screen:") ? target.Substring(7) : target;
+            if (!IsR58Target(name)) return 0;
+            return name.EndsWith("Legacy") ? 2 : 1;
+        }
+
+        private static void PumpR58(GameApp app, string name, int frame, int slot)
+        {
+            const int ShowAt = 10;
+            const int SelectAt = ShowAt + 70;
+            const int ShotAt = ShowAt + 150;
+            if (frame < ShowAt) return;
+            bool legacy = name.EndsWith("Legacy");
+            string state = name.Replace("Legacy", "").Replace("HeroDetail", "");
+
+            if (frame == ShowAt)
+            {
+                if (!EditorScratchIdentity.IsScratch)
+                {
+                    Debug.LogError("PlayModeScreenshot: " + name + " seeds a profile, so it only runs on the scratch identity. Skipping.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                    return;
+                }
+                GameSession session = app.Session;
+                PlayerProfile fresh = GameSession.CreateNewProfile(session.Content, TimeUtil.NowUnix());
+                Onboarding.MarkComplete(fresh);
+                SaveService.Save(fresh);
+                app.AdoptSaveFromDisk();
+                R55Seed(app, "Pick");
+                session = app.Session;   // AdoptSaveFromDisk can swap the session: every grant and equip below must go through the live one
+                PlayerProfile profile = session.Profile;
+                profile.Gold = 100000;
+                profile.Slag = 5000;
+
+                // The subject: the strongest owned hero below five stars; for Ascend a five star with the copies in hand.
+                long nowUnix = TimeUtil.NowUnix();
+                HeroInstance subject = null;
+                if (state == "Ascend")
+                {
+                    HeroDef five = null;
+                    for (int i = 0; i < session.Content.Heroes.Count && five == null; i++)
+                        if (session.Content.Heroes[i].Stars >= 5 && !profile.Owns(session.Content.Heroes[i].Id)) five = session.Content.Heroes[i];
+                    if (five != null) subject = session.GrantHeroDirect(five, nowUnix);
+                    if (subject == null)
+                    {
+                        for (int i = 0; i < profile.Heroes.Count; i++)
+                            if (profile.Heroes[i].Def != null && profile.Heroes[i].Def.Stars >= 5) { subject = profile.Heroes[i]; break; }
+                    }
+                    if (subject != null)
+                    {
+                        subject.Level = session.HeroLevelCapOf(subject);
+                        int need = StatMath.AscensionCopiesFor(session.Balance, subject.Ascension);
+                        if (need > 0) subject.Copies = need + 1;
+                        Debug.Log("PlayModeScreenshot: HERODETAIL ascend subject " + subject.Def.Name + " stars " + subject.Def.Stars
+                                  + " copies " + subject.Copies + " blocker '" + session.AscensionBlocker(subject) + "'");
+                    }
+                    else Debug.LogWarning("PlayModeScreenshot: HERODETAIL no five star hero to seed for Ascend.");
+                }
+                else if (state != "Locked")
+                {
+                    // A four star hero the seed did not grant (it grants the strongest of each aspect, which are five stars),
+                    // so the bar shows CONVERT and the level cap is the four star cap; else the strongest hero owned.
+                    HeroDef four = null;
+                    for (int i = 0; i < session.Content.Heroes.Count && four == null; i++)
+                        if (session.Content.Heroes[i].Stars == 4 && !profile.Owns(session.Content.Heroes[i].Id)) four = session.Content.Heroes[i];
+                    if (four != null)
+                    {
+                        subject = session.GrantHeroDirect(four, nowUnix);
+                        if (subject != null) subject.Level = Math.Max(1, Math.Min(20, session.HeroLevelCapOf(subject) - 1));
+                    }
+                    if (subject == null)
+                    {
+                        int best = -1;
+                        for (int i = 0; i < profile.Heroes.Count; i++)
+                        {
+                            HeroInstance h = profile.Heroes[i];
+                            if (h.Def != null && h.Power > best) { best = h.Power; subject = h; }
+                        }
+                    }
+                    if (subject != null) Debug.Log("PlayModeScreenshot: HERODETAIL subject " + subject.Def.Name + " stars " + subject.Def.Stars + " level " + subject.Level);
+                }
+
+                if (subject != null)
+                {
+                    // Armour worn: one rolled piece per slot in the hero's own aspect (the drop roll is a chance gate,
+                    // so the roller is called directly, as the item screens' seed does), put on through EquipArmor.
+                    ArmorConfig armorConfig = session.Content.Armor;
+                    if (armorConfig != null && armorConfig.IsUsable)
+                    {
+                        int armorSeed = 580000;
+                        for (int s = 0; s < ArmorInfo.AllSlots.Length; s++)
+                        {
+                            ArmorPiece piece = ArmorRoller.Roll(armorConfig, ArmorInfo.AllSlots[s], (ArmorTemper)(s % 4), subject.Def.Aspect, armorSeed++);
+                            if (piece == null) continue;
+                            piece.Uid = profile.AllocateArmorUid();
+                            profile.OwnedArmor.Add(piece);
+                            session.EquipArmor(subject, piece.Uid);
+                        }
+                    }
+                    Debug.Log("PlayModeScreenshot: HERODETAIL armor worn " + profile.EquippedArmorOf(subject).Count
+                              + " owned " + profile.OwnedArmor.Count + " config " + (armorConfig != null && armorConfig.IsUsable) + " aspect " + subject.Def.Aspect);
+                }
+
+                if (state == "Locked")
+                {
+                    HeroDef locked = null;
+                    for (int i = 0; i < session.Content.Heroes.Count && locked == null; i++)
+                    {
+                        HeroDef d = session.Content.Heroes[i];
+                        if (!profile.Owns(d.Id) && d.Stars == 4) locked = d;
+                    }
+                    for (int i = 0; i < session.Content.Heroes.Count && locked == null; i++)
+                        if (!profile.Owns(session.Content.Heroes[i].Id)) locked = session.Content.Heroes[i];
+                    if (locked == null)
+                    {
+                        Debug.LogError("PlayModeScreenshot: HERODETAIL no unowned hero for Locked. Skipping.");
+                        SessionState.SetInt(StageKey, slot + 1);
+                        return;
+                    }
+                    app.Router.HeroDetail.SetLockedHero(locked);
+                }
+                else if (subject != null) app.Router.HeroDetail.SetHero(subject);
+                else
+                {
+                    Debug.LogError("PlayModeScreenshot: HERODETAIL no subject for " + name + ". Skipping.");
+                    SessionState.SetInt(StageKey, slot + 1);
+                    return;
+                }
+                app.Router.Show(ScreenId.HeroDetail);
+                Debug.Log("PlayModeScreenshot: showing " + name + ", HeroDetailA2Switch.Enabled=" + HeroDetailA2Switch.Enabled);
+                return;
+            }
+
+            if (frame == SelectAt)
+            {
+                Canvas.ForceUpdateCanvases();
+                if (!legacy)
+                {
+                    int tab = state == "Skills" || state == "Locked" ? HeroDetailPick.TabSkills
+                            : state == "Gear" ? HeroDetailPick.TabGear : HeroDetailPick.TabStats;
+                    app.Router.HeroDetail.ApplyCaptureStateA2(tab, state == "Skills" || state == "Locked" ? 1 : 0);
+                    Debug.Log("PlayModeScreenshot: " + name + " tab " + HeroDetailPick.TabLabel(tab) + ", IsA2=" + app.Router.HeroDetail.IsA2);
+                }
+                return;
+            }
+
+            if (frame == ShotAt - 20) Canvas.ForceUpdateCanvases();
+            if (frame < ShotAt) KeepGameViewFresh(frame);
+            if (frame == ShotAt)
+            {
+                if (!legacy)
+                {
+                    Debug.Log("PlayModeScreenshot: " + A2Kit.FontReport() + ", FontsLoaded=" + A2Kit.FontsLoaded);
+                    UnityEngine.UI.Text[] texts = app.Router.HeroDetail.GetComponentsInChildren<UnityEngine.UI.Text>(true);
+                    Dictionary<string, int> byFont = new Dictionary<string, int>();
+                    int smallest = int.MaxValue;
+                    for (int i = 0; i < texts.Length; i++)
+                    {
+                        string fontName = texts[i].font != null ? texts[i].font.name : "none";
+                        int n;
+                        byFont.TryGetValue(fontName, out n);
+                        byFont[fontName] = n + 1;
+                        if (!fontName.StartsWith("Nunito") && !fontName.StartsWith("LilitaOne"))
+                            Debug.Log("PlayModeScreenshot: HERODETAIL FONTS other font '" + fontName + "' on " + texts[i].transform.parent.name + "/"
+                                      + texts[i].name + " text '" + texts[i].text + "' active=" + texts[i].gameObject.activeInHierarchy);
+                        if (texts[i].gameObject.activeInHierarchy && texts[i].text.Length > 0)
+                        {
+                            int size = texts[i].resizeTextForBestFit ? texts[i].resizeTextMinSize : texts[i].fontSize;
+                            if (size < smallest) smallest = size;
+                            if (size < 22)
+                                Debug.Log("PlayModeScreenshot: HERODETAIL SMALL TEXT " + size + " on " + texts[i].transform.parent.name + "/"
+                                          + texts[i].name + " '" + texts[i].text + "'");
+                        }
+                    }
+                    string summary = "";
+                    foreach (KeyValuePair<string, int> pair in byFont) summary += pair.Key + "=" + pair.Value + " ";
+                    Debug.Log("PlayModeScreenshot: HERODETAIL FONTS on screen (" + texts.Length + " Text components): " + summary.Trim()
+                              + ", smallest active size " + smallest);
+                }
+                UnityEngine.UI.Graphic[] graphics = app.Router.HeroDetail.GetComponentsInChildren<UnityEngine.UI.Graphic>(false);
+                int live = 0;
+                for (int i = 0; i < graphics.Length; i++) if (graphics[i].gameObject.activeInHierarchy && graphics[i].color.a > 0.01f) live++;
+                Debug.Log("PlayModeScreenshot: HERODETAIL GRAPHICS " + name + " active visible " + live);
                 Debug.Log("PlayModeScreenshot: shot of " + name + ", router shows "
                           + (app.Router.Current != null ? app.Router.Current.Id.ToString() : "nothing"));
                 Shoot(name, frame, slot);
@@ -2473,6 +2701,7 @@ namespace Emberfall.EditorTools
             if (IsR46Target(name)) { PumpR46(app, name, frame, Math.Min(slot, list.Length - 1)); return; }
             if (IsR55Target(name)) { PumpR55(app, name, frame, Math.Min(slot, list.Length - 1)); return; }
             if (IsR57Target(name)) { PumpR57(app, name, frame, Math.Min(slot, list.Length - 1)); return; }
+            if (IsR58Target(name)) { PumpR58(app, name, frame, Math.Min(slot, list.Length - 1)); return; }
             // R24: BattleSkin is Battle with Azure Kael, an owned test skin, worn by the line's first hero.
             bool skinBattle = name == "BattleSkin";
             if (skinBattle) name = "Battle";

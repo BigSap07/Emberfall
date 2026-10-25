@@ -387,6 +387,8 @@ namespace Emberfall.DevHarness
             CheckR56Skin(contentDir);
             // R57: the star shape and the A2 Heroes roster (R57HeroesChecks.cs).
             CheckR57Heroes(contentDir);
+            // R58: the A2 Hero Detail screen (R58HeroDetailChecks.cs).
+            CheckR58HeroDetail(contentDir);
             // R28 UI: the Leaderboards screen and the REMINDERS card, read and run (R28UiChecks.cs).
             CheckR28Ui(content, contentDir);
             // R28 builder b: the guild dungeon ladder screen and the rewarded ad block, as built (R28AdsLadderUiChecks.cs).

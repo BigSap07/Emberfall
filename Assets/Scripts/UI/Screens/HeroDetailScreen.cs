@@ -38,8 +38,11 @@ namespace Emberfall.UI.Screens
     /// already framed, with its four cardinal spikes clipped against the ring's inner edge.
     /// EmberforgeUI.PortraitFrame is what draws the hero now: the tier is a plate BEHIND the
     /// badge and the aspect is the glow outside it, which is two readings where the ring had one.
+    ///
+    /// R58: while HeroDetailA2Switch is on this is drawn by HeroDetailScreenA2 (the other half of this partial
+    /// class); everything below is the page as it was before, and is what the switch gives back.
     /// </summary>
-    public sealed class HeroDetailScreen : UIScreen
+    public sealed partial class HeroDetailScreen : UIScreen
     {
         public override ScreenId Id { get { return ScreenId.HeroDetail; } }
 
@@ -215,6 +218,8 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
+            if (HeroDetailA2Switch.Enabled) { BuildA2(); return; }
+
             // The page's own ground. The shared backdrop is the near-black violet an unconverted
             // screen sits on, and two warm brown panels on it read as two different pieces of
             // software - the same one Image, on one screen, that HeroesScreen lays down.
@@ -499,6 +504,7 @@ namespace Emberfall.UI.Screens
             if (_hero == null && _lockedDef == null && App.Session.Profile.Heroes.Count > 0)
                 _hero = App.Session.Profile.Heroes[0];
             App.RefreshHud();
+            if (_a2) { OnShowA2(); FeatureLockView.RefreshAll(App, Root); return; }
             RebuildStatic();
             Refresh();
             FeatureLockView.RefreshAll(App, Root);
@@ -507,6 +513,7 @@ namespace Emberfall.UI.Screens
         /// <summary>Rebuilds the parts that only change when the selected hero changes.</summary>
         private void RebuildStatic()
         {
+            if (_a2) return;
             HeroDef def = CurrentDef;
             if (def == null) return;
             bool locked = _hero == null;
@@ -880,6 +887,7 @@ namespace Emberfall.UI.Screens
 
         private void Refresh()
         {
+            if (_a2) { RefreshA2(); return; }
             if (_hero == null)
             {
                 RefreshLocked();
