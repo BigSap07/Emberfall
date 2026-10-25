@@ -257,6 +257,9 @@ namespace Emberfall.UI
                 if (image != null && image.sprite != null && image.sprite.name != null
                     && image.sprite.name.StartsWith(Prefix))
                     return image.sprite.name;
+                // A dark plate of another kit (a hexagon, a chip, an icon backing) owns its labels too.
+                if (image != null && image.sprite != null && image.color.a > 0.5f && IsDark(image.color))
+                    return null;
                 // A control (button, disc, tab) whose plate is not set yet owns its labels: they never take a
                 // cream ancestor's ink, whatever the panel behind the control is.
                 if (t.GetComponent<UnityEngine.UI.Selectable>() != null) return null;
@@ -301,12 +304,54 @@ namespace Emberfall.UI
             if (!On || label == null) return;
             label.fontSize = Scaled(label.fontSize);
             if (IsFigure(label.text)) label.font = A2Kit.Display;
-            if (IsCreamSurface(SurfaceOf(label.transform.parent))) label.color = OnCream(label.color);
+            // Nunito runs wider than the condensed face it replaces. A label placed by hand in a fixed rect may shrink to fit
+            // that rect, down to a floor; a label inside a layout group is sized by the group and is left alone.
+            Transform home = label.transform.parent;
+            if (home != null && home.GetComponent<UnityEngine.UI.LayoutGroup>() == null && !label.resizeTextForBestFit)
+            {
+                label.resizeTextForBestFit = true;
+                label.resizeTextMaxSize = label.fontSize;
+                label.resizeTextMinSize = Mathf.Max(8, Mathf.RoundToInt(label.fontSize * 0.7f));
+            }
+            if (IsCreamSurface(SurfaceOf(label.transform.parent))) Recolor(label);
+        }
+
+        /// <summary>The ink twin of a light token on a cream surface, and the stroke off: a dark stroke on dark ink is mud.</summary>
+        public static void Recolor(UnityEngine.UI.Text label)
+        {
+            Color c = OnCream(label.color);
+            // A colour the screen chose (aspect, rarity, good) that is too pale for cream is deepened toward ink, same hue.
+            if ((c.r * 0.3f + c.g * 0.59f + c.b * 0.11f) > 0.5f) c = Color.Lerp(c, A2Kit.Ink, 0.5f);
+            label.color = c;
+            // Never a dark stroke on cream: on ink it is mud and on a mid tone it is a smear.
+            UnityEngine.UI.Outline edge = label.GetComponent<UnityEngine.UI.Outline>();
+            if (edge != null) edge.enabled = false;
+        }
+
+        /// <summary>
+        /// A plate that was given its cream sprite AFTER some of its labels were built (a screen adds the plate to a
+        /// rect that already has children): the labels under it are restyled now. A child with a sprite of its own is a
+        /// plate, chip or icon in its own right and is left alone (a cream one is handled by its own call), and so is a
+        /// control that carries its own plate.
+        /// </summary>
+        public static void Retint(Transform plate)
+        {
+            if (!On || plate == null) return;
+            for (int i = 0; i < plate.childCount; i++)
+            {
+                Transform child = plate.GetChild(i);
+                UnityEngine.UI.Image image = child.GetComponent<UnityEngine.UI.Image>();
+                if (image != null && image.sprite != null) continue;
+                if (child.GetComponent<UnityEngine.UI.Selectable>() != null) continue;
+                UnityEngine.UI.Text text = child.GetComponent<UnityEngine.UI.Text>();
+                if (text != null) Recolor(text);
+                Retint(child);
+            }
         }
 
         public static bool IsDark(Color c)
         {
-            return (c.r * 0.3f + c.g * 0.59f + c.b * 0.11f) < 0.42f;
+            return (c.r * 0.3f + c.g * 0.59f + c.b * 0.11f) < 0.46f;
         }
     }
 }

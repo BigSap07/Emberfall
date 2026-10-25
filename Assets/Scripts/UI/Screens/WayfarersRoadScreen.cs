@@ -93,6 +93,13 @@ namespace Emberfall.UI.Screens
 
             _pageLabel = EmberforgeUI.Label("Page", _content, "", UITheme.FontSmall, Emberforge.TextQuiet, TextAnchor.UpperCenter);
             UIBuilder.Box(_pageLabel.rectTransform, 0f, -(PaidTop + PaidHeight + 6f), 600f, 30f, new Vector2(0.5f, 1f));
+            // R56: the wider body face would run under the page arrows, so this one line is set smaller (size only).
+            if (A2Skin.On)
+            {
+                _pageLabel.fontSize = Mathf.Max(9, Mathf.RoundToInt(_pageLabel.fontSize * 0.72f));
+                _pageLabel.resizeTextMaxSize = _pageLabel.fontSize;
+                _pageLabel.resizeTextMinSize = Mathf.Min(_pageLabel.resizeTextMinSize, _pageLabel.fontSize);
+            }
         }
 
         private UIButton Arrow(string name, string glyph, float x, float top)

@@ -144,6 +144,7 @@ namespace Emberfall.UI
             if (smallKit && !A2Skin.On) plate.pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier;   // a thinner rim on small panels (R26)
             plate.color = Color.white;
             if (ornaments) Ornaments(rect);
+            A2Skin.Retint(rect);   // R56
             return plate;
         }
 
@@ -167,6 +168,7 @@ namespace Emberfall.UI
             plate.color = Color.white;
             // With the kit on a plain panel is a small one: thinner rim, so a label at its edge is not under it (R26).
             if (!A2Skin.On && UiKit.Forge(EmberforgeArt.Slot.PanelPlain) != null) plate.pixelsPerUnitMultiplier = KitFrameRule.SmallPanelMultiplier;
+            A2Skin.Retint(rect);   // R56
             return plate;
         }
 
@@ -177,6 +179,7 @@ namespace Emberfall.UI
             plate.sprite = EmberforgeSkin.Get(EmberforgeArt.Slot.Sunken);
             plate.type = Image.Type.Sliced;
             plate.color = Color.white;
+            A2Skin.Retint(rect);   // R56
             return plate;
         }
 
@@ -1528,6 +1531,13 @@ namespace Emberfall.UI
                     _label.color = want;
                 }
                 else if (_labelOverridden) { _label.color = _labelRest; _labelOverridden = false; }
+
+                // R56: dark lettering carries no stroke under A2 (the disabled plate), and the stroke comes back with the light text.
+                if (A2Skin.On)
+                {
+                    Outline stroke = _label.GetComponent<Outline>();
+                    if (stroke != null) stroke.enabled = !A2Skin.IsDark(_label.color);
+                }
             }
 
             if (_content != null)
