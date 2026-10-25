@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using Emberfall.Core.Data;
 using Emberfall.Core.Model;
+using Emberfall.Core.Session;
 
 namespace Emberfall.UI.Screens
 {
@@ -32,7 +33,7 @@ namespace Emberfall.UI.Screens
     /// screen answers is discoverability, and a control whose affordance is invisible is the same
     /// bug in a new place.
     /// </summary>
-    public sealed class FormationScreen : UIScreen
+    public sealed partial class FormationScreen : UIScreen
     {
         public override ScreenId Id { get { return ScreenId.Formation; } }
 
@@ -79,6 +80,9 @@ namespace Emberfall.UI.Screens
 
         protected override void Build()
         {
+            // R55: the A2 half of this class draws the screen while FormationA2Switch is on.
+            if (FormationA2Switch.Enabled) { BuildA2(); return; }
+
             EmberforgeUI.Ground(Root);
             ScreenChrome.ForgedHeader(Root, "YOUR BANNER", Router, out _headerSubtitle);
 
@@ -174,6 +178,7 @@ namespace Emberfall.UI.Screens
 
         public override void OnShow()
         {
+            if (_a2) { App.RefreshHud(); OnShowA2(); return; }
             FeatureLockView.RefreshAll(App, Root);
             App.RefreshHud();
             _selectedUid = "";
