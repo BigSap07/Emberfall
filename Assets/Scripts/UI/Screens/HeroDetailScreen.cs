@@ -461,8 +461,10 @@ namespace Emberfall.UI.Screens
             // there was nowhere for that sentence to send them - GameSession.Ascend had no caller
             // outside the harness. It sits here rather than up on the banner because this bar is
             // where levelling is bought, and ascension is what levelling turns into at the cap.
+            // Secondary from the start; RefreshActions hands it the Primary only when LEVEL UP is not available
+            // and the ascension is (R53: one orange button on this screen, and LEVEL UP is first in line for it).
             _fusionButton = EmberforgeUI.Button("Fusion", bar, "ASCEND", UITheme.FontSmall,
-                                                ForgeButtonKind.Primary);
+                                                ForgeButtonKind.Secondary);
             UIBuilder.Box(_fusionButton.Root, -UITheme.ScreenPadding, 14f, 300f, 88f,
                           new Vector2(1f, 0f));
             _fusionButton.OnClick(OpenFusion);
@@ -937,6 +939,10 @@ namespace Emberfall.UI.Screens
             _levelUpButton.SetText(atCap ? LevelCapText.ButtonLabel : "LEVEL UP   " + cost + "G");
             _levelUpButton.Interactable = affordable;
             _levelUpTenButton.Interactable = affordable;
+            // THE ONE ORANGE BUTTON (R53). LEVEL UP while the player can afford a level; when they cannot (the
+            // hero is at its cap, or short of gold) and the hero CAN ascend, ASCEND takes it; otherwise none.
+            // x10 and CONVERT are never orange: they are the same errand as the Primary, in bulk or another way.
+            EmberforgeUI.SetKind(_levelUpButton, affordable ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
 
             // A gold price under a prologue hero would be a lie twice over: the player cannot buy
             // it, and the gold quoted is an account that does not exist yet in the story.
@@ -962,6 +968,8 @@ namespace Emberfall.UI.Screens
             {
                 _fusionButton.SetText(def.Stars >= 5 ? "ASCEND" : "CONVERT");
                 _fusionButton.Interactable = true;
+                bool ascendReady = session.AscensionBlocker(_hero) == null;
+                EmberforgeUI.SetKind(_fusionButton, !affordable && ascendReady ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
             }
 
             int deployedSlot = session.Profile.TeamSlotOf(_hero.Uid);

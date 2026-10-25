@@ -327,7 +327,7 @@ namespace Emberfall.UI.Screens
             BestFit(view.Measured, UITheme.FontTiny - 9, UITheme.FontTiny - 4);
             UIBuilder.Outlined(view.Measured, Emberforge.Outline, Emberforge.StrokeThin);
 
-            view.Run = EmberforgeUI.Button("Run", root, "RUN THIS TALENT", UITheme.FontSmall, ForgeButtonKind.Primary);
+            view.Run = EmberforgeUI.Button("Run", root, "RUN THIS TALENT", UITheme.FontSmall, ForgeButtonKind.Secondary);
             RectTransform run = view.Run.Root;
             run.anchorMin = new Vector2(0f, 0f);
             run.anchorMax = new Vector2(1f, 0f);
@@ -769,6 +769,10 @@ namespace Emberfall.UI.Screens
             if (_hero == null || _hero.Def == null) return;
             int running = _hero.SelectedTalent;
             int lockedSlots = 0;
+            // ONE ORANGE BUTTON (R53): RUN THIS TALENT on the first card that can be switched to, by the
+            // loop-card rule (EmberforgeUI.LoopCardKind). The running card has nothing to press, and the ascension
+            // door on a locked card is a trip to another page, so it is a Secondary.
+            bool runPrimaryGiven = false;
             for (int i = 0; i < _cards.Count; i++)
             {
                 CardView view = _cards[i];
@@ -791,6 +795,8 @@ namespace Emberfall.UI.Screens
                 view.Run.SetText(locked ? "ASCEND TO TIER " + HeroInstance.TierUnlockingTalent(view.Selection)
                                         : on ? "RUNNING" : "RUN THIS TALENT");
                 view.Run.Interactable = locked || !on;
+                EmberforgeUI.SetKind(view.Run, locked || on ? ForgeButtonKind.Secondary
+                                                            : EmberforgeUI.LoopCardKind(true, ref runPrimaryGiven));
             }
 
             bool none = running == 0;

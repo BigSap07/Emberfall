@@ -649,6 +649,18 @@ namespace Emberfall.UI
         }
 
         /// <summary>
+        /// Changes the kind of a button that is already built, for a screen whose one Primary moves with
+        /// the state (Hero Detail: LEVEL UP while it is affordable, ASCEND once it is not). The plate,
+        /// the pressed art and the disabled art follow; the screen still owns when to call it.
+        /// </summary>
+        public static void SetKind(UIButton button, ForgeButtonKind kind)
+        {
+            if (button == null || button.Root == null) return;
+            EmberforgeButtonSkin skin = button.Root.GetComponent<EmberforgeButtonSkin>();
+            if (skin != null) skin.SetKind(kind);
+        }
+
+        /// <summary>
         /// THE LOOP-CARD RULE (R53). A shelf of cards that all sell or pay the same way (Armory,
         /// Quartermaster, Relic Shop, the pass tiles) must not show one orange button per card: orange
         /// means "the thing to press now", and six of them say nothing. So exactly one card gets it: the

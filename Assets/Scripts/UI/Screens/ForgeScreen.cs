@@ -399,38 +399,47 @@ namespace Emberfall.UI.Screens
             HeroInstance wearer = App.Session.Profile.HeroWearingArmor(focus.Uid);
             bool equipped = wearer != null;
 
+            // What the piece allows right now decides which button is orange (R53): COMBINE if it can combine
+            // (it moves the piece up a temper), else REROLL if it can reroll, else none. SALVAGE is a danger
+            // action: a Secondary with the warning tone on its word, never orange, whatever it allows.
+            int rerollCost = App.Session.RerollCost(focus);
+            bool canReroll = App.Session.Profile.FreeSlag >= rerollCost && rerollCost > 0 && !focus.Sealed;
+            ArmorTemper? nextTemper = ArmorInfo.NextTemper(focus.Temper);
+            List<ArmorPiece> partners = App.Session.Profile.ArmorCombineCandidates(focus);
+            int combineCost = nextTemper.HasValue ? App.Session.CombineCost(nextTemper.Value) : 0;
+            // !equipped is required here, not just on the two partners ArmorCombineCandidates
+            // already filters: GameSession.CombineArmor refuses ALL THREE inputs if any one of them
+            // is worn, including this piece itself.
+            bool canCombine = !equipped && nextTemper.HasValue && partners.Count == 2
+                            && App.Session.Profile.FreeSlag >= combineCost;
+
             // ---- SALVAGE
             int salvageValue = App.Session.SalvageValue(focus);
             UIButton salvage = Action("Salvage", -234f, "SALVAGE", "+" + salvageValue + " SLAG",
-                                      UITheme.Danger, TextureLab.IngotIcon(64));
+                                      UITheme.Danger, TextureLab.IngotIcon(64), ForgeButtonKind.Secondary);
+            EmberforgeUI.Danger(salvage);
             salvage.Interactable = !equipped;
             string uid = focus.Uid;
             salvage.OnClick(delegate { OnSalvage(uid); });
             Reason(_actions, "ReasonSalvage", -234f, equipped ? "Unequip it first" : "");
 
             // ---- REROLL
-            int rerollCost = App.Session.RerollCost(focus);
             UIButton reroll = Action("Reroll", 0f, "REROLL", rerollCost + " SLAG",
-                                     UITheme.Gold, TextureLab.SpiralIcon(64));
-            reroll.Interactable = App.Session.Profile.FreeSlag >= rerollCost && rerollCost > 0 && !focus.Sealed;
+                                     UITheme.Gold, TextureLab.SpiralIcon(64),
+                                     canReroll && !canCombine ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
+            reroll.Interactable = canReroll;
             reroll.OnClick(delegate { OnReroll(uid); });
             Reason(_actions, "ReasonReroll", 0f,
                    rerollCost <= 0 ? "Cannot be rerolled" : SlagShortfall(rerollCost));
 
             // ---- COMBINE. Its edge previews the OUTPUT temper's colour.
-            ArmorTemper? nextTemper = ArmorInfo.NextTemper(focus.Temper);
-            List<ArmorPiece> partners = App.Session.Profile.ArmorCombineCandidates(focus);
-            int combineCost = nextTemper.HasValue ? App.Session.CombineCost(nextTemper.Value) : 0;
             Color combineEdge = nextTemper.HasValue ? UITheme.ArmorTemperColor(nextTemper.Value) : UITheme.Border;
 
             UIButton combine = Action("Combine", 234f, "COMBINE",
                                       nextTemper.HasValue ? combineCost + " SLAG" : "MAX TIER",
-                                      combineEdge, TextureLab.Swords(64));
-            // !equipped is required here, not just on the two partners ArmorCombineCandidates
-            // already filters: GameSession.CombineArmor refuses ALL THREE inputs if any one of them
-            // is worn, including this piece itself.
-            combine.Interactable = !equipped && nextTemper.HasValue && partners.Count == 2
-                                 && App.Session.Profile.FreeSlag >= combineCost;
+                                      combineEdge, TextureLab.Swords(64),
+                                      canCombine ? ForgeButtonKind.Primary : ForgeButtonKind.Secondary);
+            combine.Interactable = canCombine;
             string uidB = partners.Count > 0 ? partners[0].Uid : "";
             string uidC = partners.Count > 1 ? partners[1].Uid : "";
             combine.OnClick(delegate { OnCombine(uid, uidB, uidC); });
@@ -439,18 +448,18 @@ namespace Emberfall.UI.Screens
         }
 
         /// <summary>
-        /// One anvil action. TEAL, all three, and the tint the caller passes reaches only the
-        /// GLYPH now.
+        /// One anvil action. The tint the caller passes reaches only the GLYPH.
         ///
         /// It used to colour each button's own border - green for salvage, amber for reroll, gold
-        /// for combine - which is three button voices on one row, and the kit has two. The row's
-        /// job is to offer three equal choices rather than to say which is the thing to press, so
-        /// none of them is the ember one; what tells them apart is the mark and the word on each.
+        /// for combine - which is three button voices on one row, and the kit has two. What tells the
+        /// three apart is the mark and the word on each. Which one is the thing to press now is the
+        /// caller's call (RebuildActions): the action the piece allows is Primary, the others are
+        /// Secondary, and salvage never is.
         /// </summary>
-        private UIButton Action(string name, float x, string title, string cost, Color edge, Sprite icon)
+        private UIButton Action(string name, float x, string title, string cost, Color edge, Sprite icon,
+                                ForgeButtonKind kind)
         {
-            UIButton button = EmberforgeUI.Button(name, _actions, "", UITheme.FontSmall,
-                                                  ForgeButtonKind.Secondary);
+            UIButton button = EmberforgeUI.Button(name, _actions, "", UITheme.FontSmall, kind);
             UIBuilder.Box(button.Root, x, 0f, 220f, 96f, new Vector2(0.5f, 1f));
 
             Image glyph = UIBuilder.Img("Glyph", button.Root, icon, edge);

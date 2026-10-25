@@ -378,11 +378,11 @@ namespace Emberfall.DevHarness
             string menu = R26Read(root, "Assets", "Scripts", "UI", "Screens", "MainMenuScreen.cs");
             string claim = R26Read(root, "Assets", "Scripts", "UI", "Hud", "IdleClaimPopup.cs");
             string store = R26Read(root, "Assets", "Scripts", "UI", "Screens", "StoreScreen.cs");
-            Check(Regex.IsMatch(hero, @"_levelUpButton = EmberforgeUI\.Button\([^;]*ForgeButtonKind\.Primary") && Regex.IsMatch(hero, @"_fusionButton = EmberforgeUI\.Button\([^;]*ForgeButtonKind\.Primary")
+            Check(Regex.IsMatch(hero, @"_levelUpButton = EmberforgeUI\.Button\([^;]*ForgeButtonKind\.Primary") && Regex.IsMatch(hero, @"_fusionButton = EmberforgeUI\.Button\([^;]*ForgeButtonKind\.Secondary") && hero.Contains("EmberforgeUI.SetKind(_fusionButton")
                   && Regex.IsMatch(fusion, @"_actButton = EmberforgeUI\.Button\([^;]*ForgeButtonKind\.Primary")
                   && Regex.IsMatch(menu, @"_continueButton = EmberforgeUI\.Button\([^;]*ForgeButtonKind\.Primary") && Regex.IsMatch(claim, @"_claim = EmberforgeUI\.Button\([^;]*ForgeButtonKind\.Primary")
                   && Regex.IsMatch(store, @"Button\(""Claim"", tile, text, UITheme\.FontTiny,\s*EmberforgeUI\.LoopCardKind\(") && Regex.IsMatch(store, @"Button\(""Buy"" \+ o\.Id, parent, text, font, ForgeButtonKind\.Secondary\)"),
-                  "kit POLISH: the orange primary is on Continue Campaign, Level Up, Ascend (hero page and fusion page) and Claim (idle popup; the pass tiles give it to the first claimable one only); a paid Buy is a Secondary (R53)");
+                  "kit POLISH: the orange primary is on Continue Campaign, Level Up (and Ascend on the hero page only when Level Up is not available, R53), Ascend (fusion page) and Claim (idle popup; the pass tiles give it to the first claimable one only); a paid Buy is a Secondary (R53)");
         }
 
         // ------------------------------------------------------------------ item 4: the hero at the level cap
