@@ -1520,7 +1520,7 @@ namespace Emberfall.UI
             {
                 bool hasWant = false;
                 Color want = Color.white;
-                if (!_interactable && A2Skin.On) { hasWant = true; want = A2Kit.Ink; }   // R56: ink on the grey brown plate
+                if (!_interactable && A2Skin.On) { hasWant = true; want = new Color(A2Kit.TextOnDark.r, A2Kit.TextOnDark.g, A2Kit.TextOnDark.b, 0.75f); }   // R56: muted cream on the dark grey plate
                 else if (!_interactable && UiKit.On) { hasWant = true; want = Emberforge.ButtonDisabledText; }   // kit off keeps the old disabled label
                 else if (_interactable && _hasTone) { hasWant = true; want = _tone; }
                 else if (_interactable && quiet && !A2Skin.On) { hasWant = true; want = Emberforge.TextQuiet; }

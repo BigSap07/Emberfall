@@ -406,7 +406,7 @@ namespace Emberfall.UI.Screens
             next.OnClick(delegate { _page++; App.Audio.Tap(); Rebuild(); });
             Text label = EmberforgeUI.Label("Page", _body, "TIERS " + (_page * PageSize + 1) + " TO " + ((_page + 1) * PageSize) + "   -   PAGE " + (_page + 1) + " OF " + pages,
                                             UITheme.FontTiny, Emberforge.TextQuiet, TextAnchor.MiddleCenter);
-            UIBuilder.Box(label.rectTransform, 0f, -navY, 320f, 52f, new Vector2(0.5f, 1f));
+            UIBuilder.Box(label.rectTransform, 0f, -navY, A2Skin.On ? 216f : 320f, 52f, new Vector2(0.5f, 1f));   // R56: the wider body face must stay between the arrows
         }
 
         /// <summary>

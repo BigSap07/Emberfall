@@ -44,8 +44,8 @@ namespace Emberfall.UI
         };
 
         // A disabled button: a grey brown plate, not a faded orange one.
-        private static readonly Color DisabledFace = A2Kit.Hex(0xA39786);
-        private static readonly Color DisabledBevel = A2Kit.Hex(0x7D7266);
+        private static readonly Color DisabledFace = A2Kit.Hex(0x6B6052);
+        private static readonly Color DisabledBevel = A2Kit.Hex(0x4A4137);
 
         private static readonly Dictionary<string, Sprite> Cache = new Dictionary<string, Sprite>();
 
@@ -253,6 +253,8 @@ namespace Emberfall.UI
             Transform t = node;
             while (t != null)
             {
+                // A dark backing laid across the parent (a painting's scrim, a hexagon's fill) owns its labels.
+                if (t.parent != null && HasDarkBacking(t.parent)) return null;
                 UnityEngine.UI.Image image = t.GetComponent<UnityEngine.UI.Image>();
                 if (image != null && image.sprite != null && image.sprite.name != null
                     && image.sprite.name.StartsWith(Prefix))
@@ -266,6 +268,38 @@ namespace Emberfall.UI
                 t = t.parent;
             }
             return null;
+        }
+
+        private static bool Stretches(RectTransform rect)
+        {
+            return rect != null && rect.anchorMin.x < 0.01f && rect.anchorMin.y < 0.01f
+                && rect.anchorMax.x > 0.99f && rect.anchorMax.y > 0.99f;
+        }
+
+        private static bool DarkFill(Transform node)
+        {
+            UnityEngine.UI.Image image = node.GetComponent<UnityEngine.UI.Image>();
+            if (image == null || !Stretches(node as RectTransform)) return false;
+            if (image.sprite != null && image.sprite.name != null && image.sprite.name.StartsWith(Prefix)) return false;
+            return image.color.a >= 0.5f && IsDark(image.color);
+        }
+
+        /// <summary>
+        /// True when a child of this node (or a child of a stretched child) is a dark fill laid across the whole node and
+        /// not an A2 plate: a scrim over a painting, a hexagon's fill. Labels on that node sit on the dark, not on
+        /// the cream behind it, so they keep their light colours.
+        /// </summary>
+        public static bool HasDarkBacking(Transform node)
+        {
+            for (int i = 0; i < node.childCount; i++)
+            {
+                Transform child = node.GetChild(i);
+                if (DarkFill(child)) return true;
+                if (Stretches(child as RectTransform))
+                    for (int k = 0; k < child.childCount; k++)
+                        if (DarkFill(child.GetChild(k))) return true;
+            }
+            return false;
         }
 
         public static bool IsCreamSurface(string spriteName)
@@ -316,16 +350,26 @@ namespace Emberfall.UI
             if (IsCreamSurface(SurfaceOf(label.transform.parent))) Recolor(label);
         }
 
-        /// <summary>The ink twin of a light token on a cream surface, and the stroke off: a dark stroke on dark ink is mud.</summary>
+        /// <summary>
+        /// What a label's colour becomes on a cream surface: a light token to its ink twin, and any other colour that is
+        /// too pale to read on cream (a pale rarity, aspect or "good" green) deepened toward ink, same hue.
+        /// </summary>
+        public static Color CreamInk(Color color)
+        {
+            Color c = OnCream(color);
+            if ((c.r * 0.3f + c.g * 0.59f + c.b * 0.11f) > 0.5f) c = Color.Lerp(c, A2Kit.Ink, 0.5f);
+            return c;
+        }
+
+        /// <summary>
+        /// A label on a cream surface: its colour mapped now, the stroke off (a dark stroke on cream is a smear), and an
+        /// A2InkGuard so a screen that recolours it later (a value that turns good, warning or quiet) is mapped too.
+        /// </summary>
         public static void Recolor(UnityEngine.UI.Text label)
         {
-            Color c = OnCream(label.color);
-            // A colour the screen chose (aspect, rarity, good) that is too pale for cream is deepened toward ink, same hue.
-            if ((c.r * 0.3f + c.g * 0.59f + c.b * 0.11f) > 0.5f) c = Color.Lerp(c, A2Kit.Ink, 0.5f);
-            label.color = c;
-            // Never a dark stroke on cream: on ink it is mud and on a mid tone it is a smear.
-            UnityEngine.UI.Outline edge = label.GetComponent<UnityEngine.UI.Outline>();
-            if (edge != null) edge.enabled = false;
+            A2InkGuard guard = label.GetComponent<A2InkGuard>();
+            if (guard == null) guard = label.gameObject.AddComponent<A2InkGuard>();
+            guard.Bind(label);
         }
 
         /// <summary>
@@ -337,6 +381,7 @@ namespace Emberfall.UI
         public static void Retint(Transform plate)
         {
             if (!On || plate == null) return;
+            bool backed = HasDarkBacking(plate);
             for (int i = 0; i < plate.childCount; i++)
             {
                 Transform child = plate.GetChild(i);
@@ -344,7 +389,7 @@ namespace Emberfall.UI
                 if (image != null && image.sprite != null) continue;
                 if (child.GetComponent<UnityEngine.UI.Selectable>() != null) continue;
                 UnityEngine.UI.Text text = child.GetComponent<UnityEngine.UI.Text>();
-                if (text != null) Recolor(text);
+                if (text != null && !backed) Recolor(text);
                 Retint(child);
             }
         }
@@ -352,6 +397,40 @@ namespace Emberfall.UI
         public static bool IsDark(Color c)
         {
             return (c.r * 0.3f + c.g * 0.59f + c.b * 0.11f) < 0.46f;
+        }
+    }
+    /// <summary>
+    /// Keeps a label on a cream plate legible. It maps the label's colour through A2Skin.CreamInk and turns its stroke off,
+    /// and repeats that whenever a screen assigns a new colour (checked once a frame, one colour compare).
+    /// </summary>
+    public sealed class A2InkGuard : MonoBehaviour
+    {
+        private UnityEngine.UI.Text _text;
+        private Color _last;
+        private bool _bound;
+
+        public void Bind(UnityEngine.UI.Text text)
+        {
+            _text = text;
+            Apply();
+        }
+
+        private void Apply()
+        {
+            if (_text == null) return;
+            Color mapped = A2Skin.CreamInk(_text.color);
+            _text.color = mapped;
+            _last = mapped;
+            _bound = true;
+            UnityEngine.UI.Outline edge = _text.GetComponent<UnityEngine.UI.Outline>();
+            if (edge != null) edge.enabled = false;
+        }
+
+        private void LateUpdate()
+        {
+            if (!_bound || _text == null || !A2Skin.On) return;
+            Color now = _text.color;
+            if (now.r != _last.r || now.g != _last.g || now.b != _last.b || now.a != _last.a) Apply();
         }
     }
 }
