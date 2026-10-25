@@ -205,7 +205,8 @@ namespace Emberfall.UI
         /// </summary>
         public static Image Ground(RectTransform root)
         {
-            return Ground(root, Emberforge.PanelLow);
+            // R56: under A2 the kit brown floor is A2Kit.Backdrop's floor colour, so the cream panels sit on the same warm dark.
+            return Ground(root, A2Skin.On ? A2Kit.Hex(0x2A150A) : Emberforge.PanelLow);
         }
 
         /// <summary>The same ground in a colour the screen chooses (R51: the Inventory sits on the
