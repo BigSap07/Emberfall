@@ -1854,6 +1854,9 @@ namespace Emberfall.EditorTools
                         int n;
                         byFont.TryGetValue(fontName, out n);
                         byFont[fontName] = n + 1;
+                        if (!fontName.StartsWith("Nunito") && !fontName.StartsWith("LilitaOne"))
+                            Debug.Log("PlayModeScreenshot: FORMATION FONTS other font '" + fontName + "' on " + texts[i].transform.parent.name + "/"
+                                      + texts[i].name + " text '" + texts[i].text + "' active=" + texts[i].gameObject.activeInHierarchy);
                     }
                     string summary = "";
                     foreach (KeyValuePair<string, int> pair in byFont) summary += pair.Key + "=" + pair.Value + " ";

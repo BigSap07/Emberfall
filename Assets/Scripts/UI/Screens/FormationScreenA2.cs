@@ -41,8 +41,8 @@ namespace Emberfall.UI.Screens
         // sits down the badge (0 top, 1 bottom). The tile crop is tighter than the board's 185 percent.
         private const float A2SlotCrop = 1.85f;
         private const float A2SlotFocus = 0.40f;
-        private const float A2TileCrop = 2.15f;
-        private const float A2TileFocus = 0.38f;
+        private const float A2TileCrop = 2.45f;
+        private const float A2TileFocus = 0.37f;
 
         // ------------------------------------------------------------------ state
 
@@ -205,17 +205,20 @@ namespace Emberfall.UI.Screens
             const float top = 0.915f;
             const float bottom = 0.03f;
             float row = (top - bottom) / 3f;
+            // The top of each cell is left clear for the remove control, which overhangs the card, so a card's
+            // control never lands on the card above it.
+            const float overhang = 0.04f;
             if (pos < 3)
             {
                 x0 = 0.07f; x1 = 0.43f;
-                y1 = top - pos * row;
-                y0 = y1 - row;
+                y1 = top - pos * row - overhang;
+                y0 = top - (pos + 1) * row;
             }
             else
             {
                 x0 = 0.47f; x1 = 0.78f;
-                y1 = top - row * 0.5f - (pos - 3) * row;
-                y0 = y1 - row;
+                y1 = top - row * 0.5f - (pos - 3) * row - overhang;
+                y0 = top - row * 0.5f - (pos - 2) * row;
             }
         }
 
@@ -270,6 +273,8 @@ namespace Emberfall.UI.Screens
 
             if (hero == null || hero.Def == null)
             {
+                // An empty slot has no band, so its frame runs down to the number disc.
+                art.anchorMin = new Vector2(0f, 0.08f);
                 Image dash = UIBuilder.Img("Dashes", art, TextureLab.DashedRoundedOutline(220, 220, 26, 4, 14, 10), A2Kit.Teal);
                 UIBuilder.FillParent(dash.rectTransform, 0f);
                 dash.type = Image.Type.Simple;
@@ -332,15 +337,15 @@ namespace Emberfall.UI.Screens
             band.pivot = new Vector2(0.5f, 0f);
             band.offsetMin = new Vector2(0f, 0f);
             band.offsetMax = new Vector2(0f, 0f);
-            band.sizeDelta = new Vector2(band.sizeDelta.x, 74f);
+            band.sizeDelta = new Vector2(band.sizeDelta.x, 64f);
             band.anchoredPosition = new Vector2(0f, 0f);
             Image bandFill = UIBuilder.Panel("Fill", band, A2Kit.Ink, 16);
             bandFill.raycastTarget = false;
             UIBuilder.FillParent(bandFill.rectTransform, 0f);
-            RectTransform stars = A2Stars("Stars", band, def.Stars, 22f);
-            UIBuilder.Box(stars, 0f, -8f, 22f * 5 + 12f, 22f, new Vector2(0.5f, 1f));
-            Text level = A2Kit.Label("Level", band, "LV " + hero.Level, 24, A2Kit.TextOnDark, TextAnchor.MiddleCenter, A2Kit.BodyBold);
-            UIBuilder.Box(level.rectTransform, 0f, 6f, 200f, 28f, new Vector2(0.5f, 0f));
+            RectTransform stars = A2Stars("Stars", band, def.Stars, 20f);
+            UIBuilder.Box(stars, 0f, -6f, 20f * 5 + 12f, 20f, new Vector2(0.5f, 1f));
+            Text level = A2Kit.Label("Level", band, "LV " + hero.Level, 22, A2Kit.TextOnDark, TextAnchor.MiddleCenter, A2Kit.BodyBold);
+            UIBuilder.Box(level.rectTransform, 0f, 4f, 200f, 26f, new Vector2(0.5f, 0f));
         }
 
         /// <summary>The remove control: a small dark disc with a cross, overhanging the top right corner, with a larger hit.</summary>
@@ -666,10 +671,15 @@ namespace Emberfall.UI.Screens
             UIBuilder.FillParent(body, 0f);
             view.Body = body;
 
-            // The selected ring: a dark border, then a teal ring outside it.
-            Image ring = UIBuilder.Frame("Ring", body, A2Kit.Teal, 16, 6);
-            UIBuilder.FillParent(ring.rectTransform, -6f);
-            view.Ring = ring.gameObject;
+            // The selected ring: a cream band against the dark edge, then a teal ring outside it. The cream band keeps a
+            // Gale hero (teal rim) reading as selected, since a teal ring alone would merge with its own rim.
+            RectTransform ringNode = UIBuilder.Node("Ring", body);
+            UIBuilder.FillParent(ringNode, 0f);
+            Image ringOuter = UIBuilder.Frame("Teal", ringNode, A2Kit.Teal, 18, 6);
+            UIBuilder.FillParent(ringOuter.rectTransform, -9f);
+            Image ringInner = UIBuilder.Frame("Cream", ringNode, A2Kit.Cream, 15, 5);
+            UIBuilder.FillParent(ringInner.rectTransform, -3f);
+            view.Ring = ringNode.gameObject;
 
             Color fill = hero != null ? A2Kit.AspectFill(def.Aspect) : A2Kit.CreamWellInset;
             Image tile = UIBuilder.Panel("Tile", body, fill, 12);
@@ -857,12 +867,12 @@ namespace Emberfall.UI.Screens
             // The power change if this hero goes where they would go.
             int target = DetailTargetSlot(profile, hero);
             Text label = A2Kit.Label("DeltaLabel", panel.rectTransform, "Squad power", 24, A2Kit.InkSoft, TextAnchor.MiddleRight, A2Kit.BodyBold);
-            UIBuilder.Box(label.rectTransform, -24f, -34f, 240f, 32f, new Vector2(1f, 1f));
+            UIBuilder.Box(label.rectTransform, -24f, -64f, 240f, 32f, new Vector2(1f, 1f));
             if (target < 0)
             {
                 Text here = A2Kit.Label("InSquad", panel.rectTransform, "In slot " + SquadPick.DisplayNumber(profile.TeamSlotOf(hero.Uid)),
                                         34, A2Kit.Ink, TextAnchor.MiddleRight, A2Kit.Display);
-                UIBuilder.Box(here.rectTransform, -24f, -92f, 240f, 56f, new Vector2(1f, 1f));
+                UIBuilder.Box(here.rectTransform, -24f, -110f, 240f, 56f, new Vector2(1f, 1f));
             }
             else
             {
@@ -872,20 +882,20 @@ namespace Emberfall.UI.Screens
                 Color stroke = delta > 0 ? A2Kit.GoodStroke : (delta < 0 ? A2Kit.Hex(0x5A1F14) : A2Kit.Card);
                 Text value = A2Kit.Label("Delta", panel.rectTransform, SquadPick.DeltaText(delta), 72, color, TextAnchor.MiddleRight, A2Kit.Display);
                 UIBuilder.Outlined(value, stroke, 3f);
-                UIBuilder.Box(value.rectTransform, -24f, -72f, 250f, 84f, new Vector2(1f, 1f));
+                UIBuilder.Box(value.rectTransform, -24f, -92f, 250f, 84f, new Vector2(1f, 1f));
                 Text note = A2Kit.Label("Note", panel.rectTransform, SquadPick.DeltaNote(target, replaced != null), 22,
                                         A2Kit.InkSoft, TextAnchor.MiddleRight, A2Kit.Body);
-                UIBuilder.Box(note.rectTransform, -24f, -162f, 250f, 30f, new Vector2(1f, 1f));
+                UIBuilder.Box(note.rectTransform, -24f, -180f, 250f, 30f, new Vector2(1f, 1f));
             }
 
             // Close: clears the selection.
             RectTransform close = UIBuilder.Node("Close", panel.rectTransform);
-            UIBuilder.Box(close, 6f, 6f, 80f, 80f, new Vector2(1f, 1f));
+            UIBuilder.Box(close, -4f, -4f, 72f, 72f, new Vector2(1f, 1f));
             Image closeHit = UIBuilder.Panel("Hit", close, new Color(0f, 0f, 0f, 0f), 0);
             UIBuilder.FillParent(closeHit.rectTransform, 0f);
             closeHit.raycastTarget = true;
             Image cross = UIBuilder.Img("Cross", close, TextureLab.Cross(48), A2Kit.Ink);
-            UIBuilder.Box(cross.rectTransform, -4f, -4f, 36f, 36f, new Vector2(0.5f, 0.5f));
+            UIBuilder.Box(cross.rectTransform, 0f, 0f, 30f, 30f, new Vector2(0.5f, 0.5f));
             Button closeButton = close.gameObject.AddComponent<Button>();
             closeButton.targetGraphic = closeHit;
             closeButton.transition = Selectable.Transition.None;
